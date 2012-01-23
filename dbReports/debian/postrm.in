@@ -1,0 +1,16 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+case "$1" in
+    remove)
+    
+    #old,legacy log directory
+    if [ -d /var/log/anaserve ]; then
+    	rm -rf /var/log/anaserve
+    fi
+    ;;
+esac
+
+exit 0

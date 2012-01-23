@@ -1,0 +1,39 @@
+    
+<div data-role="page" id="{% block pageid %}{% endblock %}"> 
+    <div data-role="header" style="text-align: center" data-backbtn="false"> 
+        <p>{% block title %}Report for {{ result.resultsName }}{% endblock %}</p> 
+        
+        {% block btn_left %}
+            {% with result.experiment.sorted_results.count as numresults %}
+               {% ifequal numresults 1 %}
+                 <a href="{% url rundb.mobile_views.runs %}" data-direction="reverse" data-icon="arrow-l" rel="external">Runs</a>           
+               {% else %}
+                 <a href="{% url rundb.mobile_views.run result.experiment.pk %}" 
+                    data-direction="reverse" data-icon="arrow-l" rel="external">Reports</a>
+               {% endifequal %}
+            {% endwith %}
+        {% endblock %}
+        
+        {% block btn_right %}
+            {% if result.report_exist %}
+                <a href="{{result.reportLink}}?force_desktop=true" rel="external" class="ui-btn-right">Desktop</a>
+            {% endif %}
+        {% endblock %}        
+    </div> 
+    
+    <div data-role="content">     
+        {% block content %}{% endblock %}
+    </div> 
+    
+    <div data-role="footer" data-position="fixed">        
+        <div data-role="navbar">
+            <ul>
+                {% for tab, tab_label in helper.tabs.iteritems %}
+                    <li><a href="#{{ tab }}" data-transition="fade" 
+                        {% ifequal tab current_tab %}class="ui-btn-active ui-state-persist"{% endifequal %} >{{tab_label}}</a></li>
+                {% endfor %}
+            </ul>
+        </div>        
+    </div>
+</div> 
+

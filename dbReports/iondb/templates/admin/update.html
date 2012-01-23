@@ -1,0 +1,75 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Management Options{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+
+  <h1>Update Torrent Suite</h1>
+  <div> 
+
+	{% if post %}
+
+    <script>
+
+        function htmlEscape(str) {
+            return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br\>');
+        }
+
+        function loadLog(){
+            $.get('install_log', function(data) {
+                $('#loadingStatus').html(htmlEscape(data));
+            });
+        }
+
+        IntervalId = 0;
+        IntervalId = setInterval("loadLog();", 1000);
+
+    </script>
+
+
+        {%  if lockBlocked %}
+
+                <h2> The server is being updated now, the log messages will be displayed below. </h2>
+
+                <p>The page log will be automatically updated</p>
+
+
+        {% else %}
+
+                <h1>The server is already being updated. The log is shown below</h1>
+                <p>There is a lock on the file system at at /tmp/django-update-status</p>
+
+        {% endif%}
+
+        <div id="loadingStatus">
+
+        </div>
+
+	{% else %}
+
+	<div>
+	Update the server to the latest packages
+	</div>
+	
+	<div>
+	note: This will causes the web services to restart, and might take a while. 
+	Please make sure no jobs are being processed or are in queue. 
+	</div>
+	
+	<form name="input" method="post">
+		<input type="submit" value="Update" onclick="return confirm('Select OK to update server, or Cancel to abort .')" />
+	</form> 
+	{% endif %}
+
+
+  </div>
+</div>
+{% endblock %}

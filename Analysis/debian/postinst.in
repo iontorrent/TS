@@ -1,0 +1,42 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+TFFILE=@ION_INSTALL_PREFIX@/config/DefaultTFs.conf
+
+case "$1" in
+    configure)
+    
+	# Install TF file
+	if [ -e "$TFFILE" ]; then
+		echo "Not overwriting existing TF file '$TFFILE'."
+	else
+		cp $TFFILE.dist $TFFILE
+	fi
+    
+    # Perl module installation
+    # tarballs are copied to /tmp/pModIn - Is this the way to do this?
+    # Keep this order to staisfy prerequesites:
+    # IPC-System-Simple-1.21.tar.gz autodie-2.10.tar.gz
+    staging="/tmp/pModIn"
+    cd $staging
+    moduleList=( common-sense-3.4.tar.gz Carp-Assert-0.20.tar.gz IPC-System-Simple-1.21.tar.gz JSON-2.53.tar.gz JSON-XS-2.32.tar.gz Readonly-1.03.tar.gz Statistics-LineFit-0.07.tar.gz autodie-2.10.tar.gz )
+    for module in ${moduleList[@]}; do
+        instLog=/tmp/${module%.tar.gz}_install.log
+        echo "Installing ${module%.tar.gz}.  See $instLog"
+        tar zxf $module
+        cd ${module%.tar.gz}
+        perl Makefile.PL > $instLog 2>&1
+        make >> $instLog 2>&1
+        make install >> $instLog 2>&1
+        cd $staging
+        rm -rf $module ${module%.tar.gz}
+    done
+    
+    ;;
+esac
+
+exit 0
+
+

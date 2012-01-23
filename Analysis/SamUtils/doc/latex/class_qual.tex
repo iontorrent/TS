@@ -1,0 +1,116 @@
+\hypertarget{class_qual}{
+\section{Qual Class Reference}
+\label{class_qual}\index{Qual@{Qual}}
+}
+
+
+{\ttfamily \#include $<$Qual.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_qual_1_1iterator}{iterator}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_qual_ab55cb07969dae617e7bdfcce5a300790}{Qual} ()
+\item 
+\hyperlink{class_qual_aaa4dc2fa33957d220dc73ce7a8f6029e}{Qual} (const bam1\_\-t $\ast$BAM\_\-record)
+\item 
+long \hyperlink{class_qual_a2b551ccb1ea195e512b9e884a1d868e0}{get\_\-length} () const 
+\item 
+\hyperlink{class_qual_1_1iterator}{iterator} \hyperlink{class_qual_adf8165f7cf097f0ebea7d62eda8a9643}{get\_\-iterator} ()
+\item 
+std::string \hyperlink{class_qual_a6989dc35c5caea52df248448d782d486}{to\_\-string} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+An iterable container class for the \hyperlink{class_qual}{Qual} field of a SAM/BAM. Requires the \hyperlink{class_b_a_m_read}{BAMRead} that the \hyperlink{class_qual}{Qual} is retrieved from to still remain in scope.
+
+QUAL: ASCII of base QUALity plus 33 (same as the quality string in the Sanger FASTQ format). A base quality is the phred-\/scaled base error probability which equals 10 log10 Prfbase is wrongg. This field can be a `$\ast$' when quality is not stored. If not a `$\ast$', SEQ must not be a `$\ast$' and the length of the quality string ought to equal the length of SEQ 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_qual_ab55cb07969dae617e7bdfcce5a300790}{
+\index{Qual@{Qual}!Qual@{Qual}}
+\index{Qual@{Qual}!Qual@{Qual}}
+\subsubsection[{Qual}]{\setlength{\rightskip}{0pt plus 5cm}Qual::Qual (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_qual_ab55cb07969dae617e7bdfcce5a300790}
+Default constructor. Class isn't of use if it's default constructed.
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_qual}{Qual} default constructed \hyperlink{class_qual}{Qual} object 
+\end{DoxyReturn}
+\hypertarget{class_qual_aaa4dc2fa33957d220dc73ce7a8f6029e}{
+\index{Qual@{Qual}!Qual@{Qual}}
+\index{Qual@{Qual}!Qual@{Qual}}
+\subsubsection[{Qual}]{\setlength{\rightskip}{0pt plus 5cm}Qual::Qual (
+\begin{DoxyParamCaption}
+\item[{const bam1\_\-t $\ast$}]{BAM\_\-record}
+\end{DoxyParamCaption}
+)}}
+\label{class_qual_aaa4dc2fa33957d220dc73ce7a8f6029e}
+Standard constructor. Requires a bam1\_\-t$\ast$ in order to extract the \hyperlink{class_qual}{Qual} field.
+
+
+\begin{DoxyParams}{Parameters}
+{\em bam1\_\-t$\ast$} & alignment from bam file \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_qual}{Qual} constructed \hyperlink{class_qual}{Qual} object 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_qual_adf8165f7cf097f0ebea7d62eda8a9643}{
+\index{Qual@{Qual}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!Qual@{Qual}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Qual::iterator} Qual::get\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_qual_adf8165f7cf097f0ebea7d62eda8a9643}
+Gives you an iterator for the \hyperlink{class_qual}{Qual}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_qual_1_1iterator}{Qual::iterator} 
+\end{DoxyReturn}
+\hypertarget{class_qual_a2b551ccb1ea195e512b9e884a1d868e0}{
+\index{Qual@{Qual}!get\_\-length@{get\_\-length}}
+\index{get\_\-length@{get\_\-length}!Qual@{Qual}}
+\subsubsection[{get\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}long Qual::get\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_qual_a2b551ccb1ea195e512b9e884a1d868e0}
+Returns the length of the \hyperlink{class_qual}{Qual} string \begin{DoxyReturn}{Returns}
+long length of qual string 
+\end{DoxyReturn}
+\hypertarget{class_qual_a6989dc35c5caea52df248448d782d486}{
+\index{Qual@{Qual}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!Qual@{Qual}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string Qual::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_qual_a6989dc35c5caea52df248448d782d486}
+Returns a string representation of the \hyperlink{class_qual}{Qual}
+
+\begin{DoxyReturn}{Returns}
+string qual string from SAM/BAM 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/Qual.h\item 
+types/Qual.cpp\end{DoxyCompactItemize}

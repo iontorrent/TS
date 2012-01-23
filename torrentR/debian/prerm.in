@@ -1,0 +1,41 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+case "$1" in
+    upgrade)
+    ;;
+    remove)
+    LIBLIST=(\
+	    Rcpp \
+	    digest \
+	    spam \
+	    fields \
+	    plyr \
+	    reshape \
+	    proto \
+	    ggplot2 \
+	    Biobase \
+	    DBI \
+	    RSQLite \
+	    AnnotationDbi \
+	    xtable \
+	    annotate \
+	    ellipse \
+	    ROCR \
+	    geneplotter \
+        Hmisc \
+        RCurl \
+        rjson \
+    )
+    for LIB in ${LIBLIST[@]}; do
+    	if [ -d /usr/local/lib/R/site-library/$LIB ]; then
+    		R CMD REMOVE $LIB
+            echo "Removed $LIB"
+        fi
+    done
+    ;;
+esac
+
+exit 0

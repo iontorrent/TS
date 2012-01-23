@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+    <link type="text/css" href="/site_media/RunRecognitION/styles/runrecognition.css" rel="Stylesheet" />
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+    <script type="text/javascript" src="/site_media/RunRecognitION/scripts/runrecognition.js"></script>
+    
+    <script type='text/javascript'>
+        chipType = ''
+    	timeOfRun = ''
+    	
+    	function checkGenerateFile() {
+    		$('#username').attr('disabled', $('#tc_generatefile').prop('checked'));
+            $('#password').attr('disabled', $('#tc_generatefile').prop('checked'));
+            if ($('#tc_generatefile').prop('checked')) {
+            	$('#postbutton').val('Generate File')
+            } else {
+            	$('#postbutton').val('Upload')
+            }
+        }
+    	
+        function checkDuplicate() {
+        	$("#formwrap").hide();
+            $('#loading-div').show();
+        	$.ajax({
+        		url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrun/',
+        		data:  {
+        		    jive_username: $('#username').val(),
+        		    time_of_run: timeOfRun.replace('T', ' '),
+        		    chip_type: chipType
+        		  }, 
+        		dataType : "jsonp",
+        		contentType : "application/json; charset=utf-8",
+                type : "GET",
+                timeout: 5000,
+                error: function(XHR, textStatus, errorThrown){
+                    if (textStatus != 'success') {
+                    	$("#dialog-generate-file").dialog('open');
+                    }
+                },
+                success : function(data) {
+                	if (data.meta.total_count > 0) {
+                		$("#dialog-confirm").dialog('open');
+                	} else {
+                		runPlugin();
+                	}
+                }
+            });
+        }
+        
+        // validates the form and adds any needed error messages.
+        function validateForm() {
+    		errormessage = '';
+    		returnval = true;
+        	if ($('#tc_aggreement').prop('checked') == false) {
+        		errormessage += 'You must accept the terms and conditions before submitting your data.<br>';
+        		returnval = false;
+        	}
+        	if ($('#tc_generatefile').prop('checked') == false) {
+        		if ($.trim($('#username').val()).length == 0) {
+                    errormessage += 'Your ion community username is required.<br>';
+                    returnval = false;
+                }
+                if ($.trim($('#password').val()).length == 0) {
+                    errormessage += 'Your ion community password is required.<br>';
+                    returnval = false;
+                }
+        	}
+        	$('#form_errors').html(errormessage);
+        	
+        	return returnval;
+        }
+        
+        function runPlugin() {
+            obj = $('#inputform').serializeObject();
+
+            pluginAPIJSON = {
+                "plugin" : [ TB_plugin.fields.name ],
+                "pluginconfig" : obj
+            };
+            pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+            pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+            $.ajax({type : 'POST',
+                url : pluginURL,
+                contentType : "application/json; charset=utf-8",
+                success : function(data) {
+                      $("#formwrap").hide();
+                      $('#loading-div').show();
+                      setTimeout("parent.$.fn.colorbox.close()", 2000);
+                },
+                data : pluginAPIJSON,
+                dataType : "json"
+            });
+        }
+        
+        appendcount = 0
+        function appendData(label, data, numCols) {
+        	numCols = typeof(numCols) != 'undefined' ? numCols : 3;
+        	if (appendcount % numCols == 0) {
+        		$('#data_preview_table').append('<tr></tr>')
+        	}
+        	
+        	$('#data_preview_table tr:last').append('<td><strong>' + label + '</strong>:' + data + '</td>');
+        	appendcount++;
+        }
+        
+        function getGlobalConfigData() {
+            $.ajax({
+                url : '/rundb/api/v1/globalconfig/?format=json',
+                dataType : "json",
+                type : "GET",
+                async: true,
+                success : function(data) {
+                	site_name = data.objects[0].site_name
+                	if (site_name.toLowerCase().indexOf('set site_name') == -1) {
+                        $('#site_name').val(data.objects[0].site_name)
+                	}
+                }
+            });
+        }
+        
+    	$(document).ready(function() {
+    		$('#data_preview_link').click(function(){
+               $('#data_preview').toggle();
+            });
+    		
+    		// initialize the confirmation dialog.
+    		$("#dialog-confirm").dialog({
+                resizable: false,
+                height:200,
+                modal: true,
+                autoOpen: false,
+                buttons: {
+                    "Overwrite Record": function() {
+                        $( this ).dialog( "close" );
+                        runPlugin();
+                    },
+                    Cancel: function() {
+                        $( this ).dialog( "close" );
+                        $('#loading-div').hide();
+                        $("#formwrap").show();
+                    }
+                }
+            });
+    		
+    		// initialize the error dialog.
+            $("#dialog-generate-file").dialog({
+                resizable: false,
+                height:200,
+                modal: true,
+                autoOpen: false,
+                buttons: {
+                    "Generate File": function() {
+                        $( this ).dialog( "close" );
+                        $('#tc_generatefile').prop('checked', true)
+                        runPlugin();
+                    },
+                    Cancel: function() {
+                        $( this ).dialog( "close" );
+                        $('#loading-div').hide();
+                        $("#formwrap").show();
+                    }
+                }
+            });
+    		
+    		// gets the data that will be entered in to the preview pane
+    		getGlobalConfigData();
+    		runData = getRunData(TB_result);
+    		timeOfRun = runData['results'].timeStamp;
+            chipType = runData['experiment'].chipType;
+            initializeLeaderboard(chipType.replace(/[^0-9]/g, ''), '#leaderboard_wrapper', runData, '#leaderboard_position');
+            $('#reference_genome').val(runData['libmetrics'].genome);
+    		$.ajax({
+    	        url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrunfielddefinition?limit=1000',
+    	        dataType : "jsonp",
+    	        contentType : "application/json; charset=utf-8",
+    	        type : "GET",
+    	        timeout: 5000,
+    	        error: function(XHR, textStatus, errorThrown){
+    	        	$('#data_preview_loading').hide();
+    	            if (textStatus != 'success') {
+    	            	appendData('Time Stamp', timeOfRun, 2);
+    	                appendData('Analysis Version', runData['results'].analysisVersion, 2);
+    	                appendData('Chip Type', chipType, 2);
+    	            	$.each(runData['qualitymetrics'], function(key, val) {
+    	            		appendData(key, val, 2)
+    	            	});
+    	            	$.each(runData['libmetrics'], function(key, val) {
+                            appendData(key, val, 2)
+                        });
+    	            }
+    	        },
+    	        success : function(fieldDefs) {
+    	        	$('#data_preview_loading').hide();
+    	        	appendData('Time Stamp', timeOfRun);
+    	            appendData('Analysis Version', runData['results'].analysisVersion);
+    	            appendData('Chip Type', chipType);
+                    $.each(fieldDefs['objects'], function(i, curField) {
+                    	appendData(curField.name, runData[curField.ts_object][curField.ts_field]);
+                    });
+    	        }
+    	    });
+       	});
+        
+        
+    
+    	$(function() {
+    	    //process form to grab html objects and turn them into json objects 
+    		$.fn.serializeObject = function() {
+    			var o = {};
+    			var a = this.serializeArray();
+    
+    			$.each(a, function() {
+    				if (o[this.name] != null) {
+    					if (!o[this.name].push) {
+    						o[this.name] = [ o[this.name] ];
+    					}
+    
+    					o[this.name].push(this.value || '');
+    				} else if (this.name == "file") {
+    
+    					o[this.name] = [ this.value || '' ];
+    				} else {
+    					o[this.name] = this.value || '';
+    				}
+    			});
+    
+    			return o;
+    		};
+    
+    		$(function() {
+    			$('#postbutton').click(function() {
+    				// on clicking to submit the form, first validate 
+    				if (validateForm() == false) {
+    					return;
+    				}
+    				
+    				// then check if this has been submitted before
+    				if ($('#tc_generatefile').prop('checked')) {
+                        runPlugin();
+                    } else {
+        				checkDuplicate();
+                    }
+    			});
+    		})
+    	});
+    </script>
+</head>
+
+<!--build the html page for what the user sees-->
+<body>
+    <div id="loading-div" style="text-align: center; display: none;">
+        <img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Starting the Plugin...</p>
+    </div>
+    <div id="formwrap">
+        <div id="dialog-confirm" title="Overwrite submission?">
+            <p style="font-size: 12px;"><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>You have previously uploaded this run before.  Continuing will cause your data to be overwritten.</p>
+        </div>
+        <div id="dialog-generate-file" title="Generate File?">
+            <p style="font-size: 12px;"><span class="ui-icon ui-icon-alert" style="float:left; margin:0 7px 20px 0;"></span>A connection to the leaderboard could not be made.  Would you like to generate a file to upload later?</p>
+        </div>
+        <h3>Run RecognitION Leaderboard</h3>
+        <div class="hpad15">
+            <div class="border">
+                <div class="leaderboard_wrapper" id="leaderboard_wrapper">
+                </div>
+                <div id="leaderboard_position">
+                </div>
+            </div>
+        </div>
+        
+        <h3>Review Data to Be Submitted</h3>
+        <div class="hpad15">
+            <div class="border">
+                <a href="javascript:void(0);" id="data_preview_link">Show/Hide</a> the data that will be sent to the leaderboard.
+                <div id='data_preview' style="display: none;">
+                    <div id='data_preview_loading'>
+                        <div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Loading" style="float:center"></img><p>Loading...</p></div>
+                    </div>
+                    <table class="data" id="data_preview_table">
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <br/><p style="line-height:1.3em;">Provide your Ion Community login to upload to the Leaderboard or generate a file that can be uploaded later.</p>
+        <div id='form_errors' style="color: red;"></div>
+        <form id="inputform" name="inputform" onsubmit="return validateForm()">
+            <table class="runtable_outer">
+                <tr>
+                    <td class="col50">
+                        <h3>Ion Community Login</h3>
+                        <div class="hpad15">
+                            <table class="runtable">
+                                <tr>
+                                    <td scope="row" colspan="2"><input type="checkbox" id="tc_generatefile" name="tc_generatefile" onclick="javascript: checkGenerateFile(this);"/>I want to generate a file to upload later.<br></td>
+                                </tr>
+                                <tr>
+                                    <td scope="row" style="width:12em;"><strong>Username:</strong></td>
+                                    <td><input type="text" id="username" name="username" value="" /></td>
+                                </tr>
+                                <tr>
+                                   <td scope="row" style="width:12em;"><strong>Password:</strong></td>
+                                    <td><input type="password" id="password" name="password" value="" /></td>
+                                </tr>
+                                <tr>
+                                    <td scope="row" style="width:12em; text-align: center" colspan="2">Need to <a href="http://ioncommunity.iontorrent.com/" target="_blank">create an account</a>?</td>
+                                </tr>
+                           </table>
+                        </div>
+                    </td>
+                    <td class="col50">
+                        <h3>Additional Information About the Run</h3>
+                        <div class="hpad15">
+                            <table class="runtable">
+                                <tr>
+                                    <td scope="row" style="width:12em;"><strong>Site Name:</strong></td>
+                                    <td><input type="text" id="site_name" name="site_name" /></td>
+                                </tr>
+                                <tr>
+                                    <td scope="row" style="width:12em;"><strong>Reference Genome:</strong></td>
+                                    <td><input type="text" id="reference_genome" name="reference_genome" /></td>
+                                </tr>
+                                <tr>
+                                    <td scope="row" style="width:12em;"><strong>Application Type:</strong></td>
+                                    <td><input type="text" id="application_type" name="application_type" /></td>
+                                </tr>
+                                <tr>
+                                    <td scope="row" colspan="2"><input type="checkbox" id="tc_aggreement" name="tc_aggreement" /> I agree to the <a href="http://lifetech-it.hosted.jivesoftware.com/docs/DOC-1951" target="_blank">Terms and conditions</a></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </td>
+               </tr>
+            </table>
+        </form>
+        <div class="centered">
+            <input id="postbutton" type="submit" value="Upload">
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,10 @@
+--- a/bam2depth.c	2011-11-07 15:40:47.703434693 -0500
++++ b/bam2depth.c	2011-11-07 15:41:55.144515157 -0500
+@@ -80,6 +80,7 @@
+ 
+ 	// the core multi-pileup loop
+ 	mplp = bam_mplp_init(n, read_bam, (void**)data); // initialization
++	bam_mplp_set_maxcnt(mplp, 1000000); // set max depth to 1M 
+ 	n_plp = calloc(n, sizeof(int)); // n_plp[i] is the number of covering reads from the i-th BAM
+ 	plp = calloc(n, sizeof(void*)); // plp[i] points to the array of covering reads (internal in mplp)
+ 	while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0) { // come to the next covered position

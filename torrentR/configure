@@ -1,0 +1,55 @@
+
+if [ -z $BUILD_ROOT ]
+then
+  BUILD_ROOT=$PWD
+fi
+
+if [$ANALYSIS_INC == ""]
+then
+  ANALYSIS_INC=$BUILD_ROOT/../Analysis
+fi
+
+if [$BKGMODEL_INC == ""]
+then
+  BKGMODEL_INC=$BUILD_ROOT/../Analysis/BkgModel
+fi
+
+if [$PHASE_INC == ""]
+then
+  PHASE_INC=$BUILD_ROOT/../Analysis/Phase
+fi
+
+
+if [$ANALYSIS_LIB == ""]
+then
+  ANALYSIS_LIB=$BUILD_ROOT/../build/Analysis
+fi
+
+if [$LAPACKCPP_INC == ""]
+then
+  LAPACKCPP_INC=$BUILD_ROOT/../external/lapackpp-2.5.3/include
+fi
+
+if [$LAPACKCPP_LIB == ""]
+then
+  LAPACKCPP_LIB=$BUILD_ROOT/../external/lapackpp-2.5.3/src/.libs/liblapackpp.a
+fi
+
+if [$ARMADILLO_INC == ""]
+then
+    ARMADILLO_INC=$BUILD_ROOT/../external/armadillo-1.1.0/include
+fi
+
+
+if [$SAMTOOLS_INC == ""]
+then
+    SAMTOOLS_INC=$BUILD_ROOT/../external/samtools-0.1.18
+fi
+    
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$ANALYSIS_INC -I$SAMTOOLS_INC -I$BKGMODEL_INC -I$PHASE_INC -I$BUILD_ROOT/../external/hdf5-1.8.7/src -I$LAPACKCPP_INC -I$ARMADILLO_INC -Wall -g"
+
+PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.7/hdf5/lib/libhdf5.a  $LAPACKCPP_LIB -llapack -lblas -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -L/usr/lib -L$BUILD_ROOT/../external/cuda/lib64 -L$BUILD_ROOT/../external/cuda/lib -L$BUILD_ROOT/../external/samtools-0.1.18 -lbam -lcudart -lcuda"
+
+sed -e "s|@PKG_LIBS@|${PKG_LIBS}|" \
+    -e "s|@PKG_CPPFLAGS@|${PKG_CPPFLAGS}|" \
+    src/Makevars.in > src/Makevars

@@ -1,0 +1,707 @@
+\hypertarget{class_b_a_m_read}{
+\section{BAMRead Class Reference}
+\label{class_b_a_m_read}\index{BAMRead@{BAMRead}}
+}
+
+
+{\ttfamily \#include $<$BAMRead.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_b_a_m_read_a2941b759b5655356a4ca02760dc6ca5e}{BAMRead} ()
+\item 
+\hyperlink{class_b_a_m_read_a946460d3c95417f5d7071afde2e9bdeb}{BAMRead} (bam1\_\-t $\ast$BAM\_\-read, const bam\_\-header\_\-t $\ast$BAM\_\-header)
+\item 
+\hyperlink{class_b_a_m_read_ae60c749028e839956b8b256357e3aebf}{BAMRead} (bam\_\-ptr shared\_\-bam\_\-ptr, const bam\_\-header\_\-t $\ast$BAM\_\-header)
+\item 
+\hyperlink{class_b_a_m_read_a88ae0799815e3e930e773a5717aad0fb}{$\sim$BAMRead} ()
+\item 
+\hyperlink{class_b_a_m_read_ac07560ff3a2d6c645774e72605e85439}{BAMRead} (\hyperlink{class_b_a_m_read}{BAMRead} const \&other)
+\item 
+\hyperlink{class_b_a_m_read}{BAMRead} \& \hyperlink{class_b_a_m_read_a6d1e8f2f083126575ef2fb3ae0662af9}{operator=} (\hyperlink{class_b_a_m_read}{BAMRead} that)
+\item 
+\hypertarget{class_b_a_m_read_a81d2bbea4473e61c95129798c6955706}{
+bam1\_\-t $\ast$ {\bfseries get\_\-bam\_\-ptr} () const }
+\label{class_b_a_m_read_a81d2bbea4473e61c95129798c6955706}
+
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_a6d9d5003de72a18427480e2ffcbd75fc}{get\_\-qname} () const 
+\item 
+uint32\_\-t \hyperlink{class_b_a_m_read_a6a6794d5f7cd8f42b00cc933ea0c8f15}{get\_\-flag} () const 
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_abfa160a0de8d874f5209e39efd796eac}{get\_\-rname} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_ad0eabedce37189ad45ba29eadbee550a}{get\_\-pos} () const 
+\item 
+int \hyperlink{class_b_a_m_read_a6e53eeaa3db0034c9094402c89730b28}{get\_\-mapq} () const 
+\item 
+\hyperlink{class_cigar}{Cigar} \hyperlink{class_b_a_m_read_a887a47130c84d01b2f114fca460816e5}{get\_\-cigar} ()
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_ac240b76b0e03ab6b55c20194b056d065}{get\_\-rnext} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_a0281ad0d64a15d874314ffe15c98c615}{get\_\-pnext} () const 
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_a773f27591a8141752326458aa5942352}{get\_\-tlen} () const 
+\item 
+\hyperlink{class_sequence}{Sequence} \hyperlink{class_b_a_m_read_ad368179a81717f7770caf071f8497c33}{get\_\-seq} ()
+\item 
+\hyperlink{class_qual}{Qual} \hyperlink{class_b_a_m_read_ae1310c47ffebba2974b2e17424f3d45b}{get\_\-qual} ()
+\item 
+int \hyperlink{class_b_a_m_read_a04421480527f25f49e0cec5ad248cf4f}{get\_\-tid} () const 
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_a358fbd29d88ad606659cac981102e03a}{get\_\-xa} () const 
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_ad0a0a8ccc29cd8329056e006e75d32be}{get\_\-xs} () const 
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_a98e60253d0a82bc31c39ce73404f31d3}{get\_\-xt} () const 
+\item 
+int \hyperlink{class_b_a_m_read_aa713b4e990bd25a99cb6cb6ccaba7ac8}{get\_\-as} ()
+\item 
+int \hyperlink{class_b_a_m_read_aaa3950f12efb6682676829ea61b59d6d}{get\_\-hi} ()
+\item 
+int \hyperlink{class_b_a_m_read_a040e66330ed38e9ac2a5080029ce522f}{get\_\-ih} ()
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_a3db15b68f63c8e263a9b08874404f522}{get\_\-pg} ()
+\item 
+int \hyperlink{class_b_a_m_read_af8aa1684299833e57837b4fde4298ea9}{get\_\-sm} ()
+\item 
+str\_\-ptr \hyperlink{class_b_a_m_read_ac8b4d5ec304d8fa8c75dcac71e38759f}{get\_\-rg} ()
+\item 
+int \hyperlink{class_b_a_m_read_a551b6a6a5c2946c8a29fa4c1ebbfab02}{get\_\-nm} ()
+\item 
+int \hyperlink{class_b_a_m_read_aa54edc07ecf6aff07a1475a993776338}{get\_\-nh} ()
+\item 
+\hyperlink{class_m_d}{MD} \hyperlink{class_b_a_m_read_a58f99aed61006fb9b4a4a3115382ca18}{get\_\-md} ()
+\item 
+bool \hyperlink{class_b_a_m_read_ac6e68fb8c75b6f722024a81ab5866d92}{is\_\-mapped} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_abee0c3fd935865fb8bde955931a66d80}{is\_\-mapped\_\-unique} ()
+\item 
+bool \hyperlink{class_b_a_m_read_ac42757573fe5d30cc8725124fd28fd2b}{is\_\-paired} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_a12218736728585c3ad8e22be41e63b8a}{proper\_\-pair} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_a2bf6db37d6f73fdd6cf1ef233efa46d0}{mapped\_\-reverse\_\-strand} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_adbc2990ced7211feb13c382eb9d0ae93}{mate\_\-mapped\_\-reverse\_\-strand} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_aaf25681f4fc846f4718cbc440d6a038a}{is\_\-read1} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_a7b0214dc321ad06f766d5bbde98e38d5}{is\_\-read2} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_a77171be799f523f1b5b14cdcecbee1e0}{is\_\-primary} () const 
+\item 
+bool \hyperlink{class_b_a_m_read_a19a7b642813b3bb41acfed7ccf11a4bc}{is\_\-duplicate} () const 
+\item 
+coord\_\-t \hyperlink{class_b_a_m_read_a612a3a20a299d8ecb8fc4d9b87a3d5ac}{get\_\-ref\_\-len} ()
+\item 
+int \hyperlink{class_b_a_m_read_a2bd07073d526f48485c2ac034572b3c4}{calend} () const 
+\item 
+std::string \hyperlink{class_b_a_m_read_a952441067ff9c1ec819dc1819964e0b3}{to\_\-string} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+class \hyperlink{class_b_a_m_read}{BAMRead} this class is an object representation of an entry for a sam/bam file. It contains funcitons to retrieve each field from a file following the samtools spec: \href{http://samtools.sourceforge.net/SAM1.pdf}{\tt http://samtools.sourceforge.net/SAM1.pdf} In order to use this type, you need to first construct a \hyperlink{class_b_a_m_reader}{BAMReader}. See BAMReader's documentation 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_b_a_m_read_a2941b759b5655356a4ca02760dc6ca5e}{
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\subsubsection[{BAMRead}]{\setlength{\rightskip}{0pt plus 5cm}BAMRead::BAMRead (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a2941b759b5655356a4ca02760dc6ca5e}
+Default constructor. all fields will be null. attempts to call functions will throw null assertions This constructor is required in order to use BAMRead's in STL containers. \hypertarget{class_b_a_m_read_a946460d3c95417f5d7071afde2e9bdeb}{
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\subsubsection[{BAMRead}]{\setlength{\rightskip}{0pt plus 5cm}BAMRead::BAMRead (
+\begin{DoxyParamCaption}
+\item[{bam1\_\-t $\ast$}]{BAM\_\-read, }
+\item[{const bam\_\-header\_\-t $\ast$}]{BAM\_\-header}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a946460d3c95417f5d7071afde2e9bdeb}
+A call to this constructor makes a copy of the bam1\_\-t$\ast$, and assumes the BAM\_\-header reference will be valid for the life time of this object
+
+
+\begin{DoxyParams}{Parameters}
+{\em bam1\_\-t$\ast$} & BAM\_\-read these are c-\/structures internal to samtools. detailed in samtools$\ast$ /bam.h. They are the c-\/representation of the alignment, and are essentially the equivalent of this \hyperlink{class_b_a_m_read}{BAMRead} object \\
+\hline
+{\em const} & bam\_\-header\_\-t$\ast$ BAM\_\-header this is a pointer to a c-\/structure internal to samtools. detailed in samtools$\ast$ /bam.h They contain the header portion of the sam/bam file \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_b_a_m_read_ae60c749028e839956b8b256357e3aebf}{
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\subsubsection[{BAMRead}]{\setlength{\rightskip}{0pt plus 5cm}BAMRead::BAMRead (
+\begin{DoxyParamCaption}
+\item[{bam\_\-ptr}]{shared\_\-bam\_\-ptr, }
+\item[{const bam\_\-header\_\-t $\ast$}]{BAM\_\-header}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ae60c749028e839956b8b256357e3aebf}
+This constructor can be used to reduce memory if you're copying BAMRead's. However, the operator= is overloaded and it's recommended you use that. 
+\begin{DoxyParams}{Parameters}
+{\em std::shared\_\-ptr$<$bam1\_\-t$>$} & shared\_\-bam\_\-ptr a shared pointer to the bam1\_\-t. \\
+\hline
+{\em const} & bam\_\-header\_\-t$\ast$ BAM\_\-header this is a pointer to a c-\/structure internal to samtools. detailed in samtools$\ast$ /bam.h They contain the header portion of the sam/bam file \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_b_a_m_read_a88ae0799815e3e930e773a5717aad0fb}{
+\index{BAMRead@{BAMRead}!$\sim$BAMRead@{$\sim$BAMRead}}
+\index{$\sim$BAMRead@{$\sim$BAMRead}!BAMRead@{BAMRead}}
+\subsubsection[{$\sim$BAMRead}]{\setlength{\rightskip}{0pt plus 5cm}BAMRead::$\sim$BAMRead (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a88ae0799815e3e930e773a5717aad0fb}
+clears internal memory allocated in constructor. \hypertarget{class_b_a_m_read_ac07560ff3a2d6c645774e72605e85439}{
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\index{BAMRead@{BAMRead}!BAMRead@{BAMRead}}
+\subsubsection[{BAMRead}]{\setlength{\rightskip}{0pt plus 5cm}BAMRead::BAMRead (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead} const \&}]{other}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ac07560ff3a2d6c645774e72605e85439}
+Copy constructor 
+\begin{DoxyParams}{Parameters}
+{\em \hyperlink{class_b_a_m_read}{BAMRead}} & const\& a reference to an existing \hyperlink{class_b_a_m_read}{BAMRead} \\
+\hline
+\end{DoxyParams}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_b_a_m_read_a2bd07073d526f48485c2ac034572b3c4}{
+\index{BAMRead@{BAMRead}!calend@{calend}}
+\index{calend@{calend}!BAMRead@{BAMRead}}
+\subsubsection[{calend}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::calend (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a2bd07073d526f48485c2ac034572b3c4}
+This function returns the right most position of the read. It uses the cigar string to do so.
+
+\begin{DoxyReturn}{Returns}
+int right most position of read 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_aa713b4e990bd25a99cb6cb6ccaba7ac8}{
+\index{BAMRead@{BAMRead}!get\_\-as@{get\_\-as}}
+\index{get\_\-as@{get\_\-as}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-as}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-as (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_aa713b4e990bd25a99cb6cb6ccaba7ac8}
+Alignment score generated by aligner
+
+\begin{DoxyReturn}{Returns}
+int score 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a887a47130c84d01b2f114fca460816e5}{
+\index{BAMRead@{BAMRead}!get\_\-cigar@{get\_\-cigar}}
+\index{get\_\-cigar@{get\_\-cigar}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-cigar}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Cigar} BAMRead::get\_\-cigar (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_read_a887a47130c84d01b2f114fca460816e5}
+CIGAR: CIGAR string. The CIGAR operations are given in the following table (set `$\ast$' if un-\/ available)
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_cigar}{Cigar} an iterable object representation of the CIGAR string 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a6a6794d5f7cd8f42b00cc933ea0c8f15}{
+\index{BAMRead@{BAMRead}!get\_\-flag@{get\_\-flag}}
+\index{get\_\-flag@{get\_\-flag}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-flag}]{\setlength{\rightskip}{0pt plus 5cm}uint32\_\-t BAMRead::get\_\-flag (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a6a6794d5f7cd8f42b00cc933ea0c8f15}
+returns the flag fields of the read. From spec: FLAG: bitwise FLAG. Each bit is explained in the following table: Bit Description 0x1 template having multiple fragments in sequencing 0x2 each fragment properly aligned according to the aligner 0x4 fragment unmapped 0x8 next fragment in the template unmapped 0x10 SEQ being reverse complemented 0x20 SEQ of the next fragment in the template being reversed 0x40 the first fragment in the template 0x80 the last fragment in the template 0x100 secondary alignment 0x200 not passing quality controls 0x400 PCR or optical duplicate
+
+\begin{DoxyReturn}{Returns}
+uint32\_\-t unsigned encoded 32-\/bit integer 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_aaa3950f12efb6682676829ea61b59d6d}{
+\index{BAMRead@{BAMRead}!get\_\-hi@{get\_\-hi}}
+\index{get\_\-hi@{get\_\-hi}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-hi}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-hi (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_aaa3950f12efb6682676829ea61b59d6d}
+Query hit index, indicating the alignment record is the i-\/th one stored in SAM
+
+\begin{DoxyReturn}{Returns}
+int i-\/th sam record 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a040e66330ed38e9ac2a5080029ce522f}{
+\index{BAMRead@{BAMRead}!get\_\-ih@{get\_\-ih}}
+\index{get\_\-ih@{get\_\-ih}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-ih}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-ih (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a040e66330ed38e9ac2a5080029ce522f}
+Number of stored alignments in SAM that contains the query in the current record
+
+\begin{DoxyReturn}{Returns}
+int num of sam records 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a6e53eeaa3db0034c9094402c89730b28}{
+\index{BAMRead@{BAMRead}!get\_\-mapq@{get\_\-mapq}}
+\index{get\_\-mapq@{get\_\-mapq}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-mapq}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-mapq (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a6e53eeaa3db0034c9094402c89730b28}
+MAPQ: MAPping Quality. It equals -\/10 x log10 Pr\{mapping position is wrong\}, rounded to the nearest integer. A value 255 indicates that the mapping quality is not available.
+
+\begin{DoxyReturn}{Returns}
+int integer representing the mapping quality 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a58f99aed61006fb9b4a4a3115382ca18}{
+\index{BAMRead@{BAMRead}!get\_\-md@{get\_\-md}}
+\index{get\_\-md@{get\_\-md}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-md}]{\setlength{\rightskip}{0pt plus 5cm}{\bf MD} BAMRead::get\_\-md (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a58f99aed61006fb9b4a4a3115382ca18}
+The \hyperlink{class_m_d}{MD} field aims to achieve SNP/indel calling without looking at the reference. For example, a string `10A5$^\wedge$AC6' means from the leftmost reference base in the alignment, there are 10 matches followed by an A on the reference which is different from the aligned read base; the next 5 reference bases are matches followed by a 2bp deletion from the reference; the deleted sequence is AC; the last 6 bases are matches. The \hyperlink{class_m_d}{MD} field ought to match the CIGAR string.
+
+String for mismatching positions. Regex : \mbox{[}0-\/9\mbox{]}+((\mbox{[}A-\/Z\mbox{]}$|$$\backslash$$^\wedge$\mbox{[}A-\/Z\mbox{]}+)\mbox{[}0-\/9\mbox{]}+)
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_m_d}{MD} iterable object representing \hyperlink{class_m_d}{MD} string 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_aa54edc07ecf6aff07a1475a993776338}{
+\index{BAMRead@{BAMRead}!get\_\-nh@{get\_\-nh}}
+\index{get\_\-nh@{get\_\-nh}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-nh}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-nh (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_aa54edc07ecf6aff07a1475a993776338}
+Number of reported alignments that contains the query in the current record
+
+\begin{DoxyReturn}{Returns}
+int num of alignments 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a551b6a6a5c2946c8a29fa4c1ebbfab02}{
+\index{BAMRead@{BAMRead}!get\_\-nm@{get\_\-nm}}
+\index{get\_\-nm@{get\_\-nm}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-nm}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-nm (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a551b6a6a5c2946c8a29fa4c1ebbfab02}
+Edit distance to the reference, including ambiguous bases but excluding clipping
+
+\begin{DoxyReturn}{Returns}
+int hamming distance to ref 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a3db15b68f63c8e263a9b08874404f522}{
+\index{BAMRead@{BAMRead}!get\_\-pg@{get\_\-pg}}
+\index{get\_\-pg@{get\_\-pg}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-pg}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-pg (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a3db15b68f63c8e263a9b08874404f522}
+Program. Value matches the header PG-\/ID tag if  is present
+
+\begin{DoxyReturn}{Returns}
+char$\ast$ aligner name 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a0281ad0d64a15d874314ffe15c98c615}{
+\index{BAMRead@{BAMRead}!get\_\-pnext@{get\_\-pnext}}
+\index{get\_\-pnext@{get\_\-pnext}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-pnext}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-pnext (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a0281ad0d64a15d874314ffe15c98c615}
+(only used for paired reads) PNEXT: Position of the NEXT fragment in the template. Set as 0 when the information is unavailable. This field equals POS of the next fragment. If PNEXT is 0, no assumptions can be made on RNEXT and bit 0x20.
+
+\begin{DoxyReturn}{Returns}
+long position this read's pair aligns to in genome 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ad0eabedce37189ad45ba29eadbee550a}{
+\index{BAMRead@{BAMRead}!get\_\-pos@{get\_\-pos}}
+\index{get\_\-pos@{get\_\-pos}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-pos}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-pos (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ad0eabedce37189ad45ba29eadbee550a}
+1-\/based leftmost mapping POSition of the first matching base. The first base in a reference sequence has coordinate 1. POS is set as 0 for an unmapped read without coordinate. If POS is 0, no assumptions can be made about RNAME and CIGAR.
+
+\begin{DoxyReturn}{Returns}
+long 1-\/based position in genome 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a6d9d5003de72a18427480e2ffcbd75fc}{
+\index{BAMRead@{BAMRead}!get\_\-qname@{get\_\-qname}}
+\index{get\_\-qname@{get\_\-qname}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-qname}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-qname (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a6d9d5003de72a18427480e2ffcbd75fc}
+QNAME: Query template NAME. Reads/fragments having identical QNAME are regarded to come from the same template. A QNAME `$\ast$' indicates the information is unavailable.
+
+\begin{DoxyReturn}{Returns}
+const char$\ast$ a pointer to a string 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ae1310c47ffebba2974b2e17424f3d45b}{
+\index{BAMRead@{BAMRead}!get\_\-qual@{get\_\-qual}}
+\index{get\_\-qual@{get\_\-qual}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-qual}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Qual} BAMRead::get\_\-qual (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_read_ae1310c47ffebba2974b2e17424f3d45b}
+QUAL: ASCII of base QUALity plus 33 (same as the quality string in the Sanger FASTQ format). A base quality is the phred-\/scaled base error probability which equals 10 log10 Prfbase is wrongg. This field can be a `$\ast$' when quality is not stored. If not a `$\ast$', SEQ must not be a `$\ast$' and the length of the quality string ought to equal the length of SEQ.
+
+return \hyperlink{class_qual}{Qual} an iterable object representation of the QUAL string \hypertarget{class_b_a_m_read_a612a3a20a299d8ecb8fc4d9b87a3d5ac}{
+\index{BAMRead@{BAMRead}!get\_\-ref\_\-len@{get\_\-ref\_\-len}}
+\index{get\_\-ref\_\-len@{get\_\-ref\_\-len}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-ref\_\-len}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-ref\_\-len (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a612a3a20a299d8ecb8fc4d9b87a3d5ac}
+Returns length of reference that this read aligns to.
+
+\begin{DoxyReturn}{Returns}
+long reference length 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ac8b4d5ec304d8fa8c75dcac71e38759f}{
+\index{BAMRead@{BAMRead}!get\_\-rg@{get\_\-rg}}
+\index{get\_\-rg@{get\_\-rg}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-rg}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-rg (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ac8b4d5ec304d8fa8c75dcac71e38759f}
+Read group. Value matches the header RG-\/ID tag if  is present in the header.
+
+\begin{DoxyReturn}{Returns}
+char$\ast$ read group 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_abfa160a0de8d874f5209e39efd796eac}{
+\index{BAMRead@{BAMRead}!get\_\-rname@{get\_\-rname}}
+\index{get\_\-rname@{get\_\-rname}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-rname}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-rname (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_abfa160a0de8d874f5209e39efd796eac}
+RNAME: Reference sequence NAME of the alignment. If  header lines are present, RNAME (if not `$\ast$') must be present in one of the SQ-\/SN tag. An unmapped fragment without coordinate has a `$\ast$' at this field. However, an unmapped fragment may also have an ordinary coordinate such that it can be placed at a desired position after sorting. If RNAME is `$\ast$', no assumptions can be made about POS and CIGAR.
+
+\begin{DoxyReturn}{Returns}
+const char$\ast$ a pointer to a string 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ac240b76b0e03ab6b55c20194b056d065}{
+\index{BAMRead@{BAMRead}!get\_\-rnext@{get\_\-rnext}}
+\index{get\_\-rnext@{get\_\-rnext}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-rnext}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-rnext (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_read_ac240b76b0e03ab6b55c20194b056d065}
+(only used for paired reads) RNEXT: Reference sequence name of the NEXT fragment in the template. For the last fragment, the next fragment is the first fragment in the template. If  header lines are present, RNEXT (if not `$\ast$' or `=') must be present in one of the SQ-\/SN tag. This field is set as `$\ast$' when the information is unavailable, and set as `=' if RNEXT is identical RNAME. If not `=' and the next fragment in the template has one primary mapping (see also bit 0x100 in FLAG), this field is identical to RNAME of the next fragment. If the next fragment has multiple primary mappings, no assumptions can be made about RNEXT and PNEXT. If RNEXT is `$\ast$', no assumptions can be made on PNEXT and bit 0x20.
+
+\begin{DoxyReturn}{Returns}
+const char$\ast$ a string for this read's pair reference it aligned to (only used for paired reads) 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ad368179a81717f7770caf071f8497c33}{
+\index{BAMRead@{BAMRead}!get\_\-seq@{get\_\-seq}}
+\index{get\_\-seq@{get\_\-seq}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-seq}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Sequence} BAMRead::get\_\-seq (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_read_ad368179a81717f7770caf071f8497c33}
+SEQ: fragment SEQuence. This field can be a `$\ast$' when the sequence is not stored. If not a `$\ast$', the length of the sequence must equal the sum of lengths of M/I/S/=/X operations in CIGAR. An `=' denotes the base is identical to the reference base. No assumptions can be made on the letter cases.
+
+return \hyperlink{class_sequence}{Sequence} an iterable object representation of the SEQ string \hypertarget{class_b_a_m_read_af8aa1684299833e57837b4fde4298ea9}{
+\index{BAMRead@{BAMRead}!get\_\-sm@{get\_\-sm}}
+\index{get\_\-sm@{get\_\-sm}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-sm}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-sm (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_af8aa1684299833e57837b4fde4298ea9}
+Template-\/independent mapping quality
+
+\begin{DoxyReturn}{Returns}
+int mapping quality 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a04421480527f25f49e0cec5ad248cf4f}{
+\index{BAMRead@{BAMRead}!get\_\-tid@{get\_\-tid}}
+\index{get\_\-tid@{get\_\-tid}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-tid}]{\setlength{\rightskip}{0pt plus 5cm}int BAMRead::get\_\-tid (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a04421480527f25f49e0cec5ad248cf4f}
+returns the index of the reference this read aligned to from the header.
+
+\begin{DoxyReturn}{Returns}
+int an integer index to aligned reference from header 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a773f27591a8141752326458aa5942352}{
+\index{BAMRead@{BAMRead}!get\_\-tlen@{get\_\-tlen}}
+\index{get\_\-tlen@{get\_\-tlen}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-tlen}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-tlen (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a773f27591a8141752326458aa5942352}
+TLEN: signed observed Template LENgth. If all fragments are mapped to the same reference, the unsigned observed template length equals the number of bases from the leftmost mapped base to the rightmost mapped base. The leftmost fragment has a plus sign and the rightmost has a minus sign. The sign of fragments in the middle is undefined. It is set as 0 for single-\/fragment template or when the information is unavailable.
+
+\begin{DoxyReturn}{Returns}
+long length of alignment 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a358fbd29d88ad606659cac981102e03a}{
+\index{BAMRead@{BAMRead}!get\_\-xa@{get\_\-xa}}
+\index{get\_\-xa@{get\_\-xa}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-xa}]{\setlength{\rightskip}{0pt plus 5cm}str\_\-ptr BAMRead::get\_\-xa (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a358fbd29d88ad606659cac981102e03a}
+TMAP specific tag. This returns the alignment algorithm used to map this read
+
+\begin{DoxyReturn}{Returns}
+const char$\ast$ a string representing algorithm used to map read 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ad0a0a8ccc29cd8329056e006e75d32be}{
+\index{BAMRead@{BAMRead}!get\_\-xs@{get\_\-xs}}
+\index{get\_\-xs@{get\_\-xs}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-xs}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-xs (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ad0a0a8ccc29cd8329056e006e75d32be}
+TMAP specific tag. not sure what this one is yet
+
+\begin{DoxyReturn}{Returns}
+long not sure yet 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a98e60253d0a82bc31c39ce73404f31d3}{
+\index{BAMRead@{BAMRead}!get\_\-xt@{get\_\-xt}}
+\index{get\_\-xt@{get\_\-xt}!BAMRead@{BAMRead}}
+\subsubsection[{get\_\-xt}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMRead::get\_\-xt (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a98e60253d0a82bc31c39ce73404f31d3}
+TMAP specific tag. not sure what this one is yet
+
+\begin{DoxyReturn}{Returns}
+long not sure yet 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a19a7b642813b3bb41acfed7ccf11a4bc}{
+\index{BAMRead@{BAMRead}!is\_\-duplicate@{is\_\-duplicate}}
+\index{is\_\-duplicate@{is\_\-duplicate}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-duplicate}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-duplicate (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a19a7b642813b3bb41acfed7ccf11a4bc}
+Returns true if this is a PCR duplicate
+
+\begin{DoxyReturn}{Returns}
+bool true if duplicate 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ac6e68fb8c75b6f722024a81ab5866d92}{
+\index{BAMRead@{BAMRead}!is\_\-mapped@{is\_\-mapped}}
+\index{is\_\-mapped@{is\_\-mapped}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-mapped}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-mapped (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ac6e68fb8c75b6f722024a81ab5866d92}
+Returns true if the read is mapped \begin{DoxyReturn}{Returns}
+bool true if read is mapped 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_abee0c3fd935865fb8bde955931a66d80}{
+\index{BAMRead@{BAMRead}!is\_\-mapped\_\-unique@{is\_\-mapped\_\-unique}}
+\index{is\_\-mapped\_\-unique@{is\_\-mapped\_\-unique}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-mapped\_\-unique}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-mapped\_\-unique (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_abee0c3fd935865fb8bde955931a66d80}
+Returns true if the read maps to only 1 location in the reference(s)
+
+\begin{DoxyReturn}{Returns}
+bool true if uniquely mapped 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_ac42757573fe5d30cc8725124fd28fd2b}{
+\index{BAMRead@{BAMRead}!is\_\-paired@{is\_\-paired}}
+\index{is\_\-paired@{is\_\-paired}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-paired}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-paired (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_ac42757573fe5d30cc8725124fd28fd2b}
+Returns true if the alignment has a pair in this sam/bam file
+
+\begin{DoxyReturn}{Returns}
+bool true if alignment is paired 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a77171be799f523f1b5b14cdcecbee1e0}{
+\index{BAMRead@{BAMRead}!is\_\-primary@{is\_\-primary}}
+\index{is\_\-primary@{is\_\-primary}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-primary}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-primary (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a77171be799f523f1b5b14cdcecbee1e0}
+Returns true if this is the primary alignment for this read
+
+\begin{DoxyReturn}{Returns}
+bool true if primary alignment 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_aaf25681f4fc846f4718cbc440d6a038a}{
+\index{BAMRead@{BAMRead}!is\_\-read1@{is\_\-read1}}
+\index{is\_\-read1@{is\_\-read1}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-read1}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-read1 (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_aaf25681f4fc846f4718cbc440d6a038a}
+Returns true if this is the first alignment in the pair
+
+\begin{DoxyReturn}{Returns}
+bool true if read 1 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a7b0214dc321ad06f766d5bbde98e38d5}{
+\index{BAMRead@{BAMRead}!is\_\-read2@{is\_\-read2}}
+\index{is\_\-read2@{is\_\-read2}!BAMRead@{BAMRead}}
+\subsubsection[{is\_\-read2}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::is\_\-read2 (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a7b0214dc321ad06f766d5bbde98e38d5}
+Returns true if this is the second alignment in the pair
+
+\begin{DoxyReturn}{Returns}
+bool true if read 2 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a2bf6db37d6f73fdd6cf1ef233efa46d0}{
+\index{BAMRead@{BAMRead}!mapped\_\-reverse\_\-strand@{mapped\_\-reverse\_\-strand}}
+\index{mapped\_\-reverse\_\-strand@{mapped\_\-reverse\_\-strand}!BAMRead@{BAMRead}}
+\subsubsection[{mapped\_\-reverse\_\-strand}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::mapped\_\-reverse\_\-strand (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a2bf6db37d6f73fdd6cf1ef233efa46d0}
+Returns true if alignment is mapped to the reverse strand (3')
+
+\begin{DoxyReturn}{Returns}
+bool true if 3' mapped 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_adbc2990ced7211feb13c382eb9d0ae93}{
+\index{BAMRead@{BAMRead}!mate\_\-mapped\_\-reverse\_\-strand@{mate\_\-mapped\_\-reverse\_\-strand}}
+\index{mate\_\-mapped\_\-reverse\_\-strand@{mate\_\-mapped\_\-reverse\_\-strand}!BAMRead@{BAMRead}}
+\subsubsection[{mate\_\-mapped\_\-reverse\_\-strand}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::mate\_\-mapped\_\-reverse\_\-strand (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_adbc2990ced7211feb13c382eb9d0ae93}
+Returns true if this alignment's pair is mapped to the reverse strand
+
+\begin{DoxyReturn}{Returns}
+bool true if mate is mapped to 3' 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a6d1e8f2f083126575ef2fb3ae0662af9}{
+\index{BAMRead@{BAMRead}!operator=@{operator=}}
+\index{operator=@{operator=}!BAMRead@{BAMRead}}
+\subsubsection[{operator=}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMRead}\& BAMRead::operator= (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead}}]{that}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a6d1e8f2f083126575ef2fb3ae0662af9}
+overloaded operator= calls the copy constructor. \hypertarget{class_b_a_m_read_a12218736728585c3ad8e22be41e63b8a}{
+\index{BAMRead@{BAMRead}!proper\_\-pair@{proper\_\-pair}}
+\index{proper\_\-pair@{proper\_\-pair}!BAMRead@{BAMRead}}
+\subsubsection[{proper\_\-pair}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMRead::proper\_\-pair (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_read_a12218736728585c3ad8e22be41e63b8a}
+Returns true if alignment is a proper pair. A proper pair means the reads are aligned to the same strand, and the same orientation.
+
+\begin{DoxyReturn}{Returns}
+bool true if proper pair 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_read_a952441067ff9c1ec819dc1819964e0b3}{
+\index{BAMRead@{BAMRead}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!BAMRead@{BAMRead}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMRead::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_read_a952441067ff9c1ec819dc1819964e0b3}
+Returns a valid sam style format of this \hyperlink{class_b_a_m_read}{BAMRead}
+
+\begin{DoxyReturn}{Returns}
+string sam format string 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+SamUtils-\/1.moved-\/aside/BAMRead.h\item 
+types/BAMRead.h\item 
+types/BAMRead.cpp\end{DoxyCompactItemize}

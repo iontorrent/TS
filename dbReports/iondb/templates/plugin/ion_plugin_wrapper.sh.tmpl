@@ -1,0 +1,190 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+{% comment %}
+# This is a django template for generating full launch.sh scripts from a plugin launch.sh fragment. 
+# All the launch.sh biolerplate code goes here, and can be omitted from plugin launch scripts.
+# Everythere here runs under SGE for every plugin job
+{% endcomment %}
+{% autoescape off %}
+# SGE Configuration
+#$ -cwd
+# Separate STDOUT and STDERR (change to yes to merge)
+#$ -j no
+{% if memory %}
+# Memory requests
+#$ -l mem_free={{ memory }},h_vmem={{ memory }},s_vmem={{ memory}}
+# h_vmem does 'ulimit -v {{ memory }}'
+{% endif %}
+# SGE sets stack unusually high, so impose a realistic limit 
+# (or plugins cannot start threads...)
+#$ -l s_stack=16M
+{% if sge %}{{ sge|safe }}{% endif %}
+## ======================================================================
+VERSION={{ version|default_if_none:"0" }}
+
+# NB: DIRNAME isn't the path to this script anymore. Path to plugin's launch.sh
+export DIRNAME={{ pluginpath }}
+export PROGRAM={{ pluginname }}
+export PLUGINNAME={{ pluginname }}
+
+# Diagnostic information - Which host, SGE variables, etc.
+echo "Plugin: ${PLUGINNAME} - ${VERSION}"
+echo "Host: ${HOSTNAME}"
+if [ ! -z "${JOB_ID}" ]; then
+    echo "Running under SGE: ${SGE_ROOT}/${SGE_CELL}"
+    echo "Job: ${JOB_ID} - ${JOB_NAME}"
+    echo "Home: ${SGE_O_HOME}"
+    echo "Submit User: ${SGE_O_LOGNAME}"
+    echo "Submit Host: ${SGE_O_HOST}"
+    echo "Work Dir: '${SGE_O_WORKDIR}'"
+    if [ "${NSLOTS:-0}" -gt 1 ]; then echo "Slots: ${NSLOTS}"; cat "$TMP/machines"; fi
+fi
+
+# Load function library
+sourcefile=$(find {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions)
+if [[ ! -e $sourcefile ]]; then
+    echo "FATAL: Unable to find plugin_functions library"
+    exit 1
+fi
+source $sourcefile
+cmd_line_args "$@"
+
+{% comment %}
+# ======================================
+# The following variables are defined:
+#
+# RAW_DATA_DIR
+# ANALYSIS_DIR
+# LIBRARY_KEY
+# TESTFRAG_KEY
+# RESULTS_DIR
+# URL_ROOT
+# TSP_ANALYSIS_CYCLES
+# TSP_ANALYSIS_DATE
+# TSP_ANALYSIS_NAME
+# TSP_CHIPTYPE
+# TSP_FILEPATH_BAM
+# TSP_FILEPATH_BARCODE_TXT
+# TSP_FILEPATH_FASTQ
+# TSP_FILEPATH_OUTPUT_STEM
+# TSP_FILEPATH_PLUGIN_DIR
+# TSP_FILEPATH_SAM
+# TSP_FILEPATH_SFF
+# TSP_FILEPATH_TF_SFF
+# TSP_FLOWORDER
+# TSP_LIBRARY
+# TSP_LIBRARY_KEY
+# TSP_NOTES
+# TSP_NUM_FLOWS
+# TSP_PGM_NAME
+# TSP_PROJECT
+# TSP_REFERENCE_GENOME
+# TSP_RUNID
+# TSP_RUN_NAME
+# TSP_SAMPLE
+# TSP_TF_KEY
+# TSP_URLPATH_BAM
+# TSP_URLPATH_BARCODE_TXT
+# TSP_URLPATH_FASTQ
+# TSP_URLPATH_OUTPUT_STEM
+# TSP_URLPATH_PLUGIN_DIR
+# TSP_URLPATH_SAM
+# TSP_URLPATH_SFF
+# TSP_URLPATH_TF_SFF
+# ======================================
+{% endcomment%}
+
+{% if debug %}
+## DEBUG: Print full environment of generating script
+echo " ========== DEBUG : content of env ================"
+{% for key, value in env.items %}
+    echo "ENV: '{{ key }}'='{{ value }}'"
+{% endfor %}
+cat > debug.log <<'EOFDEBUG'
+{% debug %}
+EOFDEBUG
+#> FIX editor syntax
+{% endif %}
+
+## Plugin Environment Configuration - Applies to all plugins
+# Make all output world Writable
+umask 0000
+
+{% if debug %}
+# DEBUG: Allow core files
+# ulimit -c unlimited
+## Explicitly Disable Core Files
+ulimit -c 0
+{% else %}
+## Explicitly Disable Core Files
+ulimit -c 0
+{% endif %}
+
+date +'start time=%Y-%m-%d %k:%M:%S.%N'
+starttime=$(date +%s)
+
+# Start command in subshell
+(
+## Plugin Error Handling
+function plugin_error_trap
+{
+    local exit_status=$?
+    local message=${1:-"Unknown Error"}
+    echo "ERROR: Plugin exited unexpectedly with error: ${exit_status} - ${message}"
+    exit ${exit_status}
+}
+set -o errexit
+#set -o nounset
+#set -o errtrace
+#set -o pipefail
+trap 'plugin_error_trap "Execution Interrupted with Ctrl-C"' SIGINT
+trap 'plugin_error_trap "Plugin Terminated by request (TERM/KILL)"' SIGTERM SIGKILL
+#trap 'plugin_error_trap "Plugin segfault. (Check sufficient memory was requested)"' SIGCORE
+trap 'plugin_error_trap "Plugin Execution Error"' ERR
+
+echo "==============================================================================="
+{% if debug %}
+set -o xtrace
+{% endif %}
+
+# ===================================================
+# Add plugin specific code to execute below this line
+# ===================================================
+{% if command %}
+{{ command }}
+{% else %}
+# Legacy script support
+"{{ pluginpath }}/launch.sh"
+    -r "${RAW_DATA_DIR}" \
+    -a "${ANALYSIS_DIR}" \
+    -l "${LIBRARY_KEY}" \
+    -t "${TESTFRAG_KEY}" \
+    -o "${RESULTS_DIR}" \
+    -p "${DIRNAME}" \
+    -u "${URL_ROOT}"
+# -j "${JSON_FILE}"
+{% endif %}
+)
+# ===================================================
+# Save return value from command subshell
+RETVAL=$?
+
+echo "==============================================================================="
+echo "$PROGRAM: completing execution of plugin code"
+date +'end time=%Y-%m-%d %k:%M:%S.%N'
+endtime=$(date +%s)
+elapsedtime=$[($endtime - $starttime)]
+echo "pluginelapsedtime: ${PLUGINNAME},${elapsedtime}"
+
+{% if runinfo.pk %}
+python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin_name }} --convert --msg $RETVAL
+#now if there is a file named results.json send PUT that to the REST API.
+if [ -f results.json ]
+then
+    python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk}} --plugin {{ runinfo.plugin_name }} --method=resultsjson --jsonpath=`pwd`
+fi
+{% endif %}
+
+# Result of final command determines plugin exit value
+exit $RETVAL
+{% endautoescape %}

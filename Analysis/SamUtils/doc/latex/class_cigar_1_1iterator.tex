@@ -1,0 +1,98 @@
+\hypertarget{class_cigar_1_1iterator}{
+\section{Cigar::iterator Class Reference}
+\label{class_cigar_1_1iterator}\index{Cigar::iterator@{Cigar::iterator}}
+}
+
+
+{\ttfamily \#include $<$Cigar.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{class_cigar_1_1iterator_a857df633570b08ddbf2b9f4184f48469}{good} () const 
+\item 
+void \hyperlink{class_cigar_1_1iterator_ac87966ff700c1cf3fdab49a3d3a807ca}{next} ()
+\item 
+int \hyperlink{class_cigar_1_1iterator_aba3d74e76b2ec3eed5e13db4e0f04112}{len} ()
+\item 
+char \hyperlink{class_cigar_1_1iterator_af106a13d303ec2f93343d959feaa6ca6}{op} () const 
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_cigar_1_1iterator_a6bb77a766be10cfa66deca9a06c0f184}{
+class \hyperlink{class_cigar_1_1iterator_a6bb77a766be10cfa66deca9a06c0f184}{Cigar}}
+\label{class_cigar_1_1iterator_a6bb77a766be10cfa66deca9a06c0f184}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\hyperlink{class_cigar_1_1iterator}{Cigar::iterator} class to help a user of this class navigate the \hyperlink{class_cigar}{Cigar} string in a stress free manner. This iterator is forward only for now.
+
+This requires an existing \hyperlink{class_cigar}{Cigar} object to be constructed. You can retrieve an iterator by calling \hyperlink{class_cigar_a3bb0c635eb4a28ae3c1985845bac06a5}{Cigar::get\_\-iterator()}
+
+example: assume a \hyperlink{class_b_a_m_read}{BAMRead} already exists named read;
+
+\hyperlink{class_cigar}{Cigar} cigar = read.get\_\-cigar(); Cigar::iteartor cigar\_\-iterator = cigar.get\_\-iterator();
+
+The iterator advances by \hyperlink{class_cigar}{Cigar} operation. For each element in the \hyperlink{class_cigar}{Cigar} there's an operation and an associated length of the operation. \hyperlink{class_cigar_1_1iterator_aba3d74e76b2ec3eed5e13db4e0f04112}{Cigar::iterator::len()} corresponds to the operation length \hyperlink{class_cigar_1_1iterator_af106a13d303ec2f93343d959feaa6ca6}{Cigar::iterator::op()} gives the actual operation 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_cigar_1_1iterator_a857df633570b08ddbf2b9f4184f48469}{
+\index{Cigar::iterator@{Cigar::iterator}!good@{good}}
+\index{good@{good}!Cigar::iterator@{Cigar::iterator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool Cigar::iterator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_cigar_1_1iterator_a857df633570b08ddbf2b9f4184f48469}
+Are there still iterable elements of the string?
+
+\begin{DoxyReturn}{Returns}
+bool true if there are still more elements 
+\end{DoxyReturn}
+\hypertarget{class_cigar_1_1iterator_aba3d74e76b2ec3eed5e13db4e0f04112}{
+\index{Cigar::iterator@{Cigar::iterator}!len@{len}}
+\index{len@{len}!Cigar::iterator@{Cigar::iterator}}
+\subsubsection[{len}]{\setlength{\rightskip}{0pt plus 5cm}int Cigar::iterator::len (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_1_1iterator_aba3d74e76b2ec3eed5e13db4e0f04112}
+Returns length of cigar operation
+
+\begin{DoxyReturn}{Returns}
+int length of cigar op 
+\end{DoxyReturn}
+\hypertarget{class_cigar_1_1iterator_ac87966ff700c1cf3fdab49a3d3a807ca}{
+\index{Cigar::iterator@{Cigar::iterator}!next@{next}}
+\index{next@{next}!Cigar::iterator@{Cigar::iterator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void Cigar::iterator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_1_1iterator_ac87966ff700c1cf3fdab49a3d3a807ca}
+advances iterator to the next cigar element \hypertarget{class_cigar_1_1iterator_af106a13d303ec2f93343d959feaa6ca6}{
+\index{Cigar::iterator@{Cigar::iterator}!op@{op}}
+\index{op@{op}!Cigar::iterator@{Cigar::iterator}}
+\subsubsection[{op}]{\setlength{\rightskip}{0pt plus 5cm}char Cigar::iterator::op (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_cigar_1_1iterator_af106a13d303ec2f93343d959feaa6ca6}
+Returns the actual cigar operation
+
+\begin{DoxyReturn}{Returns}
+char cigar op 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/Cigar.h\item 
+types/Cigar.cpp\end{DoxyCompactItemize}

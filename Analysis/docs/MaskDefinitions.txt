@@ -1,0 +1,48 @@
+MaskEmpty - By default, all wells are marked as empty at the beginning of
+processing.
+
+MaskExclude - Any well that falls outside the usable area of the chip.  Defined
+by an exclusion mask file found in /opt/ion/config.
+
+MaskPinned - Any well with signal that is either 0 or 16383 in any frame.  Also,
+any signal "near" these values.  Its a two part algorithm.  Nearness is
+determined by using a histogram of the signals, at frame 10, to determine
+outliers and marking them as Pinned.  Outliers are +/- 4000 from maxima. 
+(High/Low filter is under review: might only have been necessary in the dark
+ages)
+
+MaskBead - Beadfind files supply data used to cluster all "empty" wells' signals
+into two groups: the empties and the beads.  Value used for clustering is
+(max-abs(min)) of NN-subtracted trace.  First group is empties while second
+group is marked MaskBead.  (Prior to beadfind, wells are filtered for pinned
+wells and excluded from beadfind analysis)
+
+MaskWashout - Any well that was found to pass beadfind using the pre-Run
+beadfind file, but did not pass beadfind using the post-Run beadfind file. 
+Thus, presumed to have washed out of the well.
+
+MaskLive (MaskTF,MaskLib)
+MaskDud
+MaskAmbiguous
+
+Key flows are used to calculate average 1 mer signal level (This is done for
+each key).  If greater than a threshold, well is marked MaskLive.  In addition,
+since there are two keys, whichever key generated the threshold-passing signal,
+the well is marked with MaskTF or MaskLib.  If the well fails threshold for both
+keys, it is marked MaskDud.  If it exceeds threshold for both keys, it is marked
+MaskAmbiguous.
+
+MaskIgnore - Any well that should no longer be considered for anything during
+the processing.  Detect a Nan during Flux Integration calculations or
+application of weka vector to raw data.  Excluding top 10% of empties during
+beadfind.  During beadfind, mark a region to be ignored during subsequent
+processing due to insufficient number of beads in region.  (0.5% of wells in
+region).  During NN-subtract, if there are insufficient empties to subtract
+from a well, mark the well MaskIgnore.
+
+MaskKeypass - After basecalling, if the well passes the keypass filter, this bit
+gets set.  This read will be written to an SFF file.
+
+
+$Rev$
+

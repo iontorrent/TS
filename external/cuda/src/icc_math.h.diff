@@ -1,0 +1,80 @@
+225,226c225,226
+< _LIBIMF_EXT _LIBIMF_INT __fpclassifyf  ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT __fpclassify   ( _LIBIMF_DBL_XDBL               __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __fpclassifyf  ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT __fpclassify   ( _LIBIMF_DBL_XDBL               __x ) __THROW;
+228c228
+< _LIBIMF_EXT _LIBIMF_INT __fpclassifyl  ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __fpclassifyl  ( _LIBIMF_XDOUBLE            __x ) __THROW;
+230,231c230,231
+< _LIBIMF_EXT _LIBIMF_INT isinff         ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT isinf          ( _LIBIMF_DBL_XDBL               __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT isinff         ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT isinf          ( _LIBIMF_DBL_XDBL               __x ) __THROW;
+233c233
+< _LIBIMF_EXT _LIBIMF_INT isinfl         ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT isinfl         ( _LIBIMF_XDOUBLE            __x ) __THROW;
+235,236c235,236
+< _LIBIMF_EXT _LIBIMF_INT __isinff       ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT __isinf        ( _LIBIMF_DBL_XDBL               __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __isinff       ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT __isinf        ( _LIBIMF_DBL_XDBL               __x ) __THROW;
+238c238
+< _LIBIMF_EXT _LIBIMF_INT __isinfl       ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __isinfl       ( _LIBIMF_XDOUBLE            __x ) __THROW;
+240,241c240,241
+< _LIBIMF_EXT _LIBIMF_INT isnanf         ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT isnan          ( _LIBIMF_DBL_XDBL               __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT isnanf         ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT isnan          ( _LIBIMF_DBL_XDBL               __x ) __THROW;
+243c243
+< _LIBIMF_EXT _LIBIMF_INT isnanl         ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT isnanl         ( _LIBIMF_XDOUBLE            __x ) __THROW;
+245,246c245,246
+< _LIBIMF_EXT _LIBIMF_INT __isnanf       ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT __isnan        ( _LIBIMF_DBL_XDBL               __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __isnanf       ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT __isnan        ( _LIBIMF_DBL_XDBL               __x ) __THROW;
+248c248
+< _LIBIMF_EXT _LIBIMF_INT __isnanl       ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __isnanl       ( _LIBIMF_XDOUBLE            __x ) __THROW;
+270,271c270,271
+< _LIBIMF_EXT _LIBIMF_INT finitef        ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT finite         ( _LIBIMF_DOUBLE             __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT finitef        ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT finite         ( _LIBIMF_DOUBLE             __x ) __THROW;
+273c273
+< _LIBIMF_EXT _LIBIMF_INT finitel        ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT finitel        ( _LIBIMF_XDOUBLE            __x ) __THROW;
+275,276c275,276
+< _LIBIMF_EXT _LIBIMF_INT __finitef      ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT __finite       ( _LIBIMF_DOUBLE             __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __finitef      ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT __finite       ( _LIBIMF_DOUBLE             __x ) __THROW;
+278c278
+< _LIBIMF_EXT _LIBIMF_INT __finitel      ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __finitel      ( _LIBIMF_XDOUBLE            __x ) __THROW;
+285,286c285,286
+< _LIBIMF_EXT _LIBIMF_INT __signbitf     ( _LIBIMF_FLOAT              __x );
+< _LIBIMF_EXT _LIBIMF_INT __signbit      ( _LIBIMF_DOUBLE             __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __signbitf     ( _LIBIMF_FLOAT              __x ) __THROW;
+> _LIBIMF_EXT _LIBIMF_INT __signbit      ( _LIBIMF_DOUBLE             __x ) __THROW;
+288c288
+< _LIBIMF_EXT _LIBIMF_INT __signbitl     ( _LIBIMF_XDOUBLE            __x );
+---
+> _LIBIMF_EXT _LIBIMF_INT __signbitl     ( _LIBIMF_XDOUBLE            __x ) __THROW;

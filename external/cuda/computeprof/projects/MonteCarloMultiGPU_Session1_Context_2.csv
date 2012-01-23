@@ -1,0 +1,10 @@
+# CUDA_PROFILE_LOG_VERSION 2.0
+# CUDA_PROFILE_CSV 1
+# TIMESTAMPFACTOR 1200fce6cfdc0b20
+# CUDA_DEVICE 1 Quadro NVS 290
+gpustarttimestamp,method,gputime,cputime,occupancy,gridSizeX,gridSizeY,gridSizeZ,blockSizeX,blockSizeY,blockSizeZ,dynSmemPerBlock,staSmemPerBlock,registerPerThread,streamID,localblocksize,memTransferSize,memtransferhostmemtype
+120102bcd2caf700,memset32_aligned1D,17.696,75.64,1,43,1,1,96,1,1,0,60,2,0,-1,,0
+120102bcd46f2d60,_Z16inverseCNDKernelPfS_j,486.688,30.4,1,128,1,1,128,1,1,0,36,10,0,-1,,0
+120102bcd597f660,memcpyHtoDasync,7.104,12.52,,,,,,,,,,,0,0,1360,0
+120102bcd5982320,_Z27MonteCarloOneBlockPerOptionPfi,36902.7,75.84,0.333,85,1,1,256,1,1,0,2076,18,0,-1,,0
+120102bcd7cb46c0,memcpyDtoHasync,8.064,5.52,,,,,,,,,,,0,0,680,1

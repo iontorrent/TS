@@ -1,0 +1,201 @@
+{% extends "rundb/ion_base_template.html" %}
+
+{% load pagetools %}
+
+{% block extra_head %}
+
+<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/fileinput/jquery.fileinput.min.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/form2object/form2object.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/form2object/jquery.toObject.js"></script>
+
+{% endblock extra_head %}
+
+{% block pagination_holder %}
+{% endblock pagination_holder %}
+{% block controls_holder %}
+{% endblock controls_holder %}
+
+{% block full_page_content%}
+ 
+    <style type="text/css" media="screen">
+      
+      @import "/site_media/jquery/css/uni-form.css";
+
+          .uniForm h2{ margin: 1em 0 1em 1.15em; }
+          fieldset h3{ margin: 1.5em -28px; padding: 14px 28px; line-height: 1; background: #efefef; color: #343434; }
+
+          .uniForm{ background: #fff; margin: 28px auto; padding: 28px;
+                /* CSS3 */
+                border-radius:         12px;
+                -webkit-border-radius: 12px;
+                -moz-border-radius:    12px;
+                -o-border-radius:      12px;
+                -khtml-border-radius:  12px;
+          }
+
+          /* Additions for validation */
+          div.valid{
+              background: url(/site_media/images/ok.png) 100% 2.75em no-repeat;
+          }
+
+    </style>
+    
+<link type="text/css" href="/site_media/jquery/css/default.uni-form.css" rel="Stylesheet" />
+<link type="text/css" href="/site_media/jquery/js/fileinput/fileinput.css" rel="Stylesheet" />
+<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
+
+    <script type="text/javascript">
+
+    //otherList - a list of all the other id_strs in use
+    uniq = {{otherList|safe}};
+
+    $(document).ready(function(){
+
+        $.ajaxSetup({async:false});
+        $("#Button").button();
+
+        $('#Form').submit(function() {
+            $(".textInput").blur();
+        
+            $("#sequence").val($("#sequence").val().toUpperCase());
+            $("#adapter").val($("#adapter").val().toUpperCase());
+            $("#floworder").val($("#floworder").val().toUpperCase());
+            $("#length").val($("#sequence").val().length);
+
+            if ($("*").hasClass("error") ) {
+                $("html, body").animate({ scrollTop: 0 }, "slow");
+                $(".error").effect("highlight", {"color":"#F20C18"}, 2000);
+                return false;
+            }
+
+            {% if barcode %}
+                Method = "PUT";
+                URL = "/rundb/api/v1/dnabarcode/{{ barcode.id }}/";
+            {% else %}
+                Method = "POST";
+                URL = "/rundb/api/v1/dnabarcode/";
+            {% endif %}
+
+            $.ajax({
+                type: Method,
+                url: URL,
+                async:  false,
+                dataType: "json",
+                contentType: "application/json",
+                data: JSON.stringify($("#Form").toObject()),
+                success: function(msg){
+                    window.location = "{% url rundb.views.edit_barcode barCodeSet %}";
+                }
+            });
+
+            //always return false because the POSTing is done to the API.
+            return false;
+        });
+
+        $("#deleteButton").button({
+            icons: {
+                primary: 'ui-icon-closethick'
+            }} );
+
+        $("#deleteButton").click(function(){
+            apprise('Are you sure you would like to remove this barcode ?', {'verify':true}, function(r)
+            {
+                if(r)
+                {
+                    //delete using the API
+                    $.ajax({
+                       type: "DELETE",
+                       url: "/rundb/api/v1/dnabarcode/{{ barcode.id }}/",
+                       async:  false,
+                       success: function(msg){
+                           window.location = "{% url rundb.views.edit_barcode barCodeSet %}";
+                       }
+                    });
+                }
+            });
+        });
+
+    });
+
+    </script>
+
+<form id="Form" method="GET" class="uniForm" enctype="application/json">
+
+    {% if barcode %}
+        <p>Edit barcode in set <strong>{{ barCodeSet }}</strong> </p>
+    {%  else %}
+        <p>Add new barcode in set <strong>{{ barCodeSet }}</strong> </p>
+    {% endif %}
+
+    <fieldset>
+
+        <div class="ctrlHolder">
+              <label for="id_str">Barcode id</label>
+              <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" size="35" maxlength="255" type="text" class="textInput required validateUniq validateAlphaNumNoSpace"/>
+              <p class="formHint">ID of this barcode sequence</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="sequence">Sequence</label>
+            <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" size="35" maxlength="128" type="text" style="text-transform: uppercase;" class="textInput required validateNuc"/>
+            <p class="formHint">Sequence</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="adapter">Adapter</label>
+            <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" size="35" maxlength="128" type="text" style="text-transform: uppercase;" class="textInput validateNuc"/>
+            <p class="formHint">Adapter</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="floworder">Floworder</label>
+            <input value="{{ barcode.floworder|blankIfNone }}" name="floworder" id="floworder" size="35" maxlength="128" type="text" style="text-transform: uppercase;" class="textInput validateNuc"/>
+            <p class="formHint">Flow Order</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="score_mode">Score Mode</label>
+            {% if barcode.score_mode %}
+                <input value="{{ barcode.score_mode }}" name="score_mode" id="score_mode" size="35" maxlength="512" type="text" class="textInput required validateInteger"/>
+            {% else %}
+                <input value="0" name="score_mode" id="score_mode" size="35" maxlength="512" type="text" class="textInput required validateInteger"/>
+            {% endif %}
+            <p class="formHint">Score Mode. Default is 0</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="score_mode">Score Cutoff</label>
+            {% if barcode.score_cutoff%}
+                <input value="{{ barcode.score_cutoff }}" name="score_cutoff" id="score_cutoff" size="35" maxlength="512" type="text" class="textInput required validateNumber "/>
+            {% else %}
+                <input value="0" name="score_cutoff" id="score_cutoff" size="35" maxlength="512" type="text" class="textInput required validateNumber "/>
+            {% endif %}
+            <p class="formHint">Score Cutoff. Default is 0</p>
+        </div>
+
+        <div class="ctrlHolder">
+            <label for="annotation">Annotation</label>
+            <input value="{{ barcode.annotation|blankIfNone }}" name="annotation" id="annotation" size="35" maxlength="512" type="text" class="textInput"/>
+            <p class="formHint">Notes</p>
+        </div>
+
+        <input value="{{ index }}" name="index" id="index" type="hidden" />
+        <input value="{{ barCodeSet }}" name="name" id="name" type="hidden" />
+        <input value="{{ length }}" name="length" id="length" type="hidden" />
+
+        <div class="buttonHolder" id="submitholder">
+            {% if barcode %}
+                <div id="deleteButton" style="float: left;">Delete Barcode</div>
+            {%  endif %}
+        
+            <input id="Button" type="submit" value="Save Barcode">
+        </div>
+
+    </fieldset>
+
+</form>
+
+{% endblock %}

@@ -1,0 +1,86 @@
+------------------------------------------------------------------------------
+NVIDIA Compute Visual Profiler 
+Linux Release Notes
+Version 4.0
+------------------------------------------------------------------------------
+
+PLEASE REFER EULA.txt FOR THE LICENSE AGREEMENT FOR USING NVIDIA SOFTWARE.
+
+Please refer Changelog.txt for changes with respect to the previous version.
+
+FILES IN THE RELEASE:
+--------------------
+* computeprof/bin/computeprof    : Compute Visual Profiler Executable
+
+* computeprof/bin/libQt*.so.4    : Qt shared libraries
+
+* computeprof/projects           : Directory containing sample profiler projects
+
+* computeprof/doc                : Directory containing files for user documentation.
+
+
+SUPPORTED LINUX DISTRIBUTIONS
+-----------------------------
+Compute Visual Profiler platform support is same as  that for the CUDA Toolkit. 
+Please refer the CUDA Toolkit Linux release notes.
+
+
+SYSTEM REQUIREMENTS
+-------------------
+. CUDA-enabled GPU
+  See http://www.nvidia.com/object/cuda_learn_products.html
+. NVIDIA Driver
+. NVIDIA CUDA Toolkit
+
+
+INSTALLATION AND SETUP
+---------------------
+The installation is part of the CUDA toolkit installation. The files are
+installed under "<CudaToolkitDir>/computeprof" where <CudaToolkitDir> is the 
+directory under which the CUDA Toolkit is installed.
+
+Setup LD_LIBRARY PATH to include the ComputeVisualProfiler bin directory:
+ > export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<CudaToolkitDir>/computeprof/bin
+
+
+RUNNING Compute Visual Profiler
+----------------------------
+ > <CudaToolkitDir>/computeprof/bin/computeprof &
+
+Refer the Compute Visual Profiler User Guide "Compute_Visual_Profiler_User_Guide.pdf" for more information.
+
+
+KNOWN ISSUES
+------------
+1) Selecting profiler counters can result in an Compute application execution error and profiling 
+   data is not generated. In such a case you will not be able to collect any profiling counter data. 
+   You can disable all profiler counters and only collect other basic profiling information.
+
+2) Following are some other issues related to profiler counters:
+   . "warp serialize" counter for GPUs with compute capability 1.x is known to 
+     give incorrect and high values for some cases.
+
+   . "divergent branch" counter for GPUs with compute capability 2.0 is known to
+      give an incorrect value zero for some cases.
+
+   . For GPUs with compute capability 2.0 the "instructions issued" and
+     "instructions executed" counter values are incorrect for some cases.
+     
+   . Prof triggers are not working on G80 (Compute Capability 1.0). 
+
+3) If some OpenCL resources (contexts, events, etc.) are not released in the program, 
+   the profiler output may be incomplete or empty and Visual profiler will report 
+   the message ‘Error in reading profiler output'. The program needs to be
+   modified to properly free up all OpenCL resources before termination.
+
+4) Enabling CUDA driver API trace can result in an error due to which profiler data is not
+   generated. In this case disable "CUDA API trace" and re-run the profiling session.
+
+5) You need to use the command line argument "--noprompt" for running most
+   of the CUDA/OpenCL SDK samples. You can enable the "Run in separate window"
+   checkbox in the Session settings dialog to open a separate window.
+   Only with this option you can give some keyboard input for console-based
+   CUDA/OpenCL programs.
+
+6) In some cases resizing, maximizing or cascading of windows for multiple sessions 
+   can result in a Compute Visual Profiler crash.

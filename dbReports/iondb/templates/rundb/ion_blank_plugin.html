@@ -1,0 +1,38 @@
+{% extends "rundb/ion_base_template.html" %}
+
+{% block pagination_holder %}{% endblock %}
+{% block current_tab%}{{tab}}{% endblock %}
+{% block controls_holder %}{% endblock %}
+{% block extra_head %}
+
+    <link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
+    <script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+
+    <!-- style for the reports -->
+    <link rel="stylesheet" type="text/css" href="/site_media/plugin_report.css" media="screen" />
+    <script type="text/javascript" src="/site-media/scripts.js"></script>
+    
+
+{% endblock extra_head %}
+
+{% block extra_plugin_head %}
+{% endblock extra_plugin_head %}
+
+
+{% block extra-plugin %}
+   
+     $(".noheading tr:odd").addClass("zebra");
+     $(".heading tr:odd").addClass("zebra");
+
+{% endblock extra-plugin %}
+
+
+
+
+
+{% block full_page_content %}
+
+ 
+{% endblock full_page_content %}

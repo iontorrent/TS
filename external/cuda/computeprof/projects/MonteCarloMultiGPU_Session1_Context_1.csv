@@ -1,0 +1,11 @@
+# CUDA_PROFILE_LOG_VERSION 2.0
+# CUDA_PROFILE_CSV 1
+# TIMESTAMPFACTOR 1200fce6dc58ddb8
+# CUDA_DEVICE 2 GeForce GT 430
+gpustarttimestamp,method,gputime,cputime,occupancy,gridSizeX,gridSizeY,gridSizeZ,blockSizeX,blockSizeY,blockSizeZ,dynSmemPerBlock,staSmemPerBlock,registerPerThread,streamID,localblocksize,memTransferSize,memtransferhostmemtype
+120102bce23419c0,memset32_aligned1D,0.896,130.48,1,22,1,1,192,1,1,0,0,6,0,-1,,0
+120102bce24b15c0,memset32_aligned1D,3.136,29.64,1,43,1,1,192,1,1,0,0,6,0,-1,,0
+120102bce28392a0,_Z16inverseCNDKernelPfS_j,205.568,27.44,0.667,128,1,1,128,1,1,0,0,17,0,-1,,0
+120102bce28fa180,memcpyHtoDasync,0.96,10.64,,,,,,,,,,,0,0,1360,0
+120102bce28face0,_Z27MonteCarloOneBlockPerOptionPfi,3397.66,178.36,0.833,85,1,1,256,1,1,0,2048,22,0,-1,,0
+120102bce2c39060,memcpyDtoHasync,3.136,6.44,,,,,,,,,,,0,0,680,1

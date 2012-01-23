@@ -1,0 +1,158 @@
+.\" Process this file with
+.\" groff -man -Tascii foo.1
+.\"
+.TH ANALYSIS 1 "May 2010" "Analysis" "ion-analysis"
+.SH NAME
+Analysis \- Process ION PGM raw data files
+.SH SYNOPSIS
+.B Analysis
+[\fIOPTION\fR]... [\fIDIRECTORY\fR]
+.SH DESCRIPTION
+.B Analysis
+processes the raw data files (.dat) emitted by Ion Torrent System's Personal
+Genome Machine (PGM).  
+
+.SH OPTIONS
+.TP
+--analysis-mode=\fImode\fR [default: bkgModel]
+Runs analysis in one of several modes: bkgModel, bfonly.
+.TP
+--cropped=\fIxorigin,yorigin,xsize,ysize\fR
+Defines a sub-region of the total chip to process.  Multiple instances of this
+argument can be used in order to define more than one subregion.
+.TP
+--Libcf-ie-dr=\fI#,#,#\fR
+Override calculated carry forward, incomplete extension, and droop values for Library.
+Setting --Libcf-ie-dr=0.0,0.0,0.0 will disable cafie correction for Library
+key reads .
+.TP
+--TFcf-ie-dr=\fI#,#,#\fR
+Override calculated carry forward, incomplete extension, and droop values for TF.
+Setting --TFcf-ie-dr=0.0,0.0,0.0 will disable cafie correction for TF and Library
+key reads.
+.TP
+--no-subdir
+Skips creation of output subdirectory and outputs directly to current working
+directory.
+.TP
+-b \fIfilename\fR, --beadfindfile=\fIfilename\fR
+File to use for beadfind (default is use beadfind_pre_0003.dat)
+.TP
+-c \fIcycles\fR, --cycles=\fIcycles\fR
+(No longer supported.  Use --flowlimit instead)
+.TP
+--flowlimit=\fIflows\fR
+Number of flows to process (default is maximum available)
+.TP
+--flow-order=\fIflow-sequence\fR
+Define alternative nuke flow order.  Default is TACG.
+.TP
+--libraryKey=\fIkey-sequence\fR
+Define alternative library sequence key.  Default key is TCAG.
+.TP
+--tfKey=\fIkey-sequence\fR
+Define alternative test fragment sequence key.  Default key is ATCG.
+.TP
+-D, --Separate-Droop
+(EXPERIMENTAL) Developer use only.
+.TP
+-f \fIframes\fR
+Number of frames to use (default is maximum available)
+.TP
+--from-wells=\fIfilename\fR
+Reprocess an existing raw wells file.  Intended for development use only.
+This allows testing of changes to basecaller without signal processing from raw images.
+Requires the raw wells file (1.wells) be specified and bfmask.bin must exist in
+same directory.  [Example
+--from-wells=/results/analysis/output/Home/test_0001/1.wells]
+.TP
+--droop-mode=\fImode\fR [default: estimate]
+Runs analysis in one of several modes for droop estimation: fit, estimate, {a valid droop percentage}.
+Examples:
+     --droop-mode=estimate
+     --droop-mode=fit
+     --droop-mode=0.15
+.TP
+-h, --help
+Help with this command and exit
+.TP
+-i \fIl:h\fR, --integral-bounds=\fIl:h\fR
+Set boundaries for peak integration (default 1350:4049)
+.TP
+-k \fIoff|on\fR, --keypass-filter=\fIoff|on\fR
+Enable/Disable keypass filter (default: on)
+.TP
+--minTFFlows=\fInumber of flows\fR
+Override minimum number of flows required to use a TF read in cafie corrections.
+.TP
+-N, --Per-Num-Norm
+EXPERIMENTAL - Developer use only
+.TP
+--nnMaskWH=\fIinnerx,innery,outerx,outery\fR
+Define alternative nearest-neighbor subtract region.  Default is 1,1,9,3 which corresponds to a 9x9 region excluding the ring of 1 wells surrounding the well.
+.TP
+--flowtimeoffset=\fItime\fR
+Time from beginning of flow to nuke hitting the chip. Time is in microseconds.  Default is 1000.
+.TP
+-p \fIthreshold\fR, --peak-threshold=\fIthreshold\fR
+Minimum peak threshold (default = 20)
+.TP
+--region-size=\fIrow\fRx\fIcolumn\fR
+Overrides the default 50x50 pixel region size.
+.TP
+-R \fIxregions\fRx\fIregions\fR, --cfiedr-regions=\fIxregions\fRx\fIregions\fR
+(EXPERIMENTAL) Developer use only.
+.TP
+--TF=\fIfilename\fR
+Define Test Fragment definition file to load.  Default value is DefaultTFs.conf.
+The directory search order is current working directory, user's home directory,
+directory defined by ION_CONFIG environment variable, the path ../config relative
+to the exectuable's directory.  This override requires the fully qualified pathname.
+.TP
+--bkg-emphasis=width,amplitude
+Sets the amplitude and width of the Gaussian-shaped emphasis to apply during
+background model's fitting process.  A larger amplitude and smaller width
+emphasizes the time-history near the start of the incorporation signal in each
+well.  A smaller emphasis and/or larger width treats more of the time history
+equally in the fitting process.  The default is 32,4
+.TP
+--bkg-effort-level=value
+Sets the maximum number of iterations the background model fitting algorithm
+will use when processing each region.  More iterations gives the algorithm more
+time to find the best possible fit and can produce better results.  A smaller
+limit will run faster at the expense of quality.  The default is 15.  The
+minimum allowed value is 5.
+.TP
+--dntp-uM=value
+Sets the nucleotide concentration used in the sequencing run in micro-molar
+units.  The default is 50uM.
+.TP
+-v, --version
+Print version and exit
+.TP
+\fIDIRECTORY\fR
+Directory path where the raw data files to be processed are located.
+(default is to use the current working directory)
+.SH ENVIRONMENT
+.IP ION_CONFIG
+If non-null the full pathname to configuration directory where for example,
+.IR DefaultTFs.conf 
+can be found.
+.SH DIAGNOSTICS
+The following diagnostics may be issued on stderr:
+ 
+is not a directory
+.RS
+The input source directory is not valid.
+.RE
+
+.SH BUGS
+Its not a bug, its a feature.  But if its a feature you don't like, report it to
+<bpuc@iontorrent.com>
+.SH AUTHOR
+Written by Mel Davey and Bernard Puc.
+.SH "SEE ALSO"
+.\.BR
+.\.BR SFFRead (1)
+.\.BR TFMapper (1),
+

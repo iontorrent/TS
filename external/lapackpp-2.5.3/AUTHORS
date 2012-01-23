@@ -1,0 +1,27 @@
+Main Author and Maintainter of LAPACK++ 2.x.x:
+
+Christian Stimming <stimming@tuhh.de>
+
+Further contributors to LAPACK++ 2.x.x:
+
+Dominik Wagenfuehr <dominik.wagenfuehr at arcor dot de>
+Brian White <bwhite@csl.cornell.edu>
+Edward Baudrez <edbaud@users.sf.net>
+Jacob (Jack) Gryn <jgryn at cs dot yorku dot ca>
+NAKATA, Maho <chat95@mac.com>
+Vincent	Acary <Vincent.Acary@inrialpes.fr>
+Matti Varjokallio <mavarjok@james.hut.fi>
+
+For LAPACK++ 1.1, the authors are as follows:
+
+University of Tennessee, Knoxvilee, TN.
+Oak Ridge National Laboratory, Oak Ridge, TN.
+Authors: J. J. Dongarra, E. Greaser, R. Pozo, D. Walker
+(C) 1992-1996 All Rights Reserved
+
+And their last statement was: Lapack++ is no longer actively
+supported. The successor to this project is that Template Numerical
+Toolkit (TNT), see http://math.nist.gov/tnt for details.
+
+Since then, the existing code base was picked up and this successor
+LAPACK++ 2.0 was created. 

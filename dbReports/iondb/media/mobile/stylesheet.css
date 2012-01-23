@@ -1,0 +1,37 @@
+.ui-li .ui-btn-inner a.ui-link-inherit,.ui-li-static.ui-li { padding: .7em 45px .7em 15px; display: block; }
+.ui-li-static.ui-li.readonly { padding: .7em 15px .7em 15px; display: block; }
+.ui-header .ui-btn-right, .ui-header .ui-btn-left { top: 0.9em }
+.ui-content { padding-left: 8px; padding-right: 8px } 
+
+img.report {
+    border: none
+}
+
+.portrait img.report.half_width {
+    width: 150px;
+    height: 75px;
+}
+
+.portrait img.report.full_width {
+    width: 310px;
+    height: 153px;
+}
+
+.landscape img.report.half_width {
+    width: 225px;
+    height: 122px;
+}
+
+.landscape img.report.full_width {
+    width: 450px;
+    height: 225px;
+}
+
+table.datagrid {
+    width: 100%;
+    border-spacing: 0px
+}
+
+table.datagrid td {
+    padding: 0.2em 5px
+}

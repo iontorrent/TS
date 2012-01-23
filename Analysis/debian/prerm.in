@@ -1,0 +1,18 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+TFFILE=@ION_INSTALL_PREFIX@/config/DefaultTFs.conf
+
+case "$1" in
+    upgrade|remove)
+	
+	if [ -e "$TFFILE" ]; then
+		echo "Not removing TF file '/opt/ion/config/DefaultTFs.conf' which may contain user modifications"
+	fi
+    
+    ;;
+esac
+
+exit 0

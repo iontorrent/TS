@@ -1,0 +1,85 @@
+\hypertarget{class_native_mutex}{
+\section{NativeMutex Class Reference}
+\label{class_native_mutex}\index{NativeMutex@{NativeMutex}}
+}
+
+
+{\ttfamily \#include $<$Lock.h$>$}
+
+Inheritance diagram for NativeMutex:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{class_native_mutex}
+\end{center}
+\end{figure}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_native_mutex_abdfe7a564699fee2b53b160d9e8cfe47}{NativeMutex} ()
+\item 
+virtual void \hyperlink{class_native_mutex_a4f08920304f158b09aeb930419909310}{lock} ()
+\item 
+virtual void \hyperlink{class_native_mutex_a16ca456764d84a506b7f59a95179f365}{unlock} ()
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_native_mutex_ad75b1979bc5716ec8532d46d5785dec3}{NativeCond}
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Class which wraps pthread\_\-mutex. Provides an OO interface to this C structure This is meant to be a C++ replacement for a pthread\_\-mutex 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_native_mutex_abdfe7a564699fee2b53b160d9e8cfe47}{
+\index{NativeMutex@{NativeMutex}!NativeMutex@{NativeMutex}}
+\index{NativeMutex@{NativeMutex}!NativeMutex@{NativeMutex}}
+\subsubsection[{NativeMutex}]{\setlength{\rightskip}{0pt plus 5cm}NativeMutex::NativeMutex (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_native_mutex_abdfe7a564699fee2b53b160d9e8cfe47}
+Initialze the mutex. Immediately ready to use after construction 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_native_mutex_a4f08920304f158b09aeb930419909310}{
+\index{NativeMutex@{NativeMutex}!lock@{lock}}
+\index{lock@{lock}!NativeMutex@{NativeMutex}}
+\subsubsection[{lock}]{\setlength{\rightskip}{0pt plus 5cm}virtual void NativeMutex::lock (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline, virtual\mbox{]}}}}
+\label{class_native_mutex_a4f08920304f158b09aeb930419909310}
+Attempts to get mutual exclusion. This functionn call will block if the mutex is already locked 
+
+Implements \hyperlink{class_lockable_a6d7e5d6331e1ec1e6c7f13c5e7da849e}{Lockable}.
+
+\hypertarget{class_native_mutex_a16ca456764d84a506b7f59a95179f365}{
+\index{NativeMutex@{NativeMutex}!unlock@{unlock}}
+\index{unlock@{unlock}!NativeMutex@{NativeMutex}}
+\subsubsection[{unlock}]{\setlength{\rightskip}{0pt plus 5cm}virtual void NativeMutex::unlock (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline, virtual\mbox{]}}}}
+\label{class_native_mutex_a16ca456764d84a506b7f59a95179f365}
+Attemps to release mutual exclusion. 
+
+Implements \hyperlink{class_lockable_aa8805ff8a031a0e052e2b519ac75ed8a}{Lockable}.
+
+
+
+\subsection{Friends And Related Function Documentation}
+\hypertarget{class_native_mutex_ad75b1979bc5716ec8532d46d5785dec3}{
+\index{NativeMutex@{NativeMutex}!NativeCond@{NativeCond}}
+\index{NativeCond@{NativeCond}!NativeMutex@{NativeMutex}}
+\subsubsection[{NativeCond}]{\setlength{\rightskip}{0pt plus 5cm}friend class {\bf NativeCond}\hspace{0.3cm}{\ttfamily  \mbox{[}friend\mbox{]}}}}
+\label{class_native_mutex_ad75b1979bc5716ec8532d46d5785dec3}
+let's be friends 
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+Lock.h\end{DoxyCompactItemize}

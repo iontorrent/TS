@@ -1,0 +1,147 @@
+<!DOCTYPE html> 
+<html> 
+<head> 
+
+  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+  <style type='text/css'> 
+	#formwrap {
+		line-height: 2em;
+		background: #eef;
+		margin: 10px;
+		padding: 10px;
+		height: 130px;
+		text-align: center;
+	}
+
+	
+
+	body {
+		font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+		font-size: 14px;
+	}
+
+  </style> 
+  
+  <script type='text/javascript'> 
+
+
+	$(function() {
+	    //Using drop down menu option
+	    $.ajax({
+		url: "/rundb/api/v1/referencegenome/?limit=0&enabled=true&index_version=tmap-f2&format=jsonp",
+		success: function(data) {
+
+		    $("#genome").html("");
+
+		    if (data.meta.limit != 0) {
+		        $("#genome").html("<p> there are no plugins enabled </p>");
+		    }
+
+		    var items = "<option>Select</option>";
+		    jQuery.each(data.objects,
+		    function(i, element) {
+
+		        items += "<option>" + element.short_name + "</option>";
+
+		    });
+
+		    $("#genome").html(items);
+
+
+		},
+		type: "GET",
+		dataType: "jsonp"
+
+	    });
+
+
+	    $.fn.serializeObject = function()
+	    {
+		var o = {};
+		var a = this.serializeArray();
+		$.each(a,
+		function() {
+		    if (o[this.name] != null) {
+		        if (!o[this.name].push) {
+		            o[this.name] = [o[this.name]];
+		        }
+		        o[this.name].push(this.value || '');
+		    } else if(this.name == "file") {
+			  o[this.name] = [this.value || ''];	
+		    }	
+
+		      else {
+		        o[this.name] = this.value || '';
+		    }
+		});
+		return o;
+	    };
+
+	    $(function() {
+		$('#postbutton').click(function() {
+		    
+			if (document.genomeform.genome.selectedIndex == 0)
+			{
+				alert("Please Select the Library name");
+				return false;
+			}
+
+			if ((document.genomeform.file[0].checked == false ) && ( document.genomeform.file[1].checked == false ) && ( document.genomeform.file[2].checked == false))
+			{
+				alert("Please Check one or more of the Output options");
+				return false;
+			}
+
+                 	obj =  $('#genomeform').serializeObject();
+
+                        pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+                        pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+
+			pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+			
+
+                        $.ajax({
+                              type: 'POST',
+                              url: pluginURL,
+                              contentType: "application/json; charset=utf-8",
+                              success: function(data) {
+  			$("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin...Check Alignment.html in the Default Report </p></div>');
+                	setTimeout("parent.$.fn.colorbox.close()" ,2000); },
+			      data: pluginAPIJSON,
+                              dataType: "json"
+                        });
+
+
+
+
+		});
+	    })
+
+
+	});
+  </script> 
+  
+</head> 
+	<body> 
+	<div id="formwrap">
+		 <form id="genomeform" name="genomeform" align="center" onsubmit="return validateForm()"> 
+			    Libraries: 
+				<select name="genome" id="genome" > </select>   <br> 
+			    Sampling: <input type="radio" name="choice" value="true" Checked/> Yes
+				<input type="radio" name="choice" value="false" /> No <br> 
+			    Output: 
+				<input type="checkbox" name="file" value="sam" Checked>.sam
+				<input type="checkbox" name="file" value="bam" Checked>.bam
+				<input type="checkbox" name="file" value="fastq">.fastq  <br> 
+		</form> 
+			<input id="postbutton" type="submit" value="Submit"> 
+	</div>
+
+         
+        <div id="json_result"> </div> 
+        
+    </body> 
+    
+</html> 
+ 

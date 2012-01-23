@@ -1,0 +1,100 @@
+{% extends "rundb/ion_base_template.html" %}
+
+{% block pagination_holder %}
+{% endblock pagination_holder %}
+{% block controls_holder %}
+{% endblock controls_holder %}
+
+{% block content %}
+
+<script type="text/javascript">
+
+ $(document).ready(function(){
+
+	 $("#advanced").button({
+	     icons: {
+	         secondary : 'ui-icon-triangle-1-s'
+	     }
+	 });
+
+     $("#submitButton").button({
+	 });
+
+ });
+
+</script>
+
+<div class="margins">
+  <h1>{{expName}}</h1>
+  <form action="" method='post' enctype="multipart/form-data">
+    {% if start_error %}<p><b>Error: {{start_error}}</b></p>{% endif %}
+    <table class="run_start_table">
+      <tbody>
+	<tr>
+	  <th>{{rpf.report_name.label}}</th>
+	  <td>{{rpf.report_name}}</td>
+	  <td class="error">{{rpf.report_name.errors}}</td>
+	</tr>
+	<tr>
+	  <th>{{rpf.path.label}}</th>
+	  <td>{{rpf.path}}</td>
+	  <td class="error">{{rpf.path.errors}}</td>
+	</tr>
+      </tbody>
+    </table>
+    <p><a id="advanced" href="javascript:toggleAdvanced('advancedSec')">Advanced</a></p>
+    <div id="advancedSec" class="hidden">
+    <table>
+      <tbody>
+      
+            <tr>
+              <th>Analysis args</th>
+              <td>{{rpf.args}}</td>
+              <td class="error">{{rpf.args.errors}}</td>
+            </tr>
+
+            <tr>
+                <th>Library Key</th>
+                <td>{{rpf.libraryKey}}</td>
+                <td class="error">{{rpf.libraryKey.errors}}</td>
+            </tr>
+
+            <tr>
+              <th>{{rpf.tf_config.label}}</th>
+              <td>{{rpf.tf_config}}</td>
+              <td class="error">{{rpf.tf_config.errors}}</td>
+            </tr>
+
+            <tr>
+              <th>{{rpf.takeover_node.label}}</th>
+              <td>{{rpf.takeover_node}}</td>
+              <td class="error">{{rpf.takeover_node.errors}}</td>
+            </tr>
+
+            <tr>
+                <th>Override alignment sampling</th>
+                <td>{{rpf.align_full}}</td>
+                <td class="error">{{rpf.align_full.errors}}</td>
+            </tr>
+
+            <tr>
+                <th>Thumbnail only</th>
+                <td>{{rpf.do_thumbnail}}</td>
+                <td class="error">{{rpf.do_thumbnail.errors}}</td>
+            </tr>
+
+
+            <tr>
+                <th>TMAP args</th>
+                <td>{{rpf.aligner_opts_extra}}</td>
+                <td class="error">{{rpf.aligner_opts_extra.errors}}</td>
+            </tr>
+
+      </tbody>
+    </table>
+    </div>
+    {{rpf.qname}}
+    <input id="submitButton" style="margin-top: 15px;" type="submit" value="Start Analysis" name="submit"/>
+  </form>
+</div>
+{% endblock %}

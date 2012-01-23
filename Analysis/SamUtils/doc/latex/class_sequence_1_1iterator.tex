@@ -1,0 +1,96 @@
+\hypertarget{class_sequence_1_1iterator}{
+\section{Sequence::iterator Class Reference}
+\label{class_sequence_1_1iterator}\index{Sequence::iterator@{Sequence::iterator}}
+}
+
+
+{\ttfamily \#include $<$Sequence.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{class_sequence_1_1iterator_a86e1fd0ddc2d36906a04d23a8374d4b8}{good} () const 
+\item 
+void \hyperlink{class_sequence_1_1iterator_accddcea1ba9cdd3fe11402612e89c082}{next} ()
+\item 
+char \hyperlink{class_sequence_1_1iterator_ae93864b1d5a02a44a999cf64f2eb3b34}{get} ()
+\item 
+void \hyperlink{class_sequence_1_1iterator_ab9bfc2f97bb6cd5cfb87d5dc0e1ee3c3}{set\_\-position} (size\_\-t pos)
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_sequence_1_1iterator_a26271d5afaff6e6d3f00c055c63d0b24}{
+class \hyperlink{class_sequence_1_1iterator_a26271d5afaff6e6d3f00c055c63d0b24}{Sequence}}
+\label{class_sequence_1_1iterator_a26271d5afaff6e6d3f00c055c63d0b24}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\hyperlink{class_sequence_1_1iterator}{Sequence::iterator} is how you access the actual elements of the \hyperlink{class_sequence}{Sequence} string. Currently only a forward iterator.
+
+example code. Assumes a valid \hyperlink{class_b_a_m_read}{BAMRead} object named \char`\"{}read\char`\"{} \hyperlink{class_sequence}{Sequence} sequence = read.get\_\-seq(); for(\hyperlink{class_sequence_1_1iterator}{Sequence::iterator} sequence\_\-iterator = sequence.get\_\-iterator(); sequence\_\-iterator.good(); sequence\_\-iterator.next()) \{ cout $<$$<$ sequence\_\-iterator.get(); \} 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_sequence_1_1iterator_ae93864b1d5a02a44a999cf64f2eb3b34}{
+\index{Sequence::iterator@{Sequence::iterator}!get@{get}}
+\index{get@{get}!Sequence::iterator@{Sequence::iterator}}
+\subsubsection[{get}]{\setlength{\rightskip}{0pt plus 5cm}char Sequence::iterator::get (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_1_1iterator_ae93864b1d5a02a44a999cf64f2eb3b34}
+Returns a character from the \hyperlink{class_sequence}{Sequence} string
+
+\begin{DoxyReturn}{Returns}
+char one character from \hyperlink{class_sequence}{Sequence} string 
+\end{DoxyReturn}
+\hypertarget{class_sequence_1_1iterator_a86e1fd0ddc2d36906a04d23a8374d4b8}{
+\index{Sequence::iterator@{Sequence::iterator}!good@{good}}
+\index{good@{good}!Sequence::iterator@{Sequence::iterator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool Sequence::iterator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_sequence_1_1iterator_a86e1fd0ddc2d36906a04d23a8374d4b8}
+Returns the status of the iterator. If true, there are more elements accessible
+
+\begin{DoxyReturn}{Returns}
+bool true if iterator has more elements 
+\end{DoxyReturn}
+\hypertarget{class_sequence_1_1iterator_accddcea1ba9cdd3fe11402612e89c082}{
+\index{Sequence::iterator@{Sequence::iterator}!next@{next}}
+\index{next@{next}!Sequence::iterator@{Sequence::iterator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void Sequence::iterator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_1_1iterator_accddcea1ba9cdd3fe11402612e89c082}
+Advances iterator to the next element \hypertarget{class_sequence_1_1iterator_ab9bfc2f97bb6cd5cfb87d5dc0e1ee3c3}{
+\index{Sequence::iterator@{Sequence::iterator}!set\_\-position@{set\_\-position}}
+\index{set\_\-position@{set\_\-position}!Sequence::iterator@{Sequence::iterator}}
+\subsubsection[{set\_\-position}]{\setlength{\rightskip}{0pt plus 5cm}void Sequence::iterator::set\_\-position (
+\begin{DoxyParamCaption}
+\item[{size\_\-t}]{pos}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_1_1iterator_ab9bfc2f97bb6cd5cfb87d5dc0e1ee3c3}
+Convenience method so you can move around the \hyperlink{class_sequence}{Sequence} string. The parameter, pos, corresponds to the 0 based index into the String. It must be less than the length of the \hyperlink{class_sequence}{Sequence}.
+
+If this is called and an iterator exists, the value the iterator points to will be changed.
+
+
+\begin{DoxyParams}{Parameters}
+{\em size\_\-t} & pos 0-\/based index in \hyperlink{class_sequence}{Sequence} string \\
+\hline
+\end{DoxyParams}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/Sequence.h\item 
+types/Sequence.cpp\end{DoxyCompactItemize}

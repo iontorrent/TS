@@ -1,0 +1,15 @@
+{% extends "rundb/mobile/base_report_tab.html" %}
+{% load mobile %}
+
+{% block pageid %}plugins{% endblock %}
+{% block title %}Plugins{% endblock %}
+
+{% block content %}
+    <ul data-role="listview" data-inset="true">
+        {% for plugin_link, plugin_file in helper.plugin_links.iteritems %}
+            {% with helper|file_link:plugin_link as plugin_full_link %}
+                {% table_row plugin_file "" plugin_full_link %}            
+            {% endwith %}
+        {% endfor %}                
+    </ul>
+{% endblock %}

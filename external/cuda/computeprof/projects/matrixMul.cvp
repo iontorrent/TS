@@ -1,0 +1,50 @@
+<!DOCTYPE cvp>
+<cvp version="4.0">
+ <session>
+  <name>matrixMul</name>
+  <progpath>"C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release/matrixMul.exe"</progpath>
+  <cmdlineargs>-noprompt</cmdlineargs>
+  <workdirpath>C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release</workdirpath>
+  <datetime>09 Feb 2011 19:22:06</datetime>
+  <normalizedcounter>false</normalizedcounter>
+  <device multProcessorCount="14" label="Device_0" id="0" computeCapability="2.0" maxGridDim="65535 65535" GpuOverlap="1" maxPitchMem="2147483647" name="Tesla C2050" clockFreq="1147000" L2CacheSize="786432" maxRegPerBlock="32768" chip="192" maxThreadPerSM="1536" maxShareMemPerBlock="49152" MemClockRate="1500000" maxBlockDim="1024 1024 64" asyncEngineCount="2" warpSize="32" maxThreadPerBlock="1024" MemBandwidth="1152000000" textureAlignment="512">
+   <context totalcountercount="0" invalidcountercount="0" id="0" label="Context_0" truncatedcountercount="0" trace="0">
+    <run number="2">gld_inst_32bit,gld_inst_64bit,gld_inst_128bit</run>
+    <run number="3">gst_inst_8bit,gst_inst_16bit,gst_inst_32bit,gst_inst_64bit,gst_inst_128bit</run>
+    <run number="4">local_load,local_store,gld_request,gst_request</run>
+    <run number="5">shared_load,shared_store,sm_cta_launched,l1_local_load_hit</run>
+    <run number="6">branch,l1_local_load_miss,l1_local_store_hit</run>
+    <run number="7">divergent_branch,l1_local_store_miss,l1_global_load_hit</run>
+    <run number="8">inst_issued,l1_global_load_miss</run>
+    <run number="9">inst_executed,uncached_global_load_transaction,global_store_transaction</run>
+    <run number="10">warps_launched,threads_launched,l1_shared_bank_conflict</run>
+    <run number="11">active_warps</run>
+    <run number="12">active_cycles</run>
+   </context>
+  </device>
+ </session>
+ <session>
+  <name>matrixMul_sizeMult</name>
+  <progpath>"C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release/matrixMul.exe"</progpath>
+  <cmdlineargs>-noprompt -sizemult=8</cmdlineargs>
+  <workdirpath>C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release</workdirpath>
+  <datetime>10 Feb 2011 10:01:38</datetime>
+  <normalizedcounter>false</normalizedcounter>
+  <device multProcessorCount="14" label="Device_0" id="0" computeCapability="2.0" maxGridDim="65535 65535" GpuOverlap="1" maxPitchMem="2147483647" name="Tesla C2050" clockFreq="1147000" L2CacheSize="786432" maxRegPerBlock="32768" chip="192" maxThreadPerSM="1536" maxShareMemPerBlock="49152" MemClockRate="1500000" maxBlockDim="1024 1024 64" asyncEngineCount="2" warpSize="32" maxThreadPerBlock="1024" MemBandwidth="1152000000" textureAlignment="512">
+   <context totalcountercount="0" invalidcountercount="0" id="0" label="Context_0" truncatedcountercount="0" trace="0">
+    <run number="2">gld_inst_32bit,gld_inst_64bit,gld_inst_128bit</run>
+    <run number="3">gst_inst_8bit,gst_inst_16bit,gst_inst_32bit,gst_inst_64bit,gst_inst_128bit</run>
+    <run number="4">local_load,local_store,gld_request,gst_request</run>
+    <run number="5">shared_load,shared_store,sm_cta_launched,l1_local_load_hit</run>
+    <run number="6">branch,l1_local_load_miss,l1_local_store_hit</run>
+    <run number="7">divergent_branch,l1_local_store_miss,l1_global_load_hit</run>
+    <run number="8">inst_issued,l1_global_load_miss</run>
+    <run number="9">inst_executed,uncached_global_load_transaction,global_store_transaction</run>
+    <run number="10">warps_launched,threads_launched,l1_shared_bank_conflict</run>
+    <run number="11">active_warps</run>
+    <run number="12">active_cycles</run>
+   </context>
+  </device>
+ </session>
+</cvp>
+

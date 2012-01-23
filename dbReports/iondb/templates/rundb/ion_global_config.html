@@ -1,0 +1,450 @@
+{% extends "rundb/ion_base_template.html" %}
+{% block extra_head %}
+  <script type="text/javascript" language="javascript" src="/site_media/jquery/js/jgcharts.pack.js"></script>
+  <link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
+  <script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+
+  <script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+  <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
+
+  <script>
+    $(function () {
+
+      $("#downloadPluginButton").button();
+      $("#addPluginNone").button();
+
+      $("#addPlugin, #addPluginNone").click(function () {
+        $.colorbox({inline:true, width:"90%", href:"#downloadPlugin"});
+      });
+
+
+      $("#downloadPluginButton").click(function () {
+        urlVAL = $("#downloadPluginURL").val();
+        downloadPluginJSON = { "url":urlVAL };
+        downloadPluginJSON = JSON.stringify(downloadPluginJSON);
+        $.ajax({
+          type:'POST',
+          url:"/rundb/api/v1/plugin/install/",
+          contentType:"application/json; charset=utf-8",
+          data:downloadPluginJSON,
+          dataType:"json",
+          async:false,
+          beforeSend:function () {
+            if ($("#downloadPluginURL").val() != ""){
+                $("#downloadPlugin").html("");
+                $("#downloadPlugin").html("<span>Initializing plugin download <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+            }else{
+                $("#downloadPluginError").html("Error: The Plugin URL must be provided.");
+                return False;
+            }
+          },
+          success:function () {
+            $("#downloadPlugin").html("");
+            $("#downloadPlugin").html("<span>Starting plugin download page will reload</span>");
+            setTimeout(function () {
+              window.location.reload();
+            }, 1000);
+          }
+        });
+      });
+
+      $("form.readonlyish input").attr("readonly", true)
+              .filter(":submit, :reset").attr("disabled", true);
+      $("#enable_editing").click(function(){
+        $("form.readonlyish input").removeAttr("readonly")
+                .filter(":submit, :reset").removeAttr("disabled");
+        $("form.readonlyish input[type=text]").stop()
+                .animate({"background-color":"#90EE90"}, 600)
+                .animate({"background-color":"#FFFFFF"}, 300);
+      });
+
+    $(".deleteLink").button({
+        icons: {
+            primary: 'ui-icon-closethick'
+        }} );
+
+    $(".deleteLink").click(function(){
+        var deletePK = $(this).data("pk");
+        apprise('Are you sure you would like to remove this failed plugin install?', {'verify':true}, function(r)
+        {
+            if(r)
+            {
+                //delete using the API
+                $.ajax({
+                    type: "DELETE",
+                    url: "/rundb/api/v1/plugin/" + deletePK + "/",
+                    async:  false,
+                    success: function(msg){
+                        window.location.reload();
+                    }
+                });
+            }
+        });
+    });
+
+    });
+  </script>
+  <style type="text/css">
+    #sitename {
+      z-index: 10;
+      position: absolute;
+    }
+
+    #sitename input[type=text] {
+      font-size: 21px;
+      font-weight: 700;
+      font-family: Verdana, Arial, sans-serif;
+      height: 29px;
+      width: 666px;
+      display: inline-block;
+      vertical-align: middle;
+      margin: 0 0 0 -2px;
+      color: black;
+      border-width: 1px;
+    }
+
+    #sitename input[type=submit] {
+      display: inline-block;
+      margin-left: 10px;
+      vertical-align: top;
+    }
+
+    fieldset {
+      border: none;
+      padding: 0;
+    }
+
+    fieldset > legend {
+      font-size: large;
+      padding: 0 16px 8px 0px;
+      float: left;
+    }
+
+    fieldset > p {
+      margin: 0 0 8px 0;
+    }
+
+    fieldset.contact > ul > li {
+      list-style-type: none;
+      display: inline-block;
+      margin-right: 20px;
+    }
+
+    fieldset.contact label, fieldset.contact input {
+      display: block;
+    }
+
+    ul.errorlist {
+      list-style-type: none;
+      color: red;
+      padding: 0;
+      margin-bottom: 0.5em;
+      font-size: large;
+    }
+
+    form.readonlyish input {
+      color: black;
+    }
+
+    #enable_editing {
+      margin: 12px 0 0 12px;
+    }
+
+    #addPluginNoneBox{
+        padding:  15px;
+    }
+    #downloadPluginError{
+        color: red;
+    }
+
+    .deleteLink{
+        margin-right: 20px;
+        float: right;
+    }
+  </style>
+
+{% endblock extra_head %}
+
+{% block site-title %}
+<form id="sitename" class="readonlyish" method="post" action="{% url iondb.rundb.views.global_config %}">
+  <input type="text" value="{{ base_site_name }}" name="site_name" class="readonly"/>
+  <input type="submit" value="Save changes" />
+</form>
+{% endblock %}
+
+{% block pagination_holder %}{% endblock %}
+{% block current_tab %}config{% endblock %}
+{% block controls_holder %}    <button id="enable_editing">Edit Fields</button>{% endblock %}
+
+{% block pre_content %}
+
+    <div class="clear">
+    <div class="left_heading left">Customer Support Contacts</div>
+  </div>
+  <div class="bounded_container clear">
+    <div style="padding: 10px;">
+      <form class="resetable readonlyish" method="post" action="{% url iondb.rundb.views.global_config %}">
+        <fieldset class="contact">
+          <legend>Lab Contact</legend>
+          <p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
+          <ul>{{ contacts.lab_contact.as_ul }}</ul>
+        </fieldset>
+        <br style="clear: both;"/>
+        <fieldset class="contact">
+          <legend>IT Contact</legend>
+          <p>This is the person in your organization who should be notified during a support request of problems related to the Torrent Server's hardware or the network environment.</p>
+          <ul>{{ contacts.it_contact.as_ul }}</ul>
+        </fieldset>
+        <div>
+          <input type="submit" value="Save changes"
+                 style="margin: 10px 38px 0 100px; display: inline-block"/>
+          <input type="reset" value="Reset" style="display: inline-block;"/>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="roundedcornr_bottom_526903">
+    <div></div>
+  </div>
+  </div>
+  </div>
+
+  <div class="contentarea centered">
+
+  {% if plugin %}
+
+    <div class="contentarea centered">
+    <div class="roundedcornr_box_526903">
+    <div class="roundedcornr_top_526903">
+      <div></div>
+    </div>
+    <div class="roundedcornr_content_526903">
+    <div class="clear">
+        <div class="left_heading left">Plugins</div>
+        <div class="right_heading">
+            <input type="submit" value="Add" id="addPlugin" />
+        </div>
+    </div>
+    <div class="bounded_container clear">
+      <table>
+        <thead>
+        <tr>
+          <th>Enabled</th>
+          <th>Auto-Run</th>
+          <th>Name</th>
+          <th>Version</th>
+          <th>Date</th>
+          <th>Config</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for pg in plugin %}{% spaceless %}
+          <tr class="{% cycle 'row1' 'row2' %} graphable" id="{{pg.pk}}_row">
+             {% ifequal pg.installStatus "installed" %}
+                    <td class='enable_plugin_td'>
+                      <input {% if pg.selected %}checked{% endif %}
+                             type='checkbox' id='enableplugin_{{pg.pk}}'/>
+                    </td>
+                    <td class='enable_plugin_autorun_td'>
+                      {% if pg.autorunMutable %}
+                        <input {% if pg.autorun %}checked{% endif %} type='checkbox'
+                               class='autorunPlugin' data-pk='{{pg.pk}}'/>
+                      {% endif %}
+                    </td>
+
+                      {# if there is an about.html make that a link to the about.html as an iframe #}
+                      {% if pg.hasAbout %}
+                      <td>
+                          <a class="colorinput" href="{{ pg.hasAbout}}?about=true">{{pg.name}}</a>
+                      </td>
+                      {% else %}
+                        <td>{{ pg.name }}</td>
+                      {% endif %}
+
+                    <td>{{ pg.version }}</td>
+                    <td>{{ pg.date|date:"M d Y" }}</td>
+                    {#  plugin config #}
+                    {% if pg.isConfig %}
+                      <td><a class="colorinput" href="{{ pg.isConfig }}?config=true">config</a>
+                      </td>
+                    {% else %}
+                      <td></td>
+                    {% endif %}
+             {% endifequal %}
+
+              {% ifequal pg.installStatus "failed" %}
+                <td colspan="6"> {{pg.name }} failed to install!
+                    <span class="deleteLink" data-pk="{{pg.pk}}">Remove This Message </span>
+                </td>
+              {% endifequal %}
+
+              {% ifequal pg.installStatus "queued" %}
+              <td colspan="6">{{pg.name }} is still downloading, reload the page to update the status
+              </td>
+              {% endifequal %}
+
+          </tr>
+
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="contentarea centered">
+    <div class="roundedcornr_box_526903">
+    <div class="roundedcornr_top_526903">
+      <div></div>
+    </div>
+    <div class="roundedcornr_content_526903">
+    <div class="centered_message">No Plugins are installed.
+
+        <div id="addPluginNoneBox">
+            <a id="addPluginNone">Install a plugin using a URL</a>
+        </div>
+
+    </div>
+
+  {% endif %}
+{% endblock pre_content %}
+
+{% block content %}
+  {% if publishers %}
+    <div class="clear">
+      <div class="left_heading left">Publishers</div>
+    </div>
+    <div class="bounded_container clear">
+      <table>
+        <thead>
+        <tr>
+          <th>Name</th>
+          <th>Version</th>
+          <th>Path</th>
+          <th>Date</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for pub in publishers %}{% spaceless %}
+          <tr class="{% cycle 'row1' 'row2' %} graphable" id="{{pub.pk}}_row">
+            <td>{{ pub.name }}</td>
+            <td>{{ pub.version }}</td>
+            <td>{{ pub.path }}</td>
+            <td>{{ pub.date|date:"M d Y" }}</td>
+          </tr>
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  {% else %}
+
+    <div class="centered_message">No Publishers are installed.</div>
+
+  {% endif %}
+{% endblock content %}
+
+
+{% block content2 %}
+
+  <div class="clear">
+    <div class="left_heading left">{% if email %}Email{% endif %}</div>
+    <div class="right_heading">
+      <input type="submit" value="Add" name="add"
+             onclick="javascript:window.location.href='{% url rundb.views.edit_email 0 %}';"/>
+    </div>
+  </div>
+  {% if email %}
+    <div class="bounded_container clear">
+      <table>
+        <thead>
+        <tr>
+          <th></th>
+          <th>Edit</th>
+          <th>Enabled</th>
+          <th>Email Address</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for e in email %}
+          <tr class="{% cycle 'row1' 'row2' %}" id="{{e.pk}}_row">
+            <td>{{ e.pk }}</td>
+            <td>
+              <div>
+                <a href="{% url rundb.views.edit_email e.pk %}">Edit</a>
+              </div>
+            </td>
+            <td class='enable_email_td'>
+              <input {% if e.selected %}checked{% endif %}
+                     type='checkbox' id='emailselected_{{e.pk}}'/>
+            </td>
+            <td>{{ e.email }}</td>
+          </tr>
+          </tbody>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="centered_message">No Email Addresses Configured.</div>
+  {% endif %}
+{% endblock content2 %}
+
+{% block content3 %}
+  <div class="clear">
+    <div class="left_heading left">Database Administration</div>
+  </div>
+  <div class="bounded_container clear">
+    <p>
+    <table>
+      <tr>
+        <td>The Django <a href="/admin" target="_blank">Admin Interface</a>
+          provides
+          direct access to the database entries for system administrators.
+        </td>
+      </tr>
+    </table>
+  </div>
+
+
+   <!-- This contains the hidden div for the pluginDownloader-->
+<div style="display:none">
+	<div id="downloadPlugin" style="padding:10px; background:#fff;">
+        <p>Please enter the HTTP URL of the Zip file that contains the Torrent Suite Plugin that you want to install</p>
+        <input type="text" size="100" id="downloadPluginURL" />
+        </br>
+        </br>
+        <div id="downloadPluginButton">download</div>
+        <span id="downloadPluginError"></span>
+	</div>
+</div>
+
+  <!--
+   <script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+   -->
+
+  <script>
+    $(".colorinput").colorbox({width:"80%", height:"80%", iframe:true})
+
+    $(".autorunPlugin").change(function() {
+
+      var checkBox = $($(this));
+      var key = $(this).data("pk");
+      var autorunUrl = "/rundb/autorunplugin/" + key;
+
+      $.ajax({
+        type: "POST",
+        beforeSend:function() {
+          //checkBox.parent().activity({segments: 10, width:3, space:2, length: 3, color: '#252525', speed: 1.5, padding: '3', align: 'left'});
+        },
+        success:function() {
+          //checkBox.parent().activity(false);
+        },
+        data: "checked=" + checkBox.is(':checked'),
+        url: autorunUrl
+      });
+
+    });
+
+
+  </script>
+{% endblock content3 %}

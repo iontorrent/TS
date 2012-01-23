@@ -1,0 +1,32 @@
+# Tooltips for Torrent PC Analysis Suite
+#
+# Format:
+# "Key"      "Title"    Text
+#
+# The key and title fields must be in quotes. The text field takes no quotes.
+
+# Experiment page
+"exp_sample" "Sample" Experiment sample, entered on the PGM.
+"exp_library" "Library" Experiment library, entered on the PGM.
+"exp_pgm" "PGM" The name of the PGM on which the experiment was run.
+"exp_ftpstatus" "FTP Status" Status of data transfre off the PGM.
+"exp_date" "Date" The date on which the experiment was done.
+"exp_experiment" "Experiment" Experiment name, entered on the PGM.
+"exp_project" "Project" Project name, entered on the PGM.
+"exp_searchbyexp" "Search By Experiment" Search for an experiment by its name.
+"exp_expand" "Expand" Expand a menu of reports for this experiment.
+"exp_star" "Star" Mark a run as special.
+
+# Report page
+"rpt_searchbyrpt" "Search By Report" Search for a report by its name.
+"rpt_downloadcsv" "Download TF Metrics as CSV" Download a comma separated values file containing all test fragment metrics for all reports.
+"rpt_rptname" "Report" A link to the report itself, which contains metrics and images.
+"rpt_status" "Status" Status of the report, indicating whether it is complete.
+"rpt_exp" "Experiment" Name of the experiment the report analyzes.
+"rpt_template" "Template" Name of the best performing test fragment in the report
+"rpt_50q10" "50Q10" Number of reads 50 bases or longer with less than 1 error in 10 bases. (MORE is better).
+"rpt_50q17" "50Q17" Number of reads 50 bases or longer with less than 1 error in 50 bases. (MORE is better).
+"rpt_syssnr" "System SNR" Signal-to-noise ratio calculated from the test fragment key. (MORE is better).
+"rpt_cfiedr" "CF/IE/DR" Carry-forward, incomplete extension, and droop measurements. Measures phase error in the data. (LESS is better).
+"rpt_cycles" "Cycles" Number of cycles analyzed in the report.
+"rpt_date" "Date" The date the report was created.

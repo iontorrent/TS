@@ -1,0 +1,414 @@
+/*!
+\mainpage
+
+\htmlonly
+
+<br>
+<p>
+<li>
+This is the technical documentation -- the <a href="../docs_user/index.html" target="_top">user documentation is over here</a>
+</li>
+<br>
+<li>
+For a quick tutorial see <i>examples/example1.cpp</i>
+</li>
+</p>
+<br>
+<hr>
+<br>
+
+<p>
+<b>Main class hierarchies</b>
+<ul>
+<li>Base &lt;- Mat</li>
+<li>Base &lt;- Mat &lt;- Col</li>
+<li>Base &lt;- Mat &lt;- Row</li>
+<li>Base &lt;- Glue</li>
+<li>Base &lt;- eGlue</li>
+<li>Base &lt;- mtGlue</li>
+<li>Base &lt;- Op</li>
+<li>Base &lt;- eOp</li>
+<li>Base &lt;- mtOp</li>
+<li>Base &lt;- subview</li>
+<li>Base &lt;- subview &lt;- subview_col</li>
+<li>Base &lt;- subview &lt;- subview_row</li>
+<li>Base &lt;- diagview</li>
+<br>
+<li>BaseCube &lt;- Cube</li>
+<li>BaseCube &lt;- GlueCube</li>
+<li>BaseCube &lt;- eGlueCube</li>
+<li>BaseCube &lt;- OpCube</li>
+<li>BaseCube &lt;- eOpCube</li>
+<li>BaseCube &lt;- subview_cube</li>
+<br>
+<li>field</li>
+<li>field &lt;- subview_field</li>
+</ul>
+</p>
+<br>
+
+<p>
+<b>Main helper classes</b>
+<ul>
+<li>diskio (for saving and loading matrices, cubes and fields)</li>
+<li>glue_times (for optimised handling of matrix multiplication)</li>
+<li>unwrap (for converting a Base object to Mat)</li>
+<li>unwrap_check (for converting a Base object to Mat and checking whether it is an alias of a specified Mat instance)</li>
+<li>partial_unwrap (used by the glue_times class, to capture transposes and scalar multiplications)</li>
+<li>Proxy (for element access to Glue, eGlue, mtGlue, Op, eOp, mtOp objects)</li>
+</ul>
+</p>
+<br>
+
+<p>
+<b>Object types</b>
+
+<ul>
+
+<li>
+The 'Base' and 'BaseCube' classes are used for static polymorphism
+(polymorphism without run-time virtual-table lookups, modelled after the "Curiously Recurring Template Pattern").
+They are used for type-safe downcasting in functions that restrict their inputs to be classes that are derived from 'Base'
+or 'BaseCube'.
+While the classes in question can be simply 'Mat' or 'Cube',
+they can also be arbitrarily long recursive instances of 'Glue', 'Op', etc.
+</li>
+<br>
+
+<li>
+'Mat' is the templated matrix class, derived from 'Base'.
+It is designed to store elements that are accessed as a 2D array.
+The storage layout is compatible with the BLAS and LAPACK libraries,
+i.e., the elements are stored linearly in memory in a column-by-column manner.
+</li>
+<br>
+
+<li>
+'Col' and 'Row' are the templated column vector and row vector classes, respectively.
+The vector classes are derived from the 'Mat' class.
+An instance of a 'Row' is effectively treated as a 'Mat' comprised of one row.
+Similarly, 'Col' is treated as 'Mat' comprised of one column.
+Functions which expect 'Mat' as an input can also use 'Row' and 'Col',
+where it mathematically makes sense -- an error at run-time is given where incorrect usage is detected.
+</li>
+<br>
+
+<li>
+The 'Cube' class, derived from 'BaseCube', is designed to store elements that are accessed as a 3D array (i.e. "3D matrix")
+The elements are stored in a slice-by-slice manner.
+Each slice is an instance of the 'Mat' class,
+with the memory for the slices stored in a contiguous manner (i.e. next to each other).
+</li>
+<br>
+
+<li>
+The type of elements that can be stored in an instance of the 'Mat' or the 'Cube' class is constrained to be one of:
+'char', 'short', 'int', 'long', 'float', 'double', 
+'std::complex&lt;float&gt;', 'std::complex&lt;double&gt;'
+as well as the unsigned versions of the integral types
+(i.e., 'unsigned char', 'unsigned short', 'unsigned int', 'unsigned long').
+</li>
+<br>
+
+<li>
+Several typedefs exist:
+<ul>
+<li>'Mat&lt;double&gt;' has been typedefed as 'mat'</li>
+<li>'Mat&lt;float&gt;' has been typedefed as 'fmat'</li>
+<li>'Col&lt;double&gt;' has been typedefed as 'vec' and 'colvec'</li>
+<li>'Row&lt;double&gt;' has been typedefed as 'rowvec'</li>
+<li>'Cube&lt;double&gt;' has been typedefed as 'cube'</li>
+</ul>
+<br>
+See <i>include/armadillo_bits/typedef.hpp</i> for the full list of typedefs.
+</li>
+<br>
+
+
+
+<li>
+The 'field' class is designed to store elements of an arbitrary type that are accessed as a 2D array.
+The elements can be strings, matrices or any C++ class that has the 'copy operator' and 'operator=' member functions defined.
+Unlike the 'Mat' class, which is optimised for numerical elements,
+the 'field' class is not optimised for any particular element type.
+</li>
+<br>
+
+<li>
+The 'Glue' class is used for storing references to two arbitrary objects that are also derived from 'Base'.
+The main use is for binary operations (e.g. multiplication of two matrices).
+As any object derived from 'Base' can be stored,
+'Glue' can store references to other 'Glue' objects,
+thereby allowing the storage of arbitrarily long mathematical expressions.
+'Glue' is restricted to store references to objects that have the same underlying element type
+(e.g., 'int', 'float', 'double', etc).
+</li>
+<br>
+
+<li>
+The 'mtGlue' class allows the storage of references to 'Base' derived objects that have a different underlying element type.
+For example, addition of an 'int' matrix with a 'float' matrix.
+The 'mt' prefix stands for 'mixed type'.
+</li>
+<br>
+
+<li>
+The 'eGlue' class is similar to 'Glue', with two further constraints:
+<ul>
+<li>
+it can be used only for a binary operation that results in a matrix that has the same dimensions as the two input objects
+</li>
+<li>
+the operation is applied individually element-by-element, using two corresponding elements from the two objects.
+For example, the binary operation can be matrix addition, but not matrix multiplication.
+</li>
+</ul>
+<br>
+The 'e' prefix stands for 'element'.
+</li>
+<br>
+
+<li>
+The 'Op', 'mtOp' and 'eOp' classes are for unary operations (e.g. matrix transpose)
+and are analogs of 'Glue', 'mtGlue' and 'eGlue' classes, respectively.
+Specifically, the 'Op' class is for operations that result in matrices with the same element type as the input object,
+the 'mtOp' class is for operations that produce matrices with an element type that is different to the element type of the input object,
+and the 'eOp' class is for operations that are applied individually element-by-element,
+resulting in matrices that have the same dimensions and the same element type as the input object.
+</li>
+<br>
+
+<li>
+For the 'Glue', 'eGlue', 'Op', 'eOp' and classes,
+the operation identifiers and types of input objects are stored as template parameters.
+The 'mtGlue' and 'mtOp' classes additionally have the output element type specified as a template parameter.
+</li>
+<br>
+
+<li>
+The 'unwrap' class is used internally by many functions to create a 'Mat' object out of 'Glue', 'eGlue', 'mtGlue', 'Op', 'eOp, 'mtOp' objects.
+If a 'Mat' object is fed to 'unwrap', no copying is done.
+</li>
+<br>
+
+</ul>
+</p>
+
+<p>
+<b>In order to have ease of use and a straightforward user interface,
+some trade-offs between verbosity, speed and memory efficiency are present</b>
+<ul>
+<li>
+To considerably speed up handling of small vectors and matrices,
+while at the same time allowing dynamic re-sizing (e.g. to load matrices of unknown size from disk),
+each matrix has a certain amount of memory pre-allocated directly in the definition of the 'Mat' class.
+The 'new' operator is called only if the required size of the matrix does not fit into the pre-allocated memory.
+The pre-allocation technique was used instead of requiring the user to hard-code matrix sizes.
+</li>
+<br>
+<li>
+Accessors for simple data, such as the number of rows and columns, are not used, e.g. <b>X.rows()</b>.
+Instead, read-only publically accessible members are provided, e.g. <b>X.n_rows</b>.
+This was done with the aim of improving readbility of user code with many loops.
+(As a sidenote, <b>X.rows(...)</b> is used to access sub-matrices of <b>X</b>).
+</li>
+<br>
+<li>
+Unsigned integers are used (of type 'u32') for loops and the storage of sizes.
+This avoids the need to account for negative values during bounds checks.
+</li>
+<br>
+
+<li>
+A scalar is treated as a 1x1 matrix during assignment.
+Hence <b>mat&nbsp;X(5,10);&nbsp;X&nbsp;=&nbsp;20;</b> will result in <b>X</b> having a size of 1x1, rather than 5x10.
+This is the same as what happens in Matlab/Octave.
+</li>
+<br>
+
+</ul>
+</p>
+
+<p>
+<b>Debugging</b>
+<ul>
+<li>
+<b>Bounds and other checks are enabled by default</b>.
+They can be turned off by defining <b>ARMA_NO_DEBUG</b> prior to including <i>armadillo</i>
+(preferably in the Makefile file or the command line, e.g. g++ -DARMA_NO_DEBUG ...).
+The reasoning here is that bounds checks should be turned off <b>only</b> when the user is satisfied that their code is working correctly
+(i.e. thoroughly debugged).
+</li>
+<br>
+
+<li>
+<b>Low level library debugging</b> can be aided by defining <b>ARMA_EXTRA_DEBUG</b> prior to including <i>armadillo</i>.
+Note that defining ARMA_NO_DEBUG will automatically undefine ARMA_EXTRA_DEBUG (see <i>armadillo_bits/debug.hpp</i>).
+</li>
+<br>
+</ul>
+</p>
+
+<p>
+<b>External libraries</b>
+<ul>
+<li>
+To avoid reinventing a few wheels, Armadillo can leverage ATLAS, LAPACK, BLAS and Boost libraries.
+While the presence of these libraries is not mandatory, the functionality of Armadillo will be reduced without them.
+Operations such as matrix multiplication will still work,
+however more involved operations such as matrix inversion of eigenvalue decomposition require ATLAS or LAPACK.
+</li>
+<br>
+</ul>
+</p>
+
+
+<p>
+<b>Delayed evaluation via expression templates and meta-programming</b>
+
+<ul>
+
+<p>
+Many operations (invoked through unary or binary operators) are not immediately executed, allowing more operations to be queued.
+The queued operations are executed (possibly by combining several operations) when the 'Mat'
+constructor or assignment operator is invoked.
+In many cases this occurs at compile time.
+</p>
+
+<p>
+Functions for binary operators (such as + and -) are overloaded to accept objects derived from 'Base' and 'BaseCube' classes.
+Each binary operator function then produces an appropriate instance of either the 'Glue', 'mtGlue' or 'eGlue' class.
+The instance can then be evaluated by the 'Mat' class (using the 'class constructor' or 'operator=' member functions),
+or used as input to further binary or unary operators.
+For example, given three matrices A, B, and C, the expression
+</p>
+
+<p>
+<center>
+A + B - C
+</center>
+</p>
+
+<p>
+is translated to an 'eGlue' object defined with the following template type:
+</p>
+
+<p>
+<center>
+eGlue&lt; eGlue&lt;Mat, Mat, eglue_plus&gt;, Mat, eglue_minus&gt;
+</center>
+</p>
+
+<p>
+In a similar manner there are user-accessible functions for unary operations,
+each producing an appropriate instance of either the 'Op', 'mtOp' or 'eOp' class.
+For example, given a matrix X, the expression
+</p>
+
+<p>
+<center>
+inv( square(X) )
+</center>
+</p>
+
+<p>
+is translated to an 'Op' object defined with the following template type:
+</p>
+
+<p>
+<center>
+Op&lt; eOp&lt;Mat, eop_square&gt;, op_inv&gt;
+</center>
+</p>
+
+<p>
+Binary and unary operations can be combined.
+For example, given two matrices A and B, the expression
+</p>
+
+<p>
+<center>
+trans(A) * inv(B)
+</center>
+</p>
+
+<p>
+is translated to a 'Glue' object defined with the following template type:
+</p>
+
+<p>
+<center>
+Glue&lt;Op&lt;Mat,op_trans&gt;,Op&lt;Mat,op_inv&gt;,glue_times&gt;
+</center>
+</p>
+
+
+<p>
+Armadillo uses the above template meta-programming as part of a mechanism for implementing a delayed evaluation approach
+(also known as lazy evaluation)
+for evaluating mathematical expressions.
+The approach is capable of combining several operations into one,
+in order to reduce (or eliminate) the need for compiler-generated temporary objects
+as well as to work around structural limitations of the class construct within the current version of the C++ language.
+</p>
+
+<p>
+All operations involving the 'eGlue' and 'eOp' classes
+(e.g. addition, subtraction, element-wise division, element-wise multiplication,
+division and multiplication by a scalar, square of each element, etc)
+can be combined.
+Furthermore, certain operations involving the 'Op' class can also be combined.
+For example, the inverse of a diagonal matrix constructed out of a vector
+takes into account that only diagonal elements are non-zero.
+</p>
+
+<p>
+Armadillo has several other intelligent expression evaluators,
+including:
+<ul>
+<li>
+optimisation of the order of matrix multiplication,
+with a view to reduce the amount of time and memory taken (accomplished by reducing the size of the required temporary matrices)
+</li>
+<li>
+the 'as_scalar(expression)' function,
+which will try to exploit the fact that the result of 'expression' is a 1*1 matrix,
+in order to reduce the amount of computation.
+</li>
+</ul>
+</p>
+
+</ul>
+</p>
+<br>
+
+<p>
+<b>Experiences with meta-programming</b>
+
+<ul>
+<p>
+We have observed that extensively templated C++ library code has little resemblance to C, Java,
+or the often used object oriented programming (OOP) subset of C++.
+As such, heavy template code can be difficult to debug if deliberate precautions are not taken.
+Specifically, we employed the function signature determination mechanism available in the GCC C++ compiler,
+in order to have a clear view of the input types created through template meta-programming.
+The mechanism can be enabled by defining the ARMA_EXTRA_DEBUG macro prior to including <i>armadillo</i>
+</p>
+
+<p>
+During the early stages of development we have also observed that
+not all C++ compilers can handle heavy template meta-programming or fully conform to the C++ standard.
+In particular, MS Visual C++ (especially prior to the 2008 version) can be troublesome.
+Nevertheless, we made efforts to allow the library to be used with a wide variety of C++ compilers,
+providing workarounds where necessary.
+</p>
+
+</ul>
+
+</p>
+
+<br>
+<br>
+
+\endhtmlonly
+*/

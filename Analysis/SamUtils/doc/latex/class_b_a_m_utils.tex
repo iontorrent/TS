@@ -1,0 +1,526 @@
+\hypertarget{class_b_a_m_utils}{
+\section{BAMUtils Class Reference}
+\label{class_b_a_m_utils}\index{BAMUtils@{BAMUtils}}
+}
+
+
+{\ttfamily \#include $<$BAMUtils.h$>$}
+
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_b_a_m_utils_a837332763b5fedf126e460492dfb6ef4}{
+typedef std::tr1::unordered\_\-map$<$ int, coord\_\-t $>$ {\bfseries q\_\-lens}}
+\label{class_b_a_m_utils_a837332763b5fedf126e460492dfb6ef4}
+
+\item 
+\hypertarget{class_b_a_m_utils_a45936ccdf7b495622cc597adf70cd2b1}{
+typedef std::tr1::unordered\_\-map$<$ int, coord\_\-t $>$ {\bfseries q\_\-lens\_\-itr}}
+\label{class_b_a_m_utils_a45936ccdf7b495622cc597adf70cd2b1}
+
+\item 
+\hypertarget{class_b_a_m_utils_a9e90e85aa7d73123e56220df3a7b48cd}{
+typedef std::tr1::unordered\_\-map$<$ int, int $>$::const\_\-iterator {\bfseries error\_\-table\_\-iterator}}
+\label{class_b_a_m_utils_a9e90e85aa7d73123e56220df3a7b48cd}
+
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_b_a_m_utils_a85245410714e12d4a68bf7b2e5d5bda8}{BAMUtils} ()
+\item 
+\hyperlink{class_b_a_m_utils_a313b40960ee8c20c2dfee7dc85bef3eb}{BAMUtils} (\hyperlink{class_b_a_m_read}{BAMRead} \&BAM\_\-record)
+\item 
+\hyperlink{class_b_a_m_utils_ac2ed544597c5c23bde585a28688edef8}{BAMUtils} (\hyperlink{class_b_a_m_read}{BAMRead} $\ast$BAM\_\-Record\_\-Ptr, std::string qscores, coord\_\-t slop)
+\item 
+\hyperlink{class_b_a_m_utils_a3c7f88e2feab687c3d34cba5bda4284d}{BAMUtils} (\hyperlink{class_b_a_m_read}{BAMRead} \&BAM\_\-record, std::string qscores, coord\_\-t slop)
+\item 
+\hyperlink{class_b_a_m_utils_a146606161e6166b7ab917d9d5b220f8e}{BAMUtils} (\hyperlink{class_b_a_m_read}{BAMRead} \&BAM\_\-record, std::string qscores, coord\_\-t slop, bool IUPAC\_\-Flag, bool Keep\_\-IUPAC, bool Truncate\_\-Soft\_\-Clipped, int error\_\-table\_\-min\_\-len, int error\_\-table\_\-max\_\-len, int error\_\-table\_\-step\_\-size)
+\item 
+std::string \hyperlink{class_b_a_m_utils_a8428c847e49fc344ec7d117e2375a5a5}{get\_\-name} ()
+\item 
+int \hyperlink{class_b_a_m_utils_ac7a8be2c669ae4ade5d1f2d1809ca938}{get\_\-strand} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_aecf614c79eaa4cbf7402cddadf2940e9}{get\_\-t\_\-start} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_a6346001db742f763d1a9951c1cb24b18}{get\_\-t\_\-length} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_a2c1dd30d977be2b0acc93645f77388c5}{get\_\-q\_\-length} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_a6c833f1a68db244f92691a460b883269}{get\_\-match} ()
+\item 
+double \hyperlink{class_b_a_m_utils_a7e91e247baff17fd807dc490fb6a1abf}{get\_\-percent\_\-id} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_ab75a230cac0e5ee3ee88aa2516af5858}{get\_\-q\_\-error} ()
+\item 
+int \hyperlink{class_b_a_m_utils_ac7a443e44e8277f48ac5542502f92cf6}{get\_\-homo\_\-errors} ()
+\item 
+int \hyperlink{class_b_a_m_utils_a4bc4b474bcfd67a0c5f1e6f809368f57}{get\_\-mismatch\_\-errors} ()
+\item 
+int \hyperlink{class_b_a_m_utils_a42b9fc179dc659139600928f34938831}{get\_\-indel\_\-errors} ()
+\item 
+std::string \hyperlink{class_b_a_m_utils_ad8cb95bc79f4c69f2fae536d9eb81bc1}{get\_\-qdna} ()
+\item 
+std::string \hyperlink{class_b_a_m_utils_a4a6c8a6c2e0051dc2502ed0250abdc62}{get\_\-matcha} ()
+\item 
+std::string \hyperlink{class_b_a_m_utils_a25489eafe1f935f1e89a446ff18807e6}{get\_\-tdna} ()
+\item 
+std::string \hyperlink{class_b_a_m_utils_aafc0fcde883403393780e3c16e193088}{get\_\-rname} ()
+\item 
+int \hyperlink{class_b_a_m_utils_af9cf3287bad403dd3584bc66e2716d59}{get\_\-slop} ()
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_a63c57af74b9c49604fe0c25dc15e86cb}{get\_\-phred\_\-len} (int phred\_\-score)
+\item 
+coord\_\-t \hyperlink{class_b_a_m_utils_a0184af608ab22c40e2563be437cf370a}{get\_\-t\_\-diff} () const 
+\item 
+\hypertarget{class_b_a_m_utils_aa6e405dab585995b949311f38d084006}{
+coord\_\-t {\bfseries get\_\-genome\_\-length} ()}
+\label{class_b_a_m_utils_aa6e405dab585995b949311f38d084006}
+
+\item 
+\hypertarget{class_b_a_m_utils_aae6d3978e085ae66eea46421d540520c}{
+void {\bfseries set\_\-genome\_\-length} (coord\_\-t len)}
+\label{class_b_a_m_utils_aae6d3978e085ae66eea46421d540520c}
+
+\item 
+\hypertarget{class_b_a_m_utils_a21a57510346bc2c86083962edf9de048}{
+void {\bfseries set\_\-slop\_\-bases} (coord\_\-t slop)}
+\label{class_b_a_m_utils_a21a57510346bc2c86083962edf9de048}
+
+\item 
+int \hyperlink{class_b_a_m_utils_ad524b2e589468b35690a35da92cf8718}{get\_\-soft\_\-clipped\_\-bases} ()
+\item 
+bool \hyperlink{class_b_a_m_utils_a70a4548a475423dd0145105acffaea31}{is\_\-pos\_\-covered} (int pos\_\-in\_\-genome)
+\item 
+bool \hyperlink{class_b_a_m_utils_a1eb91072119ca6d53365c275464f78b8}{is\_\-pos\_\-covered} (int pos\_\-in\_\-genome, int phred\_\-num)
+\item 
+char \hyperlink{class_b_a_m_utils_af6cefb7aaa070d18f540aab758e5439a}{get\_\-query\_\-base} (int pos\_\-in\_\-genome)
+\item 
+\hypertarget{class_b_a_m_utils_ac25cbf0d2d9767ce5fd1454557c8673c}{
+bool {\bfseries pass\_\-filtering} (int length, double accuracy)}
+\label{class_b_a_m_utils_ac25cbf0d2d9767ce5fd1454557c8673c}
+
+\item 
+int \hyperlink{class_b_a_m_utils_abaea34a7c2784ffd56b27bd981374d45}{get\_\-error\_\-at\_\-length} (int length)
+\item 
+bool \hyperlink{class_b_a_m_utils_a4465a52da42272735728285f9fbf5e8c}{is\_\-position\_\-an\_\-error} (int position\_\-in\_\-read)
+\item 
+\hyperlink{class_b_a_m_read}{BAMRead} \& \hyperlink{class_b_a_m_utils_af76ec0920e92a73a8c60e898330e62f6}{get\_\-bamread} ()
+\item 
+std::string \hyperlink{class_b_a_m_utils_a20441e66c8002b5dbb1df321c92b7b67}{to\_\-string} ()
+\item 
+\hypertarget{class_b_a_m_utils_ad0f217c572a93c9457ef9bca9b204748}{
+error\_\-table\_\-iterator {\bfseries error\_\-table\_\-begin} ()}
+\label{class_b_a_m_utils_ad0f217c572a93c9457ef9bca9b204748}
+
+\item 
+\hypertarget{class_b_a_m_utils_a63efa10154474db5ccf3c4e395606b2c}{
+error\_\-table\_\-iterator {\bfseries error\_\-table\_\-end} ()}
+\label{class_b_a_m_utils_a63efa10154474db5ccf3c4e395606b2c}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+A class that provides common utility functions for Ion Torrent R\&D/production code.
+
+Works on alignments from SAM/BAM files. 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_b_a_m_utils_a85245410714e12d4a68bf7b2e5d5bda8}{
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\subsubsection[{BAMUtils}]{\setlength{\rightskip}{0pt plus 5cm}BAMUtils::BAMUtils (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_a85245410714e12d4a68bf7b2e5d5bda8}
+Default constructor. a requirement to be part of an STL container \hypertarget{class_b_a_m_utils_a313b40960ee8c20c2dfee7dc85bef3eb}{
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\subsubsection[{BAMUtils}]{\setlength{\rightskip}{0pt plus 5cm}BAMUtils::BAMUtils (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead} \&}]{BAM\_\-record}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_a313b40960ee8c20c2dfee7dc85bef3eb}
+Creates a \hyperlink{class_b_a_m_utils}{BAMUtils} object using all default values for the phred scores, start slop, IUPAC and soft clip truncation flags, and error table values. Defaults are: qscores: 7,10,17,20,47 slop: 0 iupac\_\-flag: true keep\_\-iupac: true trunace\_\-soft\_\-clipped: true error\_\-table\_\-min\_\-len: 0 error\_\-table\_\-max\_\-len: 0 error\_\-table\_\-step\_\-size: 0
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMRead\&} & a valid \hyperlink{class_b_a_m_read}{BAMRead} object \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_utils}{BAMUtils} constructed \hyperlink{class_b_a_m_utils}{BAMUtils} object 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_ac2ed544597c5c23bde585a28688edef8}{
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\subsubsection[{BAMUtils}]{\setlength{\rightskip}{0pt plus 5cm}BAMUtils::BAMUtils (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead} $\ast$}]{BAM\_\-Record\_\-Ptr, }
+\item[{std::string}]{qscores, }
+\item[{coord\_\-t}]{slop}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_ac2ed544597c5c23bde585a28688edef8}
+Creates a \hyperlink{class_b_a_m_utils}{BAMUtils} object using default values for the IUPAC and soft clip truncation flags, and error table values. Defaults are: iupac\_\-flag: true keep\_\-iupac: true trunace\_\-soft\_\-clipped: true error\_\-table\_\-min\_\-len: 0 error\_\-table\_\-max\_\-len: 0 error\_\-table\_\-step\_\-size: 0
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMRead$\ast$} & a pointer to a \hyperlink{class_b_a_m_read}{BAMRead} \\
+\hline
+{\em std::string} & a csv string representing the phred scores ie: \char`\"{}7,10,17,20,47\char`\"{} \\
+\hline
+{\em long} & a value representing \# of bases to ignore from the start of the read for error calculations \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_utils}{BAMUtils} constructed \hyperlink{class_b_a_m_utils}{BAMUtils} object 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_a3c7f88e2feab687c3d34cba5bda4284d}{
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\subsubsection[{BAMUtils}]{\setlength{\rightskip}{0pt plus 5cm}BAMUtils::BAMUtils (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead} \&}]{BAM\_\-record, }
+\item[{std::string}]{qscores, }
+\item[{coord\_\-t}]{slop}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_a3c7f88e2feab687c3d34cba5bda4284d}
+Creates a \hyperlink{class_b_a_m_utils}{BAMUtils} object using default values for the IUPAC and soft clip truncation flags, and error table values. Defaults are: iupac\_\-flag: true keep\_\-iupac: true trunace\_\-soft\_\-clipped: true error\_\-table\_\-min\_\-len: 0 error\_\-table\_\-max\_\-len: 0 error\_\-table\_\-step\_\-size: 0
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMRead\&} & a reference to a \hyperlink{class_b_a_m_read}{BAMRead} \\
+\hline
+{\em std::string} & a csv string representing the phred scores ie: \char`\"{}7,10,17,20,47\char`\"{} \\
+\hline
+{\em long} & a value representing \# of bases to ignore from the start of the read for error calculations \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_utils}{BAMUtils} constructed \hyperlink{class_b_a_m_utils}{BAMUtils} object 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_a146606161e6166b7ab917d9d5b220f8e}{
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\index{BAMUtils@{BAMUtils}!BAMUtils@{BAMUtils}}
+\subsubsection[{BAMUtils}]{\setlength{\rightskip}{0pt plus 5cm}BAMUtils::BAMUtils (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMRead} \&}]{BAM\_\-record, }
+\item[{std::string}]{qscores, }
+\item[{coord\_\-t}]{slop, }
+\item[{bool}]{IUPAC\_\-Flag, }
+\item[{bool}]{Keep\_\-IUPAC, }
+\item[{bool}]{Truncate\_\-Soft\_\-Clipped, }
+\item[{int}]{error\_\-table\_\-min\_\-len, }
+\item[{int}]{error\_\-table\_\-max\_\-len, }
+\item[{int}]{error\_\-table\_\-step\_\-size}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_a146606161e6166b7ab917d9d5b220f8e}
+Creates a \hyperlink{class_b_a_m_utils}{BAMUtils} object using default values for the IUPAC and soft clip truncation flags, and error table values.
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMRead\&} & a reference to a \hyperlink{class_b_a_m_read}{BAMRead} \\
+\hline
+{\em std::string} & qscores a csv string representing the phred scores ie: \char`\"{}7,10,17,20,47\char`\"{} \\
+\hline
+{\em long} & start\_\-slop a value representing \# of bases to ignore from the start of the read for error calculations \\
+\hline
+{\em bool} & IUPAC\_\-Flag if true, will try and validate IUPAC alignment mismatches in \hyperlink{class_m_d}{MD} string \\
+\hline
+{\em bool} & Keep\_\-IUPAC if true, will keep IUPAC's in tDNA string instead of nucleotide bases \\
+\hline
+{\em bool} & Truncate\_\-Soft\_\-Clipped if true, ignores soft clipped regions of reads in error calculations \\
+\hline
+{\em int} & error\_\-table\_\-min\_\-len minimum length for error table record keeping \\
+\hline
+{\em int} & error\_\-table\_\-max\_\-len maximum length for error table record keeping \\
+\hline
+{\em int} & error\_\-table\_\-step\_\-size interval for error table. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_utils}{BAMUtils} constructed \hyperlink{class_b_a_m_utils}{BAMUtils} object 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_b_a_m_utils_af76ec0920e92a73a8c60e898330e62f6}{
+\index{BAMUtils@{BAMUtils}!get\_\-bamread@{get\_\-bamread}}
+\index{get\_\-bamread@{get\_\-bamread}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-bamread}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMRead}\& BAMUtils::get\_\-bamread (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_af76ec0920e92a73a8c60e898330e62f6}
+Returns a reference to the internal \hyperlink{class_b_a_m_read}{BAMRead} object
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_read}{BAMRead}\& \hyperlink{class_b_a_m_read}{BAMRead} used for this utility 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_abaea34a7c2784ffd56b27bd981374d45}{
+\index{BAMUtils@{BAMUtils}!get\_\-error\_\-at\_\-length@{get\_\-error\_\-at\_\-length}}
+\index{get\_\-error\_\-at\_\-length@{get\_\-error\_\-at\_\-length}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-error\_\-at\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-error\_\-at\_\-length (
+\begin{DoxyParamCaption}
+\item[{int}]{length}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_abaea34a7c2784ffd56b27bd981374d45}
+returns error at a given length, if the read is that long. returns -\/1 otherwise returns error \hypertarget{class_b_a_m_utils_ac7a443e44e8277f48ac5542502f92cf6}{
+\index{BAMUtils@{BAMUtils}!get\_\-homo\_\-errors@{get\_\-homo\_\-errors}}
+\index{get\_\-homo\_\-errors@{get\_\-homo\_\-errors}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-homo\_\-errors}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-homo\_\-errors (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_ac7a443e44e8277f48ac5542502f92cf6}
+\hyperlink{class_b_a_m_utils_ac7a443e44e8277f48ac5542502f92cf6}{get\_\-homo\_\-errors()} returns the \# of errors caused by homopolymers in the read \hypertarget{class_b_a_m_utils_a42b9fc179dc659139600928f34938831}{
+\index{BAMUtils@{BAMUtils}!get\_\-indel\_\-errors@{get\_\-indel\_\-errors}}
+\index{get\_\-indel\_\-errors@{get\_\-indel\_\-errors}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-indel\_\-errors}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-indel\_\-errors (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a42b9fc179dc659139600928f34938831}
+\hyperlink{class_b_a_m_utils_a42b9fc179dc659139600928f34938831}{get\_\-indel\_\-errors()} returns the \# of errors caused by indels in the read \hypertarget{class_b_a_m_utils_a6c833f1a68db244f92691a460b883269}{
+\index{BAMUtils@{BAMUtils}!get\_\-match@{get\_\-match}}
+\index{get\_\-match@{get\_\-match}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-match}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-match (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a6c833f1a68db244f92691a460b883269}
+\hyperlink{class_b_a_m_utils_a6c833f1a68db244f92691a460b883269}{get\_\-match()} returns number of bases that match the reference \hypertarget{class_b_a_m_utils_a4a6c8a6c2e0051dc2502ed0250abdc62}{
+\index{BAMUtils@{BAMUtils}!get\_\-matcha@{get\_\-matcha}}
+\index{get\_\-matcha@{get\_\-matcha}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-matcha}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::get\_\-matcha (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a4a6c8a6c2e0051dc2502ed0250abdc62}
+\hyperlink{class_b_a_m_utils_a4a6c8a6c2e0051dc2502ed0250abdc62}{get\_\-matcha()} returns the annotated match sequence, for example \char`\"{}$|$$|$$|$$|$+-\/-\/-\/    $|$$|$ $|$ $|$ -\/++$|$+\char`\"{} \hypertarget{class_b_a_m_utils_a4bc4b474bcfd67a0c5f1e6f809368f57}{
+\index{BAMUtils@{BAMUtils}!get\_\-mismatch\_\-errors@{get\_\-mismatch\_\-errors}}
+\index{get\_\-mismatch\_\-errors@{get\_\-mismatch\_\-errors}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-mismatch\_\-errors}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-mismatch\_\-errors (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a4bc4b474bcfd67a0c5f1e6f809368f57}
+\hyperlink{class_b_a_m_utils_a4bc4b474bcfd67a0c5f1e6f809368f57}{get\_\-mismatch\_\-errors()} returns the \# of errors caused by mismatches in the read \hypertarget{class_b_a_m_utils_a8428c847e49fc344ec7d117e2375a5a5}{
+\index{BAMUtils@{BAMUtils}!get\_\-name@{get\_\-name}}
+\index{get\_\-name@{get\_\-name}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-name}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::get\_\-name (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a8428c847e49fc344ec7d117e2375a5a5}
+\hyperlink{class_b_a_m_utils_a8428c847e49fc344ec7d117e2375a5a5}{get\_\-name()} returns name of read. matches name from fastq and sam file \hypertarget{class_b_a_m_utils_a7e91e247baff17fd807dc490fb6a1abf}{
+\index{BAMUtils@{BAMUtils}!get\_\-percent\_\-id@{get\_\-percent\_\-id}}
+\index{get\_\-percent\_\-id@{get\_\-percent\_\-id}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-percent\_\-id}]{\setlength{\rightskip}{0pt plus 5cm}double BAMUtils::get\_\-percent\_\-id (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a7e91e247baff17fd807dc490fb6a1abf}
+\hyperlink{class_b_a_m_utils_a7e91e247baff17fd807dc490fb6a1abf}{get\_\-percent\_\-id()} returns the \% similarity between the reference and read \hypertarget{class_b_a_m_utils_a63c57af74b9c49604fe0c25dc15e86cb}{
+\index{BAMUtils@{BAMUtils}!get\_\-phred\_\-len@{get\_\-phred\_\-len}}
+\index{get\_\-phred\_\-len@{get\_\-phred\_\-len}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-phred\_\-len}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-phred\_\-len (
+\begin{DoxyParamCaption}
+\item[{int}]{phred\_\-score}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a63c57af74b9c49604fe0c25dc15e86cb}
+\hyperlink{class_b_a_m_utils_a63c57af74b9c49604fe0c25dc15e86cb}{get\_\-phred\_\-len()} returns the length of the read given a Q\# score. \hypertarget{class_b_a_m_utils_ab75a230cac0e5ee3ee88aa2516af5858}{
+\index{BAMUtils@{BAMUtils}!get\_\-q\_\-error@{get\_\-q\_\-error}}
+\index{get\_\-q\_\-error@{get\_\-q\_\-error}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-q\_\-error}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-q\_\-error (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_ab75a230cac0e5ee3ee88aa2516af5858}
+\hyperlink{class_b_a_m_utils_ab75a230cac0e5ee3ee88aa2516af5858}{get\_\-q\_\-error()} returns the \# of errors in the lowest Q-\/score. By default this is Q7 \hypertarget{class_b_a_m_utils_a2c1dd30d977be2b0acc93645f77388c5}{
+\index{BAMUtils@{BAMUtils}!get\_\-q\_\-length@{get\_\-q\_\-length}}
+\index{get\_\-q\_\-length@{get\_\-q\_\-length}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-q\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-q\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a2c1dd30d977be2b0acc93645f77388c5}
+\hyperlink{class_b_a_m_utils_a2c1dd30d977be2b0acc93645f77388c5}{get\_\-q\_\-length()} returns the length of the aligned portion of the read \hypertarget{class_b_a_m_utils_ad8cb95bc79f4c69f2fae536d9eb81bc1}{
+\index{BAMUtils@{BAMUtils}!get\_\-qdna@{get\_\-qdna}}
+\index{get\_\-qdna@{get\_\-qdna}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-qdna}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::get\_\-qdna (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_ad8cb95bc79f4c69f2fae536d9eb81bc1}
+\hyperlink{class_b_a_m_utils_ad8cb95bc79f4c69f2fae536d9eb81bc1}{get\_\-qdna()} returns the query dna sequence as a string \hypertarget{class_b_a_m_utils_af6cefb7aaa070d18f540aab758e5439a}{
+\index{BAMUtils@{BAMUtils}!get\_\-query\_\-base@{get\_\-query\_\-base}}
+\index{get\_\-query\_\-base@{get\_\-query\_\-base}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-query\_\-base}]{\setlength{\rightskip}{0pt plus 5cm}char BAMUtils::get\_\-query\_\-base (
+\begin{DoxyParamCaption}
+\item[{int}]{pos\_\-in\_\-genome}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_af6cefb7aaa070d18f540aab758e5439a}
+assumes fasta orientation of read \hyperlink{class_b_a_m_utils_af6cefb7aaa070d18f540aab758e5439a}{get\_\-query\_\-base()} returns the base \hypertarget{class_b_a_m_utils_aafc0fcde883403393780e3c16e193088}{
+\index{BAMUtils@{BAMUtils}!get\_\-rname@{get\_\-rname}}
+\index{get\_\-rname@{get\_\-rname}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-rname}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::get\_\-rname (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_aafc0fcde883403393780e3c16e193088}
+\hyperlink{class_b_a_m_utils_aafc0fcde883403393780e3c16e193088}{get\_\-rname()} returns the name of the contig this read aligned too \hypertarget{class_b_a_m_utils_af9cf3287bad403dd3584bc66e2716d59}{
+\index{BAMUtils@{BAMUtils}!get\_\-slop@{get\_\-slop}}
+\index{get\_\-slop@{get\_\-slop}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-slop}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-slop (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_af9cf3287bad403dd3584bc66e2716d59}
+\hyperlink{class_b_a_m_utils_af9cf3287bad403dd3584bc66e2716d59}{get\_\-slop()} returns the \# of bases at the start of the read which are ignored in error calculation \hypertarget{class_b_a_m_utils_ad524b2e589468b35690a35da92cf8718}{
+\index{BAMUtils@{BAMUtils}!get\_\-soft\_\-clipped\_\-bases@{get\_\-soft\_\-clipped\_\-bases}}
+\index{get\_\-soft\_\-clipped\_\-bases@{get\_\-soft\_\-clipped\_\-bases}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-soft\_\-clipped\_\-bases}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-soft\_\-clipped\_\-bases (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_ad524b2e589468b35690a35da92cf8718}
+\hyperlink{class_b_a_m_utils_ad524b2e589468b35690a35da92cf8718}{get\_\-soft\_\-clipped\_\-bases()} returns the length of the read that was not included in the alignment, aka soft clipped \hypertarget{class_b_a_m_utils_ac7a8be2c669ae4ade5d1f2d1809ca938}{
+\index{BAMUtils@{BAMUtils}!get\_\-strand@{get\_\-strand}}
+\index{get\_\-strand@{get\_\-strand}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-strand}]{\setlength{\rightskip}{0pt plus 5cm}int BAMUtils::get\_\-strand (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_ac7a8be2c669ae4ade5d1f2d1809ca938}
+\hyperlink{class_b_a_m_utils_ac7a8be2c669ae4ade5d1f2d1809ca938}{get\_\-strand()} returns an integer representing the strand. 0 is the positive strand 16 is the negative strand \hypertarget{class_b_a_m_utils_a0184af608ab22c40e2563be437cf370a}{
+\index{BAMUtils@{BAMUtils}!get\_\-t\_\-diff@{get\_\-t\_\-diff}}
+\index{get\_\-t\_\-diff@{get\_\-t\_\-diff}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-t\_\-diff}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-t\_\-diff (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a0184af608ab22c40e2563be437cf370a}
+\hyperlink{class_b_a_m_utils_a0184af608ab22c40e2563be437cf370a}{get\_\-t\_\-diff()} returns the \# of differences in the alignment between the template and query sequences \hypertarget{class_b_a_m_utils_a6346001db742f763d1a9951c1cb24b18}{
+\index{BAMUtils@{BAMUtils}!get\_\-t\_\-length@{get\_\-t\_\-length}}
+\index{get\_\-t\_\-length@{get\_\-t\_\-length}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-t\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-t\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a6346001db742f763d1a9951c1cb24b18}
+\hyperlink{class_b_a_m_utils_a6346001db742f763d1a9951c1cb24b18}{get\_\-t\_\-length()} returns the length of the alignment with respect to the reference \hypertarget{class_b_a_m_utils_aecf614c79eaa4cbf7402cddadf2940e9}{
+\index{BAMUtils@{BAMUtils}!get\_\-t\_\-start@{get\_\-t\_\-start}}
+\index{get\_\-t\_\-start@{get\_\-t\_\-start}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-t\_\-start}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t BAMUtils::get\_\-t\_\-start (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_aecf614c79eaa4cbf7402cddadf2940e9}
+\hyperlink{class_b_a_m_utils_aecf614c79eaa4cbf7402cddadf2940e9}{get\_\-t\_\-start()} is the start of the alignment in the genome \hypertarget{class_b_a_m_utils_a25489eafe1f935f1e89a446ff18807e6}{
+\index{BAMUtils@{BAMUtils}!get\_\-tdna@{get\_\-tdna}}
+\index{get\_\-tdna@{get\_\-tdna}!BAMUtils@{BAMUtils}}
+\subsubsection[{get\_\-tdna}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::get\_\-tdna (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a25489eafe1f935f1e89a446ff18807e6}
+\hyperlink{class_b_a_m_utils_a25489eafe1f935f1e89a446ff18807e6}{get\_\-tdna()} returns the template dna sequence \hypertarget{class_b_a_m_utils_a70a4548a475423dd0145105acffaea31}{
+\index{BAMUtils@{BAMUtils}!is\_\-pos\_\-covered@{is\_\-pos\_\-covered}}
+\index{is\_\-pos\_\-covered@{is\_\-pos\_\-covered}!BAMUtils@{BAMUtils}}
+\subsubsection[{is\_\-pos\_\-covered}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMUtils::is\_\-pos\_\-covered (
+\begin{DoxyParamCaption}
+\item[{int}]{pos\_\-in\_\-genome}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a70a4548a475423dd0145105acffaea31}
+A convenience function that checks to see if this read covers a specific portion of the genome
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & pos\_\-in\_\-genome 1-\/based position in genome \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool true if position is covered 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_a1eb91072119ca6d53365c275464f78b8}{
+\index{BAMUtils@{BAMUtils}!is\_\-pos\_\-covered@{is\_\-pos\_\-covered}}
+\index{is\_\-pos\_\-covered@{is\_\-pos\_\-covered}!BAMUtils@{BAMUtils}}
+\subsubsection[{is\_\-pos\_\-covered}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMUtils::is\_\-pos\_\-covered (
+\begin{DoxyParamCaption}
+\item[{int}]{pos\_\-in\_\-genome, }
+\item[{int}]{phred\_\-num}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a1eb91072119ca6d53365c275464f78b8}
+A convenience function that checks to see if this read covers a specific portion of the genome for a specific quality level on a phred scale.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & pos\_\-in\_\-genome 1-\/based position in genome \\
+\hline
+{\em int} & phred\_\-num phred score of interest \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool true if position is covered 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_utils_a4465a52da42272735728285f9fbf5e8c}{
+\index{BAMUtils@{BAMUtils}!is\_\-position\_\-an\_\-error@{is\_\-position\_\-an\_\-error}}
+\index{is\_\-position\_\-an\_\-error@{is\_\-position\_\-an\_\-error}!BAMUtils@{BAMUtils}}
+\subsubsection[{is\_\-position\_\-an\_\-error}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMUtils::is\_\-position\_\-an\_\-error (
+\begin{DoxyParamCaption}
+\item[{int}]{position\_\-in\_\-read}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_utils_a4465a52da42272735728285f9fbf5e8c}
+takes 1 based position in read \hypertarget{class_b_a_m_utils_a20441e66c8002b5dbb1df321c92b7b67}{
+\index{BAMUtils@{BAMUtils}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!BAMUtils@{BAMUtils}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string BAMUtils::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_utils_a20441e66c8002b5dbb1df321c92b7b67}
+tab delimited string of the get funcitons in this class
+
+\begin{DoxyReturn}{Returns}
+string string representation of class 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+BAMUtils.h\item 
+BAMUtils.cpp\end{DoxyCompactItemize}

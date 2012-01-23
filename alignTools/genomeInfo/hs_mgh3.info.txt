@@ -1,0 +1,5 @@
+genome_shortname	hs_mgh3
+genome_name	Iafrate amplicons, version 3
+genome_version	hs_mgh3
+index_version	b-0.1
+genome_length	1832

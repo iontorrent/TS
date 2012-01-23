@@ -1,0 +1,35 @@
+dibayes : {
+  call-stringency : "low_frequency",
+  het-skip-high-coverage : 0,
+  reads-min-mapping-qv : 8,
+  het-min-lca-start-pos : 5,
+  het-min-lca-base-qv : 18,
+  het-lca-both-strands : 0,
+  het-min-allele-ratio : 0.01,
+  het-max-coverage-bayesian : 60,
+  het-min-nonref-base-qv : 18,
+  snps-min-base-qv : 20,
+  snps-min-nonref-base-qv : 20,
+  reads-with-indel-exclude : 0,
+  het-min-coverage : 2,
+  het-min-start-pos : 2,
+  hom-min-coverage : 1,
+  hom-min-nonref-allele-count : 2,
+  snps-min-filteredreads-rawreads-ratio : 0.15,
+  het-min-validreads-totalreads-ratio : 0.65,
+  reads-min-alignlength-readlength-ratio : 0.2,
+  hom-min-nonref-base-qv : 14,
+  hom-min-nonref-start-pos : 2  
+}
+
+ion-variant-hunter : {
+  min-variant-freq : 0.04,
+  min-num-reads : 3,
+  strand-prob : 0,
+  min-mapq : 8
+}
+
+filter-indels : {
+  min-bayesian-score : 25.0
+}
+

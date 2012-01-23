@@ -1,0 +1,64 @@
+\hypertarget{class_align_stats}{
+\section{AlignStats Class Reference}
+\label{class_align_stats}\index{AlignStats@{AlignStats}}
+}
+
+
+{\ttfamily \#include $<$alignStats.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct \hyperlink{struct_align_stats_1_1options}{options}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_align_stats_a84f49807979ff9c6dd69daee8394afe9}{AlignStats} (\hyperlink{struct_align_stats_1_1options}{options} \&settings)
+\item 
+void \hyperlink{class_align_stats_a427f0be3b13aa16e07706fcd5d70158b}{go} ()
+\item 
+long \hyperlink{class_align_stats_a7a726273929b40bbaf117a822e5e47aa}{get\_\-total\_\-reads} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+class \hyperlink{class_align_stats}{AlignStats} This class really has 1 use, and that is just to encapsulate portions of this (what used to be alignStats.pl) program to make it easier for a multi-\/threading implementation. 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_align_stats_a84f49807979ff9c6dd69daee8394afe9}{
+\index{AlignStats@{AlignStats}!AlignStats@{AlignStats}}
+\index{AlignStats@{AlignStats}!AlignStats@{AlignStats}}
+\subsubsection[{AlignStats}]{\setlength{\rightskip}{0pt plus 5cm}AlignStats::AlignStats (
+\begin{DoxyParamCaption}
+\item[{{\bf options} \&}]{settings}
+\end{DoxyParamCaption}
+)}}
+\label{class_align_stats_a84f49807979ff9c6dd69daee8394afe9}
+Simple constructor which only takes the \hyperlink{struct_align_stats_1_1options}{AlignStats::options} struct as a parameter. This unifies the initialization process, and constructors into 1 thing. 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_align_stats_a7a726273929b40bbaf117a822e5e47aa}{
+\index{AlignStats@{AlignStats}!get\_\-total\_\-reads@{get\_\-total\_\-reads}}
+\index{get\_\-total\_\-reads@{get\_\-total\_\-reads}!AlignStats@{AlignStats}}
+\subsubsection[{get\_\-total\_\-reads}]{\setlength{\rightskip}{0pt plus 5cm}long AlignStats::get\_\-total\_\-reads (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_align_stats_a7a726273929b40bbaf117a822e5e47aa}
+Returns a long which is the \hyperlink{struct_align_stats_1_1options_a13b8f29a0ad066ba915ee118c21c9b8d}{AlignStats::options.total\_\-reads} field This represents the total number of reads given in the constructor, or if that wasn't set it represents the total number of observed reads in the SAM/BAM file \hypertarget{class_align_stats_a427f0be3b13aa16e07706fcd5d70158b}{
+\index{AlignStats@{AlignStats}!go@{go}}
+\index{go@{go}!AlignStats@{AlignStats}}
+\subsubsection[{go}]{\setlength{\rightskip}{0pt plus 5cm}void AlignStats::go (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_align_stats_a427f0be3b13aa16e07706fcd5d70158b}
+Runs the program This function calculates statistics given the options passed via the constructor. If a new \hyperlink{struct_align_stats_1_1options}{AlignStats::options} is set, a new call to \hyperlink{class_align_stats_a427f0be3b13aa16e07706fcd5d70158b}{go()} will re-\/run the program 
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+alignStats.h\item 
+alignStats.cpp\end{DoxyCompactItemize}

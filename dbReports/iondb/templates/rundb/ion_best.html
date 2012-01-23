@@ -1,0 +1,77 @@
+{% extends "rundb/ion_base_template.html" %}
+{% block pagination_holder %}{% endblock %}
+{% block controls %}
+<form action="" method="get" id="control_form">
+<table>
+  <thead>
+    <tr>
+      {% for field in sort %}{% spaceless %}
+      <th>{{field.label}}</th>
+      {% endspaceless %}{% endfor%}
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+    {% for field in sort %}
+       <td>{{field}}</td>
+    {% endfor%}
+    <td>
+      <div class="clearholder">
+      {% if getURL %}
+      <a href="{% url rundb.views.best_runs %}">Clear</a>
+      {% else %}
+      &nbsp;
+      {% endif %}
+      </div>
+    </td>
+    </tr> 
+    <tr style="display:none;">
+        <td><input type="submit" value="Submit" name="submit"/></td>
+    </tr>
+  </tbody>
+</table>
+</form>
+{% endblock controls %}
+
+{% block content %}
+{% if reports %}
+<table style="width:100%; border-collapse:collapse;";>
+  <thead style="text-align:left;">
+    <tr>
+      <th>Analysis Name</th><th>Analysis Date</th><th>Exp.</th><th>Exp. Date</th><th>Library Name</th>
+      <th>Library 50Q10</th><th>Library 50Q17</th><th>Library 50Q20</th>
+      <th>Library 100Q10</th><th>Library 100Q17</th><th>Library 100Q20<th>Library SNR</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r,tfm,lbm in reports.reports %}{% spaceless %}
+    <tr class="{% cycle 'row1' 'row2' %}">
+    {#only provide links to the report if they exist#}  
+	{% if r.report_exist %}
+      <td><a href="{{r.reportLink}}">{{r.resultsName}}</a></td>
+    {%else%}
+      <td>{{r.resultsName}}</td>
+    {% endif %}
+      <td>{{r.timeStamp|date:"D M d, Y"}}</td>
+      <td>{{r.experiment.pretty_print}}</td>
+      <td>{{r.experiment.date|date:"D M d, Y"}}</td>
+      <td>{{r.experiment.library}}</td>
+      <td>{{lbm.i50Q10_reads}}</td>
+      <td>{{lbm.i50Q17_reads}}</td>
+      <td>{{lbm.i50Q20_reads}}</td>
+      <td>{{lbm.i100Q10_reads}}</td>
+      <td>{{lbm.i100Q17_reads}}</td>
+      <td>{{lbm.i100Q20_reads}}</td>
+      <td>{{lbm.sysSNR}}</td>
+    </tr>
+    {% endspaceless %}
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p><b>No reports were generated this year.</b></p>
+{% endif %}
+{% endblock %}
+
+

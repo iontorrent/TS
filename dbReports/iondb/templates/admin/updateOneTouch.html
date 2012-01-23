@@ -1,0 +1,63 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Management Options{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+
+  <h1>Update OneTouch Device</h1>
+
+
+  <div>
+
+	{% if post %}
+
+    <script>
+
+        function htmlEscape(str) {
+            return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/\n/g, '<br\>');
+        }
+
+        function loadLog(){
+            $.get('ot_log', function(data) {
+                $('#loadingStatus').html(htmlEscape(data));
+            });
+        }
+
+        IntervalId = 0;
+        IntervalId = setInterval("loadLog();", 1000);
+
+    </script>
+
+
+        <h2> The OneTouch devices are being updated , the log messages will be displayed below. </h2>
+
+        <p>The page log will be automatically updated</p>
+
+        <div id="loadingStatus">
+            {{ state }}
+        </div>
+
+	{% else %}
+
+	<div>
+	Update OneTouch device to the latest version by connecting the OneTouch device to one of the network ports on the back of the Torrent Server, then click the update button.
+	</div>
+	
+	<form name="input" method="post">
+		<input type="submit" value="Update" onclick="return confirm('Select OK to update OneTouch, or Cancel to abort .')" />
+	</form> 
+	{% endif %}
+
+
+    <br/>
+    <br/>
+    <br/>
+    Optional: Download the OneTouch update file manually, to place on a USB Drive - <a href="/onetouchUpdates.tar.bz2">onetouchUpdates.tar.bz2</a>
+
+  </div>
+</div>
+{% endblock %}

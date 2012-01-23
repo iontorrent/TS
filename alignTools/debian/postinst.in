@@ -1,0 +1,41 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+INSTALL_DIR="/opt/picard"
+
+case "$1" in
+    configure)
+    	# Create link; do it here until we figure out how to do in CPACK or CMAKE
+        rm -f /opt/picard/picard-tools-current
+        ln -sf /opt/picard/picard-tools-1.52 /opt/picard/picard-tools-current
+        
+    	# Create .dict files for all installed genome files
+        picard_dir="${INSTALL_DIR}/picard-tools-current"
+        if [ ! -d $picard_dir ]; then
+        	echo "$picard_dir does not exist.  Cannot create .dict files"
+            exit 0
+        fi
+        genome_dir="/results/referenceLibrary/tmap-f2"
+        if [ ! -d $genome_dir ]; then
+        	echo "$genome_dir does not exist.  Nothing to do re: .dict"
+            exit 0
+        fi
+        # get list of genome directories
+        logfile=/tmp/ion-alignment_dict.log
+        date > $logfile
+        for fasta in $(find /results/referenceLibrary/tmap-f2 -maxdepth 2 -name \*.fasta); do
+        	# for each genome, determine if .dict exists
+        	if [ ! -f ${fasta%.*}.dict ]; then
+        		# create .dict if it does not exist
+                java -Xmx2g -jar $picard_dir/CreateSequenceDictionary.jar \
+                	R=${fasta} \
+                    O=${fasta%.*}.dict >> $logfile 2>&1
+            fi
+        done
+    ;;
+esac
+
+exit 0
+
+

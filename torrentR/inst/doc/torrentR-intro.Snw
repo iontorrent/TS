@@ -1,0 +1,313 @@
+\documentclass[a4paper]{article}
+
+\SweaveOpts{echo=true}
+%\VignetteIndexEntry{torrentR-intro}
+
+\begin{document}
+
+\section{Introduction}
+
+The torrentR package provides some basic capabilities for working with data from Ion Torrent Systems.
+
+The package and many of the underlying data types that it accesses are in a state of fairly rapid flux, so
+this document should be considered as a snapshot in time.  Some of the methods and underlying data types are
+highly likely to change as the system evolves.
+
+Instructions for building and installing the torrentR package can be found in the file torrentR/INSTALL.
+
+\section{Loading Data}
+
+The table below lists the data types that can be read with the torrentR package, along with the
+relevant functions for handling.  The remainder of this document delves further into each data
+type and presents usage examples.
+
+\begin{center}
+  \begin{tabular}{@{\extracolsep{\fill}} | l | p{1.3in} | p{2.5in} | }
+    \hline
+    File Type       & torrentR function(s)                      & Comments \\ \hline
+    *.dat           & readDat, readDatCollection                & Dat files contain the raw signal that comes directly from the PGM. \\ \hline
+    bfmask.bin      & readBeadFindMask, readBeadFindMaskHeader  & The bfmask.bin file contains information about the estimated classification of each well - whether or not it contains a bead, what kind of a bead it contains (test fragment or library), etc. \\ \hline
+    1.wells, 1.cafie-residuals & readWells                      & The 1.wells file is derived from the dat files and contains the estimate of the incorporoation signal for each flow in each well.  The 1.cafie-residuals is an optional file that contains information about the CAFIE model fit. \\ \hline
+    rawlib*.sff     & readSFF                                   & The SFF file contains base calls and flow values and is the primary result delivered by the Analysis pipeline \\ \hline
+    Default.sam.parsed & readSamParsed                          & The Default.sam.parsed file contains alignment information for any library reads that were mapped to the genome \\ \hline
+    wellStats.txt, regionCafieDebug.txt & readTSV               & The wellStats.txt and regionCafieDebug.txt files are tab-delimited text files containing information about the CAFIE model in the CAFIE-estimation and CAFIE-calling phases. \\ \hline
+    DefaultTFs.conf & readTfConf, readTfInfo                    & The DeftaultTFs.conf file contains information about the names and sequences of test fragments that may be present in the run. \\ \hline
+    TFTracking.txt  & readTfStats, readTfInfo                   & The TFTracking.txt provides the identity of the test fragment for each bead identified as being some form of test fragment. \\ \hline
+  \end{tabular}
+\end{center}
+
+In the following sections we go through each data type to explore how it can be accessed and used.  This vignette shows examples of reading data using a small
+dataset consisting of a small region cropped out of the middle of a 314 chip.
+
+The remaining sections are loosely ordered in the chronology of their occurence in the data analysis pipeline.
+
+\section{DAT files}
+
+The DAT files contain the raw data that is ftp'ed directly from the Personal Genome Machine to the Torrent Server.  They are the
+most basic data type handled by the torrentR package.  A single DAT can be read with the readDat() function:
+
+<<>>=
+library(torrentR)
+dataDir <- system.file("extdata",package="torrentR")
+dat1 <- readDat(sprintf("%s/acq_0000.dat",dataDir))
+str(dat1)
+@
+
+The example above reads all available frames and wells which make up the complete dataset for acq\_0000.dat, the
+first nucleotide flow.
+
+The readDatCollection() function can be used to read the data for multiple flows - for example, here is how one could
+read all available data for the first 8 flows:
+
+<<>>=
+dat2 <- readDatCollection(datDir=dataDir,minFlow=1,maxFlow=8)
+str(dat2)
+@
+
+Note how the returned list is essentially the same thing that is returned by readDat() but with an addition list element flow
+recording which flows were returned and with extra columns concatenated to the signal matrix for the additional flows.
+
+For the toy dataset used here it is actually feasible to load all of the data for a subset of the flows because it is based on
+a small cropped region, however in most situations an attempt to read all data for one or a number of flows would be at
+risk of requiring more memory than is available.  In some of the following examples we will explore some ways to sensibly
+limit or sub-sample the data to load.  As with many of the functions, the man pages for readDat() and readDatCollection()
+provide more detail on some of the available options to help keep jobs manageable.
+
+\section{The bfmask.bin file}
+
+One of the first things that happens in the analysis pipeline is an attempt to classify wells into those that are loaded, or
+"bead wells", and those that are not - the "empty wells".  Furthermore, each bead well is tested against the expected
+library and Test Fragment (TF) key sequences to partition the set of all bead wells into mutually-exlusive categories:
+duds (beads without sufficient incorporation signal and hence presumably without sufficient attached template), live library
+beads and live TF beads.
+
+This information on the classification of wells, along with some well classification information derived further downstream,
+is written into a file named bfmask.bin in the analysis directory.  The functions readBeadFindMask() and
+readBeadFindMaskHeader() can be used to parse the information in the bfmask.bin.  It is a relatively compact file and it can
+typcially be loaded in its entirity without fear of running into memory issues.
+
+<<>>=
+bfHeader <- readBeadFindMaskHeader(sprintf("%s/bfmask.bin",dataDir))
+str(bfHeader)
+bf1 <- readBeadFindMask(sprintf("%s/bfmask.bin",dataDir))
+str(bf1)
+@
+
+The information in the bfmask.bin file provides a very convenient way to intelligently load manageable subsets of information.
+For example:
+
+\begin{center}
+<<fig=TRUE>>=
+set.seed(0)
+libSample   <- sample(which(bf1$maskLib==1),100)
+emptySample <- sample(which(bf1$maskEmpty==1),100)
+dat.lib   <- readDatCollection(datDir=dataDir,minFlow=1,maxFlow=8,col=bf1$col[libSample],  row=bf1$row[libSample])
+dat.empty <- readDatCollection(datDir=dataDir,minFlow=1,maxFlow=8,col=bf1$col[emptySample],row=bf1$row[emptySample])
+fgMedian <- apply(dat.lib$signal,2,median)
+bgMedian <- apply(dat.empty$signal,2,median)
+plot(fgMedian-bgMedian,type="l")
+flowBoundaries <- (0:10)*dat.lib$nFrame
+abline(v=flowBoundaries)
+@
+\end{center}
+
+\section{Wells files}
+
+The 1.wells file stores the estimated incorporation signal that is derived from the raw data in the DAT files.  It can
+be read with the readWells() function though as with reading DAT files one often needs to use some of the function
+options to load a subset of the available data.
+
+A call to str() gives a quick peek of what is available in the returned list.
+
+<<>>=
+wellFile <- system.file("extdata/1.wells",package="torrentR")
+wells1 <- readWells(wellFile)
+str(wells1)
+@
+
+This next example reads in a rectangular slice, by specifing the columns and row bounds.
+Note that column and row are 0-based indices (as is also true of the corresponding
+values returned by the DAT and bfmask.bin readers).
+
+<<>>=
+wells2 <- readWells(wellFile,colMin=0,colMax=49,rowMin=10,rowMax=20)
+@
+
+This example reads in 4 wells at coordinates (1,6), (2,7), (3,8) and (4,9).
+
+<<>>=
+wells3 <- readWells(wellFile,col=c(1,2,3,4),row=c(6,7,8,9))
+@ 
+
+Particular elements in the returned list can be accessed directly with the usual list \$ operator:
+
+<<>>=
+wells3$col
+wells3$mask$tf
+wells3$signal[,1:6]
+@ 
+
+The next few sections describe some of the functions available for working with data from the 1.wells file:
+
+\subsection{plotIonogram()}
+
+The plotIonogram() function provides functionality for basic plotting of data for a well:
+
+\begin{center}
+<<fig=TRUE>>=
+wells4 <- readWells(wellFile,col=bf1$col[libSample],row=bf1$row[libSample])
+plotIonogram(wells4$signal[1,],wells4$flowOrder,wells4$flow, flowRange=1:200,flowsPerWindow=100)
+@
+\end{center}
+
+By default plotIonogram() plots the raw data, if key-normalized data is prefered it
+can be produced by setting plotType to "norm" and supplying the key sequence:
+
+\begin{center}
+<<fig=TRUE>>=
+plotIonogram(wells4$signal[1,],wells4$flowOrder,wells4$flow, flowRange=1:100,flowsPerWindow=100,plotType="norm",keySeq="TCAG")
+@
+\end{center}
+
+plotIonogram() can also show data for multiple wells on the same plot, though this often
+only makes sense when done for wells that are sequencing the same template (such as
+wells sequencing the same TF)
+
+\begin{center}
+<<fig=TRUE>>=
+plotIonogram(wells4$signal,wells4$flowOrder,wells4$flow, flowRange=1:100,flowsPerWindow=100,plotType="norm",keySeq="TCAG")
+@
+\end{center}
+
+\subsection{normalizeIonogram()}
+
+normalizeIonogram() can be used to perform normalization based on a provided key sequence.  It can
+be applied to one well at a time or to multiple wells in a batch.  To perform the normalization it
+needs to be told the key sequence and the flow order.  The flow order is available in the list
+returned by readWells() but the key sequence must be specified by the user.
+<<>>=
+# Return the normalized signal for the first well.  The returned
+# value norm1 is a list with one element named "normalized", which
+# is a numeric matrix with one row and 220 columns (because there
+# are 220 flows in i5).
+seqKey <- "TCAG"
+norm1 <- normalizeIonogram(wells4$signal[1,],seqKey,wells4$flowOrder)
+dim(norm1$normalized)
+# Return the normalized signal for the first 50 flows of all wells.
+# The returned value is a list with one element named "normalized"
+# which is a numeric matrix with 100 rows (because i5 stores 100 wells)
+# and 50 columns (one per requested flow)
+norm2 <- normalizeIonogram(wells4$signal[,1:50],seqKey,wells4$flowOrder)
+dim(norm2$normalized)
+@
+
+\subsection{CAFIE residuals}
+
+Lastly, data other than estimated incorporation can be written to wells-formatted files.  One example
+is the residuals after CAFIE-calling, which can be useful to inspect to examine possible errors.
+There is an option --cafie-residuals that can be supplied to the Analysis executable that causes 
+a 1.cafie-residuals file in wells format to be written out after CAFIE calling is complete.
+
+\section{wellStats.txt and regionCafieDebug.txt}
+
+The wellStats.txt and regionCafieDebug.txt files are optional files that are sometimes available for
+an analysis run (created by the --well-stat-file and --region-cafie-debug-file options to Analysis).
+They contain per-read information generated at the time of CAFIE parameter estimation (regionCafieDebug.txt)
+and at the time of final CAFIE basecalling (wellStats.txt).  This information can be helpful in run
+diagnostics.
+
+Each file is written in tab-delimited text format, all columns are numeric and the first line
+is a header line.  These and other tab-delimited text files can be read with readTSV():
+
+\subsection{regionCafieDebug.txt}
+
+<<>>=
+rCafie <- readTSV(sprintf("%s/regionCafieDebug.txt",dataDir))
+str(rCafie)
+@
+
+There is one entry for each read that was considered in regional CAFIE parameter estimation.
+Some of the field names returned are quite obvious, those that might not be are as follows:
+
+region\_id: The region assignment for each read.
+
+res\_new: The median absolute CAFIE residual in the first 40 flows
+
+ppf: The percentage of the first 40 flows that are positive (i.e. have one or more estimated incorporation).
+
+cf,ie,dr: the per-read estimates of CF, IE and DR.
+
+\subsection{wellStats.txt}
+
+The wellStats.txt file contains per-read information available at the time of final CAFIE calling.  There is one line for each read that goes
+through the CAFIE calling process.
+
+<<>>=
+wStats <- readTSV(sprintf("%s/wellStats.txt",dataDir))
+str(wStats)
+@
+
+\section{SFF files}
+
+The Standard Flowgram File (SFF) is the primary result from the Analysis pipeline, it contains the basecalls as well as CAFIE-corrected flow values
+and the mapping from bases to flows.  The readSFF() function can be used to load SFF data directly into R.
+
+The following example shows a basic call to readSFF() requesting that it read all the information in the SFF file.
+
+<<>>=
+sffFile <- sprintf("%s/rawlib.sff",dataDir)
+sff1 <- readSFF(sffFile)
+str(sff1)
+@
+
+The next example restricts to reading the SFF entries corresponding to the random sample of
+library wells.  Note that not all wells classified as library in the bfmask.bin make it
+through to the SFF file - additional more stringent filters are applied to determine what
+makes it into the SFF and some reads initially classified as library drop out along the way.
+
+<<>>=
+sff2 <- readSFF(sffFile,col=bf1$col[libSample],row=bf1$row[libSample])
+@
+
+The documentation for readSFF contains details about the returned data.  Some of the key returned values include
+flow (the CAFIE-corrected flow values), base (the base calls), qual (Phred-style quality values for each base)
+and flowIndex (the mapping from bases to flows).
+
+\section{The Default.sam.parsed file}
+
+Information about library read alignments to the genome is stored in SAM and
+BAM files.  These formats are described at samtools.sourceforge.net/SAM1.pdf
+and ideally torrentR would be able to directly parse them, but at least until
+now it has been expedient to post-process the SAM format into a tab-delimited
+text file called Default.sam.parsed.  However this file is neither a standard
+nor supported file so its use is being phased out and the functionality related
+to it will be replaced by something else.  So what is described in this section
+may be redundant/unavailable by the time you read this.
+
+The function readSamParsed provides a means to read this file:
+
+<<>>=
+samFile <- sprintf("%s/Default.sam.parsed",dataDir)
+sam1 <- readSamParsed(samFile)
+@
+
+By default it returns only the well coordinates and the Q10 length of the read (which is defined as the maximal position in the read
+at which the total read error rate is equal to Q10 or 10\%.  The fields option allows for selection of other values in the returned
+list:
+
+<<>>=
+sam2 <- readSamParsed(samFile,fields=c("name","q17Len","qDNA.a","match.a","tDNA.a"))
+@
+
+The qDNA.a and tDNA.a contain the query and target sequences respectively.  The following example finds the first well with a Q17 length larger
+than 100 and uses seqToFlow() to get the predicted ideal flow values for each in the first 30 flows:
+
+<<>>=
+goodWell <- which(sam2$q17Len > 99)[1]
+rbind(
+  "ref"  = seqToFlow(sam2$tDNA.a[goodWell],wells4$flowOrder,30),
+  "read" = seqToFlow(sam2$qDNA.a[goodWell],wells4$flowOrder,30)
+)
+@
+
+\end{document}

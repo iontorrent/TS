@@ -1,0 +1,789 @@
+// -*-c++-*- 
+/*****************************************************************
+ * file lacomplex Locally modified copy of stdc++'s file complex
+ *  -------------------
+ * begin                : 2004-01-14
+ * copyright            : (C) 2004 by Christian Stimming
+ * email                : stimming@tuhh.de
+ *
+ * (Almost) All changes by Christian are marked with "CS:".
+***************************************************************************/
+
+// The template and inlines for the -*- C++ -*- complex number classes.
+
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002
+// Free Software Foundation, Inc.
+//
+// This file is part of the GNU ISO C++ Library.  This library is free
+// software; you can redistribute it and/or modify it under the
+// terms of the GNU General Public License as published by the
+// Free Software Foundation; either version 2, or (at your option)
+// any later version.
+
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License along
+// with this library; see the file COPYING.  If not, write to the Free
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+// USA.
+
+// As a special exception, you may use this file as part of a free software
+// library without restriction.  Specifically, if other files instantiate
+// templates or use macros or inline functions from this file, or you compile
+// this file and link it with other files to produce an executable, this
+// file does not by itself cause the resulting executable to be covered by
+// the GNU General Public License.  This exception does not however
+// invalidate any other reasons why the executable file might be covered by
+// the GNU General Public License.
+
+//
+// ISO C++ 14882: 26.2  Complex Numbers
+// Note: this is not a conforming implementation.
+// Initially implemented by Ulrich Drepper <drepper@cygnus.com>
+// Improved by Gabriel Dos Reis <dosreis@cmla.ens-cachan.fr>
+//
+
+/** \file lacomplex 
+ * \brief Complex data type that can be used from the application.
+ * 
+ * This file has been heavily copied from the Standard
+ *  C++ Library header <\c complex >. See the explanations at la::complex
+ *  for the reasons.
+ */
+
+#ifndef LACOMPLEX_CPPHEADER
+#define LACOMPLEX_CPPHEADER
+
+//#pragma GCC system_header
+
+#if LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+// This is for gcc >= 3.0.0
+#  include <bits/c++config.h>
+#  include <bits/cpp_type_traits.h>
+#endif // LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+
+#include <cmath>
+#include <iosfwd>
+#include <sstream>
+#include <complex>
+
+#if defined __GNUC__ && (__GNUC__ < 3)
+// This is for gcc2.95
+#  include <iostream>
+#endif
+
+
+/** \brief Namespace of Lapack++.
+ *
+ * This namespace defines the complex data type that can be used
+ * from the application, and also various matrix template
+ * functions.
+ * 
+ * This namespace defines the complex data type that is used for
+ * passing scalars in and out of LAPACK++. It is a copy of the \c
+ * std::complex<double> and it includes automatic conversion from and
+ * to \c std::complex<double>. Additionally it includes automatic
+ * conversion from and to the internal FORTRAN type \ref COMPLEX,
+ * which is why this class is needed to pass complex values into
+ * Lapack++.
+ *
+ * This file has been heavily copied from the Standard C++ Library
+ * header <\c complex >. See the explanations at la::complex for the
+ * reasons.
+ */
+namespace la
+{
+  /** \name Functions for Lapack++ complex number type */
+  //@{
+#if LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+  using std::ios_base;
+#else
+  typedef std::ios ios_base;
+#endif
+
+  // Forward declarations
+  template<typename _Tp> class complex;
+  //template<> class complex<float>;
+#if defined __GNUC__ && (__GNUC__ > 2)
+  template<> class complex<double>;
+#endif
+  //template<> class complex<long double>;
+
+  template<typename _Tp> _Tp abs(const complex<_Tp>&);
+  template<typename _Tp> _Tp arg(const complex<_Tp>&);
+  template<typename _Tp> _Tp norm(const complex<_Tp>&);
+
+
+  // Transcendentals:
+    
+    
+/** @brief Complex data type that can be used from the application.
+ *
+ * This type is used for passing scalars in and out of LAPACK++. It is
+ * a copy of the \c std::complex<double> and it includes automatic
+ * conversion from and to \c std::complex<double>. Additionally it
+ * includes automatic conversion from and to the internal FORTRAN type
+ * \ref COMPLEX, which is why this class is needed to pass complex
+ * values into Lapack++.
+ *
+ * Again: If you get errors when passing a \c std::complex<double>
+ * into Lapack++, then you first need to convert your \c
+ * std::complex<double> into this \c LaComplex value.
+ */
+  // 26.2.2  Primary template class complex
+  template<typename _Tp>
+    class complex
+    {
+    public:
+      typedef _Tp value_type;
+      
+      complex(const _Tp& = _Tp(), const _Tp & = _Tp());
+
+      // Let's the compiler synthetize the copy constructor   
+      // complex (const complex<_Tp>&);
+      template<typename _Up>
+        complex(const complex<_Up>&);
+      // CS: Additionally add conversion *from* stdc++ type.
+      complex(const std::complex<_Tp>&);
+      // CS: end
+        
+      _Tp real() const;
+      _Tp imag() const;
+
+      complex<_Tp>& operator=(const _Tp&);
+      complex<_Tp>& operator+=(const _Tp&);
+      complex<_Tp>& operator-=(const _Tp&);
+      complex<_Tp>& operator*=(const _Tp&);
+      complex<_Tp>& operator/=(const _Tp&);
+
+      // Let's the compiler synthetize the
+      // copy and assignment operator
+      // complex<_Tp>& operator= (const complex<_Tp>&);
+      template<typename _Up>
+        complex<_Tp>& operator=(const complex<_Up>&);
+      template<typename _Up>
+        complex<_Tp>& operator+=(const complex<_Up>&);
+      template<typename _Up>
+        complex<_Tp>& operator-=(const complex<_Up>&);
+      template<typename _Up>
+        complex<_Tp>& operator*=(const complex<_Up>&);
+      template<typename _Up>
+        complex<_Tp>& operator/=(const complex<_Up>&);
+
+      // CS: Additionally add converstions to old C-style complex type
+      complex(COMPLEX);
+      operator COMPLEX() const;
+      COMPLEX toCOMPLEX() const;
+      operator std::complex<_Tp>() const;
+      // CS: end additions
+
+    private:
+      _Tp _M_real, _M_imag;
+    };
+
+  template<typename _Tp>
+    inline _Tp
+    complex<_Tp>::real() const { return _M_real; }
+
+  template<typename _Tp>
+    inline _Tp
+    complex<_Tp>::imag() const { return _M_imag; }
+
+  template<typename _Tp>
+    inline 
+    complex<_Tp>::complex(const _Tp& __r, const _Tp& __i)
+    : _M_real(__r), _M_imag(__i) { }
+
+  template<typename _Tp>
+    template<typename _Up>
+    inline 
+    complex<_Tp>::complex(const complex<_Up>& __z)
+    : _M_real(__z.real()), _M_imag(__z.imag()) { }
+        
+  // CS: addition
+  template<typename _Tp>
+    inline 
+    complex<_Tp>::complex(const std::complex<_Tp>& __z)
+    : _M_real(__z.real()), _M_imag(__z.imag()) { }
+  // CS: end addition
+
+  template<typename _Tp>
+    complex<_Tp>&
+    complex<_Tp>::operator=(const _Tp& __t)
+    {
+     _M_real = __t;
+     _M_imag = _Tp();
+     return *this;
+    } 
+
+  // 26.2.5/1
+  template<typename _Tp>
+    inline complex<_Tp>&
+    complex<_Tp>::operator+=(const _Tp& __t)
+    {
+      _M_real += __t;
+      return *this;
+    }
+
+  // 26.2.5/3
+  template<typename _Tp>
+    inline complex<_Tp>&
+    complex<_Tp>::operator-=(const _Tp& __t)
+    {
+      _M_real -= __t;
+      return *this;
+    }
+
+  // 26.2.5/5
+  template<typename _Tp>
+    complex<_Tp>&
+    complex<_Tp>::operator*=(const _Tp& __t)
+    {
+      _M_real *= __t;
+      _M_imag *= __t;
+      return *this;
+    }
+
+  // 26.2.5/7
+  template<typename _Tp>
+    complex<_Tp>&
+    complex<_Tp>::operator/=(const _Tp& __t)
+    {
+      _M_real /= __t;
+      _M_imag /= __t;
+      return *this;
+    }
+
+  template<typename _Tp>
+    template<typename _Up>
+    complex<_Tp>&
+    complex<_Tp>::operator=(const complex<_Up>& __z)
+    {
+      _M_real = __z.real();
+      _M_imag = __z.imag();
+      return *this;
+    }
+
+  // 26.2.5/9
+  template<typename _Tp>
+    template<typename _Up>
+    complex<_Tp>&
+    complex<_Tp>::operator+=(const complex<_Up>& __z)
+    {
+      _M_real += __z.real();
+      _M_imag += __z.imag();
+      return *this;
+    }
+
+  // 26.2.5/11
+  template<typename _Tp>
+    template<typename _Up>
+    complex<_Tp>&
+    complex<_Tp>::operator-=(const complex<_Up>& __z)
+    {
+      _M_real -= __z.real();
+      _M_imag -= __z.imag();
+      return *this;
+    }
+
+  // 26.2.5/13
+  // XXX: This is a grammar school implementation.
+  template<typename _Tp>
+    template<typename _Up>
+    complex<_Tp>&
+    complex<_Tp>::operator*=(const complex<_Up>& __z)
+    {
+      const _Tp __r = _M_real * __z.real() - _M_imag * __z.imag();
+      _M_imag = _M_real * __z.imag() + _M_imag * __z.real();
+      _M_real = __r;
+      return *this;
+    }
+
+  // 26.2.5/15
+  // XXX: This is a grammar school implementation.
+  template<typename _Tp>
+    template<typename _Up>
+    complex<_Tp>&
+    complex<_Tp>::operator/=(const complex<_Up>& __z)
+    {
+      const _Tp __r =  _M_real * __z.real() + _M_imag * __z.imag();
+      const _Tp __n = norm(__z);
+      _M_imag = (_M_imag * __z.real() - _M_real * __z.imag()) / __n;
+      _M_real = __r / __n;
+      return *this;
+    }
+
+  // CS: Additionally add converstions to old C-style complex type
+  template<typename _Tp>
+  inline
+  complex<_Tp>::complex(COMPLEX c)
+    : _M_real(c.r), _M_imag(c.i) { }
+
+  template<typename _Tp>
+  inline
+  complex<_Tp>::operator COMPLEX() const
+  {
+    return toCOMPLEX();
+  }
+
+  template<typename _Tp>
+  inline COMPLEX
+  complex<_Tp>::toCOMPLEX() const
+  {
+    COMPLEX r;
+    r.r = _M_real;
+    r.i = _M_imag;
+    return r;
+  }
+
+  template<typename _Tp>
+  inline
+  complex<_Tp>::operator std::complex<_Tp>() const
+  {
+    return std::complex<_Tp>(real(), imag());
+  }
+  // CS: end 
+
+  // Operators:
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator+(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) += __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator+(const complex<_Tp>& __x, const _Tp& __y)
+    { return complex<_Tp> (__x) += __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator+(const _Tp& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__y) += __x; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator-(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) -= __y; }
+    
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator-(const complex<_Tp>& __x, const _Tp& __y)
+    { return complex<_Tp> (__x) -= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator-(const _Tp& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) -= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator*(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) *= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator*(const complex<_Tp>& __x, const _Tp& __y)
+    { return complex<_Tp> (__x) *= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator*(const _Tp& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__y) *= __x; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator/(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) /= __y; }
+    
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator/(const complex<_Tp>& __x, const _Tp& __y)
+    { return complex<_Tp> (__x) /= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator/(const _Tp& __x, const complex<_Tp>& __y)
+    { return complex<_Tp> (__x) /= __y; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator+(const complex<_Tp>& __x)
+    { return __x; }
+
+  template<typename _Tp>
+    inline complex<_Tp>
+    operator-(const complex<_Tp>& __x)
+    {  return complex<_Tp>(-__x.real(), -__x.imag()); }
+
+  template<typename _Tp>
+    inline bool
+    operator==(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return __x.real() == __y.real() && __x.imag() == __y.imag(); }
+
+  template<typename _Tp>
+    inline bool
+    operator==(const complex<_Tp>& __x, const _Tp& __y)
+    { return __x.real() == __y && __x.imag() == _Tp(); }
+
+  template<typename _Tp>
+    inline bool
+    operator==(const _Tp& __x, const complex<_Tp>& __y)
+    { return __x == __y.real() && _Tp() == __y.imag(); }
+
+  template<typename _Tp>
+    inline bool
+    operator!=(const complex<_Tp>& __x, const complex<_Tp>& __y)
+    { return __x.real() != __y.real() || __x.imag() != __y.imag(); }
+
+  template<typename _Tp>
+    inline bool
+    operator!=(const complex<_Tp>& __x, const _Tp& __y)
+    { return __x.real() != __y || __x.imag() != _Tp(); }
+
+  template<typename _Tp>
+    inline bool
+    operator!=(const _Tp& __x, const complex<_Tp>& __y)
+    { return __x != __y.real() || _Tp() != __y.imag(); }
+
+  template<typename _Tp>
+    std::istream&
+    operator>>(std::istream& __is, complex<_Tp>& __x)
+    {
+      _Tp __re_x, __im_x;
+      char __ch;
+      __is >> __ch;
+      if (__ch == '(') 
+	{
+	  __is >> __re_x >> __ch;
+	  if (__ch == ',') 
+	    {
+	      __is >> __im_x >> __ch;
+	      if (__ch == ')') 
+		__x = complex<_Tp>(__re_x, __im_x);
+	      else
+		__is.setstate(ios_base::failbit);
+	    }
+	  else if (__ch == ')') 
+	    __x = complex<_Tp>(__re_x, _Tp(0));
+	  else
+	    __is.setstate(ios_base::failbit);
+	}
+      else 
+	{
+	  __is.putback(__ch);
+	  __is >> __re_x;
+	  __x = complex<_Tp>(__re_x, _Tp(0));
+	}
+      return __is;
+    }
+
+  template<typename _Tp>
+    std::ostream&
+    operator<<(std::ostream& __os, const complex<_Tp>& __x)
+    {
+      std::ostringstream __s;
+      __s.flags(__os.flags());
+#if defined __GNUC__ && (__GNUC__ > 2)
+      __s.imbue(__os.getloc());
+#endif
+      __s.precision(__os.precision());
+      __s << '(' << __x.real() << ',' << __x.imag() << ')';
+      return __os << __s.str();
+    }
+
+  // Values
+  template<typename _Tp>
+    inline _Tp
+    real(const complex<_Tp>& __z)
+    { return __z.real(); }
+    
+  template<typename _Tp>
+    inline _Tp
+    imag(const complex<_Tp>& __z)
+    { return __z.imag(); }
+
+#ifndef DOXYGEN_IGNORE
+  template<typename _Tp>
+    inline _Tp
+    abs(const complex<_Tp>& __z)
+    {
+      _Tp __x = __z.real();
+      _Tp __y = __z.imag();
+      const _Tp __s = std::max(std::abs(__x), std::abs(__y));
+      if (__s == _Tp())  // well ...
+        return __s;
+      __x /= __s; 
+      __y /= __s;
+      return __s * sqrt(__x * __x + __y * __y);
+    }
+
+  template<typename _Tp>
+    inline _Tp
+    arg(const complex<_Tp>& __z)
+    { return atan2(__z.imag(), __z.real()); }
+
+  // 26.2.7/5: norm(__z) returns the squared magintude of __z.
+  //     As defined, norm() is -not- a norm is the common mathematical
+  //     sens used in numerics.  The helper class _Norm_helper<> tries to
+  //     distinguish between builtin floating point and the rest, so as
+  //     to deliver an answer as close as possible to the real value.
+  template<bool>
+    struct _Norm_helper
+    {
+      template<typename _Tp>
+        static inline _Tp _S_do_it(const complex<_Tp>& __z)
+        {
+          const _Tp __x = __z.real();
+          const _Tp __y = __z.imag();
+          return __x * __x + __y * __y;
+        }
+    };
+
+  template<>
+    struct _Norm_helper<true>
+    {
+      template<typename _Tp>
+        static inline _Tp _S_do_it(const complex<_Tp>& __z)
+        {
+          _Tp __res = abs(__z);
+          return __res * __res;
+        }
+    };
+  
+  template<typename _Tp>
+    inline _Tp
+    norm(const complex<_Tp>& __z)
+    {
+	return _Norm_helper<
+#if LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+	    std::__is_floating<_Tp>::
+#  if defined __GNUC__ && (__GNUC__ > 3)
+	    // This member name is for gcc>=4.0.0
+	    __value
+#  else
+	    // This member name is for gcc 3.x.x
+	    _M_type 
+#  endif // __GNUC__ > 3
+	    && !
+#  ifdef _GLIBCXX_FAST_MATH
+	    // This macro name is new in gcc3.4
+	    _GLIBCXX_FAST_MATH
+#  else
+	    // This macro name is for gcc3.3
+	    _GLIBCPP_FAST_MATH
+#  endif // _GLIBCXX_FAST_MATH
+#else // LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+	    false
+#endif // LAPACKPP_HAVE_BITS_CPP_TYPE_TRAITS_H
+	    >::_S_do_it(__z);
+    }
+
+#endif // DOXYGEN_IGNORE
+  // much deleted...
+
+#if defined __GNUC__ && (__GNUC__ > 2)
+  // 26.2.3  complex specializations
+  // complex<double> specialization
+  template<> class complex<double>
+  {
+  public:
+    typedef double value_type;
+
+    complex(double  =0.0, double =0.0);
+#ifdef _GLIBCPP_BUGGY_COMPLEX
+    complex(const complex& __z) : _M_value(__z._M_value) { }
+#endif // _GLIBCPP_BUGGY_COMPLEX
+    complex(const complex<float>&);
+    explicit complex(const complex<long double>&);
+    // CS: Additionally add conversion *from* stdc++ type.
+    complex(const std::complex<double>&);
+    // CS: end
+        
+    double real() const;
+    double imag() const;
+        
+    complex<double>& operator=(double);
+    complex<double>& operator+=(double);
+    complex<double>& operator-=(double);
+    complex<double>& operator*=(double);
+    complex<double>& operator/=(double);
+
+    // The compiler will synthetize this, efficiently.
+    // complex& operator= (const complex&);
+    template<typename _Tp>
+      complex<double>& operator=(const complex<_Tp>&);
+    template<typename _Tp>
+      complex<double>& operator+=(const complex<_Tp>&);
+    template<typename _Tp>
+      complex<double>& operator-=(const complex<_Tp>&);
+    template<typename _Tp>
+      complex<double>& operator*=(const complex<_Tp>&);
+    template<typename _Tp>
+      complex<double>& operator/=(const complex<_Tp>&);
+
+    // CS: Additionally add converstions to old C-style complex type
+    complex(COMPLEX);
+    operator COMPLEX() const;
+    COMPLEX toCOMPLEX() const;
+    operator std::complex<double>() const;
+    // CS: end additions
+
+  private:
+    typedef __complex__ double _ComplexT;
+    _ComplexT _M_value;
+
+    complex(_ComplexT __z) : _M_value(__z) { }
+        
+    friend class complex<float>;
+    friend class complex<long double>;
+  };
+
+  inline double
+  complex<double>::real() const
+  { return __real__ _M_value; }
+
+  inline double
+  complex<double>::imag() const
+  { return __imag__ _M_value; }
+
+  inline
+  complex<double>::complex(double __r, double __i)
+  {
+    __real__ _M_value = __r;
+    __imag__ _M_value = __i;
+  }
+  
+  // CS: addition
+  inline
+  complex<double>::complex(const std::complex<double>&__s)
+  {
+    __real__ _M_value = __s.real();
+    __imag__ _M_value = __s.imag();
+  }
+  // CS: end addition
+
+  inline complex<double>&
+  complex<double>::operator=(double __d)
+  {
+    __real__ _M_value = __d;
+    __imag__ _M_value = 0.0;
+    return *this;
+  }
+
+  inline complex<double>&
+  complex<double>::operator+=(double __d)
+  {
+    __real__ _M_value += __d;
+    return *this;
+  }
+
+  inline complex<double>&
+  complex<double>::operator-=(double __d)
+  {
+    __real__ _M_value -= __d;
+    return *this;
+  }
+
+  inline complex<double>&
+  complex<double>::operator*=(double __d)
+  {
+    _M_value *= __d;
+    return *this;
+  }
+
+  inline complex<double>&
+  complex<double>::operator/=(double __d)
+  {
+    _M_value /= __d;
+    return *this;
+  }
+
+  template<typename _Tp>
+    inline complex<double>&
+    complex<double>::operator=(const complex<_Tp>& __z)
+    {
+      __real__ _M_value = __z.real();
+      __imag__ _M_value = __z.imag();
+      return *this;
+    }
+    
+  template<typename _Tp>
+    inline complex<double>&
+    complex<double>::operator+=(const complex<_Tp>& __z)
+    {
+      __real__ _M_value += __z.real();
+      __imag__ _M_value += __z.imag();
+      return *this;
+    }
+
+  template<typename _Tp>
+    inline complex<double>&
+    complex<double>::operator-=(const complex<_Tp>& __z)
+    {
+      __real__ _M_value -= __z.real();
+      __imag__ _M_value -= __z.imag();
+      return *this;
+    }
+
+  template<typename _Tp>
+    inline complex<double>&
+    complex<double>::operator*=(const complex<_Tp>& __z)
+    {
+      _ComplexT __t;
+      __real__ __t = __z.real();
+      __imag__ __t = __z.imag();
+      _M_value *= __t;
+      return *this;
+    }
+
+  template<typename _Tp>
+    inline complex<double>&
+    complex<double>::operator/=(const complex<_Tp>& __z)
+    {
+      _ComplexT __t;
+      __real__ __t = __z.real();
+      __imag__ __t = __z.imag();
+      _M_value /= __t;
+      return *this;
+    }
+
+  // CS: Additionally add converstions to old C-style complex type
+  inline
+  complex<double>::complex(COMPLEX __c)
+  {
+    __real__ _M_value = __c.r;
+    __imag__ _M_value = __c.i;
+  }
+
+  inline
+  complex<double>::operator COMPLEX() const
+  {
+    return toCOMPLEX();
+  }
+
+  inline COMPLEX
+  complex<double>::toCOMPLEX() const
+  {
+    COMPLEX r;
+    r.r = real();
+    r.i = imag();
+    return r;
+  }
+
+  inline
+  complex<double>::operator std::complex<double>() const
+  {
+    return std::complex<double>(real(), imag());
+  }
+  // CS: end 
+#endif // (__GNUC__ > 2)
+
+  // much deleted...
+
+  //@}
+} // namespace std
+
+#endif	/* _CPP_COMPLEX */

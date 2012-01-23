@@ -1,0 +1,231 @@
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+   text-align: center;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+  $(function()
+  {
+    // turn off async JavaScript so we can easily get/set var names
+    $.ajaxSetup({async: false});
+    // get the reference for the current report - TS_result is defined in run verison of this script
+    var reportUrl = '/rundb/api/v1/results/' + TB_result;
+    var referenceID;
+    $.get( reportUrl, function(data)
+    {
+     var rl = data.log;
+     var reportParams = rl.replace("log.html","ion_params_00.json");
+     $.getJSON( reportParams, function(data)
+     {
+      // from report data get the short reference name
+      referenceID = data.libraryName;
+     });
+    });
+    document.getElementById('referenceid').innerHTML = referenceID;
+    var refBedURL = '/rundb/api/v1/content/?format=json&publisher__name=BED&path__startswith=/' + referenceID + '/unmerged/detail/';
+    $.get( refBedURL, function(data)
+    {
+      $.each( data.objects, function(intIndex,result)
+      {
+       var targfile = result.file;
+       var i = targfile.lastIndexOf('/unmerged/detail/');
+       if( i < 0 ) return true;
+       var selName = targfile.substr(i+17)
+       if( selName.substr(0,7) == 'example' ) return true;
+       var j = selName.lastIndexOf('.bed');
+       if( j > 0 )
+       {
+        selName = selName.substr(0,j);
+        if( result.meta.hotspot )
+        {
+         $("#targetloci").append("<option value='" + targfile + "'>" +  selName + "</option>");
+        }
+        else
+        {
+         $("#targetregions").append("<option value='" + targfile + "'>" +  selName + "</option>");
+        }
+       }
+      });
+    });
+ 
+    $.fn.serializeObject = function()
+    {
+     var o = {};
+     var a = this.serializeArray();
+     $.each(a, function()
+     {
+       if (o[this.name] != null) {
+        if (!o[this.name].push) {
+         o[this.name] = [o[this.name]];
+        }
+        o[this.name].push(this.value || '');
+       } else {
+        o[this.name] = this.value || '';
+       }
+      });
+      return o;
+    };
+
+    $( function()
+    {
+     $('#postbutton').click( function()
+     {
+      // pass user selection with spaces translated to underscores
+      var libName = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].text;
+      document.variantcaller.librarytype_id.value = libName.replace(/\s/g,'_');
+      var usrSel = document.getElementById('variationtype')[document.variantcaller.variationtype.selectedIndex].text;
+      document.variantcaller.variationtype_id.value = usrSel.replace(/\s/g,'_');
+      usrSel = document.getElementById('targetregions')[document.variantcaller.targetregions.selectedIndex].text;
+      document.variantcaller.targetregions_id.value = usrSel.replace(/\s/g,'_');
+      usrSel = document.getElementById('targetloci')[document.variantcaller.targetloci.selectedIndex].text;
+      document.variantcaller.targetloci_id.value = usrSel.replace(/\s/g,'_');
+      // store the merged versions of the file: selecting None results in ""
+      var targets = document.getElementById('targetregions')[document.variantcaller.targetregions.selectedIndex].value;
+      var i = targets.lastIndexOf('/unmerged/detail/');
+      if( i < 0 )
+      {
+       document.variantcaller.targetregions_merge.value = "";
+      }
+      else
+      {
+       document.variantcaller.targetregions_merge.value = targets.substr(0,i) + '/merged/plain/' + targets.substr(i+17);
+      }
+      var hotspots = document.getElementById('targetloci')[document.variantcaller.targetloci.selectedIndex].value;
+      i = hotspots.lastIndexOf('/unmerged/detail/');
+      if( i < 0 )
+      {
+       document.variantcaller.targetloci_merge.value = "";
+      }
+      else
+      {
+       document.variantcaller.targetloci_merge.value = hotspots.substr(0,i) + '/merged/plain/' + hotspots.substr(i+17);
+      }
+      // confirm user selction combos - may later include library specific targets fields
+      var libType = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].value;
+      if( libType == "fullgenome" )
+      {
+       if( targets != "" || hotspots != "" )
+       {
+        var msg = "Selecting Targeted or Hotspot regions is typically not appropriate for Library Type: " + libName;
+        msg += ". (Variants will be considered in these just regions.)";
+        msg += "\n\nDo you wish to continue?";
+        if( !confirm(msg) ) return false;
+       }
+      }
+      else
+      {
+       if( targets == "" )
+       {
+        var msg = "Targeted regions selection is typically appropriate for Library Type: " + libName;
+        msg += ". (Variants may be reported in non-enriched regions where coverage is low.)";
+        msg += "\n\nDo you wish to continue?";
+        if( !confirm(msg) ) return false;
+       }
+      }
+      // serialize user selections and run the plugin
+      obj = $('#variantcaller').serializeObject();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+       type: 'POST',
+       url: pluginURL,
+       async: false,
+       contentType: "application/json; charset=utf-8",
+       success: function(data)
+       {
+        $("#json_result").html(
+         '<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
+        setTimeout("parent.$.fn.colorbox.close()",2000);
+       },
+       data: pluginAPIJSON,
+       dataType: "json"
+      });
+     });
+    });
+
+  });
+ </script>
+</head>
+
+<body>
+ <div align="center">
+  <form id="variantcaller" name="variantcaller" align="center">
+   <h1>Torrent Variant Caller Plugin</h1>
+   <table cellpadding="5px">
+    <tr>
+     <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for variant calling.">Reference Genome:</span></td>
+     <td><div id="referenceid"></div></td>
+    </tr>
+    <tr>
+     <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
+     <td><select id="librarytype" name="librarytype" style="width:120px">
+      <option value="fullgenome">Full Genome</option>
+      <option value="ampliseq">Ion AmpliSeq</option>
+      <option value="targetseq">Ion TargetSeq</option>
+     </select></td>
+    </tr>
+    <tr>
+     <td><span class="help" title="Select the type of variants you are interested in detecting.">Variant Frequency:</span></td>
+     <td><select id="variationtype" name="variationtype" style="width:120px">
+      <option value="Germ_Line">Germ Line</option>
+      <option value="Somatic">Somatic</option>
+     </select></td>
+    </tr>
+    <tr>
+    <td><span class="help"
+       title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Notes below.">
+       Targeted regions:</span></td>
+     <td><select id="targetregions" name="targetregions" style="width:300px"><option value="">None</option></select></td>
+    <tr>
+     <td><span class="help"
+       title="Select the 'hotspot' regions (variant loci) matching your reference and enriched fragment library. See Description and Notes below.">
+       Hotspot regions:</span></td>
+     <td><select id="targetloci" name="targetloci" style="width:300px"><option value="">None</option></select></td>
+    </tr>
+   </table>
+   <br/>
+   <div id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="librarytype_id" name="librarytype_id"/>
+   <input type="hidden" id="variationtype_id" name="variationtype_id"/>
+   <input type="hidden" id="targetregions_id" name="targetregions_id"/>
+   <input type="hidden" id="targetloci_id" name="targetloci_id"/>
+   <input type="hidden" id="targetregions_merge" name="targetregions_merge"/>
+   <input type="hidden" id="targetloci_merge" name="targetloci_merge"/>
+   <br/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+     This plugin analyzes mapped reads coverage over each individual reference base to deduce whether there is sufficient
+     variation to call a SNP or INDEL at that position. If a target region and/or hotspot region is defined then this
+     analysis is restricted to just those regions and more detailed information will be presented on the report pages.</p>
+    <p>
+     The target regions selected should correspond to your reference and enriched fragment library. You may also select
+     'Whole reference' to analyze coverage against the full reference but this is only recommended if your library (type)
+     was not enriched and for a small genome.</p> 
+    <p>
+     A run will fail almost immediately (after queuing) if your selected targeted regions do not appear to match
+     the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
+   </div>
+  </form>
+  </div>
+</body>
+</html>
+

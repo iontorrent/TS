@@ -1,0 +1,229 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Management Options{% endblock %}
+{% block extrahead %}
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <script>
+    $(function () {
+
+      function clear_form_titles() {
+        if ($(this).val() === $(this).parent('abbr').attr('title')) {
+          $(this).val('').removeClass('unfocused');
+        }
+      }
+
+      $('form#network').submit(function () {
+        $('abbr[title] > input').each(clear_form_titles);
+      });
+      $('abbr[title] > input').each(function () {
+        // Initially set inline form labels
+        if ($(this).val() === '') {
+          $(this).val($(this).parent('abbr').attr('title')).addClass('unfocused');
+        }
+        // Remove inline labels on focus
+        $(this).focus(clear_form_titles);
+        // Replace inline labels on blur
+        $(this).blur(function () {
+          if ($(this).val() === '') {
+            $(this).val($(this).parent().attr('title')).addClass('unfocused');
+          }
+        });
+      });
+      // This saves the starting value of each from input so that the reset
+      // buttons work.  It should execute before any code that would set a
+      // form elements value to something that you would not want it 'reset' to
+      $('form.resetable input').each(function () {
+        $(this).data("original_value", $(this).val());
+      });
+      $('form.resetable input[type="reset"]').click(function () {
+        $(this).parent('form').children('input').each(function () {
+          $(this).val($(this).data("original_value"));
+        });
+      });
+
+      function toggle_network_fields() {
+        if ($('input[name=network-mode]:checked').val() == "dhcp") {
+          $('.host_settings input[type=text]').attr('readonly', true);
+        } else {
+          $('.host_settings input[type=text]').removeAttr('readonly');
+        }
+      }
+
+      toggle_network_fields();
+      $('input[name=network-mode]').change(toggle_network_fields);
+
+      friends = [
+        "rssh.iontorrent.net:22",
+        "drm.appliedbiosystems.com:443",
+        "updates.iontorrent.com:80",
+        "us.archive.ubuntu.com:80",
+        "security.ubuntu.com:80"
+      ];
+      function hey(address, friend) {
+        var where = "/rundb/how_is/" + friend + "/feeling";
+        $.getJSON(where, function (replies) {
+          if (replies.feeling == ":)")
+            $('#neighborhood').append("<tr><td>" + friend + " </td><td class=\"happy\">Detected ✔</td></tr>");
+          else if (replies.feeling == ":(")
+            $('#neighborhood').prepend("<tr><td>" + friend + " </td><td class=\"sad\">Missing x</td></tr>");
+        });
+      }
+
+      $.each(friends, hey);
+
+      $("input").attr("readonly", true);
+    });
+  </script>
+  <style type="text/css">
+    #network input.unfocused {
+      color: gray;
+    }
+
+    ul.errorlist {
+      list-style-type: none;
+      color: red;
+      padding: 0;
+      margin-bottom: 0.5em;
+      font-size: large;
+    }
+
+    #network label {
+      float: left;
+      width: 100px;
+    }
+
+    #network input[type=text] {
+      width: 200px;
+    }
+
+    #network .inline-fields input {
+      display: inline-block;
+    }
+
+    #proxy_server #id_network-proxy_address {
+      width: 145px;
+    }
+
+    #proxy_server #id_network-proxy_port {
+      width: 45px;
+    }
+
+    #network #proxy_login input {
+      width: 95px;
+    }
+
+    #network #mode label {
+      float: none;
+      width: auto;
+    }
+
+    #network #mode ul {
+      list-style-type: none;
+      margin: 0 0 0 100px;
+      padding: 0;
+    }
+
+    #network #mode li {
+      display: inline-block;
+      padding-right: 40px;
+    }
+
+    #neighborhood td {
+      text-align: right;
+      padding: 4px;
+    }
+
+    #neighborhood tr td:last-child {
+      font-weight: bold;
+      text-align: left;
+    }
+
+    #neighborhood .happy {
+      color: green;
+    }
+
+    #neighborhood .sad {
+      color: red;
+    }
+
+    fieldset.host_settings {
+      padding: 0;
+      margin: 0;
+      border: none;
+    }
+
+    #network input {
+      border: none;
+      background: transparent;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>Network Settings</h1>
+
+    <div>
+      {% if errors %}
+        <h3>Errors</h3>
+        <div>
+          {{ errors }}
+        </div>
+      {% endif %}
+      <div style="padding: 10px;">
+        <div style="float: left; width: 500px;">
+          <form id="network" class="resetable" method="post"
+                action="{% url iondb.rundb.admin.network %}">
+            <p style="display: inline-block; width: 100px;">Mac Address:</p>
+
+            <p style="display: inline-block;">{{ network.mac }}</p>
+            <br style="clear: both;"/>
+
+            <fieldset class="host_settings">
+              <div id="mode">
+                {{ network.data.mode }}
+              </div>
+              <div>
+                {{ network.form.address.label_tag }}
+                {{ network.form.address }}
+              </div>
+              <div>
+                {{ network.form.subnet.label_tag }}
+                {{ network.form.subnet }}
+                </div>
+                <div>
+                  {{ network.form.gateway.label_tag }}
+                  {{ network.form.gateway }}
+                </div>
+                <div>
+                  {{ network.form.nameservers.label_tag }}
+                  {{ network.form.nameservers }}
+                </div>
+            </fieldset>
+            {% if network.data.proxy_address %}
+            <div id="proxy_server" class="inline-fields">
+              <label>Proxy server</label>
+              <abbr title="Address">{{ network.form.proxy_address }}</abbr>
+              <abbr title="Port">{{ network.form.proxy_port }}</abbr>
+            </div>
+            {% if network.data.proxy_username %}
+            <div id="proxy_login" class="inline-fields">
+              <label>Proxy login</label>
+              <abbr title="Username">{{ network.form.proxy_username }}</abbr>
+              <abbr title="Password">{{ network.form.proxy_password }}</abbr>
+            </div>
+            {% endif %}
+            {% else %}
+              <p>No proxy settings configured.</p>
+            {% endif %}
+          </form>
+        </div>
+        <table id="neighborhood"
+               style="width: 400px; text-align: right; float: left;">
+
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "rundb/mobile/base_report_tab.html" %}
+{% load mobile %}
+
+{% block pageid %}info{% endblock %}
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+        <h2>Analysis Info</h2>    
+        <ul data-role="listview" data-inset="true">
+            {% for param, value in helper.analysis_meta.iteritems %}
+                {% table_row param value %}
+            {% endfor %}                
+            {% for param, value in helper.process_params.iteritems %}
+                {% table_row param value %}
+            {% endfor %}                
+        </ul>
+        
+        <h2>Software Version</h2>
+        <ul data-role="listview" data-inset="true">
+            {% for software, version in helper.versions.iteritems %}
+                {% table_row software version %}
+            {% endfor %}                
+        </ul>
+{% endblock %}

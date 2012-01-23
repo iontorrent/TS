@@ -1,0 +1,42 @@
+{% extends "rundb/mobile/base_report_tab.html" %}
+{% load mobile %}
+
+{% block pageid %}isp{% endblock %}
+{% block title %}ISP Summary{% endblock %}
+
+{% block content %}
+        {% if helper.beadfind_info %}
+                <table class="datagrid">
+                    <tr>
+                        <td style="width: 50%">&nbsp;</td>
+                        <td class="ui-bar-e" style="width: 30%">Count</td>
+                        <td class="ui-bar-e" style="width: 20%">%</td>
+                    </tr>
+                    
+                    {% for param, value in helper.beadfind_wells_summary.items %}
+                        {% grid_row param value %}
+                    {% endfor %}
+                </table>
+
+                <br><br>
+                
+                <table class="datagrid">
+                    <tr>
+                        <td style="width: 50%">&nbsp;</td>
+                        <td class="ui-bar-e" style="width: 30%">Count</td>
+                        <td class="ui-bar-e" style="width: 20%">%</td>
+                    </tr>
+
+                    {% for param, value in helper.library_isp_summary.items %}
+                        {% grid_row param value %}
+                    {% endfor %}
+                </table>
+        {% endif %}
+
+        <br><br>
+                        
+        <div>
+            {% report_img helper "Bead_density_contour.png" "Bead Density" %}
+        </div>
+
+{% endblock %}

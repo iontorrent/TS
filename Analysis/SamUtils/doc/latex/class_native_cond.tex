@@ -1,0 +1,74 @@
+\hypertarget{class_native_cond}{
+\section{NativeCond Class Reference}
+\label{class_native_cond}\index{NativeCond@{NativeCond}}
+}
+
+
+{\ttfamily \#include $<$Lock.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_native_cond_a8e39f7b42b3552799ca3079fad91ef27}{NativeCond} ()
+\item 
+void \hyperlink{class_native_cond_ad8bb0c006edab3df48f963b1e71a69aa}{wait} (\hyperlink{class_native_mutex}{NativeMutex} $\ast$mutex)
+\item 
+void \hyperlink{class_native_cond_a29d11d21dfc87d3adf3394dc30b1d93f}{broadcast} ()
+\item 
+void \hyperlink{class_native_cond_a297c31409348913fe693510d3f33229d}{signal} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+Class which wraps pthread\_\-cond\_\-t. Provides an OO interface to this C structure. This is meant to be a C++ replacement for a pthread\_\-cond\_\-t 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_native_cond_a8e39f7b42b3552799ca3079fad91ef27}{
+\index{NativeCond@{NativeCond}!NativeCond@{NativeCond}}
+\index{NativeCond@{NativeCond}!NativeCond@{NativeCond}}
+\subsubsection[{NativeCond}]{\setlength{\rightskip}{0pt plus 5cm}NativeCond::NativeCond (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_native_cond_a8e39f7b42b3552799ca3079fad91ef27}
+Initializes the conditional. Ready to use after construction. 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_native_cond_a29d11d21dfc87d3adf3394dc30b1d93f}{
+\index{NativeCond@{NativeCond}!broadcast@{broadcast}}
+\index{broadcast@{broadcast}!NativeCond@{NativeCond}}
+\subsubsection[{broadcast}]{\setlength{\rightskip}{0pt plus 5cm}void NativeCond::broadcast (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_native_cond_a29d11d21dfc87d3adf3394dc30b1d93f}
+Broadcast to all threads waiting on this condition to wake up \hypertarget{class_native_cond_a297c31409348913fe693510d3f33229d}{
+\index{NativeCond@{NativeCond}!signal@{signal}}
+\index{signal@{signal}!NativeCond@{NativeCond}}
+\subsubsection[{signal}]{\setlength{\rightskip}{0pt plus 5cm}void NativeCond::signal (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_native_cond_a297c31409348913fe693510d3f33229d}
+Signal a thread waiting on this condition to wake up \hypertarget{class_native_cond_ad8bb0c006edab3df48f963b1e71a69aa}{
+\index{NativeCond@{NativeCond}!wait@{wait}}
+\index{wait@{wait}!NativeCond@{NativeCond}}
+\subsubsection[{wait}]{\setlength{\rightskip}{0pt plus 5cm}void NativeCond::wait (
+\begin{DoxyParamCaption}
+\item[{{\bf NativeMutex} $\ast$}]{mutex}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_native_cond_ad8bb0c006edab3df48f963b1e71a69aa}
+Wait for a broadcast or signal 
+\begin{DoxyParams}{Parameters}
+{\em NativeMutex$\ast$} & mutex a \hyperlink{class_native_mutex}{NativeMutex} \\
+\hline
+\end{DoxyParams}
+
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+Lock.h\end{DoxyCompactItemize}

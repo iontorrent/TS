@@ -1,0 +1,240 @@
+\hypertarget{class_pileup}{
+\section{Pileup Class Reference}
+\label{class_pileup}\index{Pileup@{Pileup}}
+}
+
+
+{\ttfamily \#include $<$Pileup.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_pileup_ab24ad8d1adc85141d279fa82645f9d67}{Pileup} ()
+\item 
+\hyperlink{class_pileup_af7a208f2f224582260aa4780f05156be}{Pileup} (int tid, int pos, vector$<$ int $>$ \&phreds)
+\item 
+\hyperlink{class_pileup_aa12195e46d05c2ef4bcd5c455af2fa27}{Pileup} (int tid, int pos, vector$<$ int $>$ \&phreds, \hyperlink{class_b_a_m_utils}{BAMUtils} $\ast$\_\-p)
+\item 
+\hyperlink{class_pileup_a0ed467fc2ce855eee7a61b83059d8877}{Pileup} (\hyperlink{class_pileup}{Pileup} const \&other)
+\item 
+\hyperlink{class_pileup}{Pileup} \& \hyperlink{class_pileup_a4c65041c58658064b3de1ef715990fb1}{operator=} (\hyperlink{class_pileup}{Pileup} that)
+\item 
+void \hyperlink{class_pileup_a5ef3f3c48d209a9297fa5d3edcc64918}{insert\_\-util} (\hyperlink{class_b_a_m_utils}{BAMUtils} $\ast$\_\-p)
+\item 
+int \hyperlink{class_pileup_a54cb72913b0fde34d9a781f3f9a9a2d9}{get\_\-tid} () const 
+\item 
+coord\_\-t \hyperlink{class_pileup_a7c2e7c25ed33a0e62e8de528218b6107}{get\_\-pos} () const 
+\item 
+long \hyperlink{class_pileup_a5fd72bbb7048f642b86bb668ae011124}{get\_\-num\_\-reads} () const 
+\item 
+bool \hyperlink{class_pileup_ab83a8e4e308f82d44034ee8fbdea4859}{is\_\-covered} () const 
+\item 
+int \hyperlink{class_pileup_a30556727363178d131bfe8648a18c77c}{get\_\-phred\_\-cov} (int phred)
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+This class aims to encapsulate one position in the reference sequence. It contains all of the reads that overlay this particular position. The read(s) may or may not actually have coverage at this position, however.
+
+This class is retrieved from a \hyperlink{class_pileup_factory}{PileupFactory}. It's not recommended that you try and construct them yourself. 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_pileup_ab24ad8d1adc85141d279fa82645f9d67}{
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\subsubsection[{Pileup}]{\setlength{\rightskip}{0pt plus 5cm}Pileup::Pileup (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_ab24ad8d1adc85141d279fa82645f9d67}
+Default constructor. A necessary evil in order to use these objects in STL containers \hypertarget{class_pileup_af7a208f2f224582260aa4780f05156be}{
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\subsubsection[{Pileup}]{\setlength{\rightskip}{0pt plus 5cm}Pileup::Pileup (
+\begin{DoxyParamCaption}
+\item[{int}]{tid, }
+\item[{int}]{pos, }
+\item[{vector$<$ int $>$ \&}]{phreds}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_af7a208f2f224582260aa4780f05156be}
+A light constructor that initializes the \hyperlink{class_pileup}{Pileup} with it's position, reference, and Phred scores The phred scores are used to see whether or not this read has some level of Phred coverage.
+
+For instance, given phreds of 7,10,17,20,47 you can see how many Q7 bases cover this position, and how many Q47 bases cover this position, etc.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & tid index of reference in header of SAM/BAM file \\
+\hline
+{\em int} & pos position in reference \\
+\hline
+{\em vector$<$int$>$} & a vector of phred scores. \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup} a constructed pileup object, but it doesn't contain reads yet. 
+\end{DoxyReturn}
+\hypertarget{class_pileup_aa12195e46d05c2ef4bcd5c455af2fa27}{
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\subsubsection[{Pileup}]{\setlength{\rightskip}{0pt plus 5cm}Pileup::Pileup (
+\begin{DoxyParamCaption}
+\item[{int}]{tid, }
+\item[{int}]{pos, }
+\item[{vector$<$ int $>$ \&}]{phreds, }
+\item[{{\bf BAMUtils} $\ast$}]{\_\-p}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_aa12195e46d05c2ef4bcd5c455af2fa27}
+Convenience constructor if read already to be placed into the \hyperlink{class_pileup}{Pileup}
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & tid index of reference in header of SAM/BAM file \\
+\hline
+{\em int} & pos position in reference \\
+\hline
+{\em vector$<$int$>$} & phreds a vector of phred scores. \\
+\hline
+{\em BAMUtils$\ast$} & \_\-p a pointer to a \hyperlink{class_b_a_m_utils}{BAMUtils} object that covers this read \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup} a constructed pileup object, but it doesn't contain reads yet. 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a0ed467fc2ce855eee7a61b83059d8877}{
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\index{Pileup@{Pileup}!Pileup@{Pileup}}
+\subsubsection[{Pileup}]{\setlength{\rightskip}{0pt plus 5cm}Pileup::Pileup (
+\begin{DoxyParamCaption}
+\item[{{\bf Pileup} const \&}]{other}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a0ed467fc2ce855eee7a61b83059d8877}
+A copy constructor 
+\begin{DoxyParams}{Parameters}
+{\em \hyperlink{class_pileup}{Pileup}} & const\& other an existing \hyperlink{class_pileup}{Pileup} object \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup} a copy of other 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_pileup_a5fd72bbb7048f642b86bb668ae011124}{
+\index{Pileup@{Pileup}!get\_\-num\_\-reads@{get\_\-num\_\-reads}}
+\index{get\_\-num\_\-reads@{get\_\-num\_\-reads}!Pileup@{Pileup}}
+\subsubsection[{get\_\-num\_\-reads}]{\setlength{\rightskip}{0pt plus 5cm}long Pileup::get\_\-num\_\-reads (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a5fd72bbb7048f642b86bb668ae011124}
+Returns the number of reads that overlap this position (not necessarily cover it).
+
+For instance, if this position in the sample is a deletion to the reference, and all the reads that overlap this position observe that deletion the position will technically not have any coverage.
+
+\begin{DoxyReturn}{Returns}
+long number of reads 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a30556727363178d131bfe8648a18c77c}{
+\index{Pileup@{Pileup}!get\_\-phred\_\-cov@{get\_\-phred\_\-cov}}
+\index{get\_\-phred\_\-cov@{get\_\-phred\_\-cov}!Pileup@{Pileup}}
+\subsubsection[{get\_\-phred\_\-cov}]{\setlength{\rightskip}{0pt plus 5cm}int Pileup::get\_\-phred\_\-cov (
+\begin{DoxyParamCaption}
+\item[{int}]{phred}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a30556727363178d131bfe8648a18c77c}
+Returns the level of Phred coverage at this position. So, if we have 10 Q47 reads that map here and this position is within the Q47 length of all 10 reads, the return value will be 10.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & phred Phred score we're interested in \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+int level of coverage 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a7c2e7c25ed33a0e62e8de528218b6107}{
+\index{Pileup@{Pileup}!get\_\-pos@{get\_\-pos}}
+\index{get\_\-pos@{get\_\-pos}!Pileup@{Pileup}}
+\subsubsection[{get\_\-pos}]{\setlength{\rightskip}{0pt plus 5cm}coord\_\-t Pileup::get\_\-pos (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a7c2e7c25ed33a0e62e8de528218b6107}
+Returns position in reference that this \hyperlink{class_pileup}{Pileup} corresopnds to
+
+\begin{DoxyReturn}{Returns}
+long position in genome 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a54cb72913b0fde34d9a781f3f9a9a2d9}{
+\index{Pileup@{Pileup}!get\_\-tid@{get\_\-tid}}
+\index{get\_\-tid@{get\_\-tid}!Pileup@{Pileup}}
+\subsubsection[{get\_\-tid}]{\setlength{\rightskip}{0pt plus 5cm}int Pileup::get\_\-tid (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a54cb72913b0fde34d9a781f3f9a9a2d9}
+Returns the index of the reference in the SAM/BAM header file
+
+\begin{DoxyReturn}{Returns}
+int index of reference 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a5ef3f3c48d209a9297fa5d3edcc64918}{
+\index{Pileup@{Pileup}!insert\_\-util@{insert\_\-util}}
+\index{insert\_\-util@{insert\_\-util}!Pileup@{Pileup}}
+\subsubsection[{insert\_\-util}]{\setlength{\rightskip}{0pt plus 5cm}void Pileup::insert\_\-util (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMUtils} $\ast$}]{\_\-p}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a5ef3f3c48d209a9297fa5d3edcc64918}
+Inserts a \hyperlink{class_b_a_m_utils}{BAMUtils} object into this position. This function will check to make sure the read covers this position. If the read doesn't cover the position, the input pointer is disregarded
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMUtils$\ast$} & \_\-p pointer to a \hyperlink{class_b_a_m_utils}{BAMUtils} object that you think covers this position \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_pileup_ab83a8e4e308f82d44034ee8fbdea4859}{
+\index{Pileup@{Pileup}!is\_\-covered@{is\_\-covered}}
+\index{is\_\-covered@{is\_\-covered}!Pileup@{Pileup}}
+\subsubsection[{is\_\-covered}]{\setlength{\rightskip}{0pt plus 5cm}bool Pileup::is\_\-covered (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_ab83a8e4e308f82d44034ee8fbdea4859}
+A convenience method that will simply return whether or not there is SOMETHING covering this position. This can save you computation if there is a \_\-lot\_\- of coverage at a position.
+
+\begin{DoxyReturn}{Returns}
+bool true if position is covered 
+\end{DoxyReturn}
+\hypertarget{class_pileup_a4c65041c58658064b3de1ef715990fb1}{
+\index{Pileup@{Pileup}!operator=@{operator=}}
+\index{operator=@{operator=}!Pileup@{Pileup}}
+\subsubsection[{operator=}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Pileup}\& Pileup::operator= (
+\begin{DoxyParamCaption}
+\item[{{\bf Pileup}}]{that}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_a4c65041c58658064b3de1ef715990fb1}
+Overloaded operator= which calls the copy constructor 
+\begin{DoxyParams}{Parameters}
+{\em \hyperlink{class_pileup}{Pileup}} & that an existing \hyperlink{class_pileup}{Pileup} object \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup} a copy of that 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+types/Pileup.h\end{DoxyCompactItemize}

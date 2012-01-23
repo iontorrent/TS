@@ -1,0 +1,105 @@
+
+1. Using Lapack++
+=================
+
+1.1. Needed Components
+----------------------
+
+You need DLLs of BLAS and Lapack.
+The contrib folder contains a patch against the latest lapack.tgz package
+which allows creating DLLs from the original source package.
+
+Alternatively, use the self-installing setup.exe file of lapackpp;
+this will include a DLL for blas and for lapack.
+
+
+2. Compiling Lapack++
+=====================
+
+This section is only for compiling lapackpp yourself; if you
+installed the self-installing setup.exe file, you don't need to
+consider this section.
+
+This section is for compiling with the gcc compiler. If you want
+to use the Microsoft Visual C++ compiler instead, use the provided
+project file lapackpp.vcproj. For installation copy the resulting
+Debug/lapackpp.lib into whatever location you consider
+appropriate.
+
+
+2.1. Needed Components
+----------------------
+
+2.1.1. MinGW32
+
+MinGW32 is a project with the goal to provide a free compiler system and a
+nearly complete shell environment which allows to execute the configure 
+script. The resulting DLLs and EXEs only link against Windows libraries, so
+there are no licence issues when releasing binary packages.
+The compiler itself is the very well known GCC.
+
+MinGW creates an environment just like under Linux (with quite the same
+file hierarchie, including a home directory).
+Paths including hard drive identifiers are used like this:
+c:\SOMEPATH -> /c/SOMEPATH
+d:\SOMEPATH -> /d/SOMEPATH
+and so on.
+
+The root directory of MinGW is a a subdirectory of the one you installed
+mingw to, in most cases "c:\msys\1.0". So "/" from inside the shell actually 
+refers to that directory.
+
+You can get MinGW from http://www.mingw.org/
+
+Install instructions:
+- download and install MSYS 1.0.9 
+  (there is an executable, which wants to install itself to "c:/msys". 
+  This is a good choice, so from here on I assume you have choosen this path,
+  too)
+- download and install  MinGW-3.1.0-1.exe (when asked for the install path
+  please make sure you use "c:/msys/1.0/mingw" !!)
+- download and install msysDTK-1.0.1.exe (it finds its install path by itself)
+
+There are many more packages on their download site, but you don't need them, 
+since most of them are already included in the packages we just installed.
+
+
+2.1.2. BLAS, Lapack
+-------------------
+You only need the DLLs of BLAS and Lapack.
+The contrib folder contains a patch against the latest lapack.tgz package
+which allows creating DLLs from the original source package.
+
+Download lapack.tgz from http://www.netlib.org/lapack/.
+
+
+
+2.2. Compiling
+==============
+
+Just type 
+
+  ./configure YOUR_OPTIONS
+  make 
+
+This will create the DLL needed by other projects. It will be copied
+to your Windows system folder when you type "make install".
+
+Some common options for ./configure concern the library name of blas
+and lapack, and also additional library search paths in LDFLAGS if
+your MinGW installation is in a non-standard path. E.g.:
+
+  ./configure --disable-atlas --with-blas=blas32 --with-lapack=lapack32 \
+    LDFLAGS="-L/mingw/lib -L/c/WINNT/system32" 
+
+
+2.3 Installation
+================
+
+Type 
+
+  make install
+
+to have the header files copied to the chosen prefix (default
+/usr/local) and to have the DLL liblapackpp32.dll copied into your
+Windows system folder.

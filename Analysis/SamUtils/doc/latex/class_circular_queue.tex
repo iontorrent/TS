@@ -1,0 +1,120 @@
+\hypertarget{class_circular_queue}{
+\section{CircularQueue$<$ element, size $>$ Class Template Reference}
+\label{class_circular_queue}\index{CircularQueue@{CircularQueue}}
+}
+
+
+{\ttfamily \#include $<$CircularQueue.h$>$}
+
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+enum \{ {\bfseries Capacity} =  size+1
+ \}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_circular_queue_a91b8a2001622c02f8aa2743bcbef429f}{CircularQueue} ()
+\item 
+bool \hyperlink{class_circular_queue_a9d256b9f7a99266ecefd4b443c6b1356}{put} (element \&\_\-item)
+\item 
+bool \hyperlink{class_circular_queue_ab635df07d4925bad3f982660517661ea}{pop} (element \&\_\-item)
+\item 
+bool \hyperlink{class_circular_queue_a4004e2048b2e471d4536d416701aaa04}{is\_\-empty} () const 
+\item 
+bool \hyperlink{class_circular_queue_a6256f1eaa82600323bfe00f7b9b13c15}{is\_\-full} () const 
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\subsubsection*{template$<$typename element, unsigned int size$>$class CircularQueue$<$ element, size $>$}
+
+A Circular Queue Thread safe for one reader, and one writer Queue isn't dynamic. It recieves a static initialization size and uses that to ensure thread safety.
+
+Initialized with a typename and size 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_circular_queue_a91b8a2001622c02f8aa2743bcbef429f}{
+\index{CircularQueue@{CircularQueue}!CircularQueue@{CircularQueue}}
+\index{CircularQueue@{CircularQueue}!CircularQueue@{CircularQueue}}
+\subsubsection[{CircularQueue}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename element , unsigned int size$>$ {\bf CircularQueue}$<$ element, size $>$::{\bf CircularQueue} (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_circular_queue_a91b8a2001622c02f8aa2743bcbef429f}
+Constructor which initializes the queue. 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_circular_queue_a4004e2048b2e471d4536d416701aaa04}{
+\index{CircularQueue@{CircularQueue}!is\_\-empty@{is\_\-empty}}
+\index{is\_\-empty@{is\_\-empty}!CircularQueue@{CircularQueue}}
+\subsubsection[{is\_\-empty}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename element , unsigned int size$>$ bool {\bf CircularQueue}$<$ element, size $>$::is\_\-empty (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_circular_queue_a4004e2048b2e471d4536d416701aaa04}
+Convenience function to check if the queue is empty
+
+\begin{DoxyReturn}{Returns}
+bool true if the queue is empty 
+\end{DoxyReturn}
+\hypertarget{class_circular_queue_a6256f1eaa82600323bfe00f7b9b13c15}{
+\index{CircularQueue@{CircularQueue}!is\_\-full@{is\_\-full}}
+\index{is\_\-full@{is\_\-full}!CircularQueue@{CircularQueue}}
+\subsubsection[{is\_\-full}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename element , unsigned int size$>$ bool {\bf CircularQueue}$<$ element, size $>$::is\_\-full (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_circular_queue_a6256f1eaa82600323bfe00f7b9b13c15}
+Convenience function to check if the queue is full
+
+\begin{DoxyReturn}{Returns}
+bool true if the queue is full 
+\end{DoxyReturn}
+\hypertarget{class_circular_queue_ab635df07d4925bad3f982660517661ea}{
+\index{CircularQueue@{CircularQueue}!pop@{pop}}
+\index{pop@{pop}!CircularQueue@{CircularQueue}}
+\subsubsection[{pop}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename element , unsigned int size$>$ bool {\bf CircularQueue}$<$ element, size $>$::pop (
+\begin{DoxyParamCaption}
+\item[{element \&}]{\_\-item}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_circular_queue_ab635df07d4925bad3f982660517661ea}
+tries to pop an element from the queue. returns false if the queue is empty. Overwrites the contents of element\& \_\-item, and that is the return'ed element from the queue.
+
+
+\begin{DoxyParams}{Parameters}
+{\em element\&} & \_\-item this is the variable that contains the returned item from the queue \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool returns true if pop was successfull, false otherwise 
+\end{DoxyReturn}
+\hypertarget{class_circular_queue_a9d256b9f7a99266ecefd4b443c6b1356}{
+\index{CircularQueue@{CircularQueue}!put@{put}}
+\index{put@{put}!CircularQueue@{CircularQueue}}
+\subsubsection[{put}]{\setlength{\rightskip}{0pt plus 5cm}template$<$typename element , unsigned int size$>$ bool {\bf CircularQueue}$<$ element, size $>$::put (
+\begin{DoxyParamCaption}
+\item[{element \&}]{\_\-item}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_circular_queue_a9d256b9f7a99266ecefd4b443c6b1356}
+Adds an element to the queue. Returns false if the queue is full
+
+
+\begin{DoxyParams}{Parameters}
+{\em element\&} & \_\-item an element to be added to the queue \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool returns true if element successfully added to queue 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+CircularQueue.h\end{DoxyCompactItemize}

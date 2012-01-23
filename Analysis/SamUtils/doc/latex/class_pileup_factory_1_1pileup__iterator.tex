@@ -1,0 +1,92 @@
+\hypertarget{class_pileup_factory_1_1pileup__iterator}{
+\section{PileupFactory::pileup\_\-iterator Class Reference}
+\label{class_pileup_factory_1_1pileup__iterator}\index{PileupFactory::pileup\_\-iterator@{PileupFactory::pileup\_\-iterator}}
+}
+
+
+{\ttfamily \#include $<$Pileup.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{class_pileup_factory_1_1pileup__iterator_a50cc0c2e2cc88ee53ca49e0c9af37abb}{good} ()
+\item 
+void \hyperlink{class_pileup_factory_1_1pileup__iterator_ae1b39c13e75befc882424cc2ba97d840}{next} ()
+\item 
+\hyperlink{class_pileup}{Pileup} \& \hyperlink{class_pileup_factory_1_1pileup__iterator_ae9b4c64e31955f28f65a5841e394add2}{get} ()
+\item 
+int \hyperlink{class_pileup_factory_1_1pileup__iterator_a1bf8e5041e0cbf9863820b7e9e2e2dc8}{get\_\-position} ()
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_pileup_factory_1_1pileup__iterator_a432907b7bd4b655df9251d3c4ead752b}{
+class \hyperlink{class_pileup_factory_1_1pileup__iterator_a432907b7bd4b655df9251d3c4ead752b}{PileupFactory}}
+\label{class_pileup_factory_1_1pileup__iterator_a432907b7bd4b655df9251d3c4ead752b}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+the \hyperlink{class_pileup_factory_1_1pileup__iterator}{PileupFactory::pileup\_\-iterator} class abstracts all the positional information from the user of the class It also removes the possibility of dealing with positions that have no reads overlapping them. This will iterate only over full \hyperlink{class_pileup}{Pileup} objects (it's possible that the \hyperlink{class_pileup}{Pileup} has no coverage however).
+
+Use this for maximum efficiency when looking at the entire window.
+
+WARNING!!! The iterator is not guaranteed to iterate the contents of the Factory in order.
+
+example code assuming properly constructed object. Assume an existing factory named pileups
+
+for (\hyperlink{class_pileup_factory_1_1pileup__iterator}{PileupFactory::pileup\_\-iterator} itr = pileups.get\_\-pileup\_\-iterator(); itr.good(); itr.next()) \{ \hyperlink{class_pileup}{Pileup}\& p = itr.get(); cerr $<$$<$delim$<$$<$ \char`\"{}Ref id:\char`\"{}$<$$<$delim$<$$<$ p.get\_\-tid() $<$$<$delim$<$$<$ \char`\"{}position in genome:\char`\"{}$<$$<$delim$<$$<$ p.get\_\-pos() $<$$<$delim$<$$<$\char`\"{}num reads:\char`\"{}$<$$<$delim$<$$<$ p.get\_\-num\_\-reads() $<$$<$ endl; \} 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_pileup_factory_1_1pileup__iterator_ae9b4c64e31955f28f65a5841e394add2}{
+\index{PileupFactory::pileup\_\-iterator@{PileupFactory::pileup\_\-iterator}!get@{get}}
+\index{get@{get}!PileupFactory::pileup_iterator@{PileupFactory::pileup\_\-iterator}}
+\subsubsection[{get}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Pileup}\& PileupFactory::pileup\_\-iterator::get (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_1_1pileup__iterator_ae9b4c64e31955f28f65a5841e394add2}
+Returns a reference to the current \hyperlink{class_pileup}{Pileup} pointed to by the iterator
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup}\& reference to existing \hyperlink{class_pileup}{Pileup} object 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_1_1pileup__iterator_a1bf8e5041e0cbf9863820b7e9e2e2dc8}{
+\index{PileupFactory::pileup\_\-iterator@{PileupFactory::pileup\_\-iterator}!get\_\-position@{get\_\-position}}
+\index{get\_\-position@{get\_\-position}!PileupFactory::pileup_iterator@{PileupFactory::pileup\_\-iterator}}
+\subsubsection[{get\_\-position}]{\setlength{\rightskip}{0pt plus 5cm}int PileupFactory::pileup\_\-iterator::get\_\-position (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_1_1pileup__iterator_a1bf8e5041e0cbf9863820b7e9e2e2dc8}
+Returns genomic 1-\/based position that iterator is at currently. \hypertarget{class_pileup_factory_1_1pileup__iterator_a50cc0c2e2cc88ee53ca49e0c9af37abb}{
+\index{PileupFactory::pileup\_\-iterator@{PileupFactory::pileup\_\-iterator}!good@{good}}
+\index{good@{good}!PileupFactory::pileup_iterator@{PileupFactory::pileup\_\-iterator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool PileupFactory::pileup\_\-iterator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_1_1pileup__iterator_a50cc0c2e2cc88ee53ca49e0c9af37abb}
+Returns status of iterator
+
+\begin{DoxyReturn}{Returns}
+bool true if more elements in factory 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_1_1pileup__iterator_ae1b39c13e75befc882424cc2ba97d840}{
+\index{PileupFactory::pileup\_\-iterator@{PileupFactory::pileup\_\-iterator}!next@{next}}
+\index{next@{next}!PileupFactory::pileup_iterator@{PileupFactory::pileup\_\-iterator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::pileup\_\-iterator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_1_1pileup__iterator_ae1b39c13e75befc882424cc2ba97d840}
+Advances iterator to next \hyperlink{class_pileup}{Pileup} 
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+types/Pileup.h\end{DoxyCompactItemize}

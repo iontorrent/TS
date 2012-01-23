@@ -1,0 +1,118 @@
+\hypertarget{class_m_d}{
+\section{MD Class Reference}
+\label{class_m_d}\index{MD@{MD}}
+}
+
+
+{\ttfamily \#include $<$MD.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_m_d_1_1iterator}{iterator}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_m_d_aa7967579000eaef089f10895267a5504}{MD} ()
+\item 
+\hyperlink{class_m_d_a7b3eb9755ab164b552c5d74d5748a039}{MD} (const bam1\_\-t $\ast$BAM\_\-record)
+\item 
+long \hyperlink{class_m_d_ab644e59d5b25a7465a5c7c1fe8b817ac}{get\_\-length} () const 
+\item 
+\hyperlink{class_m_d_1_1iterator}{iterator} \hyperlink{class_m_d_ae4f7cc374b63a6685a49731385c4215d}{get\_\-iterator} ()
+\item 
+std::string \hyperlink{class_m_d_a917a401e11b15587fab8371f7723002c}{to\_\-string} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+An iterable container class for the \hyperlink{class_m_d}{MD} field of a SAM/BAM. Requires the \hyperlink{class_b_a_m_read}{BAMRead} that the \hyperlink{class_m_d}{MD} is retrieved from to still remain in scope.
+
+The \hyperlink{class_m_d}{MD} field aims to achieve SNP/indel calling without looking at the reference. For example, a string `10A5$^\wedge$AC6' means from the leftmost reference base in the alignment, there are 10 matches followed by an A on the reference which is different from the aligned read base; the next 5 reference bases are matches followed by a 2bp deletion from the reference; the deleted sequence is AC; the last 6 bases are matches. The \hyperlink{class_m_d}{MD} field ought to match the CIGAR string.
+
+String for mismatching positions. Regex : \mbox{[}0-\/9\mbox{]}+((\mbox{[}A-\/Z\mbox{]}$|$$\backslash$$^\wedge$\mbox{[}A-\/Z\mbox{]}+)\mbox{[}0-\/9\mbox{]}+) 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_m_d_aa7967579000eaef089f10895267a5504}{
+\index{MD@{MD}!MD@{MD}}
+\index{MD@{MD}!MD@{MD}}
+\subsubsection[{MD}]{\setlength{\rightskip}{0pt plus 5cm}MD::MD (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_aa7967579000eaef089f10895267a5504}
+Default constructor. Class isn't of use if it's default constructed.
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_m_d}{MD} default constructed \hyperlink{class_m_d}{MD} object 
+\end{DoxyReturn}
+\hypertarget{class_m_d_a7b3eb9755ab164b552c5d74d5748a039}{
+\index{MD@{MD}!MD@{MD}}
+\index{MD@{MD}!MD@{MD}}
+\subsubsection[{MD}]{\setlength{\rightskip}{0pt plus 5cm}MD::MD (
+\begin{DoxyParamCaption}
+\item[{const bam1\_\-t $\ast$}]{BAM\_\-record}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_a7b3eb9755ab164b552c5d74d5748a039}
+Standard constructor. Requires a bam1\_\-t$\ast$ in order to extract the \hyperlink{class_m_d}{MD} field.
+
+
+\begin{DoxyParams}{Parameters}
+{\em bam1\_\-t$\ast$} & alignment from bam file \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_m_d}{MD} constructed \hyperlink{class_m_d}{MD} object 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_m_d_ae4f7cc374b63a6685a49731385c4215d}{
+\index{MD@{MD}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!MD@{MD}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf MD::iterator} MD::get\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_ae4f7cc374b63a6685a49731385c4215d}
+Gives you an iterator for the \hyperlink{class_m_d}{MD}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_m_d_1_1iterator}{MD::iterator} 
+\end{DoxyReturn}
+\hypertarget{class_m_d_ab644e59d5b25a7465a5c7c1fe8b817ac}{
+\index{MD@{MD}!get\_\-length@{get\_\-length}}
+\index{get\_\-length@{get\_\-length}!MD@{MD}}
+\subsubsection[{get\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}long MD::get\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_m_d_ab644e59d5b25a7465a5c7c1fe8b817ac}
+Returns the length of the \hyperlink{class_m_d}{MD} string \begin{DoxyReturn}{Returns}
+long length of \hyperlink{class_m_d}{MD} string 
+\end{DoxyReturn}
+\hypertarget{class_m_d_a917a401e11b15587fab8371f7723002c}{
+\index{MD@{MD}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!MD@{MD}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string MD::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_a917a401e11b15587fab8371f7723002c}
+Returns a string representation of the \hyperlink{class_m_d}{MD}
+
+\begin{DoxyReturn}{Returns}
+string \hyperlink{class_m_d}{MD} string from SAM/BAM 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/MD.h\item 
+types/MD.cpp\end{DoxyCompactItemize}

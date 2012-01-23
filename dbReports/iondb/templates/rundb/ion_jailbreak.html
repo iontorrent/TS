@@ -1,0 +1,16 @@
+{% comment %}
+  This is the world's least functional, well formatted, single purpose page.
+  If the parent has no jailbreak_callback function defined or it returns true,
+  Go here from within an <iframe> in order to redirect the parent window.
+{% endcomment %}
+<html>
+  <head>
+    <script>
+      if (!parent.jailbreak_callback || parent.jailbreak_callback({{ contentupload_id }})) {
+        parent.location = "{{ go }}";
+      }
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

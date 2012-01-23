@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Management Options{% endblock %}
+
+
+{% block content %}
+<div id="content-main">
+  <h1>Management Actions</h1>
+  <div> 
+	{% if errors %}
+		<h3>Errors</h3>
+		<div>
+		{{errors}}
+		</div>
+	{% endif %}
+
+	{% if post %}
+		<h2> The server is shutting down now! </h2>
+
+	{% else %}
+
+	  <h2>Shutdown Server</h2>
+
+	<form name="input" method="post">
+		<input type="submit" value="Shutdown" onclick="return confirm('Select OK to shutdown server, or Cancel to abort shutdown.')" />
+	</form> 
+	{% endif %}
+
+
+  </div>
+</div>
+{% endblock %}

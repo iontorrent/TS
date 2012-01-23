@@ -1,0 +1,19 @@
+.tiptip_content {
+	background-color: #fff;
+}
+
+.tiptip_holder.tip_top .tiptip_arrow_inner {
+	border-top-color: #fff;
+}
+
+.tiptip_holder.tip_bottom .tiptip_arrow_inner {
+	border-bottom-color: #fff;
+}
+
+.tiptip_holder.tip_right .tiptip_arrow_inner {
+	border-right-color: #fff;
+}
+
+.tiptip_holder.tip_left .tiptip_arrow_inner {
+	border-left-color: #fff;
+}

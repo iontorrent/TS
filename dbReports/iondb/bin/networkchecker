@@ -1,0 +1,184 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+#clear 
+
+#================Look up the MAC address for eth0 ========================= 
+echo "=================================================================="
+echo "-----Looking up the MAC address for the server-----"
+macaddress=`/sbin/ifconfig eth0 | grep HWaddr|cut -d' ' -f11`
+echo "MAC Address = $macaddress"
+
+#================Test that server has an IP Address========================= 
+echo
+echo "=================================================================="
+echo "-----Checking that that server has acquired an IP Address-----"
+ipaddress=`/sbin/ifconfig eth0 | grep 'inet addr:'|grep -v '127.0.0.1'|cut -d: -f2|awk '{print $1}'`
+if [[ $ipaddress =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    OIFS=$IFS
+    IFS='.'
+    ip=($ipaddress)
+    IFS=$OIFS
+    [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+        && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+    stat=$?
+fi
+
+if [ "$stat" = "0" ]
+then
+	echo "GOOD - this server has an IP address: $ipaddress"
+else
+    echo "***ERROR***"	
+	echo "Could not locate an IP address.  Make sure the network cable is connected."
+    echo	
+	echo "If the green light on the ethernet port is on, then perhaps this network"
+	echo "does not supply an IP address with DHCP?  If that is the case then"
+	echo "the IT department may need to configure the server with a STATIC address."
+fi
+
+
+#===================Test for eth0 status======================================
+echo
+echo "=================================================================="
+echo "-----Checking network connection-----"
+if (/sbin/ifconfig eth0 | grep UP | grep MTU &> /dev/null)
+then 
+	echo "GOOD - the 'eth0' ethernet port is UP"
+else
+	echo "***ERROR***"
+	echo "The 'eth0' network port is not UP."
+	exit 0
+fi
+
+#====================Test for default route====================================
+echo
+echo "=================================================================="
+echo "-----Checking route-----"
+if (/bin/netstat -r | grep default &> /dev/null)
+then 
+	echo "GOOD - we can connect to the local network"
+else
+	echo "a little trouble...  we're not able to find a default route to the local network."
+	echo
+	echo "Double check connectivity.  Possibly something didn't work in the IP configuration."
+	echo "Maybe try rebooting the server to force it to pick up it's IP address again, then"
+	echo "retry this test."
+fi
+
+
+
+#===================Test for reverse lookup of IP in the DNS==================
+echo 
+echo "=================================================================="
+echo "-----Looking up this Server's URL in the Domain Name Server-----" 
+
+dnshostname=`host $ipaddress | grep pointer | cut -d' ' -f5|awk '{print $1}'`
+if [ "$dnshostname" = "" ] 
+then 
+    echo "Could not retrieve the hostname from the domain name server"
+	echo
+    echo "You may need to check with the IT Department to find out the"
+	echo "Correct URL for the users to reach the server from their browser."
+    echo "It depends on how their IP domain names are configured."	
+	echo	
+	echo "In the meanwhile, try connecting with http://$ipaddress"
+else
+	echo "GOOD - The DNS Server replied with this URL: http://$dnshostname"
+	echo "Make sure users can reach the Torrent Browser with that URL"
+	echo
+	echo "If the URL with the hostname doesn't work, then try it with the"
+	echo "IP address, like this: http://$ipaddress"
+fi
+
+
+#=================Test if we can ping Google ==================================
+echo
+echo "=================================================================="
+echo "-----Testing connectivity to the internet-----"
+if ping -c 2 www.google.com &> /dev/null
+then 
+	echo "GOOD - It appears this machine can reach The Internet."
+else 
+	echo "hmmm...  doesn't seem like we can get out to The Internet."
+	echo 
+	echo "You may need to check with the IT Dept to find out if"
+	echo "this machine has permissions to get out.  Could be a firewall"
+	echo "blocking the connection?" 
+fi	
+
+#================Test that we can connect to the update server=================
+echo
+echo "=================================================================="
+echo "-----Testing connection to the Ion Torrent update server-----"
+
+if eval "/usr/bin/wget -o /tmp/log -O - http://updates.iontorrent.com/updates/software/lucid/Packages.gz >/dev/null"
+then
+    echo "GOOD - Successful connection to updates.iontorrent.com"
+	rm -f Packages.gz 2>/dev/null
+    rm -f /tmp/log 2>/dev/null
+else
+    echo "uh-oh.... We can't reach 'updates.iontorrent.com' " 
+	echo
+	echo "Try again in a little while, the server needs to reach http://updates.iontorrent.com"
+	echo "or we won't be able to get software patches for the Server or PGMs" 
+
+fi
+
+# Checks if an ethernet port exists
+function valid_port ()
+{
+	grep -q $1 /proc/net/dev
+	valid=$?
+	return $valid
+}
+
+#=================Test if we can ping the PGMs ==================================
+echo
+echo "=================================================================="
+echo "-----Checking to see if PGMs are connected to this server-----"
+if (valid_port eth1); then
+	if ping -c 2 192.168.201.10 &> /dev/null
+    then
+	    echo "PGM1 - connected"
+    else
+	    echo "PGM1 - not connected"
+    fi
+else
+	echo "no eth1"
+fi
+
+
+if (valid_port eth2); then
+    if ping -c 2 192.168.202.10 &> /dev/null
+    then
+	    echo "PGM2 - connected"
+    else
+	    echo "PGM2 - not connected"
+    fi
+else
+	echo "no eth2"
+fi
+
+if (valid_port eth3); then
+    if ping -c 2 192.168.203.10 &> /dev/null
+    then
+	    echo "PGM3 - connected"
+    else
+	    echo "PGM3 - not connected"
+    fi
+else
+	echo "no eth3"
+fi
+
+if (valid_port eth4); then
+    if ping -c 2 192.168.204.10 &> /dev/null
+    then
+	    echo "PGM4 - connected"
+    else
+	    echo "PGM4 - not connected"
+    fi
+else
+	echo "no eth4"
+fi
+echo
+echo
+exit 0

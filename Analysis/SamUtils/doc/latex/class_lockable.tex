@@ -1,0 +1,58 @@
+\hypertarget{class_lockable}{
+\section{Lockable Class Reference}
+\label{class_lockable}\index{Lockable@{Lockable}}
+}
+
+
+{\ttfamily \#include $<$Lock.h$>$}
+
+Inheritance diagram for Lockable:\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[height=2.000000cm]{class_lockable}
+\end{center}
+\end{figure}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+virtual void \hyperlink{class_lockable_a6d7e5d6331e1ec1e6c7f13c5e7da849e}{lock} ()=0
+\item 
+virtual void \hyperlink{class_lockable_aa8805ff8a031a0e052e2b519ac75ed8a}{unlock} ()=0
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+An interface to encapsulate a synchronization mechanism in a concurrent computation environment. 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_lockable_a6d7e5d6331e1ec1e6c7f13c5e7da849e}{
+\index{Lockable@{Lockable}!lock@{lock}}
+\index{lock@{lock}!Lockable@{Lockable}}
+\subsubsection[{lock}]{\setlength{\rightskip}{0pt plus 5cm}virtual void Lockable::lock (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}pure virtual\mbox{]}}}}
+\label{class_lockable_a6d7e5d6331e1ec1e6c7f13c5e7da849e}
+Grants mutual exclusion to caller. 
+
+Implemented in \hyperlink{class_native_mutex_a4f08920304f158b09aeb930419909310}{NativeMutex}.
+
+\hypertarget{class_lockable_aa8805ff8a031a0e052e2b519ac75ed8a}{
+\index{Lockable@{Lockable}!unlock@{unlock}}
+\index{unlock@{unlock}!Lockable@{Lockable}}
+\subsubsection[{unlock}]{\setlength{\rightskip}{0pt plus 5cm}virtual void Lockable::unlock (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}pure virtual\mbox{]}}}}
+\label{class_lockable_aa8805ff8a031a0e052e2b519ac75ed8a}
+Returns the mutual exclusion to the program 
+
+Implemented in \hyperlink{class_native_mutex_a16ca456764d84a506b7f59a95179f365}{NativeMutex}.
+
+
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+Lock.h\end{DoxyCompactItemize}

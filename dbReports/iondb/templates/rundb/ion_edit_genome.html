@@ -1,0 +1,275 @@
+{% extends "rundb/ion_base_template.html" %}
+{% load humanize %}
+{% block extra_head %}
+
+<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+<script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+
+<link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
+<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
+
+<script type="text/javascript" language="javascript">
+    function delete_bed() {
+        deleteURL =  "/rundb/api/v1/contentupload/" + $(this).data("contentupload") + "/";
+        bedLine = $(this).parent();
+        apprise('Are you sure you would like to remove this BED file?', {'verify':true}, function(r)
+        {
+            if(r)
+            {
+                //delete using the API
+                $.ajax({
+                    type: "DELETE",
+                    url: deleteURL,
+                    async: false,
+                    success: function(msg){
+                        bedLine.fadeOut(function(){
+                            bedLine.remove();
+                        });
+                    }
+                });
+            }
+        });
+    }
+    function add_upload(data) {
+        var name = data.file_path.split("/").pop();
+        var button = $('<input class="deleteBed" type="button" data-contentupload="'+data.id+'" value="delete" />');
+        button.click(delete_bed);
+        if (data.status == "Successfully Completed") {
+            li = '<li>'+name+'</li>';
+            $("#bedFileList").append($(li).append(button));
+        } else {
+            li = '<li><a href="/rundb/uploadstatus/'+data.id+'/">'+name+'</a> - '+data.status+' </li>';
+            $("#processingBedFileList").append($(li).append(button));
+        }
+    }
+    function add_filtered_uploads(data) {
+        for (var i=0; i < data.objects.length; i++) {
+            if (data.objects[i].meta.reference == "{{ name }}") {
+                add_upload(data.objects[i]);
+            }
+        }
+    }
+    function jailbreak_callback(upload_id) {
+        $("#bedUpload").colorbox.close();
+        $.getJSON("/rundb/api/v1/contentupload/"+upload_id+"/", add_upload);
+        return false;
+    }
+    //bind to the refresh genome button
+    $(document).ready(function() {
+        $("#delete").click( function(){
+            build_genome_dialogue('{% url rundb.genomes.delete_genome key %}');
+        } );
+
+        $("#with_dir").click( function(){
+            build_genome_dialogue('{% url rundb.genomes.delete_genome key %}?with_dir=True');
+        } );
+
+        $("#bedUpload").colorbox({iframe:true, width:"80%", height:"80%"});
+
+        $(".deleteBed").click(delete_bed);
+        
+    });
+</script>
+{% endblock extra_head %}
+
+{% block pagination_holder %}
+{% endblock pagination_holder %}
+{% block controls_holder %}
+{% endblock controls_holder %}
+
+
+{% block content %}
+
+<div class="margins">
+
+    {% if not genome_dict %}
+    	{% ifnotequal status "started" %}
+            <h2> Error </h2>
+            <p> The Genome info text file for <strong>{{name}}</strong> could not be opened from the filesystem.
+                It may have manually been deleted. </p>
+            <p> Please contact your Torrent Server Administrator. </p>
+
+    <input type="button" value="Delete" name="delete" id="with_dir"/>
+    <input type="Button" value="Cancel" name="cancel" onclick="javascript:window.location.href='{% url rundb.genomes.references %}';"/>
+    	{% endifnotequal %}
+    
+    {# verbose error #}
+    {% if verbose_error %}
+        <h2>Verbose index creation error</h2>
+        {% for error in verbose_error %}
+            {{error|linebreaks}}
+        {% endfor %}
+        <p>
+        For additional information, check the online <a href="/ion-docs/Home.html">help</a>.
+        </p>
+    {%endif%}
+
+    {% endif %}
+    
+    {% ifequal status "started" %}
+    
+            <h2> Genome Creation is in progress</h2>
+            <p> The Genome <strong>{{name}}</strong> 
+            		is still being created. This process may take a few hours.
+            </p>
+
+    <input type="button" value="Delete" name="delete" id="with_dir"/>
+    <input type="Button" value="Back" name="back" onclick="javascript:window.location.href='{% url rundb.genomes.references %}';"/>
+    
+    {% endifequal %}
+
+    {% if genome_dict %}
+
+    {% ifnotequal started "started" %}
+	  <h1>{{name}}</h1>
+	  <form action="" method='post' enctype="multipart/form-data">
+	    <table>
+	      <tbody>
+		<tr>
+		  <th>{{temp.name.label}}</th>
+		  <td>{{temp.name}}</td>
+		  <td>{{temp.name.errors}}</td>
+		</tr>
+		<tr>
+		  <th>{{temp.NCBI_name.label}}</th>
+		  <td>{{temp.NCBI_name}}</td>
+		  <td>{{temp.NCBI_name.errors}}</td>
+		</tr>
+        <tr>
+            <th>Read Sample Size (set to 0 for no sampling) </th>
+            <td>{{temp.read_sample_size}}</td>
+            <td>{{temp.read_sample_size.errors}}</td>
+        </tr>
+		<tr>
+		  <th>{{temp.notes.label}}</th>
+		  <td>{{temp.notes}}</td>
+		  <td>{{temp.notes.errors}}</td>
+		</tr>
+	    <tr>
+	        <th>{{temp.enabled.label}}</th>
+	        <td>{{temp.enabled}}</td>
+	        <td>{{temp.enabled.errors}}</td>
+	    </tr>
+	
+	    {% if genome_dict %}
+	    <tr>
+	        <th>Genome Info </th>
+	        <td>
+               <ul>
+	          {% for key,val in genome_dict.items %}
+                 <li>
+                     {{key}} : {{val}}
+                 </li>
+	          {% endfor %}
+             </ul>
+	        </td>
+	     </tr>
+	     {% endif %}
+
+        {% if genome_fasta %}
+        <tr>
+
+            {% if fastaOrig %}
+                <th>FASTA (auto corrected)</th>
+            {%  else %}
+                <th>FASTA</th>
+            {% endif %}
+
+            <td>
+                {%  if enabled %}
+                <a href="/output/{{index_version}}/{{name}}/{{name}}.fasta">{{name}}.fasta</a>
+                {%  else %}
+                    <a href="/output/disabled/{{index_version}}/{{name}}/{{name}}.fasta">{{name}}.fasta</a>
+                {%  endif %}
+                (File size {{genome_size|intcomma}} bytes)
+            </td>
+
+        </tr>
+        {% endif %}
+
+        {% if fastaOrig %}
+            <tr>
+                <th>Original FASTA</th>
+                <td>
+                    {%  if enabled %}
+                        <a href="/output/{{index_version}}/{{name}}/{{name}}.orig">{{name}}.orig</a>
+                    {%  else %}
+                        <a href="/output/disabled/{{index_version}}/{{name}}/{{name}}.orig">{{name}}.orig</a>
+                    {%  endif %}
+                    (File size {{genome_size|intcomma}} bytes)
+                </td>
+            </tr>
+        {% endif %}
+        <tr id="processingBedFiles">
+          <th>
+            Processing BED Files </br>
+          </th>
+          <td>
+            <ul id="processingBedFileList">
+              {% for bedFile in processingBedFiles %}
+                <li>
+                  <a href="/rundb/uploadstatus/{{bedFile.pk}}/">{{bedFile.path}}</a> - {{bedFile.status}}
+                  <input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                </li>
+              {% endfor %}
+            </ul>
+          </td>
+        </tr>
+        <tr>
+            <th>
+                Available BED Files </br>
+            </th>
+            <td>
+                <ul id="bedFileList">
+                    {% for bedFile in bedFiles %}
+                    <li>
+                        {{bedFile.path}}
+                        <input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <input id="bedUpload" href="/rundb/publish/frame/BED?genome={{name}}" type="button" value="Upload BED files"/>
+
+            </td>
+        </tr>
+
+
+	      </tbody>
+	    </table>
+	    <input type="button" value="Delete" name="delete" id="delete"/>
+	    <input type="submit" value="Save" name="submit"/>
+	    <input type="Button" value="Cancel" name="cancel" onclick="javascript:window.location.href='{% url rundb.genomes.references %}';"/>
+	      {{temp.genome_key}}
+          {{temp.index_version}}
+	  </form>
+	  {% endifnotequal %}
+
+{% endif %}
+
+
+
+
+
+    
+</div>
+
+
+<div id="control_dialogue" class="control_dialogue" title="Confirm Delete">
+    <p>Are you sure you want to delete this genome index. It can not be recovered. </p>
+    <div id="control_button_holder">
+        <div id="term_button_holder">
+            <input type="button" name="terminate" value="Delete"/>
+        </div>
+        <div id="cancel_button_holder">
+            <input type="button" name="cancel" value="Cancel"/>
+        </div>
+    </div>
+</div>
+<div id="control_status_dialogue" class="control_dialogue">
+    <p id="job_status_text"></p>
+</div>
+
+
+
+{% endblock %}

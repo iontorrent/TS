@@ -1,0 +1,1 @@
+Please see buildTools/LICENSE.txt.in for license information

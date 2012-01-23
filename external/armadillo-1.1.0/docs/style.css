@@ -1,0 +1,71 @@
+body
+  {
+  font-family: "Trebuchet MS", Trebuchet, "DejaVu Sans", "Luxi Sans", "Liberation Sans", Arial, Helvetica, sans-serif;
+  color: #000000;
+  background-color: #FFFFFF;
+  /* font-size: 10pt; */
+  /* line-height: 120%; */
+  height: 110%;
+  }
+
+/* In the above, "height: 110%;" is a hack for stylistic purposes.
+   It typically makes the browser place a scroll bar on the left,
+   thereby reducing the overall width of the page. This is necessary,
+   as some pages do not have enough content (height wise) to make
+   the scrollbar appear, while other pages are long enough to have
+   the scrollbar.  When content is centered for stylistic purposes,
+   the content on "short" pages will be in a different place than
+   the content on "long" pages. This can be visually annoying when
+   navigating from a "short" page to a "long" page, or vice versa.
+   Forcing the scrollbar to always appear removes this problem.
+*/  
+
+pre
+  {
+  font-family: "DejaVu Sans Mono", "Liberation Mono", "Andale Mono", "Bitstream Vera Sans Mono", "Luxi Mono", monospace;
+  font-size: smaller;
+  color: #666666;
+  }
+
+a
+  {
+  text-decoration: none;
+  color: #57a706;
+  }
+
+a:hover
+  {
+  text-decoration: underline;
+  color: #57a706;
+  }
+
+a.menu
+  {
+  text-decoration: none;
+  color: #CCCCCC;
+  }
+
+a.menu:hover
+  {
+  text-decoration: none;
+  color: #57a706;
+  }
+
+a.hidden, a.hidden:hover, a.hidden:active, a.hidden:link, a.hidden:visited
+  {
+  text-decoration: none;
+  border-bottom: 0px
+  }
+
+table
+  {
+  /* border: 1px solid #000; */
+  /* display: block; */
+  border-collapse: collapse;
+  }
+
+td.line
+  {
+  border-left: 2px solid rgb(204, 204, 204);
+  }
+

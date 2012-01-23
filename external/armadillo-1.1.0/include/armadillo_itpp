@@ -1,0 +1,14 @@
+//
+// !WARNING!
+//
+// As IT++ 4.0 is licensed under the terms of General Public
+// License (GPL) without any exception, including this file
+// will necessairly cause your work to be covered by the GPL.
+// If you do not wish for this to happen, do not include this
+// file.
+
+
+#define ARMA_USE_ITPP
+
+#include <armadillo>
+  

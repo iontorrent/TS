@@ -1,0 +1,120 @@
+\hypertarget{class_sequence}{
+\section{Sequence Class Reference}
+\label{class_sequence}\index{Sequence@{Sequence}}
+}
+
+
+{\ttfamily \#include $<$Sequence.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_sequence_1_1iterator}{iterator}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_sequence_a532b7e8df6ff6b2f990c14ae97859ca2}{Sequence} ()
+\item 
+\hyperlink{class_sequence_a4396b10c88a28e86858dc2389d75df53}{Sequence} (const bam1\_\-t $\ast$BAM\_\-record)
+\item 
+long \hyperlink{class_sequence_a7f101854a09dd48866a747d64282e6c7}{get\_\-length} () const 
+\item 
+\hyperlink{class_sequence_1_1iterator}{iterator} \hyperlink{class_sequence_a308e9325008e8f1e5f665555b0c2932f}{get\_\-iterator} ()
+\item 
+std::string \hyperlink{class_sequence_a4644cbc2d0760970dacaac8a29f095a7}{to\_\-string} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+A class representing the SEQ field from a SAM/BAM file
+
+Requires the \hyperlink{class_b_a_m_read}{BAMRead} that the \hyperlink{class_sequence}{Sequence} is retrieved from to still remain in scope.
+
+SEQ: fragment SEQuence. This field can be a `$\ast$' when the sequence is not stored. If not a `$\ast$', the length of the sequence must equal the sum of lengths of M/I/S/=/X operations in CIGAR. An `=' denotes the base is identical to the reference base. No assumptions can be made on the letter cases. 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_sequence_a532b7e8df6ff6b2f990c14ae97859ca2}{
+\index{Sequence@{Sequence}!Sequence@{Sequence}}
+\index{Sequence@{Sequence}!Sequence@{Sequence}}
+\subsubsection[{Sequence}]{\setlength{\rightskip}{0pt plus 5cm}Sequence::Sequence (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_a532b7e8df6ff6b2f990c14ae97859ca2}
+Default constructor. Class is useless if you use this
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_sequence}{Sequence} a default constructed \hyperlink{class_sequence}{Sequence} object 
+\end{DoxyReturn}
+\hypertarget{class_sequence_a4396b10c88a28e86858dc2389d75df53}{
+\index{Sequence@{Sequence}!Sequence@{Sequence}}
+\index{Sequence@{Sequence}!Sequence@{Sequence}}
+\subsubsection[{Sequence}]{\setlength{\rightskip}{0pt plus 5cm}Sequence::Sequence (
+\begin{DoxyParamCaption}
+\item[{const bam1\_\-t $\ast$}]{BAM\_\-record}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_a4396b10c88a28e86858dc2389d75df53}
+Standard constructor. Requires a bam1\_\-t$\ast$ in order to extract the sequence information
+
+
+\begin{DoxyParams}{Parameters}
+{\em const} & bam1\_\-t$\ast$ pointer to an alignment from a SAM/BAM \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_sequence}{Sequence} a constructed and usable \hyperlink{class_sequence}{Sequence} object 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_sequence_a308e9325008e8f1e5f665555b0c2932f}{
+\index{Sequence@{Sequence}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!Sequence@{Sequence}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Sequence::iterator} Sequence::get\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_a308e9325008e8f1e5f665555b0c2932f}
+Gives you an iterator for the \hyperlink{class_sequence}{Sequence}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_sequence_1_1iterator}{Sequence::iterator} 
+\end{DoxyReturn}
+\hypertarget{class_sequence_a7f101854a09dd48866a747d64282e6c7}{
+\index{Sequence@{Sequence}!get\_\-length@{get\_\-length}}
+\index{get\_\-length@{get\_\-length}!Sequence@{Sequence}}
+\subsubsection[{get\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}long Sequence::get\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_sequence_a7f101854a09dd48866a747d64282e6c7}
+Returns the length of the \hyperlink{class_sequence}{Sequence} string
+
+\begin{DoxyReturn}{Returns}
+long length of sequence string; 
+\end{DoxyReturn}
+\hypertarget{class_sequence_a4644cbc2d0760970dacaac8a29f095a7}{
+\index{Sequence@{Sequence}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!Sequence@{Sequence}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string Sequence::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_sequence_a4644cbc2d0760970dacaac8a29f095a7}
+Returns a string representation of the \hyperlink{class_sequence}{Sequence}
+
+\begin{DoxyReturn}{Returns}
+string sequence string from SAM/BAM 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/Sequence.h\item 
+types/Sequence.cpp\end{DoxyCompactItemize}

@@ -1,0 +1,107 @@
+
+The following instructions describe how to compile and install the torrentR
+package from source.  Note that compiling the torrentR package requires
+compilation of code from the Ion torrent Analysis package, so make sure that
+you have the Analysis codebase located in the same directory in which torrentR
+is located.
+
+Note also that this build has been validated only on Ubuntu linux 10.04 - the
+same OS that the Torrent Server runs.
+
+1) Install a collection of debian packages required for building and using
+   torrentR
+
+     sudo apt-get install \
+       build-essential \
+       cmake \
+       liblapack-dev \
+       liblapack3gf \
+       libblas-dev \
+       libblas3gf \
+       libatlas-base-dev \
+       libatlas-headers \
+       gfortran \
+       zlib1g-dev \
+       libgsl0-dev \
+       imagemagick
+
+2) Install R and a collection of R debian packages - not all are required for
+   installing torrentR but it is a good idea to grab the full list as the rest
+   are used by one or more plug-ins.
+
+     sudo apt-get install \
+       r-base \
+       r-base-dev \
+       r-base-latex \
+       r-cran-lattice \
+       r-cran-cluster \
+       r-cran-hmisc \
+       r-cran-mass \
+       r-cran-rcolorbrewer \
+       r-cran-rocr \
+       r-cran-gplots \
+       r-cran-colorspace \
+       r-cran-bitops \
+       r-cran-catools\
+       r-cran-gdata \
+       r-cran-gtools
+
+3) Get some R packages for which there is no debian package - these we will
+   install from source.  The only ones that are requried for installation of
+   torrentR are Rcpp, spam and fields, the rest are good to have because some
+   plug-ins use them.
+
+     for PKG in \
+       Rcpp_0.7.8.tar.gz \
+       spam_0.22-0.tar.gz \
+       plyr_1.0.3.tar.gz \
+       reshape_0.8.3.tar.gz \
+       proto_0.3-8.tar.gz; do
+         PREFIX=${PKG%%_*.tar.gz}
+         wget http://cran.r-project.org/src/contrib/Archive/$PREFIX/$PKG
+         sudo R CMD INSTALL $PKG
+     done
+     for PKG in fields_6.3.tar.gz; do
+       wget http://cran.r-project.org/src/contrib/$PKG
+       sudo R CMD INSTALL $PKG
+     done
+
+4) Compile torrentR from source using the cmake build system
+
+     MODULES=torrentR ./buildTools/build.sh 
+
+5) Install torrentR.  There are a few options at this point:
+
+   5.1) System-wide installation from compiled source for all users.
+
+     sudo R CMD INSTALL torrentR
+
+   5.2) System-wide installation from debian package.  Using this
+        option will pull in various other debian packages identified
+        above if they are not present already, even though they are
+        not strictly speaking required to run torrentR itself, though
+        some plug-ins do requrie them.
+
+     sudo dpkg -i 
+
+   5.3) Installation from source to a specific location.  This option
+        will install torrentR in a directory specified by the user (which
+        must exist).  When using this approach it is often convenient to
+        set the R_LIBS environment variable to the library location so
+        that it will be automatically found when running R, otherwise one
+        needs to use the lib.loc option when calling library() in torrentR
+
+     R CMD INSTALL -l ~/lib/R torrentR
+
+6) Launch R and confirm that library(torrentR) executes without error.
+
+7) To get started, read the torrentR vignette which can be found
+   in torrentR/inst/doc/torrentR-intro.pdf
+
+   If you make changes and want to rebuild the vignette a couple of
+   tex packages are required:
+
+     sudo apt-get install \
+       texlive-latex-recommended \
+       texinfo
+     R CMD build torrentR

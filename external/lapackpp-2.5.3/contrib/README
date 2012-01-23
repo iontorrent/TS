@@ -1,0 +1,51 @@
+
+
+lapack.diff
+===========
+
+This file contains a diff against the original lapack.tgz package.
+You need to apply this patch in order to create DLLs for WIN32 platforms.
+
+You will need MinGW32 to compile Lapack (see README.W32 in top source dir).
+
+After unpacking the package and applying the patch you can create DLLs by
+typing
+ make -fMakefile.win32
+
+This will most probably take some time.
+
+The resulting DLLs should be copied to a location where Windows can find
+them (this usually is the windows folder).
+
+The resulting libblas32.dll is not optimized for your system !
+So it would be best tou get an optimized BLAS library.
+However, this library works, so you may try it first.
+
+
+Microsoft Visual Studio C++ (MSVC)
+==================================
+
+If you want to build lapackpp with MSVC but still use the
+libblas32.dll and liblapack32.dll, you need to do the following to
+create the required import libraries libblas32.lib and
+liblapack32.lib: 
+
+First get the LAPACK package, unpack it and apply this diff. Then
+compile the LAPACK package by mingw32 as explained above. 
+
+After this has finished, go into the LAPACK directory BLAS/SRC and
+call the lib.exe program of your MSVC installation (located in
+Vc7/bin/lib.exe) as follows:
+
+  lib.exe /def:libblas32.def
+
+This will create the import library libblas32.lib; copy it
+wherever you want to keep it. Then do the same in the LAPACK
+directory SRC:
+
+  lib.exe /def:liblapack32.def
+
+which will create the import library liblapack32.lib. With these,
+you can now compile lapackpp with MSVC and create a lapackpp.dll
+file that works with MSVC and depends on the libblas32.dll and
+liblapack32.dll.

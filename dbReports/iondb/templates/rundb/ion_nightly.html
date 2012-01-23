@@ -1,0 +1,221 @@
+{% extends "rundb/ion_nightly_base_template.html" %}
+{% block pagination_holder %}{% endblock %}
+{% block controls_holder %}{% endblock %}
+{% load humanize %}
+{% load emailtools %}
+{% load ion_readable %}
+<DOCTYPE html>
+<html>
+<head>
+<title>{% block title %}{% endblock title %}</title>
+</head>
+<body>
+  {% block pre_content %}
+<div id="body" style="width:100%;">
+  <div style="float:left; margin-left:8px; margin-top:2px;">
+    <img src="{% abs_media images/raw_name_small.png %}" alt="IonTorrent Systems"/>
+  </div>
+  <div style="float:right; margin-right:8px;">
+    <h3>Report Summary</h3>
+  </div>
+  <div style="clear:both;"></div>
+  <div style="width:100%; height:2px; margin-top:-8px;
+	      background-color:#000;
+	      color:#000; font-size:1px;">
+  </div>
+  
+  <div style="width:100%; text-align:center; font-size:9pt;">
+    <h4>{% now "F jS Y" %}</h4>
+    <h2>{{ sitename }}&nbsp;&nbsp;{{ webroot}}</h2>
+  </div>
+  {% endblock pre_content %}
+  
+    {% block content %}
+  <div style="width:100%; background-color:#DDD;
+	      margin-top:16px; margin-left:auto;
+	      margin-right:auto; padding:8px;">
+    <p>
+    <h2><center>New Run Results</center></h2>
+    </p>
+    {% if reportsNew %}
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead style="text-align:left;">
+        <tr>
+          <th ALIGN="left" rowspan="2">Name</th>
+          <th ALIGN="center" rowspan="2">Chip Type</th>
+          <th ALIGN="center" rowspan="2">Project</th>
+          <th ALIGN="center" rowspan="2">Sample</th>
+          <th ALIGN="center" rowspan="2">Reference</th>
+          <th ALIGN="right" rowspan="2">AQ7 Reads</th>
+          <th ALIGN="center" colspan="3">AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2">AQ17 bases</th>
+          <th ALIGN="right" rowspan="2">SNR</th>
+        </tr>
+        <tr>
+          <th ALIGN="right">100 bp</th>
+          <th ALIGN="right">200 bp</th>
+          <th ALIGN="right">300 bp</th>
+        </tr>
+      </thead>
+      <tbody>
+	{% for r,tfm,lbm,link in reportsNew %}{% spaceless %}
+	<tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+	  <td><a href="{{link}}">{{r.resultsName}}</a></td>
+      <td ALIGN="center">{{r.experiment.chipType}}</td>
+      <td ALIGN="center">{{r.experiment.project}}</td>
+      <td ALIGN="center">{{r.experiment.sample}}</td>
+	  
+	  {#Full alignment data #}
+	  {% ifequal lbm.align_sample 0 %}
+	      <td ALIGN="center">{{r.experiment.library}}</td>
+		  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+	  {% endifequal %}
+      
+      
+      {# extrapolated alignment data #}
+	  {% ifequal lbm.align_sample 1 %}
+	      <td ALIGN="center">{{r.experiment.library}}*</td>
+		  <td ALIGN="right">{{lbm.extrapolated_q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_100q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_200q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_300q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable}}</td>
+	  {% endifequal %}
+	  
+	  
+	  {% ifnotequal lbm.align_sample 0 %}
+		  {% ifnotequal lbm.align_sample 1 %}
+		  	<td>none</td>
+		  	<td>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  {% endifnotequal %}
+	  {% endifnotequal %}
+		  	
+	  
+	  
+	  <td ALIGN="right">{{lbm.sysSNR}}</td>
+	</tr>
+    <tr  colspan="11"style="background-color:{%cycle 'inherit' '#AAA' %};">
+      <td colspan="11">Notes: {{r.experiment.notes}}</td>
+	</tr>
+	{% endspaceless %}
+	{% endfor %}
+    <tr>
+    	<!-- a little space after the last run entry -->
+    	<td>&nbsp;</td>
+    </tr>
+    
+    <tr>
+      <td colspan="7">* Extrapolated values from sampled alignment.</td>
+    </tr>
+    
+    <tr>
+    	<!-- a little space after the last run entry -->
+    	<td>&nbsp;</td>
+    </tr>
+    
+    <tr>
+      <td colspan="7">Total AQ17 bases for today:</td>
+      <td ALIGN="right">&nbsp;&nbsp;{{hq_base_num_new|intcomma}}</td>
+    </tr>
+    </tbody>
+    </table>
+    {% else %}
+    <p><b>No reports were generated today.</b></p>
+    {% endif %}
+    {% endblock %}
+    
+    {% block content2 %}
+  <div style="width:100%; background-color:#DDD;
+	      margin-top:16px; margin-left:auto;
+	      margin-right:auto; padding:8px;">
+    <p>
+    <h2><center>Re-analyzed Run Results</center></h2>
+    </p>
+    {% if reportsOld %}
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead style="text-align:left;">
+        <tr>
+          <th ALIGN="left" rowspan="2">Name</th>
+          <th ALIGN="center" rowspan="2">Chip Type</th>
+          <th ALIGN="center" rowspan="2">Project</th>
+          <th ALIGN="center" rowspan="2">Sample</th>
+          <th ALIGN="center" rowspan="2">Reference</th>
+          <th ALIGN="right" rowspan="2">AQ7 Reads</th>
+          <th ALIGN="center" colspan="3">AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2">AQ17 bases</th>
+          <th ALIGN="right" rowspan="2">SNR</th>
+        </tr>
+        <tr>
+          <th ALIGN="right">100 bp</th>
+          <th ALIGN="right">200 bp</th>
+          <th ALIGN="right">300 bp</th>
+        </tr>
+      </thead>
+      <tbody>
+	{% for r,tfm,lbm,link in reportsOld %}{% spaceless %}
+	<tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+	  <td><a href="{{link}}">{{r.resultsName}}</a></td>
+      <td ALIGN="center">{{r.experiment.chipType}}</td>
+      <td ALIGN="center">{{r.experiment.project}}</td>
+      <td ALIGN="center">{{r.experiment.sample}}</td>
+	  
+	  {#Full alignment data #}
+	  {% ifequal lbm.align_sample 0 %}
+	      <td ALIGN="center">{{r.experiment.library}}</td>
+		  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+	  {% endifequal %}
+      
+      
+      {# extrapolated alignment data #}
+	  {% ifequal lbm.align_sample 1 %}
+	      <td ALIGN="center">{{r.experiment.library}}*</td>
+		  <td ALIGN="right">{{lbm.extrapolated_q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_100q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_200q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_300q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable}}</td>
+	  {% endifequal %}
+	  
+	  {% ifnotequal lbm.align_sample 0 %}
+		  {% ifnotequal lbm.align_sample 1 %}
+		  	<td>none</td>
+		  	<td>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  	<td bgcolor=#88CC88>0</td>
+		  {% endifnotequal %}
+	  {% endifnotequal %}
+      
+	  <td ALIGN="right">{{lbm.sysSNR}}</td>
+	</tr>
+    <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+      <td colspan="11">Notes: {{r.experiment.notes}}</td>
+	</tr>
+	{% endspaceless %}
+	{% endfor %}
+    </tbody>
+    </table>
+    {% else %}
+    <p><b>No reports were generated today.</b></p>
+    {% endif %}
+    <p>
+      Something missing? This daily message only includes reports that have
+      completed successfully. Reports which have not yet completed and
+      experiments for which no reports have been created will not appear.     
+    </p>
+    {% endblock content2 %}
+  </div>
+</div>
+</body>
+</html>

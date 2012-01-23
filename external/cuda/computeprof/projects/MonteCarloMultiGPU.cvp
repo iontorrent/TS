@@ -1,0 +1,21 @@
+<!DOCTYPE cvp>
+<cvp version="4.0">
+ <session>
+  <name>Session1</name>
+  <progpath>"C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release/MonteCarloMultiGPU.exe"</progpath>
+  <cmdlineargs>--noprompt</cmdlineargs>
+  <workdirpath>C:/ProgramData/NVIDIA Corporation/NVIDIA GPU Computing SDK 4.0/C/bin/win64/Release</workdirpath>
+  <datetime>10 Feb 2011 15:14:17</datetime>
+  <normalizedcounter>false</normalizedcounter>
+  <device multProcessorCount="14" label="Device_0" id="0" computeCapability="2.0" maxGridDim="65535 65535" GpuOverlap="1" maxPitchMem="2147483647" totalConstMem="65536" name="Tesla C2050" clockFreq="1147000" L2CacheSize="786432" maxRegPerBlock="32768" chip="192" maxThreadPerSM="1536" maxShareMemPerBlock="49152" maxBlockDim="1024 1024 64" MemClockRate="1500000" asyncEngineCount="2" warpSize="32" maxThreadPerBlock="1024" MemBandwidth="1152000000" textureAlignment="512">
+   <context totalcountercount="0" invalidcountercount="0" id="0" label="Context_0" truncatedcountercount="0" trace="0"/>
+  </device>
+  <device multProcessorCount="2" label="Device_2" id="1" computeCapability="1.1" maxGridDim="65535 65535" GpuOverlap="1" maxPitchMem="2147483647" totalConstMem="65536" name="Quadro NVS 290" clockFreq="918000" L2CacheSize="0" maxRegPerBlock="8192" chip="134" maxThreadPerSM="768" maxShareMemPerBlock="16384" maxBlockDim="512 512 64" MemClockRate="400000" asyncEngineCount="1" warpSize="32" maxThreadPerBlock="512" MemBandwidth="51200000" textureAlignment="256">
+   <context totalcountercount="0" invalidcountercount="0" id="1" label="Context_1" truncatedcountercount="0" trace="0"/>
+  </device>
+  <device multProcessorCount="2" label="Device_1" id="2" computeCapability="2.1" maxGridDim="65535 65535" GpuOverlap="1" maxPitchMem="2147483647" totalConstMem="65536" name="GeForce GT 430" clockFreq="1400000" L2CacheSize="131072" maxRegPerBlock="32768" chip="193" maxThreadPerSM="1536" maxShareMemPerBlock="49152" maxBlockDim="1024 1024 64" MemClockRate="900000" asyncEngineCount="2" warpSize="32" maxThreadPerBlock="1024" MemBandwidth="230400000" textureAlignment="512">
+   <context totalcountercount="0" invalidcountercount="0" id="2" label="Context_2" truncatedcountercount="0" trace="0"/>
+  </device>
+ </session>
+</cvp>
+

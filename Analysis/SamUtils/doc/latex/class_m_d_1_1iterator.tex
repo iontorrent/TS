@@ -1,0 +1,74 @@
+\hypertarget{class_m_d_1_1iterator}{
+\section{MD::iterator Class Reference}
+\label{class_m_d_1_1iterator}\index{MD::iterator@{MD::iterator}}
+}
+
+
+{\ttfamily \#include $<$MD.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{class_m_d_1_1iterator_af7c76fd41e89596ca1316240450556ad}{good} () const 
+\item 
+void \hyperlink{class_m_d_1_1iterator_a235c960eb3aeea90190ce31150ee2b91}{next} ()
+\item 
+char \hyperlink{class_m_d_1_1iterator_a5fa1e01668a60a5c59555ecfec9f58d6}{get} ()
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_m_d_1_1iterator_ad2a05478d344fd87e28cba84fcef1740}{
+class \hyperlink{class_m_d_1_1iterator_ad2a05478d344fd87e28cba84fcef1740}{MD}}
+\label{class_m_d_1_1iterator_ad2a05478d344fd87e28cba84fcef1740}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\hyperlink{class_m_d_1_1iterator}{MD::iterator} is how you access the actual elements of hte \hyperlink{class_m_d}{MD} string. Currently only a forward iterator.
+
+example code. Assumes a valid \hyperlink{class_b_a_m_read}{BAMRead} object named \char`\"{}read\char`\"{} \hyperlink{class_m_d}{MD} md = read.get\_\-md(); for(\hyperlink{class_m_d_1_1iterator}{MD::iterator} md\_\-iterator = md.get\_\-iterator(); md\_\-iterator.good(); md\_\-iterator.next()) \{ cout $<$$<$ md\_\-iterator.get(); \} 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_m_d_1_1iterator_a5fa1e01668a60a5c59555ecfec9f58d6}{
+\index{MD::iterator@{MD::iterator}!get@{get}}
+\index{get@{get}!MD::iterator@{MD::iterator}}
+\subsubsection[{get}]{\setlength{\rightskip}{0pt plus 5cm}char MD::iterator::get (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_1_1iterator_a5fa1e01668a60a5c59555ecfec9f58d6}
+Returns a character from the \hyperlink{class_m_d}{MD} string \begin{DoxyReturn}{Returns}
+char one character from \hyperlink{class_m_d}{MD} string 
+\end{DoxyReturn}
+\hypertarget{class_m_d_1_1iterator_af7c76fd41e89596ca1316240450556ad}{
+\index{MD::iterator@{MD::iterator}!good@{good}}
+\index{good@{good}!MD::iterator@{MD::iterator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool MD::iterator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_m_d_1_1iterator_af7c76fd41e89596ca1316240450556ad}
+Returns the status of the iterator. If true, there are more elements accessible
+
+\begin{DoxyReturn}{Returns}
+bool true if iterator has more elements 
+\end{DoxyReturn}
+\hypertarget{class_m_d_1_1iterator_a235c960eb3aeea90190ce31150ee2b91}{
+\index{MD::iterator@{MD::iterator}!next@{next}}
+\index{next@{next}!MD::iterator@{MD::iterator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void MD::iterator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_m_d_1_1iterator_a235c960eb3aeea90190ce31150ee2b91}
+Advances iterator to the next element 
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/MD.h\item 
+types/MD.cpp\end{DoxyCompactItemize}

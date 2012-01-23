@@ -1,0 +1,13 @@
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Set a default build type for single-configuration
+# CMake generators if no build type is set.
+IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+   SET(CMAKE_BUILD_TYPE Release)
+ENDIF()
+
+# Compiler flags
+# -D_DEBUG enables memory debugging, but it isn't working
+set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -Werror -O0 -g -fPIC -Wno-write-strings -Wno-unused-parameter -DION_DEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-Wall -Wextra -Werror -O6 -g -fPIC -Wno-write-strings -Wno-unused-parameter")
+set(CMAKE_CXX_FLAGS_PROFILE "-Wall -Wextra -Werror -O6 -g -fPIC -Wno-write-strings -Wno-unused-parameter -lunwind -lprofiler")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wall")

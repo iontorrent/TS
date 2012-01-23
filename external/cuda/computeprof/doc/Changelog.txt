@@ -1,0 +1,312 @@
+Key changes in version computeprof v4.0 with respect to computeprof v3.2:
+1) Added analysis features which include:
+    - Analysis summary and hints at the session, device and context level
+    - Analyzing a kernel:
+        . whether it is memory throughput or instruction throughput limited
+        . memory throughput analysis
+        . instruction throughput analysis
+        . kernel occupancy analysis
+
+2) Added some new counters for devices of compute capability 2.x:
+    - l2 read texture requests
+    - thread inst executed
+    - gld instructions 8/16/32/128 bit
+    - gst instructions 8/16/32/128 bit
+
+3) Added some new derived statistics for devices of compute capability 2.x
+   and they are displayed in the profiler table:
+    - instruction/byte
+    - L1 global hit ratio (%)
+    - Instructions/Cycle
+    - Serialization(%)
+    - Instructions replayed
+    - Divergent branches(%)
+    - L1 local hit ratio(%)
+    - Memory divergence nreplayed (%)
+    - SM activity(%)
+    - memory divergence due\nto shared bank conflicts (%)
+    - memory divergence\ndue to L1 misses (%)
+    - Shared bank conflict replay(%)
+    - Global load miss replay(%)
+    - Texture hit rate(%)
+    - Achieved global mem read throughput(GB/s)
+    - Achieved global mem write throughput(GB/s)
+    - App requested global mem read throughput(GB/s)
+    - App requested global mem write throughput(GB/s)
+    - active warps/active cycle
+    - Texture fetch rate (in GigaFetch/s)
+    - Texture throughput(GB/s)
+    - Load coalescing(%)
+    - Store coalescing(%)
+    - L1 read Throughput(GB/s)
+    - L2 read throughput(GB/s)
+    - L2 read texture throughput(GB/s)
+    - L2 write throughput(GB/s)
+    - Control flow divergence(%)
+
+4) Added new CUDA runtime and driver API functions to initialize, start and stop profiling
+
+5) Kernel occupancy analysis feature is moved to the new kernel analysis window. The main menu option has
+   been removed.
+
+6) The main menu option "Analyze profiler counters" has been removed. This is replaced by the new
+   kernel analysis feature.
+
+7) Derived counters are saved to the Visual Profiler project CSV files in place of the base counters.
+
+8) Other GUI changes:
+    a) The summary table and context level analysis output is shown at the end of a new profiling session.
+       The kernel which takes maximum percentage GPU time is highlighted in the summary table and in the
+       analysis output. The new kernel analysis window can be opened by double clicking on a kernel
+       in the summary table.
+
+    
+Key changes in version computeprof v3.2 with respect to computeprof v3.1:
+1) Added support to enable or disable profiling during application execution.
+
+2) Added new counters and derived stats for devices of compute capability 2.0 
+   or higher.
+   Counters:
+    l2 read requests
+    l2 write requests
+    l2 read misses
+    l2 write misses
+    dram reads   
+    dram writes   
+    tex cache requests    
+    tex cache misses
+   Derived stats:
+    global memory bandwidth
+    texture hit rate %
+    
+3) GUI changes:
+   a) A new dialog is shown at startup which allows quick access to commonly 
+      used initial steps - profiling an application, opening a projects, 
+      creating a new project, importing profiler data from a CSV file and 
+      viewing online help.
+   b) "Session Settings" Dialog: Moved device selection option for selecting 
+      counters from "Session" tab to "Profiler Counters" tab 
+   c) "Session View Settings" Dialog: Columns in shown/hidden lists are sorted.
+   d) "Device property" dialog is enhanced to show new properties:
+      texture properties 
+      surface alignment 
+      concurrent kernel 
+      global memory 
+   e) Table views are enhanced to show: 
+      Alternate rows colored.
+      Run number and counter type in column
+      gridsize/blocksize in single column 
+   f) Added new tool buttons for 
+      Kernel table 
+      Memory table 
+      Device level summary plot 
+      Session level summary plot 
+      Comparison plot 
+      API trace
+   g) "Launch/Abort Application" button:
+      Icons are enhanced
+      Same button is used to launch or abort application.
+   h) The default colors used in charts are changed.  
+
+Key changes in version computeprof v3.1 with respect to cudaprof v3.0:
+1) The CUDA Visual Profiler and OpenCL Visual Profiler applications are integrated into 
+   a single application called Compute Visual Profiler. The application executable name is 
+   changed to computeprof. The file extension used for Visual Profiler project file is ".cvp".
+
+2) Support is added to collect and view CUDA driver API trace information.
+
+3) Added new counters and derived stats for devices of compute capability 2.0.
+   Counters:
+    l1_local_load_hit 
+    l1_local_load_miss 
+    l1_local_store_hit 
+    l1_local_store_miss 
+    l1_shared_bank_conflict 
+   Derived stats:
+    retire ipc 
+    active warps/active cycle 
+    l1 gld hit rate % 
+    l1 local hit rate %    
+ 
+4) GUI changes:
+   a) The context type (CUDA or OPENCL) is displayed next to the context name in 
+      session tree view and in device property page.  
+   b) Tooltips describing the data in a column is shown when the cursor is pointed
+      to the column name in the table header for the Profiler table and the Summary table.
+
+Key changes in version cudaprof v3.0 with respect to v2.3:
+1) Following new counters are supported:
+  a) tex_cache_hit, tex_cache_miss : Number of texture cache sector hits, misses
+  b) "NOP Triggers" : Can be used to get execution counts for certain code paths in the kernel
+
+2) New memory copy option "host mem transfer type" is added for memory transfers.
+   This specifies whether a memory transfers uses "Pageable" or "Page-locked"
+   
+3) Device level summary plot :
+   One bar for each method is there. Bars are sorted in decreasing GPU time. Bar length 
+   is proportional to cumulative GPU time for a method across all contexts for a device.
+
+4) Session level summary plot :
+   One bar for each device is there. Bar length is proportional to GPU Utilization. 
+   GPU Utilization is the proportion of time when the GPU was actually executing some method 
+   to total time interval from GPU start to end. The values are presented in percentage.
+   
+5) User interface changes:
+   "Session Settings" Dialog : 
+   a) Added a new device selection option on "Session" tab.
+      Based on this option the available counters can be selected on "Profiler Counter" tab. 
+      In case of "multi-device" only counters supported by all devices can be selected.
+   b) All the counters on "Profiler Counter" tab and options on "Other Options" tab are shown 
+      in tree view under different groups.
+
+6) Support for the global memory load & store request counters (gld_request and gst_request) in dropped. 
+   Global memory load and store efficiency which uses these counters is also dropped.
+
+7) Added support for devices of compute capability 2.0.
+
+8) cudaprof MacOS version is updated from v2.0 to v3.0
+
+Key changes in version cudaprof v2.3 with respect to v2.2:
+1) The summary table is enhanced to display global memory load efficiency 
+   and global memory store efficiency for each kernel. 
+   These use the following new profiler counters: 
+     gld_request : Number of global memory load requests
+     gst_request : Number of global memory store requests
+   This is available only for devices with compute capability 1.2 or higher.
+
+2) The profiler now uses GPU timestamps. This provides more accurate timing information
+   for GPU events on a timeline. 
+
+3) The profiler now supports multiple contexts for each device.
+
+4) The profiler now reports all memory transfers. The method name for memory transfers
+   is changed from memcopy to memcpy<type> where <type> indicates the direction of transfer
+   and whether asynchronous memory transfer is used.
+
+5) A new option "Normalize counters" is added in the "Session settings" dialog on 
+   the "Profiler counters" tab. When this option is enabled all counter values are
+   normalized and per block counts are given.
+
+6) User interface changes:
+a) There are changes to the main menu. The "Profile" menu options are moved to 
+   the "Session" menu and "Profiler" menu is dropped. The "Session->View" sub-menu options
+   are moved a new top level main menu "View".
+b) The session list is now a tree with three levels. Sessions at the top level, devices under a session 
+   at the next level and contexts under a device at the lowest level.
+   Summary session information is displayed when a session is selected in the tree view.
+   Summary device information is displayed when a device is selected in the tree view.
+c) Added shortcut keys Ctrl+MouseScrollWheel for zooming in and out for GPU Time Height plot and GPU Time Width plot	
+d) A new context menu is added for the profiler table and summary table column header. 
+   It provides options to hide and show columns.
+e) The  rows and columns in the profiler and summary table are now resized based on the contents.
+f) Rows in the profiler output table can now be sorted based on any column by clicking on the column header.
+g) A "Apply" button is added to the "Session view settings..." dialog. Also this now a non-modal dialog. 
+   Options for different views can now be changed.
+h) The session tree and output windows are now docable and the user can now drag and drop these window 
+   anywhere in the Main Window. New menu options  "View->Session Window" and "View->Output Window" 
+   are added to control the visibility of the session and output windows.
+i) Close buttons are added for tabs for each view (except for the profiler output table).
+
+
+Key changes in version cudaprof v2.2 with respect to v1.1:
+
+1) Profiler counters are now also supported on the Windows Vista platform.
+
+2) Support has been added to handle profiler data for multiple CUDA devices.
+The session list now uses a tree display and devices are listed as children under each session.
+
+3) Following new profiler counters are supported: 
+  a)  gld_32b, gld_64b, gld_128b : Count 32-byte, 64-byte, 128-byte global memory loads
+      gst_32b, gst_64b, gst_128b : Count 32-byte, 64-byte, 128-byte global memory stores
+    These are available only for GPUs with compute capability 1.2 or higher.
+
+  b) gld_req, gst_req: Count number of global memory load and store requests.
+    These are available only for GPUs with compute capability 1.2.
+
+4) The summary table is enhanced to display global memory bandwidth values for each kernel. The overall application level global memory bandwidth is also provided using the new menu option "Session->Global Memory Throughput". The global memory bandwidth calculation uses the new counter values gld_32b/64b/128b and gst_32b/64b/128b and is available only for GPUs with compute capability 1.2 or higher.
+
+5) The summary table is enhanced to display instruction bandwidth for each kernel. The instruction bandwidth is a ratio of achieved instruction rate to the peak single instruction issue rate. It uses the "instructions" profiler counter.
+
+6) A new option "Session->Analyze Occupancy" is provided - which reports details of occupancy calculation for each kernel and the factor due to which the maximum occupancy is not achieved. 
+
+7) The GPU Time Width Plot is enhanced to display data from multiple streams or from multiple devices. New options "Split On Stream" and "Split on Gpu" are provided in the "Session View Settings" dialog.
+
+8) There is a new option "Timestamp Based Total" provided in the "Session View Settings" dialog for "Summary Plot". This uses the difference in timestamp values for the last and first method to compute the total gpu time instead of using the sum of gpu times for all methods. When this option is used a new bar is displayed to show the "GPU Idle" time.
+
+
+9) Miscellaneous:
+
+- Handling of large profiler data is improved
+
+- A busy cursor is now displayed for operations which can take long time.
+
+- The host machine configuration can be seen using the new menu option "Help->System Info".
+
+- In session settings dialog all counters, timestamp, kernel and memory transfer options are enabled by default.
+
+- The cputime and profiler counter columns are hidden by default in the summary table.
+
+- CUDA Visual Profiler is now integrated into the CUDA Toolkit installer and the version number has been changed from 1.1 directly to 2.2 to match the CUDA toolkit version.
+
+
+Key changes in version cudaprof v1.1 with respect to v1.0:
+
+1) Enhancements to profiler output:
+
+a) New columns added for kernel methods:
+  - Size of grid of blocks (grid size X, grid size Y)
+  - Size of a thread block (block size X, block size Y, block size Z)
+  - Register count per thread 
+  - Static shared memory size per block
+  - Dynamic shared memory size per block
+  - StreamID of kernel launched 
+
+b) New columns added for memcopy methods:
+  - number of bytes 
+  - direction of transfer (host to device or device to host) 
+  - cputime 
+
+2) New view options added:
+
+a) Comparison summary plot : This plot can be used to compare summary profiling data for two sessions.
+
+b) Kernel table : This lists number of calls, grid size, block size, shared memory size per block and register count per thread for each kernel.
+
+c) Memcopy table: This lists number of calls, memory transfer size in bytes and memory transfer direction for each memcopy.
+
+3) cudaprof now detects whether a CUDA capable device is available on the system. If a CUDA device is not found the following message is displayed:
+   "Unable to load cuda library. CUDA Visual Profiler device features will be disabled."
+and certain options like Profile menu options are disabled. 
+Also based on the device type certain options are enabled or disabled. A new option "Profile->Device Properties" is provided to display cuda device properties.
+
+4) The cputime value displayed is adjusted based on whether kernel execution is asynchronous or not. 
+
+5) Summary table has a new method display option. User can choose between "base name", "base name with suffix" or "full name". The "base name" option is useful to combine data for different template based kernel methods having the same name.
+
+6) Width plot 
+
+a) display with cpu time enabled is changed. cputime is shown as a separate bar below gputime.
+
+b) A new option is added to use occupancy as a bar height option in width plot.
+
+7) Added height zoom option for height plot.
+
+8) Common improvements to plots
+
+a) Added title for each plot.
+
+b) Added option to display plot configuration options.
+
+
+9) The error reporting during program execution is changed to help in identifying the specific cause of the error.
+
+10) The cudaprof user document (earlier README file) is now converted to HTML format (cudaprof.html) and can also be viewed using the "Help->Cuda Visual Profiler Help" menu option or using the <F1> function key. This new help option is currently only supported on Windows.
+
+
+11) The format of the cudaprof .cpj project files is changed from plain text to XML. The information for each session which was earlier in separate .csn files is now part of the .cpj file. The new format is used for any new projects created or when existing projects are updated. Existing projects in the old format can also be opened.
+
+12) CUDA device names for all available CUDA devices are now saved for each session and they are shown in Session Properties.
+
+13) Added menu option "File->Delete" to delete a cuda profiler project.
+
+14) In the Windows version the Microsoft Visual C++ libraries are no longer included in the cudaprof ZIP file. If you do not have Microsoft Visual C++ 2005 SP1 installed you will need to download and install the Microsoft Visual C++ 2005 SP1 Redistributable Package.

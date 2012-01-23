@@ -1,0 +1,25 @@
+{% extends "rundb/mobile/base_template.html" %}
+
+{% block body %}
+<div data-role="page" id="{% block pageid %}{% endblock %}"> 
+    <div data-role="header" style="text-align: center" data-backbtn="false"> 
+        <p>{% block title %}{% endblock %}</p> 
+        
+        {% block btn_left %}
+        {% endblock %}
+        
+        {% block btn_right %}
+        {% endblock %}        
+    </div> 
+    
+    <div data-role="content">     
+        {% block content %}{% endblock %}
+    </div> 
+
+    
+    <div data-role="footer" data-position="fixed">
+        {% block footer %}{% endblock %}                
+    </div>
+</div> 
+
+{% endblock %}

@@ -1,0 +1,21 @@
+# pkg-config configuration for lapackpp
+# For information about the syntax, see pkg-config(1)
+
+# General installation directories
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+datarootdir=${prefix}/share
+datadir=${datarootdir}
+bindir=${exec_prefix}/bin
+
+# Human-readable name
+Name: lapackpp
+# Human-readable description
+Description: A library for high performance linear algebra computations.
+
+Version: 2.5.3
+Libs: -L${exec_prefix}/lib -llapackpp
+Cflags: -I${prefix}/include
+

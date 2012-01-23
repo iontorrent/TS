@@ -1,0 +1,418 @@
+{% extends "rundb/ion_base_template.html" %}
+{% load embeddedhelp %}
+{% load pagetools %}
+{% block controls %}
+{% load humanize %}
+
+<script type="text/javascript">
+
+    freeStore = {{ freeStore }};
+    totalStore = {{ totalStore }};
+    usedStore = {{ usedStore }};
+
+     $(document).ready(function(){
+            {% if not force_desktop %}
+                  if (jQuery.browser.mobile) {
+                      window.location = '{% url rundb.mobile_views.runs %}'
+                  }
+            {% endif %}
+                 $(".analyzeButton").button({
+                     icons: {
+                         secondary : 'ui-icon-play'
+                     }
+                 });
+
+        barFill = ( usedStore / totalStore ) * 100;
+
+        $("#storageBar").height(barFill + "%");
+
+        if (barFill >= 70){
+            $("#storageBar").css("background-color", "yellow");
+        }
+
+        if (barFill >= 90){
+            $("#storageBar").css("background-color", "red");
+            (function pulse(){
+                    $('#storageBar').delay(200).fadeOut('slow').delay(50).fadeIn('slow',pulse);
+            })();
+        }
+
+        storeBarTip = "Results directory is " + Math.floor(barFill) + "% full</br>";
+        storeBarTip += freeStore + "GB of space remaining" ;
+
+        $(".storageTip").click(function(){
+            window.location.href = "{% url rundb.views.servers %}#archive";
+        });
+
+        $(".storageTip").attr("title",storeBarTip);
+
+        $().tipTipDefaults({ delay : 0 });
+        $('.storageTip').tipTip({ position : 'bottom' });
+
+         //change library
+         $(".changeLib").click(function(){
+
+             var exp_id = $(this).attr("id");
+             exp_id = exp_id.split("_")[1];
+
+             //write the links to set each the lib for each exp
+             $('.refLink').each(function(index, link) {
+                 var lib = $(link).attr("alt");
+                 var libUrl =  "changelibrary/" + exp_id  ;
+
+                 $(link).unbind('click');
+
+                 $(link).click(function(){
+                     $.ajax({
+                         type: "POST",
+                         beforeSend:function(){
+                             $("#referenceLibraries").hide();
+                             $("#refLoading").show();
+                             $("#refLoading").html("<p>Making Changes <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
+                         },
+                         complete:function(){
+                             $("#refLoading").hide();
+                             $("#refLoading").html("");
+                             $("#referenceLibraries").show();
+                             $("#libDialog").dialog("close");
+                             var lib_class = "#changeLib_" + exp_id;
+                             $(lib_class).text($(link).attr("alt"));
+                         },
+                         data: "lib=" + lib,
+                         url: libUrl
+                     })
+                 });
+             });
+
+             $("#libDialog").dialog({
+                 width: 500,
+                 height: 400,
+                 title: "Reference List",
+                 buttons: [
+                     {
+                         text: "Close",
+                         click: function() {
+                             $(this).dialog("close");
+                         }
+                     }
+                 ]
+             })
+
+         });
+
+     });
+
+</script>
+
+
+<form action="" method="get" id="control_form">
+<table>
+  <thead>
+    <tr>
+      {% for field in filterform %}{% spaceless %}
+      <th>{{field.label}}</th>
+      {% endspaceless %}{% endfor%}
+      <th>
+	<div class="relative">
+	  <span>Search by Run</span>
+	</div>
+      </th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr>
+    {% for field in filterform %}
+       <td>{{field}}</td>
+    {% endfor%}
+    <td class="searchholder">
+      <div class="left">
+	{{searchform.searchterms}}
+      </div>
+      <div class="left margin_left">
+	<input type='button' onclick="javascript:submitControlForm()"
+	       value="Go"/>
+      </div>
+    </td>
+    <td>
+      <div class="clearholder">
+      {% if getURL %}
+      <a href="{% url rundb.views.experiment %}">Clear</a>
+      {% else %}
+      &nbsp;
+      {% endif %}
+      </div>
+    </td>
+    </tr> 
+    <tr style="display:none;">
+        <td><input type="submit" value="Submit" name="submit"/></td>
+    </tr>
+  </tbody>
+</table>
+{{sortform.sortfield}}
+</form>
+{% endblock controls %}
+
+{% block current_tab %}experiment{% endblock %}
+{% block content %}
+{% if exp.object_list %}
+<table>
+  <thead>
+    <tr class="sortables">
+     <th>
+        <span class="ui-icon ui-icon-star star"></span>
+    </th>
+      <th>
+	<span class="ui-icon ui-icon-plus"></span>
+      </th>
+      <th></th> <!-- for analyze button -->
+      <th>
+        <div class="sortheading">Runs</div>
+        <div class="sortkey">expname</div>
+      </th>
+      <th>
+          <div>Chip</div>
+      </th>
+      <th>
+        <div class="sortheading">Project</div>
+        <div class="sortkey">project</div>
+      </th>
+      <th>
+        <div class="sortheading">Sample</div>
+        <div class="sortkey">sample</div>
+      </th>
+      <th>
+        <div class="sortheading">Reference</div>
+        <div class="sortkey">library</div>
+      </th>
+      <th>
+        <div class="sortheading">PGM</div>
+        <div class="sortkey">pgmName</div>
+      </th>
+      <th>
+        <div class="sortheading">Status</div>
+        <div class="sortkey">ftpStatus</div>
+      </th>
+
+      <th>
+        <div class="storageTip sortheading">Storage</div>
+        <div class="sortkey">storage_options</div>
+
+        <div class="storageTip" id="storageBarHolder"><div id="storageBar"></div></div>
+
+      </th>
+
+      <th>
+        <div class="sortheading">Date</div>
+        <div class="sortkey">date</div>
+      </th>
+
+    </tr>
+
+  </thead>
+  <tbody>
+    {% for e in exp.object_list %}
+
+        {% with e.results_set.count as count %}
+
+    <tr class="{% cycle 'row1' 'row2' %}">
+
+    <td class='star_td'>
+        <input {% if e.star %}checked{% endif %} type='checkbox' id='star_{{e.pk}}'/>
+    </td>
+
+    <td>
+        <span class="left" id="{{e.pk}}_expandbutton">
+          {% spaceless %}
+
+          {% if count or e.notes %}
+              {% icon ui-icon-circle-plus ui-icon-circle-minus %}
+                javascript:toggleTr('{{e.pk}}')
+              {% endicon %}
+          {% else %}
+              {% icon "ui-icon-circle-plus ui-state-disabled" %}#{% endicon %}
+          {% endif %}
+
+          {% endspaceless %}
+        </span>
+
+    </td>
+
+    <td style="width:64px;">
+        <span class="left" title="Start a new analysis.">
+          <a class="analyzeButton" href="{% url rundb.views.createReport e.pk 0 %}">
+            Analyze
+          </a>
+        </span>
+    </td>
+
+    <td>
+        <span class="left margin_left">
+          {% if count or e.notes %}
+              <a href="javascript:clickExpand('{{e.pk}}_expandbutton')">
+                {{e.pretty_print}}
+              </a>
+          {% else %}
+            {{e.pretty_print}}
+          {% endif %}
+        </span>
+    </td>
+    <td>{{ e.chipType|cut:'"'}}</td>
+    <td>{{ e.project }}</td>
+    <td>{{ e.sample }}</td>
+    <td><a class="changeLib libLink" id="changeLib_{{ e.pk }}">{{ e.library }}</a></td>
+    <td>{{ e.pgmName }}</td>
+
+    {% if e.ftpStatus|length_is:"1"  %}
+    	<td><div class="progress_bar" id="{{e.pk}}" style="height:15px; width:150px; float:left">
+    	<div class="hidden">{{e.pk}}</div></div>
+    	</td>
+    {% else %}{% if e.ftpStatus|length_is:"2"  %}
+    	<td><div class="progress_bar" id="{{e.pk}}" style="height:15px; width:150px; float:left">
+    	<div class="hidden">{{e.pk}}</div></div>
+    	</td>
+    {% else %}
+    	<td>{{e.ftpStatus|default:" - "}}</td>
+    {% endif %}{% endif %}
+    
+    <td class='storage_td'>
+        {% if not e.available %}
+        <form id='{{e.pk}}_{{e.pretty_print}}'>
+          <select name="storage_options" id="id_storage_options">
+            <!-- This is not pretty but it makes the loading really fast from 30seconds down to << 1second for 100000 records-->
+            <option value="KI" {% ifequal e.storage_options "KI" %}selected="selected"{% else %}{% endifequal %}>Keep</option>
+            <option value="A" {% ifequal e.storage_options "A" %}selected="selected"{% else %}{% endifequal %}>Archive Raw</option>
+            <option value="D"{% ifequal e.storage_options "D" %}selected="selected"{% else %}{% endifequal %}>Delete Raw</option>
+          </select>
+        </form>
+        {% else %}
+        {{ e.available }}
+        {% endif %}
+    </td>
+    <td>{{e.date|date:"M d Y"}}</td>
+    </tr>
+    <tr class="{% cycle 'row1' 'row2' %}"  id="{{e.pk}}">
+      <td colspan="12">
+      
+				<div id="{{e.pk}}_holder" class="hidden">
+                  {% if count %}
+                      <table class="margins innertable">
+                        <thead>
+                          <tr>
+                        {% for s in e.results_set.model.best_metrics_headings %}
+                        <th>{{s}}</th>
+                        {% endfor %}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for r in e.sorted_results %}
+                          <tr>
+                        <td>
+                        {% if r.report_exist %}
+                          <span class="left right_margin" title="Open report in this window.">
+                            <a href="{{r.reportLink}}">{{r.resultsName}}</a>
+                          </span>
+                          <span class="left icon_link ui-icon ui-icon-extlink
+                                   ui-state-default ui-corner-all"
+                            onclick="window.open('{{r.reportLink}}')"
+                            title="Open report in new window.">
+                          </span>
+                          {% else %}
+                          <span class="left right_margin">
+                            {{r.resultsName}}
+                          {% endif %}
+                        </td>
+
+                        <td>{{r.status}}</td>
+                        <td>{{r.processedFlows}}</td>
+                        {% with lm=r.libmetrics_set.values.0 %}
+                        {# lib key signal #}
+                        <td>{{lm.aveKeyCounts|floatformat:0}}</td>
+
+                        {# Q17 bases #}
+                        <td>{{r.qualitymetrics_set.values.0.q17_bases|floatformat:0|intcomma}}</td>
+
+
+                        {# 100 bp AQQ17 bases #}
+                        {% ifequal lm.align_sample 1 %}
+                            <td>{{lm.extrapolated_100q17_reads|intcomma}}</td>
+                        {% endifequal %}
+
+                        {% ifequal lm.align_sample 0 %}
+                            <td>{{lm.i100Q17_reads|intcomma}}</td>
+                        {% endifequal %}
+
+                        {% ifnotequal lm.align_sample 0 %}
+                            {% ifnotequal lm.align_sample 1 %}
+                                <td></td>
+                            {% endifnotequal %}
+                        {% endifnotequal %}
+
+                        {# AQQ17 bases #}
+                        {% ifequal lm.align_sample 1 %}
+                            <td>{{lm.extrapolated_mapped_bases_in_q17_alignments|intcomma}}</td>
+                        {% endifequal %}
+
+                        {% ifequal lm.align_sample 0 %}
+                            <td>{{lm.q17_mapped_bases|intcomma}}</td>
+                        {% endifequal %}
+
+                        {% ifnotequal lm.align_sample 0 %}
+                            {% ifnotequal lm.align_sample 1 %}
+                                <td></td>
+                            {% endifnotequal %}
+                        {% endifnotequal %}
+
+                        {% endwith %}
+
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                  {% else %}
+                      <div class="tablePad"></div>
+                  {% endif %}
+
+                {%  if e.notes %}
+                    <div class="expNote"><strong>Notes:</strong> {{ e.notes }}</div>
+                {%  endif %}
+				</div>
+				
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+    <div id="libDialog" style="display: none;">
+       {%  if refgenomes %}
+            <p>Select a reference library to change to.</p>
+       {%  else %}
+           <p>No reference genomes found.</p>
+       {%  endif %}
+            <div id="referenceLibraries">
+              <ul>
+                {%  for ref in refgenomes %}
+                  <li>
+                      <a class="refLink libLink" alt="{{ ref.short_name }}"> {{ ref.name }} ({{ ref.short_name }})</a>
+                  </li>
+                {%  endfor %}
+              </ul>
+            </div>
+            <div id="refLoading" style="text-indent: 40px;">
+
+        </div>
+    </div>
+
+{% else %}
+<div class="centered_message">No runs found.</div>
+<div class="centered_message">
+  {% if getURL %}
+  Click <a href="{% url rundb.views.experiment %}">here</a> to clear
+  filters and see all experiments.
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

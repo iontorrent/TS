@@ -1,0 +1,111 @@
+#!/usr/bin/env python
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+import sys, os
+import logging
+import subprocess
+from optparse import OptionParser
+import json
+
+sys.path.append('/opt/ion/')
+from iondb.plugins import PluginRunner
+from iondb.plugin_json import *
+
+"""
+    Ion Plugin Shell -- Run barebones plugin launch.sh scripts from command line
+    Expands full plugin template and executes in embedded shell
+"""
+
+def getLaunchArguments():
+    """ Legacy arguments - needed for out of framework support """
+    parser = OptionParser()
+    parser.add_option("-v", dest="version", action="count", help="print version and exit")
+    parser.add_option("-r", dest="raw_data_dir",  help="specify the location of the raw data")
+    parser.add_option("-a", dest="analysis_dir",  help="specify the location of the analysis")
+    parser.add_option("-l", dest="library_key",  help="specify the library key")
+    parser.add_option("-t", dest="testfrag_key",  help="specify the testfrag key")
+    parser.add_option("-o", dest="results_dir",  help="specify the plugin result folder")
+    parser.add_option("-p", dest="dirname",  help="specify the plugin directory")
+    parser.add_option("-u", dest="url_root",  help="specify the URL root of the results directory")
+    parser.add_option("-j", dest="json_file",  help="specify the json parameters file")
+    return parser.parse_args()
+
+def preparePluginEnvironment(opt):
+    env = {
+        'pathToRaw': opt.raw_data_dir,
+        'net_location': opt.url_root,
+        'libraryKey': opt.library_key,
+    }
+    for key in ('analysis_dir', 'testfrag_key'):
+        if hasattr(opt, key):
+            env[key] = getattr(opt,key)
+        else:
+            print "Warning: %s not specified" % key
+
+    # plan from parent json
+    parent_json_fname = os.path.join(opt.analysis_dir, "ion_params_00.json")
+    parent_json = {}
+    with open(parent_json_fname, 'r') as f:
+        parent_json = json.loads(f.read())
+    if 'plan' in parent_json:
+        env['plan'] = json.dumps(parent_json['plan'], separators=(',', ':'))
+    # Note: primary key is in parent_json too. Could avoid extra read of key file
+
+    return env
+
+
+if __name__ == '__main__':
+    origargs = sys.argv
+    (opt, args) = getLaunchArguments()
+
+    env = preparePluginEnvironment(opt)
+    basefolder = 'plugin_out'
+
+    start_json = {}
+    if opt.json_file:
+        with open(opt.json_file, 'r') as f:
+            content = f.read()
+            start_json = json.loads(content)
+    else:
+        # These options are required if there is no json file
+        if not opt.dirname:
+            print "Error: Cannot run without -p dirname"
+            sys.exit(1)
+        if not opt.analysis_dir:
+            print "Error: Cannot run without -a analysis dir"
+            sys.exit(1)
+        (plugin_root, plugin_name) = os.path.split(opt.dirname)
+        plugin = { 'path': opt.dirname, 'name': plugin_name}
+        try:
+            primary_key = open(os.path.join(opt.analysis_dir, "primary.key")).readline()
+            primary_key = primary_key.split("=")[1].strip()
+        except:
+            primary_key = None
+            print " #### Error, unable to get the primary key. Status will not be updated, and results will not be visible via the Torrent Server"
+        start_json = make_plugin_json(env,plugin,primary_key,basefolder,opt.url_root)
+
+    if opt.results_dir:
+        start_json['runinfo']['results_dir'] = opt.results_dir
+
+    launcher = PluginRunner()
+    content = launcher.createPluginWrapper(args[0],start_json)
+
+    # Write shell script to plugin output directory
+    if not os.path.exists(start_json['runinfo']['results_dir']):
+        os.makedirs(start_json['runinfo']['results_dir'])
+    jsonfname=os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
+    with open(jsonfname,"wb") as fp:
+        json.dump(start_json,fp,indent=2)
+    launcher.writePluginLauncher(start_json['runinfo']['results_dir'], start_json['runinfo']['plugin_name'], content)
+
+    injectargs = "set --"
+    injectargs += ' -j "%s"' % jsonfname
+    for p in origargs[2:]:
+        injectargs += ' "%s"' % p
+    injectargs += "\n";
+    #print injectargs
+
+    sh = subprocess.Popen("/bin/bash", stdin=subprocess.PIPE, cwd=start_json['runinfo']['results_dir'])
+    sh.communicate(injectargs + content)
+    sys.exit( sh.returncode )
+

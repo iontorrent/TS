@@ -1,0 +1,110 @@
+\hypertarget{class_b_a_m_reader_1_1iterator}{
+\section{BAMReader::iterator Class Reference}
+\label{class_b_a_m_reader_1_1iterator}\index{BAMReader::iterator@{BAMReader::iterator}}
+}
+
+
+{\ttfamily \#include $<$BAMReader.h$>$}
+
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+bool \hyperlink{class_b_a_m_reader_1_1iterator_a0ab6687c9a5f309a4a2efddb92fdf284}{good} () const 
+\item 
+void \hyperlink{class_b_a_m_reader_1_1iterator_aa82ff5e9b564ed252e8bcea444894bea}{next} ()
+\item 
+\hyperlink{class_b_a_m_read}{BAMRead} \hyperlink{class_b_a_m_reader_1_1iterator_a71d10d5702031a805287d571d86467d5}{get} () const 
+\item 
+int \hyperlink{class_b_a_m_reader_1_1iterator_a49aaa89d863d0562248f3a049ff6d962}{get\_\-tid} () const 
+\item 
+int \hyperlink{class_b_a_m_reader_1_1iterator_a3176072f62b35beb0b1f8aab4f12273b}{get\_\-tid\_\-len} (int tid)
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_b_a_m_reader_1_1iterator_af692f9f96824c5d2ce8191ebdc41d34d}{
+class \hyperlink{class_b_a_m_reader_1_1iterator_af692f9f96824c5d2ce8191ebdc41d34d}{BAMReader}}
+\label{class_b_a_m_reader_1_1iterator_af692f9f96824c5d2ce8191ebdc41d34d}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+A class to allow the user to iterate through the SAM/BAM file/stdin. A file must already be opened by the reader for an iterator to be valid.
+
+example code
+
+string bam\_\-file = string(argv\mbox{[}1\mbox{]}); \hyperlink{class_b_a_m_reader}{BAMReader} reader(bam\_\-file); for (\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} i = reader.get\_\-iterator(); i.good(); i.next()) \{ \hyperlink{class_b_a_m_read}{BAMRead} read = i.get(); cerr $<$$<$ read.to\_\-string(); \} 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_b_a_m_reader_1_1iterator_a71d10d5702031a805287d571d86467d5}{
+\index{BAMReader::iterator@{BAMReader::iterator}!get@{get}}
+\index{get@{get}!BAMReader::iterator@{BAMReader::iterator}}
+\subsubsection[{get}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMRead} BAMReader::iterator::get (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1iterator_a71d10d5702031a805287d571d86467d5}
+Returns a fully constructed \hyperlink{class_b_a_m_read}{BAMRead}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_read}{BAMRead} a constructed \hyperlink{class_b_a_m_read}{BAMRead} from the file 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_1_1iterator_a49aaa89d863d0562248f3a049ff6d962}{
+\index{BAMReader::iterator@{BAMReader::iterator}!get\_\-tid@{get\_\-tid}}
+\index{get\_\-tid@{get\_\-tid}!BAMReader::iterator@{BAMReader::iterator}}
+\subsubsection[{get\_\-tid}]{\setlength{\rightskip}{0pt plus 5cm}int BAMReader::iterator::get\_\-tid (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1iterator_a49aaa89d863d0562248f3a049ff6d962}
+Returns the reference index of the current alignment pointed to by the iterator. A convenience function that wont make copies of c-\/structures
+
+\begin{DoxyReturn}{Returns}
+int reference index from header 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_1_1iterator_a3176072f62b35beb0b1f8aab4f12273b}{
+\index{BAMReader::iterator@{BAMReader::iterator}!get\_\-tid\_\-len@{get\_\-tid\_\-len}}
+\index{get\_\-tid\_\-len@{get\_\-tid\_\-len}!BAMReader::iterator@{BAMReader::iterator}}
+\subsubsection[{get\_\-tid\_\-len}]{\setlength{\rightskip}{0pt plus 5cm}int BAMReader::iterator::get\_\-tid\_\-len (
+\begin{DoxyParamCaption}
+\item[{int}]{tid}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1iterator_a3176072f62b35beb0b1f8aab4f12273b}
+Returns the length of the reference the read aligns to A convenience function that wont make copies of c-\/structures
+
+\begin{DoxyReturn}{Returns}
+int length of reference read aligns to 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_1_1iterator_a0ab6687c9a5f309a4a2efddb92fdf284}{
+\index{BAMReader::iterator@{BAMReader::iterator}!good@{good}}
+\index{good@{good}!BAMReader::iterator@{BAMReader::iterator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMReader::iterator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1iterator_a0ab6687c9a5f309a4a2efddb92fdf284}
+Returns the status of the iterator. The iterator is good if there are still alignments and the file handle is good.
+
+\begin{DoxyReturn}{Returns}
+bool true if there are alignments 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_1_1iterator_aa82ff5e9b564ed252e8bcea444894bea}{
+\index{BAMReader::iterator@{BAMReader::iterator}!next@{next}}
+\index{next@{next}!BAMReader::iterator@{BAMReader::iterator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::iterator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_1_1iterator_aa82ff5e9b564ed252e8bcea444894bea}
+Move on to next alignment: 
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+BAMReader.h\item 
+BAMReader.cpp\end{DoxyCompactItemize}

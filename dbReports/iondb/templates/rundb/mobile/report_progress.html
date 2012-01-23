@@ -1,0 +1,56 @@
+{% extends "rundb/mobile/base_single_page_template.html" %}
+{% load mobile %}
+
+{% block pageid %}report_progress_{{ result.pk }}{% endblock %}
+{% block title %}{{ result.resultsName }}{% endblock %}
+{% block btn_left %}
+            {% with result.experiment.sorted_results.count as numresults %}
+               {% ifequal numresults 1 %}
+                 <a href="{% url rundb.mobile_views.runs %}" data-direction="reverse" data-icon="arrow-l" rel="external">Runs</a>           
+               {% else %}
+                 <a href="{% url rundb.mobile_views.run result.experiment.pk %}" 
+                    data-direction="reverse" data-icon="arrow-l" rel="external">Reports</a>
+               {% endifequal %}
+            {% endwith %}
+{% endblock %}        
+{% block btn_right %}
+            {% if result.report_exist %}
+                <a href="{{result.reportLink}}?force_desktop=true" rel="external" class="ui-btn-right">Desktop</a>
+            {% endif %}
+{% endblock %}        
+
+{% block content %}
+    <div style="text-align: center"><img id="warn_icon" src="/site_media/images/dialog-warning.png"></div>
+    <h3 style="text-align: center"> Report Generation In Progress </h3>
+    <ul data-role="listview" data-inset="true">
+        {% for task, status in helper.progress.iteritems %}
+            <li class="readonly" id="{{ task|safe|space_to_underscore}}">
+                {{ task|safe }} <p class="ui-li-aside">{{ status }}</p>
+            </li>            
+        {% endfor %}                
+    </ul>
+
+<script>
+    function checkProgressStatus(){
+        $.getJSON("{{ helper|file_link:"parsefiles.php" }}?progress", function(json) {
+            var all_done = true;
+            jQuery.each(json, function(i, val) {
+                if (!val){
+                  $("#" + i).fadeOut();
+                };
+                if (val){
+                      all_done = false;
+                };
+            });
+            if (all_done){
+                $("div[data-role=content]").html("<h2>The report is done</h2>.  The page will automatically reload in 5 seconds. ");
+                setTimeout("window.location.reload(true);", 5000);
+            };
+        });
+    };
+    setInterval("checkProgressStatus()", 5000 );
+</script>
+
+{% endblock %}
+
+

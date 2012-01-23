@@ -1,0 +1,161 @@
+{% load pagetools %}
+<!DOCTYPE html>
+<html>
+  <head>
+<!--    <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+    <link type="text/css" href="/site_media/jquery/css/smoothness/jquery-ui-1.7.2.custom.css" rel="Stylesheet" />	
+
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.7.2.custom.min.js"></script>
+    <script type="text/javascript" src="/site_media/scripts.js"></script>
+
+    <script type="text/javascript" language="javscript">
+      $(document).ready(function() {
+      var CURRENT_TAB = "{% block current_tab %}{% endblock %}";
+      if (CURRENT_TAB != "") {
+          $("#" + CURRENT_TAB + " > div").addClass("selected");
+      }
+      });
+    </script>
+-->
+    {% block extra_head %}
+    {% endblock extra_head %}
+    <title>Torrent Browser{% block title %}{% endblock title %}</title>
+  </head>
+  <body>
+  <!--
+    <div class="all all_width">
+      <div class="topbar">
+	<div class="logoholder">
+	  <a href="http://www.iontorrent.com/">
+	  <img src="/site_media/images/raw_name_small.png"
+	       alt="IonTorrent Systems, Inc." style="border:none;"/>
+	  </a>
+	</div>
+   -->	
+      
+      {% block controls_holder %}
+      <div class="controlholder centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+	    <div class="controls">
+	    {% block controls %}
+	    {% endblock controls %}
+	    </div>
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% endblock controls_holder %}
+      {% if use_precontent %}
+      <div class="pre_content centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+	    {% block pre_content %}
+	    {% endblock pre_content %}
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% endif %}
+      <div class="contentarea centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+            {% block content %}
+	    {% endblock content %}
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% if use_content2 %}
+      <br/>
+      <div class="contentarea centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+            {% block content2 %}
+	    {% endblock content2 %}
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% endif %}
+      {% if use_content3 %}
+      <br/>
+      <div class="contentarea centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+            {% block content3 %}
+	    {% endblock content3 %}
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% endif %}
+      {% block pagination_holder %}
+      <div class="centered">
+	<div class="roundedcornr_box_526903">
+	  <div class="roundedcornr_top_526903"><div></div></div>
+	  <div class="roundedcornr_content_526903">
+            {% block pagination %}
+	        <div class="paginator clear">{% spaceless %}
+		  {% near_range paginator %}
+		  <div class="larrow">
+		    {% if paginator.has_previous %}
+		    {% icon ui-icon-circle-arrow-w %}
+		    ?page={{ paginator.previous_page_number }}&{{getURL|safe}}
+		    {% endicon %}
+		    {% else %}
+		    {% icon "ui-icon-circle-arrow-w ui-state-disabled" %}#
+		    {% endicon %}
+		    {% endif %}
+		  </div>
+		  
+		  <span class="current">
+		    {% for ndx in page_number_range %}
+		      {% ifequal ndx paginator.number %}
+		      <strong>{{ndx}}</strong>
+		      {% else %}
+		      <a href="?page={{ndx}}{% if getURL %}&{{getURL|safe}}{% endif %}">
+			{{ndx}}
+		      </a>
+		      {% endifequal %}
+		      {% if not forloop.last %}&nbsp;{% endif %}
+		    {% endfor %}
+		  </span>
+		  
+		  <div class="rarrow">
+		    {% if paginator.has_next %}
+		    {% icon "ui-icon-circle-arrow-e" %}
+		    ?page={{ paginator.next_page_number }}&{{getURL|safe}}
+		    {% endicon %}
+		    {% else %}
+		    {% icon "ui-icon-circle-arrow-e ui-state-disabled" %}#
+		    {% endicon %}
+		    {% endif %}
+		  
+		  </div>
+		  {% endspaceless %}
+		</div>
+		<div class="clear"></div>
+	    {% endblock pagination %}
+	  </div>
+	  <div class="roundedcornr_bottom_526903"><div></div></div>
+	</div>
+      </div>
+      {% endblock pagination_holder %}
+      <div class="clear"></div>
+      <div class="footer">
+	<!--<a href="/admin/">Administer</a><br/>-->
+	&copy; 2010
+	<a href="http://www.iontorrent.com/">IonTorrent Systems, Inc.</a>
+	
+      </div>
+    </div> <!-- end div-all -->
+  </body>
+</html>
+

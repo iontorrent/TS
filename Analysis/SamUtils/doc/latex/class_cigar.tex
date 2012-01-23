@@ -1,0 +1,117 @@
+\hypertarget{class_cigar}{
+\section{Cigar Class Reference}
+\label{class_cigar}\index{Cigar@{Cigar}}
+}
+
+
+{\ttfamily \#include $<$Cigar.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_cigar_1_1iterator}{iterator}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_cigar_a2571db4ce2a919c396678fbb56a0fd6d}{Cigar} ()
+\item 
+\hyperlink{class_cigar_a3e62c7013ade6aa475c2187a760d00ad}{Cigar} (const bam1\_\-t $\ast$BAM\_\-record)
+\item 
+std::string \hyperlink{class_cigar_a479d41ab253dab1e6c3ebf82ed1c4f0c}{to\_\-string} ()
+\item 
+long \hyperlink{class_cigar_a739bd187b321432f023239608c0205fb}{get\_\-length} () const 
+\item 
+\hyperlink{class_cigar_1_1iterator}{iterator} \hyperlink{class_cigar_a3bb0c635eb4a28ae3c1985845bac06a5}{get\_\-iterator} ()
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+A class representing the CIGAR field from a SAM/BAM
+
+Requires the \hyperlink{class_b_a_m_read}{BAMRead} that the \hyperlink{class_cigar}{Cigar} is retrieved from to still remain in scope.
+
+CIGAR: CIGAR string. The CIGAR operations are given in the following table (set `$\ast$' if un-\/ available): Op BAM Description M 0 alignment match (can be a sequence match or mismatch) I 1 insertion to the reference D 2 deletion from the reference N 3 skipped region from the reference S 4 soft clipping (clipped sequences present in SEQ) H 5 hard clipping (clipped sequences NOT present in SEQ) P 6 padding (silent deletion from padded reference) = 7 sequence match X 8 sequence mismatch Notes: -\/H can only be present as the first and/or last operation.
+
+-\/S may only have H operations between them and the ends of the CIGAR string.
+
+-\/For mRNA-\/to-\/genome alignment, an N operation represents an intron. For other types of alignments, the interpretation of N is not defined. 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_cigar_a2571db4ce2a919c396678fbb56a0fd6d}{
+\index{Cigar@{Cigar}!Cigar@{Cigar}}
+\index{Cigar@{Cigar}!Cigar@{Cigar}}
+\subsubsection[{Cigar}]{\setlength{\rightskip}{0pt plus 5cm}Cigar::Cigar (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_a2571db4ce2a919c396678fbb56a0fd6d}
+Default constructor. You cannot do anything with this class if not constructed with a bam1\_\-t$\ast$ \begin{DoxyReturn}{Returns}
+\hyperlink{class_cigar}{Cigar} default constructed \hyperlink{class_cigar}{Cigar} object 
+\end{DoxyReturn}
+\hypertarget{class_cigar_a3e62c7013ade6aa475c2187a760d00ad}{
+\index{Cigar@{Cigar}!Cigar@{Cigar}}
+\index{Cigar@{Cigar}!Cigar@{Cigar}}
+\subsubsection[{Cigar}]{\setlength{\rightskip}{0pt plus 5cm}Cigar::Cigar (
+\begin{DoxyParamCaption}
+\item[{const bam1\_\-t $\ast$}]{BAM\_\-record}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_a3e62c7013ade6aa475c2187a760d00ad}
+Standard constructor. Needs a bam1\_\-t in order to extract the cigar information
+
+const bam1\_\-t$\ast$ an alignment from a SAM/BAM \begin{DoxyReturn}{Returns}
+\hyperlink{class_cigar}{Cigar} constructed \hyperlink{class_cigar}{Cigar} object 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_cigar_a3bb0c635eb4a28ae3c1985845bac06a5}{
+\index{Cigar@{Cigar}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!Cigar@{Cigar}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Cigar::iterator} Cigar::get\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_a3bb0c635eb4a28ae3c1985845bac06a5}
+Gives you an iterator to the \hyperlink{class_cigar}{Cigar}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_cigar_1_1iterator}{Cigar::iterator} 
+\end{DoxyReturn}
+\hypertarget{class_cigar_a739bd187b321432f023239608c0205fb}{
+\index{Cigar@{Cigar}!get\_\-length@{get\_\-length}}
+\index{get\_\-length@{get\_\-length}!Cigar@{Cigar}}
+\subsubsection[{get\_\-length}]{\setlength{\rightskip}{0pt plus 5cm}long Cigar::get\_\-length (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_cigar_a739bd187b321432f023239608c0205fb}
+Returns length of CIGAR string itself.
+
+\begin{DoxyReturn}{Returns}
+long length of cigar string 
+\end{DoxyReturn}
+\hypertarget{class_cigar_a479d41ab253dab1e6c3ebf82ed1c4f0c}{
+\index{Cigar@{Cigar}!to\_\-string@{to\_\-string}}
+\index{to\_\-string@{to\_\-string}!Cigar@{Cigar}}
+\subsubsection[{to\_\-string}]{\setlength{\rightskip}{0pt plus 5cm}std::string Cigar::to\_\-string (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_cigar_a479d41ab253dab1e6c3ebf82ed1c4f0c}
+Returns cigar string that you'd find in BAM/SAM.
+
+\begin{DoxyReturn}{Returns}
+std::string string version of CIGAR 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+types/Cigar.h\item 
+types/Cigar.cpp\end{DoxyCompactItemize}

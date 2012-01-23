@@ -1,0 +1,99 @@
+\hypertarget{class_b_a_m_reader_1_1pileup__generator}{
+\section{BAMReader::pileup\_\-generator Class Reference}
+\label{class_b_a_m_reader_1_1pileup__generator}\index{BAMReader::pileup\_\-generator@{BAMReader::pileup\_\-generator}}
+}
+
+
+{\ttfamily \#include $<$BAMReader.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+struct {\bfseries tmpstruct\_\-t}
+\end{DoxyCompactItemize}
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_a6d9fb9ee5484241b1e86869021e2103e}{
+typedef std::list$<$ \hyperlink{class_b_a_m_read}{BAMRead} $>$ {\bfseries pileup\_\-reads}}
+\label{class_b_a_m_reader_1_1pileup__generator_a6d9fb9ee5484241b1e86869021e2103e}
+
+\item 
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_a3e72f3ee7e831d1a858da4ef8ccdfd69}{
+typedef const bam\_\-pileup1\_\-t $\ast$ {\bfseries pileup\_\-ptr}}
+\label{class_b_a_m_reader_1_1pileup__generator_a3e72f3ee7e831d1a858da4ef8ccdfd69}
+
+\item 
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_aefed21ad1afac5ea13b3647ab10bac48}{
+typedef std::pair$<$ pileup\_\-reads, int $>$ {\bfseries pileup\_\-data}}
+\label{class_b_a_m_reader_1_1pileup__generator_aefed21ad1afac5ea13b3647ab10bac48}
+
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+void \hyperlink{class_b_a_m_reader_1_1pileup__generator_a3f1130ab642fd1e02edbce5907182e83}{next} ()
+\item 
+bool \hyperlink{class_b_a_m_reader_1_1pileup__generator_a53d8c653b0b5aac9444ec36a8c0c791f}{good} ()
+\item 
+pileup\_\-data \hyperlink{class_b_a_m_reader_1_1pileup__generator_a1c7b4a224230469b00f16eb97a300103}{get} ()
+\end{DoxyCompactItemize}
+\subsection*{Friends}
+\begin{DoxyCompactItemize}
+\item 
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_af692f9f96824c5d2ce8191ebdc41d34d}{
+class \hyperlink{class_b_a_m_reader_1_1pileup__generator_af692f9f96824c5d2ce8191ebdc41d34d}{BAMReader}}
+\label{class_b_a_m_reader_1_1pileup__generator_af692f9f96824c5d2ce8191ebdc41d34d}
+
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+An inefficient, but simple version of \hyperlink{class_pileup}{Pileup} which wraps up samtools pileup C functions. This class will do the same thing as a command line samtools mpileup call.
+
+It's not efficient because it will return the same read more than once.
+
+The \hyperlink{class_b_a_m_reader_1_1pileup__generator}{pileup\_\-generator} advances by genomic positon, and returns a std::pair$<$pileup\_\-reads, int$>$ pileup\_\-data;
+
+Where pileup\_\-reads is: std::list$<$BAMRead$>$ pileup\_\-reads; 
+
+\subsection{Member Function Documentation}
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_a1c7b4a224230469b00f16eb97a300103}{
+\index{BAMReader::pileup\_\-generator@{BAMReader::pileup\_\-generator}!get@{get}}
+\index{get@{get}!BAMReader::pileup_generator@{BAMReader::pileup\_\-generator}}
+\subsubsection[{get}]{\setlength{\rightskip}{0pt plus 5cm}pileup\_\-data BAMReader::pileup\_\-generator::get (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1pileup__generator_a1c7b4a224230469b00f16eb97a300103}
+Returns an std::pair$<$ std::list$<$BAMRead$>$, int $>$
+
+The int is the position in the reference sequence this \hyperlink{class_pileup}{Pileup} is
+
+\begin{DoxyReturn}{Returns}
+std::pair$<$ std::list$<$BAMRead$>$, int $>$ a tuple representing the pileup 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_1_1pileup__generator_a53d8c653b0b5aac9444ec36a8c0c791f}{
+\index{BAMReader::pileup\_\-generator@{BAMReader::pileup\_\-generator}!good@{good}}
+\index{good@{good}!BAMReader::pileup_generator@{BAMReader::pileup\_\-generator}}
+\subsubsection[{good}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMReader::pileup\_\-generator::good (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1pileup__generator_a53d8c653b0b5aac9444ec36a8c0c791f}
+Are there still positions in the pileup(s)? \hypertarget{class_b_a_m_reader_1_1pileup__generator_a3f1130ab642fd1e02edbce5907182e83}{
+\index{BAMReader::pileup\_\-generator@{BAMReader::pileup\_\-generator}!next@{next}}
+\index{next@{next}!BAMReader::pileup_generator@{BAMReader::pileup\_\-generator}}
+\subsubsection[{next}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::pileup\_\-generator::next (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_1_1pileup__generator_a3f1130ab642fd1e02edbce5907182e83}
+Advance the generator to the next read 
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+BAMReader.h\end{DoxyCompactItemize}

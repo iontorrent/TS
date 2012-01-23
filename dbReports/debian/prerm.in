@@ -1,0 +1,109 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+
+SETTINGS=@ION_INSTALL_PREFIX@/iondb/settings.py
+
+case "$1" in
+    upgrade|remove)
+	if [ -e	"/etc/init.d/ionCrawler" ]; then
+		invoke-rc.d ionCrawler stop
+	fi
+	if [ -e	"/etc/init.d/ionJobServer" ]; then
+		invoke-rc.d ionJobServer stop
+	fi
+	if [ -e	"/etc/init.d/ionArchive" ]; then
+		invoke-rc.d ionArchive stop
+	fi
+	if [ -e	"/etc/init.d/ionPlugin" ]; then
+		invoke-rc.d ionPlugin stop
+	fi
+	if [ -e	"/etc/init.d/celeryd" ]; then
+		invoke-rc.d celeryd stop
+	fi
+
+    if [ ! -e /opt/ion/.computenode ]; then
+	    #--- Remove symbolic links	---#
+	    rm -f /var/www/output
+        rm -f /var/www/media
+        rm -f /var/www/site_media
+        rm -f /results/analysis/output/tmap-*
+        rm -f /results/analysis/output/disabled/tmap-*
+    fi
+
+    rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html"
+
+	if [ -e "$SETTINGS" ]; then
+		echo "Not removing settings file '$SETTINGS' which may contain user modifications"
+	fi
+
+	if [ "$1" = "remove" ]; then
+		if [ -d /opt/ion/iondb ]; then
+			find "@ION_INSTALL_PREFIX@/iondb" -name "*.pyc" -exec rm -f {} \;
+			find "@ION_INSTALL_PREFIX@/iondb" -name "*.log" -exec rm -f {} \;
+			rm -f "@ION_INSTALL_PREFIX@/iondb/bin/install_script.py"
+		fi
+	fi
+    
+	#---	Remove crontab nightly email	---#
+	# command to remove
+	COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"
+
+	# generate two random names for temporary files.
+	FILE="/tmp/$(basename $0).$RANDOM.txt"
+	FILE2="/tmp/$(basename $0).$RANDOM.txt"
+
+	# read in the users crontab entry into our random file
+	(crontab -u ionadmin -l > $FILE 2> /dev/null) || echo "No crontab for ionadmin" 1>&2
+
+	# Filter out our command
+	(cat $FILE | grep -v "$COMMAND" > $FILE2)  || echo "Filtering out our commands" 1>&2
+
+	# reload file into crontab or remove crontab if empty
+	if [ -s $FILE2 ]
+	then
+		comm="crontab $FILE2"
+	else
+		comm="crontab -r"
+	fi
+
+	#
+	# use su - username if we are adding to another users crontab. 
+	(su - ionadmin -c "$comm") || echo "Purging our entries" > /dev/null
+
+	# remove our tmp files
+	rm "$FILE" "$FILE2"
+    
+    #---	Reinstate the apache2 stock configuration	---#
+    if [ -s /etc/apache2/httpd.conf.old ]; then
+    	mv /etc/apache2/httpd.conf.old /etc/apache2/httpd.conf
+        invoke-rc.d apache2 restart
+    fi
+	files=(
+        /sbin/shutdown
+        /usr/bin/at
+        /usr/bin/aptitude
+        /usr/bin/apt-get
+        /usr/sbin/TSconfig
+        )
+#    for file in ${files[@]}; do
+#		sed -i "s:$file::" /etc/sudoers
+#    	sed -i 's/,,/,/g' /etc/sudoers
+#    	sed -i 's/,$//' /etc/sudoers
+#    done
+
+    #----------------------------------
+    # Remove files created during package install
+    #----------------------------------
+    if [ -f /opt/ion/iondb/templates/rundb/php_base.html ]; then
+        rm -f /opt/ion/iondb/templates/rundb/php_base.html
+    fi
+    
+    if [ -f /opt/ion/iondb/templates/rundb/php_base_plugin.html ]; then
+        rm -f /opt/ion/iondb/templates/rundb/php_base_plugin.html
+    fi
+    
+    ;;
+esac
+
+exit 0

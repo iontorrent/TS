@@ -1,0 +1,39 @@
+th.col_large, td.col_large { 
+		width: 275 !important;
+		} 
+
+th.col_med, td.col_med { 
+		width: 150 !important;
+		} 
+
+th.col_small, td.col_small { 
+		width: 80 !important;
+		} 
+
+th.col_span {
+		width: 400 !important;
+	}
+
+th.col_large, th.col_med, th.col_small {
+	background-color: transparent !important;
+}
+
+.noheading {
+	margin: 0px;
+	width: 100%;
+}
+
+.top, .bottom {
+	padding-left: 0px;
+	padding-right: 0px ;
+	width: 100% !important;
+}
+
+.dataTables_filter, .dataTables_length, .datatable_info, .datatable_paginate {
+	padding-left: 15px;
+	padding-right: 15px;
+}
+
+.tiptip_holder {
+	max-width: 200px !important;
+}

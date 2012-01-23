@@ -1,0 +1,76 @@
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Verison info
+
+# Figure out state of current build
+execute_process(COMMAND "hostname" "-f" 
+                OUTPUT_VARIABLE BUILDHOST
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "date" "-u" "+%Y%m%d%H%M" 
+                OUTPUT_VARIABLE BUILDDATE
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "svn" "info" "${PROJECT_SOURCE_DIR}"
+                COMMAND "grep" "^URL" 
+                COMMAND "sed" "s/^URL:.*svn\\///" 
+                OUTPUT_VARIABLE SVNPATH
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "svn" "info" "${PROJECT_SOURCE_DIR}"
+                COMMAND "grep" "^Revision" 
+                COMMAND "sed" "s/^Revision: //" 
+                OUTPUT_VARIABLE SVNREV
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "MAJOR" "${PROJECT_SOURCE_DIR}/version"
+                COMMAND "sed" "s/^MAJOR=//" 
+                OUTPUT_VARIABLE MAJOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "MINOR" "${PROJECT_SOURCE_DIR}/version"
+                COMMAND "sed" "s/^MINOR=//" 
+                OUTPUT_VARIABLE MINOR
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "RELEASE" "${PROJECT_SOURCE_DIR}/version"
+                COMMAND "sed" "s/^RELEASE=//" 
+                OUTPUT_VARIABLE RELEASE
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Variables which user can override - values persist between builds only if explicitly set
+set (BUILDTAG 0 CACHE STRING "The build tag string. EG TSRC.")
+if(BUILDTAG)
+    set (ION_VERSION_BUILDTAG "${BUILDTAG}" CACHE INTERNAL "Build Tag" FORCE)
+else()
+    set (ION_VERSION_BUILDTAG "DEV-${BUILDHOST}" CACHE INTERNAL "Build Tag" FORCE)
+endif()
+set (BUILDNUM 0 CACHE STRING "The build number or date.")
+if(BUILDNUM)
+    set (ION_VERSION_BUILDNUM "${BUILDNUM}" CACHE INTERNAL "Build Number or Date" FORCE)
+else()
+    set (ION_VERSION_BUILDNUM "${BUILDDATE}" CACHE INTERNAL "Build Number or Date" FORCE)
+endif()
+
+# Variables which we always update between builds
+set (ION_VERSION_MAJOR "${MAJOR}" CACHE INTERNAL "Version Major Number" FORCE)
+set (ION_VERSION_MINOR "${MINOR}" CACHE INTERNAL "Version Minor Number" FORCE)
+set (ION_VERSION_RELEASE "${RELEASE}" CACHE INTERNAL "Version Release Number" FORCE)
+set (ION_VERSION_SVNPATH "${SVNPATH}" CACHE INTERNAL "SVN Path Number" FORCE)
+set (ION_VERSION_SVNREV "${SVNREV}" CACHE INTERNAL "SVN Revision Number" FORCE)
+set (ION_VERSION_BUILDHOST "${BUILDHOST}" CACHE INTERNAL "Host the build was done on" FORCE)
+# If we include this, it will force rebuilds when ever the date value changes -- eg every min
+#set (ION_VERSION_BUILDDATE "${BUILDDATE}" CACHE INTERNAL "The date of the build" FORCE)
+
+# Version config files
+configure_file (
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.h.in"
+	"${PROJECT_BINARY_DIR}/IonVersion.h" @ONLY
+)
+configure_file (
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.cpp.in"
+	"${PROJECT_BINARY_DIR}/IonVersion.cpp" @ONLY
+)
+configure_file (
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.env.in"
+	"${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" DESTINATION /opt/ion/bin
+    RENAME ${CMAKE_PROJECT_NAME}.version.env
+)
+
+# Custom target. Any target which uses version info should depend on this
+add_custom_target(IONVERSION ALL COMMAND "make" "rebuild_cache")

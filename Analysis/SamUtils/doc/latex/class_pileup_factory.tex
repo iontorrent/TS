@@ -1,0 +1,370 @@
+\hypertarget{class_pileup_factory}{
+\section{PileupFactory Class Reference}
+\label{class_pileup_factory}\index{PileupFactory@{PileupFactory}}
+}
+
+
+{\ttfamily \#include $<$Pileup.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_pileup_factory_1_1pileup__iterator}{pileup\_\-iterator}
+\end{DoxyCompactItemize}
+\subsection*{Public Types}
+\begin{DoxyCompactItemize}
+\item 
+typedef std::tr1::unordered\_\-map$<$ int, \hyperlink{class_pileup}{Pileup} $>$ \hyperlink{class_pileup_factory_ae4c0b96c035216ba005467e2d5fc3397}{pileup\_\-container\_\-t}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_pileup_factory_a0f382d75621a4b7d6cc5fd0c1d749e5e}{PileupFactory} ()
+\item 
+\hyperlink{class_pileup_factory_ae8550e54b25cea368a5cc8ba618a80e5}{PileupFactory} (int tid, int start\_\-pos, int end\_\-pos)
+\item 
+\hyperlink{class_pileup_factory_acbc56060b1f13b7d1cdb4acba5b6c451}{PileupFactory} (int tid, int start\_\-pos, int end\_\-pos, vector$<$ int $>$ \&phreds)
+\item 
+\hyperlink{class_pileup_factory_a2b95a68ddb7f2bcd6d828e6733cca118}{PileupFactory} (int tid, int start\_\-pos, int end\_\-pos, vector$<$ int $>$ \&phreds, std::vector$<$ \hyperlink{class_b_a_m_read}{BAMRead} $>$ \&the\_\-overlaps)
+\item 
+\hyperlink{class_pileup_factory_a34aafd5bef78d8b1cf6ed40cc7d07e70}{PileupFactory} (\hyperlink{class_pileup_factory}{PileupFactory} const \&other)
+\item 
+\hyperlink{class_pileup_factory}{PileupFactory} \& \hyperlink{class_pileup_factory_a152705c18ce0fb952bf89c0783752bca}{operator=} (\hyperlink{class_pileup_factory}{PileupFactory} that)
+\item 
+void \hyperlink{class_pileup_factory_a227de38502522bf50b855d1a8b7f5a6f}{init\_\-factory} ()
+\item 
+void \hyperlink{class_pileup_factory_a1920bc4147b24073bf616ffb29f7ab5c}{insert\_\-util} (\hyperlink{class_b_a_m_utils}{BAMUtils} \&util)
+\item 
+\hyperlink{class_pileup}{Pileup} \hyperlink{class_pileup_factory_ad61e4f1bfe0ce99004d5e07e0697d0de}{get\_\-pileup} (int pos\_\-in\_\-genome)
+\item 
+bool \hyperlink{class_pileup_factory_aa0f1f6e20f54688154b710a63b41d457}{is\_\-pos\_\-covered} (int pos\_\-in\_\-genome, int phred\_\-score)
+\item 
+\hyperlink{class_pileup_factory_1_1pileup__iterator}{pileup\_\-iterator} \hyperlink{class_pileup_factory_ab41f2591c7092b2800ba8768a3b593a6}{get\_\-pileup\_\-iterator} ()
+\item 
+void \hyperlink{class_pileup_factory_a4d203d432afda6c43c207f4b5e4062de}{set\_\-overlap\_\-reads} (std::vector$<$ \hyperlink{class_b_a_m_read}{BAMRead} $>$ \&the\_\-overlaps)
+\item 
+void \hyperlink{class_pileup_factory_abfb03a6dad3dbc9d7216c2d96174b42f}{handle\_\-overlaps} (std::string \&q\_\-score\_\-str, coord\_\-t start\_\-slop)
+\item 
+void \hyperlink{class_pileup_factory_a735687db4dba9bbd23d4ecca73b9fc1a}{release\_\-resources} ()
+\item 
+int \hyperlink{class_pileup_factory_a7fa771e82cda5f6c17bc3c488bac9ad6}{get\_\-start} () const 
+\item 
+int \hyperlink{class_pileup_factory_af7f9b6c0c1d5c5d3615bbf7fb1024731}{get\_\-end} () const 
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+This class attempts to encapsulate a Genomic window. Given a start position, and a stop position inside 1 reference sequence \hyperlink{class_b_a_m_utils}{BAMUtils} objects can be inserted. Upon insertion of reads, assuming they're in the window, the Factory becomes query-\/able.
+
+Best practices for use of this factory are to insert all \hyperlink{class_b_a_m_utils}{BAMUtils} from the window BEFORE trying to use other member functions.
+
+This object can be very memory intensive, and is compute intensive. It is advised that you keep the windows small if you suspect the possibility of extreme levels of coverage (in excess of 100x). The advised window length is 10 kilobases.
+
+The start and stop positions of the window are inclusive.
+
+The start and stop positions are 1-\/based. 
+
+\subsection{Member Typedef Documentation}
+\hypertarget{class_pileup_factory_ae4c0b96c035216ba005467e2d5fc3397}{
+\index{PileupFactory@{PileupFactory}!pileup\_\-container\_\-t@{pileup\_\-container\_\-t}}
+\index{pileup\_\-container\_\-t@{pileup\_\-container\_\-t}!PileupFactory@{PileupFactory}}
+\subsubsection[{pileup\_\-container\_\-t}]{\setlength{\rightskip}{0pt plus 5cm}typedef std::tr1::unordered\_\-map$<$int, {\bf Pileup}$>$ {\bf PileupFactory::pileup\_\-container\_\-t}}}
+\label{class_pileup_factory_ae4c0b96c035216ba005467e2d5fc3397}
+an STL container that implements some key,value 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_pileup_factory_a0f382d75621a4b7d6cc5fd0c1d749e5e}{
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\subsubsection[{PileupFactory}]{\setlength{\rightskip}{0pt plus 5cm}PileupFactory::PileupFactory (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a0f382d75621a4b7d6cc5fd0c1d749e5e}
+Default constructor. A necessary evil in order to use these objects in STL containers \hypertarget{class_pileup_factory_ae8550e54b25cea368a5cc8ba618a80e5}{
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\subsubsection[{PileupFactory}]{\setlength{\rightskip}{0pt plus 5cm}PileupFactory::PileupFactory (
+\begin{DoxyParamCaption}
+\item[{int}]{tid, }
+\item[{int}]{start\_\-pos, }
+\item[{int}]{end\_\-pos}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_ae8550e54b25cea368a5cc8ba618a80e5}
+Standard constructor. This constructor will setup a default list of phred scores to observe coverage at: 7,10,17,20,47
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & tid index of reference from SAM/BAM header \\
+\hline
+{\em int} & start\_\-pos start position of window \\
+\hline
+{\em int} & end\_\-pos end position of window \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup_factory}{PileupFactory} a constructed \hyperlink{class_pileup_factory}{PileupFactory} that's ready for \hyperlink{class_b_a_m_utils}{BAMUtils} objects 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_acbc56060b1f13b7d1cdb4acba5b6c451}{
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\subsubsection[{PileupFactory}]{\setlength{\rightskip}{0pt plus 5cm}PileupFactory::PileupFactory (
+\begin{DoxyParamCaption}
+\item[{int}]{tid, }
+\item[{int}]{start\_\-pos, }
+\item[{int}]{end\_\-pos, }
+\item[{vector$<$ int $>$ \&}]{phreds}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_acbc56060b1f13b7d1cdb4acba5b6c451}
+If using custom phred scores, you require this constructor.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & tid index of reference from SAM/BAM header \\
+\hline
+{\em int} & start\_\-pos start position of window \\
+\hline
+{\em int} & end\_\-pos end position of window \\
+\hline
+{\em vector$<$int$>$} & phreds list of phred scores to use \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup_factory}{PileupFactory} a constructed \hyperlink{class_pileup_factory}{PileupFactory} that's ready for \hyperlink{class_b_a_m_utils}{BAMUtils} objects 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_a2b95a68ddb7f2bcd6d828e6733cca118}{
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\subsubsection[{PileupFactory}]{\setlength{\rightskip}{0pt plus 5cm}PileupFactory::PileupFactory (
+\begin{DoxyParamCaption}
+\item[{int}]{tid, }
+\item[{int}]{start\_\-pos, }
+\item[{int}]{end\_\-pos, }
+\item[{vector$<$ int $>$ \&}]{phreds, }
+\item[{std::vector$<$ {\bf BAMRead} $>$ \&}]{the\_\-overlaps}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a2b95a68ddb7f2bcd6d828e6733cca118}
+I initially designed this constructor to be used in the case of a region that overlaps a previous genomic window. The reads that overlapped would be passed in at construction to make I/O code in \hyperlink{class_align_stats}{AlignStats} much simpler.
+
+However, if you already have a list of reads that are within the window for this new Factory you can simply pass them in the constructor here, and the returned \hyperlink{class_pileup_factory}{PileupFactory} will be immediately ready to use.
+
+If the input \hyperlink{class_b_a_m_read}{BAMRead} vector is large, this constructor can take a large amount of time to execute. \hyperlink{class_b_a_m_utils}{BAMUtils} objects are created for each \hyperlink{class_b_a_m_read}{BAMRead}, and then inserted into an internal data structure containing a \hyperlink{class_pileup}{Pileup} for each position in the window.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & tid index of reference from SAM/BAM header \\
+\hline
+{\em int} & start\_\-pos start position of window \\
+\hline
+{\em int} & end\_\-pos end position of window \\
+\hline
+{\em vector$<$int$>$} & phreds list of phred scores to use \\
+\hline
+{\em vector$<$BAMRead$>$} & the\_\-overlaps A vector of BAMRead(s) ready to be inserted \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup_factory}{PileupFactory} a constructed \hyperlink{class_pileup_factory}{PileupFactory} that's ready for \hyperlink{class_b_a_m_utils}{BAMUtils} objects 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_a34aafd5bef78d8b1cf6ed40cc7d07e70}{
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\index{PileupFactory@{PileupFactory}!PileupFactory@{PileupFactory}}
+\subsubsection[{PileupFactory}]{\setlength{\rightskip}{0pt plus 5cm}PileupFactory::PileupFactory (
+\begin{DoxyParamCaption}
+\item[{{\bf PileupFactory} const \&}]{other}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a34aafd5bef78d8b1cf6ed40cc7d07e70}
+Copy constructor
+
+
+\begin{DoxyParams}{Parameters}
+{\em \hyperlink{class_pileup_factory}{PileupFactory}} & const\& other Factory to copy \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup_factory}{PileupFactory} a copy of other 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_pileup_factory_af7f9b6c0c1d5c5d3615bbf7fb1024731}{
+\index{PileupFactory@{PileupFactory}!get\_\-end@{get\_\-end}}
+\index{get\_\-end@{get\_\-end}!PileupFactory@{PileupFactory}}
+\subsubsection[{get\_\-end}]{\setlength{\rightskip}{0pt plus 5cm}int PileupFactory::get\_\-end (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_af7f9b6c0c1d5c5d3615bbf7fb1024731}
+Returns end of genomic window defined in construction
+
+\begin{DoxyReturn}{Returns}
+int end position of genomic window 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_ad61e4f1bfe0ce99004d5e07e0697d0de}{
+\index{PileupFactory@{PileupFactory}!get\_\-pileup@{get\_\-pileup}}
+\index{get\_\-pileup@{get\_\-pileup}!PileupFactory@{PileupFactory}}
+\subsubsection[{get\_\-pileup}]{\setlength{\rightskip}{0pt plus 5cm}{\bf Pileup} PileupFactory::get\_\-pileup (
+\begin{DoxyParamCaption}
+\item[{int}]{pos\_\-in\_\-genome}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_ad61e4f1bfe0ce99004d5e07e0697d0de}
+Returns a \hyperlink{class_pileup}{Pileup} given a position in the genome. If position is outside of the genomic window a default constructed \hyperlink{class_pileup}{Pileup} is returned.
+
+If the position has no coverage, a default constructed \hyperlink{class_pileup}{Pileup} object is returned
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & pos\_\-in\_\-genome 1-\/based position in genome \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup}{Pileup} a \hyperlink{class_pileup}{Pileup} object for pos\_\-in\_\-genome 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_ab41f2591c7092b2800ba8768a3b593a6}{
+\index{PileupFactory@{PileupFactory}!get\_\-pileup\_\-iterator@{get\_\-pileup\_\-iterator}}
+\index{get\_\-pileup\_\-iterator@{get\_\-pileup\_\-iterator}!PileupFactory@{PileupFactory}}
+\subsubsection[{get\_\-pileup\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf pileup\_\-iterator} PileupFactory::get\_\-pileup\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_ab41f2591c7092b2800ba8768a3b593a6}
+Returns an iterator for the Pileups inside the factory.
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_pileup_factory_1_1pileup__iterator}{PileupFactory::pileup\_\-iterator} 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_a7fa771e82cda5f6c17bc3c488bac9ad6}{
+\index{PileupFactory@{PileupFactory}!get\_\-start@{get\_\-start}}
+\index{get\_\-start@{get\_\-start}!PileupFactory@{PileupFactory}}
+\subsubsection[{get\_\-start}]{\setlength{\rightskip}{0pt plus 5cm}int PileupFactory::get\_\-start (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a7fa771e82cda5f6c17bc3c488bac9ad6}
+Returns start of genomic window defined in construction \begin{DoxyReturn}{Returns}
+int start position of genomic window 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_abfb03a6dad3dbc9d7216c2d96174b42f}{
+\index{PileupFactory@{PileupFactory}!handle\_\-overlaps@{handle\_\-overlaps}}
+\index{handle\_\-overlaps@{handle\_\-overlaps}!PileupFactory@{PileupFactory}}
+\subsubsection[{handle\_\-overlaps}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::handle\_\-overlaps (
+\begin{DoxyParamCaption}
+\item[{std::string \&}]{q\_\-score\_\-str, }
+\item[{coord\_\-t}]{start\_\-slop}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_abfb03a6dad3dbc9d7216c2d96174b42f}
+This function is used ONLY AFTER you have just called:
+
+\hyperlink{class_pileup_factory_a4d203d432afda6c43c207f4b5e4062de}{PileupFactory::set\_\-overlap\_\-reads(std::vector$<$BAMRead$>$\& the\_\-overlaps)}
+
+This is computationally expensive depending on the genomic window size. It automatically inserts all the reads passed in \hyperlink{class_pileup_factory_a4d203d432afda6c43c207f4b5e4062de}{PileupFactory::set\_\-overlap\_\-reads(std::vector$<$BAMRead$>$\& the\_\-overlaps)} into the internal data structure, and resulting \hyperlink{class_pileup}{Pileup} objects.
+
+
+\begin{DoxyParams}{Parameters}
+{\em std::string} & q\_\-score\_\-str a string representation of the phred scores \\
+\hline
+{\em coord\_\-t} & start\_\-slop number of bases at the start of the read to ignore for error calculations) \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_pileup_factory_a227de38502522bf50b855d1a8b7f5a6f}{
+\index{PileupFactory@{PileupFactory}!init\_\-factory@{init\_\-factory}}
+\index{init\_\-factory@{init\_\-factory}!PileupFactory@{PileupFactory}}
+\subsubsection[{init\_\-factory}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::init\_\-factory (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a227de38502522bf50b855d1a8b7f5a6f}
+If performance is on your mind, this sets up the internal data structure \hypertarget{class_pileup_factory_a1920bc4147b24073bf616ffb29f7ab5c}{
+\index{PileupFactory@{PileupFactory}!insert\_\-util@{insert\_\-util}}
+\index{insert\_\-util@{insert\_\-util}!PileupFactory@{PileupFactory}}
+\subsubsection[{insert\_\-util}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::insert\_\-util (
+\begin{DoxyParamCaption}
+\item[{{\bf BAMUtils} \&}]{util}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a1920bc4147b24073bf616ffb29f7ab5c}
+Inserts a \hyperlink{class_b_a_m_utils}{BAMUtils} object into some Pileup(s). The function determines which Pileup(s) are effected, finds them, and adds this \hyperlink{class_b_a_m_utils}{BAMUtils} to it.
+
+
+\begin{DoxyParams}{Parameters}
+{\em BAMUtils\&} & util a reference to an existing \hyperlink{class_b_a_m_utils}{BAMUtils} object \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_pileup_factory_aa0f1f6e20f54688154b710a63b41d457}{
+\index{PileupFactory@{PileupFactory}!is\_\-pos\_\-covered@{is\_\-pos\_\-covered}}
+\index{is\_\-pos\_\-covered@{is\_\-pos\_\-covered}!PileupFactory@{PileupFactory}}
+\subsubsection[{is\_\-pos\_\-covered}]{\setlength{\rightskip}{0pt plus 5cm}bool PileupFactory::is\_\-pos\_\-covered (
+\begin{DoxyParamCaption}
+\item[{int}]{pos\_\-in\_\-genome, }
+\item[{int}]{phred\_\-score}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_aa0f1f6e20f54688154b710a63b41d457}
+A convenience method so you can avoid handling \hyperlink{class_pileup}{Pileup} objects all together if you want. Returns true if the position is covered by phred\_\-score reads.
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & pos\_\-in\_\-genome 1-\/based position in genome to inspect \\
+\hline
+{\em int} & phred\_\-score Phred score you're interested in \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+bool true if position is covered by reads in the factory 
+\end{DoxyReturn}
+\hypertarget{class_pileup_factory_a152705c18ce0fb952bf89c0783752bca}{
+\index{PileupFactory@{PileupFactory}!operator=@{operator=}}
+\index{operator=@{operator=}!PileupFactory@{PileupFactory}}
+\subsubsection[{operator=}]{\setlength{\rightskip}{0pt plus 5cm}{\bf PileupFactory}\& PileupFactory::operator= (
+\begin{DoxyParamCaption}
+\item[{{\bf PileupFactory}}]{that}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a152705c18ce0fb952bf89c0783752bca}
+Overloaded operator= that calls the copy constructor \hypertarget{class_pileup_factory_a735687db4dba9bbd23d4ecca73b9fc1a}{
+\index{PileupFactory@{PileupFactory}!release\_\-resources@{release\_\-resources}}
+\index{release\_\-resources@{release\_\-resources}!PileupFactory@{PileupFactory}}
+\subsubsection[{release\_\-resources}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::release\_\-resources (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a735687db4dba9bbd23d4ecca73b9fc1a}
+Clears internal resources \hypertarget{class_pileup_factory_a4d203d432afda6c43c207f4b5e4062de}{
+\index{PileupFactory@{PileupFactory}!set\_\-overlap\_\-reads@{set\_\-overlap\_\-reads}}
+\index{set\_\-overlap\_\-reads@{set\_\-overlap\_\-reads}!PileupFactory@{PileupFactory}}
+\subsubsection[{set\_\-overlap\_\-reads}]{\setlength{\rightskip}{0pt plus 5cm}void PileupFactory::set\_\-overlap\_\-reads (
+\begin{DoxyParamCaption}
+\item[{std::vector$<$ {\bf BAMRead} $>$ \&}]{the\_\-overlaps}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_pileup_factory_a4d203d432afda6c43c207f4b5e4062de}
+Allows you to input a vector of BAMRead's. Warning: do not do this if you supplied this vector during construction. It will overwrite an internal class member.
+
+If this function is used, you need to call:
+
+\hyperlink{class_pileup_factory_abfb03a6dad3dbc9d7216c2d96174b42f}{PileupFactory::handle\_\-overlaps(std::string\& q\_\-score\_\-str, coord\_\-t start\_\-slop)};
+
+The reason that handle\_\-overlaps isn't called is because it can be computationally expensive, and this allows the user of the class to copy the data into the Factory, but not necessarily do the heavy computation aspect of it right away.
+
+
+\begin{DoxyParams}{Parameters}
+{\em std::vector$<$BAMRead$>$\&} & the\_\-overlaps reads that mapped to this genomic region \\
+\hline
+\end{DoxyParams}
+
+
+The documentation for this class was generated from the following file:\begin{DoxyCompactItemize}
+\item 
+types/Pileup.h\end{DoxyCompactItemize}

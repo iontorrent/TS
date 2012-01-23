@@ -1,0 +1,55 @@
+{% extends "rundb/ion_base_template.html" %}
+{% block pagination_holder %}{% endblock %}
+{% block controls_holder %}{% endblock %}
+{% block current_tab %}crawler_status{% endblock %}
+{% block content %}
+{% if result_dict %}
+<div class="centered_message">The crawler is online.</div>
+<p></p>
+<table>
+  <tbody>
+    <tr class="row1">
+      {% with result_dict.elapsed as e %}
+      <th>Crawler Uptime</th>
+      <td>{% spaceless %}
+	{% if e.days %}{{e.days}} day{{e.days|pluralize}}, {% endif %}
+	{% if e.days or e.hours %}
+	{{e.hours}} hour{{e.hours|pluralize}},
+	{% endif %}
+	{{e.minutes}} minute{{e.minutes|pluralize}},
+	{{e.seconds}} second{{e.seconds|pluralize}}
+      {% endspaceless %}</td>
+      {% endwith %}
+    </tr>
+    <tr class="row2">
+      <th>Number of Experiments Added</th><td>{{result_dict.nfound}}</td>
+    </tr>
+    <tr class="row1">
+      <th>Recently Added Experiments</th>
+      <td>
+	{% for exp in result_dict.exprs %}
+	<div>
+	  {{exp}}
+	</div>
+	{% endfor %}
+      </td>
+    </tr>
+    <tr class="row2">
+      <th>Currently Inspecting Folder</th><td>{{result_dict.folder}}</td>
+    </tr>
+    <tr class="row1">
+      <th>State</th>
+      <td>
+	<b>{{result_dict.state.0|capfirst}}</b>
+	for the last {{result_dict.state.1|floatformat:2}} seconds.
+      </td>
+    </tr>
+    <tr class="row2">
+      <th>Running on Host</th><td>{{result_dict.hostname}}</td>
+    </tr>
+  </tbody>
+</table>
+{% else %}
+<p class="centered_message">The crawler is offline.</p>
+{% endif %}
+{% endblock %}

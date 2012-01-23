@@ -1,0 +1,367 @@
+\hypertarget{class_b_a_m_reader}{
+\section{BAMReader Class Reference}
+\label{class_b_a_m_reader}\index{BAMReader@{BAMReader}}
+}
+
+
+{\ttfamily \#include $<$BAMReader.h$>$}
+
+\subsection*{Classes}
+\begin{DoxyCompactItemize}
+\item 
+class \hyperlink{class_b_a_m_reader_1_1iterator}{iterator}
+\item 
+class \hyperlink{class_b_a_m_reader_1_1pileup__generator}{pileup\_\-generator}
+\end{DoxyCompactItemize}
+\subsection*{Public Member Functions}
+\begin{DoxyCompactItemize}
+\item 
+\hyperlink{class_b_a_m_reader_a85d3f6b07c7d5fb373445a8494f5dc21}{BAMReader} ()
+\item 
+\hyperlink{class_b_a_m_reader_add2b99c8016d3babbee3761944b747c4}{BAMReader} (const std::string \&BAM\_\-file)
+\item 
+\hyperlink{class_b_a_m_reader_a48e691d891ee2aab6909712e7fb59f57}{BAMReader} (const std::string \&BAM\_\-file, const std::string \&Index\_\-File)
+\item 
+void \hyperlink{class_b_a_m_reader_a3d36c9ac10d8fd1bcb1303563d1ed31c}{open} ()
+\item 
+void \hyperlink{class_b_a_m_reader_ae9366fa9633aa9366e1b87ee82043cc0}{open} (const std::string \&BAM\_\-file)
+\item 
+void \hyperlink{class_b_a_m_reader_a6513bdca6cd2c1c1b3c3f53a1a00a771}{open} (const std::string \&mode\_\-stdin, const std::string \&type\_\-of\_\-stdin)
+\item 
+void \hyperlink{class_b_a_m_reader_a68972b171921c6019128a6558d76ca4b}{close} ()
+\item 
+bool \hyperlink{class_b_a_m_reader_a74559ce62f95808827c869fc0496f12d}{is\_\-open} () const 
+\item 
+\hypertarget{class_b_a_m_reader_a84d7e5d949659fe49b4bdd809ae1ddb6}{
+{\bfseries operator bool} () const }
+\label{class_b_a_m_reader_a84d7e5d949659fe49b4bdd809ae1ddb6}
+
+\item 
+int \hyperlink{class_b_a_m_reader_a0e452e1c6a2058dca0f0e301fa687709}{num\_\-refs} () const 
+\item 
+const strvec \& \hyperlink{class_b_a_m_reader_ad3d26bd30f9459d57462a1a8a74d87e3}{refs} () const 
+\item 
+const lenvec \& \hyperlink{class_b_a_m_reader_a2ffe18c4b02e0f4b1eef9342441bf187}{lens} () const 
+\item 
+\hyperlink{class_b_a_m_reader_1_1iterator}{iterator} \hyperlink{class_b_a_m_reader_a72af082a9d384395f3d9f15a632bda2a}{get\_\-iterator} ()
+\item 
+\hyperlink{class_b_a_m_reader_1_1iterator}{iterator} \hyperlink{class_b_a_m_reader_a21ef814e5d6cd574607a25344dff8006}{get\_\-iterator} (int ref\_\-index)
+\item 
+\hyperlink{class_b_a_m_reader_1_1iterator}{iterator} \hyperlink{class_b_a_m_reader_acb2bc246e0bb07f2e325a4a8b3bfa452}{get\_\-iterator} (const std::string \&ref\_\-seq\_\-name)
+\item 
+\hyperlink{class_b_a_m_reader_1_1iterator}{iterator} \hyperlink{class_b_a_m_reader_a4e5e15cb7d6ace49e542f1e907bd1ff9}{get\_\-iterator} (int ref\_\-index, coord\_\-t begin, coord\_\-t end)
+\item 
+\hyperlink{class_b_a_m_reader_1_1iterator}{iterator} \hyperlink{class_b_a_m_reader_a9621217637606a2c4c2415ea704eae7a}{get\_\-iterator} (const std::string \&ref\_\-seq\_\-name, coord\_\-t begin, coord\_\-t end)
+\item 
+\hyperlink{class_b_a_m_reader_1_1pileup__generator}{pileup\_\-generator} \hyperlink{class_b_a_m_reader_a472145007a75d39cd21cc93e660cd4dc}{get\_\-generator} (std::string region)
+\item 
+const bam\_\-header\_\-t $\ast$ \hyperlink{class_b_a_m_reader_a82bd12d0b5656563a07409a0739bcead}{get\_\-header} () const 
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+\hyperlink{class_b_a_m_reader}{BAMReader} is a class used to read SAM/BAM files or SAM/BAM from stdin It's a light weight class that wraps the functionality in samtools 
+
+\subsection{Constructor \& Destructor Documentation}
+\hypertarget{class_b_a_m_reader_a85d3f6b07c7d5fb373445a8494f5dc21}{
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\subsubsection[{BAMReader}]{\setlength{\rightskip}{0pt plus 5cm}BAMReader::BAMReader (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a85d3f6b07c7d5fb373445a8494f5dc21}
+Default constructor. Initializes internal members. Use this constructor if you're reading from stdin, and then use \hyperlink{class_b_a_m_reader_a6513bdca6cd2c1c1b3c3f53a1a00a771}{BAMReader::open(const std::string\& mode\_\-stdin, const std::string\& type\_\-of\_\-stdin)}
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader}{BAMReader} a \hyperlink{class_b_a_m_reader}{BAMReader} that has no file/io 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_add2b99c8016d3babbee3761944b747c4}{
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\subsubsection[{BAMReader}]{\setlength{\rightskip}{0pt plus 5cm}BAMReader::BAMReader (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{BAM\_\-file}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_add2b99c8016d3babbee3761944b747c4}
+A constructor which takes a string representing the path to a bam file, including the file name. The constructor doesn't open the file.
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader}{BAMReader} a \hyperlink{class_b_a_m_reader}{BAMReader} that is ready to be opened 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a48e691d891ee2aab6909712e7fb59f57}{
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\index{BAMReader@{BAMReader}!BAMReader@{BAMReader}}
+\subsubsection[{BAMReader}]{\setlength{\rightskip}{0pt plus 5cm}BAMReader::BAMReader (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{BAM\_\-file, }
+\item[{const std::string \&}]{Index\_\-File}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a48e691d891ee2aab6909712e7fb59f57}
+A constructor which takes a string representing the path to a bam file, including the file name. It also takes a string representing the path to an index file for this bam.
+
+The constructor doesn't open the file. \begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader}{BAMReader} a \hyperlink{class_b_a_m_reader}{BAMReader} that is ready to be opened 
+\end{DoxyReturn}
+
+
+\subsection{Member Function Documentation}
+\hypertarget{class_b_a_m_reader_a68972b171921c6019128a6558d76ca4b}{
+\index{BAMReader@{BAMReader}!close@{close}}
+\index{close@{close}!BAMReader@{BAMReader}}
+\subsubsection[{close}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::close (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a68972b171921c6019128a6558d76ca4b}
+Closes file. If file is already closed, or not open, this has no effect \hypertarget{class_b_a_m_reader_a472145007a75d39cd21cc93e660cd4dc}{
+\index{BAMReader@{BAMReader}!get\_\-generator@{get\_\-generator}}
+\index{get\_\-generator@{get\_\-generator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-generator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf pileup\_\-generator} BAMReader::get\_\-generator (
+\begin{DoxyParamCaption}
+\item[{std::string}]{region}
+\end{DoxyParamCaption}
+)\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_a472145007a75d39cd21cc93e660cd4dc}
+Get a pileup generator for a specific region. The region must follow the format of samtools pileup, ie: \char`\"{}chr3:1,000-\/2,000\char`\"{} format is \char`\"{}ref:start-\/stop\char`\"{}
+
+
+\begin{DoxyParams}{Parameters}
+{\em string} & region \char`\"{}ref:start-\/stop\char`\"{} \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1pileup__generator}{BAMReader::pileup\_\-generator} a pileup generator for the region of interest 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a82bd12d0b5656563a07409a0739bcead}{
+\index{BAMReader@{BAMReader}!get\_\-header@{get\_\-header}}
+\index{get\_\-header@{get\_\-header}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-header}]{\setlength{\rightskip}{0pt plus 5cm}const bam\_\-header\_\-t$\ast$ BAMReader::get\_\-header (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const\hspace{0.3cm}{\ttfamily  \mbox{[}inline\mbox{]}}}}
+\label{class_b_a_m_reader_a82bd12d0b5656563a07409a0739bcead}
+Returns a reference to the C-\/structure representing the header file.
+
+\begin{DoxyReturn}{Returns}
+bam\_\-header\_\-t$\ast$ pointer to the header 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a9621217637606a2c4c2415ea704eae7a}{
+\index{BAMReader@{BAMReader}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMReader::iterator} BAMReader::get\_\-iterator (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{ref\_\-seq\_\-name, }
+\item[{coord\_\-t}]{begin, }
+\item[{coord\_\-t}]{end}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a9621217637606a2c4c2415ea704eae7a}
+Iterate over all alignments in an interval. Intervals are specified C++-\/style, as 0-\/based, and half open:
+
+
+\begin{DoxyParams}{Parameters}
+{\em const} & std::string\& ref\_\-seq\_\-name name of reference from header \\
+\hline
+{\em long} & begin beginning of region of interest \\
+\hline
+{\em long} & end end of region of interest \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} iterator to selected region 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a72af082a9d384395f3d9f15a632bda2a}{
+\index{BAMReader@{BAMReader}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMReader::iterator} BAMReader::get\_\-iterator (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a72af082a9d384395f3d9f15a632bda2a}
+This returns an iterator for all alignments in the SAM/BAM
+
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} iterator to all alignments 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a21ef814e5d6cd574607a25344dff8006}{
+\index{BAMReader@{BAMReader}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMReader::iterator} BAMReader::get\_\-iterator (
+\begin{DoxyParamCaption}
+\item[{int}]{ref\_\-index}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a21ef814e5d6cd574607a25344dff8006}
+Returns an iterator to the specific reference of interest. Will only iterate over those reads
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & ref\_\-index index of reference from header \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} iterator to selected reference 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a4e5e15cb7d6ace49e542f1e907bd1ff9}{
+\index{BAMReader@{BAMReader}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMReader::iterator} BAMReader::get\_\-iterator (
+\begin{DoxyParamCaption}
+\item[{int}]{ref\_\-index, }
+\item[{coord\_\-t}]{begin, }
+\item[{coord\_\-t}]{end}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a4e5e15cb7d6ace49e542f1e907bd1ff9}
+Iterate over all alignments in an interval. Intervals are specified C++-\/style, as 0-\/based, and half open:
+
+
+\begin{DoxyParams}{Parameters}
+{\em int} & ref\_\-index index from header of reference \\
+\hline
+{\em long} & begin beginning of region of interest \\
+\hline
+{\em long} & end end of region of interest \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} iterator to selected region 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_acb2bc246e0bb07f2e325a4a8b3bfa452}{
+\index{BAMReader@{BAMReader}!get\_\-iterator@{get\_\-iterator}}
+\index{get\_\-iterator@{get\_\-iterator}!BAMReader@{BAMReader}}
+\subsubsection[{get\_\-iterator}]{\setlength{\rightskip}{0pt plus 5cm}{\bf BAMReader::iterator} BAMReader::get\_\-iterator (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{ref\_\-seq\_\-name}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_acb2bc246e0bb07f2e325a4a8b3bfa452}
+Returns an iterator to the specific reference of interest. Will only iterate over those reads
+
+
+\begin{DoxyParams}{Parameters}
+{\em const} & std::string\& ref\_\-index name of reference \\
+\hline
+\end{DoxyParams}
+\begin{DoxyReturn}{Returns}
+\hyperlink{class_b_a_m_reader_1_1iterator}{BAMReader::iterator} iterator to selected reference 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a74559ce62f95808827c869fc0496f12d}{
+\index{BAMReader@{BAMReader}!is\_\-open@{is\_\-open}}
+\index{is\_\-open@{is\_\-open}!BAMReader@{BAMReader}}
+\subsubsection[{is\_\-open}]{\setlength{\rightskip}{0pt plus 5cm}bool BAMReader::is\_\-open (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_b_a_m_reader_a74559ce62f95808827c869fc0496f12d}
+Returns true if file is open. False if file isn't open
+
+\begin{DoxyReturn}{Returns}
+bool true if file is open 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a2ffe18c4b02e0f4b1eef9342441bf187}{
+\index{BAMReader@{BAMReader}!lens@{lens}}
+\index{lens@{lens}!BAMReader@{BAMReader}}
+\subsubsection[{lens}]{\setlength{\rightskip}{0pt plus 5cm}const lenvec \& BAMReader::lens (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_b_a_m_reader_a2ffe18c4b02e0f4b1eef9342441bf187}
+Returns a vector of the reference lengths from the header
+
+\begin{DoxyReturn}{Returns}
+lenvec\& vector of reference lenghts from header 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a0e452e1c6a2058dca0f0e301fa687709}{
+\index{BAMReader@{BAMReader}!num\_\-refs@{num\_\-refs}}
+\index{num\_\-refs@{num\_\-refs}!BAMReader@{BAMReader}}
+\subsubsection[{num\_\-refs}]{\setlength{\rightskip}{0pt plus 5cm}int BAMReader::num\_\-refs (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_b_a_m_reader_a0e452e1c6a2058dca0f0e301fa687709}
+Returns the number of references specificed in the header of the SAM/BAM file
+
+\begin{DoxyReturn}{Returns}
+int number of references in header 
+\end{DoxyReturn}
+\hypertarget{class_b_a_m_reader_a6513bdca6cd2c1c1b3c3f53a1a00a771}{
+\index{BAMReader@{BAMReader}!open@{open}}
+\index{open@{open}!BAMReader@{BAMReader}}
+\subsubsection[{open}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::open (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{mode\_\-stdin, }
+\item[{const std::string \&}]{type\_\-of\_\-stdin}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a6513bdca6cd2c1c1b3c3f53a1a00a771}
+Tries to open an stdin stream. Valid arguments to mode\_\-stdin: \char`\"{}-\/\char`\"{} Valid arguments to type\_\-of\_\-stdin: \char`\"{}r\char`\"{} or \char`\"{}rb\char`\"{}. Use \char`\"{}r\char`\"{} for sams, and \char`\"{}rb\char`\"{} for binary Samtools will exist the program if the above isn't used correctly.
+
+
+\begin{DoxyParams}{Parameters}
+{\em const} & std::string\& mode\_\-stdin currently only '-\/' is valid input \\
+\hline
+{\em const} & std::string\& type\_\-of\_\-stdin expects \char`\"{}r\char`\"{} or \char`\"{}rb\char`\"{}\\
+\hline
+\end{DoxyParams}
+void \hyperlink{class_b_a_m_reader_a6513bdca6cd2c1c1b3c3f53a1a00a771}{BAMReader::open(const std::string\& BAM\_\-file, const std::string\& Index\_\-File)} \{
+
+bam\_\-file = BAM\_\-file; index\_\-file = Index\_\-File;
+
+bam\_\-index = bam\_\-index\_\-load(Index\_\-File.c\_\-str()); \_\-open();
+
+\} \hypertarget{class_b_a_m_reader_a3d36c9ac10d8fd1bcb1303563d1ed31c}{
+\index{BAMReader@{BAMReader}!open@{open}}
+\index{open@{open}!BAMReader@{BAMReader}}
+\subsubsection[{open}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::open (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_a3d36c9ac10d8fd1bcb1303563d1ed31c}
+Tries to open file specificed in constructor. If no file is specified this has no effect \hypertarget{class_b_a_m_reader_ae9366fa9633aa9366e1b87ee82043cc0}{
+\index{BAMReader@{BAMReader}!open@{open}}
+\index{open@{open}!BAMReader@{BAMReader}}
+\subsubsection[{open}]{\setlength{\rightskip}{0pt plus 5cm}void BAMReader::open (
+\begin{DoxyParamCaption}
+\item[{const std::string \&}]{BAM\_\-file}
+\end{DoxyParamCaption}
+)}}
+\label{class_b_a_m_reader_ae9366fa9633aa9366e1b87ee82043cc0}
+Tries to open file passed in the funciton call.
+
+
+\begin{DoxyParams}{Parameters}
+{\em const} & std::string\& BAM\_\-file represents path of file to open \\
+\hline
+\end{DoxyParams}
+\hypertarget{class_b_a_m_reader_ad3d26bd30f9459d57462a1a8a74d87e3}{
+\index{BAMReader@{BAMReader}!refs@{refs}}
+\index{refs@{refs}!BAMReader@{BAMReader}}
+\subsubsection[{refs}]{\setlength{\rightskip}{0pt plus 5cm}const strvec \& BAMReader::refs (
+\begin{DoxyParamCaption}
+{}
+\end{DoxyParamCaption}
+) const}}
+\label{class_b_a_m_reader_ad3d26bd30f9459d57462a1a8a74d87e3}
+Returns a vector of strings with the reference names from the header
+
+\begin{DoxyReturn}{Returns}
+strvec\& vector of references in header 
+\end{DoxyReturn}
+
+
+The documentation for this class was generated from the following files:\begin{DoxyCompactItemize}
+\item 
+BAMReader.h\item 
+BAMReader.cpp\end{DoxyCompactItemize}

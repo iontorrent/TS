@@ -1,0 +1,9 @@
+# CUDA_PROFILE_LOG_VERSION 2.0
+# CUDA_PROFILE_CSV 1
+# TIMESTAMPFACTOR 1200ac5e631dcdc8
+# CUDA_DEVICE 0 Tesla C2050
+gpustarttimestamp,method,gputime,cputime,occupancy,gridSizeX,gridSizeY,gridSizeZ,blockSizeX,blockSizeY,blockSizeZ,dynSmemPerBlock,staSmemPerBlock,registerPerThread,streamID,localblocksize,memTransferSize,memtransferhostmemtype,gld_inst_32bit,gld_inst_64bit,gld_inst_128bit,gst_inst_8bit,gst_inst_16bit,gst_inst_32bit,gst_inst_64bit,gst_inst_128bit,local_load,local_store,gld_request,gst_request,shared_load,shared_store,sm_cta_launched,l1_local_load_hit,branch,l1_local_load_miss,l1_local_store_hit,divergent_branch,l1_local_store_miss,l1_global_load_hit,inst_issued,l1_global_load_miss,inst_executed,uncached_global_load_transaction,global_store_transaction,warps_launched,threads_launched,l1_shared_bank_conflict,active_warps,active_cycles,l2 read requests,l2 read texture requests,l2 write requests,l2 read misses,l2 write misses,tex cache requests,tex cache misses,threads instruction executed,dram reads,dram writes
+1200f5970febe000,memcpyHtoA,320.448,797.24,,,,,,,,,,,0,0,1048576,0
+1200f5970ff0d7c0,_Z15transformKernelPfiif,144.384,47.88,0.333,64,64,1,8,8,1,0,0,18,0,-1,,0,0,0,0,0,0,262144,0,0,0,0,0,586,0,0,293,0,11294,0,0,22,0,0,109432,0,108162,0,2352,586,18752,0,1216589,80362,0,65184,32768,96321,100243,16837,4697,3439072,185640,135673
+1200f5970ff8ed60,_Z15transformKernelPfiif,142.624,8.56,0.333,64,64,1,8,8,1,0,0,18,0,-1,,0,0,0,0,0,0,262144,0,0,0,0,0,586,0,0,293,0,11364,0,0,12,0,0,109370,0,107796,0,2344,586,18752,0,1203366,80257,0,65135,32768,58801,35547,16876,4613,3421760,126536,45569
+1200f59710012fa0,memcpyDtoH,389.984,2737.64,,,,,,,,,,,0,0,1048576,0

@@ -1,0 +1,93 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+#set -x
+#echo $0 $1 $2
+### BEGIN INIT INFO
+# Provides:          plugin queue
+# Required-Start:    $local_fs $remote_fs $network $syslog
+# Required-Stop:     $local_fs $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start/stop ionPlugin daemon
+### END INIT INFO
+
+EXEC='/opt/ion/iondb/bin/ionPlugin.py'
+EXEC_CMD="/usr/bin/python -- ${EXEC}"
+DAEMON_NAME='ionPlugin'
+USERID='ionian'
+PIDFILE="/var/run/${DAEMON_NAME}.pid"
+
+function start_function ()
+{
+    # Start the Job Server
+    if [ -f ${EXEC} ]
+    then
+        start-stop-daemon \
+            --start \
+            --chuid ${USERID} \
+            --user ${USERID} \
+            --pidfile ${PIDFILE} \
+            --background \
+            --startas $EXEC_CMD
+        if [ $? -eq 0 ]
+        then
+            sleep 1
+            pid=$(ps aux|grep "/usr/bin/python "${EXEC}|grep -v grep|awk '{print($2)}')
+            if [ "$pid" == "" ]; then
+                echo "ERROR: $DAEMON_NAME failed to start"
+                return 1
+            else
+                echo "Starting $DAEMON_NAME pid = $pid"
+                echo ${pid} > ${PIDFILE}
+            fi
+        else
+            echo "Failed to start: $DAEMON_NAME"
+            return 1
+        fi
+    else
+        echo "Can't find $DAEMON_NAME. Broken install of Torrent Server?"
+        return 1
+    fi
+}
+
+function stop_function ()
+{
+    echo "Stopping $DAEMON_NAME"
+    start-stop-daemon --stop --user ${USERID} --pidfile ${PIDFILE} --retry 5
+    rm -f ${PIDFILE}
+}
+
+function status ()
+{
+    if [ -f ${PIDFILE} ]; then
+        pid=$(cat ${PIDFILE})
+        if [ "$pid" != "" ]
+        then
+            echo "$DAEMON_NAME is running. pid = $pid"
+        else
+            echo "No $DAEMON_NAME process"
+            return 1
+        fi
+    else
+        echo "No pid file: ${PIDFILE}"
+        return 1
+    fi
+}
+
+case $1 in
+	start)
+		start_function
+	;;
+	stop)
+		stop_function
+	;;
+	restart)
+		stop_function
+		start_function
+	;;
+	status)
+		status
+	;;
+    *)
+    echo " * Usage: /etc/init.d/${DAEMON_NAME} {start|stop|status|restart}"
+esac

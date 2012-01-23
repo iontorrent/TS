@@ -1,0 +1,279 @@
+{% extends "rundb/ion_base_template.html" %}
+{% load pagetools %}
+{% load embeddedhelp %}
+{% load humanize %}
+
+{% block controls %}
+<form action="" method='get' id="control_form">
+<table>
+  <thead>
+    <tr>
+      {% for field in filterform %}{% spaceless %}
+      <th>{{field.label}}</th>
+      {% endspaceless %}{% endfor%}
+      <th>
+	<div class="relative">
+	  <span>Search by Report{#{% tooltip rpt_searchbyrpt %}#}</span>
+	  <span class="global_help">{#{% tooltip_summary %}#}</span>
+	</div>
+      </th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <tr>
+    {% for field in filterform %}
+       <td>{{field}}</td>
+    {% endfor%}
+    <td class="searchholder">
+      <div class="left">{{searchform.searchterms}}</div>
+      <div class="left margin_left">
+	<input type="button" value="Go" onclick="submitControlForm()"/>
+      </div>
+    </td>
+    <td>
+      {% if getURL %}
+      <a href="{% url rundb.views.reports %}">Clear</a>
+      {% else %}
+      <div class="clearholder">_</div>
+      {% endif %}
+    </td>
+    </tr>
+    <tr style="display:none;">
+        <td><input type="submit" value="Submit" name="submit"/></td>
+    </tr>
+  </tbody>
+</table>
+{{sortform.sortfield}}
+</form>
+{% endblock %}
+
+{% block current_tab %}reports{% endblock %}
+
+{% block content %}
+{% if rep.object_list %}
+<table id="reports">
+  <colgroup span="10"></colgroup>
+    <thead>
+    <tr class="sortables">
+        <th>
+            <span class="ui-icon ui-icon-plus"></span>
+        </th>
+        <th>
+            <div class="sortheading">Report{#{% tooltip rpt_rptname %}#}</div>
+            <div class="sortkey">resultsname</div>
+        </th>
+        <th>
+            <!-- ReAnalyze -->
+        </th>
+        <th>
+            <div class="sortheading">Status{#{% tooltip rpt_status %}#}</div>
+            <div class="sortkey">status</div>
+        </th>
+        <th>
+            <div class="sortheading">Run{#{% tooltip rpt_exp %}#}</div>
+            <div class="sortkey">experiment</div>
+        </th>
+        <th>
+            <div>Chip</div>
+        </th>
+        <th>
+            <div class="sortheading">Flows {#{% tooltip rpt_cycles %}#}</div>
+            <div class="sortkey">processedcycles</div>
+        </th>
+
+        <th>
+            <div class="heading">Lib Key Signal</div>
+        </th>
+        <th>
+            <div class="heading">Q17 Bases</div>
+        </th>
+        <th>
+            <div class="heading">100 bp AQ17 Reads</div>
+        </th>
+        <th>
+            <div class="heading">AQ17 Bases</div>
+        </th>
+
+        <th>
+            <div class="sortheading">Date {#{% tooltip rpt_date %}#}</div>
+            <div class="sortkey">timestamp</div>
+        </th>
+    </tr>
+    </thead>
+  <tbody>
+    {% for r in rep.object_list %}
+    {% with r.best_metrics as tfm %}
+    <tr class="{% cycle 'row1' 'row2' %} centertd">
+      <td>{% spaceless %}
+	{#{% if tfm %}#}
+	{% if r.pretty_tabulate %}
+	{% icon ui-icon-circle-plus ui-icon-circle-minus %}
+	javascript:toggleTr('{{r.pk}}')
+	{% endicon %}
+	{#{% endif %}#}
+	{% else %}
+	{% icon "ui-icon-circle-plus ui-state-disabled" %}#{% endicon %}
+	{% endif %}
+      {% endspaceless %}</td>
+      <td>
+
+    {#only provide links to the report if they exist#}
+	{% if r.report_exist %}
+	<span class="left right_margin" title="Open report in this window.">
+	  <a href="{{r.reportLink}}">{{r.resultsName}}</a>
+	</span>
+	<span class="left icon_link ui-icon ui-icon-extlink
+		     ui-state-default ui-corner-all"
+	      onclick="window.open('{{r.reportLink}}')"
+	      title="Open report in new window.">
+	</span>
+	{% else %}
+	<span class="left right_margin">
+	  {{r.resultsName}}
+	</span>
+
+	{% endif %}
+      </td>
+      {% ifequal r.status 'Completed' %}
+      <td>
+        <span class="left right_margin" title="Re-Analyze from a 1.wells file">
+          <a href="{% url rundb.views.createReport r.experiment.pk, r.pk %}">
+            <span class="left icon_link ui-icon ui-icon-arrowrefresh-1-s
+                 ui-state-default ui-corner-all"
+              title="Re-Analyze from a 1.wells file">
+            </span>
+          </a>
+        </span>
+      </td>
+      {% else %}
+      <td width="115px">
+        <div class="progressbox_holder" id="{{r.pk}}">
+          <div class="progressbox" id="wellfinding" title="Well Characterization"></div>
+          <div class="progressbox" id="signalprocessing" title="Signal Processing"></div>
+          <div class="progressbox" id="basecalling" title="Basecalling"></div>
+          <div class="progressbox" id="sffread" title="Creating Fastq"></div>
+          <div class="progressbox" id="alignment" title="Aligning Reads"></div>
+          <div class="hidden" id="{{r.reportLink}}>"</div>
+        </div>
+      </td>
+      {% endifequal %}
+        
+        <td><span class="hasTip" title="{{ r.verboseStatus}}">{{r.status}}</span></td>
+
+        <td>{{r.experiment.pretty_print}}</td>
+        <td>{{ r.experiment.chipType|cut:'"' }}</td>
+        <td>{{r.processedFlows}}</td>
+
+        {% with lm=r.libmetrics_set.values.0 %}
+        {# lib key signal #}
+        <td>{{lm.aveKeyCounts|floatformat:0}}</td>
+
+        <td>{{r.qualitymetrics_set.values.0.q17_bases|floatformat:0|intcomma}}</td>
+
+        {# 100 bp AQQ17 bases #}
+        {% ifequal lm.align_sample 1 %}
+            <td>{{lm.extrapolated_100q17_reads|intcomma}}</td>
+        {% endifequal %}
+
+        {% ifequal lm.align_sample 0 %}
+            <td> {{lm.i100Q17_reads|intcomma}}</td>
+        {% endifequal %}
+
+        {% ifnotequal lm.align_sample 0 %}
+	        {% ifnotequal lm.align_sample 1 %}
+	            <td></td>
+	        {% endifnotequal %}
+        {% endifnotequal %}
+
+        {# AQQ17 bases #}
+        {% ifequal lm.align_sample 1 %}
+            <td>{{lm.extrapolated_mapped_bases_in_q17_alignments|intcomma}}</td>
+        {% endifequal %}
+
+        {% ifequal lm.align_sample 0 %}
+            <td>{{lm.q17_mapped_bases|intcomma}}</td>
+        {% endifequal %}
+
+        {% ifnotequal lm.align_sample 0 %}
+	        {% ifnotequal lm.align_sample 1 %}
+	            <td></td>
+	        {% endifnotequal %}
+        {% endifnotequal %}
+
+        <td>{{r.timeStamp|date:"M d Y"}}</td>
+
+        {% endwith %}
+    </tr>
+    <tr class="{% cycle 'row1' 'row2' %}" id="{{r.pk}}">
+      <td colspan="12">
+	{% if tfm %}
+	{% with r.pretty_tabulate as tbl %}
+	{% if tbl %}
+	<div class="innerholder hidden" id="{{r.pk}}_holder">
+	  <table class="innertable">
+	    <thead>
+	      <tr>
+              <th>TF Name</th>
+              <th>TF Reads</th>
+              <th>TF Key Signal</th>
+              <th>TF AQ17 Mean</th>
+	      </tr>
+	    </thead>
+	    <tbody>
+
+          {% for row in tbl %}
+	            <tr>
+                    <td>{{ row.name }}</td>
+                    <td>{{ row.keypass|intcomma}}</td>
+                    <td>{{ row.aveKeyCount }}</td>
+                    <td>{{ row.Q17Mean|intcomma }}</td>
+                </tr>
+	      {% endfor %}
+        
+	    </tbody>
+	  </table>
+	</div>
+	{% endif %}
+	{% endwith %}
+	{% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+
+    <script>
+        $(document).ready(function() {
+            $().tipTipDefaults({ delay : 0 });
+            $('.progressbox').tipTip({ position : 'bottom' });
+
+
+            $('.hasTip').tipTip({ position : 'bottom' });
+        });
+    </script>
+        
+{% else %}
+<div class="centered_message">No reports found.</div>
+<div class="centered_message">
+  {% if getURL %}
+  Click <a href="{% url rundb.views.reports %}">here</a> to clear
+  filters and see all reports.
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+
+
+        {% block content2 %}
+
+  <div class="clear">
+  </div>
+
+  <div class="centered_link"><a id="downloadCSV" href="{% url rundb.views.tf_csv %}">Download CSV</a></div>
+{% endblock content2 %}
+

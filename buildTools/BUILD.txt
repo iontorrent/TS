@@ -1,0 +1,159 @@
+QUICK START on Ubuntu 10.04 (=Lucid)
+
+    apt-get install \
+        build-essential \
+        cmake \
+        liblapack-dev \
+        liblapack3gf \
+        libblas-dev \
+        libblas3gf \
+        libatlas-base-dev \
+        libatlas-headers \
+        gfortran \
+        zlib1g-dev \
+        libgsl0-dev
+
+   ./buildTools/build.sh
+
+
+
+QUICK START on Ubuntu 11.04 (=Natty) (EXPERIMENTAL)
+
+     Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
+
+     apt-get update
+
+     apt-get install \
+        build-essential \
+        cmake \
+        liblapack-dev \
+        liblapack3gf \
+        libblas-dev \
+        libblas3gf \
+        libatlas-base-dev \
+        libatlas-dev \
+        gfortran \
+        zlib1g-dev \
+        libgsl0-dev
+
+   ./buildTools/build.sh
+
+
+
+EXTERNAL DEPENDENCIES
+
+These fall into two general categories. Those which are included 
+in the external folder and those which are assumed to be already
+installed on the system. For the external software, browse the
+folder labelled external. For system installed dependencies
+you will need to install the following Ubuntu packages:
+
+* build-essential
+* cmake
+* liblapack-dev
+* liblapack3gf
+* libblas-dev
+* libblas3gf
+* libatlas-base-dev
+* libatlas-headers
+* gfortran
+* zlib1g-dev
+* libgsl0-dev
+* libcurl4-openssl-dev
+
+The lapack++ (included external) depends on atlas and blas. 
+Instructions for lapack++ on Ubuntu can be found at:
+
+	https://help.ubuntu.com/community/Lapack%2B%2B
+    
+torrentR will fail to build unless additional installation steps are taken.  See
+https://iontorrent.jira.com/wiki/display/TS/HOWTO+-+TorrentR+Server+Installation+Steps
+
+BUILD EVERYTHING
+
+From the top level folder (where buildTools, Analysis, and others 
+are listed as subfolders) run:
+
+   ./buildTools/build.sh
+
+This will create a build folder "build" which will contain the
+compiled object files, executables, and Debian packages. Under
+the hood we are using cmake to generate a makefile based build
+system. We then run make to do the build. Finally cpack (part
+of cmake) is used to generate the packages. 
+
+BUILD SPECIFIC MODULES
+
+From the top level folder (where buildTools, Analysis, and others 
+are listed as subfolders) run:
+
+   MODULES="FOO BAR" ./buildTools/build.sh
+
+where FOO and BAR are particular modules to build. 
+(eg alignTools, Analysis). 
+
+WORK ON SINGLE MODULE
+
+You can create a out-of-tree build folder for your module of 
+interest.  eg:
+
+    cd Analysis && mkdir build
+    cd build && cmake ..
+
+Or run the build.sh script described in this doc which will create
+a top level build folder. eg:
+
+   MODULES="Analysis" ./buildTools/build.sh
+   cd build/Analysis
+
+From there you can use the following targets:
+
+   'make': build binaries
+   'make package': build debian package
+
+TIPS
+
+* Use VERBOSE=1 when running make to get more info about specific
+  commands run. eg:
+
+    VERBOSE=1 make
+
+* To generate makefile system using wizard mode:
+
+    cmake -i ..
+	
+# Generate official build
+
+	./buildTools/build.sh -DBUILDTAG=TSRC
+
+* Generate debug build
+
+    cmake -DCMAKE_BUILD_TYPE=Debug ..    
+    - or -
+    ./buildTools/build.sh -DCMAKE_BUILD_TYPE=Debug
+
+* Some mods to CMakeLists.txt file will not get correctly picked
+  up if you are just running "make". In such cases, the simplest
+  solution is to blow away the build folder and re-run the build. 
+  For example:
+   
+    rm -r build
+    ./buildTools/build.sh
+
+* 'make clean' will clean out the build folder as well as the 
+  external libraries. So in general you probably do not want
+  to do this. Instead just blow away the build folder as
+  described above. 
+
+* Build using shared libraries rather than static 
+  [not tested/supported]
+
+    ./buildTools/build.sh -DBUILD_SHARED_LIBS:BOOL=TRUE
+
+* Direct install from build folder 
+  [not tested/supported]
+
+    sudo make install
+    sudo ./debian/postinst configure
+
+

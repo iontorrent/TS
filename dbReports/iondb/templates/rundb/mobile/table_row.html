@@ -1,0 +1,5 @@
+<li {% if not link %}class="readonly"{% endif %}>
+  {% if link %}<a href="{{ link }}" {% if link_external %} rel="external" {% endif %}>{% endif %}
+      {{ label|safe }} <p class="ui-li-aside">{{ value }}</p>
+  {% if link %}</a>{% endif %}                  
+</li>            
