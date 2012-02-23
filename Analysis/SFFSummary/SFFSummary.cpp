@@ -24,6 +24,13 @@ SFFSummary::SFFSummary() {
   perReadQualLength.resize(0);
   perReadLength.resize(0);
 
+  for (int idx = 0; idx < 8; idx++) {
+    zeromerFirstMoment[idx] = 0;
+    zeromerSecondMoment[idx] = 0;
+    onemerFirstMoment[idx] = 0;
+    onemerSecondMoment[idx] = 0;
+  }
+  count = 0;
 }
 
 void SFFSummary::summaryStatInit(void) {
@@ -114,6 +121,8 @@ void SFFSummary::summarizeFromSffFile(string sffFile, vector <uint16_t> &_qual, 
   sff_file_t *sff_file_in = sff_fopen(sffFile.c_str(), "rb", NULL, NULL);
   sff_t *sff = NULL;
 
+  string flowOrder = sff_file_in->header->flow->s;
+
   while(NULL != (sff = sff_read(sff_file_in))) {
     uint16_t clipped_start  = sff_clipped_read_left(sff)-1;
     uint16_t clipped_stop   = sff_clipped_read_right(sff);
@@ -133,6 +142,9 @@ void SFFSummary::summarizeFromSffFile(string sffFile, vector <uint16_t> &_qual, 
 
     // Update the summary statistics
     summaryStatUpdate(qScore,rName);
+
+    // TODO: Insert keySNR generation here.
+    AddElementSNR(sff_flowgram(sff), flowOrder);
 
     sff_destroy(sff);
   }
@@ -188,6 +200,26 @@ void SFFSummary::phredToErr(uint16_t qScore, double &errorRate) {
   errorRate = pow(10.0,exponent);
 }
 
+
+
+void SFFSummary::AddElementSNR (uint16_t *corValues, const string& flowOrder)
+{
+  int numFlowsPerCycle = flowOrder.length();
+  count++;
+
+  for (int iFlow = 0; iFlow < 8; iFlow++) {
+    char nuc = flowOrder[iFlow%numFlowsPerCycle];
+    if (corValues[iFlow] < 50) {        // Zeromer
+      zeromerFirstMoment[nuc&7] += corValues[iFlow];
+      zeromerSecondMoment[nuc&7] += corValues[iFlow] * corValues[iFlow];
+    } else if (corValues[iFlow] < 150) { // Onemer
+      onemerFirstMoment[nuc&7] += corValues[iFlow];
+      onemerSecondMoment[nuc&7] += corValues[iFlow]* corValues[iFlow];
+    }
+  }
+}
+
+
 void SFFSummary::writeTSV(std::ostream &out) {
   for(unsigned int iQual=0; iQual < qual.size(); iQual++) {
     // Number of bases attaining the quality score
@@ -203,6 +235,24 @@ void SFFSummary::writeTSV(std::ostream &out) {
   // Number of trimmed reads exceeding each threshold
   for(uint16_t iLength=0;  iLength < readLength.size(); iLength++)
     out << "Number of " << readLength[iLength] << "BP Reads = " << nReadsByLength[readLength[iLength]] << endl;
+
+
+  // TODO: output keySNR here
+  double SNR = 0;
+  if (count > 0) {
+    double SNRx[8];
+    for(int idx = 0; idx < 8; idx++) { // only care about the first 3, G maybe 2-mer etc
+      double mean0 = zeromerFirstMoment[idx] / count;
+      double mean1 = onemerFirstMoment[idx] / count;
+      double var0 = zeromerSecondMoment[idx] / count - mean0*mean0;
+      double var1 = onemerSecondMoment[idx] / count - mean1*mean1;
+      double avgStdev = (sqrt(var0) + sqrt(var1)) / 2.0;
+      if (avgStdev > 0.0)
+        SNRx[idx] = (mean1-mean0) / avgStdev;
+    }
+    SNR = (SNRx['A'&7] + SNRx['C'&7] + SNRx['T'&7]) / 3.0;
+  }
+  out << "System SNR = " << setprecision(2) << SNR << endl;
 }
 
 void SFFSummary::writePrettyText(std::ostream &out) {

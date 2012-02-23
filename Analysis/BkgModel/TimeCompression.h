@@ -19,12 +19,22 @@ class TimeCompression
   float   *deltaFrameSeconds; // in seconds
   int     *frames_per_point;      // helper table used to construct average of incomming data
   int     npts;           // number of data points after time compression
+  
+  float time_start; // when real points exist in the data we take
  
   
   TimeCompression();
   ~TimeCompression();
+  void Allocate(int imgFrames);
+  void CompressionFromFramesPerPoint();
   void DeAllocate();
-  void SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg); // interface
+  void SetUpOldTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void SetUpStandardTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void StandardFramesPerPoint(int imgFrames,float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void ExponentialFramesPerPoint(int imgFrames, float t_comp_start, int start_detailed_time, float geom_ratio);
+  void HyperTime(int imgFrames, float t_comp_start, int start_detailed_time);
+  void StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
 };
 
 

@@ -46,11 +46,11 @@ import random
 import string
 import logging
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save, post_delete
+from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
 from distutils.version import StrictVersion
 
@@ -123,6 +123,10 @@ class Experiment(models.Model):
     metaData = json_field.JSONField(blank=True)
 
     def __unicode__(self): return self.expName
+
+    def runtype(self):
+        return self.log.get("runtype","")
+
     def pretty_print(self):
         nodate = self.PRETTY_PRINT_RE.sub("", self.expName)
         ret = " ".join(nodate.split('_')[1:]).strip()
@@ -181,6 +185,11 @@ class Experiment(models.Model):
             return 'Deleted'
         if backup.isBackedUp:
             return 'Archived'
+
+    def save(self):
+        """on save we need to sync up the log JSON and the other values that might have been set
+        this was put in place primarily for the runtype field"""
+        super(Experiment, self).save()
 
 class Lookup(object):
     _ALIASES = {}
@@ -828,8 +837,8 @@ class LibMetrics(models.Model):
 
     q7_coverage_percentage = models.FloatField()
     q7_alignments = models.IntegerField()
-    q7_mapped_bases = models.IntegerField()
-    q7_qscore_bases = models.IntegerField()
+    q7_mapped_bases = models.BigIntegerField()
+    q7_qscore_bases = models.BigIntegerField()
     q7_mean_alignment_length = models.IntegerField()
     q7_longest_alignment = models.IntegerField()
     i50Q7_reads = models.IntegerField()
@@ -847,8 +856,8 @@ class LibMetrics(models.Model):
 
     q10_coverage_percentage = models.FloatField()
     q10_alignments = models.IntegerField()
-    q10_mapped_bases = models.IntegerField()
-    q10_qscore_bases = models.IntegerField()
+    q10_mapped_bases = models.BigIntegerField()
+    q10_qscore_bases = models.BigIntegerField()
     q10_mean_alignment_length = models.IntegerField()
     q10_longest_alignment = models.IntegerField()
     i50Q10_reads = models.IntegerField()
@@ -866,8 +875,8 @@ class LibMetrics(models.Model):
 
     q17_coverage_percentage = models.FloatField()
     q17_alignments = models.IntegerField()
-    q17_mapped_bases = models.IntegerField()
-    q17_qscore_bases = models.IntegerField()
+    q17_mapped_bases = models.BigIntegerField()
+    q17_qscore_bases = models.BigIntegerField()
     q17_mean_alignment_length = models.IntegerField()
     q17_longest_alignment = models.IntegerField()
     i50Q17_reads = models.IntegerField()
@@ -885,8 +894,8 @@ class LibMetrics(models.Model):
 
     q20_coverage_percentage = models.FloatField()
     q20_alignments = models.IntegerField()
-    q20_mapped_bases = models.IntegerField()
-    q20_qscore_bases = models.IntegerField()
+    q20_mapped_bases = models.BigIntegerField()
+    q20_qscore_bases = models.BigIntegerField()
     q20_mean_alignment_length = models.IntegerField()
     q20_longest_alignment = models.IntegerField()
     i50Q20_reads = models.IntegerField()
@@ -903,8 +912,8 @@ class LibMetrics(models.Model):
     i600Q20_reads = models.IntegerField()
 
     q47_coverage_percentage = models.FloatField()
-    q47_mapped_bases = models.IntegerField()
-    q47_qscore_bases = models.IntegerField()
+    q47_mapped_bases = models.BigIntegerField()
+    q47_qscore_bases = models.BigIntegerField()
     q47_alignments = models.IntegerField()
     q47_mean_alignment_length = models.IntegerField()
     q47_longest_alignment = models.IntegerField()
@@ -930,13 +939,13 @@ class LibMetrics(models.Model):
     #first add a int to let me know if it is full of sampled align
     align_sample = models.IntegerField()
     genome = models.CharField(max_length=512)
-    genomesize = models.IntegerField()
+    genomesize = models.BigIntegerField()
     total_number_of_sampled_reads = models.IntegerField()
     sampled_q7_coverage_percentage = models.FloatField()
     sampled_q7_mean_coverage_depth = models.FloatField()
     sampled_q7_alignments = models.IntegerField()
     sampled_q7_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q7_alignments = models.IntegerField()
+    sampled_mapped_bases_in_q7_alignments = models.BigIntegerField()
     sampled_q7_longest_alignment = models.IntegerField()
     sampled_50q7_reads = models.IntegerField()
     sampled_100q7_reads = models.IntegerField()
@@ -947,7 +956,7 @@ class LibMetrics(models.Model):
     sampled_q10_mean_coverage_depth = models.FloatField()
     sampled_q10_alignments = models.IntegerField()
     sampled_q10_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q10_alignments = models.IntegerField()
+    sampled_mapped_bases_in_q10_alignments = models.BigIntegerField()
     sampled_q10_longest_alignment = models.IntegerField()
     sampled_50q10_reads = models.IntegerField()
     sampled_100q10_reads = models.IntegerField()
@@ -958,7 +967,7 @@ class LibMetrics(models.Model):
     sampled_q17_mean_coverage_depth = models.FloatField()
     sampled_q17_alignments = models.IntegerField()
     sampled_q17_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q17_alignments = models.IntegerField()
+    sampled_mapped_bases_in_q17_alignments = models.BigIntegerField()
     sampled_q17_longest_alignment = models.IntegerField()
     sampled_50q17_reads = models.IntegerField()
     sampled_100q17_reads = models.IntegerField()
@@ -969,7 +978,7 @@ class LibMetrics(models.Model):
     sampled_q20_mean_coverage_depth = models.FloatField()
     sampled_q20_alignments = models.IntegerField()
     sampled_q20_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q20_alignments = models.IntegerField()
+    sampled_mapped_bases_in_q20_alignments = models.BigIntegerField()
     sampled_q20_longest_alignment = models.IntegerField()
     sampled_50q20_reads = models.IntegerField()
     sampled_100q20_reads = models.IntegerField()
@@ -980,7 +989,7 @@ class LibMetrics(models.Model):
     sampled_q47_mean_coverage_depth = models.FloatField()
     sampled_q47_alignments = models.IntegerField()
     sampled_q47_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q47_alignments = models.IntegerField()
+    sampled_mapped_bases_in_q47_alignments = models.BigIntegerField()
     sampled_q47_longest_alignment = models.IntegerField()
     sampled_50q47_reads = models.IntegerField()
     sampled_100q47_reads = models.IntegerField()
@@ -992,7 +1001,7 @@ class LibMetrics(models.Model):
     extrapolated_q7_mean_coverage_depth = models.FloatField()
     extrapolated_q7_alignments = models.IntegerField()
     extrapolated_q7_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q7_alignments = models.IntegerField()
+    extrapolated_mapped_bases_in_q7_alignments = models.BigIntegerField()
     extrapolated_q7_longest_alignment = models.IntegerField()
     extrapolated_50q7_reads = models.IntegerField()
     extrapolated_100q7_reads = models.IntegerField()
@@ -1003,7 +1012,7 @@ class LibMetrics(models.Model):
     extrapolated_q10_mean_coverage_depth = models.FloatField()
     extrapolated_q10_alignments = models.IntegerField()
     extrapolated_q10_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q10_alignments = models.IntegerField()
+    extrapolated_mapped_bases_in_q10_alignments = models.BigIntegerField()
     extrapolated_q10_longest_alignment = models.IntegerField()
     extrapolated_50q10_reads = models.IntegerField()
     extrapolated_100q10_reads = models.IntegerField()
@@ -1014,7 +1023,7 @@ class LibMetrics(models.Model):
     extrapolated_q17_mean_coverage_depth = models.FloatField()
     extrapolated_q17_alignments = models.IntegerField()
     extrapolated_q17_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q17_alignments = models.IntegerField()
+    extrapolated_mapped_bases_in_q17_alignments = models.BigIntegerField()
     extrapolated_q17_longest_alignment = models.IntegerField()
     extrapolated_50q17_reads = models.IntegerField()
     extrapolated_100q17_reads = models.IntegerField()
@@ -1025,7 +1034,7 @@ class LibMetrics(models.Model):
     extrapolated_q20_mean_coverage_depth = models.FloatField()
     extrapolated_q20_alignments = models.IntegerField()
     extrapolated_q20_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q20_alignments = models.IntegerField()
+    extrapolated_mapped_bases_in_q20_alignments = models.BigIntegerField()
     extrapolated_q20_longest_alignment = models.IntegerField()
     extrapolated_50q20_reads = models.IntegerField()
     extrapolated_100q20_reads = models.IntegerField()
@@ -1036,7 +1045,7 @@ class LibMetrics(models.Model):
     extrapolated_q47_mean_coverage_depth = models.FloatField()
     extrapolated_q47_alignments = models.IntegerField()
     extrapolated_q47_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q47_alignments = models.IntegerField()
+    extrapolated_mapped_bases_in_q47_alignments = models.BigIntegerField()
     extrapolated_q47_longest_alignment = models.IntegerField()
     extrapolated_50q47_reads = models.IntegerField()
     extrapolated_100q47_reads = models.IntegerField()
@@ -1053,21 +1062,21 @@ class QualityMetrics(models.Model):
     """a place in the database to store the quality metrics from SFFSumary"""
     #make csv metrics lookup here
     report = models.ForeignKey(Results, db_index=True)
-    q0_bases = models.IntegerField()
+    q0_bases = models.BigIntegerField()
     q0_reads = models.IntegerField()
     q0_max_read_length = models.IntegerField()
     q0_mean_read_length = models.FloatField()
     q0_50bp_reads = models.IntegerField()
     q0_100bp_reads = models.IntegerField()
     q0_15bp_reads = models.IntegerField()
-    q17_bases = models.IntegerField()
+    q17_bases = models.BigIntegerField()
     q17_reads = models.IntegerField()
     q17_max_read_length = models.IntegerField()
     q17_mean_read_length = models.FloatField()
     q17_50bp_reads = models.IntegerField()
     q17_100bp_reads = models.IntegerField()
     q17_150bp_reads = models.IntegerField()
-    q20_bases = models.IntegerField()
+    q20_bases = models.BigIntegerField()
     q20_reads = models.IntegerField()
     q20_max_read_length = models.FloatField()
     q20_mean_read_length = models.IntegerField()
@@ -1278,6 +1287,7 @@ class PluginResult(models.Model):
         ('Started', 'Started'),
         ('Declined', 'Declined'),
         ('Unknown', 'Unknown'),
+        ('Queued', 'Queued'),
     )
     state = models.CharField(max_length=20, choices=ALLOWED_STATES)
     store = json_field.JSONField(blank=True)
@@ -1538,13 +1548,17 @@ class Publisher(models.Model):
 
     def get_editing_scripts(self):
         pub_files = os.listdir(self.path)
-        stages = ("pre_process", "validate", "post_process", "register")
+        stages = ( ("pre_process", "Pre-processing"),
+                   ("validate", "Validating"),
+                   ("post_process", "Post-processing"),
+                   ("register", "Registering"),
+        )
         pub_scripts = []
-        for stage in stages:
+        for stage, name in stages:
             for pub_file in pub_files:
                 if pub_file.startswith(stage):
                     script_path = os.path.join(self.path, pub_file)
-                    pub_scripts.append(script_path)
+                    pub_scripts.append((script_path, name))
                     break
         return pub_scripts
 
@@ -1558,7 +1572,7 @@ class ContentUpload(models.Model):
     def __unicode__(self): return u'ContentUpload %d' % self.id
 
 
-@receiver(post_delete, sender=ContentUpload)
+@receiver(post_delete, sender=ContentUpload, dispatch_uid="delete_upload")
 def on_contentupload_delete(sender, instance, **kwargs):
     """Delete all of the files represented by a ContentUpload object which was
     deleted and all of files derived from that ContentUpload which are in it's
@@ -1584,7 +1598,7 @@ class Content(models.Model):
     def __unicode__(self): return self.path
 
 
-@receiver(post_delete, sender=Content)
+@receiver(pre_delete, sender=Content, dispatch_uid="delete_content")
 def on_content_delete(sender, instance, **kwargs):
     """Delete the file represented by a Content object which was deleted."""
     # I had cosidered attempting to intelligently remove empty parent

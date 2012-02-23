@@ -39,6 +39,7 @@
 </head>
 <body>
 <div class="all all_width">
+  {% block topbar %}
   <div class="topbar">
     {% block site-title %}
       <h1 id="sitename">{{ base_site_name }}</h1>
@@ -52,6 +53,7 @@
     {% include "rundb/tabs.html" %}
   </div>
   <div class="darkline">&nbsp;</div>
+  {% endblock topbar %}
 
   {% block controls_holder %}
     <div class="controlholder centered">
@@ -87,7 +89,10 @@
       </div>
     </div>
   {% endif %}
-  <div class="contentarea centered">
+    {% block override_full_page_content %}
+        <div class="contentarea centered">
+    {% endblock override_full_page_content %}
+
     {% block full_page_content %}
 
       <div class="roundedcornr_box_526903">
@@ -197,6 +202,7 @@
 
     {% endblock full_page_content %}
 
+  {% block footer %}
   <div class="clear"></div>
   <div class="footer">
     <!--<a href="/admin/">Administer</a><br/>-->
@@ -209,6 +215,7 @@
     This product should be used for research use only
 
   </div>
+  {% endblock footer %}
 </div> <!-- end div-all -->
 </body>
 </html>

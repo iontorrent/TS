@@ -59,21 +59,21 @@ function storage_option(){
     var setstr = this.storage_options.value;
     var message = null;
     if(setstr == 'A'){
-	message = 'Archive';
+        message = 'Archive';
     }
     else if(setstr == 'D'){
-	message = 'Delete';
+        message = 'Delete';
     }
     else if(setstr == 'KI'){
-	message = 'Keep';
+        message = 'Keep';
     }
     alert("Experiment "+name+" will now be a candidate to - "+message)
     //$.get("/rundb/storage/"+pk+"/"+setstr, null, null, "text");
     var url = "/rundb/storage/" + pk + "/" + setstr;
     $.ajax({
-      type: 'POST',
-      url: url
-    });
+                type: 'POST',
+                url: url
+            });
 }
 
 function storage_option(){
@@ -145,9 +145,7 @@ function set_pb_factory(id){
         var value = data['value'];
         $(".progDiv").html();
         $("#" + id).progressbar('destroy');
-        $("#" + id).progressbar({'value':value}).children('.ui-progressbar-value').html(value + '%');
-
-
+        $("#" + id).progressbar({'value':value}).children('.ui-progressbar-value').html('<div class="progress-number">'+value + '%</div>');
     }
 }
 

@@ -1,1 +1,0 @@
-/usr/bin/c++  -fPIC   -shared -Wl,-soname,libarmadillo.so.1 -o libarmadillo.so.1.1.0 CMakeFiles/armadillo.dir/src/pull_libs.cpp.o -lblas -llapack -lcblas -llapack_atlas 

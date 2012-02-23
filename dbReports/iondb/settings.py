@@ -169,14 +169,17 @@ EMAIL_USE_TLS = True
 
 # set the root URL, for setting URLs in email
 ROOT_URL = "http://updates.iontorrent.com/"
+EXTERNAL_IP_URL = "http://icanhazip.com"
 
 CRAWLER_PORT = 10001
 CRAWLER_PERIOD = 60
 
 ANALYSIS_ROOT = "/opt/ion/iondb/anaserve"
 
+JOBSERVER_HOST = HOSTNAME
 JOBSERVER_PORT = 10000
 IARCHIVE_PORT = 10002
+IPLUGIN_HOST = HOSTNAME
 IPLUGIN_PORT = 9191
 
 # SGE settings - all you need to run SGE

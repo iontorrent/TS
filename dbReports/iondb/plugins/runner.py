@@ -8,15 +8,8 @@ import string
 
 import os
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-import iondb.settings as settings
 
-# Out of framework django templates
-import django.conf
-try:
-    django.conf.settings.configure(TEMPLATE_DIRS=settings.TEMPLATE_DIRS)
-except:
-    pass # Settings already configured
-
+from django.conf import settings
 import django.template
 from django.template.loader import render_to_string
 
@@ -50,26 +43,26 @@ class PluginRunner():
         log.propagate = False
         log.info("XMLRPC call to '%s':'%d'", host, port)
 
-        while (attempts < retries):
+        while attempts < retries:
             try:
                 conn = client.connect(host,port)
                 ret = conn.pluginStart(start_json)
-                log.info("Plugin %s Queued '%s'", start_json["runinfo"]["plugin_name"], ret)
+                log.info("Plugin %s Queued '%s'",
+                         start_json["runinfo"]["plugin_name"], ret)
                 return ret
             except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
-                log.info("XMLRPC Error: %s", f)
+                log.exception("XMLRPC Error")
                 if attempts < retries:
-                    log.info("Error connecting to plugin daemon at %s:%d. Retrying in %d" % (host, port, delay))
+                    log.warn("Error connecting to plugin daemon at %s:%d. Retrying in %d", host, port, delay)
                     time.sleep(delay)
                     attempts += 1
-        #raise Exception("Unable to connect to plugin daemon after multiple attempts")
+        # Exceeded number of retry attempts
         return False
-
 
     def writePluginLauncher(self, pluginout, pluginname, content):
         pluginWrapperFile = os.path.join(pluginout, "ion_plugin_%s_launch.sh" % pluginname)
         with open(pluginWrapperFile, 'w') as f:
-            f.write(content.encode('utf-8'))
+            f.write(content)
         os.chmod(pluginWrapperFile, 0775)
         return pluginWrapperFile
 

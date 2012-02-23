@@ -209,7 +209,7 @@ public:
 	/**
 	 get_t_diff() returns the # of differences in the alignment between the template and query sequences 
 	 */
-	inline coord_t get_t_diff() const { return t_diff; }
+	inline coord_t get_t_diff() { return t_diff; }
 
 	/**
 	 Returns QUAL field from SAM/BAM.  The string is in the orientation of the read.
@@ -692,7 +692,10 @@ std::string		BAMUtils::get_tdna() {
 //$tName
 inline
 std::string		BAMUtils::get_rname() {
-	return std::string(bam_record.get_rname());
+  if (bam_record.get_rname())
+    return std::string(bam_record.get_rname());
+  else
+    return "*";
 }
 
 //$numSlop

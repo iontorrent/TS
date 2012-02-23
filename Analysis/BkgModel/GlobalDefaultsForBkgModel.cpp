@@ -7,7 +7,16 @@ float GlobalDefaultsForBkgModel::kmax_default[NUMNUC]  = { 18.0,   20.0,   17.0,
 float GlobalDefaultsForBkgModel::krate_default[NUMNUC] = { 18.78,   20.032,   25.04,   31.3 };
 float GlobalDefaultsForBkgModel::d_default[NUMNUC]     = {159.923,189.618,227.021,188.48};
  float GlobalDefaultsForBkgModel::krate_adj_limit[NUMNUC] = {2.0,2.0,2.0,2.0};
+ float GlobalDefaultsForBkgModel::sigma_mult_default[NUMNUC] = {1.162,1.124,1.0,0.8533};
+ float GlobalDefaultsForBkgModel::t_mid_nuc_delay_default[NUMNUC] = {0.69,1.78,0.0,0.17}; 
+float GlobalDefaultsForBkgModel::nuc_flow_frame_width = 22.5;  // 1.5 seconds * 15 frames/second
+int GlobalDefaultsForBkgModel::time_left_avg = 5;
+int GlobalDefaultsForBkgModel::time_start_detail = -5;
+int GlobalDefaultsForBkgModel::time_stop_detail = 16;
+
 float GlobalDefaultsForBkgModel::dampen_kmult = 0;
+bool GlobalDefaultsForBkgModel::var_kmult_only = false;
+bool GlobalDefaultsForBkgModel::generic_test_flag = false;
  
 void GlobalDefaultsForBkgModel::SetFlowOrder(char *_flowOrder)
 {
@@ -145,8 +154,28 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults(char *fname)
                num = sscanf(line,"clonal_call_scale: %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4]);
                 for (int i=0;i<num;i++) clonal_call_scale[i]=d[i];
             }        
-                      
-            
+            if (strncmp("sigma_mult", line, 10) == 0)
+            {
+               num = sscanf(line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3]);
+                for (int i=0;i<num;i++) sigma_mult_default[i]=d[i];
+            }     
+            if (strncmp("t_mid_nuc_delay", line, 15) == 0)
+            {
+               num = sscanf(line,"t_mid_nuc_delay: %f %f %f %f", &d[0],&d[1],&d[2],&d[3]);
+                for (int i=0;i<num;i++) t_mid_nuc_delay_default[i]=d[i];
+            }    
+            if (strncmp("nuc_flow_timing", line, 15) == 0)
+            {
+               num = sscanf(line,"nuc_flow_frame_width: %f", &d[0]);
+                nuc_flow_frame_width = d[0];
+            }                 
+            if (strncmp("time_compression", line, 16) == 0)
+            {
+               num = sscanf(line,"time_compression: %f %f %f", &d[0], &d[1],&d[2]);
+                time_left_avg = d[0];
+                time_start_detail = d[1];
+                time_stop_detail = d[2];
+            }      
         }
         else
             done = true;
@@ -159,6 +188,8 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults(char *fname)
     printf("kmax: %f\t%f\t%f\t%f\n",kmax_default[0],kmax_default[1],kmax_default[2],kmax_default[3]);
     printf("krate: %f\t%f\t%f\t%f\n",krate_default[0],krate_default[1],krate_default[2],krate_default[3]);
     printf("d: %f\t%f\t%f\t%f\n",d_default[0],d_default[1],d_default[2],d_default[3]);
+    printf("sigma_mult: %f\t%f\t%f\t%f\n",sigma_mult_default[0],sigma_mult_default[1],sigma_mult_default[2],sigma_mult_default[3]);
+    printf("t_mid_nuc_delay: %f\t%f\t%f\t%f\n",t_mid_nuc_delay_default[0],t_mid_nuc_delay_default[1],t_mid_nuc_delay_default[2],t_mid_nuc_delay_default[3]);
     printf("sens: %f\n",sens_default);
     printf("tau_R_m: %f\n",tau_R_m_default);
     printf("tau_R_o: %f\n",tau_R_o_default);
@@ -185,6 +216,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile(char *experimentName)
   char *line;
   int nChar = MAX_LINE_LEN;
   float read_data[MAX_DATA_PTS];
+  int pset=0;
   
   sprintf(fname,"%s/emphasis_vector.txt", experimentName);
   status = stat(fname,&fstatus);
@@ -212,6 +244,15 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile(char *experimentName)
         bytes_read = getline(&line, (size_t *) &nChar,evect_file);
         sscanf(line,"%f",&read_data[i]);
       }
+      // pick 3 gopt parameter sets:
+      // 0 = all params, 1 - no nuc-dep factors, 2 - no nuc-dep factors plus no emphasis      
+      if (evect_size == 13) pset = 2;
+        else if (evect_size == 23) pset = 1;
+          else if (evect_size == 43) pset = 0;
+            else {
+              fprintf (stderr, "Unrecognized number of points (%d) in %s\n", evect_size, fname);
+              exit (1);
+              }
     }
 
     fclose(evect_file);
@@ -227,41 +268,73 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile(char *experimentName)
     kmax_default[GNUCINDEX] *= read_data[dv++];
 
     // 2-5 values scale individual terms
-    kmax_default[TNUCINDEX] *= read_data[dv++];
-    kmax_default[ANUCINDEX] *= read_data[dv++];
-    kmax_default[CNUCINDEX] *= read_data[dv++];
-    kmax_default[GNUCINDEX] *= read_data[dv++];
-
+    if (pset == 0){
+      kmax_default[TNUCINDEX] *= read_data[dv++];
+      kmax_default[ANUCINDEX] *= read_data[dv++];
+      kmax_default[CNUCINDEX] *= read_data[dv++];
+      kmax_default[GNUCINDEX] *= read_data[dv++];
+    }
+    
     krate_default[TNUCINDEX] *= read_data[dv];
     krate_default[ANUCINDEX] *= read_data[dv];
     krate_default[CNUCINDEX] *= read_data[dv];
     krate_default[GNUCINDEX] *= read_data[dv++];
     
-    krate_default[TNUCINDEX] *= read_data[dv++];
-    krate_default[ANUCINDEX] *= read_data[dv++];
-    krate_default[CNUCINDEX] *= read_data[dv++];
-    krate_default[GNUCINDEX] *= read_data[dv++];
+    if (pset == 0){
+      krate_default[TNUCINDEX] *= read_data[dv++];
+      krate_default[ANUCINDEX] *= read_data[dv++];
+      krate_default[CNUCINDEX] *= read_data[dv++];
+      krate_default[GNUCINDEX] *= read_data[dv++];
+    }
 
     d_default[TNUCINDEX] *= read_data[dv];
     d_default[ANUCINDEX] *= read_data[dv];
     d_default[CNUCINDEX] *= read_data[dv];
     d_default[GNUCINDEX] *= read_data[dv++];
+    
+    if (pset == 0){
+      d_default[TNUCINDEX] *= read_data[dv++];
+      d_default[ANUCINDEX] *= read_data[dv++];
+      d_default[CNUCINDEX] *= read_data[dv++];
+      d_default[GNUCINDEX] *= read_data[dv++];
+    }
+    
+    sigma_mult_default[TNUCINDEX] *= read_data[dv];
+    sigma_mult_default[ANUCINDEX] *= read_data[dv];
+    sigma_mult_default[CNUCINDEX] *= read_data[dv];
+    sigma_mult_default[GNUCINDEX] *= read_data[dv++];
 
-    d_default[TNUCINDEX] *= read_data[dv++];
-    d_default[ANUCINDEX] *= read_data[dv++];
-    d_default[CNUCINDEX] *= read_data[dv++];
-    d_default[GNUCINDEX] *= read_data[dv++];
+    if (pset == 0){
+      sigma_mult_default[TNUCINDEX] *= read_data[dv++];
+      sigma_mult_default[ANUCINDEX] *= read_data[dv++];
+      sigma_mult_default[CNUCINDEX] *= read_data[dv++];
+      sigma_mult_default[GNUCINDEX] *= read_data[dv++];
+    }
+    
+    t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
+    t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
+    t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
+    t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+
+    if (pset == 0){
+      t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv++];
+      t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv++];
+      t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv++];
+      t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+    }
     
     sens_default *= read_data[dv++];
 
     tau_R_m_default = read_data[dv++];
     tau_R_o_default = read_data[dv++];
 
-    for (int vn=0;vn < 8;vn++)
-      emp[vn] = read_data[dv++];
+    if (pset == 0 || pset==1){
+      for (int vn=0;vn < 8;vn++)
+        emp[vn] = read_data[dv++];
 
-    emphasis_ampl_default = read_data[dv++];
-    emphasis_width_default = read_data[dv++]; 
+      emphasis_ampl_default = read_data[dv++];
+      emphasis_width_default = read_data[dv++]; 
+    }
 
     clonal_call_scale[0] = read_data[dv++];
     clonal_call_scale[1] = read_data[dv++];
@@ -270,10 +343,28 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile(char *experimentName)
     clonal_call_scale[4] = read_data[dv++];
 
   }
-  else
+  else{
     fprintf(stderr, "emphasis file: %s \tstatus: %d\n",fname,status);
+    exit (1);
+    }
 
   delete [] line;  
+  
+  //output defaults used
+    printf("GOPT parameters used: \n");
+    printf("km_const: %f\t%f\t%f\t%f\n",kmax_default[TNUCINDEX],kmax_default[ANUCINDEX],kmax_default[CNUCINDEX],kmax_default[GNUCINDEX]);
+    printf("krate: %f\t%f\t%f\t%f\n",krate_default[TNUCINDEX],krate_default[ANUCINDEX],krate_default[CNUCINDEX],krate_default[GNUCINDEX]);
+    printf("d_coeff: %f\t%f\t%f\t%f\n",d_default[TNUCINDEX],d_default[ANUCINDEX],d_default[CNUCINDEX],d_default[GNUCINDEX]);
+    printf("sigma_mult: %f\t%f\t%f\t%f\n",sigma_mult_default[0],sigma_mult_default[1],sigma_mult_default[2],sigma_mult_default[3]);
+    printf("t_mid_nuc_delay: %f\t%f\t%f\t%f\n",t_mid_nuc_delay_default[0],t_mid_nuc_delay_default[1],t_mid_nuc_delay_default[2],t_mid_nuc_delay_default[3]);
+    printf("sens: %f\n",sens_default);
+    printf("tau_R_m: %f\n",tau_R_m_default);
+    printf("tau_R_o: %f\n",tau_R_o_default);
+    printf("emphasis: %f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",emp[0],emp[1],emp[2],emp[3],emp[4],emp[5],emp[6],emp[7]);
+    printf("emp_amplitude: \t%f\n",emphasis_ampl_default);
+    printf("emp_width: \t%f\n",emphasis_width_default);
+    printf("clonal_call_scale: %f\t%f\t%f\t%f\t%f\n",clonal_call_scale[0], clonal_call_scale[1], clonal_call_scale[2], clonal_call_scale[3], clonal_call_scale[4]);
+    printf("\n");
 }
 
 char *GlobalDefaultsForBkgModel::xtalk_name = NULL;

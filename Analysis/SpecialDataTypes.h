@@ -26,7 +26,7 @@ struct SequenceItem {
 };
 
 enum {
-  MASK_TF = 0, MASK_LIB = 1,
+  MASK_TF = 0, MASK_LIB = 1
 };
 
 enum {

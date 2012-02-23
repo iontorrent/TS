@@ -95,6 +95,8 @@ void reg_params_setKmax(reg_params *cur, float *kmax_default);
 void reg_params_setSens(reg_params *cur, float sens_default);
 void reg_params_setBuffModel(reg_params *cur, float tau_R_m_default, float tau_R_o_default);
 void reg_params_setNoRatioDriftValues(reg_params *cur);
+void reg_params_setSigmaMult(reg_params *cur, float *sigma_mult_default);
+void reg_params_setT_mid_nuc_delay (reg_params *cur, float *t_mid_nuc_delay_default);
 
 void ResetRegionBeadShiftsToZero(reg_params *reg_p);
 

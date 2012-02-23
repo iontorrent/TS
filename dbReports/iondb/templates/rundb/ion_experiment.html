@@ -4,6 +4,9 @@
 {% block controls %}
 {% load humanize %}
 
+<link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
+<script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+
 <script type="text/javascript">
 
     freeStore = {{ freeStore }};
@@ -11,6 +14,10 @@
     usedStore = {{ usedStore }};
 
      $(document).ready(function(){
+
+
+        $(".editExperiment").colorbox({width:"90%", height:"90%", iframe:true});
+
             {% if not force_desktop %}
                   if (jQuery.browser.mobile) {
                       window.location = '{% url rundb.mobile_views.runs %}'
@@ -96,7 +103,9 @@
                          }
                      }
                  ]
-             })
+             });
+
+
 
          });
 
@@ -187,6 +196,9 @@
         <div class="sortkey">library</div>
       </th>
       <th>
+          edit
+      </th>
+      <th>
         <div class="sortheading">PGM</div>
         <div class="sortkey">pgmName</div>
       </th>
@@ -262,6 +274,9 @@
     <td>{{ e.project }}</td>
     <td>{{ e.sample }}</td>
     <td><a class="changeLib libLink" id="changeLib_{{ e.pk }}">{{ e.library }}</a></td>
+    <td>
+        <a class="editExperiment" href="editexperiment/{{e.pk}}">edit</a>
+    </td>
     <td>{{ e.pgmName }}</td>
 
     {% if e.ftpStatus|length_is:"1"  %}
@@ -293,7 +308,7 @@
     <td>{{e.date|date:"M d Y"}}</td>
     </tr>
     <tr class="{% cycle 'row1' 'row2' %}"  id="{{e.pk}}">
-      <td colspan="12">
+      <td colspan="13">
       
 				<div id="{{e.pk}}_holder" class="hidden">
                   {% if count %}

@@ -20,9 +20,13 @@ class EmphasisClass
   float   *EmphasisScale;              // scaling factor for each vector
    int numEv;               // number of emphasis vectors allocated
   float emp[NUMEMPHASISPARAMETERS];  // parameters for emphasis vector generation
+  
+  // keep timing parameters as well
   float   emphasis_width;   // parameters scaling the emphasis vector
   float   emphasis_ampl;    // parameters scaling the emphasis vector
-  
+  // timing parameters - warning, if time-compression changes these need to be updated
+  int *my_frames_per_point;
+  float *my_frameNumber;
   int npts; // how long the vector should be
   
   void CustomEmphasis(float *evect, float evSel);
@@ -31,6 +35,9 @@ class EmphasisClass
   void Destroy();
   void DefaultValues();
   void SetDefaultValues(float *, float, float);
+  void CurrentEmphasis(float t_center, float amult);
+  void SetupEmphasisTiming(int _npts, int *frames_per_point, float *frameNumber);
+  int  ReportUnusedPoints(float threshold, int min_used);
   EmphasisClass();
   ~EmphasisClass();
 };

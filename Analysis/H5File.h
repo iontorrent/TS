@@ -10,8 +10,7 @@
 #include "hdf5.h"
 #include "Utils.h"
 #include "IonErr.h"
-
-using namespace arma;
+#include "DataCube.h"
 
 class H5File;
 
@@ -39,16 +38,18 @@ class H5DataSet {
    * Assumes that the T* is the same size as specified by starts and
    * ends that starts and ends are contingous in memory. */
   template<typename T> 
-    void WriteRangeData(const size_t *starts, const size_t *ends, 
-                        size_t size, const T *data);
+    void WriteRangeData(const size_t *starts, const size_t *ends, const T *data);
 
   /** Utility function to write an entire matrix. */
   template<typename T>
-  void WriteMatrix(Mat<T> &mat);
+  void WriteMatrix(arma::Mat<T> &mat);
 
   /** Utility function to read an entire matrix. */
   template<typename T>
-  void ReadMatrix(Mat<T> &mat);
+  void ReadMatrix(arma::Mat<T> &mat);
+
+  template<typename T>
+  void WriteDataCube(DataCube<T> &cube);
 
   /** 
    * Assumes that the T* is the same size as specified by starts and
@@ -73,12 +74,12 @@ class H5DataSet {
   void Init(size_t id);
 
   /* Setup for the state of the dataset. */
-  void SetDataspace(int rank, hsize_t *dims, hsize_t *chunking, int type);
+  void SetDataspace(int rank, const hsize_t dims[], const hsize_t chunking[], int type);
   bool CreateDataSet();
   bool OpenDataSet();
   void GetSelectionSpace(const size_t *starts, const size_t *ends, hid_t &memspace);
   void SetGroup(hid_t group) {mGroup = group; }
-  void SetCompression(int level) { mCompression = 0; }
+  void SetCompression(int level) { mCompression = level; }
   void SetParent(H5File *p) { mParent = p; }
   void SetName(const std::string &s) { mName = s; }
 
@@ -115,6 +116,9 @@ class H5File {
   /** Constructor. */
   H5File(const std::string &file) { Init(); SetFile(file); }
 
+  /** Initialize to standard defaults. */
+  void Init();
+
   /** Destructor. */
   ~H5File() { Close(); }
 
@@ -131,11 +135,11 @@ class H5File {
   
   /** Utility function to write a matrix in one go to an hdf5 file. */
   template <typename T> 
-  static bool WriteMatrix(const std::string &hdf5FilePath, Mat<T> &mat);
+  static bool WriteMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat, bool overwrite=false);
 
   /** Utility function to read a matrix in one go to an hdf5 file. */
   template <typename T> 
-  static bool ReadMatrix(const std::string &hdf5FilePath, Mat<T> &mat);
+  static bool ReadMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat);
   
   /** Set the file name on the OS filesystem. */
   void SetFile(const std::string &path) { mName = path; }
@@ -160,7 +164,15 @@ class H5File {
    * owned by HFile, don't delete when finished, call Close()
    */
   template<typename T>
-  H5DataSet * CreateDataSet(const std::string &name, Mat<T> &mat, int compression);
+  H5DataSet * CreateDataSet(const std::string &name, arma::Mat<T> &mat, int compression);
+
+  /** 
+   * Create a dataset using dimensions and type from a cube.  Memory
+   * owned by HFile, don't delete when finished, call Close()
+   */
+  template<typename T>
+  H5DataSet * CreateDataSet(const std::string &name, DataCube<T> &mat, int compression);
+
 
   /** 
    * Make a new dataset inside the h5 file with properties
@@ -169,8 +181,8 @@ class H5File {
    */
   H5DataSet * CreateDataSet(const std::string &name,
                             hsize_t rank,
-                            hsize_t *dims,
-                            hsize_t *chunking,
+                            const hsize_t dims[],
+                            const hsize_t chunking[],
                             int compression,
                             hid_t type);
   
@@ -186,9 +198,6 @@ class H5File {
 
  private:
 
-  /** Initialize to standard defaults. */
-  void Init();
-
   /** Break a path into a group and data set leaf. /path/to/dataset -> /path/to, dataset */
   static void FillInGroupFromName(const std::string &path, std::string &groupName, std::string &dsName);
   /** Recurse into path creating new groups as necessary. */
@@ -201,8 +210,7 @@ class H5File {
 };
 
 template<typename T> 
-void H5DataSet::WriteRangeData(const size_t *starts, const size_t *ends, 
-                               size_t size, const T *data) {
+void H5DataSet::WriteRangeData(const size_t *starts, const size_t *ends, const T *data) {
   ION_ASSERT(mDataSet != H5_NULL, "DataSet: " + mName + " doesn't appear open.");    
   hid_t memspace;
   GetSelectionSpace(starts, ends, memspace);
@@ -211,19 +219,35 @@ void H5DataSet::WriteRangeData(const size_t *starts, const size_t *ends,
 }
 
 template<typename T>
-void H5DataSet::WriteMatrix(Mat<T> &mat) {
+void H5DataSet::WriteMatrix(arma::Mat<T> &mat) {
   size_t starts[2];
   size_t ends[2];
   starts[0] = starts[1] = 0;
   ends[0] = mat.n_rows;
   ends[1] = mat.n_cols;
-  size_t size = mat.n_rows * mat.n_cols;
-  Mat<T> m = trans(mat); // armadillo is stored column major, we want row major...
-  WriteRangeData(starts, ends, size, m.memptr());
+  //size_t size = mat.n_rows * mat.n_cols;
+  arma::Mat<T> m = trans(mat); // armadillo is stored column major, we want row major...
+  WriteRangeData(starts, ends, m.memptr());
 }
 
 template<typename T>
-void H5DataSet::ReadMatrix(Mat<T> &mat) {
+void H5DataSet::WriteDataCube(DataCube<T> &cube) {
+  size_t starts[3];
+  size_t ends[3];
+  size_t xStart, xEnd, yStart, yEnd, zStart, zEnd;
+  cube.GetRange(xStart, xEnd, yStart, yEnd, zStart, zEnd);
+  starts[0] = xStart;
+  ends[0] = xEnd;
+  starts[1] = yStart;
+  ends[1] = yEnd;
+  starts[2] = zStart;
+  ends[2] = zEnd;
+  //size_t size = (xEnd - xStart) * (yEnd - yStart) * (zEnd - zStart);
+  WriteRangeData(starts, ends, cube.GetMemPtr());
+}
+
+template<typename T>
+void H5DataSet::ReadMatrix(arma::Mat<T> &mat) {
   ION_ASSERT(mRank == 2, "Can't read a matrix when rank isn't 2");
   mat.set_size(mDims[1],mDims[0]);
   size_t starts[2];
@@ -250,7 +274,7 @@ void H5DataSet::ReadRangeData(const size_t *starts, const size_t *ends,
 }
 
 template<typename T>
-H5DataSet * H5File::CreateDataSet(const std::string &name, Mat<T> &mat, int compression) {
+H5DataSet * H5File::CreateDataSet(const std::string &name, arma::Mat<T> &mat, int compression) {
   hsize_t rank = 2;
   hsize_t dims[rank];
   hsize_t chunking[rank];
@@ -262,8 +286,27 @@ H5DataSet * H5File::CreateDataSet(const std::string &name, Mat<T> &mat, int comp
   return ds;
 }
 
+template<typename T>
+H5DataSet * H5File::CreateDataSet(const std::string &name, DataCube<T> &cube, int compression) {
+  hsize_t rank = 3;
+  hsize_t dims[rank];
+  hsize_t chunking[rank];
+  chunking[0] = dims[0] = cube.GetNumX();
+  chunking[1] = dims[1] = cube.GetNumY();
+  chunking[2] = dims[2] = cube.GetNumZ();
+  // @todo - make this settable 
+  chunking[0] = std::min((int)chunking[0], 60);
+  chunking[1] = std::min((int)chunking[1], 60);
+  chunking[2] = std::min((int)chunking[2], 60);
+  T t = 0;
+  hid_t type = GetH5Type(t);
+  H5DataSet *ds = CreateDataSet(name, rank, dims, chunking, compression, type);
+  return ds;
+}
+
+
 template <typename T> 
-bool H5File::ReadMatrix(const std::string &hdf5FilePath, Mat<T> &mat) {
+bool H5File::ReadMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat) {
   std::string file, h5path;
   bool okPath = SplitH5FileGroup(hdf5FilePath, file, h5path);
   ION_ASSERT(okPath, "Could not find valid ':' to split on in path: '" + hdf5FilePath + "'");
@@ -277,12 +320,12 @@ bool H5File::ReadMatrix(const std::string &hdf5FilePath, Mat<T> &mat) {
 }
 
 template <typename T> 
-bool  H5File::WriteMatrix(const std::string &hdf5FilePath, Mat<T> &mat) {
+bool  H5File::WriteMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat, bool overwrite) {
   std::string file, h5path;
   bool okPath = SplitH5FileGroup(hdf5FilePath, file, h5path);
   ION_ASSERT(okPath, "Could not find valid ':' to split on in path: '" + hdf5FilePath + "'");
   H5File h5File(file);
-  h5File.Open();
+  h5File.Open(overwrite);
   H5DataSet *ds = h5File.CreateDataSet(h5path, mat, 3);
   ION_ASSERT(ds != NULL, "Couldn't make dataset: " + h5path);
   ds->WriteMatrix(mat);

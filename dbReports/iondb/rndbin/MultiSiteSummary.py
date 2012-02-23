@@ -30,6 +30,7 @@ class MetricRecord:
         self.count = 0
         self.metricSum = 0
         self.q17bases = 0
+        self.q20bases = 0
         self.sum314 = 0
         self.sum316 = 0
         self.sum318 = 0
@@ -39,10 +40,14 @@ class MetricRecord:
         self.site = ""
         self.siteFilter = False
         self.plugin = False
+        self.reverse = False
         if (':' in metricName):
             self.plugin = True
             self.pluginStore = metricName.split(':')[0]
             self.pluginMetric = metricName.split(':')[1]
+    def Reverse(self):
+        self.reverse = True
+        self.recordValue = 999999
 
 
 def BuildTrackingMetrics(metricRecordList, site):
@@ -91,6 +96,7 @@ def BuildTrackingMetrics(metricRecordList, site):
                 metricRecord.count = metricRecord.count + 1
                 metricRecord.metricSum = metricRecord.metricSum + bestVal
                 metricRecord.q17bases = metricRecord.q17bases + bestLib.q17_mapped_bases
+                metricRecord.q20bases = metricRecord.q20bases + bestLib.q20_mapped_bases
                 if '314' in bestResult.experiment.chipType:
                     metricRecord.sum314 = metricRecord.sum314 + 1
                 if '316' in bestResult.experiment.chipType:
@@ -102,9 +108,9 @@ def BuildTrackingMetrics(metricRecordList, site):
                     overallBest = bestVal
                     if metricRecord.numInList == 0:
                         metricRecord.numInList = 1
-                        metricRecord.recordReportList.append((bestResult, bestVal, bestLib.q17_mapped_bases, web_root))
+                        metricRecord.recordReportList.append((bestResult, bestVal, bestLib.q17_mapped_bases, bestLib.q20_mapped_bases, web_root))
                     else:
-                        metricRecord.recordReportList[0] = (bestResult, bestVal, bestLib.q17_mapped_bases, web_root)
+                        metricRecord.recordReportList[0] = (bestResult, bestVal, bestLib.q17_mapped_bases, bestLib.q20_mapped_bases, web_root)
 
 
 def BuildMetrics(metricRecordList, site):
@@ -209,37 +215,41 @@ def BuildMetrics(metricRecordList, site):
                         valtext = getattr(libmetrics, metricRecord.metricName)
                         val = int(valtext)
 
-                    if (val > metricRecord.recordValue):
-                        # if report's parent experiment already exists in the list, replace it, else insert it
-                        repIndex = 0
-                        repToReplace = -1
-                        repFound = False
-                        for rep_item, rep_value, q17bases, webRoot in metricRecord.recordReportList:
-                            # only replace it if its a better record
-                            if (rep_item.experiment.pk == rep.experiment.pk):
-                                repFound = True # found it, but report might not be better than the one already added
-                                if (val > rep_value):
-                                    repToReplace = repIndex
-                            repIndex = repIndex + 1
-                        if repToReplace > -1: # found and its better than the one already added
-                            metricRecord.recordReportList[repToReplace] = (rep, val, libmetrics.q17_mapped_bases, web_root)
-                            #print 'replaced experiment %s using newer report value %s' % (rep.experiment.expName, val)
-                        else:
-                            # only add if we didn't add this experiment already
-                            if repFound == False:
-                                if (metricRecord.numInList < metricRecord.numBest):
-                                    metricRecord.recordReportList.append((rep, val, libmetrics.q17_mapped_bases, web_root))
-                                    metricRecord.numInList = metricRecord.numInList + 1
+                    if (val > 0):
+                        if ((metricRecord.reverse == False and val > metricRecord.recordValue) or (metricRecord.reverse == True and val < metricRecord.recordValue)):
+                            # if report's parent experiment already exists in the list, replace it, else insert it
+                            repIndex = 0
+                            repToReplace = -1
+                            repFound = False
+                            for rep_item, rep_value, q17bases, q20bases, webRoot in metricRecord.recordReportList:
+                                # only replace it if its a better record
+                                if (rep_item.experiment.pk == rep.experiment.pk):
+                                    repFound = True # found it, but report might not be better than the one already added
+                                    if ((metricRecord.reverse == False and val > rep_value) or (metricRecord.reverse == True and val < rep_value)):
+                                        repToReplace = repIndex
+                                repIndex = repIndex + 1
+                            if repToReplace > -1: # found and its better than the one already added
+                                metricRecord.recordReportList[repToReplace] = (rep, val, libmetrics.q17_mapped_bases, libmetrics.q20_mapped_bases, web_root)
+                                #print 'replaced experiment %s using newer report value %s' % (rep.experiment.expName, val)
+                            else:
+                                # only add if we didn't add this experiment already
+                                if repFound == False:
+                                    if (metricRecord.numInList < metricRecord.numBest):
+                                        metricRecord.recordReportList.append((rep, val, libmetrics.q17_mapped_bases, libmetrics.q20_mapped_bases, web_root))
+                                        metricRecord.numInList = metricRecord.numInList + 1
+                                    else:
+                                        # replace the worst item in the list
+                                        metricRecord.recordReportList[metricRecord.numInList-1] = (rep, val, libmetrics.q17_mapped_bases, libmetrics.q20_mapped_bases, web_root)
+    
+                            #re-sort the list, and set the min recordValue to 0 if list not full (so we can continue to add to the list), or to the worst item in the list, so we can replace that item if/when new record is found
+                            metricRecord.recordReportList = sorted(metricRecord.recordReportList, key=lambda val: val[1], reverse=(not metricRecord.reverse))
+                            if metricRecord.numInList == metricRecord.numBest:
+                                rep, metricRecord.recordValue, q17bases, q20bases, webRoot = metricRecord.recordReportList[metricRecord.numInList-1]
+                            else:
+                                if metricRecord.reverse == False:
+                                    metricRecord.recordValue = 0
                                 else:
-                                    # replace the worst item in the list
-                                    metricRecord.recordReportList[metricRecord.numInList-1] = (rep, val, libmetrics.q17_mapped_bases, web_root)
-
-                        #re-sort the list, and set the min recordValue to 0 if list not full (so we can continue to add to the list), or to the worst item in the list, so we can replace that item if/when new record is found
-                        metricRecord.recordReportList = sorted(metricRecord.recordReportList, key=lambda val: val[1], reverse=True)
-                        if metricRecord.numInList == metricRecord.numBest:
-                            rep, metricRecord.recordValue, q17bases, webRoot = metricRecord.recordReportList[metricRecord.numInList-1]
-                        else:
-                            metricRecord.recordValue = 0
+                                    metricRecord.recordValue = 999999
 
 
 
@@ -249,12 +259,12 @@ def DumpMetric(metricRecord):
         # display tracking summary metrics a bit different
         print 'Site Tracking for %s' % metricRecord.site
         html.write('Site Tracking for %s<br>' % metricRecord.site)
-        print 'Runs: %s  100Q17 reads: %s  Q17 bases: %s  314/316/318: %s/%s/%s' % (metricRecord.count, metricRecord.metricSum, metricRecord.q17bases, metricRecord.sum314, metricRecord.sum316, metricRecord.sum318)
-        html.write('Runs: %s  100Q17 reads: %s  Q17 bases: %s  314/316/318: %s/%s/%s<br>' % (metricRecord.count, metricRecord.metricSum, metricRecord.q17bases, metricRecord.sum314, metricRecord.sum316, metricRecord.sum318))
+        print 'Runs: %s  %s: %s  AQ17 bases: %s  AQ20 bases: %s  314/316/318: %s/%s/%s' % (metricRecord.count, metricRecord.metricName, metricRecord.metricSum, metricRecord.q17bases, metricRecord.q20bases, metricRecord.sum314, metricRecord.sum316, metricRecord.sum318)
+        html.write('Runs: %s  %s: %s  AQ17 bases: %s  AQ20 bases: %s  314/316/318: %s/%s/%s<br>' % (metricRecord.count, metricRecord.metricName, metricRecord.metricSum, metricRecord.q17bases, metricRecord.q20bases, metricRecord.sum314, metricRecord.sum316, metricRecord.sum318))
         try:
-            recordReport, recordValue, q17bases, webRoot = metricRecord.recordReportList[0]
-            print 'Top run %s: %s Q17 bases: %s Run date: %s  Analysis date: %s' % (metricRecord.metricName, recordValue, q17bases, recordReport.experiment.date, recordReport.timeStamp)
-            html.write('<a href="%s">Top Run %s: %s Q17 bases: %s Run date: %s Analysis date: %s</a><br>\n' % (webRoot + recordReport.reportLink, metricRecord.metricName, recordValue, q17bases, recordReport.experiment.date, recordReport.timeStamp))
+            recordReport, recordValue, q17bases, q20bases, webRoot = metricRecord.recordReportList[0]
+            print 'Top run %s: %s AQ17 bases: %s AQ20 bases: %s Run date: %s  Analysis date: %s' % (metricRecord.metricName, recordValue, q17bases, q20bases, recordReport.experiment.date, recordReport.timeStamp)
+            html.write('<a href="%s">Top Run %s: %s AQ17 bases: %s AQ20bases: %s Run date: %s Analysis date: %s</a><br>\n' % (webRoot + recordReport.reportLink, metricRecord.metricName, recordValue, q17bases, q20bases, recordReport.experiment.date, recordReport.timeStamp))
         except:
             print 'No top run found?'
             html.write('No top run found?<br>')
@@ -265,30 +275,82 @@ def DumpMetric(metricRecord):
         else:
             html.write('Ion Chip: %s Top %s Run<br>' % (metricRecord.chip, metricRecord.metricName))
 
-        for recordReport, recordValue, q17bases, webRoot in metricRecord.recordReportList:
-            print '%s: %s Q17 bases: %s Run date: %s  Analysis date: %s' % (metricRecord.metricName, recordValue, q17bases, recordReport.experiment.date, recordReport.timeStamp)
+        for recordReport, recordValue, q17bases, q20bases, webRoot in metricRecord.recordReportList:
+            print '%s: %s AQ17 bases: %s AQ20 bases: %s Run date: %s  Analysis date: %s' % (metricRecord.metricName, recordValue, q17bases, q20bases, recordReport.experiment.date, recordReport.timeStamp)
             print 'URL: %s' % (webRoot + recordReport.reportLink)
-            html.write('<a href="%s">%s Q17 bases: %s Run date: %s Analysis date: %s</a><br>\n' % (webRoot + recordReport.reportLink, recordValue, q17bases, recordReport.experiment.date, recordReport.timeStamp))
+            html.write('<a href="%s">%s AQ17 bases: %s AQ20 bases: %s Run date: %s Analysis date: %s</a><br>\n' % (webRoot + recordReport.reportLink, recordValue, q17bases, q20bases, recordReport.experiment.date, recordReport.timeStamp))
 
- 
+
+def lookupSite(url):
+    if 'cbd01' in url:
+        return 'SoCal'
+    if 'aruba' in url:
+        return 'Bev'
+    if 'ioneast' in url:
+        return 'IE'
+    if 'ionwest' in url:
+        return 'IW'
+    if 'pbox' in url:
+        return 'Bev/pbox'
+    return 'unknown'
 
 
 if __name__=="__main__":
     siteList = ['ioneast', 'ionwest', 'beverly', 'pbox', 'ioncarlsbad']
 
     metricRecords = []
-    metricRecords.append(MetricRecord('i100Q17_reads', 5, '314'))
-    metricRecords.append(MetricRecord('i200Q17_reads', 5, '314'))
-    metricRecords.append(MetricRecord('i300Q17_reads', 5, '314'))
-    metricRecords.append(MetricRecord('i400Q17_reads', 5, '314'))
-    metricRecords.append(MetricRecord('i100Q17_reads', 5, '316'))
-    metricRecords.append(MetricRecord('i200Q17_reads', 5, '316'))
-    metricRecords.append(MetricRecord('i300Q17_reads', 5, '316'))
-    metricRecords.append(MetricRecord('i400Q17_reads', 5, '316'))
-    metricRecords.append(MetricRecord('i100Q17_reads', 5, '318'))
-    metricRecords.append(MetricRecord('i200Q17_reads', 5, '318'))
-    metricRecords.append(MetricRecord('i300Q17_reads', 5, '318'))
-    metricRecords.append(MetricRecord('i400Q17_reads', 5, '318'))
+
+    m1 = MetricRecord('i100Q17_reads', 5, '314')
+    m2 = MetricRecord('i200Q17_reads', 5, '314')
+    m3 = MetricRecord('i300Q17_reads', 5, '314')
+    m4 = MetricRecord('i400Q17_reads', 5, '314')
+    m5 = MetricRecord('i100Q17_reads', 5, '316')
+    m6 = MetricRecord('i200Q17_reads', 5, '316')
+    m7 = MetricRecord('i300Q17_reads', 5, '316')
+    m8 = MetricRecord('i400Q17_reads', 5, '316')
+    m9 = MetricRecord('i100Q17_reads', 5, '318')
+    m10 = MetricRecord('i200Q17_reads', 5, '318')
+    m11 = MetricRecord('i300Q17_reads', 5, '318')
+    m12 = MetricRecord('i400Q17_reads', 5, '318')
+
+    m13 = MetricRecord('i100Q20_reads', 5, '314')
+    m14 = MetricRecord('i200Q20_reads', 5, '314')
+    m15 = MetricRecord('i300Q20_reads', 5, '314')
+    m16 = MetricRecord('i400Q20_reads', 5, '314')
+    m17 = MetricRecord('i100Q20_reads', 5, '316')
+    m18 = MetricRecord('i200Q20_reads', 5, '316')
+    m19 = MetricRecord('i300Q20_reads', 5, '316')
+    m20 = MetricRecord('i400Q20_reads', 5, '316')
+    m21 = MetricRecord('i100Q20_reads', 5, '318')
+    m22 = MetricRecord('i200Q20_reads', 5, '318')
+    m23 = MetricRecord('i300Q20_reads', 5, '318')
+    m24 = MetricRecord('i400Q20_reads', 5, '318')
+
+    metricRecords.append(m1)
+    metricRecords.append(m2)
+    metricRecords.append(m3)
+    metricRecords.append(m4)
+    metricRecords.append(m5)
+    metricRecords.append(m6)
+    metricRecords.append(m7)
+    metricRecords.append(m8)
+    metricRecords.append(m9)
+    metricRecords.append(m10)
+    metricRecords.append(m11)
+    metricRecords.append(m12)
+    metricRecords.append(m13)
+    metricRecords.append(m14)
+    metricRecords.append(m15)
+    metricRecords.append(m16)
+    metricRecords.append(m17)
+    metricRecords.append(m18)
+    metricRecords.append(m19)
+    metricRecords.append(m20)
+    metricRecords.append(m21)
+    metricRecords.append(m22)
+    metricRecords.append(m23)
+    metricRecords.append(m24)
+
     IonStats_200Q20 = MetricRecord('i200Q20_reads', 1, '31')
     metricRecords.append(IonStats_200Q20)
     IonStats_Q7 = MetricRecord('q7_longest_alignment', 1, '31')
@@ -304,8 +366,18 @@ if __name__=="__main__":
     metricRecords.append(MetricRecord('q17_mean_alignment_length', 5, '31'))
     metricRecords.append(MetricRecord('q20_mean_alignment_length', 5, '31'))
     metricRecords.append(MetricRecord('q47_mean_alignment_length', 5, '31'))
-    metricRecords.append(MetricRecord('ampliconGeneralAnalysis:coverage_needed_for_99_percentile_base_with_at_least_1x_coverage', 5, '31'))
-    metricRecords.append(MetricRecord('ampliconGeneralAnalysis:coverage_needed_for_98_percentile_base_with_at_least_10x_coverage', 5, '31'))
+    metricRecords.append(MetricRecord('q17_mapped_bases', 3, '314'))
+    metricRecords.append(MetricRecord('q17_mapped_bases', 3, '316'))
+    metricRecords.append(MetricRecord('q17_mapped_bases', 3, '318'))
+    metricRecords.append(MetricRecord('q20_mapped_bases', 5, '314'))
+    metricRecords.append(MetricRecord('q20_mapped_bases', 5, '316'))
+    metricRecords.append(MetricRecord('q20_mapped_bases', 5, '318'))
+    #pluginMetric = MetricRecord('ampliconGeneralAnalysis:coverage_needed_for_99_percentile_base_with_at_least_1x_coverage', 5, '31')
+    #pluginMetric.Reverse()
+    #metricRecords.append(pluginMetric)
+    #pluginMetric = MetricRecord('ampliconGeneralAnalysis:coverage_needed_for_98_percentile_base_with_at_least_10x_coverage', 5, '31')
+    #pluginMetric.Reverse()
+    #metricRecords.append(pluginMetric)
 
     today = datetime.date.today()
     timeStart = datetime.datetime(today.year, today.month, today.day)
@@ -327,6 +399,15 @@ if __name__=="__main__":
         weeklySite.siteFilter = True
         metricRecords.append(weeklySite)
 
+        weeklySite = MetricRecord('i100Q20_reads', 1, '31')
+        weeklySite.track = True
+        weeklySite.dateFilter = True
+        weeklySite.dateMin = timeStart
+        weeklySite.dateMax = timeEnd
+        weeklySite.site = site
+        weeklySite.siteFilter = True
+        metricRecords.append(weeklySite)
+
     for site in siteList:
         BuildMetrics(metricRecords, site)
         BuildTrackingMetrics(metricRecords, site)
@@ -338,6 +419,9 @@ if __name__=="__main__":
     html.write('Weekly metrics captured from %s to %s<br>' % (timeStart, timeEnd))
 
     for metricRecord in metricRecords:
+        # quick cleanup of recordValue to make sure it now reflects the top record, not the barrier to entry for a record
+        if metricRecord.numInList > 0:
+            rep, metricRecord.recordValue, q17bases, q20bases, webRoot = metricRecord.recordReportList[0]
         DumpMetric(metricRecord)
 
     html.write('</body></html>\n')
@@ -351,4 +435,98 @@ if __name__=="__main__":
     IonStats.write('%s,%s,%s\n' % (IonStats_Q20.metricName, IonStats_Q20.recordValue, 0))
     IonStats.write('%s,%s,%s\n' % (IonStats_Q47.metricName, IonStats_Q47.recordValue, 0))
     IonStats.write('%s,%s,%s\n' % (IonStats_200Q20.metricName, IonStats_200Q20.recordValue, 0))
+    IonStats.close()
+
+    # dump out a csv file for copy/paste into excel tracker
+    IonWeekly = open("weekly.csv", "w")
+    IonWeekly.write('314 RECORDS\n')
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m1.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m13.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m2.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m14.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m3.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m15.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m4.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m16.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+
+    IonWeekly.write('316 RECORDS\n')
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m5.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m17.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m6.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m18.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m7.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m19.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m8.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m20.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+
+    IonWeekly.write('318 RECORDS\n')
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m9.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m21.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m10.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m22.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m11.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m23.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+    IonWeekly.write('\n\n\n\n');
+    for i in range(5):
+        recordReport1, recordValue1, q17bases1, q20bases1, webRoot1 = m12.recordReportList[i]
+        recordReport2, recordValue2, q17bases2, q20bases2, webRoot2 = m24.recordReportList[i]
+        siteText1 = lookupSite(webRoot1)
+        siteText2 = lookupSite(webRoot2)
+        IonWeekly.write('%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' % (recordValue1, q17bases1, recordReport1.timeStamp, siteText1, webRoot1 + recordReport1.reportLink, recordValue2, q20bases2, recordReport2.timeStamp, siteText2, webRoot2 + recordReport2.reportLink))
+
+    IonWeekly.close()
 

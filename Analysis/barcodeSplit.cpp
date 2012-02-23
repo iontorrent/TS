@@ -13,6 +13,7 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <algorithm>
 
 #include "IonVersion.h"
 #include "BarCode.h"
@@ -29,6 +30,7 @@
  */
 typedef struct {
 	char *name;
+	char *id_str;
 	int numReads;
 	FILE *fd_fastq;
 	FILE *fd_sff;
@@ -97,6 +99,7 @@ int main (int argc, char *argv[])
 	char *nomatch		= strdup ("nomatch");
 	bool make_sff		= false;
 	bool rtbug		= false;
+	double filter = 0.01;
 	int scoreMode		= -1; // -1 = not set, 0 is percent match-based, 1 is # flows-based, 2 is # flows-based with weighting to break ties
 	double	scoreCutoff	= -1.0; // not set
 	std::string scoreHistFn = "";
@@ -123,12 +126,13 @@ int main (int argc, char *argv[])
 			{"bfmask-file",             required_argument,  NULL,   'k'},
 			{"bcmmask",             no_argument,  NULL,   'e'},
 			{"bcmask-file",             required_argument,  NULL,   'c'},
+			{"filter",					required_argument,		NULL,	'l'},
 			{"help",					no_argument,		NULL,	'h'},
 			{"debug",					no_argument,		NULL,	'x'},
 			{NULL, 0, NULL, 0}
 		};
 		
-	while ((c = getopt_long (argc, argv, "b:d:f:m:z:k:c:hi:esvx", long_options, &option_index)) != -1)
+	while ((c = getopt_long (argc, argv, "b:d:f:l:m:z:k:c:hi:esvx", long_options, &option_index)) != -1)
 	{
 		switch (c)
 		{
@@ -195,6 +199,12 @@ int main (int argc, char *argv[])
 			case 'i':	// input file
 				sff_filename = strdup (optarg);
 				break;
+			
+			case 'l':{	// output file with filter switch based on number of barcode reads
+				int ret = sscanf (optarg, "%lf", &filter);
+				if (ret < 1) filter = 0.01;
+				
+			  }	break;
 			
 			case 's':	// create sff files output
 				make_sff = true;
@@ -279,6 +289,7 @@ int main (int argc, char *argv[])
 	bcTrack *bcTracker = (bcTrack *) malloc (num_barcodes * sizeof (bcTrack));
 	for (int i = 0; i < num_barcodes; i++) {
 		bcTracker[i].name = strdup (BC.GetBarcode(i));
+		bcTracker[i].id_str = strdup (BC.GetBarcodeId(i));
 		bcTracker[i].numReads = 0;
 		bcTracker[i].fd_fastq = NULL;
 		bcTracker[i].fd_sff = NULL;
@@ -494,6 +505,30 @@ sff_read->rheader->name->s);
 			sff_header_write(defaultfd_sff,gh);
 		}
 	}
+	
+	// filter by number of barcode reads
+	if (filter > 0){		
+  		std::vector <int> bcreads;
+		for (int i=0; i<num_barcodes; i++)
+			bcreads.push_back(bcTracker[i].numReads);
+		std::sort(bcreads.begin(),bcreads.end(),std::greater<int>());		
+
+		int last = 20;
+		for (int i=0; i<num_barcodes-1; i++){			
+			if (float(bcreads[i+1])/(.001+float(bcreads[i])) < filter){ 
+				last = max(last,bcreads[i]);
+				break;
+				}
+		}
+		FILE *ffile = fopen("barcodeFilter.txt","wt");
+		if (ffile != NULL)
+		{		  
+		  fprintf(ffile,"BarcodeId,BarcodeName,NumReads,Include\n");
+		  for (int i=0; i<num_barcodes; i++)		    
+			fprintf(ffile,"%s,%s,%i,%i\n",bcTracker[i].id_str,bcTracker[i].name,bcTracker[i].numReads,int(bcTracker[i].numReads>=last));			
+		  fclose(ffile);		
+		}
+	}
 
 	if (bcmask_filename!=NULL) {
 		BC.OutputRawMask(bcmask_filename);
@@ -507,6 +542,7 @@ sff_read->rheader->name->s);
 	sff_header_destroy (gh);
 	for (int i = 0; i < num_barcodes;i++){
 		free (bcTracker[i].name);
+		free (bcTracker[i].id_str);
 		if (bcTracker[i].fd_fastq) fclose(bcTracker[i].fd_fastq);
 		if (bcTracker[i].fd_sff) fclose(bcTracker[i].fd_sff);
 	}

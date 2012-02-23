@@ -5,7 +5,7 @@
 ulimit -s 8192
 #$ -l mem_free=22G,h_vmem=22G,s_vmem=22G
 #normal plugin script
-VERSION="2.0.1.0"
+VERSION="2.0.1.1"
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should all be set to 0 in production mode
@@ -290,6 +290,7 @@ call_variants()
                 BAM_UNTRIM="$BAMFILE"
                 BAMFILE="${OUTDIR}/$PLUGIN_OUT_TRIMPBAM"
                 run "java -cp ${DIRNAME}/TRIMP_lib -jar ${DIRNAME}/TRIMP.jar $BAM_UNTRIM $BAMFILE $REFERENCE $INPUT_BED_FILE"
+		run "samtools index $BAMFILE"
                 if [ -f "$BAMFILE" ]; then
                     if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
                         echo "> $BAMFILE" >&2
@@ -513,7 +514,7 @@ if [ -n "$INPUT_SNP_BED_FILE" -a "$ENABLE_HOTSPOT_LEFT_ALIGNMENT" -eq 1 ]; then
     echo "Ensuring left-alignment of HotSpot regions..." >&2
     run "mkdir -p ${PLUGIN_HS_ALIGN_DIR}"
     run "ln -sf ${TSP_FILEPATH_PLUGIN_DIR}/$PLUGIN_OUT_LOCI_BEDFILE ${PLUGIN_HS_ALIGN_DIR}/$PLUGIN_OUT_LOCI_BEDFILE"
-    ALBCMD="java -jar ${DIRNAME}/LeftAlignBed.jar ${PLUGIN_HS_ALIGN_DIR}/${PLUGIN_OUT_LOCI_BEDFILE} ${PLUGIN_HS_ALIGN_BED} ${DIRNAME}/GenomeAnalysisTK.jar ${REFERENCE}"
+    ALBCMD="java -jar -Xmx1500m ${DIRNAME}/LeftAlignBed.jar ${PLUGIN_HS_ALIGN_DIR}/${PLUGIN_OUT_LOCI_BEDFILE} ${PLUGIN_HS_ALIGN_BED} ${DIRNAME}/GenomeAnalysisTK.jar ${REFERENCE}"
     if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
         echo "\$ $ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&1" >&2
     fi

@@ -35,6 +35,7 @@ void AccumulateSingleNeighborXtalkTrace(float *my_xtflux, bead_params *p, reg_pa
                                                   BeadScratchSpace &my_scratch, TimeCompression &time_c, RegionTracker &my_regions, 
                                                 flow_buffer_info my_flow, PoissonCDFApproxMemo *math_poiss, bool use_vectorization,
                                                   float tau_top, float tau_bulk, float multiplier);
-    
+void MultiCorrectBeadBkg(float *block_signal_corrected, bead_params *p,
+                         BeadScratchSpace &my_scratch, flow_buffer_info &my_flow, TimeCompression &time_c, RegionTracker &my_regions, float *sbg, bool use_vectorization);
     
 #endif // MULTIFLOWMODEL_H

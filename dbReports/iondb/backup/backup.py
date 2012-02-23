@@ -26,7 +26,7 @@ import logging.handlers
 from iondb.backup import devices
 from django.core import mail
 import traceback
-from django.db import connection, transaction
+from django.db import connection
 from iondb.backup.archiveExp import Experiment
 
 settings.EMAIL_HOST = 'localhost'
@@ -37,7 +37,7 @@ last_exp_size = 0
 #Global
 gl_experiments = {}
 
-__version__ = filter(str.isdigit, "$Revision: 21186 $")
+__version__ = filter(str.isdigit, "$Revision: 23638 $")
 
 
 class Email():
@@ -107,7 +107,6 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
     and there are runs marked for deletion.  Without remove only mode, the list of runs to process could get filled with
     Archive runs, and the Delete Runs would never get processed.
     '''
-    debug = True
     exp = models.Experiment.objects.all().order_by('date')
     log.debug ("Total Experiments: %d" % len(exp))
     if removeOnly:
@@ -123,19 +122,27 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
 
     experiments = []
     for e in exp:
-        if debug:
-            log.debug('Experiment date %s' % str(e.date))
+        log.debug('Experiment date %s' % str(e.date))
         if len(experiments) < num: # only want to loop until we have the correct number
             
             location = server_and_location(e)
             if location == None:
                 continue
             
-            diff = time.mktime(timenow) - time.mktime(datetime.datetime.timetuple(e.date))
-            if debug:
-                log.debug ('Time diff is %d' % diff)
+            # TODO: instead of using the experiment date field, which is set to when the experiment was performed
+            # use the file timestamp of the first (or last?) .dat file when calculating grace period
+            EXPERIMENTAL = True
+            if not EXPERIMENTAL:
+                diff = time.mktime(timenow) - time.mktime(datetime.datetime.timetuple(e.date))
+                log.debug ('Time since experiment was run %d' % diff)
+            else:
+                stat = os.stat(e.expDir)
+                diff = time.mktime(timenow) - stat.st_mtime
+                log.debug ('Time since folder created is %d' % diff)
+            
             # grace_period units are hours
             if diff < (grace_period * 3600):    #convert hours to seconds
+                log.info ('Within grace period: %s' % e.expName)
                 continue
             
             experiment = Experiment(e,
@@ -151,8 +158,7 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
             try:
                 # don't add anything to the list if its already archived
                 bk = models.Backup.objects.get(backupName=experiment.get_exp_name())
-                if debug:
-                    log.debug('This has been archived')
+                log.debug('This has been archived')
                 continue 
             except:
                 # check that the path exists, and double check that its not marked to 'Keep'
@@ -166,7 +172,7 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
                         e.user_ack = 'S'
                         e.save()
                         experiment.user_ack = 'S'
-                    # Only runs marked Delete should require acknowledge; Archive should go automatically
+                    # Runs marked Archive are automatically handled so set them as Acknowledged:
                     if experiment.get_storage_option() == 'A':
                         e.user_ack = 'A'
                         e.save()
@@ -179,14 +185,13 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
                         
                     experiments.append(experiment)
                 #DEBUG MODE: show why the experiment is or is not valid for archiving
-                if debug:
-                    log.debug("Path: %s" % experiment.get_exp_path())
-                    log.debug("Does path exist? %s" % ('yes' if path.exists(experiment.get_exp_path()) else 'no'))
-                    log.debug("Is path a link? %s" % ('yes' if path.islink(experiment.get_exp_path()) else 'no'))
-                    log.debug("Is exp location same as loc? %s" % ('yes' if experiment.location==cur_loc else 'no'))
-                    log.debug("Is storage option not Keep? %s" % ('yes' if  experiment.get_storage_option() != 'KI' else 'no'))
-                    log.debug("Is %s in %s? %s" % (serverPath,experiment.dir,'yes' if serverPath in experiment.dir else 'no'))
-                    log.debug("User Ack is set to %s" % experiment.user_ack)
+                log.debug("Path: %s" % experiment.get_exp_path())
+                log.debug("Does path exist? %s" % ('yes' if path.exists(experiment.get_exp_path()) else 'no'))
+                log.debug("Is path a link? %s" % ('yes' if path.islink(experiment.get_exp_path()) else 'no'))
+                log.debug("Is exp location same as loc? %s" % ('yes' if experiment.location==cur_loc else 'no'))
+                log.debug("Is storage option not Keep? %s" % ('yes' if  experiment.get_storage_option() != 'KI' else 'no'))
+                log.debug("Is %s in %s? %s" % (serverPath,experiment.dir,'yes' if serverPath in experiment.dir else 'no'))
+                log.debug("User Ack is set to %s" % experiment.user_ack)
         else:
             log.debug("Number of experiments: %d" % len(experiments))
             return experiments
@@ -302,8 +307,12 @@ def backup(log, experiments, backupDrive, number_to_backup, backupFreeSpace, bwL
             except:
                 log.error(traceback.format_exc())
             add_to_db(exp, linkPath, True)
+            exp.user_ack = 'D'
+            exp.save()
         elif removecomplete and not JUST_TESTING:
             add_to_db(exp, 'DELETED', False)
+            exp.user_ack = 'D'
+            exp.save()
         else:
             log.info("copycomplete returned: %s" % copycomplete)
             log.info("removecomplete returned: %s" % removecomplete)
@@ -433,7 +442,6 @@ def loopScheduler(log):
                 timeBefore = time.mktime(time.localtime(time.time()))
         except:
             log.error(traceback.format_exc())
-        transaction.commit_unless_managed()
         #log.info ("Sleeping for %d seconds" % LOOP)
         time.sleep(LOOP)
         
@@ -540,68 +548,6 @@ def GetAutoArchiveAck_GC():
     except:
         return False
     return autoAck
-
-#def loop(log, cur_loc, isConf, params):
-#    global gl_experiments
-#    pk = None
-#    email = Email()
-#    try:
-#        IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-#        log.debug("Backup server running on %s" % IP_ADDRESS)
-#        autoArchiveAck = GetAutoArchiveAck_GC()
-#        if autoArchiveAck:
-#            log.info("User acknowledgement to archive is not required")
-#        
-#        if isConf and params['enabled']:
-#            NUMBER_TO_BACKUP = params['NUMBER_TO_BACKUP']
-#            
-#            BACKUP_DRIVE_PATH = params['BACKUP_DRIVE_PATH']
-#            PERCENT_FULL_BEFORE_BACKUP = params['BACKUP_THRESHOLD']
-#            BANDWIDTH_LIMIT = params['BANDWIDTH_LIMIT']
-#            BACKUP_PK = params['PK']
-#            ADMIN_EMAIL = params['EMAIL']
-#            pk = BACKUP_PK
-#            GRACE_PERIOD = params['GRACE_PERIOD']
-#            backupFreeSpace, bkpPerFree, removeOnly = get_archive_report(log,params)
-#            serverFullSpace = get_server_full_space(cur_loc)
-#            log.info ("Backup trigger percentage: %0.2f %% full" % PERCENT_FULL_BEFORE_BACKUP)
-#            for serverPath, percentFull in serverFullSpace:
-#                
-#                experiments = build_exp_list(cur_loc, NUMBER_TO_BACKUP, GRACE_PERIOD, serverPath, removeOnly, log, autoArchiveAck)
-#                gl_experiments[serverPath] = experiments
-#                
-#                if percentFull > PERCENT_FULL_BEFORE_BACKUP:
-#                    log.info("%s : %.2f %% full" % (serverPath, percentFull))
-#                    set_status(log, "Backing Up")
-#                    if len(experiments) == 0:
-#                        log.info("No datasets are valid to process")
-#                    notify(log,experiments,ADMIN_EMAIL)
-#                    backup(log, experiments, BACKUP_DRIVE_PATH, 
-#                           NUMBER_TO_BACKUP, backupFreeSpace, 
-#                           BANDWIDTH_LIMIT, BACKUP_PK, email, ADMIN_EMAIL)
-#                else:
-#                    #percentFree = 100-percentFull
-#                    #log.info("Results Drive %s Free Space = %0.2f" % (serverPath,percentFree))
-#                    log.info("Results Drive %s Used Space = %0.2f" % (serverPath,percentFull))
-#                    if bkpPerFree:
-#                        # when bkpPerFree is undefined, there is no backup drive mounted
-#                        log.info("Backup Drive Free Space = %0.2f" % bkpPerFree)
-#            
-#            if len(serverFullSpace) == 0:
-#                log.debug ("No fileservers configured")
-#                
-#        else:
-#            log.info("No backups configured, or they're disabled")
-#        db.reset_queries()
-#        if pk != None:
-#            set_status(log,"Idle")
-#
-#    except KeyboardInterrupt:
-#        # when do we ever execute this code?
-#        set_status(log,"Off")
-#    except:
-#        log.error(traceback.format_exc())
-#        set_status(log,"ERROR")
         
 def _cleanup(signum, frame):
     bk = models.BackupConfig.objects.all()[0]
@@ -625,7 +571,7 @@ def get_archive_report(log,params):
                 return backupFreeSpace, bkpPerFree, removeOnly
     else:
         removeOnly = True
-        log.info('No archive drive, entering Remove Only Mode.')
+        log.debug('No archive drive, entering Remove Only Mode.')
     return backupFreeSpace, bkpPerFree, removeOnly
 
 def refreshVals(experiments):
@@ -641,9 +587,13 @@ class Status(xmlrpc.XMLRPC):
     def __init__(self,log):
         xmlrpc.XMLRPC.__init__(self)
         self.log = log
+        self.start_time = datetime.datetime.now()
         
+    # N.B. This is no longer used to get the list of experiments
+    # views.py=>db_backup() function queries dbase directly
     def xmlrpc_next_to_archive(self):
         global gl_experiments
+        self.log.debug("Got a next_to_archive xmlrpc from %s" % self.request.getClientIP())
         '''Returns the meta information of all the file servers currently in the database'''
         IP_ADDRESS = socket.gethostbyname(socket.gethostname())
         cur_loc = get_current_location(IP_ADDRESS,self.log)
@@ -661,9 +611,29 @@ class Status(xmlrpc.XMLRPC):
         # We use this function to wake up the daemon and start the backup process
         # Typically, we expect about 10 calls to this function at a time
         global gl_experiments
-        self.log.debug("Got an acknowledge xmlrpc")
+        try:
+            self.log.debug("Got an acknowledge xmlrpc from %s" % self.request.getClientIP())
+        except:
+            self.log.error(traceback.format_exc())
         gl_experiments = refreshVals(gl_experiments)
         return True
+
+    def render(self, request):
+        self.request = request
+        return xmlrpc.XMLRPC.render(self, request)
+    
+    def xmlrpc_status_check(self):
+        """Return the amount of time the ionArchive service has been running."""
+        try:
+            diff = datetime.datetime.now() - self.start_time
+            seconds = float(diff.days*24*3600)
+            seconds += diff.seconds
+            seconds += float(diff.microseconds)/1000000.0
+            self.log.debug("Uptime called - %d (s)" % seconds)
+        except:
+            self.log.error(traceback.format_exc())
+            seconds = 0
+        return seconds
     
 def checkThread (thread,log,reactor):
     '''Checks thread for aliveness.
@@ -678,18 +648,11 @@ def checkThread (thread,log,reactor):
 
 def main(argv):
     # Setup log file logging
-    try:
-        log='/var/log/ion/iarchive.log'
-        infile = open(log, 'a')
-        infile.close()
-    except:
-    	print traceback.format_exc()
-    	log = '/var/log/iarchive.log'
+    filename = '/var/log/ion/iarchive.log'
     archlog = logging.getLogger('archlog')
     archlog.propagate = False
-    #archlog.setLevel(logging.DEBUG)
     archlog.setLevel(logging.INFO)
-    handler = logging.handlers.RotatingFileHandler(log, maxBytes=1024*1024*10, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024*1024*10, backupCount=5)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     archlog.addHandler(handler)

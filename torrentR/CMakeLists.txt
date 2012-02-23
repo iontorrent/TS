@@ -24,7 +24,7 @@ configure_file (
 
 set(ENV{ANALYSIS_INC}="${PROJECT_SOURCE_DIR}/../Analysis")
 set(ENV{BKGMODEL_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BkgModel")
-set(ENV{PHASE_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Phase")
+set(ENV{PHASE_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller")
 set(ENV{ANALYSIS_LIB}="${PROJECT_BINARY_DIR}/Analysis")
 
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis )

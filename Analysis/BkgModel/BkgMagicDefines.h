@@ -49,7 +49,6 @@
 #define DEFAULTNUCINDEX 0
 
 #define MAXCLONALMODIFYPOINTSERROR 6
-#define TOOMANYERRORS 6
 
 #define NUMBEADSPERGROUP 199
 
@@ -60,6 +59,9 @@
 
 #define MAX_BOUND_CHECK(param) {if (bound->param < cur->param) cur->param = bound->param;}
 #define MIN_BOUND_CHECK(param) {if (bound->param > cur->param) cur->param = bound->param;}
+
+#define MAX_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam < cur->param) cur->param = bound->bparam;}
+#define MIN_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam > cur->param) cur->param = bound->bparam;}
 
 #define EFFECTIVEINFINITY 1000
 
@@ -77,10 +79,23 @@
 
 typedef int16_t FG_BUFFER_TYPE;
 
+
 #define MAGIC_OFFSET_FOR_EMPTY_TRACE 4.0
 #define DEFAULT_FRAME_TSHIFT 3
 
+#define WASHOUT_THRESHOLD 2.0
+#define WASHOUT_FLOW_DETECTION 6
+
 #define MAGIC_MAX_CLONAL_HP_LEVEL 5
+
+// speedup flags to accumulate 2x all together
+#define CENSOR_ZERO_EMPHASIS 1
+#define CENSOR_THRESHOLD 0.01
+#define MIN_CENSOR 1
+
+// levmar state
+#define UNINITIALIZED -1
+#define MEAN_PER_FLOW 997
 
 
 

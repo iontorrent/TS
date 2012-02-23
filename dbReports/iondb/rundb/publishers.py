@@ -16,6 +16,7 @@ module are in fact Django views.
 import datetime
 import subprocess
 import logging
+import traceback
 import os
 import os.path
 
@@ -43,7 +44,8 @@ logger = logging.getLogger(__name__)
 
 def search_for_publishers(config, pub_dir="/results/publishers/"):
     """
-    Searches for new plugins
+    Searches for new publishers, reads their publisher_meta.json, and makes any
+    necessary updates to the publisher's record.
     """
     def create_new(name, version, path):
         pub = models.Publisher()
@@ -53,32 +55,37 @@ def search_for_publishers(config, pub_dir="/results/publishers/"):
         pub.path = path
         pub.save()
 
-    #TODO: try and roll the version info into a configparseble file.
-    def get_version(dir, register):
-        """Open the script file and look for a version string."""
-        #for line in open(os.path.join(dir, register)):
-        #    if "VERSION" in line:
-        #        return line.split("=")[1].strip().replace('"', '')
-        return "0"
-
     def update_version(pub, version):
         pub.version = version
         pub.save()
 
-    default_script = "register"
     if os.path.exists(pub_dir):
         # only list files in the 'publishers' directory if they are actually folders
         folder_list = [i for i in os.listdir(pub_dir) if (
                         os.path.isdir(os.path.join(pub_dir, i)) and i != "scratch")]
         for pname in folder_list:
             full_path = os.path.join(pub_dir, pname)
-            version = get_version(full_path, default_script)
+            pub_meta_path = os.path.join(full_path, "publisher_meta.json")
             try:
-                p = models.Publisher.objects.get(name=pname.strip())
-                if p.version != version:
-                    update_version(p, version)
-            except ObjectDoesNotExist:
-                create_new(pname, version, full_path)
+                with open(pub_meta_path) as pub_meta_file:
+                    publisher_meta = json.load(pub_meta_file)
+                version = str(publisher_meta["version"])
+            # Begin Righteous error reporting!
+            except NameError:
+                logger.error("Publisher %s is missing publisher_meta.json" % pname)
+            except IOError as error:
+                logger.error("Publisher %s failed to read publisher_meta.json with %s" % (pname, error))
+            except (ValueError, KeyError) as error:
+                logger.error("Publisher %s has an improperly formatted publisher_meta.json with %s" % (pname, error))
+            else:
+                try:
+                    p = models.Publisher.objects.get(name=pname.strip())
+                    if p.version != version:
+                        update_version(p, version)
+                        logger.info("Publisher %s updated to version %s" % (pname, version))
+                except ObjectDoesNotExist:
+                    create_new(pname, version, full_path)
+                    logger.info("Publisher %s version %s added" % (pname, version))
 
 
 # ============================================================================
@@ -98,11 +105,11 @@ class PublisherContentUploadValidator(forms.Form):
 
 
 def purge_publishers():
-    """Removes records from plugin table which no longer have corresponding folder
-    on the file system.  If the folder does not exist, we assume that the plugin
-    has been deleted.  In any case, one cannot execute the plugin if the plugin
-    folder has been removed."""
-    # get all plugin records from table
+    """Removes records from publisher table which no longer have corresponding
+    folder on the file system.  If the folder does not exist, we assume that
+    the publisher has been deleted.  In any case, one cannot execute the
+    publisher if the publisher's folder has been removed.
+    """
     pubs = models.Publisher.objects.all()
     # for each record, test for corresponding folder
     for pub in pubs:
@@ -110,6 +117,7 @@ def purge_publishers():
         if not os.path.isdir(pub.path):
             # remove this record
             pub.delete()
+            logger.info("Deleting publisher %s which no longer exists at %s" % (pub.name, pub.path))
 
 
 def write_file(file_data, destination):
@@ -140,9 +148,7 @@ def store_upload(pub, file_data, file_name, meta_data=None):
     # TODO: Any path's defined here should really be persisted with the Content Upload
     meta_path = os.path.join(upload_dir, "meta.json")
     open(meta_path, 'w').write(meta_data)
-    upload.status = "Editing"
-    msg = models.UserEventLog(text="Successfully uploaded.  Now validating and processing.")
-    upload.logs.add(msg)
+    upload.status = "Queued for processing"
     upload.save()
     return upload
 
@@ -170,33 +176,48 @@ def run_pub_scripts(pub, upload):
     """Spawn subshells in which the Publisher's editing scripts are run, with
     the upload's folder and the script's output folder as command line args.
     """
-    logger = run_pub_scripts.get_logger()
-    #TODO: Handle unique file upload instance particulars
-    logger.info("Editing upload for %s" % pub.name)
+    try:
+        logger = run_pub_scripts.get_logger()
+        #TODO: Handle unique file upload instance particulars
+        logger.info("Editing upload for %s" % pub.name)
+        previous_status = upload.status
+        upload_path = upload.file_path
+        upload_dir = os.path.dirname(upload_path)
+        meta_path = os.path.join(upload_dir, "meta.json")
+        pub_dir = pub.path
+        pub_scripts = pub.get_editing_scripts()
+        for script_path, stage_name in pub_scripts:
+            # If at some point in the loop, one of the scripts changes the status,
+            # then we cease updating it automatically.
+            if upload.status == previous_status:
+                previous_status = stage_name
+                upload.status = stage_name
+                upload.save()
+            result, stdout, stderr = run_script(pub_dir, script_path, str(upload.id),
+                                                upload_dir, upload_path, meta_path)
+            # The script may have updated the upload during execution, so we reload
+            upload = models.ContentUpload.objects.get(pk=upload.pk)
+            if result is 0:
+                logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
+            else:
+                logger.error("Editing for %s died during %s." % (pub.name, script_path))
+                upload.status = "Error: publisher failed."
+                upload.save()
+            # If either the script itself or we set the status to anything starting
+            # with "Error" then we abort further processing here.
+            if upload.status.startswith("Error"):
+                return
+        # At this point every script has finished running and we have not returned
+        # early due to an error, alright!
+        upload.status = "Successfully Completed"
+        upload.save()
+    except Exception as error:
+        tb = "\n".join("    "+s for s in traceback.format_exc().split("\n"))
+        logger.error("Exception in %s upload %d during %s\n%s" %
+            (pub.name, upload.id, stage_name, tb))
+        upload.status = "Error: processing failed."
+        upload.save()
 
-    upload_path = upload.file_path
-    upload_dir = os.path.dirname(upload_path)
-    meta_path = os.path.join(upload_dir, "meta.json")
-    pub_dir = pub.path
-    pub_scripts = pub.get_editing_scripts()
-    for script_path in pub_scripts:
-        result, stdout, stderr = run_script(pub_dir, script_path, str(upload.id),
-                                            upload_dir, upload_path, meta_path)
-        upload = models.ContentUpload.objects.get(pk=upload.pk)
-        if result is 0:
-            logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
-        else:
-            logger.error("Editing for %s died during %s." % (pub.name, script_path))
-            upload.status = "Error: publisher failed."
-            upload.save()
-        # If either the script itself or we set the status to anything starting
-        # with "Error" then we abort further processing here.
-        if upload.status.startswith("Error"):
-            return
-    # At this point every script has finished running and we have not returned
-    # early due to an error, alright!
-    upload.status = "Successfully Completed"
-    upload.save()
 
 
 def edit_upload(pub, upload, meta=None):

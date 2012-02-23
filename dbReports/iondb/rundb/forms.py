@@ -10,7 +10,7 @@ import datetime
 from iondb.backup import devices
 from iondb.rundb import tasks
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 class RunParamsForm(forms.Form):
@@ -20,7 +20,7 @@ class RunParamsForm(forms.Form):
                            initial=models.GlobalConfig.objects.all()[0].get_default_command(), 
                            required=False,
                            widget=forms.TextInput(attrs={'size':'60'}))
-    blockArgs = forms.CharField(max_length=64,
+    blockArgs = forms.CharField(max_length=128,
                            required=False,
                            widget=forms.TextInput(attrs={'size':'60'}))
     libraryKey = forms.CharField(max_length=128,
@@ -30,7 +30,7 @@ class RunParamsForm(forms.Form):
                                 widget=forms.FileInput(attrs={'size':'60'}))
     takeover_node = forms.BooleanField(required=False, initial=False)
     align_full = forms.BooleanField(required=False, initial=False)
-    qname = forms.CharField(max_length=128,widget=forms.HiddenInput(), required=True)
+    do_thumbnail = forms.BooleanField(required=False, initial=True)
     aligner_opts_extra = forms.CharField(max_length=100000,required=False,widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
 
     def clean_report_name(self):
@@ -373,7 +373,7 @@ class NetworkConfigForm(forms.Form):
                 "proxy_password": "",
                 "collab_ip": "",
                 }
-        cmd = ["/usr/sbin/TSquery"]
+        cmd = ["TSquery", "--all"]
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)

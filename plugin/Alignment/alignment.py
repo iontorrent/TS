@@ -207,17 +207,24 @@ def make_zipfile(alignment):
     if os.path.isabs(zip_path):
         head, tail = os.path.split(zip_path)
         os.chdir(head)
-    myzip = zipfile.ZipFile(zip_name, "w")
+    myzip = zipfile.ZipFile(zip_name, "w", allowZip64=True)
     
     for suffix in alignment.output_format:
         file_name = "%s.%s" % (alignment.file_prefix, suffix)
         if os.path.isabs(file_name):
             head, tail = os.path.split(file_name)
             file_name = tail
-        myzip.write(file_name)
+        try:
+            myzip.write(file_name)
+        except zipfile.LargeZipFile:
+            print "[alignment.py] The zip file was too large, ZIP64 extensions could not be enabled"
+        except:
+            print "[alignment.py] Unexpected error creating zip"
+            traceback.print_exc()
+        finally:
+            myzip.close()
         
     myzip.close()
-            
     
     
 def create_igv_session(alignment, base_url, plugin_url):

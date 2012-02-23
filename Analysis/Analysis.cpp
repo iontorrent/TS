@@ -3,8 +3,8 @@
 // Ion Torrent Systems, Inc.
 // Analysis Pipeline
 // (c) 2009
-// $Rev: 20450 $
-//  $Date: 2011-11-30 13:08:01 -0800 (Wed, 30 Nov 2011) $
+// $Rev: 23473 $
+//  $Date: 2012-01-26 19:07:26 -0500 (Thu, 26 Jan 2012) $
 //
 
 #include <stdio.h>
@@ -42,11 +42,11 @@
 #include "fstrcmp.h"
 #include "LinuxCompat.h"
 #include "Utils.h"
+#include "SeqList.h"
 //#include "WorkerInfoQueue.h"
 #include "SampleStats.h"
 #include "Stats.h"
 #include "CommandLineOpts.h"
-#include "Flow.h"
 #include "file-io/ion_util.h"
 #include "ReservoirSample.h"
 #include "IonErr.h"
@@ -128,7 +128,7 @@ void SetUpAnalysisLocation(CommandLineOpts &clo, char *experimentName, string &a
 
   analysisLocation = analysisPath;
   char *analysisDir = NULL;
-  if (clo.NO_SUBDIR)
+  if (clo.sys_context.NO_SUBDIR)
   {
     analysisDir = strdup(basename(tmpStr));
   }
@@ -138,7 +138,7 @@ void SetUpAnalysisLocation(CommandLineOpts &clo, char *experimentName, string &a
   }
 
   //  Create a run identifier from output results directory string
-  ion_run_to_readname(clo.runId, analysisDir, strlen(analysisDir));
+  ion_run_to_readname(clo.sys_context.runId, analysisDir, strlen(analysisDir));
 
   free(analysisDir);
   free(analysisPath);
@@ -156,80 +156,13 @@ void ExportSubRegionSpecsToMask(CommandLineOpts &clo)
   Mask::chipSubRegion.w = (clo.GetChipRegion()).w;
 }
 
-void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, CommandLineOpts &clo, FILE *fpLog, Flow *flw)
-{
-  seqList[0].seq = clo.tfKey;
-  seqList[1].seq = clo.libKey;
-  //const int numSeqListItems = sizeof(seqList) / sizeof(SequenceItem);
-  // Calculate number of key flows & Ionogram
-  //  TFs tempTF(flw->GetFlowOrder()); // MGD note - would like GenerateIonogram to be in the utils lib soon
-  for (int i = 0; i < numSeqListItems; i++)
-  {
-    int zeroMerCount = 0;
-    int oneMerCount = 0;
-    seqList[i].len = strlen(seqList[i].seq);
-    //    seqList[i].numKeyFlows = tempTF.GenerateIonogram(seqList[i].seq,
-    //        seqList[i].len, seqList[i].Ionogram);
-    seqList[i].numKeyFlows = seqToFlow(seqList[i].seq, seqList[i].len,
-                                       seqList[i].Ionogram, 64, flw->GetFlowOrder(), strlen(flw->GetFlowOrder()));
-
-    seqList[i].usableKeyFlows = seqList[i].numKeyFlows - 1;
-    // and calculate for the given flow order, what nucs are 1-mers and which are 0-mers
-    // requirement is that we get at least one flow for each nuc that has a 0 and a 1
-    // it just might take lots of flows for a given key
-    int flow;
-    for (flow = 0; flow < seqList[i].numKeyFlows; flow++)
-    {
-      seqList[i].onemers[flow] = -1;
-      seqList[i].zeromers[flow] = -1;
-    }
-    for (flow = 0; flow < seqList[i].numKeyFlows; flow++)
-    {
-      if (seqList[i].Ionogram[flow] == 1)
-      {
-        // for now just mark the first occurance of any nuc hit
-        if (seqList[i].onemers[flw->GetNuc(flow)] == -1)
-        {
-          oneMerCount++;
-          seqList[i].onemers[flw->GetNuc(flow)] = flow;
-        }
-      }
-      else
-      {
-        // for now just mark the first occurance of any nuc hit
-        if (seqList[i].zeromers[flw->GetNuc(flow)] == -1)
-        {
-          zeroMerCount++;
-          seqList[i].zeromers[flw->GetNuc(flow)] = flow;
-        }
-      }
-    }
-    if (oneMerCount <= 1 || zeroMerCount <= 1)
-    {
-      fprintf(
-        fpLog,
-        "Key: '%s' with flow order: '%s' does not have at least 2 0mers and 2 1mers.\n",
-        seqList[i].seq, flw->GetFlowOrder());
-      fprintf(
-        stderr,
-        "Key: '%s' with flow order: '%s' does not have at least 2 0mers and 2 1mers.\n",
-        seqList[i].seq, flw->GetFlowOrder());
-      exit(EXIT_FAILURE);
-    }
-    if (seqList[i].numKeyFlows > clo.maxNumKeyFlows)
-      clo.maxNumKeyFlows = seqList[i].numKeyFlows;
-    if ((seqList[i].numKeyFlows - 1) < clo.minNumKeyFlows)
-      clo.minNumKeyFlows = seqList[i].numKeyFlows - 1;
-  }
-}
-
 
 
 void InitPinnedWellReporterSystem(CommandLineOpts &clo)
 {
   // Enable or disable the PinnedWellReporter system.
   bool bEnablePWR = false;
-  if (0 != clo.outputPinnedWells)
+  if (0 != clo.img_control.outputPinnedWells)
     bEnablePWR = true;
   PWR::PinnedWellReporter::Instance(bEnablePWR);
 }
@@ -264,6 +197,7 @@ int main(int argc, char *argv[])
   experimentName = strdup(clo.GetExperimentName());
 
   CreateResultsFolder(experimentName);
+  CreateResultsFolder(clo.sys_context.basecaller_output_directory);
 
   string analysisLocation;
   SetUpAnalysisLocation(clo,experimentName,analysisLocation);
@@ -275,20 +209,21 @@ int main(int argc, char *argv[])
   // for new analysis, this is a file to be created; for reprocessing, this is the wells file to be read.
   // create the new wells file on a local partition.
   ClearStaleWellsFile();
-  MakeNewTmpWellsFile(clo, experimentName);
+  MakeNewTmpWellsFile(clo.sys_context, experimentName);
 
-  RawWells rawWells(clo.wellsFilePath, clo.wellsFileName);
+  RawWells rawWells(clo.sys_context.wellsFilePath, clo.sys_context.wellsFileName);
 
   int well_rows, well_cols; // dimension of wells file - found out from images if we use them - why is this separate from the rawWells object?
 
   // structure our flows & special key sequences we look for
   int numFlows = clo.GetNumFlows();
 
-  Flow *flw;
-  flw = new Flow(clo.flowOrder);
-  SequenceItem seqList[] = { { MaskTF, "ATCG", 0, 0, 0, {0}, {0}, {0} }, { MaskLib, "TCAG", 0, 0, 0, {0}, {0}, {0} } };
-  int numSeqListItems = 2;
-  InitializeSeqList(seqList,numSeqListItems,clo,my_progress.fpLog,flw);
+  SeqListClass my_keys;
+  my_keys.StdInitialize(clo.flow_context.flowOrder,clo.key_context.libKey, clo.key_context.tfKey,my_progress.fpLog); // 8th duplicated flow processing code
+  //@TODO: these parameters are just for reporting purposes???
+  // they appear to be ignored everywhere
+  my_keys.UpdateMinFlows(clo.key_context.minNumKeyFlows);
+  my_keys.UpdateMaxFlows(clo.key_context.maxNumKeyFlows);
 
   // GENERATE FUNCTIONAL WELLS FILE & BEADFIND FROM IMAGES OR PREVIOUS PROCESS
 
@@ -298,7 +233,17 @@ int main(int argc, char *argv[])
   Mask bfmask(1, 1);
   Mask *maskPtr = &bfmask;
 
-  GetFromImagesToWells(rawWells, maskPtr, clo, experimentName, analysisLocation,flw,numFlows, seqList,numSeqListItems,my_progress, wholeChip, well_rows,well_cols);
+  GetFromImagesToWells(rawWells, maskPtr, clo, experimentName, analysisLocation, numFlows, my_keys,my_progress, wholeChip, well_rows,well_cols);
+
+  if (!clo.mod_control.USE_RAWWELLS & clo.mod_control.WELLS_FILE_ONLY){
+    // stop after generating the functional wells file
+    UpdateBeadFindOutcomes(maskPtr, wholeChip, experimentName, clo, clo.mod_control.USE_RAWWELLS);
+    my_progress.ReportState("Analysis (wells file only) Complete");
+    CleanupTmpWellsFile(clo);
+
+    free(experimentName);
+    exit(EXIT_SUCCESS);
+  }
 
   // Update progress bar status file: img proc complete/sig proc started
   updateProgress(IMAGE_TO_SIGNAL);
@@ -309,16 +254,14 @@ int main(int argc, char *argv[])
   // no images below this point
 
   // operating from a wells file generated above
-  GenerateBasesFromWells(clo, rawWells, flw, maskPtr, seqList, well_rows, well_cols,
-                         experimentName, my_progress);
+  GenerateBasesFromWells(clo, rawWells, maskPtr, my_keys.seqList, well_rows, well_cols, experimentName, my_progress);
 
-  UpdateBeadFindOutcomes(maskPtr, wholeChip, experimentName, clo, clo.USE_RAWWELLS);
+  UpdateBeadFindOutcomes(maskPtr, wholeChip, experimentName, clo, clo.mod_control.USE_RAWWELLS);
   my_progress.ReportState("Analysis Complete");
 
   CleanupTmpWellsFile(clo);
 
   free(experimentName);
-  if (flw!=NULL) delete flw;
   exit(EXIT_SUCCESS);
 }
 

@@ -902,10 +902,16 @@ void AlignStats::write_alignment_summary() {
 	//long total_reads = get_total_reads();
 	
 	string alignment_stats_filename;
-	if(opt.out_file != "Default") {
-			alignment_stats_filename = opt.out_file + ".alignment.summary";
+   
+    if( opt.out_file.find("Default") == std::string::npos) {
+      alignment_stats_filename = opt.out_file + ".alignment.summary";
 	} else {
-			alignment_stats_filename = "alignment.summary";
+      if ( opt.output_dir.length() > 0 ) {
+        alignment_stats_filename = opt.output_dir + "/alignment.summary";
+      } else {
+        alignment_stats_filename = "alignment.summary";
+      }
+			
 	}
 		
 	
@@ -1069,27 +1075,30 @@ void AlignStats::write_alignment_summary() {
 	
 		for ( vector<string>::size_type k = 0; k < q_scores.size(); k++) {
 			//string histo_prefix = opt.out_file+  "Q" + q_scores[k];
-			string histo_prefix =  "Q" + q_scores[k];
-			ofstream histo_file(string(histo_prefix + ".histo.dat").c_str());
-			if (histo_file.fail()) {
-				cerr << "[alignStats] couldn't open " << histo_prefix + "histo.dat" << endl;
-				exit(1);
+          string histo_prefix =  "Q" + q_scores[k];
+          ofstream histo_file;
+          if ( opt.output_dir.length() > 0 ) {
+            histo_file.open( string( opt.output_dir + "/" + histo_prefix + ".histo.dat").c_str() );
+          } else {
+            histo_file.open( string(histo_prefix + ".histo.dat").c_str() );
+          }
+          if (histo_file.fail()) {
+            cerr << "[alignStats] couldn't open " << histo_prefix + "histo.dat" << endl;
+			exit(1);
 				
-			}
-			
-			
-			
-			for (int i = 0; i <= opt.align_summary_max_len; i++) {
-				if (i <= opt.filter_length) {
-					histo_file << i << " 0" << endl;
-				}
-				else if(i >opt.filter_length) {
-					histo_file << i << " " << q_histo[k][i] << endl;
-					
-				}
-			}
-			histo_file.close();
-		}
+		  }
+						
+          for (int i = 0; i <= opt.align_summary_max_len; i++) {
+              if (i <= opt.filter_length) {
+                  histo_file << i << " 0" << endl;
+              }
+              else if(i >opt.filter_length) {
+                  histo_file << i << " " << q_histo[k][i] << endl;
+                  
+              }
+          }
+          histo_file.close();
+        }
 	}
 	
 	if (opt.debug_flag) std::cerr << "[write_alignment_summary] done" << std::endl;

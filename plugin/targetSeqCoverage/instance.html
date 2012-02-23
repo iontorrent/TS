@@ -1,0 +1,175 @@
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+   text-align: center;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+  $(function()
+  {
+    var targetsDir = "/results/plugins/targetSeqCoverage/targetFiles"
+    $.getJSON( '/getTargets.php?dir='+targetsDir+'&ext=bed',
+    function(data)
+    {
+     $("#unptargets").html("<option>Select</option><option value=''>Whole reference</option>")
+     $.each( data,
+      function( intIndex, objValue )
+      {
+       var i = objValue.lastIndexOf('targetseq.')
+       var j = objValue.lastIndexOf('.bed')
+       if( i >= 0 && j > i )
+       {
+        var targfile = targetsDir + "/" + objValue
+        var refg = '?'
+        var targ = objValue.substring(i+10,j)
+        j = targ.indexOf('.')
+        if( j >= 0 )
+        {
+          refg = targ.substring(0,j)
+          targ = targ.substring(j+1)
+        }
+        targ = targ.replace(/^\s+/,'')
+        targ = targ.substr(0,1).toUpperCase() + targ.substr(1)
+        targ = targ.replace(/_+/g,' ')
+        targ = refg + ": " + targ
+        $("#unptargets").append("<option value='" + targfile + "'>" +  targ + "</option>")
+       }
+     })
+    })
+
+    $.fn.serializeObject = function()
+    {
+     var o = {};
+     var a = this.serializeArray();
+     $.each(a,
+      function() {
+       if (o[this.name] != null) {
+        if (!o[this.name].push) {
+         o[this.name] = [o[this.name]];
+        }
+        o[this.name].push(this.value || '');
+       } else {
+        o[this.name] = this.value || '';
+       }
+      });
+     return o;
+    };
+
+    $(function()
+    {
+     $('#postbutton').click(function()
+     {
+      if( document.targetseq.unptargets.selectedIndex == 0 )
+      {
+       alert("Please select the target regions to be used for coverage analysis.");
+       return false;
+      }
+      var regex = /^[0-9]+$/;
+      var padval = document.targetseq.padtargets.value;
+      if( !regex.test(padval) )
+      {
+       alert("Target padding value must be a non-negative integer (>=0).");
+       return false;
+      }
+      if( document.targetseq.unptargets.selectedIndex == 1 && padval > 0 )
+      {
+       alert("Target padding value must be 0 if no specific Targeted regions value is selected.");
+       return false;
+      }
+      var targetLabel = document.getElementById('unptargets')[document.targetseq.unptargets.selectedIndex].text;
+      document.targetseq.targetseqid.value = targetLabel;
+      obj = $('#targetseq').serializeObject();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+       type: 'POST',
+       url: pluginURL,
+       async: false,
+       contentType: "application/json; charset=utf-8",
+       success: function(data)
+       {
+        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check targetSeqCoverage.html in the Plugin Summary</p></div>');
+        setTimeout("parent.$.fn.colorbox.close()",2000);
+       },
+       data: pluginAPIJSON,
+       dataType: "json"
+      });
+     });
+    });
+
+  });
+ </script>
+</head>
+
+<body>
+ <div align="center">
+  <form id="targetseq" name="targetseq" align="center">
+   <h1>TargetSeqCoverage Plugin</h1>
+   <h3>Targeted Re-sequencing Coverage Analysis</h3>
+   <table cellpadding="5px">
+    <tr>
+     <td><span class="help"
+       title="Select the targets matching your reference and enriched fragment library. See Description and Notes below.">
+       Targeted regions:</span></td>
+     <td><select id="unptargets" name="unptargets"></select></td> </tr>
+    <tr>
+     <td><span class="help"
+       title="Specifiy the number of bases for on/off padded targets analysis. See Description and Notes below.">
+       Target padding (bases):</span></td>
+     <td><input type="text" size=6 id="padtargets" name="padtargets" value=100></select></td> </tr>
+    <tr>
+     <td><span class="help"
+       title="Check to generate and examine coverage across reads filtered to unique starts. See Description and Notes below.">
+       Examine unique starts:</span></td>
+     <td><input type="checkbox" id="uniquestarts" name="uniquestarts" value="ustarts" checked/></td> </tr>
+   </table>
+   <br/>
+   <div id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="targetseqid" name="targetseqid"/>
+   <br/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+     This plugin generates statistics, downloadable data and basic visualization of coverage over targeted regions of a
+     reference. It is intended to be used for mapped reads from Ion TargetSeq experiments.</p>
+    <p>
+     The targeted regions selected should correspond to your reference and enriched fragment library. You may also select
+     'Whole reference' to analyze coverage against the full reference but this is only recommended
+     for non-enriched sequencing of small genomes.</p>
+    <p>
+     The Target padding value specifies a number of bases to expand each individual target by at both 3' and 5' ends
+     for analyzing padded target coverage. Padded targets coverage is only analyzed for on-target reads and results in
+     one additional plot and summary statistic in the detailed coverage report(s). This data is not generated if the
+     target padding value is set to 0.</p>
+    <p>
+     The 'Examine unique starts' option is used to specify coverage analysis for a filtered subset of reads, generated by
+     sampling a single uniquely mapped read per starting alignment to the reference, in both read orientations.
+     This removes any bias due to non-uniform library enrichment but produces the most conservative representation
+     of target coverage. When this option is checked, the detailed report table will have two columns of side-by-side
+     results for the unfiltered (all) and the filtered (unique starts) reads.
+    <p>
+     A run will fail almost immediately (after queuing) if your selected targeted regions do not appear to match
+     the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
+   </div>
+  </form>
+  </div>
+</body>
+</html>
+

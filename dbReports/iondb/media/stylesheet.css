@@ -644,6 +644,15 @@ table {
 }
 
 .ui-progressbar-value {
+    width: 100%;
+    float: left;
+    text-align: center;
+    font-size: 12px;
+}
+
+.ui-progressbar-value .progress-number {
+    float: left;
+    width: 150px;
     text-align: center;
     font-size: 12px;
 }

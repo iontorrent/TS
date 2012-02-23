@@ -1,0 +1,359 @@
+BFAST -- History of visible changes.
+
+See LICENSE for details
+See COPYING for copying conditions.
+
+Please send bfast bug reports to bfast-help@lists.sourceforge.net 
+
+Version 0.6.4d
+* adding '-z' option in 'bfast postprocess' to choose a random best scoring
+alignment when used with '-z 3'.
+* MD tag in the SAM output modified to agree with 'samtools calmd'.
+
+Version 0.6.4c
+* bug fixed encountering '.' base characters.  Added new tests in 'make check'.
+
+Version 0.6.4b
+* bug fixed in postprocess for color space where an the color space error
+string was malformed, hitting an assertion.
+
+Version 0.6.4a
+* 'postprocess' now supports using pairing information to better choose
+alignments.
+* multi-threading re-implemented in 'match', 'localalign', and 'postprocess'.
+* output format of BAF files changed to reduce file size, thus speeding up
+'localalign' 
+* bfast.submit.pl now can clean up files no longer need to make the final BAM
+file.
+* some small boundary conditions fixed in 'localalign' that would cause a
+crash.
+* command line parsing now standardized with GNU getopt.
+* mapping quality was incorrectly calculated in some boundary cases,
+defaulting to the 255 value.
+* MAF and GFF output removed.
+* pairing/mirroring options in 'localalign' removed. 
+* ill2fastq.pl now outputs the qualities from sequence.txt files assuming
+PHRED+64 input.
+
+Version 0.6.3c
+* NM tag now fixed to include indels as edits.
+* MD tag was not considering leading matches when the read included 
+an indel.
+
+Version 0.6.3b
+* Added the 'bfast easyalign' command that will run bfast with the 
+default parameters ('bfast match', 'bfast localalign', and 
+'bfast postprocess').
+* Additional mapping quality bug found when only two alignments are 
+present.
+
+Version 0.6.3a
+* The mate's reference name is now set to "=" when it matches
+the current reads reference name when outputting to the SAM format.
+* All characters are ignored after the leading whitespace when reading
+in the names of the contigs in the reference FASTA file.  Previously,
+whitespaces where converted to '_'.
+* Adding for reading .gz and .bz2 files in solid2fastq (C-version).
+Also, the ability to write to .gz and .bz2 files is supported.
+* Adding in the ability to read .gz and .bz2 files in 'bfast match'.
+* Fixed bug related to calculating the mapping quality.  This may 
+explain the high occurrence of 255 mapping qualities in the SAM output.
+* Fixed a bug in the calculating the NH tag when using -a 3 in 
+'bfast postprocess'.
+
+Version 0.6.2a
+* Adding more optional tag fields to SAM output, most notably the 
+MD field.  The supported fields are detailed in the bfast book.
+* Adding multi-threading to "bfast postprocess"
+* Changed qseq2fastq.pl to ill2fastq.pl to support Illumina both
+QSEQ and SEQUENCE files.
+* Optimized the binary search within the index search; should
+be faster.
+* Adding in an option to "bfast match" that will load all main
+or secondary indexes into memory to avoid storing temporary files.
+This is particularly useful on high-memory machines.
+* Fixing a bug that did not properly save all constraints. This
+reduced performance previously.
+* Fixed behaviour differences between when the index(es) are
+split and when they are one piece.
+* solid2fastq (C-version) now can read in bzip2 compressed
+files using the "-j" option.  This is experimental.
+
+Version 0.6.1
+* fixing bugs related to the reorganization of the code.
+
+Version 0.6.0
+* complete re-organization of the bfast code and commands
+* supports automatic splitting of the indexes to allow efficient
+low-memory execution (>4GB for the human genome).
+* bfast reference and index file names are now based off of the 
+input reference FASTA file.
+* the match, localalign, and postprocess command support the
+pipe-and-filter model (stdin and stdout).
+* local alignment now supports a seed-constrained version, which
+uses information from the lookups to constrain the local 
+alignment.  This adds a speed improvement as well as accuracy 
+improvement.
+
+Version 0.5.7
+* bfast.submit.pl supports the -s and -e options in BFAST.
+
+Version 0.5.6
+* balign now is able to only align a specific subset of reads from the 
+matches file.  This is similar to bmatches and should be especially 
+useful if the index search (bmatches) is faster than the local
+alignment (balign), which is usually the case for ABI SOLiD data.
+* Both the secondary indexes list and offsets files are now optional in
+bmatches.
+* Added bfast.submit.pl PERL script for scheduling alignment jobs on SGE
+and PBS clusters.
+
+Version 0.5.5
+* Adding support for input queueing, so that a given number of reads are 
+loaded into memory then analyzed instead of one-by-one.
+
+Version 0.5.4
+* Bug in the SAM header and setting the unpaired reads incorrectly.
+* SAM output will now skip triple/quad/... end reads instead of quitting.
+* Adding support for all alignments to be carried forward. This is so
+if a SAM file is generated, all alignments, even those that are unmapped,
+are present in the SAM file.  This affects bmatches, balign, and bpostprocess.
+* qseq2fastq.pl now works with Illumina pipeline 1.4
+
+Version 0.5.3
+* Bug converting SAM format fixed where unmapped ends of a paired end
+read where not being annotated correctly (if the end was the first or
+second).
+* Added C implementation of solid2fastq.pl for faster fastq generation.
+* Fixing bug in qseq2fastq.pl that did not complement but only reversed
+the seconde end of a paired end read.
+
+Version 0.5.2
+* Fixing bug when searching secondary indexes (introduced in 0.5.0
+when zlib use started).
+
+Version 0.5.1
+* Fixed a bug when trying to read in secondary indexes in bmatches.
+* Updated make check for creating the distribution.
+* Truncating the keysize now works in bmatches.
+* Updated the default scoring matrix so that it does not need to be
+specified.
+* Updating gzreads and gzwrites for custom 64-bit support.
+* Updating the maximum number of matches behaviour in 
+* Adding in some new helper functions to calculate the power or sensitivity
+of the alignments.
+
+Version 0.5.0
+* All output files now use the zlib for compression.  This includes brg,
+bif, bmf, and baf files.
+* Removed brepair and breport as they are now obsolete.
+
+Version 0.4.7
+* Updated output file naming in bmfconvert.
+* Updated bug in balign regarding retrieving the substitutions scores.
+
+Version 0.4.6
+* Simplified the scoring matrix.  Now only match/mismatch is required for
+input.
+* Updated bug in color space local aligner if the color match score was
+not zero. Also enforcing all color match and color mismatch scores
+respectively to be the same to allow for an optimization in the algorithm.
+
+Version 0.4.5
+* Moved mapping quality calculation to balign.  BAF files have an extra
+field specifying the mapping quality.  For 0.4.1-0.4.4 BAF versions, use
+fixbaf to convert them to 0.4.5 versions.
+* Removed bfix - obsolete.
+
+Version 0.4.4
+* Fixed bugs when outputting to SAM format.
+* Added bmf conversion to fastq.
+* Fixed bug in RGRanges, where pallindromic sequences were being removed
+from one strand.
+* Added new utility brg2fasta.
+* Added ability in bmatches to use masks that are prefixes of the mask (-k).
+* Now can output a very rudimentary mapping quality in bpostprocess.
+* Added a scripts folder to convert raw base/color calls to BFAST fastq
+format.
+
+Version 0.4.3
+* Added an option to bpostprocess where all "best scoring" alignments
+can be returned.
+* Fixed bug where aligning perfectly did not retain repeat masker 
+information in the reference.
+
+Version 0.4.2
+* Added support for SAM 0.1.2 output.
+* Added new utility brepair, which tries to align unpaired reads. I 
+would not recommend using it since it does not in my analysis help
+too much in practice and is inefficient.
+
+Version 0.4.1
+* Adding support for quality scores.  The input reads now must be in
+fastq or multi-end fastq format.
+* Adding support for multi end reads.
+* The names of Output files of bmatches, balign, and subsequent 
+programs are changed.
+
+Version 0.3.4
+* Updated balign, bmfconvert, bafconvert, and bsort output file names.
+* Added gff output in bpostprocess and bafconvert.
+* Fixed bug in bpostprocess when specifying the maximum number of 
+nt errors.
+* bsort now performs a threaded sort if the maximum number of entries
+is large.
+* removed some options to do with choosing paired end reads in 
+bpostprocess, since they are easily misinterpreted.
+* added a uniqueness score option in bpostprocess, which will replace
+the alignment score with a ratio of the chosen alignment score versus
+all other alignments' scores.
+
+Version 0.3.3
+* A quick fix to remove a memory leak that can causes crashes
+when aligning nt space data.
+
+Version 0.3.2
+* Updating how we report color errors in .baf files.
+* Added a new utility: bmergesorted that merges two files that
+have been sorted by bsort.
+* Updated bsort to print more information while sorting.  Also,
+updated bsort to sort bpostprocess unpaired baf output.
+* Update berrordistribution and bpairedenddist to accept any
+number of input files.
+* Changed bgeterrordistribution to berrordistribution.
+* Updated bpostprocess to output unpaired reads when one end
+has ambiguity.
+* Updated local alignment optimization in balign (-b).
+* Updated bsort to take in the maximum number of entries for 
+memory management.
+* Fixed bug in balign where alignment could not handle switching
+directly from an insertion to a deletion (or vice versa).
+
+Version 0.3.1
+* Found bug in read simulator.
+* Fixing more bugs to do with indels.
+
+Version 0.2.6
+* Fixed a bug in breport that caused memory leaks.
+* Added support to output unpaired reads in bpostprocess.
+* Fixed a bug in balign where the position of indels were
+being reported incorrectly for NT space.  This was as a result
+of incorporating color space code incorrectly.
+
+Version 0.2.5
+* bpairedenddist now outputs to a file instead of stdout.
+* Added a new utility balignsim which tests the accuracy of 
+various local alignment algorithms implemented by balign.
+* Fixed bug in balign when considering indels for color space.
+
+Version 0.2.4
+* Added a .sh script to update the tests since the reference
+genome files and index files have their version numbers embedded.
+* Updated color space tests; there was a bug in reporting the 
+reverse strand.
+* Updated balign "Validatin outputID" message.
+* Moved from using mktemp to mkstemp, which means no more mktemp
+warnings.
+* Added a new utility, bsort, which sorts a bfast reported file.
+* Fixed off by two error for reverse strand in color space for 
+bmatches.
+* Fixed bug with paired end bmatches file as input to bevalsim.
+* Fixed bug with calling insertions on the reverse strand.  The
+offset was off by the two times the length of the insertion.
+
+Version 0.2.3
+* Updated bfix to include packed.
+* Updated bug when reading a bfast reference genome file.
+* Added "make check" functionality for regression testing.
+* Fixed warning in Mac OS X complaining of unused argp structures.
+* Fixed bug in Mac OS X where -r argument in bpostprocess caused
+an error.
+* Updated names of files generated by bmatches and balign.
+
+Version 0.2.2
+* Fixed major bug that was introduced in 0.1.10 where matches to 
+the reverse strand were being erroneously included.
+* Added check when making the indexes that the hash width is less 
+than or equal to the key-size.
+
+Version 0.2.1
+* Major version change.
+* Added option in balign to allow local alignment to only consider
+mismatches and color errors.
+* Removed memory leak in balign.
+* begenerate reads now outputes a read number in the read name.
+* Halved the required storage size of the hash in the index.
+* Added butil utility bfix which will convert 0.2.1 < reference 
+genome and index files to the current version.
+
+Version 0.1.13
+* Updated bug in RGIndex where reverse read could have n's.
+
+Version 0.1.12
+* bmatches: now option -w can specify which strand to match.
+* bevalsim now takes in any bmf or baf file.
+* Optimized part of bmatches procedure.  Both forward and reverse
+matches wil count towards maxKeyMatches (-K).
+* Updated bpreprocess help message.
+* Updated bindexhist and bindexdist for color space.
+* Fixed bug in bgeneratereads for color space.
+
+Version 0.1.11
+* bpostprocess now prints out MAF that complies with UCSC standards.
+
+Version 0.1.10
+* bmatches supports only matching to the forward strand.  This 
+facilitates aligning methylated sequences.
+* bpreprocess bug fixed when using an exons file.
+* bevalsim now requires knowing paired end info and the original
+reads file generated by bgeneratereads.
+* fixed bug in bgeneratereads and bevalsim for paired end data.
+* Fixed bugs in AlignEntryRead where the contig name was not being
+read properly.
+
+Version 0.1.9
+* Updated bmf output to properly display when the maximum number
+of matches has been reached.
+* bmfconvert does not require paired end argument.
+* Now supports trimming whitespace including carriage return on the
+ends of the reads, mainly to support reads made on Windows machines.
+* Updated butil binaries.
+
+Version 0.1.8
+* Updated to support Ns in the reads; will still ignore "."s.
+* Adjusting bounds bug with -e option fixed.  Would not default to 
+the correct end position.
+* Updated command line parsing to avoid memory leaks.
+
+Version 0.1.7
+* Update bpostprocess for paired end support: now tested.
+* Added support for filtering each end by score for paired end reads.
+* Removed extra "." in inversions file (bpostprocess).
+* Updated btestindexes against small bugs and added optimizations.
+* Added bgeneratedistribution to calculate error distributions.
+
+Version 0.1.6
+* bgeneratereads was not producing SNPs and errors properly.
+* bmatches now supresses timing output when -t is not specified.
+* bpreprocess memory leaks fixed.
+
+Version 0.1.5
+* Fixed bug in bpreprocess where the program crashed right before terminating.
+
+Version 0.1.4 
+* Updated bmatches output file name for the filtered reads.
+* Updated bpostprocess output file names.
+* Recoded btestindexes to support finding indexes for color space.
+
+Version 0.1.3 
+* Improved speed for index creation while specifying an exon-like structure.
+
+Version 0.1.2 
+* Added support for index creation while specifying an exon-like structure.
+
+Version 0.1.1 
+* First alpha public release.
+
+-------------------------------------------------------
+
+See LICENSE for details

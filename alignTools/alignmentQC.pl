@@ -21,8 +21,8 @@ my $opt = {
   "qscores"                => "7,10,17,20,47",
   "threads"                => &numCores(),
   "aligner"                => "tmap",
-  "aligner-opts-rg"   => undef,                 # primary options (for -R to TMAP)
-  "aligner-opts-extra"     => "stage1 map1 map2 map3", # this could include stage and algorithm options
+  "aligner-opts-rg"        => undef,                 # primary options (for -R to TMAP)
+  "aligner-opts-extra"     => "stage1 --stage-seed-freq-cutoff 0.1 map1 map2 map3", # this could include stage and algorithm options
   "aligner-format-version" => undef,
   "align-all-reads"        => 0,
   "genome-path"            => ["/referenceLibrary","/results/referenceLibrary","/opt/ion/referenceLibrary"],
@@ -31,7 +31,8 @@ my $opt = {
   "help"                   => 0,
   "default-sample-size"    => 10000,
   "default-exclude-length" => 20,
-  "out-log"                => "alignmentQC_out.txt",
+  "logfile"                => "alignmentQC_out.txt",
+  "output-dir"             => "./",
 };
 
 GetOptions(
@@ -46,7 +47,7 @@ GetOptions(
   "q|qscores=s"              => \$opt->{"qscores"},
   "b|threads=i"              => \$opt->{"threads"},
   "d|aligner=s"              => \$opt->{"aligner"},
-  "aligner-opts-rg=s"   => \$opt->{"aligner-opts-rg"},
+  "aligner-opts-rg=s"        => \$opt->{"aligner-opts-rg"},
   "aligner-opts-extra=s"     => \$opt->{"aligner-opts-extra"},
   "c|align-all-reads"        => \$opt->{"align-all-reads"},
   "a|genome-path=s@"         => \$opt->{"genome-path"},
@@ -54,10 +55,13 @@ GetOptions(
   "r|realign"                => \$opt->{"realign"},
   "aligner-format-version=s" => \$opt->{"aligner-format-version"},
   "h|help"                   => \$opt->{"help"},
+  "output-dir=s"             => \$opt->{"output-dir"},
+  "logfile=s"                => \$opt->{"logfile"},
 );
 
 &checkArgs($opt);
-unlink($opt->{"out-log"}) if(-e $opt->{"out-log"});
+
+unlink($opt->{"logfile"}) if(-e $opt->{"logfile"});
 
 # Determine how many reads are being aligned, make sure there is at least one
 my $nReads = &getReadNumber($opt->{"readFile"},$opt->{"readFileType"});
@@ -96,7 +100,7 @@ if($opt->{"sample-size"} > 0) {
     print "Aligning random sample of ".$opt->{"sample-size"}." from total of $nReads reads\n";
     my $sampledSff   = &extendSuffix($opt->{"readFile"},"sff","sampled");
 
-    my $command1 = sprintf("SFFRandom -n %s -o %s %s 2>>%s",$opt->{"sample-size"},$sampledSff,$opt->{"readFile"},$opt->{"out-log"});
+    my $command1 = sprintf("SFFRandom -n %s -o %s %s 2>>%s",$opt->{"sample-size"},$sampledSff,$opt->{"readFile"},$opt->{"logfile"});
     die "$0: Failure during random sampling of reads\n" if(&executeSystemCall($command1));
 
     $opt->{"readFile"} = $sampledSff;
@@ -115,7 +119,7 @@ my $truncatedFile = undef;
 if(defined($opt->{"trim-length"})) {
   $truncatedFile = &extendSuffix($opt->{"readFile"},$opt->{"readFileType"},"truncated");
   if($opt->{"readFileType"} eq "fastq") {
-    my $commandTrim = sprintf("trimfastq.pl -i %s -o %s -l %s 2>>%s",$opt->{"readFile"},$truncatedFile,$opt->{"trim-length"},$opt->{"out-log"});
+    my $commandTrim = sprintf("trimfastq.pl -i %s -o %s -l %s 2>>%s",$opt->{"readFile"},$truncatedFile,$opt->{"trim-length"},$opt->{"logfile"});
     die "$0: Failure during truncation of reads\n" if(&executeSystemCall($commandTrim));
   } else {
     die "$0: don't know how to truncate reads of format ".$opt->{"readFileType"}."\n";
@@ -125,7 +129,7 @@ if(defined($opt->{"trim-length"})) {
 
 # Do the alignment
 my $fileToAlign = defined($opt->{"trim-length"}) ? $truncatedFile : $opt->{"readFile"};
-my $bamBase = basename($opt->{"out-base-name"});
+my $bamBase = $opt->{"output-dir"} . "/" . basename($opt->{"out-base-name"});
 my $bamFile = $bamBase.".bam";
 my $alignStartTime = time();
 if($opt->{"aligner"} eq "tmap") {
@@ -138,7 +142,7 @@ if($opt->{"aligner"} eq "tmap") {
   $command .= " ".$opt->{"aligner-opts-rg"} if(defined($opt->{"aligner-opts-rg"}));
   die if(!defined($opt->{"aligner-opts-extra"}));
   $command .= " ".$opt->{"aligner-opts-extra"};
-  $command .= " 2>> ".$opt->{"out-log"};
+  $command .= " 2>> ".$opt->{"logfile"};
   $command .= " | samtools view -Sbu - | samtools sort -m 1000000000 - $bamBase";
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));
@@ -167,7 +171,10 @@ if($opt->{"sample-size"}) {
   $commandPostProcess .= " --totalReads $nReads";
   $commandPostProcess .= " --sampleSize ".$opt->{"sample-size"};
 }
-$commandPostProcess .= " 2>> ".$opt->{"out-log"};
+if($opt->{"output-dir"}) {
+  $commandPostProcess .= " --outputDir ".$opt->{"output-dir"};
+}
+$commandPostProcess .= " 2>> ".$opt->{"logfile"};
 print "  $commandPostProcess\n";
 die "$0: Failure during alignment post-processing\n" if(&executeSystemCall($commandPostProcess));
 my $postAlignStopTime = time();
@@ -327,6 +334,7 @@ usage: $0
                                   format - do not rely on it)
     -r,--realign                : Create a flowalign.sam with flow-space
                                   realignment (experimental)
+    --output-dir                : Output directory for stats output
     -h,--help                   : This help message
 EOF
 }

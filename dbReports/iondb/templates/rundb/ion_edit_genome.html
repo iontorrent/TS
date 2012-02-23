@@ -7,11 +7,49 @@
 
 <link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
 <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
-
+<style type="text/css">
+  th > input {
+    margin-top: 12px;
+    display: block;
+  }
+  #referenceDetails th {
+    width: 430px;
+  }
+  #referenceDetails th, #referenceDetails td {
+    vertical-align: top;
+    padding-bottom: 20px;
+  }
+  #referenceDetails ul {
+    margin: 0;
+  }
+  ul {
+    padding-left: 0;
+  }
+  .fileList {
+    border-top: 1px gray solid;
+  }
+  .fileList th {
+    padding-top: 6px;
+  }
+  .fileList li {
+    list-style-type: none;
+    padding: 3px;
+    margin: -3px 0 6px -3px;
+    border: 1px solid transparent;
+    vertical-align: top;
+  }
+  .fileList p {
+    padding-left: 8px;
+    margin: 0;
+  }
+  .fileList .deleteBed{
+    margin-left: 25px;
+  }
+</style>
 <script type="text/javascript" language="javascript">
     function delete_bed() {
         deleteURL =  "/rundb/api/v1/contentupload/" + $(this).data("contentupload") + "/";
-        bedLine = $(this).parent();
+        bedLine = $(this).parent("li");
         apprise('Are you sure you would like to remove this BED file?', {'verify':true}, function(r)
         {
             if(r)
@@ -24,34 +62,82 @@
                     success: function(msg){
                         bedLine.fadeOut(function(){
                             bedLine.remove();
+                            showOrHideProcessing();
                         });
                     }
                 });
             }
         });
     }
+    function showOrHideProcessing() {
+        var processing = $("#processingBedFiles");
+        if(processing.has("li").length == 0) {
+          processing.fadeOut('fast');
+        } else {
+          processing.fadeIn('fast');
+        }
+    }
     function add_upload(data) {
         var name = data.file_path.split("/").pop();
+        var li = $('<li>'+name+'</li>');
         var button = $('<input class="deleteBed" type="button" data-contentupload="'+data.id+'" value="delete" />');
         button.click(delete_bed);
+        button.hover(
+            function(){
+              $(this).parent("li").addClass("ui-state-error");
+            },
+            function(){
+              $(this).parent("li").removeClass("ui-state-error");
+            }
+        );
+        li.append(button);
         if (data.status == "Successfully Completed") {
-            li = '<li>'+name+'</li>';
-            $("#bedFileList").append($(li).append(button));
+            li.append('<p><a href="/rundb/uploadstatus/'+data.id+'/">Details</a></p>');
+            $("#availableBedFileList").append(li);
         } else {
-            li = '<li><a href="/rundb/uploadstatus/'+data.id+'/">'+name+'</a> - '+data.status+' </li>';
-            $("#processingBedFileList").append($(li).append(button));
+            li.append('<p><a href="/rundb/uploadstatus/'+data.id+'/">Details</a> - '+data.status+' </p>');
+            $("#processingBedFileList").append(li);
         }
     }
     function add_filtered_uploads(data) {
+        var in_progress = false;
         for (var i=0; i < data.objects.length; i++) {
-            if (data.objects[i].meta.reference == "{{ name }}") {
-                add_upload(data.objects[i]);
+            var upload = data.objects[i];
+            if (upload.meta.reference == "{{ name }}") {
+                add_upload(upload);
+                if(upload.status != "Successfully Completed" && upload.status.indexOf("Error") != 0) {
+                    in_progress = true;
+                }
             }
         }
+        return in_progress;
+    }
+    function update_uploads(data) {
+        $(".fileList li").remove();
+        if(add_filtered_uploads(data)) {
+            global_upload_refresh_timer = window.setTimeout(refresh_uploads, refresh_timer_wait);
+            if (refresh_timer_wait < 2000) {
+                refresh_timer_wait *= 2;
+            }
+        } else {
+            refresh_timer_wait = 250;
+        }
+        showOrHideProcessing();
+    }
+
+    var global_upload_refresh_timer = null;
+    var refresh_timer_wait = 250;
+
+    function refresh_uploads() {
+        if (global_upload_refresh_timer != null) {
+            clearTimeout(global_upload_refresh_timer);
+            global_upload_refresh_timer = null;
+        }
+        $.getJSON("/rundb/api/v1/contentupload/", update_uploads);
     }
     function jailbreak_callback(upload_id) {
         $("#bedUpload").colorbox.close();
-        $.getJSON("/rundb/api/v1/contentupload/"+upload_id+"/", add_upload);
+        refresh_uploads();
         return false;
     }
     //bind to the refresh genome button
@@ -67,7 +153,21 @@
         $("#bedUpload").colorbox({iframe:true, width:"80%", height:"80%"});
 
         $(".deleteBed").click(delete_bed);
-        
+
+        refresh_uploads();
+
+        $(".deleteBed").hover(
+            function(){
+                $(this).parent("li").addClass("ui-state-error");
+            },
+            function(){
+                $(this).parent("li").removeClass("ui-state-error");
+            }
+        );
+
+        if($("#processingBedFiles").has("li").length == 0) {
+            $("#processingBedFiles").hide();
+        }
     });
 </script>
 {% endblock extra_head %}
@@ -123,8 +223,8 @@
     {% ifnotequal started "started" %}
 	  <h1>{{name}}</h1>
 	  <form action="" method='post' enctype="multipart/form-data">
-	    <table>
-	      <tbody>
+	  <table id="referenceDetails">
+	  <tbody>
 		<tr>
 		  <th>{{temp.name.label}}</th>
 		  <td>{{temp.name}}</td>
@@ -200,7 +300,7 @@
                 </td>
             </tr>
         {% endif %}
-        <tr id="processingBedFiles">
+        <tr id="processingBedFiles" class="fileList">
           <th>
             Processing BED Files </br>
           </th>
@@ -208,29 +308,27 @@
             <ul id="processingBedFileList">
               {% for bedFile in processingBedFiles %}
                 <li>
-                  <a href="/rundb/uploadstatus/{{bedFile.pk}}/">{{bedFile.path}}</a> - {{bedFile.status}}
-                  <input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                  {{bedFile.path}}<input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                  <p><a href="/rundb/uploadstatus/{{bedFile.pk}}/">Details</a> - {{bedFile.status}}</p>
                 </li>
               {% endfor %}
             </ul>
           </td>
         </tr>
-        <tr>
+        <tr id="availableBedFiles" class="fileList" >
             <th>
-                Available BED Files </br>
+                Available BED Files
+                <input id="bedUpload" href="/rundb/publish/frame/BED?genome={{name}}" type="button" value="Upload BED files"/>
             </th>
             <td>
-                <ul id="bedFileList">
+                <ul id="availableBedFileList">
                     {% for bedFile in bedFiles %}
                     <li>
-                        {{bedFile.path}}
-                        <input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                        {{bedFile.path}}<input class="deleteBed" type="button" data-contentupload="{{bedFile.pk}}" value="delete" />
+                        <p><a href="/rundb/uploadstatus/{{bedFile.pk}}/">Details</a></p>
                     </li>
                     {% endfor %}
                 </ul>
-
-                <input id="bedUpload" href="/rundb/publish/frame/BED?genome={{name}}" type="button" value="Upload BED files"/>
-
             </td>
         </tr>
 

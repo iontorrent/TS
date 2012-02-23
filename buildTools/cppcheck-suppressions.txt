@@ -1,0 +1,60 @@
+# Ok or expected warnings
+
+# RSM demo code - should probably not check in
+resourceLeak:RSM/rsmagent/AgentEmbedded-5.3-252/DemoNT/RSMAgent.c:79 (error) Resource leak: fp
+# RSM libraries 
+memleak:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/expat/xmlparse/xmlparse.c:1338 (error) Memory leak: tag
+uninitdata:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/expat/xmlparse/xmlparse.c:458 (error) Data is allocated but not initialized: parser
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/deflate.c:148 (style) struct or union member 'static_tree_desc_s::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/gzio.c:20 (style) struct or union member 'internal_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/infblock.c:12 (style) struct or union member 'inflate_codes_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/inffast.c:13 (style) struct or union member 'inflate_codes_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/inflate.c:9 (style) struct or union member 'inflate_blocks_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/inftrees.c:21 (style) struct or union member 'internal_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/infutil.c:12 (style) struct or union member 'inflate_codes_state::dummy' is never used
+unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/zutil.c:10 (style) struct or union member 'internal_state::dummy' is never used
+arrayIndexOutOfBounds:buildTools/dbgmem.cpp:231 (error) Array 'str[5]' index 5 out of bounds
+arrayIndexOutOfBounds:buildTools/dbgmem.cpp:232 (error) Array 'str[5]' index -1 out of bounds
+deallocDealloc:buildTools/dbgmem.cpp:227 (error) Deallocating a deallocated pointer: ab
+uninitdata:buildTools/dbgmem.cpp:55 (error) Data is allocated but not initialized: item
+unusedStructMember:Analysis/crop/Archive.cpp:54 (style) struct or union member 'HDR::fileHdr' is never used
+unusedStructMember:Analysis/deInterlace.cpp:51 (style) struct or union member 'DeCompFile::mFile' is never used
+unusedStructMember:Analysis/BkgModel.cpp:35 (style) struct or union member 'mat_table_build_instr::comp_num' is never used
+#more OK warnings, but specific to SamUtils/
+operatorEqVarError:Analysis/SamUtils/types/BAMRead.h:88 (possible style) Member variable 'BAMRead::bam_header' is not assigned a value in 'BAMRead::operator='
+operatorEqVarError:Analysis/SamUtils/types/BAMRead.h:88 (possible style) Member variable 'BAMRead::bam_record' is not assigned a value in 'BAMRead::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::all_covered' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::_debug' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::_utils' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::q_scores' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::_num_reads' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::_pos' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:110 (possible style) Member variable 'Pileup::_tid' is not assigned a value in 'Pileup::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::overlap_utils' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::overlap_reads' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::positional_cov' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::_phreds' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::_end_pos' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::_start_pos' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::_tid' is not assigned a value in 'PileupFactory::operator='
+operatorEqVarError:Analysis/SamUtils/types/Pileup.h:340 (possible style) Member variable 'PileupFactory::_debug' is not assigned a value in 'PileupFactory::operator='
+# memleak warnings for GPU checkin. They seem bogus as memory is free but under certain true conditions
+memleak:Analysis/BkgModel.cpp:2642 (possible error) Memory leak: bkg_model_cuda
+# warning classes to consider enabling checks on
+redundantIfDelete0
+unusedFunction
+stlSize
+postIncrementDecrement
+variableScope
+exceptNew
+# errors in legacy code or low priority warnings to correct
+variableScope:Analysis/server/RegistrationServer/AvahiService.cpp:94 (style) The scope of the variable ret can be reduced
+cstyleCast:Analysis/server/RegistrationServer/Server.cpp:109 (style) C-style pointer casting
+cstyleCast:Analysis/server/RegistrationServer/Server.cpp:139 (style) C-style pointer casting
+cstyleCast:Analysis/server/iPhoneServer/Server.cpp:566 (style) C-style pointer casting
+cstyleCast:Analysis/server/iPhoneServer/Server.cpp:570 (style) C-style pointer casting
+cstyleCast:Analysis/server/iPhoneServer/Server.cpp:574 (style) C-style pointer casting
+variableScope:Analysis/server/iPhoneServer/Server.cpp:602 (style) The scope of the variable i can be reduced
+memleak:Analysis/server/iPhoneServer/Server.cpp:815 (possible error) Memory leak: stats
+resourceLeak:Analysis/server/RegistrationServer/Server.cpp:405 (possible error) Resource leak: lfp
+charArrayIndex:Analysis/BeadmaskParse.cpp:122 (style) Warning - using char variable as array index

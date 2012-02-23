@@ -4,6 +4,6 @@
 #as of 6/21 the stack size being set on SGE nodes is too large, setting manually to the default
 ulimit -s 8192
 #normal plugin script
-VERSION="0.2"
-$DIRNAME/alignment.py startplugin.json
-cp $DIRNAME/Alignment_block.php $RESULTS_DIR/
+VERSION="0.1"
+$DIRNAME/alignment.py startplugin.json >> $TSP_FILEPATH_PLUGIN_DIR/launch_sh_output.txt
+cp $DIRNAME/Alignment_block.php $TSP_FILEPATH_PLUGIN_DIR/

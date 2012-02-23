@@ -1,5 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+#include <cstddef>
 #include "BkgFitStructures.h"
 #include "BkgFitOptim.h"
 
@@ -7,36 +8,40 @@ static CpuStep_t Steps[] =
 {
   // Index into the intitial float parameters in a particular bead
   {FVAL,       "FVAL",       NULL,  0.00,  CalcFirst,  NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM,     SPECIALCALCULATION}, // fills in fval
-  
-  {DFDA,       "DFDA",       NULL,  0.01,  CalcBoth,   offsetof(bead_params,Ampl[FIRSTINDEX]), NOTREGIONPARAM,       NOTNUCRISEPARAM ,NUMFB},
+// basic properties of beads
   {DFDP,       "DFDP",       NULL,  0.01,  CalcBoth,   offsetof(bead_params,Copies),       NOTREGIONPARAM,       NOTNUCRISEPARAM,SINGLETON},
   {DFDR,       "DFDR",       NULL,  0.01,  CalcBase,   offsetof(bead_params,R),       NOTREGIONPARAM,       NOTNUCRISEPARAM,SINGLETON},
-  {DFDDKR,     "DFDDKR",     NULL,  0.01,  CalcBoth,   offsetof(bead_params,kmult[FIRSTINDEX]),   NOTREGIONPARAM,       NOTNUCRISEPARAM,NUMFB},
   {DFDPDM,     "DFDPDM",     NULL,  0.01,  CalcBoth,   offsetof(bead_params,dmult),      NOTREGIONPARAM,       NOTNUCRISEPARAM,SINGLETON},
+ // per flow updated parameters
+  {DFDA,       "DFDA",       NULL,  0.01,  CalcBoth,   offsetof(bead_params,Ampl[FIRSTINDEX]), NOTREGIONPARAM,       NOTNUCRISEPARAM ,NUMFB},
+  {DFDDKR,     "DFDDKR",     NULL,  0.01,  CalcBoth,   offsetof(bead_params,kmult[FIRSTINDEX]),   NOTREGIONPARAM,       NOTNUCRISEPARAM,NUMFB},
   
   // bead parameters done as special calculations
-  {DFDTSH,     "DFDTSH",     NULL,  0.01,  CalcNone,   NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM,SPECIALCALCULATION},
   {DFDGAIN,    "DFDGAIN",    NULL,  0.00,  CalcNone,   NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM,SPECIALCALCULATION},
  
   // Index into the initial float parameters in a region
-// enzyme kinetics parameters
-  {DFDD,       "DFDD",       NULL,  1.00,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,d[FIRSTINDEX]),     NOTNUCRISEPARAM,NUMNUC},
-  {DFDKRATE,   "DFDKRATE",   NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,krate[FIRSTINDEX]), NOTNUCRISEPARAM,NUMNUC},
-  {DFDKMAX,    "DFDKMAX",    NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,kmax[FIRSTINDEX]),  NOTNUCRISEPARAM,NUMNUC},
-  
-  {DFDPDR,     "DFDPDR",     NULL, 0.001,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,CopyDrift),     NOTNUCRISEPARAM,SINGLETON},
-  // buffering hyperparameters
-  {DFDRDR,     "DFDRDR",     NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,RatioDrift),      NOTNUCRISEPARAM,SINGLETON},
-  {DFDMR,      "DFDMR",      NULL, 0.001,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,NucModifyRatio[FIRSTINDEX]),    NOTNUCRISEPARAM,NUMNUC},
-  {DFDTAUMR,   "DFDTAUMR",   NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,tau_R_m),  NOTNUCRISEPARAM,SINGLETON},
-  {DFDTAUOR,   "DFDTAUOR",   NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,tau_R_o),  NOTNUCRISEPARAM,SINGLETON},
-  
+  // special timing for empty trace
+  {DFDTSH,     "DFDTSH",     NULL,  0.01,  CalcNone,   NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM,SPECIALCALCULATION},
   // index into the nuc_rise parameters into a particular region
   {DFDT0,      "DFDT0",      NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  NOTREGIONPARAM, offsetof(nuc_rise_params,t_mid_nuc),    SINGLETON},
   {DFDSIGMA,   "DFDSIGMA",   NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  NOTREGIONPARAM, offsetof(nuc_rise_params,sigma),    SINGLETON},
   {DFDT0DLY,   "DFDT0DLY",   NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  NOTREGIONPARAM, offsetof(nuc_rise_params,t_mid_nuc_delay[FIRSTINDEX]), NUMNUC},
   {DFDSMULT,   "DFDSMULT",   NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  NOTREGIONPARAM, offsetof(nuc_rise_params,sigma_mult[FIRSTINDEX]),   NUMNUC},
-
+// enzyme kinetics parameters
+  {DFDD,       "DFDD",       NULL,  1.00,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,d[FIRSTINDEX]),     NOTNUCRISEPARAM,NUMNUC},
+  {DFDKRATE,   "DFDKRATE",   NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,krate[FIRSTINDEX]), NOTNUCRISEPARAM,NUMNUC},
+  {DFDKMAX,    "DFDKMAX",    NULL,  0.01,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,kmax[FIRSTINDEX]),  NOTNUCRISEPARAM,NUMNUC},
+  
+  // buffering hyperparameters
+  {DFDMR,      "DFDMR",      NULL, 0.001,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,NucModifyRatio[FIRSTINDEX]),    NOTNUCRISEPARAM,NUMNUC},
+  {DFDTAUMR,   "DFDTAUMR",   NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,tau_R_m),  NOTNUCRISEPARAM,SINGLETON},
+  {DFDTAUOR,   "DFDTAUOR",   NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,tau_R_o),  NOTNUCRISEPARAM,SINGLETON},
+  
+// time varying parameters
+   {DFDRDR,     "DFDRDR",     NULL,  0.01,  CalcBase,   NOTBEADPARAM,  offsetof(reg_params,RatioDrift),      NOTNUCRISEPARAM,SINGLETON},
+   {DFDPDR,     "DFDPDR",     NULL, 0.001,  CalcBoth,   NOTBEADPARAM,  offsetof(reg_params,CopyDrift),     NOTNUCRISEPARAM,SINGLETON},
+  
+// special for lev-mar calculations
   {DFDERR,     "DFDERR",     NULL,  0.00,  CalcNone,   NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM, SPECIALCALCULATION},
   {YERR,       "YERR",       NULL,  0.00,  CalcNone,   NOTBEADPARAM, NOTREGIONPARAM, NOTNUCRISEPARAM, SPECIALCALCULATION}
 };
@@ -64,18 +69,18 @@ static fit_descriptor fit_R_descriptor[] =
 static fit_descriptor fit_initial_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDA,          & ((bead_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {DFDR,          & ((bead_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDA,          & ((bead_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {TBL_END,       0,                                                        ParamTableEnd    },
 };
 
 static fit_descriptor fit_post_key_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDA,          & ((bead_params *)(NULL))->Ampl[7]    - (float *) NULL,           ParamTypeNotKey  }, // Not TRUE!!! Cannot be guaranteed 8+ are not key
   {DFDR,          & ((bead_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
   {DFDP,          & ((bead_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
   {DFDPDM,        & ((bead_params *)(NULL))->dmult         - (float *) NULL,           ParamTypeAllFlow  },
+  {DFDA,          & ((bead_params *)(NULL))->Ampl[POSTKEY]    - (float *) NULL,           ParamTypeNotKey  }, // Not TRUE!!! Cannot be guaranteed 8+ are not key
   {TBL_END,       0,                                                        ParamTableEnd    },
 };
 
@@ -97,100 +102,126 @@ static fit_descriptor fit_well_w_bkg_descriptor[] =
 static fit_descriptor fit_well_minimal_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDA,          & ((bead_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {DFDR,          & ((bead_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDA,          & ((bead_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {TBL_END,       0,                                                        ParamTableEnd    },
 };
 
 static fit_descriptor fit_region_init1_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+// bead modifying parameters
   {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
   {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
   {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
+// timing of nuc rise shape
+  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
   {TBL_END,       0,                                                            ParamTableEnd    },
 };
 
 static fit_descriptor fit_region_init2_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
+// Parameters modifying beads
+  {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
+// parameter modifying empty trace
+  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// timing of nuc rise shape
   {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
+// Enzyme kinetics
   {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
   {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
-  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
-  {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
-  {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
+// buffering parameters
+  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
   {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
   {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
+// time varying parameters
   {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
   {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
   {TBL_END,       0,                                                               ParamTableEnd    },
 };
 
 static fit_descriptor fit_region_full_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
+// parameters modifying beads
+  {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
+  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
+// parameter modifying empty trace
+  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// timing of nuc rise shape
   {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
+// enzyme kinetics
   {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
   {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
-  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
-  {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
-  {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
+// buffering parameters
+  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
   {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
   {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
+// time varying parameters
   {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
   {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
   {TBL_END,       0,                                                            ParamTableEnd    },
 };
 
 static fit_descriptor fit_region_init2_noRatioDrift_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
-  {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
-  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// bead modifying parameters
   {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
-//  {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
-//  {DFDKMAX,       & ((reg_params *)(NULL))->kmax[FIRSTINDEX]   - (float *) NULL,            ParamTypePerNuc  },
+  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
+// parameter modifying empty trace
+  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// timing of nuc rise shape
+  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
   {DFDT0DLY,      & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc_delay[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
   {DFDSMULT,      & ((reg_params *)(NULL))->nuc_shape.sigma_mult[FIRSTINDEX]   - (float *) NULL,      ParamTypePerNuc  },
+// enzyme kinetics
+  {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
+  {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
+// buffering parameters
+  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
+  {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
+  {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
+// time varying parameters
+//  {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
+  {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
+//  {DFDKMAX,       & ((reg_params *)(NULL))->kmax[FIRSTINDEX]   - (float *) NULL,            ParamTypePerNuc  },
   {TBL_END,       0,                                                               ParamTableEnd    },
 };
 
 static fit_descriptor fit_region_full_noRatioDrift_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
-  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
-  {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
-  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// bead modifying parameters
   {DFDR,          & ((reg_params *)(NULL))->R          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
   {DFDP,          & ((reg_params *)(NULL))->Copies          - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
-  {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
-//  {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
-  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
-//  {DFDKMAX,       & ((reg_params *)(NULL))->kmax[FIRSTINDEX]   - (float *) NULL,            ParamTypePerNuc  },
+  {DFDA,          & ((reg_params *)(NULL))->Ampl[FIRSTINDEX]    - (float *) NULL,           ParamTypePerFlow },
+// parameter modifying empty trace timing
+  {DFDTSH,        & ((reg_params *)(NULL))->tshift     - (float *) NULL,           ParamTypeAllFlow },
+// parameters modifying nuc rise
+  {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+  {DFDSIGMA,      & ((reg_params *)(NULL))->nuc_shape.sigma      - (float *) NULL,           ParamTypeAllFlow },
   {DFDT0DLY,      & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc_delay[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
   {DFDSMULT,      & ((reg_params *)(NULL))->nuc_shape.sigma_mult[FIRSTINDEX]   - (float *) NULL,      ParamTypePerNuc  },
+// enzyme kinetics
+  {DFDKRATE,      & ((reg_params *)(NULL))->krate[FIRSTINDEX]   - (float *) NULL,           ParamTypePerNuc  },
+  {DFDD,          & ((reg_params *)(NULL))->d[FIRSTINDEX]       - (float *) NULL,           ParamTypePerNuc  },
+// buffering parameters
+  {DFDMR,         & ((reg_params *)(NULL))->NucModifyRatio[FIRSTINDEX]      - (float *) NULL,           ParamTypePerNuc  },
+  {DFDTAUMR,      & ((reg_params *)(NULL))->tau_R_m    - (float *) NULL,           ParamTypeAllFlow },
+  {DFDTAUOR,      & ((reg_params *)(NULL))->tau_R_o    - (float *) NULL,           ParamTypeAllFlow },
+// time varying parameters
+//  {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
+  {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
+//  {DFDKMAX,       & ((reg_params *)(NULL))->kmax[FIRSTINDEX]   - (float *) NULL,            ParamTypePerNuc  },
   {TBL_END,       0,                                                            ParamTableEnd    },
 };
 
@@ -198,6 +229,7 @@ static fit_descriptor fit_region_slim_descriptor[] =
 {
 //  {PartialDerivComponent,  param_ndx,                                          ParameterSensitivityClassification}
   {DFDT0,         & ((reg_params *)(NULL))->nuc_shape.t_mid_nuc      - (float *) NULL,           ParamTypeAllFlow },
+// time varying parameters
   {DFDRDR,        & ((reg_params *)(NULL))->RatioDrift        - (float *) NULL,           ParamTypeAllFlow },
   {DFDPDR,        & ((reg_params *)(NULL))->CopyDrift        - (float *) NULL,           ParamTypeAllFlow },
 //    {DFDERR,        &((reg_params *)(NULL))->darkness[FIRSTINDEX]     -(float *)NULL,           ParamTypeAllFlow },

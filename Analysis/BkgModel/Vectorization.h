@@ -252,7 +252,7 @@ void PurpleSolveTotalTrace_Vec(int numfb, float **vb_out, float **blue_hydrogen,
     float gain);
 
 void RedSolveHydrogenFlowInWell_Vec(int numfb, float **vb_out, float **red_hydrogen, 
-    int len, float *deltaFrame, float tauB);
+    int len, float *deltaFrame, float *tauB);
 
 void BlueSolveBackgroundTrace_Vec(int numfb, float **vb_out, float **blue_hydrogen, int len, 
     float *deltaFrame, float *tauB, float *etbR);
@@ -262,5 +262,9 @@ void MultiplyVectorByScalar_Vec(float *my_vec, float my_scalar, int len);
 void Dfderr_Step_Vec(int numfb, float** dst, float** et, float** em, int len);
 void Dfdgain_Step_Vec(int numfb, float** dst, float** src, float** em, int len, float gain);
 
+void ParallelLinearComputeCumulativeIncorporationHydrogens_Vec(float **ival_offset, int npts, float *deltaFrameSeconds,
+        float **nuc_rise_ptr, int SUB_STEPS, int *my_start, 
+        float *A, float *SP,
+        float *kr, float *kmax, float *d);
 
 #endif // VECTORIZATION_H

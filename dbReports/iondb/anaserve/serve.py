@@ -87,7 +87,7 @@ logging.basicConfig(filename=LOG_FILENAME,
                     format="%(asctime)s - %(levelname)s - %(message)s",
                     )
 
-__version__ = filter(str.isdigit, "$Revision: 21578 $")
+__version__ = filter(str.isdigit, "$Revision: 23611 $")
 
 def make_zip(zip_file, to_zip):
     """Try to make a zip of a file if it exists"""
@@ -262,7 +262,7 @@ class Analysis(object):
     paused (suspended), resumed, or terminated.
     """
     ANALYSIS_TYPE = ""
-    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, qname):
+    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, job_type):
         """Initialize by storing essential parameters."""
         super(Analysis,self).__init__()
         self.name = name
@@ -277,7 +277,7 @@ class Analysis(object):
             for ele in pair:
                 assert isinstance(ele, (str,unicode))
         self.files = files
-        self.qname = qname
+        self.job_type = job_type
     def get_id(self):
         """Returns the running job's ID number given by the underlying
         execution system.
@@ -365,8 +365,8 @@ class DRMAnalysis(Analysis):
                 self.parent.retval = _session.wait(self.jobid,timeout)
             except:
                 self.parent.terminated = True
-    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, qname):
-        super(DRMAnalysis,self).__init__(name,script,params,files,savePath,pk,chipType,chips,qname)
+    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, job_type):
+        super(DRMAnalysis,self).__init__(name,script,params,files,savePath,pk,chipType,chips,job_type)
         self.retval = None
         self.jobid = None
         self.terminated = False
@@ -387,8 +387,11 @@ class DRMAnalysis(Analysis):
         adir = path.join(self.savePath)
         script_fname,params_fname = self._write_out(adir)
         jt = _session.createJobTemplate()
+        qname = 'all.q'
+        if self.job_type == 'thumbnail':
+            qname = 'thumbnail.q'
         #SGE
-        jt.nativeSpecification = "%s -w w -q %s" % (self.get_sge_params(self.chips,self.chipType),self.qname)
+        jt.nativeSpecification = "%s -w w -q %s" % (self.get_sge_params(self.chips,self.chipType),qname)
         #TORQUE
         #jt.nativeSpecification = ""
         jt.remoteCommand = "python"
@@ -438,8 +441,25 @@ class DRMAnalysis(Analysis):
     @tolerate_invalid_job
     def terminate(self):
         """Terminates the job by issuing a command to the grid."""
+        logging.debug("DRMAA terminate job")
         if not self._running():
             return False
+
+        # todo, read joblist from database instead of a file
+        joblistfile = os.path.join(self.savePath, 'job_list.txt')
+        logging.debug("DRMA def terminate(self): %s " % joblistfile)
+        if os.path.exists(joblistfile):
+            fd = open(joblistfile)
+            for line in fd:
+                blockjobid = line.rstrip('\n')
+                try:
+                    logging.debug("terminate job %s in status %s" % (blockjobid,_session.jobStatus(blockjobid)))
+                    _session.control(blockjobid,drmaa.JobControlAction.TERMINATE)
+                except Exception,e:
+                    logging.error(str(e))
+                    pass
+            fd.close()
+
         _session.control(self.jobid,drmaa.JobControlAction.TERMINATE)
         return True
     def get_id(self):
@@ -455,8 +475,8 @@ class DRMAnalysis(Analysis):
 class LocalAnalysis(Analysis):
     """Describes a local, non-grid analysis. Runs by spawning a process."""
     ANALYSIS_TYPE = "local"
-    def __init__(self, name, script, params, files, savePath, pk, chipType,chips,qname):
-        super(LocalAnalysis,self).__init__(name,script,params,files,savePath,pk,chipType,chips,qname)
+    def __init__(self, name, script, params, files, savePath, pk, chipType,chips,job_type):
+        super(LocalAnalysis,self).__init__(name,script,params,files,savePath,pk,chipType,chips,job_type)
         self.proc = None  
     
     def initiate(self, rootdir):
@@ -664,6 +684,7 @@ class AnalysisQueue(object):
             seconds += float(diff.microseconds)/1000000.0
             return seconds
     def control_job(self,pk,signal):
+        logging.debug("Analysis queue control_job: %s %s" % (pk , signal))
         """Terminate, suspend, or resume a job."""
         self.cv.acquire()
         try:
@@ -698,6 +719,44 @@ class AnalysisServer(xmlrpc.XMLRPC):
         self.q = analysis_queue
         self.execService = execService
 
+    def xmlrpc_uploadmetrics(self,
+            tfmapperstats_outputfile,
+            procParams,
+            beadPath,      
+            filterPath, 
+            alignmentSummaryPath,
+            STATUS,
+            peakOut,
+            QualityPath,
+            BaseCallerJsonPath,
+            primarykeyPath,
+            uploadStatusPath,
+            message, boolean):
+        """Upload Metrics to the database"""
+
+        from ion.reports import uploadMetrics
+        try:
+            uploadMetrics.writeDbFromFiles(
+                tfmapperstats_outputfile,
+                procParams,
+                beadPath,
+                filterPath,
+                alignmentSummaryPath,
+                STATUS,
+                peakOut,
+                QualityPath,
+                BaseCallerJsonPath,
+                primarykeyPath,
+                uploadStatusPath)
+
+            # this will replace the five progress squares with a re-analysis button
+            uploadMetrics.updateStatus(primarykeyPath, message, boolean)
+        except:
+            traceback.print_exc()
+            return 1
+
+        return 0
+
     def xmlrpc_submitjob(self,jt_nativeSpecification, jt_remoteCommand,
                            jt_workingDirectory, jt_outputPath,
                            jt_errorPath, jt_args, jt_joinFiles):
@@ -715,12 +774,12 @@ class AnalysisServer(xmlrpc.XMLRPC):
     def xmlrpc_jobstatus(self, jobid):
         """Get the status of the job"""
         return _session.jobStatus(jobid)
-    def xmlrpc_startanalysis(self,name,script,parameters,files,savePath,pk,chipType,chips,qname):
+    def xmlrpc_startanalysis(self,name,script,parameters,files,savePath,pk,chipType,chips,job_type):
         """Add an analysis to the ``AnalysisQueue``'s queue of waiting
         analyses."""
         logging.debug("Analysis request received: %s" % name)
         ACls = self.q.best_analysis_class()
-        la = ACls(name,script,parameters,files,savePath,pk,chipType,chips,qname)
+        la = ACls(name,script,parameters,files,savePath,pk,chipType,chips,job_type)
         self.q.add_analysis(la)
         return name
     def xmlrpc_status(self, save_path, pk):
@@ -745,6 +804,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
         return ret       
     def xmlrpc_control_job(self,pk,signal):
         """Send the given signal to the job specified by ``pk``."""
+        logging.debug("xmlrpc_control_job: %s %s" % (pk , signal))
         return self.q.control_job(pk,signal)
     def xmlrpc_test_path(self,path):
         """Determine if ``path`` is readable and writeable by the job

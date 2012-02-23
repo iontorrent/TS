@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-set -ex
+set -e
 
 case "$1" in
     configure)
@@ -24,6 +24,11 @@ case "$1" in
         rm -rf /results/plugins/variantCalling
     fi
     
+    # Special link for a plugin
+    rm -f /var/www/site_media/RunRecognitION
+    if [ -e /results/plugins/RunRecognitION/static ]; then
+        ln -s /results/plugins/RunRecognitION/static /var/www/site_media/RunRecognitION
+    fi
     ;;
 esac
 

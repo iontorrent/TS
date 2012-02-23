@@ -79,13 +79,6 @@ public:
 			     size_t nucIx,
 			     double bulkTau) {
     double totalSsq = 0;
-    ofstream tOut;
-    ofstream bOut;
-    static int first = 1;
-    if (first == 1) {
-      tOut.open("traceWell.txt");
-      bOut.open("traceBulk.txt");
-    }
 								
     Col<T> trace(store.GetNumFrames());
     Col<T> traceIntegral(store.GetNumFrames());
@@ -96,27 +89,12 @@ public:
       size_t wellIx = wells[i];
       store.GetTrace(wellIx, flowIx, trace.begin());
       store.GetReferenceTrace(wellIx, flowIx,  bulkTrace.begin());
-      if (first == 1) {
-	tOut << wellIx;
-	bOut << wellIx;
-	for (size_t x = 0; x < trace.n_rows; x++) {
-	  tOut << "\t" << trace.at(x);
-	  bOut << "\t" << bulkTrace.at(x);
-	}
-	tOut << endl;
-	bOut << endl;
-      }
       bulkIntegral = cumsum(bulkTrace);
       bulk = bulkIntegral + bulkTau * bulkTrace;
       traceIntegral = cumsum(trace);
       double tauB = 0;
       double ssq = PointFcn(trace, traceIntegral, weights, bulk, nucIx, tauB);
       totalSsq += log(ssq + 1.0);
-    }
-    if (first == 1) {
-      tOut.close();
-      bOut.close();
-      first = 0;
     }
     return totalSsq;
   }

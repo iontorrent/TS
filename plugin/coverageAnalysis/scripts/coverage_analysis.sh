@@ -235,12 +235,12 @@ if [ $SHOWLOG -eq 1 ]; then
 fi
 
 if [ -n "$BEDFILE" ]; then
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {print gs}' "$BEDFILE"`
+  gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
 else
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $2} END {print gs}' "$GENOME"`
+  gnm_size=`awk 'BEGIN {gs = 0} {gs += $2} END {printf "%.0f",gs+0}' "$GENOME"`
 fi
 
-base_reads=`samtools depth "$BAMFILE" | awk '{c+=$3} END {print c}'`
+base_reads=`samtools depth "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
 
 COVERAGE_ANALYSIS="awk -f $RUNDIR/coverage_analysis.awk -v basereads=$base_reads -v genome=$gnm_size -v outfile=\"$OUTCOV_BIN_XLS\" -v x1cover=\"$OUTCOV_XLS\" -v plot0x=$PLOT0 -v showlevels=$MAXCOV -v binsize=$BINSIZE \"$FPILEUP\""
 

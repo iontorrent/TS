@@ -1,5 +1,6 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 from django.conf.urls.defaults import *
+from django.conf import settings
 
 from tastypie.api import Api
 
@@ -90,6 +91,7 @@ urlpatterns = patterns(
     (r'^addplan/$', 'views.add_plan'),
     (r'^addplans/$', 'views.add_plans'),
     (r'^editplan/(\d+)/$', 'views.edit_plan'),
+    (r'^editexperiment/(\d+)/$', 'views.edit_experiment'),
     (r'^expack/$', 'views.exp_ack'),
     (r'^test_task/(\w+)$', 'views.test_task'),
     (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),
@@ -99,6 +101,7 @@ urlpatterns = patterns(
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),
     (r'how_is/(?P<host>[\w\.]+):(?P<port>\d+)/feeling$', 'views.how_are_you'),
+    (r'^external_ip/$', 'views.fetch_remote_content', {"url": settings.EXTERNAL_IP_URL}),
     )
 
 urlpatterns.extend(patterns(

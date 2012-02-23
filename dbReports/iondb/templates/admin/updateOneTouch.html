@@ -37,8 +37,8 @@
 
         <p>The page log will be automatically updated</p>
 
-        <div id="loadingStatus">
-            {{ state }}
+        <div id="loadingStatus" style="padding: 20px;">
+            {{ state|safe }}
         </div>
 
 	{% else %}

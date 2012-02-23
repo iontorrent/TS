@@ -34,7 +34,7 @@ void SetChipTypeFromWells(RawWells &rawWells)
 
 void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType)
 {
-  const char * paramsToKeep[] = {"Project","Sample","Library","Start Time","End Time","Experiment Name","Pending Run Short ID","User Name","Serial Number","Gain","Noise","Datacollect version","LiveView version","Firmware version","FPGA version","Driver version","Script version","Board version","Board serial","Kernel Build","PreRun","Frequency","Oversample","Frame Time","Num Frames","Ref Electrode","DAC","VREFS","Cal Chip Hist","Cal Chip High/Low/InRange","Image Map","Cycles","Flows","ChipType","RunType","ChipBarCode","SeqBarCode","LibBarCode","AnalyzeEarly","AutoAnalyze","AutoAnalysisName","PreBeadFind","PostBeadFind","LibraryKeySequence","AutoSettleCalibrate","CalibratePassed","ChipTemperature","PGMTemperature","PGMPressure","WetLoad","AdvScriptFeatures","Advanced User","barcodeId","R1pH","R2pH","R3pH","R4pH","W1pH","W2pH","RawTracesOK","HardDisk","HardDisk","User Notes"};
+  const char * paramsToKeep[] = {"Project","Sample","Start Time","Experiment Name","User Name","Serial Number","Oversample","Frame Time", "Num Frames", "Cycles", "Flows", "LibraryKeySequence", "ChipTemperature", "PGMTemperature", "PGMPressure","W2pH","W1pH","Cal Chip High/Low/InRange"};
   std::string logFile = getExpLogPath(dirExt);
   char* paramVal = NULL;
   for (size_t pIx = 0; pIx < sizeof(paramsToKeep)/sizeof(char *); pIx++)
@@ -60,20 +60,20 @@ void CopyTmpWellFileToPermanent(CommandLineOpts &clo, char *experimentName)
   static char *wellfileIndex = "1";
   static char *wellfileExt = "wells";
 
-  if (clo.LOCAL_WELLS_FILE && !clo.USE_RAWWELLS)
+  if (clo.sys_context.LOCAL_WELLS_FILE && !clo.mod_control.USE_RAWWELLS)
   {
     char wellFileName[MAX_PATH_LENGTH];
     sprintf(wellFileName, "%s/%s.%s", experimentName, wellfileIndex, wellfileExt);
-    CopyFile(clo.tmpWellsFile, wellFileName);
+    CopyFile(clo.sys_context.tmpWellsFile, wellFileName);
   }
 }
 
 
-void MakeNewTmpWellsFile(CommandLineOpts &clo, char *experimentName)
+void MakeNewTmpWellsFile(SystemContext &sys_context, char *experimentName)
 {
-  if (clo.wellsFilePath[0] == '\0')
+  if (sys_context.wellsFilePath[0] == '\0')
   {
-    if (clo.LOCAL_WELLS_FILE)
+    if (sys_context.LOCAL_WELLS_FILE)
     {
       char fTemplate[256] = { 0 };
       //Utils:ClearStaleWellsFile() is sensitive to temp well filename format
@@ -84,13 +84,13 @@ void MakeNewTmpWellsFile(CommandLineOpts &clo, char *experimentName)
       else
         exit(EXIT_FAILURE);
 
-      strcpy(clo.tmpWellsFile, fTemplate);
-      strcpy(clo.wellsFilePath, "/tmp");
-      strcpy(clo.wellsFileName, basename(fTemplate));
+      strcpy(sys_context.tmpWellsFile, fTemplate);
+      strcpy(sys_context.wellsFilePath, "/tmp");
+      strcpy(sys_context.wellsFileName, basename(fTemplate));
     }
     else
     {
-      strcpy(clo.wellsFilePath, experimentName);
+      strcpy(sys_context.wellsFilePath, experimentName);
     }
   }
 }
@@ -100,8 +100,8 @@ void CleanupTmpWellsFile(CommandLineOpts &clo)
   //Cleanup
   //Copy wells file from temporary, local file to permanent; remove temp file
   //Copy temp wells file moved to pre-cafie code.
-  if (clo.LOCAL_WELLS_FILE && !clo.USE_RAWWELLS)
+  if (clo.sys_context.LOCAL_WELLS_FILE && !clo.mod_control.USE_RAWWELLS)
   {
-    unlink(clo.tmpWellsFile);
+    unlink(clo.sys_context.tmpWellsFile);
   }
 }

@@ -39,7 +39,8 @@ class KeyClassifier {
   /** Project one column vector onto another. Used to see how a well projects onto 
       consensus 1mer incorporation. Incorporation must be unit vector I = I/norm(I,2) */
   static double GetProjection(const Col<double> &well, const Col<double> &incorporation) {
-    Col<double>::fixed<1> val = (trans(well) * incorporation);
+    Col<double>::fixed<1> val;
+    val = (trans(well) * incorporation);
     return val.at(0); 
   }
 

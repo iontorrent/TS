@@ -4,9 +4,10 @@
 #include "../Analysis/file-io/sff_definitions.h"
 #include "../Analysis/file-io/sff.h"
 #include "../Analysis/file-io/ion_util.h"
+#include "../Analysis/ReservoirSample.h"
 #include <sstream>
 
-RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases) {
+RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEXP RnSample, SEXP RrandomSeed) {
 
 	SEXP ret = R_NilValue; 		// Use this when there is nothing to be returned.
 	char *exceptionMesg = NULL;
@@ -17,10 +18,16 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases) {
 		RcppVector<int> col(Rcol);
 		RcppVector<int> row(Rrow);
 		int maxBases          = Rcpp::as<int>(RmaxBases);
+		int nSample           = Rcpp::as<int>(RnSample);
+		int randomSeed        = Rcpp::as<int>(RrandomSeed);
 
-		// If a subset of rows and columns is specified, make a map for fast checking
+		sff_file_t *sff_file = NULL;
+		int thisCol,thisRow;
+
+		// Check if we're sampling
 		std::map<std::string, unsigned int> wellIndex;
 		if(col.size() > 0 || row.size() > 0) {
+			// A subset of rows and columns is specified
 			if(col.size() != row.size()) {
 				exceptionMesg = copyMessageToR("col and row should have the same number of entries, ignoring\n");
 			} else {
@@ -30,21 +37,38 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases) {
 					wellIndex[wellIdStream.str()] = i;
 				}
 			}
+		} else if(nSample > 0) {
+			// A random set of a given size is requested
+			sff_file_t *sff_file = NULL;
+			sff_file = sff_fopen(sffFile, "rb", NULL, NULL);
+			sff_t *sff = NULL;
+			ReservoirSample<std::pair<int,int> > sample;
+			sample.Init(nSample,randomSeed);
+			while(NULL != (sff =sff_read(sff_file))) {
+				// Extract the row and column position
+				if(1 != ion_readname_to_rowcol(sff_name(sff), &thisRow, &thisCol)) {
+					fprintf (stderr, "Error parsing read name: '%s'\n", sff_name(sff));
+				}
+				sample.Add(std::pair<int,int>(thisCol,thisRow));
+				sff_destroy(sff);
+			}
+			sff_fclose(sff_file);
+			sample.Finished();
+			// Then make a map from the sampled reads
+			std::vector<std::pair<int,int> > sampleCoords = sample.GetData();
+			for(unsigned int iSample=0; iSample < sampleCoords.size(); iSample++) {
+				std::stringstream wellIdStream;
+				wellIdStream << sampleCoords[iSample].first << ":" << sampleCoords[iSample].second;
+				wellIndex[wellIdStream.str()] = iSample;
+			}
 		}
 
-		sff_file_t *sff_file = NULL;
 		sff_file = sff_fopen(sffFile, "rb", NULL, NULL);
-
-		//SFF sff;
-		//const SFFFileInfo *sffInfo = sff.OpenForRead(sffFile);
-
-		int thisCol,thisRow;
-		std::map<std::string, unsigned int>::iterator wellIndexIter;
 		bool filter = (wellIndex.size() > 0);
 		int nReadOut= (filter) ? (wellIndex.size()) : sff_file->header->n_reads;
+		int nFlow = sff_file->header->flow_length;
 
 		// Initialize things to return
-		int nFlow = sff_file->header->flow_length;
 		RcppVector<int>    out_col(nReadOut);
 		RcppVector<int>    out_row(nReadOut);
 		RcppVector<int>    out_length(nReadOut);
@@ -60,7 +84,6 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases) {
 
 		int nReadsFromSFF=0;
 		sff_t *sff = NULL;
-
 		while(NULL != (sff =sff_read(sff_file))) {
 
 			// Extract the row and column position
@@ -68,43 +91,50 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases) {
 				fprintf (stderr, "Error parsing read name: '%s'\n", sff_name(sff));
 			}
 
+			bool storeRead = true;
 			if(filter) {
+				std::map<std::string, unsigned int>::iterator wellIndexIter;
 				std::stringstream wellIdStream;
 				wellIdStream << thisCol << ":" << thisRow;
 				wellIndexIter = wellIndex.find(wellIdStream.str());
 				if(wellIndexIter == wellIndex.end())
-					continue;
+					storeRead=false;
 			}
-                        int nBases = sff_n_bases(sff);
-			int trimLength = std::min(maxBases, nBases);
 
-			// Store values that will be returned
-			out_col(nReadsFromSFF)              = thisCol;
-			out_row(nReadsFromSFF)              = thisRow;
-			out_clipQualLeft(nReadsFromSFF)     = sff_clip_qual_left(sff);
-			out_clipQualRight(nReadsFromSFF)    = sff_clip_qual_right(sff);
-			out_clipAdapterLeft(nReadsFromSFF)  = sff_clip_adapter_left(sff);
-			out_clipAdapterRight(nReadsFromSFF) = sff_clip_adapter_right(sff);
-			int i;
-			for(i=0; i<nFlow; i++)
-				out_flow(nReadsFromSFF,i)         = sff_flowgram(sff)[i] / 100.0;
-			out_fullLength(nReadsFromSFF)       = sff_n_bases(sff);
-			out_length(nReadsFromSFF)           = trimLength;
-			out_base[nReadsFromSFF].resize(maxBases);
-			for(i=0; i<trimLength; i++) {
-				out_base[nReadsFromSFF][i]        = sff_bases(sff)[i];
-				out_qual(nReadsFromSFF,i)         = sff_quality(sff)[i];
-				out_flowIndex(nReadsFromSFF,i)    = sff_flow_index(sff)[i];
+			if(storeRead) {
+                        	int nBases = sff_n_bases(sff);
+				int trimLength = std::min(maxBases, nBases);
+
+				// Store values that will be returned
+				out_col(nReadsFromSFF)              = thisCol;
+				out_row(nReadsFromSFF)              = thisRow;
+				out_clipQualLeft(nReadsFromSFF)     = sff_clip_qual_left(sff);
+				out_clipQualRight(nReadsFromSFF)    = sff_clip_qual_right(sff);
+				out_clipAdapterLeft(nReadsFromSFF)  = sff_clip_adapter_left(sff);
+				out_clipAdapterRight(nReadsFromSFF) = sff_clip_adapter_right(sff);
+				int i;
+				for(i=0; i<nFlow; i++)
+					out_flow(nReadsFromSFF,i)         = sff_flowgram(sff)[i] / 100.0;
+				out_fullLength(nReadsFromSFF)       = sff_n_bases(sff);
+				out_length(nReadsFromSFF)           = trimLength;
+				out_base[nReadsFromSFF].resize(maxBases);
+				for(i=0; i<trimLength; i++) {
+					out_base[nReadsFromSFF][i]        = sff_bases(sff)[i];
+					out_qual(nReadsFromSFF,i)         = sff_quality(sff)[i];
+					out_flowIndex(nReadsFromSFF,i)    = sff_flow_index(sff)[i];
+				}
+				// Pad out remaining bases with null entries
+				for(; i<maxBases; i++) {
+					out_base[nReadsFromSFF][i]        = 'N';
+					out_qual(nReadsFromSFF,i)         = 0;
+					out_flowIndex(nReadsFromSFF,i)    = 0;
+				}
+				nReadsFromSFF++;
 			}
-			// Pad out remaining bases with null entries
-			for(; i<maxBases; i++) {
-				out_base[nReadsFromSFF][i]        = 'N';
-				out_qual(nReadsFromSFF,i)         = 0;
-				out_flowIndex(nReadsFromSFF,i)    = 0;
-			}
-			nReadsFromSFF++;
 			sff_destroy(sff);
 		}
+		sff_fclose(sff_file);
+
 		RcppResultSet rs;
 		if(nReadsFromSFF != nReadOut) {
 			// If we find fewer reads than expected then issue warning and trim back data structures

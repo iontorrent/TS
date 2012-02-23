@@ -12,16 +12,35 @@
 #include "Mask.h"
 #include "bivariate_gaussian.h"
 
-bool fit_normals(
-	arma::vec2 mean[2],
-	arma::mat22 sgma[2],
-	arma::vec2& alpha,
-	const std::deque<float>& ppf,
-	const std::deque<float>& ssq
-);
+inline float mixed_ppf_cutoff()   {return 0.84;}
+inline float mixed_pos_threshold(){return 0.25;}
+inline int   mixed_first_flow()   {return 12;}
+inline int   mixed_last_flow()    {return 72;}
+
+template <class T>
+bool all_finite(T first, T last)
+{
+	bool finite = true;
+	for(; first<last; ++first){
+		if(*first > 100){
+			finite = false;
+			break;
+		}
+	}
+	return finite;
+}
+
+template <class Ran0, class Ran1>
+bool key_is_good(Ran0 observed, Ran1 ideal_begin, Ran1 ideal_end)
+{
+    bool good = true;
+    for(Ran1 ideal=ideal_begin; ideal<ideal_end; ++ideal, ++observed)
+        good = good and round(*observed) == *ideal;
+    return good;
+}
 
 template <class Ran>
-inline double percent_positive(Ran first, Ran last, double cutoff=0.25)
+inline double percent_positive(Ran first, Ran last, double cutoff=mixed_pos_threshold())
 {
 	return std::count_if(first, last, std::binder2nd<std::greater<double> >(std::greater<double>(),cutoff)) / static_cast<double>(last - first);
 }
@@ -36,6 +55,14 @@ inline double sum_fractional_part(Ran first, Ran last)
 	}
 	return ret;
 }
+
+bool fit_normals(
+	arma::vec2 mean[2],
+	arma::mat22 sgma[2],
+	arma::vec2& alpha,
+	const std::deque<float>& ppf,
+	const std::deque<float>& ssq
+);
 
 class clonal_filter {
 public:
@@ -81,31 +108,10 @@ std::ostream& operator<<(std::ostream& out, const filter_counts& counts);
 
 // Make a clonality filter from a sample of reads from a RawWells file.
 // Record number of reads in sample that are caught by each filter.
-void make_filter(clonal_filter& filter, filter_counts& counts, int nlib, Mask& mask, RawWells& wells, const std::vector<int>& key_ionogram);
+void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const std::vector<int>& key_ionogram);
 
-template <class Ran>
-void NormalizeLib(Ran beg, Ran end)
-{
-    // Hard wired for TCAG and XDB.
-    double keyMean = (beg[0] + beg[2] + beg[5]) / 3.0;
-	if(keyMean > 0.0){
-	    while(beg < end)
-    	    *beg++ /= keyMean;
-	}
-}
-
-template <class T>
-bool all_finite(T first, T last)
-{
-	bool finite = true;
-	for(; first<last; ++first){
-		if(*first > 100){
-			finite = false;
-			break;
-		}
-	}
-	return finite;
-}
+// Make a clonality filter given ppf and ssq for a random sample of wells:
+void make_filter(clonal_filter& filter, filter_counts& counts, const std::deque<float>& ppf, const std::deque<float>& ssq);
 
 #endif // MIXED_H
 

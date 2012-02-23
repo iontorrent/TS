@@ -30,6 +30,7 @@ class SearchAmplitude{
     EmphasisClass *emphasis_data;
     
     bool use_vectorization;
+    bool rate_fit;
     
     // bad!  Parasite on pointers I'm not supposed to see
     // because we need so much context when generating a trace
@@ -54,13 +55,20 @@ class SearchAmplitude{
       my_flow = _my_flow;
       emphasis_data = _emphasis_data;
     };
-    void EvaluateAmplitudeFit(bead_params *p, float *avals,float *error_by_flow,float *sbg);
-    void BinarySearchOneBead(bead_params *p, float min_step, bool restart, float *sbg);
+    void EvaluateAmplitudeFit(bead_params *p, float *avals,float *error_by_flow);
+
+    void BinarySearchOneBead(bead_params *p, float min_step, bool restart);
     void BinarySearchAmplitude(BeadTracker &my_beads, float min_step,bool restart);
     SearchAmplitude();
     ~SearchAmplitude();
-    /*void ProjectionSearchBead(int ibd, float *sbg);
-    void ProjectionSearch();*/
+    // second method
+    void ProjectionSearchAmplitude(BeadTracker &my_beads, bool _rate_fit);
+    void ProjectionSearchOneBead(bead_params *p);
+    // and yet a third option for amplitude
+    int GoldenSectionOneBead(bead_params *p);
+    void GoldenSectionAmplitude (BeadTracker &my_beads);
+    
+    
 };
 
 

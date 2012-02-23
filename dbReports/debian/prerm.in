@@ -92,16 +92,6 @@ case "$1" in
 #    	sed -i 's/,$//' /etc/sudoers
 #    done
 
-    #----------------------------------
-    # Remove files created during package install
-    #----------------------------------
-    if [ -f /opt/ion/iondb/templates/rundb/php_base.html ]; then
-        rm -f /opt/ion/iondb/templates/rundb/php_base.html
-    fi
-    
-    if [ -f /opt/ion/iondb/templates/rundb/php_base_plugin.html ]; then
-        rm -f /opt/ion/iondb/templates/rundb/php_base_plugin.html
-    fi
     
     ;;
 esac

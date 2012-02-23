@@ -201,8 +201,7 @@ EOFws
             chmod a+w /var/log/ion/ionPlugin.log || true
         fi
         # touchy code
-        #for log_file in django.log iarchive.log crawl.log ionPlugin.log
-        for log_file in django.log
+        for log_file in django.log iarchive.log crawl.log ionPlugin.log
         do
             touch /var/log/ion/$log_file
             chown :www-data /var/log/ion/$log_file
@@ -216,9 +215,9 @@ EOFws
     # Modify sudoers
     # ------------------------------------------
     SUDOFILE=/etc/sudoers
-    sed -i '/www-data/ d' $SUDOFILE
+    sed -i '/www-data/ d' ${SUDOFILE}
     echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig" >> ${SUDOFILE}
-   
+    
 #    if ! grep -q ^www-data ${SUDOFILE}; then
 #    	# if no entry exists for www-data, then add it here
 #    	echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig" >> ${SUDOFILE}
@@ -234,7 +233,7 @@ EOFws
 #        for file in ${files[@]}; do
 #            if ! grep ^www-data ${SUDOFILE}| grep $file; then
 #		        sed -i "s:\(^www-data ALL=.*\):\1,$file:" ${SUDOFILE}
-#    		fi
+#            fi
 #        done
 #    fi
     
@@ -326,13 +325,12 @@ EOFws
         	echo "load TF templates failed."
     	(cd @ION_INSTALL_PREFIX@/iondb/bin/ && python migrate.py ; cd -) || \
         	echo "database migration failed."
-    	(cd @ION_INSTALL_PREFIX@/iondb/bin/ && python install_script.py ../TLScript.py) || \
-        	echo "insert of analysis script into database failed."
-
         #generate the Django base template to use for PHP
         (cd @ION_INSTALL_PREFIX@/iondb/bin/ && python base_template.py > /dev/null && \
         chown www-data:www-data /opt/ion/iondb/templates/rundb/php_base.html) || \
 	    	echo "Failed to create the Django template for PHP."
+    	(cd @ION_INSTALL_PREFIX@/iondb/bin/ && python install_script.py /usr/lib/python2.6/dist-packages/ion/reports/TLScript.py) || \
+        	echo "insert of analysis script into database failed."
 
 		invoke-rc.d apache2 restart
     	invoke-rc.d ionCrawler start

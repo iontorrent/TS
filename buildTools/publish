@@ -1,0 +1,82 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+
+function print_help()
+{
+	echo
+	echo "Usage: publish [--dev|--alpha|--patch] filename"
+    echo
+    echo "Default location to publish to is lucid-alpha"
+    echo -e "--dev\tlucid-dev"
+    echo -e "--alpha\tlucid-alpha"
+    echo -e "--patch\tpatchtest"
+    echo
+}
+
+#---    First, if no args given, print help ---#
+if [ $# == 0 ]; then
+    print_help
+    exit 0
+fi
+
+# last argument is file to transfer
+for arg in $*; do
+	PKGFILE=$arg
+done
+
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+    '--dev')
+    	PUBDIR="lucid-dev"
+    ;;
+    '--alpha')
+    	PUBDIR="lucid-alpha"
+    ;;
+    '--patch')
+    	PUBDIR="patchtest"
+    ;;
+    esac
+    shift
+done
+
+USER=ion
+SERVER=rnd1.ite
+PUBDIR=${PUBDIR-"lucid-alpha"}
+PUBPATH=public_html/updates_server_root/updates/software/$PUBDIR
+
+if [ ! -f "$PKGFILE" ]; then
+   echo "ERROR: $PKGFILE not found."
+   exit 1
+fi
+
+#prevent accidental overwriting of existing file
+fname=$(basename $PKGFILE)
+file=$(\
+ssh $USER@$SERVER ls $PUBPATH/$fname 2>/dev/null
+)
+if [ "$file" == "$PUBPATH/$fname" ]; then
+   echo "ERROR: File exists: $file"
+   exit 1
+fi
+
+echo "Copying $PKGFILE to $PUBDIR"
+scp -p $PKGFILE $USER@$SERVER:$PUBPATH
+fname=$(basename $PKGFILE)
+file=$(\
+ssh $USER@$SERVER ls $PUBPATH/$fname
+)
+if [ "$file" == "" ]; then
+   echo "ERROR: There was an error copying $fname"
+   exit 1
+fi
+
+echo "Writing new Packages.gz file"
+ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
+if [ $? -ne 0 ]
+then
+	echo "There was an error creating the Packages.gz file"
+	exit 1
+fi
+
+exit 0

@@ -22,6 +22,9 @@
 #include "OptArgs.h"
 #include "adapter_searcher.h" 
 #include "IonErr.h"
+#include "json/json.h"
+
+
 
 using namespace std;
 
@@ -30,7 +33,7 @@ struct options {
 	: adapter_cutoff(0.0)
 	, flow_order("TACGTACGTCTGAGCATCGATCGATGTACAGC") // XDB
 	, key("TCAG")
-	, adapter("ATCACCGACTGCCCATAGAGAGGCTGAGAC")      // P1 rev comp
+	, adapter("ATCACCGACTGCCCATAGAGAGGCTGAGAC")      // P1-B fusion rev comp prefix
 	, qual_cutoff(100.0)
 	, qual_wsize(30)
 	, trim_extra_left(0)
@@ -74,6 +77,7 @@ int32_t  trim_right(const options& opt, sff_t* sff, int32_t& clip_adapter_left, 
 int32_t  trim_len(int32_t clip_qual_left, int32_t clip_qual_right, int32_t clip_adapter_left, int32_t clip_adapter_right, int32_t &adapter_3prime_trim_len, int32_t &qual_3prime_trim_len);
 void updateBeadSummary(const options& opt, int32_t cnt, int32_t nReads, int32_t dropped_by_adapter, int32_t dropped_by_qual);
 bool readBeadSummary(ifstream &inFile, map<string, unsigned int> &beadSummaryHeader, vector< vector<string> > &beadSummaryData);
+bool readBeadSummaryJson(ifstream &inFile, map<string, unsigned int> &beadSummaryHeader, vector< vector<string> > &beadSummaryData);
 bool writeBeadSummary(ofstream &outFile, map<string, unsigned int> &beadSummaryHeader, vector< vector<string> > &beadSummaryData, unsigned int validFieldNum, unsigned int libRow, int32_t cnt, int32_t nReads, int32_t dropped_by_adapter, int32_t dropped_by_qual);
 void init_gc();
 inline bool  isgc(int c);
@@ -160,10 +164,10 @@ int main(int argc, const char* argv[])
 
 
 	// Cleanup:
-	cout << "writing..." << endl;
+	cout << "SFFTrim: writing..." << endl;
 	sff_fclose(sff_file_out);
 	sff_fclose(sff_file_in);
-	cout << endl << "done" << endl;
+	cout << "SFFTrim: done" << endl;
 }
 
 int32_t trim_right(const options& opt, sff_t* sff, int32_t& clip_adapter_left, int32_t& clip_qual_right, int32_t& clip_adapter_right, double& ascore, int32_t& aflow, int32_t &adapter_3prime_trim_len, int32_t &qual_3prime_trim_len)
@@ -303,7 +307,7 @@ bool check_args(options *opt)
 
 void updateBeadSummary(const options& opt, int32_t cnt, int32_t nReads, int32_t dropped_by_adapter, int32_t dropped_by_qual)
 {
-	ifstream inFile;
+/*	ifstream inFile;
 	if(opt.in_bead_summary == "") {
 		ION_WARN(string("Input bead summary file not specified, unable to update bead summary with reads trimmed to zero length"));
 		return;
@@ -313,7 +317,21 @@ void updateBeadSummary(const options& opt, int32_t cnt, int32_t nReads, int32_t 
 			ION_WARN(string("Unable to open input bead summary file ") + opt.in_bead_summary + string(" for read"));
 			return;
 		}
-        }
+  }*/
+
+  ifstream inJsonFile;
+  string inJsonName = "BaseCaller.json";
+  if(inJsonName == "") {
+    ION_WARN(string("Input bead summary file not specified, unable to update bead summary with reads trimmed to zero length"));
+    return;
+  } else {
+    inJsonFile.open(inJsonName.c_str());
+    if(inJsonFile.fail()) {
+      ION_WARN(string("Unable to open input bead summary file ") + inJsonName + string(" for read"));
+      return;
+    }
+  }
+
 
 	ofstream outFile;
 	if(opt.out_bead_summary == "") {
@@ -325,12 +343,13 @@ void updateBeadSummary(const options& opt, int32_t cnt, int32_t nReads, int32_t 
 			ION_WARN(string("Unable to open output bead summary file ") + opt.out_bead_summary + string(" for write"));
 			return;
 		}
-        }
+  }
 
 	// Read the original bead summary
 	map<string, unsigned int> beadSummaryHeader;
 	vector< vector<string> > beadSummaryData;
-	bool successfulRead = readBeadSummary(inFile,beadSummaryHeader,beadSummaryData);
+	bool successfulRead = readBeadSummaryJson(inJsonFile,beadSummaryHeader,beadSummaryData);
+//	bool successfulRead = readBeadSummary(inFile,beadSummaryHeader,beadSummaryData);
 
 	if(!successfulRead) {
 		ION_WARN(string("Problem parsing input bead summary file ") + opt.in_bead_summary);
@@ -365,7 +384,8 @@ void updateBeadSummary(const options& opt, int32_t cnt, int32_t nReads, int32_t 
 		}
 	}
 
-	inFile.close();
+//	inFile.close();
+	inJsonFile.close();
 	outFile.close();
 }
 
@@ -415,6 +435,79 @@ bool readBeadSummary(ifstream &inFile, map<string, unsigned int> &beadSummaryHea
 
 	return(success);
 }
+
+
+
+bool readBeadSummaryJson(ifstream &inFile, map<string, unsigned int> &beadSummaryHeader, vector< vector<string> > &beadSummaryData)
+{
+  try {
+
+  if (!inFile.good())
+    return false;
+  Json::Value BaseCallerJson, Summary;
+  inFile >> BaseCallerJson;
+
+  Summary = BaseCallerJson["BeadSummary"];
+
+  beadSummaryHeader.clear();
+
+  beadSummaryHeader["class"] = 0;
+  beadSummaryHeader["key"] = 1;
+  beadSummaryHeader["polyclonal"] = 2;
+  beadSummaryHeader["highPPF"] = 3;
+  beadSummaryHeader["zero"] = 4;
+  beadSummaryHeader["short"] = 5;
+  beadSummaryHeader["badKey"] = 6;
+  beadSummaryHeader["highRes"] = 7;
+  beadSummaryHeader["valid"] = 8;
+
+  beadSummaryData.clear();
+  beadSummaryData.resize(2);
+
+  char temp[256];
+
+  beadSummaryData[0].push_back("lib");
+  beadSummaryData[0].push_back(Summary["lib"]["key"].asString());
+  sprintf(temp, "%d", Summary["lib"]["polyclonal"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["highPPF"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["zero"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["short"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["badKey"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["highRes"].asInt());
+  beadSummaryData[0].push_back(temp);
+  sprintf(temp, "%d", Summary["lib"]["valid"].asInt());
+  beadSummaryData[0].push_back(temp);
+
+  beadSummaryData[1].push_back("tf");
+  beadSummaryData[1].push_back(Summary["tf"]["key"].asString());
+  sprintf(temp, "%d", Summary["tf"]["polyclonal"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["highPPF"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["zero"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["short"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["badKey"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["highRes"].asInt());
+  beadSummaryData[1].push_back(temp);
+  sprintf(temp, "%d", Summary["tf"]["valid"].asInt());
+  beadSummaryData[1].push_back(temp);
+
+  return true;
+
+  } catch (...) {
+    return false;
+  }
+}
+
+
 
 bool writeBeadSummary(ofstream &outFile, map<string, unsigned int> &beadSummaryHeader, vector< vector<string> > &beadSummaryData, unsigned int validFieldNum, unsigned int libRow, int32_t cnt, int32_t nReads, int32_t dropped_by_adapter, int32_t dropped_by_qual) {
 	string delim = "\t";

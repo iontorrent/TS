@@ -3,6 +3,7 @@
 #define ACQ_H
 
 #include <stdint.h>
+#include <vector>
 #include "Image.h"
 
 class Acq {
@@ -23,6 +24,62 @@ class Acq {
 		uint16_t get_val(uint32_t x, uint32_t y, uint32_t rframe, uint32_t numFrames);
 		int     PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, int16_t *results, uint64_t *out_len, uint32_t ow, uint32_t oh);
 
+                void CalculateNumOfRegions(uint32_t ow, uint32_t oh);
+                void PopulateRegionalAcquisitionWindow(
+                    const char* t0InfoFile, 
+                    const char* regionAcqT0File,
+                    int ow, 
+                    int oh);
+                bool CheckForRegionAcqTimeWindow(uint32_t baseInterval, uint32_t timeStamp, int regionNum, int* framesToAvg = NULL);
+                int DeltaCompressionOnRegionalAcquisitionWindow(
+                    int elems, 
+		    uint32_t baseFrameRate,
+		    uint32_t timeStamp,
+		    unsigned int frameNum,
+		    int16_t* firstFramePtr,
+		    int16_t *framePtr, 
+		    int16_t* prevFramePtr, 
+		    int16_t *results, 
+		    uint64_t *out_len, 
+		    uint32_t ow, 
+		    uint32_t oh); 
+                bool WriteRegionBasedAcq(char *acqName, int ox, int oy, int ow, int oh);
+                bool WriteFrameAveragedRegionBasedAcq(char *acqName, int ox, int oy, int ow, int oh);
+                unsigned int GetCompressedFrameNum(unsigned int unCompressedFrameNum);
+                unsigned int GetUncompressedFrames(unsigned int compressedFrames);
+                bool WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh);
+                void PopulateCroppedRegionalAcquisitionWindow(
+                    const char* t0InfoFile, 
+		    const char* regionAcqT0File,
+		    int ox,
+		    int oy,
+		    int ow, 
+		    int oh,
+                    unsigned int baseframerate);
+		void ParseT0File(
+                    const char* t0InfoFile, 
+		    const char* regionAcqT0File,
+		    int ox,
+		    int oy,
+		    int ow, 
+		    int oh,
+                    unsigned int baseframerate);
+                void GenerateExcludeMaskRegions(const char* excludeMaskFile);
+                int FramesBeforeT0Averaged(
+		    int elems, 
+		    uint32_t baseFrameRate,
+		    uint32_t timeStamp,
+		    unsigned int frameNum,
+		    int* framesToAvg,
+		    int32_t* avgFramePtr,
+		    int16_t* firstFramePtr,
+		    int16_t *framePtr, 
+		    int16_t* prevFramePtr, 
+		    int16_t *results, 
+		    uint64_t *out_len, 
+		    uint32_t ow, 
+		    uint32_t oh); 
+
 	protected:
 
 		Image *image;
@@ -37,6 +94,11 @@ class Acq {
 		int *timestamps;
 		int x_region_size;
 		int y_region_size;
+                uint32_t num_regions_x;
+                uint32_t num_regions_y;
+                std::vector<float> region_acq_start;
+                std::vector<float> region_acq_end;
+                std::vector<int> excludedRegions;
 };
 
 #endif // ACQ_H

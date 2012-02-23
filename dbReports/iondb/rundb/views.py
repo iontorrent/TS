@@ -36,6 +36,7 @@ import urllib
 import xmlrpclib
 import stat
 import logging
+import traceback
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
 
@@ -55,7 +56,9 @@ from iondb.backup import rawDataStorageReport
 from django import http, shortcuts, template
 from django.conf import settings
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
-from django.core import urlresolvers, serializers
+from django.core import urlresolvers
+from django import http
+from django.core import serializers
 
 from django.utils.datastructures import SortedDict
 
@@ -76,7 +79,7 @@ from iondb.rundb import tasks
 
 FILTERED = None # contains the last filter for the reports page for csv export
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 def toBoolean(val):
     """convert strings from CSV to Python bool
@@ -112,7 +115,7 @@ def base_context_processor(request):
     added to the base_template in every view.
     Namespace any items added here with 'base_' in order to avoid conflict.
     """
-    site_name = models.GlobalConfig.objects.all().order_by('id')[0].site_name
+    site_name = models.GlobalConfig.objects.get(pk=1).site_name
     return {"base_site_name": site_name}
 
 
@@ -418,7 +421,7 @@ def reports(request, page=None):
         ctx = paginator.page(paginator.num_pages)
 
     ctxd = {"rep":ctx, "paginator":ctx, "filterform":filter, "getURL":getURL,
-            "searchform":search, "sortform":sort, "use_content2" : True }
+            "searchform":search, "sortform":sort, }
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_report.html",
                                         context_instance=context)
@@ -632,9 +635,9 @@ def createReport(request, pk, reportpk):
             # This handles the takeovernode button
             tn = rpf.cleaned_data['takeover_node']
             if tn:
-                sge_args = 'takeover'
+                chiptype_arg = 'takeover'
             else:
-                sge_args = exp.chipType
+                chiptype_arg = exp.chipType
             ufResultsName = rpf.cleaned_data['report_name']
             resultsName = ufResultsName.strip().replace(' ', '_')
 
@@ -647,6 +650,10 @@ def createReport(request, pk, reportpk):
             #linkPath = result.web_path(loc)
             tfConfig = rpf.cleaned_data['tf_config']
             blockArgs = rpf.cleaned_data['blockArgs']
+            doThumbnail = rpf.cleaned_data['do_thumbnail']
+            ts_job_type = ""
+            if doThumbnail:
+                ts_job_type = 'thumbnail'
             args = rpf.cleaned_data['args']
             #do a full alignment?
             align_full = rpf.cleaned_data['align_full']
@@ -654,7 +661,6 @@ def createReport(request, pk, reportpk):
             sfftrim = models.GlobalConfig.objects.all()[0].sfftrim
             #get sff args
             sfftrim_args = models.GlobalConfig.objects.all()[0].sfftrim_args
-            qname = rpf.cleaned_data['qname']
             #If libraryKey was set, then override the value taken from the explog.txt on the PGM
             libraryKey = rpf.cleaned_data['libraryKey']
             #ionCrawler may modify the path to raw data in the path variable passed thru URL
@@ -675,34 +681,16 @@ def createReport(request, pk, reportpk):
                 #------------------------------------------------
                 # Tests to determine if raw data still available:
                 #------------------------------------------------
-                if exp.storageHost and 'localhost' in exp.storageHost:
-                    # Data directory is located on this server
-                    if bk and 'from-wells' not in args:
-                        if str(bk.backupPath) == 'DELETED':
-                            bail(result, "The analysis cannot start because the raw data has been deleted.")
-                        else:
-                            if not path.exists(exp.expDir):
-                                bail(result, "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available."
-                                     % (str(bk.backupPath),))
-                    if 'from-wells' not in args and not path.exists(exp.expDir):
-                        bail(result, "No path to raw data")
-                else:
-                    # Data directory is located on secondary server
-                    #NOTE: This test will only work if the ionArchive daemon on the secondary is 'talking' to the primary database
-                    if bk and 'from-wells' not in args:
-                        if str(bk.backupPath) == 'DELETED':
-                            bail(result, "The analysis cannot start because the raw data has been deleted.")
-                        #else:
-                            # TODO:How can we determine if the data is present on external server?
-                            # bail here if data has been archived.
-                    # TODO:How can we determine if data is present on external server?
-                    #if 'from-wells' not in args and not path.exists(exp.expDir):
-                    #    bail(result,"No path to raw data")
-
-                    #NOTE: At this time, if re-analyzing data that exists on secondary server, the job will get submitted to the sge queue
-                    # and will fail to run when the Analysis binary throws an error - no such file or directory.  Worst-case is there are
-                    # jobs queued up on secondary and the error condition will not get determined and reported until other jobs complete
-                    # many hours later.
+                # Data directory is located on this server
+                if bk and 'from-wells' not in args:
+                    if str(bk.backupPath) == 'DELETED':
+                        bail(result, "The analysis cannot start because the raw data has been deleted.")
+                    else:
+                        if not path.exists(exp.expDir):
+                            bail(result, "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available."
+                                 % (str(bk.backupPath),))
+                if 'from-wells' not in args and not path.exists(exp.expDir):
+                    bail(result, "No path to raw data")
 
                 try:
                     host = "127.0.0.1"
@@ -724,8 +712,8 @@ def createReport(request, pk, reportpk):
                 if exp.barcodeId and exp.barcodeId is not '':
                     files.append(create_bc_conf(exp.barcodeId,"barcodeList.txt"))
                 # tell the analysis server to start the job
-                params = makeParams(exp, args, blockArgs, resultsName, result, align_full, sfftrim, sfftrim_args, libraryKey,
-                					os.path.join(storage.webServerPath, loc.name),aligner_opts_extra)
+                params = makeParams(exp, args, blockArgs, doThumbnail, resultsName, result, align_full, sfftrim, sfftrim_args, libraryKey,
+                                                        os.path.join(storage.webServerPath, loc.name),aligner_opts_extra)
                 chip_dict = {}
                 try:
                     chips = models.Chip.objects.all()
@@ -734,7 +722,7 @@ def createReport(request, pk, reportpk):
                     chip_dict = {} # just in case we can't read from the db
                 try:
                     conn.startanalysis(resultsName, script, params, files,
-                                       webRootPath, result.pk, sge_args, chip_dict, qname)
+                                       webRootPath, result.pk, chiptype_arg, chip_dict, ts_job_type)
                 except (socket.error, xmlrpclib.Fault):
                     bail(result, "Failed to contact job server.")
                 # redirect the user to the report started page
@@ -748,18 +736,6 @@ def createReport(request, pk, reportpk):
         rpf = forms.RunParamsForm()
         rpf.fields['path'].initial = path.join(exp.expDir)
         rpf.fields['align_full'].initial = False
-        try:
-            # Case of missing dbase field or empty dbase field
-            if not exp.storageHost or exp.storageHost is "":
-                rpf.fields['qname'].initial = settings.SGEQUEUENAME
-            # Case of data living on primary server (ie, on locally mounted NAS)
-            elif 'localhost' in exp.storageHost:
-                rpf.fields['qname'].initial = settings.SGEQUEUENAME
-            # Case of data living on secondary server
-            else:
-                rpf.fields['qname'].initial = str(exp.storageHost + '.q')
-        except:
-            rpf.fields['qname'].initial = settings.SGEQUEUENAME
 
         extra = get_initial_arg(reportpk)
         args = models.GlobalConfig.objects.all()[0].get_default_command()
@@ -822,7 +798,7 @@ def get_selected_plugins():
     interface
     """
     try:
-        pg = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
+        pg = models.Plugin.objects.filter(selected=True).exclude(path='')
     except:
         return ""
     ret = []
@@ -849,8 +825,8 @@ def get_alternative():
         ret = False
     return ret
 
-def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim, sfftrim_args, libraryKey,
-				url_path, aligner_opts_extra):
+def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_full , sfftrim, sfftrim_args, libraryKey,
+                                url_path, aligner_opts_extra):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
     will need to be run must be constructed here and included inside the return.  
@@ -859,6 +835,8 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
     plugins = get_selected_plugins()
     exp = expOb
     pathToData = path.join(exp.expDir)
+    if doThumbnail and exp.chipType == "900":
+        pathToData = path.join(pathToData,'thumbnail')
     defaultLibKey = gc.default_library_key
     expName = exp.expName
 
@@ -868,18 +846,7 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
     exp_json = json.loads(exp_json)
     exp_json = exp_json[0]["fields"]
 
-    #now get the plan and return that
-    plan = exp.log.get("pending_run_short_id",False)
-    if plan:
-        plan_filter = models.PlannedExperiment.objects.filter(planShortID=plan)
-        plan_json = serializers.serialize("json", plan_filter)
-        plan_json = json.loads(plan_json)
-        try:
-            plan = plan_json[0]["fields"]
-        except IndexError:
-            plan = {}
-
-    site_name = models.GlobalConfig.objects.all().order_by('id')[0].site_name
+    site_name = models.GlobalConfig.objects.get(pk=1).site_name
 
     try:
         libraryName = models.ReferenceGenomes.objects.get(short_name=exp.library).name
@@ -887,7 +854,6 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
         libraryName = exp.library
 
     skipchecksum = False
-    fastqpath = result.fastqLink.strip().split('/')[-1]
 
     #TODO: remove the libKey from the analysis args, assign this in the TLScript. To make this more fluid
 
@@ -943,7 +909,7 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
                                'adapter_cutoff':16
                                }
     rawdatastyle = exp.rawdatastyle
-
+    
     ret = {'pathToData':pathToData,
            'analysisArgs':analysisArgs,
            'blockArgs':blockArgs,
@@ -952,7 +918,6 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
            'expName':expName,
            'libraryKey':libraryKey,
            'plugins':plugins,
-           'fastqpath':fastqpath,
            'skipchecksum':skipchecksum,
            'flowOrder':flowOrder,
            'align_full' : align_full,
@@ -968,8 +933,7 @@ def makeParams(expOb, args, blockArgs, resultsName, result, align_full , sfftrim
            'url_path':url_path,
            'reverse_primer_dict':reverse_primer_dict,
            'rawdatastyle':rawdatastyle,
-           'aligner_opts_extra':aligner_opts_extra,
-           'plan': plan
+           'aligner_opts_extra':aligner_opts_extra 
            }
 
     return ret
@@ -1073,6 +1037,25 @@ def db_backup(request):
                 ret.append(fs)
         return ret
     
+    def areyourunning():
+        uptime = 0.0
+        try:
+            astat = xmlrpclib.ServerProxy("http://127.0.0.1:%d" % settings.IARCHIVE_PORT)
+            logger.debug ("Sending xmplrpc status_check")
+            uptime = astat.status_check()
+            daemon_status = True
+        except (socket.error, xmlrpclib.Fault):
+            logger.warn (traceback.format_exc())
+            daemon_status = False
+        except:
+            logger.exception(traceback.format_exc())
+            daemon_status = False
+        return daemon_status
+    
+    # Determine if ionArchive service is running
+    daemon_status = areyourunning()
+    
+    #Note: there is always only 1 BackupConfig object configured.
     bk = models.BackupConfig.objects.all().order_by('pk')
     # populate dictionary with experiments ready to be archived
     # Get all experiments in database sorted by date
@@ -1083,13 +1066,14 @@ def db_backup(request):
     experiments = experiments.exclude(user_ack='U').exclude(user_ack='D')
     
     # make dictionary, one array per file server of archiveExperiment objects
-    status = False
     to_archive = {}
-    servers =  get_servers()
+    servers = get_servers()
     for fs in servers:
         explist = []
         for exp in experiments:
             if fs.filesPrefix in exp.expDir:
+                #TODO: remove this dependency on the rig object (pgmName)
+                #if the rig no longer exists, the experiment cannot be deleted
                 location = models.Rig.objects.get(name=exp.pgmName).location
                 E = Experiment(exp,
                                str(exp.expName),
@@ -1101,14 +1085,12 @@ def db_backup(request):
                                location,
                                exp.pk)
                 explist.append(E)
-                # Set this based on whether there are runs to backup
-                status = True
             # limit number in list to configured limit
-            if len(explist) == bk[0].number_to_backup:
+            if len(explist) >= bk[0].number_to_backup:
                 break
         to_archive[fs.filesPrefix] = explist
         
-    ctx = template.RequestContext(request, {"backups":bk, "to_archive":to_archive, "status":status})
+    ctx = template.RequestContext(request, {"backups":bk, "to_archive":to_archive, "status":daemon_status})
     return ctx
 
 #def backup(request):
@@ -1226,6 +1208,7 @@ def findVersions():
                  "ion-tsups",
                  "ion-publishers",
                  "ion-onetouchupdater",
+                 "ion-pipeline",
                  "ion-usbmount",
                  "tmap",
                  "ion-torrentR"]
@@ -1259,22 +1242,34 @@ def about(request):
     return shortcuts.render_to_response("rundb/ion_about.html",
                                         context_instance=ctx, mimetype="text/html")
 
-def search_for_plugins(config, basedir):
+def search_for_plugins(config, basepath):
     """
     Searches for new plugins
     """
-    def get_version(pluginscript):
-        VERSION=re.compile(r'VERSION=\"?([\d\.]+)\"?')
+    def create_new(name, version, path):
+        p = models.Plugin()
+        p.name = name
+        p.version = version
+        p.date = datetime.datetime.now()
+        p.selected = False
+        p.path = path
+        p.autorun = False
+        p.save()
+
+    def get_version(pdir, name, defaultpluginscript):
+        command = "grep VERSION %s/%s | head -1 | awk '{print $1}' " % (pdir, defaultpluginscript)
         try:
-            with open(pluginscript, 'r') as f:
-                for line in f:
-                    m = VERSION.search(line)
-                    if m:
-                        return m.group(1)
+            a = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+            version = a.stdout.readlines()[0].strip()
+            version = version.split("=")[1]
+            version = version.replace('"', '')
         except:
-            logger.error("Failed to parse VERSION from '%s'", pluginscript)
-            return "0"
-        return "0"
+            version = "0"
+        return version
+
+    def update_version(plugin, version):
+        plugin.version = version
+        plugin.save()
 
     def set_pluginconfig (plugin, pdir, configfile):
         """if there is data in pluginconfig json
@@ -1282,74 +1277,54 @@ def search_for_plugins(config, basedir):
         """
         pluginconfigfile = os.path.join(pdir, configfile)
         if not os.path.exists(pluginconfigfile):
-            return False  # No config file
+            return
+        logger.info("Setting pluginconfig: '%s'", pluginconfigfile)
         try:
             with open(pluginconfigfile) as f:
                 config = f.read()
             config = json.loads(config)
-            if plugin.config != config:
-                logger.info("Setting pluginconfig: '%s'", pluginconfigfile)
-                plugin.config = config
-                return True
-            else:
-                # Value Unchanged
-                return False
+            plugin.config = config
+            plugin.save()
+            return
         except:
             logger.exception("Failed to load pluginconfig from '%s'", pluginconfigfile)
-            return False
+            return
 
     default_script = config.default_plugin_script
-    if not path.exists(basedir):
-        return None
+    basedir = "/results/plugins" # FIXME - get from globalconfig
+    if path.exists(basedir):
+        # only list files in the 'plugin' directory if they are actually folders
+        folder_list = [i for i in os.listdir(basedir) if (path.isdir(path.join(basedir, i)) and i != "scratch")]
+        for pname in folder_list:
+            full_path = path.join(basedir, pname)
+            try:
+                p = models.Plugin.objects.get(name=pname.strip())
+            except:
+                create_new(pname,
+                           get_version(full_path, pname, default_script),
+                           full_path)
+                p = models.Plugin.objects.get(name=pname.strip())
+                if not p.config:
+                    set_pluginconfig (p,
+                                      path.join(basedir, pname),
+                                      "pluginconfig.json")
+                continue
+            current_version = get_version(path.join(basedir, pname),
+                                          pname,
+                                          default_script)
 
-    # only list files in the 'plugin' directory if they are actually folders
-    folder_list = ( i for i in os.listdir(basedir) if (path.isdir(path.join(basedir, i)) and i != "scratch") )
-    for pname in folder_list:
-        full_path = path.join(basedir, pname)
-        # Make sure this looks like a plugin
-        launch_script = path.join(full_path, default_script)
-        if not path.exists(launch_script):
-            logger.info("Non plugin in plugin folder: '%s'", pname)
-            continue
-        version = get_version(launch_script)
+            if p.version != current_version:
+                update_version(p, current_version)
 
-        # needs_save aka created. Tracks if anything changed
-        (p, needs_save) = models.Plugin.objects.get_or_create(name=pname.strip(),   # Do not filter for active here
-                                                              # default values if created
-                                                              defaults={'version':version,
-                                                                        'path':full_path,
-                                                                        'date':datetime.datetime.now(),
-                                                                        'active':True,
-                                                                       }
-                                                             )
-        # update version in place - "upgraded"
-        if p.version != version:
-            p.version = version
-            p.date=datetime.datetime.now()
-            # p.autorun is kept from prior version
-            needs_save=True
+            # update paths in place
+            if p.path != full_path:
+                p.path = path
+                p.save()
 
-        # Note only version bump or change to config updates date field.
-        # Other changes keep original date.
-
-        # update path in place and set active - "reinstalled"
-        if p.path != full_path:
-            p.path = full_path
-            needs_save=True
-
-        # If the path exists, it is active.
-        if not p.active:
-            p.active=True
-            needs_save=True
-
-        # Refresh pluginconfig.json if needed
-        if set_pluginconfig (p, full_path, "pluginconfig.json"):
-            p.date=datetime.datetime.now() # a reconfigure bumps date to show user something changed
-            needs_save=True
-
-        if needs_save:
-            p.save()
-
+            if not p.config:
+                set_pluginconfig (p,
+                             path.join(basedir, pname),
+                             "pluginconfig.json")
     return None
 
 def purge_plugins(plugin_path):
@@ -1359,18 +1334,19 @@ def purge_plugins(plugin_path):
     has been deleted.  In any case, one cannot execute the plugin if the plugin
     folder has been removed.
     """
-    # get all *active* plugin records from table
-    plugins = models.Plugin.objects.filter(active=True).exclude(path='')
+    # get all plugin records from table
+    plugins = models.Plugin.objects.all().exclude(path='')
     # for each record, test for corresponding folder
-    for plugin in plugins:
-        # if specified folder does not exist
+    for plugin in plugins:    
+        # if folder does not exist
         if not os.path.isdir(plugin.path):
-            # Do not delete - foreign keys in PluginResults table
-            # Inactivate and leave dummy plugin record
-            plugin.active = False
-            # Leave autorun and selected flags in prior state for possible reactivation
-            plugin.path = ''
-            plugin.save()
+            ## FIXME - mark as inactive / missing / disabled
+            #plugin.autorun = False
+            #plugin.selected = False
+            #plugin.path = ''
+            #plugin.save()
+            # Remove plugin record
+            plugin.delete()
     return
 
 
@@ -1406,6 +1382,7 @@ def config_site_name(request, context, config):
     to do here is check whether we should update it, and if so, do so.
     """
     if request.method == "POST" and "site_name" in request.POST:
+        config = config.get(pk=1)
         config.site_name = request.POST["site_name"]
         config.save()
         context.update({"base_site_name": request.POST["site_name"]})
@@ -1415,7 +1392,7 @@ def global_config(request):
     """
     Renders the Config tab.
     """
-    globalconfig = models.GlobalConfig.objects.all().order_by('pk')[0]
+    globalconfig = models.GlobalConfig.objects.all().order_by('pk')
     ctx = template.RequestContext(request, {})
     # As the config page takes on more responsibility, things that need updating
     # can be updated from here:
@@ -1425,9 +1402,10 @@ def global_config(request):
     emails = models.EmailAddress.objects.all().order_by('pk')
     purge_plugins('/results/plugins')
     publishers.purge_publishers()
-    search_for_plugins(globalconfig, '/results/plugins')
-    publishers.search_for_publishers(globalconfig)
-    plugs = models.Plugin.objects.filter(active=True).order_by('pk')
+    for c in globalconfig:
+        search_for_plugins(c, c.plugin_folder)
+        publishers.search_for_publishers(c)
+    plugs = models.Plugin.objects.all().order_by('pk')
     pubs = models.Publisher.objects.all().order_by('name')
     ctx.update({"config":globalconfig,
                 "email":emails,
@@ -1453,6 +1431,21 @@ def how_are_you(request, host, port):
         status  = ":("
     return http.HttpResponse('{"feeling":"%s"}' % status,
                         mimetype='application/javascript')
+
+
+def fetch_remote_content(request, url):
+    """Perform an HTTP GET request on the given url and forward it's result.
+    This is specifically for remote requests which need to originate from this
+    server rather than from the client connecting to the torrent server.
+    """
+    try:
+        remote = urllib.urlopen(url)
+        data = remote.read()
+        remote.close()
+    except Exception as complaint:
+        logger.warn(complaint)
+        data = ""
+    return http.HttpResponse(data)
 
 
 def edit_email(request, pk):
@@ -1895,6 +1888,7 @@ def barcodeData(filename,metric=None):
                 else:
                     print sys.stderr, "Metric missing: ", metric
             else:
+                del row[""] ## Delete empty string (from trailing comma)
                 #return a list of dicts where each dict is one row
                 dictList.append(row)
     except (IOError, csv.Error) as e:
@@ -1951,7 +1945,7 @@ def plugin_iframe(request,pk):
 
     plugin = shortcuts.get_object_or_404(models.Plugin, pk=pk)
     #make json to send to the template
-    plugin_json = models.Plugin.objects.filter(pk=pk) ## needs to return queryset, use filter instead of get
+    plugin_json = models.Plugin.objects.filter(pk=pk)
     plugin_json = serializers.serialize("json", plugin_json)
     plugin_json = json.loads(plugin_json)[0]
     plugin_json = json.dumps(plugin_json)
@@ -2086,7 +2080,11 @@ def add_plans(request):
             os.unlink(destination.name)
             return http.HttpResponse(json.dumps({"status":"Error: Plan file is empty"}) , mimetype="text/html")
 
-        expectedHeader = ["planName","sample","project","cycles","runType","library","barcodeId","seqKitBarcode","autoAnalyze","preAnalysis","notes"]
+        expectedHeader = [ "planName", "sample", "project", "flows",
+                          "runType", "library", "barcodeId",
+                          "seqKitBarcode", "autoAnalyze", "preAnalysis",
+                          "bedfile", "regionfile", "notes"
+                         ]
 
         if sorted(firstCSV[0]) != sorted(expectedHeader):
             os.unlink(destination.name)
@@ -2117,7 +2115,7 @@ def add_plans(request):
                     value = toBoolean(value)
 
                 #don't save if the cycles is blank
-                if key == 'cycles' and value == '':
+                if key == 'flows' and value == '':
                     pass
                 else:
                     setattr(newPlan, key, value)
@@ -2206,6 +2204,31 @@ def edit_plan(request, id):
 
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_addeditplan.html",
+                                        context_instance=context)
+def edit_experiment(request, id):
+    """
+    Simple view to display the edit barcode page
+    """
+
+    #get the info to populate the page
+    runTypes, barcodes, references, bedFiles, hotspotFiles, seqKits, libKits, variantfrequencies = get_plan_data()
+
+    #get the existing plan
+    exp = shortcuts.get_object_or_404(models.Experiment,pk=id)
+
+
+    selectedReference = exp.library
+
+    ctxd = {"exp":exp,
+            "bedFiles":bedFiles, "hotspotFiles" : hotspotFiles,
+            "libKits": libKits, "seqKits" : seqKits,
+            "variantfrequencies": variantfrequencies,
+            "runTypes":runTypes, "barcodes" : barcodes,
+            "references" : references,
+            "selectedReference" : selectedReference }
+
+    context = template.RequestContext(request, ctxd)
+    return shortcuts.render_to_response("rundb/ion_editexp.html",
                                         context_instance=context)
 
 def exp_ack(request):

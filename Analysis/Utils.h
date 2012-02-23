@@ -57,7 +57,7 @@ char	*GetPGMFlowOrder (char *path);
 
 int seqToFlow(const char *seq, int seqLen, int *ionogram, int ionogramLen, char *flowOrder, int flowOrderLen);
 void flowToSeq(std::string &seq, hpLen_vec_t &hpLen, std::string &flowOrder);
-void GetChipDim(const char *type, int dims[2]);
+void GetChipDim(const char *type, int dims[2], const char *);
 std::string GetMemUsage();
 void MemoryUsage(const std::string &s);
 void MemUsage(const std::string &s);

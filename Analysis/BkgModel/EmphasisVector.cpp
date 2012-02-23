@@ -10,6 +10,8 @@ void EmphasisClass::Allocate(int tsize)
   npts = tsize;
   if (emphasis_vector_storage == NULL)
   {
+    my_frames_per_point = new int[npts];
+    my_frameNumber = new float[npts];
     emphasis_vector_storage = new float[npts*numEv];
     EmphasisVectorByHomopolymer = new float *[numEv];
     EmphasisScale = new float[numEv];
@@ -26,6 +28,10 @@ void EmphasisClass::Destroy()
   EmphasisVectorByHomopolymer=NULL;
   if (EmphasisScale!=NULL)
       delete[] EmphasisScale;
+  if (my_frames_per_point!=NULL)
+    delete[] my_frames_per_point;
+  if (my_frameNumber!=NULL)
+    delete[] my_frameNumber;
   EmphasisScale = NULL;
 }
 
@@ -57,48 +63,80 @@ EmphasisClass::EmphasisClass()
     emphasis_vector_storage=NULL;
     EmphasisVectorByHomopolymer=NULL;
     EmphasisScale = NULL;
+    
+    my_frames_per_point = NULL;
+    my_frameNumber = NULL;
     DefaultValues();
 }
 
-// prepare to export the default math as a separate routine
-// so that Rcpp can wrap it and we see what we expect to see
+int RescaleVector(float *vect, int npts)
+{
+  float scale = 0.0;
+  for (int i=0; i<npts; i++)
+  {
+      if (vect[i] < 0.0) vect[i] = 0.0;
+      scale += vect[i];
+  }
+  for (int i=0;i < npts;i++)   // actual data
+      vect[i] *= (float) npts/scale;
+  return(npts);
+}
 
-int GenerateIndividualEmphasis(float *vect, int vn, float *emp, int tsize, float t_center, int *frames_per_point, float *frameNumber, float amult,float width, float ampl)
+// just a gaussian
+int GenerateBlankEmphasis(float *vect, float *emp, int tsize, float t_center, int *frames_per_point, float *frameNumber)
 {
     int npts = tsize;
-    float scale = 0.0;
+
+    for (int i=0;i < npts;i++)   // emphasis for actual data
+    {
+      float deltat = frameNumber[i]-t_center;
+      float EmphasisOffsetC = (deltat-emp[6]) /emp[7];
+      vect[i] = frames_per_point[i];
+      vect[i] *= exp(-EmphasisOffsetC*EmphasisOffsetC);
+    }
+
+    RescaleVector(vect, tsize);
+    return(npts);
+}
+
+// unusually fancy "square wave"
+int GenerateStratifiedEmphasis(float *vect, int vn, float *emp, int tsize, float t_center, int *frames_per_point, float *frameNumber, float width, float ampl)
+{
+   int npts = tsize;
     float na = emp[0]+vn*emp[1];
     float nb = emp[2]+vn*emp[3];
     float db = emp[4]+vn*emp[5];
 
     for (int i=0;i < npts;i++)   // emphasis for actual data
     {
-      vect[i] = frames_per_point[i];
       float deltat = frameNumber[i]-t_center;
-      if (amult*ampl > 0.0)
-      {
-        float EmphasisOffsetA  = (deltat-na) /width;
+
+        vect[i] = frames_per_point[i];
         float EmphasisOffsetB = (deltat-nb) / (width*db);
+        float tmp_val= ampl*exp(-EmphasisOffsetB*EmphasisOffsetB);
+        
+        float EmphasisOffsetA  = (deltat-na) /width;
         if ((EmphasisOffsetA < 0.0) && (deltat >= -3.0)) // note: technically incompatible with spline nuc rise
-          vect[i] *= ampl*amult*exp(-EmphasisOffsetB*EmphasisOffsetB);
+          vect[i] *= tmp_val;
         else if (EmphasisOffsetA >= 0.0)
-          vect[i] *= ampl*amult*exp(-EmphasisOffsetA*EmphasisOffsetA) *exp(-EmphasisOffsetB*EmphasisOffsetB);
-      }
-      else
-      {
-        float EmphasisOffsetC = (deltat-emp[6]) /emp[7];
-        vect[i] *= exp(-EmphasisOffsetC*EmphasisOffsetC);
-      }
-
-      if (vect[i] < 0.0) vect[i] = 0.0;
-
-      scale += vect[i];
+          vect[i] *= tmp_val*exp(-EmphasisOffsetA*EmphasisOffsetA);
     }
 
-    for (int i=0;i < npts;i++)   // actual data
-      vect[i] *= (float) npts/scale;
-    
+    RescaleVector(vect,npts);
     return(npts);
+}
+
+
+// prepare to export the default math as a separate routine
+// so that Rcpp can wrap it and we see what we expect to see
+
+int GenerateIndividualEmphasis(float *vect, int vn, float *emp, int tsize, float t_center, int *frames_per_point, float *frameNumber, float amult,float width, float ampl)
+{ 
+    float a_control =amult*ampl;
+    if (a_control>0.0)
+      return(GenerateStratifiedEmphasis(vect,vn,emp,tsize,t_center,frames_per_point,frameNumber,width,a_control));
+    else
+      return(GenerateBlankEmphasis(vect,emp,tsize,t_center,frames_per_point,frameNumber));
 }
 
 
@@ -110,8 +148,29 @@ void EmphasisClass::GenerateEmphasis(int tsize, float t_center, int *frames_per_
   for (int vn = 0;vn < numEv;vn++)
   {
     float *vect = EmphasisVectorByHomopolymer[vn] = &emphasis_vector_storage[npts*vn];
+      EmphasisScale[vn] = GenerateIndividualEmphasis(vect, vn, emp, npts,t_center,frames_per_point,frameNumber, amult,width,ampl); // actual data 
+  }
+}
 
-    EmphasisScale[vn] = GenerateIndividualEmphasis(vect, vn, emp, tsize,t_center,frames_per_point,frameNumber, amult,width,ampl); // actual data
+void EmphasisClass::SetupEmphasisTiming(int _npts, int *frames_per_point, float *frameNumber)
+{
+      Allocate(_npts);
+      for (int i=0; i<npts; i++)
+      {
+        my_frames_per_point[i] = frames_per_point[i];
+        my_frameNumber[i] = frameNumber[i];
+      }
+}
+
+// assume we know global timing and width values already
+// note if change time compression,need to resynch this function
+void EmphasisClass::CurrentEmphasis(float t_center, float amult)
+{
+  for (int vn = 0;vn < numEv;vn++)
+  {
+    float *vect = EmphasisVectorByHomopolymer[vn] = &emphasis_vector_storage[npts*vn];
+
+    EmphasisScale[vn] = GenerateIndividualEmphasis(vect, vn, emp, npts,t_center,my_frames_per_point,my_frameNumber, amult,emphasis_width,emphasis_ampl); // actual data
   }
 }
 
@@ -136,4 +195,23 @@ void EmphasisClass::CustomEmphasis(float *evect, float evSel)
     for (int i=0; i<npts; i++)
       evect[i] = * (EmphasisVectorByHomopolymer[numEv-1]+i);
   }
+}
+
+int EmphasisClass::ReportUnusedPoints(float threshold, int min_used)
+{
+  int point_used[npts];
+
+  for (int i=0; i<npts; i++)
+    point_used[i] = 0;
+  for (int vn=0; vn<numEv; vn++)
+  {
+    for (int i=0; i<npts; i++)
+      if (EmphasisVectorByHomopolymer[vn][i]>threshold)
+        point_used[i]++;
+  }
+  int workable;
+  for (workable=npts; workable>0; workable--)
+    if (point_used[workable-1]>=min_used) // how many lengths need to use a point
+      break;
+  return(workable); // stop after finding a used point
 }

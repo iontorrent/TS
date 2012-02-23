@@ -33,10 +33,14 @@ class LevMarBeadAssistant{
     
     // data used in fitting algorithm by bead
     float   *lambda;
+   float   lambda_max;
+    float   lambda_escape;
+
+    // residuals
     float   *residual;
     float   avg_resid;
-    float   lambda_max;
-    float   lambda_escape;
+    int res_state;
+    int avg_resid_state;
     
     // I may regret this, but let's try lev-mar region state here in addition
         // data used in fitting algorithm by region
@@ -74,6 +78,9 @@ class LevMarBeadAssistant{
     bool IncreaseBeadLambda(int ibd);
     void IncrementRegionGroup();
     bool ValidBeadGroup(int ibd);
+    bool WellBehavedBead(int ibd);
+    int CountHappyBeads();
+    void ReAssignBeadsToRegionGroups(int num_beads_per_group);
 };
 
 

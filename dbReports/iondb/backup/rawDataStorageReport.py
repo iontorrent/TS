@@ -22,7 +22,7 @@ def server_and_location(experiment):
 
 def disk_space(path):
     '''
-    Returns used and available disk capacity in kilobytes
+    Returns used and available disk capacity in gigabytes
     '''
     import commands
     total = commands.getstatusoutput("df -k %s 2>/dev/null" % path)
@@ -35,6 +35,10 @@ def disk_space(path):
     #print "---------"
     #print str(kbytes) + " KBytes"
     #print str(int(kbytes) / 1024 / 1024) + " GB"
+    
+    # Return gigabytes instead
+    used = used / 1024 / 1024
+    available = available / 1024 / 1024
     
     return used, available
 
@@ -62,6 +66,9 @@ def used_disk_space(path):
     #print "---------"
     #print str(kbytes) + " KBytes"
     #print str(int(kbytes) / 1024 / 1024) + " GB"
+    
+    # Return gigabytes instead
+    kbytes = kbytes / 1024 / 1024
     
     return kbytes
 
@@ -202,9 +209,9 @@ def file_server_storage_report(exps):
         #print "Disk Usage by Datasets:      %12d KBytes" % uds_rawdata
         #print "Disk Usage by Reports :      %12d KBytes" % uds_reports
         #print "Disk Usage by Other   :      %12d KBytes" % uds_other
-        report.append("Total Disk Space         :      %12d KBytes\n" % tds)
-        report.append("Used Disk Space          :      %12d KBytes %.1f%%\n" % (uds, percentuds))
-        report.append("Free Disk Space          :      %12d KBytes %.1f%%\n" % (fds, percentfds))
+        report.append("Total Disk Space         :      %6d GBytes\n" % tds)
+        report.append("Used Disk Space          :      %6d GBytes %.1f%%\n" % (uds, percentuds))
+        report.append("Free Disk Space          :      %6d GBytes %.1f%%\n" % (fds, percentfds))
         report.append("\n")
     return report
 

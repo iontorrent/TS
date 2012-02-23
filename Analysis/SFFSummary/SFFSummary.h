@@ -34,6 +34,7 @@ class SFFSummary {
     void phredToErr(vector <uint16_t> &qScore, vector <double> &errorRate);
     void summaryStatInit();
     void summaryStatUpdate(vector <uint16_t> qScore, string rName);
+    void AddElementSNR (uint16_t *corValues, const string& flowOrder);
 
 
     // variables describing what we aim to collect
@@ -57,6 +58,14 @@ class SFFSummary {
     vector < string >                                  readName;            // Read names
     vector < vector < unsigned int > >                 perReadQualLength;   // Read length at a given qual threshold
     vector < unsigned int >                            perReadLength;       // Untrimmed read length
+
+    // variables used in key SNR calculation
+    int count;
+    double zeromerFirstMoment[8];
+    double zeromerSecondMoment[8];
+    double onemerFirstMoment[8];
+    double onemerSecondMoment[8];
+
 };
 
 #endif // SFFSUMMARY_H

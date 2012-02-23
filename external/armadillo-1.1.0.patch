@@ -1,0 +1,75 @@
+--- a/include/armadillo_bits/config.hpp	2010-10-14 00:16:44.000000000 -0400
++++ b/include/armadillo_bits/config.hpp	2011-12-05 19:21:53.751894618 -0500
+@@ -13,11 +13,11 @@
+ 
+ 
+ #if !defined(ARMA_USE_LAPACK)
+-// #define ARMA_USE_LAPACK
++#define ARMA_USE_LAPACK
+ #endif
+ 
+ #if !defined(ARMA_USE_BLAS)
+-// #define ARMA_USE_BLAS
++#define ARMA_USE_BLAS
+ #endif
+ 
+ // #define ARMA_BLAS_LONG
+@@ -27,25 +27,25 @@
+ // uncomment the above line if your BLAS and LAPACK libraries use "long long" instead of "int"
+ 
+ #define ARMA_BLAS_UNDERSCORE
+-// uncomment the above line if your BLAS and LAPACK libraries have function names with a trailing underscore;
++// uncomment the above line if your BLAS and LAPACK libraries have function names with a trailing underscore
+ // conversely, comment it out if the function names don't have a trailing underscore
+ 
+-// #define ARMA_USE_ATLAS
+-// #define ARMA_ATLAS_INCLUDE_DIR /usr/include/
++#define ARMA_USE_ATLAS
++#define ARMA_ATLAS_INCLUDE_DIR /usr/include/
+ //// If you're using ATLAS and the compiler can't find cblas.h and/or clapack.h
+ //// uncomment the above define and specify the appropriate include directory.
+ //// Make sure the directory has a trailing /
+ 
+-// #define ARMA_USE_BOOST
+-// #define ARMA_USE_BOOST_DATE
++/* #undef ARMA_USE_BOOST */
++/* #undef ARMA_USE_BOOST_DATE */
+ 
+-// #define ARMA_HAVE_STD_ISFINITE
+-// #define ARMA_HAVE_STD_ISINF
+-// #define ARMA_HAVE_STD_ISNAN
+-// #define ARMA_HAVE_STD_SNPRINTF
++#define ARMA_HAVE_STD_ISFINITE
++#define ARMA_HAVE_STD_ISINF
++#define ARMA_HAVE_STD_ISNAN
++#define ARMA_HAVE_STD_SNPRINTF
+ 
+-// #define ARMA_HAVE_LOG1P
+-// #define ARMA_HAVE_GETTIMEOFDAY
++#define ARMA_HAVE_LOG1P
++#define ARMA_HAVE_GETTIMEOFDAY
+ 
+-// #define ARMA_EXTRA_DEBUG
+-// #define ARMA_NO_DEBUG
++/* #undef ARMA_EXTRA_DEBUG */
++/* #undef ARMA_NO_DEBUG */
+--- a/include/armadillo_bits/fn_norm.hpp	2010-10-27 20:12:49.000000000 -0400
++++ b/include/armadillo_bits/fn_norm.hpp	2011-12-05 19:15:12.001944480 -0500
+@@ -351,6 +351,7 @@
+         return T(0);
+       }
+     }
++  return T(0);
+   }
+ 
+ 
+--- a/include/armadillo_bits/unwrap.hpp	2010-11-26 01:29:15.000000000 -0500
++++ b/include/armadillo_bits/unwrap.hpp	2011-12-05 19:15:12.081945665 -0500
+@@ -1181,6 +1181,7 @@
+     , M       (A.m)
+     {
+     arma_extra_debug_sigprint();
++    arma_ignore(B);
+     }
+   
+   inline

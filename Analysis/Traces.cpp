@@ -494,7 +494,7 @@ void Traces::T0DcOffset(int t0Minus, int t0Plus) {
 }
 
 bool Traces::FillCriticalFrames() {
-  size_t nFrames = 50;
+  size_t nFrames = min((size_t)50, mFrames);
   size_t size = mIndexes.size();
   vector<int64_t> idxOut(mIndexes.size(), -1);
   int count = 0;
@@ -503,7 +503,6 @@ bool Traces::FillCriticalFrames() {
     if (mIndexes[i] >= 0) {
       count++;
     }
-    
   }
   int numWarn = 0;
   // Allocate memory and loop through creating smaller footprint

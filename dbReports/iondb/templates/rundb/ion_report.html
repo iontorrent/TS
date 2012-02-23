@@ -173,6 +173,10 @@
         <td>{{r.qualitymetrics_set.values.0.q17_bases|floatformat:0|intcomma}}</td>
 
         {# 100 bp AQQ17 bases #}
+        {% ifequal lm.align_sample 2 %}
+            <td>{{lm.i100Q17_reads|intcomma}}</td>
+        {% endifequal %}
+
         {% ifequal lm.align_sample 1 %}
             <td>{{lm.extrapolated_100q17_reads|intcomma}}</td>
         {% endifequal %}
@@ -182,12 +186,18 @@
         {% endifequal %}
 
         {% ifnotequal lm.align_sample 0 %}
-	        {% ifnotequal lm.align_sample 1 %}
-	            <td></td>
-	        {% endifnotequal %}
+                {% ifnotequal lm.align_sample 1 %}
+                        {% ifnotequal lm.align_sample 2 %}
+	     	        <td></td>
+                        {% endifnotequal %}
+                {% endifnotequal %}
         {% endifnotequal %}
 
         {# AQQ17 bases #}
+        {% ifequal lm.align_sample 2 %}
+            <td>{{lm.q17_mapped_bases|intcomma}}</td>
+        {% endifequal %}
+
         {% ifequal lm.align_sample 1 %}
             <td>{{lm.extrapolated_mapped_bases_in_q17_alignments|intcomma}}</td>
         {% endifequal %}
@@ -197,9 +207,11 @@
         {% endifequal %}
 
         {% ifnotequal lm.align_sample 0 %}
-	        {% ifnotequal lm.align_sample 1 %}
-	            <td></td>
-	        {% endifnotequal %}
+                {% ifnotequal lm.align_sample 1 %}
+                        {% ifnotequal lm.align_sample 2 %}
+                        <td></td>
+                        {% endifnotequal %}
+                {% endifnotequal %}
         {% endifnotequal %}
 
         <td>{{r.timeStamp|date:"M d Y"}}</td>

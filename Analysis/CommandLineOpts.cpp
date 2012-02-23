@@ -29,10 +29,18 @@ void CommandLineOpts::PrintHelp() {
     exit (EXIT_FAILURE);
 }
 
-void CommandLineOpts::DefaultBkgModelControl()
+void ModuleControlOpts::DefaultControl()
 {
-     USE_BKGMODEL = 1;
-   bkg_model_emphasis_width = 32.0;
+    USE_BKGMODEL = 1;
+    BEADFIND_ONLY = false;
+    USE_RAWWELLS = 0;
+    WELLS_FILE_ONLY = false;	// when true, stop procesing at 1.wells file
+}
+
+void BkgModelControlOpts::DefaultBkgModelControl()
+{
+  bkgModelHdf5Debug = 0;
+    bkg_model_emphasis_width = 32.0;
     bkg_model_emphasis_amplitude = 4.0;
     dntp_uM = 50.0;
     AmplLowerLimit = 0.001;
@@ -47,6 +55,8 @@ void CommandLineOpts::DefaultBkgModelControl()
         kmax[i] = -1.0;
     }
     no_rdr_fit_first_20_flows = 0;
+    var_kmult_only = 0;
+    generic_test_flag = 0;
     BkgTraceDebugRegions.clear();
     bkgDebugParam = 0;
     enableXtalkCorrection = true;
@@ -57,74 +67,41 @@ void CommandLineOpts::DefaultBkgModelControl()
     vectorize = 1;
     gpuWorkLoad = 1.0;
     numGpuThreads = 2;
-    numCpuThreads = numCores();
+    numCpuThreads = 0;
     readaheadDat = 0;
+    saveWellsFrequency = 3;
+    filterBubbles = 0;
+    // diagnostics
+    debug_bead_only = 1;  // only debug bead
 }
 
-void CommandLineOpts::DefaultCAFIEControl()
+void CafieControlOpts::DefaultCAFIEControl()
 {
-     NormalizeZeros = false; // if USE_BKGMODEL true
     singleCoreCafie = false;
-    //bool tryAllReads = true; // this determines what TF's we track to determine cf/ie/dr - normally would be set to false but TF's with lib key are being handled right now - risk that we include non-TF's as part of the cf/ie/dr calcs
-    tryAllReads = false; // this determines what TF's we track to determine cf/ie/dr - normally would be set to false but TF's with lib key are being handled right now - risk that we include non-TF's as part of the cf/ie/dr calcs
-     minTFScore = 0.85; // if we can't score this TF with 85% confidence, its unknown
-   minTFFlows = 36; // 8 flows for key, plus at least one more cycle, or we ignore this TF
     libPhaseEstimator = "nel-mead-treephaser";
 //    libPhaseEstimator = "nel-mead-adaptive-treephaser";
-    TF_CAFIE_CORRECTION = 1;
-    TFoverride = NULL;
     cfiedrRegionsX = 13, cfiedrRegionsY = 12;
     cfiedrRegionSizeX = 0, cfiedrRegionSizeY = 0;
     blockSizeX = 0, blockSizeY = 0;
-    cafieFlowMax = 80; // reasonable number of flows to fit while staying out of the adapter area on TF's A, B, C, D
-    minTFCount = 1000;
     LibcfOverride = 0.0;
     LibieOverride = 0.0;
     LibdrOverride = 0.0;
-    TFcfOverride = 0.0;
-    TFieOverride = 0.0;
-    TFdrOverride = 0.0;
-    initial_cf = 0.008;
-    initial_ie = 0.008;
-    initial_dr = 0.000;
-    libKey = strdup ("TCAG");
-    tfKey = strdup ("ATCG");
-    dotFixDebug = false;
     basecaller = "treephaser-swan";
-    regionCafieDebugFile=NULL;
-    wantDotFixes = true;
     doCafieResidual = 0;
-    skiptfbasecalling = 0;
-    alternateTFMode = 0; // MGD hack - needs to be 0 for default processing!
-    numCFIEDRFitPasses = 1;
-    useCafieHPIgnoreList = false; // defaults to false - just ignore all HP's when estimating, gets set to true when hp ignore list passed in
-    cafieHPIgnoreList = NULL; // list of HP's to ignore
-    numCafieHPIgnoreList = 0;
-    cafieFitIgnoreLowQual = false; // set to true to enable the CFIEDRFit code to ignore low quality ideal vector base calls
-    perFlowScale = false;
-    perFlowScaleFile = NULL;
-    perFlowScaleVal.resize(0);
-    numFlowsToFitCafie1 = 60; // num flows to cafie fit pass 1
-    numFlowsIncrement = 20; // multiple pass increment
-    cfiedrKeepPercent = 0.8; // default of 1.0 is mean, removal of outliers = 0.6;
     numCafieSolveFlows = 0;
-    droopMode = strdup ("estimate");
-    hpScaleFactor = 1.0;
-    SCALED_SOLVE2 = 1;
-    NONLINEAR_HP_SCALE = 0;
-    usePass1Droop = false; // when set to true, we calculate droop as an independent param estimate, then just solve cf & ie
-    wantPerWellCafie = 0;
+    // Options related to doing basecalling on just a subset of wells
+    basecallSubsetFile = NULL;
 }
 
-void CommandLineOpts::DefaultBeadfindControl()
+void BeadfindControlOpts::DefaultBeadfindControl()
 {
-    maxNumKeyFlows = 0;
-    minNumKeyFlows = 99;
+    //maxNumKeyFlows = 0;
+    //minNumKeyFlows = 99;
     bfMinLiveRatio = .0001;
-    bfMinLiveLibSnr = 3.5;
-    bfTfFilterQuantile = 1.25;
-    bfLibFilterQuantile = .5;
-    bfUseProj = 1;
+    bfMinLiveLibSnr = 4;
+    bfMinLiveTfSnr = 4;
+    bfTfFilterQuantile = 1;
+    bfLibFilterQuantile = 1;
     skipBeadfindSdRecover = 0;
     beadfindThumbnail = 0;
     beadfindLagOneFilt = 0;
@@ -132,31 +109,24 @@ void CommandLineOpts::DefaultBeadfindControl()
     maskFileCategorized = 0;
     sprintf (bfFileBase, "beadfind_post_0003.dat");
     sprintf (preRunbfFileBase, "beadfind_pre_0003.dat");
-    BEADFIND_ONLY = false;
+    BF_ADVANCED = true;
+    SINGLEBF = true;
     noduds = 0;
     beadfindType = "differential";
 }
 
-void CommandLineOpts::DefaultFilterControl()
+void FilterControlOpts::DefaultFilterControl()
 {
     nUnfilteredLib = 100000;
     unfilteredLibDir = strdup("unfiltered");
     beadSummaryFile = strdup("beadSummary.unfiltered.txt");
-     KEYPASSFILTER = true;
-   // Options related to filtering reads by percentage of positive flows
+    KEYPASSFILTER = true;
+    
+    minReadLength = 8;
+    // Options related to filtering reads by percentage of positive flows
     percentPositiveFlowsFilterTraining = 0;  // Should the ppf filter be used when initially estimating CAFIE params?
     percentPositiveFlowsFilterCalling = 1;   // Should the ppf filter be used when writing the SFF?
     percentPositiveFlowsFilterTFs = 0;       // If the ppf filter is on, should it be applied to TFs?
-    percentPositiveFlowsMaxFlow = 60;
-    percentPositiveFlowsMinFlow = 0;
-    percentPositiveFlowsMaxValue = 0.6;
-    percentPositiveFlowsMaxValueOverride = false;
-    percentPositiveFlowsMaxValueByFlowOrder[string("TACG")] = 0.60;  // regular flow order
-    percentPositiveFlowsMaxValueByFlowOrder[string("TACGTACGTCTGAGCATCGATCGATGTACAGC")] = 0.60;  // xdb flow order
-    percentPositiveFlowsMinValue = 0.4;
-    percentPositiveFlowsMinValueOverride = false;
-    percentPositiveFlowsMinValueByFlowOrder[string("TACG")] = 0.40;  // regular flow order
-    percentPositiveFlowsMinValueByFlowOrder[string("TACGTACGTCTGAGCATCGATCGATGTACAGC")] = 0.30;  // xdb flow order
     // Options related to filtering reads by putative clonality
     clonalFilterTraining = 0;  // Should the clonality filter be used when initially estimating CAFIE params?
     clonalFilterSolving  = 1;  // Should the clonality filter be used when solving library reads?
@@ -172,45 +142,26 @@ void CommandLineOpts::DefaultFilterControl()
     cafieResMaxValueByFlowOrder[string("TACGTACGTCTGAGCATCGATCGATGTACAGC")] = 0.08;  // xdb flow order
 }
 
-void CommandLineOpts::DefaultWellControl()
+void SystemContext::DefaultSystemContext()
 {
-    sprintf (wellsFileName, "1.wells");
+     dat_source_directory = NULL;
+    wells_output_directory = NULL;
+    basecaller_output_directory = NULL;
+    
+    strcpy (runId, "");
+    
+   sprintf (wellsFileName, "1.wells");
     strcpy (tmpWellsFile, "");
     LOCAL_WELLS_FILE = true;
     strcpy (wellsFilePath, "");
     wellStatFile=NULL;
     wellsFormat = "hdf5";
+    NO_SUBDIR = 0;  // when set to true, no experiment subdirectory is created for output files.
 }
 
-CommandLineOpts::CommandLineOpts(int argc, char *argv[])
+void SpatialContext::DefaultSpatialContext()
 {
-    //Constructor
-    if (argc == 1) {
-        PrintHelp();
-    }
-    /*---   options variables       ---*/
-    dirExt = NULL;
-    sprintf (dirOut, "./");
-    OUTPUTDIR_OVERRIDE = NULL;
-
-    DefaultCAFIEControl();
-    DefaultBkgModelControl();
-    DefaultBeadfindControl();
-    DefaultFilterControl();
-    DefaultWellControl();
-    
     numRegions = 0;
-    sequenceAllLib = 0;
-    minReadLength = 8;
-    lowerIntegralBound = 0;    // Frame 15...(used to be 20, Added a little more at the start for bkgModel)
-    upperIntegralBound = 3049;    // Frame 60
-    minPeakThreshold = 20;
-    maxFrames = 0;    // Set later from the first raw image header.
-    totalFrames = 0;
-    sPtr = NULL;
-   NUC_TRACE_CORRECT = 0;
-    NO_SUBDIR = 0;  // when set to true, no experiment subdirectory is created for output files.
-    // int     minSeqBases = 14; // if TF doesn't have this many bases, its ignored
     /* enables sub chip analysis */
     chipRegion.row=0;
     chipRegion.col=0;
@@ -224,33 +175,6 @@ CommandLineOpts::CommandLineOpts(int argc, char *argv[])
     regionYSize = 50;
     cropRegions = NULL;
     numCropRegions = 0;
-    USE_RAWWELLS = 0;
-    flowTimeOffset = 1000;
-    strcpy (runId, "");
-    NNinnerx = 1;
-    NNinnery = 1;
-    NNouterx = 12;
-    NNoutery = 8;
-    flowOrder = strdup ("TACG");
-    numFlowsPerCycle = strlen (flowOrder);
-    flowOrderOverride = false;
-    neighborSubtract = 0;
-    numGroupsPerRegion = 1;
-    SINGLEBF = true;
-    USE_PINNED = false;
-    BF_ADVANCED = true;
-    flowOrderIndex = NULL;
-    hilowPixFilter = 0;   // default is disabled
-    ignoreChecksumErrors = 0;
-    // Options related to doing basecalling on just a subset of wells
-    basecallSubsetFile = NULL;
-    // Options related to per-flow scaling
-    flowLimitSet = 0;
-
-    filterBubbles = 0;
-    outputPinnedWells = 0;
-
-    
     // some raw image processing (like cross talk correction in the Image class) needs the absolute coordinates of the
     // pixels in the image.  This is easy for a standard data set, but for a cropped data set the origin of the data is
     // unknown.  These allow the user to specify the location of the cropped region so that these parts of analysis
@@ -263,6 +187,81 @@ CommandLineOpts::CommandLineOpts(int argc, char *argv[])
     chip_offset_y = -1;
     chip_len_x = 0;
     chip_len_y = 0;
+}
+
+void ImageControlOpts::DefaultImageOpts(){
+    maxFrames = 0;    // Set later from the first raw image header.
+    totalFrames = 0;
+    NNinnerx = 1;
+    NNinnery = 1;
+    NNouterx = 12;
+    NNoutery = 8;
+    ignoreChecksumErrors = 0;
+    hilowPixFilter = 0;   // default is disabled
+    flowTimeOffset = 1000;
+
+    // image diagnostics
+    outputPinnedWells = 0;
+}
+
+void KeyContext::DefaultKeys()
+{
+    libKey = strdup ("TCAG");
+    tfKey = strdup ("ATCG");
+    minNumKeyFlows = 99;
+    maxNumKeyFlows = 0;
+}
+
+void FlowContext::DefaultFlowFormula()
+{
+    flowOrder = strdup ("TACG");
+    numFlowsPerCycle = strlen (flowOrder);
+    flowOrderOverride = false;
+    flowOrderIndex = NULL;
+    numTotalFlows = 0;
+   flowLimitSet = 0;
+}
+
+void ObsoleteOpts::Defaults()
+{
+    NUC_TRACE_CORRECT = 0;
+    USE_PINNED = false;
+    lowerIntegralBound = 0;    // Frame 15...(used to be 20, Added a little more at the start for bkgModel)
+    upperIntegralBound = 3049;    // Frame 60
+    minPeakThreshold = 20;
+    neighborSubtract = 0;
+}
+
+
+CommandLineOpts::CommandLineOpts(int argc, char *argv[])
+{
+    //Constructor
+    if (argc == 1) {
+        PrintHelp();
+    }
+    // helper pointer for loading options
+    sPtr = NULL;
+    /*---   options variables       ---*/
+
+    // overall program flow control what to do?
+    mod_control.DefaultControl();
+    
+    // controls for individual modules - how we are to analyze
+    cfe_control.DefaultCAFIEControl();
+    bkg_control.DefaultBkgModelControl();
+    bfd_control.DefaultBeadfindControl();
+    flt_control.DefaultFilterControl();
+    img_control.DefaultImageOpts();
+
+    // obsolete
+    no_control.Defaults();
+
+    // contexts for program operation - what the state of the world is
+    sys_context.DefaultSystemContext();
+    loc_context.DefaultSpatialContext();
+    flow_context.DefaultFlowFormula();
+    key_context.DefaultKeys();
+
 
     /*---   end options variables   ---*/
 
@@ -276,49 +275,65 @@ CommandLineOpts::CommandLineOpts(int argc, char *argv[])
         argvCopy[i] = strdup (argv[i]);
     GetOpts (argc, argv);
 
-    if (OUTPUTDIR_OVERRIDE) {
-        experimentName = strdup (OUTPUTDIR_OVERRIDE);
-    } else {
-        if (NO_SUBDIR) {
-            experimentName = (char *) malloc (3);
-            strcpy (experimentName, "./");
-        } else {
-            experimentName = experimentDir (dirExt, dirOut);    // subDir is created with this name
-        }
-    }
+}
+
+FilterControlOpts::~FilterControlOpts()
+{
+    if (unfilteredLibDir)
+        free (unfilteredLibDir);
+    if (beadSummaryFile)
+        free (beadSummaryFile);
+}
+
+SystemContext::~SystemContext()
+{
+    if (experimentName)
+        free (experimentName);
+    if (wells_output_directory)
+        free (wells_output_directory);
+    if (dat_source_directory)
+        free (dat_source_directory);
+    if (basecaller_output_directory)
+        free (basecaller_output_directory);
+}
+
+CafieControlOpts::~CafieControlOpts()
+{
+
+    if (basecallSubsetFile)
+        free(basecallSubsetFile);
+}
+
+KeyContext::~KeyContext()
+{
+    if (libKey)
+        free (libKey);
+    if (tfKey)
+        free (tfKey);
+}
+
+BeadfindControlOpts::~BeadfindControlOpts()
+{
+    if (beadMaskFile)
+        free (beadMaskFile);
+}
+
+FlowContext::~FlowContext()
+{
+    if (flowOrder)
+        free (flowOrder);
+}
+
+SpatialContext::~SpatialContext()
+{
+    if (cropRegions)
+        free(cropRegions);
 }
 
 CommandLineOpts::~CommandLineOpts()
 {
     //Destructor
-    if (experimentName)
-        free (experimentName);
-    if (OUTPUTDIR_OVERRIDE)
-        free (OUTPUTDIR_OVERRIDE);
-    if (unfilteredLibDir)
-        free (unfilteredLibDir);
-    if (beadSummaryFile)
-        free (beadSummaryFile);
-    if (dirExt)
-        free (dirExt);
-    if (beadMaskFile)
-        free (beadMaskFile);
-    if (libKey)
-        free (libKey);
-    if (tfKey)
-        free (tfKey);
-    if (flowOrder)
-        free (flowOrder);
-    if (basecallSubsetFile)
-        free(basecallSubsetFile);
-    if (perFlowScaleFile)
-        free(perFlowScaleFile);
-    if (droopMode)
-        free (droopMode);
-    if (cropRegions)
-        free(cropRegions);
-    if (cafieHPIgnoreList)
-        delete [] cafieHPIgnoreList;
+
 }
 
 /*
@@ -335,11 +350,14 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
     int c;
     long input;
     int option_index = 0;
+    
+    //@TODO this structure needs sorting or replacing badly!!!
+    
     static struct option long_options[] =
     {
-        {"no-subdir",               no_argument,        &NO_SUBDIR,         1},
-        {"output-dir",        required_argument,  NULL,       0},
-        {"TF",                      required_argument,  NULL,               0},
+        {"no-subdir",               no_argument,        &sys_context.NO_SUBDIR,         1},
+        {"output-dir",     required_argument,  NULL,       0},
+        {"basecaller-output-dir",   required_argument,  NULL,       0},
         {"beadfindFile",            required_argument,  NULL,               'b'},
         {"beadfindfile",            required_argument,  NULL,               'b'},
         {"cycles",                  required_argument,  NULL,               'c'}, //Deprecated; use flowlimit
@@ -349,14 +367,10 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         {"keypass-filter",          required_argument,  NULL,               'k'},
         {"peak-threshold",          required_argument,  NULL,               'p'},
         {"version",                 no_argument,        NULL,               'v'},
-        {"nuc-correct",             no_argument,        &NUC_TRACE_CORRECT, 1},
+        {"nuc-correct",             no_argument,        &no_control.NUC_TRACE_CORRECT, 1},
         {"basecallSubsetFile",      required_argument,  NULL,   0},
-        {"per-flow-scale-file",     required_argument,  NULL,   0},
         {"phred-score-version",     required_argument,  NULL,   0},
         {"phred-table-file",        required_argument,  NULL,       0},
-        {"nuc-mults",               required_argument,  NULL,       0},
-        {"scaled-solve2",           required_argument,  NULL,       0},
-        {"sequence-all-lib",        required_argument,  NULL,       0},
         {"min-read-length",         required_argument,        NULL,                         0},
         {"cr-filter-train",                          required_argument,        NULL,                                0},
         {"cr-filter",                                required_argument,        NULL,                                0},
@@ -368,42 +382,17 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         {"ppf-filter-train",                         required_argument,        NULL,                                0},
         {"ppf-filter",                               required_argument,        NULL,                                0},
         {"ppf-filter-tf",                            required_argument,        NULL,                                0},
-        {"percent-positive-flow-filter-max-flow",    required_argument,        NULL,                          0},
-        {"percent-positive-flow-filter-min-flow",    required_argument,        NULL,                          0},
-        {"percent-positive-flow-filter-max-value",   required_argument,        NULL,                          0},
-        {"percent-positive-flow-filter-min-value",   required_argument,        NULL,                          0},
         {"clonal-filter-train",                      required_argument,        NULL,                            0},
         {"clonal-filter-solve",                      required_argument,        NULL,                            0},
-        {"cafie-lowqualfilter",      required_argument,  NULL,            0},
-        {"nonlinear-hp-scale",      required_argument,  NULL,           0},
         {"cfiedr-regions",          required_argument,  NULL,               'R'},
         {"cfiedr-regions-size",     required_argument,  NULL,               'S'},
         {"block-size",              required_argument,  NULL,               'U'},
-        {"region-cafie-auto",       no_argument,        NULL,               'A'},
-        {"region-cafie-tf",         no_argument,        NULL,               'T'},
-        {"Separate-Droop",          no_argument,        NULL,               'D'},
-        {"separate-droop",          no_argument,        NULL,               'D'},
-        {"Per-Num-Norm",            no_argument,        NULL,               'N'},
-        {"per-num-norm",            no_argument,        NULL,               'N'},
         {"region-size",             required_argument,  NULL,             0},
-        {"minTF",                   required_argument,  NULL,             0},
-        {"mintf",                   required_argument,  NULL,             0},
-        {"numGroupsPerRegion",      required_argument,  NULL,             0},
-        {"numgroupsperregion",      required_argument,  NULL,             0},
-        {"minTFFlows",              required_argument,  NULL,             0},
-        {"mintfflows",              required_argument,  NULL,             0},
-        {"alternateTFMode",         required_argument,  NULL,             0},
         {"from-wells",              required_argument,  NULL,               0},
         {"flowtimeoffset",          required_argument,  NULL,               0},
         {"flowlimit",       required_argument,  NULL,       0},
-        {"cafieflowmax",            required_argument,  NULL,               0},
         {"Libcf-ie-dr",       required_argument,  NULL,               0},
         {"libcf-ie-dr",       required_argument,  NULL,               0},
-        {"TFcf-ie-dr",        required_argument,  NULL,               0},
-        {"tfcf-ie-dr",        required_argument,  NULL,               0},
-        {"initial-cfiedr",        required_argument,  NULL,               0},
-        {"try-all-tfs",       no_argument,  NULL,               0},
-        {"ignore-hps",        required_argument,  NULL,               0},
         {"nnMask",          required_argument,  NULL,       0},
         {"nnmask",          required_argument,  NULL,       0},
         {"nnMaskWH",        required_argument,  NULL,       0},
@@ -412,86 +401,81 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         {"librarykey",        required_argument,  NULL,       0},
         {"tfKey",         required_argument,  NULL,       0},
         {"tfkey",         required_argument,  NULL,       0},
-        {"forceNN",         no_argument,    &neighborSubtract,  1},
-        {"forcenn",         no_argument,    &neighborSubtract,  1},
-        {"singleCoreCafie",     no_argument,    &singleCoreCafie, 1},
-        {"singlecorecafie",     no_argument,    &singleCoreCafie, 1},
+        {"forceNN",         no_argument,    &no_control.neighborSubtract,  1},
+        {"forcenn",         no_argument,    &no_control.neighborSubtract,  1},
+        {"singleCoreCafie",     no_argument,    &cfe_control.singleCoreCafie, 1},
+        {"singlecorecafie",     no_argument,    &cfe_control.singleCoreCafie, 1},
         {"analysis-mode",     required_argument,  NULL,       0},
-        {"perWell-cafie",     no_argument,    &wantPerWellCafie,  1},
-        {"perwell-cafie",     no_argument,    &wantPerWellCafie,  1},
-        {"droop-mode",          required_argument,  NULL,       0},
-        {"use-pinned",        no_argument,    &USE_PINNED,    1},
+        {"use-pinned",        no_argument,    &no_control.USE_PINNED,    1},
         {"well-stat-file",      required_argument,  NULL,           0},
         {"basecaller",          required_argument,  NULL,       0},
-        {"cafie-solver",      no_argument,  NULL,           0},
         {"phase-estimator",         required_argument,  NULL,               0},
-        {"dot-fix-debug",     no_argument,  NULL,           0},
         {"ignore-checksum-errors",      no_argument,  NULL,           0},
         {"ignore-checksum-errors-1frame",   no_argument,  NULL,           0},
-        {"region-cafie-debug-file",   required_argument,  NULL,           0},
         {"flow-order",        required_argument,  NULL,           0},
-        {"region-cafie-file",   no_argument,    NULL,           'F'},
-        {"bfold",         no_argument,    &BF_ADVANCED,   0},
-        {"bfonly",          no_argument,    &BEADFIND_ONLY,   1},
-        {"noduds",          no_argument,    &noduds,   1},
-        {"local-wells-file",    no_argument,    &LOCAL_WELLS_FILE,  1},
+        
+        {"bfold",         no_argument,    &bfd_control.BF_ADVANCED,   0},
+        {"bfonly",          no_argument,    &mod_control.BEADFIND_ONLY,   1},
+        {"noduds",          no_argument,    &bfd_control.noduds,   1},
+        {"beadmask-categorized",          no_argument,    &bfd_control.maskFileCategorized,   1},
+        
+        {"local-wells-file",    no_argument,    &sys_context.LOCAL_WELLS_FILE,  1},
+        
         {"use-beadmask",      required_argument,  NULL,       0},
-        {"beadmask-categorized",          no_argument,    &maskFileCategorized,   1},
-        {"bkg-debug-param",     no_argument,    &bkgDebugParam,   1},
+        
+        {"bkg-debug-param",     required_argument,    NULL,   0},
         {"xtalk-correction",required_argument,     NULL,  0},
         {"clonal-filter-bkgmodel",required_argument,     NULL,  0},
         {"bkg-relax-krate-constraint",required_argument,     NULL,  0},
         {"bkg-damp-kmult",required_argument,     NULL,  0},
-        {"mintfscore",        required_argument,  NULL,       0},
+        {"bkg-h5-debug",           required_argument,  NULL,               0},
         {"bkg-emphasis",            required_argument,  NULL,               0},
         {"dntp-uM",                 required_argument,  NULL,               0},
         {"bkg-ampl-lower-limit",    required_argument,  NULL,               0},
         {"bkg-effort-level",        required_argument,  NULL,               0},
         {"gopt",                    required_argument,  NULL,               0},
-        {"xtalk",                    required_argument,  NULL,               0},
+        {"xtalk",                   required_argument,  NULL,               0},
         {"krate",                   required_argument,  NULL,               0},
         {"kmax",                    required_argument,  NULL,               0},
         {"diffusion-rate",          required_argument,  NULL,               0},
-        {"cropped",         required_argument,  NULL,       0},
-        {"analysis-region",     required_argument,  NULL,       0},
-        {"cafie-residuals",         no_argument,        &doCafieResidual,   1},
-        {"n-unfiltered-lib",        no_argument,        &nUnfilteredLib,    1},
-        {"num-cfiedr-fit-passes", required_argument,  NULL,       0},
-        {"cfiedr-keep-percent",   required_argument,  NULL,       0},
-        {"skip-tf-basecalling",   no_argument,    &skiptfbasecalling, 1},
-        {"num-flows-to-fit",    required_argument,  NULL,       0},
-        {"num-flows-increment",   required_argument,  NULL,       0},
-        {"bead-washout",      no_argument,    NULL,       0},
-        {"hilowfilter",       required_argument,  NULL,       0},
-        {"wells-format",           required_argument,  NULL,               0},
+        {"cropped",                 required_argument,  NULL,       0},
+        {"analysis-region",         required_argument,  NULL,       0},
+        {"cafie-residuals",         no_argument,        &cfe_control.doCafieResidual,   1},
+        {"n-unfiltered-lib",        no_argument,        &flt_control.nUnfilteredLib,    1},
+        {"bead-washout",            no_argument,    NULL,       0},
+        {"hilowfilter",             required_argument,  NULL,       0},
+        {"numcputhreads",           required_argument,  NULL,       0},
+        {"numgputhreads",           required_argument,  NULL,       0},
+        {"wells-format",            required_argument,  NULL,               0},
         {"beadfind-type",           required_argument,  NULL,               0},
         {"beadfind-basis",          required_argument,  NULL,               0},
         {"beadfind-dat",            required_argument,  NULL,               0},
         {"beadfind-bgdat",          required_argument,  NULL,               0},
         {"beadfind-minlive",        required_argument,  NULL,               0},
         {"beadfind-minlivesnr",     required_argument,  NULL,               0},
-        {"beadfind-tf-filter-quantile",     required_argument,  NULL,               0},
-        {"beadfind-lib-filter-quantile",     required_argument,  NULL,               0},
-        {"beadfind-use-proj",     required_argument,  NULL,               0},
-        {"beadfind-minlivesnr",     required_argument,  NULL,               0},
-        {"beadfind-minlivesnr",     required_argument,  NULL,               0},
+        {"beadfind-min-lib-snr",    required_argument,  NULL,               0},
+        {"beadfind-min-tf-snr",     required_argument,  NULL,               0},
+        {"beadfind-lib-filt",    required_argument,  NULL,               0},
+        {"beadfind-tf-filt",     required_argument,  NULL,               0},
         {"beadfind-skip-sd-recover",required_argument,  NULL,               0},
-        {"beadfind-thumbnail",required_argument,  NULL,               0},
-        {"beadfind-lagone-filt",required_argument,  NULL,               0},
-        {"flag-bubbles",            no_argument,        &filterBubbles,     1},
+        {"beadfind-thumbnail",      required_argument,  NULL,               0},
+        {"beadfind-lagone-filt",    required_argument,  NULL,               0},
+        {"flag-bubbles",            no_argument,        &bkg_control.filterBubbles,     1},
         {"gpuWorkLoad",             required_argument,  NULL,             0},
-        {"numGpuThreads",           required_argument,  NULL,             0},
-        {"numCpuThreads",           required_argument,  NULL,             0},
-        {"vectorize",               no_argument,        &vectorize,         1},
+        {"save-wells-freq",         required_argument,  NULL,             0},
+        {"vectorize",               no_argument,        &bkg_control.vectorize,         1},
         {"bkg-dbg-trace",           required_argument,  NULL,               0},
-        {"limit-rdr-fit",           no_argument,        &no_rdr_fit_first_20_flows,     1},
+        {"limit-rdr-fit",           no_argument,        &bkg_control.no_rdr_fit_first_20_flows,     1},
+        {"var-kmult-only",          no_argument,        &bkg_control.var_kmult_only, 1},
+        {"generic-test-flag",          no_argument,        &bkg_control.generic_test_flag, 1},
+        {"debug-all-beads",         no_argument,    &bkg_control.debug_bead_only,              0}, // turn off what is turned on
         {"cropped-region-origin",   required_argument,  NULL,               0},
-        {"output-pinned-wells",      no_argument,    &outputPinnedWells,   0},
-        {"readaheadDat",           required_argument,  NULL,             0},
+        {"output-pinned-wells",     no_argument,    &img_control.outputPinnedWells,   0},
+        {"readaheadDat",            required_argument,  NULL,             0},
         {NULL,                      0,                  NULL,               0}
     };
 
-    while ( (c = getopt_long (argc, argv, "Ab:c:f:Fhi:k:m:p:R:Dv", long_options, &option_index)) != -1 )
+    while ( (c = getopt_long (argc, argv, "b:c:f:hi:k:m:p:R:v", long_options, &option_index)) != -1 )
     {
 
         switch (c)
@@ -501,271 +485,45 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             char *lOption = strdup (long_options[option_index].name);
             ToLower (lOption);
 
-            if (strcmp (lOption, "output-pinned-wells") == 0)
-            {
-                outputPinnedWells = 1;
-            }
 
             if (long_options[option_index].flag != 0)
                 break;
-            if (strcmp (lOption, "tf") == 0) {
-                TFoverride = optarg;
-            }
-            if (strcmp (lOption, "nonlinear-hp-scale") == 0) {
-                NONLINEAR_HP_SCALE=1;
-                int stat = sscanf (optarg, "%lf", &hpScaleFactor);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
+
+
+            // module control:  what are we doing overall?
+            
             if (strcmp (lOption, "analysis-mode") == 0) {
                 ToLower(optarg);
                 if (strcmp (optarg,"bkgmodel") == 0) {
-                    USE_BKGMODEL = 1;
+                    mod_control.USE_BKGMODEL = 1;
                 }
                 else if (strcmp (optarg,"bfonly") == 0) {
-                    BEADFIND_ONLY = 1;
+                    mod_control.BEADFIND_ONLY = 1;
                 }
                 else {
                     fprintf (stderr, "Option Error: %s=%s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "num-cafie-solve-flows") == 0) {
-                int stat = sscanf (optarg, "%d", &numCafieSolveFlows);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (numCafieSolveFlows < 0) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
+            if (strcmp (lOption, "from-wells") == 0) {
+                if (isFile(optarg)) {
+                    mod_control.USE_RAWWELLS = 1;
+                    strncpy (sys_context.wellsFileName, basename(optarg), 256);
+                    strncpy (sys_context.wellsFilePath, dirname(optarg), 256);
+                    sys_context.dat_source_directory = "./";  //fake source directory
+                }
+                else {
+                    fprintf (stderr, "Invalid file specified: %s\n", optarg);
                     exit (EXIT_FAILURE);
                 }
-            }
-            if (strcmp (lOption, "ppf-filter-train") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    percentPositiveFlowsFilterTraining = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    percentPositiveFlowsFilterTraining = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "ppf-filter") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    percentPositiveFlowsFilterCalling = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    percentPositiveFlowsFilterCalling = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "ppf-filter-tf") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    percentPositiveFlowsFilterTFs = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    percentPositiveFlowsFilterTFs = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "percent-positive-flow-filter-max-flow") == 0) {
-                int stat = sscanf (optarg, "%d", &percentPositiveFlowsMaxFlow);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (percentPositiveFlowsMaxFlow < 1) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "percent-positive-flow-filter-min-flow") == 0) {
-                int stat = sscanf (optarg, "%d", &percentPositiveFlowsMinFlow);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (percentPositiveFlowsMinFlow < 0) {
-                    fprintf (stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            } if (strcmp (lOption, "percent-positive-flow-filter-max-value") == 0) {
-                percentPositiveFlowsMaxValueOverride = true;
-                int stat = sscanf (optarg, "%lf", &percentPositiveFlowsMaxValue);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if ((percentPositiveFlowsMaxValue > 1) || (percentPositiveFlowsMaxValue < 0)) {
-                    fprintf (stderr, "Option Error: %s must specify a value between 0 and 1 (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "percent-positive-flow-filter-min-value") == 0) {
-                percentPositiveFlowsMinValueOverride = true;
-                int stat = sscanf (optarg, "%lf", &percentPositiveFlowsMinValue);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if ((percentPositiveFlowsMinValue > 1) || (percentPositiveFlowsMinValue < 0)) {
-                    fprintf (stderr, "Option Error: %s must specify a value between 0 and 1 (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "clonal-filter-train") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    clonalFilterTraining = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    clonalFilterTraining = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "clonal-filter-solve") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    clonalFilterSolving = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    clonalFilterSolving = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cafie-lowqualfilter") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    cafieFitIgnoreLowQual = false;
-                } else if (!strcmp(optarg,"on")) {
-                    cafieFitIgnoreLowQual = true;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "min-read-length") == 0) {
-                int stat = sscanf (optarg, "%d", &minReadLength);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (minReadLength < 1) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "xtalk-correction") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    enableXtalkCorrection = false;
-                } else if (!strcmp(optarg,"on")) {
-                    enableXtalkCorrection = true;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "clonal-filter-bkgmodel") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    enableBkgModelClonalFilter = false;
-                } else if (!strcmp(optarg,"on")) {
-                    enableBkgModelClonalFilter = true;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "bkg-relax-krate-constraint") == 0) {
-                int stat = sscanf (optarg, "%d", &relaxKrateConstraint);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (relaxKrateConstraint < 0) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "bkg-damp-kmult") == 0) {
-                int stat = sscanf (optarg, "%f", &damp_kmult);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (damp_kmult < 0) {
-                    fprintf (stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }            if (strcmp (lOption, "cr-filter-train") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    cafieResFilterTraining= 0;
-                } else if (!strcmp(optarg,"on")) {
-                    cafieResFilterTraining= 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cr-filter") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    cafieResFilterCalling= 0;
-                } else if (!strcmp(optarg,"on")) {
-                    cafieResFilterCalling= 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cr-filter-tf") == 0) {
-                if (!strcmp(optarg,"off")) {
-                    cafieResFilterTFs = 0;
-                } else if (!strcmp(optarg,"on")) {
-                    cafieResFilterTFs = 1;
-                } else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cafie-residual-filter-max-flow") == 0) {
-                int stat = sscanf (optarg, "%d", &cafieResMaxFlow);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (cafieResMaxFlow < 1) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cafie-residual-filter-min-flow") == 0) {
-                int stat = sscanf (optarg, "%d", &cafieResMinFlow);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (cafieResMinFlow < 0) {
-                    fprintf (stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "cafie-residual-filter-max-value") == 0) {
-                cafieResMaxValueOverride = true;
-                int stat = sscanf (optarg, "%lf", &cafieResMaxValue);
-                if (stat != 1) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                } else if (cafieResMaxValue <= 0) {
-                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "basecallsubsetfile") == 0) {
-                basecallSubsetFile = strdup(optarg);
-                readBasecallSubsetFile(basecallSubsetFile,basecallSubset);
-            }
-            if (strcmp (lOption, "per-flow-scale-file") == 0) {
-                perFlowScaleFile = strdup(optarg);
-                perFlowScale = true;
-                readPerFlowScaleFile(perFlowScaleVal, perFlowScaleFile);
             }
 
-            if (strcmp (lOption, "phred-table-file") == 0) {
+            // end module control ------------------------------------------------------------------
+            
+            // cafie/basecaller control  -----------------------------------------------------------------------
+             if (strcmp (lOption, "phred-table-file") == 0) {
                 if (isFile(optarg)) {
-                    phredTableFile = string( optarg );
+                    cfe_control.phredTableFile = string( optarg );
                 }
                 else {
                     fprintf (stderr, "Invalid file specified for phred table: %s\n", optarg);
@@ -773,234 +531,197 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                 }
             }
 
-            if (strcmp (lOption, "region-size") == 0) {
-                sPtr = strchr(optarg,'x');
-                if (sPtr) {
-                    int stat = sscanf (optarg, "%dx%d", &regionXSize, &regionYSize);
-                    if (stat != 2) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "mintfflows") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    minTFFlows = (int) input;
-                }
+            if (strcmp (lOption, "basecallSubsetFile") == 0) {
+                cfe_control.basecallSubsetFile = strdup(optarg);
+                readBasecallSubsetFile(cfe_control.basecallSubsetFile,cfe_control.basecallSubset);
             }
 
-            if (strcmp (lOption, "alternateTFMode") == 0) {
-                if (validIn (optarg, &input)) {
+           if (strcmp (lOption, "num-cafie-solve-flows") == 0) {
+                int stat = sscanf (optarg, "%d", &cfe_control.numCafieSolveFlows);
+                if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } else {
-                    alternateTFMode = (int) input;
-                    cafieFlowMax = 120; // by default, give us a bump on how many flows we use to determine what TF we have
-                }
-            }
-
-            if (strcmp (lOption, "from-wells") == 0) {
-                if (isFile(optarg)) {
-                    USE_RAWWELLS = 1;
-                    NormalizeZeros = false;
-                    strncpy (wellsFileName, basename(optarg), 256);
-                    strncpy (wellsFilePath, dirname(optarg), 256);
-                    dirExt = "./";  //fake source directory
-                }
-                else {
-                    fprintf (stderr, "Invalid file specified: %s\n", optarg);
+                } else if (cfe_control.numCafieSolveFlows < 0) {
+                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp(lOption, "sequence-all-lib") == 0) {
-                for (unsigned int i = 0; i < strlen(optarg); i++)
-                    optarg[i] = tolower(optarg[i]);
-                if (strcmp(optarg, "off") == 0) {
-                    sequenceAllLib = 0;
-                } else if (strcmp(optarg, "on") == 0) {
-                    sequenceAllLib = 1;
-                } else {
-                    fprintf(stderr, "Option Error: %c %s\n", c, optarg);
-                    exit(EXIT_FAILURE);
-                }
-            }
-            if (strcmp (lOption, "scaled-solve2") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    SCALED_SOLVE2 = (int) input;
-                }
-            }
-            if (strcmp (lOption, "flowtimeoffset") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    flowTimeOffset = (int) input;
-                }
-            }
-            if (strcmp (lOption, "cafieflowmax") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    cafieFlowMax = (int) input;
-                }
-            }
-            if (strcmp (lOption, "mintf") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    minTFCount = (int) input;
-                }
-            }
-            if (strcmp (lOption, "numgroupsperregion") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    numGroupsPerRegion = (int) input;
                 }
             }
             if (strcmp (lOption, "libcf-ie-dr") == 0) {
                 sPtr = strchr(optarg,',');
                 if (sPtr) {
-                    int stat = sscanf (optarg, "%lf,%lf,%lf", &LibcfOverride, &LibieOverride, &LibdrOverride);
+                    int stat = sscanf (optarg, "%lf,%lf,%lf", &cfe_control.LibcfOverride, &cfe_control.LibieOverride, &cfe_control.LibdrOverride);
                     if (stat != 3) {
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
                     }
-                    libPhaseEstimator = "override";
+                    cfe_control.libPhaseEstimator = "override";
                 }
                 else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "tfcf-ie-dr") == 0) {
-                sPtr = strchr(optarg,',');
-                if (sPtr) {
-                    int stat = sscanf (optarg, "%lf,%lf,%lf", &TFcfOverride, &TFieOverride, &TFdrOverride);
-                    if (stat != 3) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                    TF_CAFIE_CORRECTION = 0;
-                }
-                else {
+            if (strcmp(lOption, "basecaller") == 0) {
+                cfe_control.basecaller = optarg;
+            }
+            if (strcmp(lOption, "phase-estimator") == 0) {
+                cfe_control.libPhaseEstimator = optarg;
+            }
+
+            // end cafie control -------------------------------------------------------
+
+            // filter control -------------------------------------------------------------
+
+            
+            if (strcmp (lOption, "ppf-filter-train") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.percentPositiveFlowsFilterTraining = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.percentPositiveFlowsFilterTraining = 1;
+                } else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "initial-cfiedr") == 0) {
-                sPtr = strchr(optarg,',');
-                if (sPtr) {
-                    int stat = sscanf (optarg, "%lf,%lf,%lf", &initial_cf, &initial_ie, &initial_dr);
-                    if (stat != 3) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
+            if (strcmp (lOption, "ppf-filter") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.percentPositiveFlowsFilterCalling = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.percentPositiveFlowsFilterCalling = 1;
+                } else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "cfiedr-keep-percent") == 0) {
-                int stat = sscanf (optarg, "%lf", &cfiedrKeepPercent);
+            if (strcmp (lOption, "ppf-filter-tf") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.percentPositiveFlowsFilterTFs = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.percentPositiveFlowsFilterTFs = 1;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (lOption, "clonal-filter-train") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.clonalFilterTraining = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.clonalFilterTraining = 1;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (lOption, "clonal-filter-solve") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.clonalFilterSolving = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.clonalFilterSolving = 1;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (lOption, "min-read-length") == 0) {
+                int stat = sscanf (optarg, "%d", &flt_control.minReadLength);
                 if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
+                } else if (flt_control.minReadLength < 1) {
+                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "ignore-hps") == 0) {
-                // count how many HP entries are in our list
-                numCafieHPIgnoreList = 0;
-                int len = strlen(optarg);
-                if (len > 0)
-                    numCafieHPIgnoreList = 1;
-                for (int k=0;k<len;k++) {
-                    if (optarg[k] == ',')
-                        numCafieHPIgnoreList++;
-                }
-                if (numCafieHPIgnoreList > 0) {
-                    cafieHPIgnoreList = new int[numCafieHPIgnoreList];
-                    int nextHP = 0;
-                    char *ptr = optarg;
-                    do {
-                        sscanf(ptr, "%d", &cafieHPIgnoreList[nextHP]);
-                        ptr = strchr(ptr, ',');
-                        if (ptr) ptr++; // skip the comma so we can read the next int
-                        nextHP++;
-                    } while (ptr);
-                    useCafieHPIgnoreList = true;
-                    assert(nextHP == numCafieHPIgnoreList); // MGD - intel compiler not liking: && "Number of ints in HP list did not match our expected number?");
-                }
-                else {
+           if (strcmp (lOption, "cr-filter-train") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.cafieResFilterTraining= 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.cafieResFilterTraining= 1;
+                } else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "well-stat-file") == 0) {
-                if (wellStatFile)
-                    free(wellStatFile);
-                wellStatFile = strdup(optarg);
+            if (strcmp (lOption, "cr-filter") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.cafieResFilterCalling= 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.cafieResFilterCalling= 1;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
             }
-            if (strcmp(lOption, "basecaller") == 0) {
-                basecaller = optarg;
+            if (strcmp (lOption, "cr-filter-tf") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    flt_control.cafieResFilterTFs = 0;
+                } else if (!strcmp(optarg,"on")) {
+                    flt_control.cafieResFilterTFs = 1;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
             }
-            if (strcmp(lOption, "cafie-solver") == 0) {
-                basecaller = "cafie-solver";
+            if (strcmp (lOption, "cafie-residual-filter-max-flow") == 0) {
+                int stat = sscanf (optarg, "%d", &flt_control.cafieResMaxFlow);
+                if (stat != 1) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                } else if (flt_control.cafieResMaxFlow < 1) {
+                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
             }
-            if (strcmp(lOption, "phase-estimator") == 0) {
-                libPhaseEstimator = optarg;
+            if (strcmp (lOption, "cafie-residual-filter-min-flow") == 0) {
+                int stat = sscanf (optarg, "%d", &flt_control.cafieResMinFlow);
+                if (stat != 1) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                } else if (flt_control.cafieResMinFlow < 0) {
+                    fprintf (stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
             }
-            if (strcmp(lOption, "dot-fix-debug") == 0) {
-                dotFixDebug = true;
-            }
-            if (strcmp(lOption, "try-all-tfs") == 0) {
-                tryAllReads = true;
-            }
-            if (strcmp(lOption, "ignore-checksum-errors") == 0) {
-                ignoreChecksumErrors |= 0x01;
-            }
-            if (strcmp(lOption, "ignore-checksum-errors-1frame") == 0) {
-                ignoreChecksumErrors |= 0x02;
-            }
-            if (strcmp(lOption, "droop-mode") == 0) {
-                if (droopMode)
-                    free(droopMode);
-                droopMode = strdup(optarg);
+            if (strcmp (lOption, "cafie-residual-filter-max-value") == 0) {
+                flt_control.cafieResMaxValueOverride = true;
+                int stat = sscanf (optarg, "%lf", &flt_control.cafieResMaxValue);
+                if (stat != 1) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                } else if (flt_control.cafieResMaxValue <= 0) {
+                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
             }
 
-            if (strcmp(lOption, "region-cafie-debug-file") == 0) {
-                if (regionCafieDebugFile)
-                    free(regionCafieDebugFile);
-                regionCafieDebugFile = strdup(optarg);
+            // end filter control options -----------------------------------------------------
+
+
+
+
+
+            // Image control options ---------------------------------------------------
+
+            
+            if (strcmp(lOption, "ignore-checksum-errors") == 0) {
+                img_control.ignoreChecksumErrors |= 0x01;
             }
-            if (strcmp (lOption, "flow-order") == 0) {
-                if (flowOrder)
-                    free(flowOrder);
-                flowOrder = strdup(optarg);
-                numFlowsPerCycle = strlen(flowOrder);
-                flowOrderOverride = true;
-                // if (numFlowsPerCycle > 4)
-                // wantDotFixes = false; // MGD - for now, the CafieSolver lacks the ability to be smart about detecting valid 'dots' in the face of arbitrary flow orders
+            if (strcmp(lOption, "ignore-checksum-errors-1frame") == 0) {
+                img_control.ignoreChecksumErrors |= 0x02;
+            }
+             if (strcmp (lOption, "output-pinned-wells") == 0)
+            {
+                img_control.outputPinnedWells = 1;
+            }
+           if (strcmp (lOption, "flowtimeoffset") == 0) {
+                if (validIn (optarg, &input)) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+                else {
+                    img_control.flowTimeOffset = (int) input;
+                }
             }
             if (strcmp (lOption, "nnmask") == 0) {
                 sPtr = strchr(optarg,',');
@@ -1011,10 +732,10 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
                     }
-                    NNinnerx = inner;
-                    NNinnery = inner;
-                    NNouterx = outer;
-                    NNoutery = outer;
+                    img_control.NNinnerx = inner;
+                    img_control.NNinnery = inner;
+                    img_control.NNouterx = outer;
+                    img_control.NNoutery = outer;
                 }
                 else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
@@ -1024,7 +745,7 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             if (strcmp (lOption, "nnmaskwh") == 0) {
                 sPtr = strchr(optarg,',');
                 if (sPtr) {
-                    int stat = sscanf (optarg, "%d,%d,%d,%d", &NNinnerx, &NNinnery, &NNouterx, &NNoutery);
+                    int stat = sscanf (optarg, "%d,%d,%d,%d", &img_control.NNinnerx, &img_control.NNinnery, &img_control.NNouterx, &img_control.NNoutery);
                     if (stat != 4) {
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
@@ -1035,41 +756,62 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "num-cfiedr-fit-passes") == 0) {
+            if (strcmp (long_options[option_index].name, "hilowfilter") == 0) {
+                ToLower(optarg);
+                if (strcmp (optarg, "true") == 0 ||
+                        strcmp (optarg, "on") == 0 ||
+                        atoi(optarg) == 1)
+                {
+                    img_control.hilowPixFilter = 1;
+                }
+                else
+                {
+                    img_control.hilowPixFilter = 0;
+                }
+            }
+
+            // end image control options -----------------------------------------------------------
+
+            // flow entry and manipulation --------------------------------------------
+            if (strcmp (lOption, "flow-order") == 0) {
+                if (flow_context.flowOrder)
+                    free(flow_context.flowOrder);
+                flow_context.flowOrder = strdup(optarg);
+                flow_context.numFlowsPerCycle = strlen(flow_context.flowOrder);
+                flow_context.flowOrderOverride = true;
+            }
+
+            if (strcmp (long_options[option_index].name, "flowlimit") == 0) {
                 if (validIn (optarg, &input)) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    numCFIEDRFitPasses = (int) input;
+                    flow_context.flowLimitSet = (unsigned int) input;
                 }
             }
+
+            // end flow entry & manipulation ------------------------------------------------
+
+            // keys - only two types for now --------------------------------------------
             if (strcmp (lOption, "librarykey") == 0) {
-                libKey = (char *) malloc (strlen(optarg)+1);
-                strcpy (libKey, optarg);
-                ToUpper (libKey);
+                key_context.libKey = (char *) malloc (strlen(optarg)+1);
+                strcpy (key_context.libKey, optarg);
+                ToUpper (key_context.libKey);
             }
             if (strcmp (lOption, "tfkey") == 0) {
-                tfKey = (char *) malloc (strlen(optarg)+1);
-                strcpy (tfKey, optarg);
-                ToUpper (tfKey);
+                key_context.tfKey = (char *) malloc (strlen(optarg)+1);
+                strcpy (key_context.tfKey, optarg);
+                ToUpper (key_context.tfKey);
             }
-            if (strcmp(lOption, "use-beadmask") == 0) {
-                beadMaskFile = strdup (optarg);
-            }
-            if (strcmp(lOption, "beadmask-categorized") == 0) {
-                maskFileCategorized = 1;
-            }
-            if (strcmp(lOption, "flag-bubbles") == 0) {
-                filterBubbles = 1;
-            }
-            if (strcmp(lOption, "mintfscore") == 0) {
-                minTFScore = atof (optarg);
-            }
-            if (strcmp (long_options[option_index].name, "bkg-emphasis") == 0) {
-                sPtr = strchr(optarg,',');
+            // end keys ------------------------------------------------------------------
+
+            // Spatial reasoning about the chip, cropped area, etc -----------------------------------
+
+            if (strcmp (lOption, "region-size") == 0) {
+                sPtr = strchr(optarg,'x');
                 if (sPtr) {
-                    int stat = sscanf (optarg, "%f,%f", &bkg_model_emphasis_width, &bkg_model_emphasis_amplitude);
+                    int stat = sscanf (optarg, "%dx%d", &loc_context.regionXSize, &loc_context.regionYSize);
                     if (stat != 2) {
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
@@ -1080,155 +822,15 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (long_options[option_index].name, "dntp-uM") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%f", &dntp_uM);
-                    if (stat != 1) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (long_options[option_index].name, "bkg-ampl-lower-limit") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%f", &AmplLowerLimit);
-                    if (stat != 1) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (long_options[option_index].name, "bkg-effort-level") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%d", &bkgModelMaxIter);
-                    if (stat != 1) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-
-                    if (bkgModelMaxIter < 5)
-                    {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
-            if (strcmp (long_options[option_index].name, "gopt") == 0) {
-                gopt = optarg;
-                if (strcmp(gopt, "disable") == 0 || strcmp(gopt, "opt") == 0);
-                else
-                {
-                    FILE *gopt_file = fopen(gopt,"r");
-                    if (gopt_file != NULL)
-                        fclose(gopt_file);
-                    else {
-                        fprintf (stderr, "Option Error: %s cannot open file %s\n", long_options[option_index].name,optarg);
-                        exit (1);
-                    }
-                }
-            }
-            if (strcmp (long_options[option_index].name, "xtalk") == 0) {
-                xtalk = optarg;
-                if (strcmp(xtalk, "disable") == 0 || strcmp(xtalk, "opt") == 0);
-                else
-                {
-                    FILE *tmp_file = fopen(xtalk,"r");
-                    if (tmp_file != NULL)
-                        fclose(tmp_file);
-                    else {
-                        fprintf (stderr, "Option Error: %s cannot open file %s\n", long_options[option_index].name,optarg);
-                        exit (1);
-                    }
-                }
-            }
-
-            if (strcmp (long_options[option_index].name, "krate") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%f,%f,%f,%f", &krate[0],&krate[1],&krate[2],&krate[3]);
-                    if (stat != 4) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (1);
-                    }
-
-                    for (int i=0;i < 3;i++)
-                    {
-                        if ((krate[i] < 0.01) || (krate[i] > 100.0))
-                        {
-                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                            exit (1);
-                        }
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (1);
-                }
-            }
-            if (strcmp (long_options[option_index].name, "kmax") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%f,%f,%f,%f", &kmax[0],&kmax[1],&kmax[2],&kmax[3]);
-                    if (stat != 4) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (1);
-                    }
-
-                    for (int i=0;i < 3;i++)
-                    {
-                        if ((kmax[i] < 0.01) || (kmax[i] > 100.0))
-                        {
-                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                            exit (1);
-                        }
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (1);
-                }
-            }
-            if (strcmp (long_options[option_index].name, "diffusion-rate") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%f,%f,%f,%f", &diff_rate[0],&diff_rate[1],&diff_rate[2],&diff_rate[3]);
-                    if (stat != 4) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (1);
-                    }
-
-                    for (int i=0;i < 3;i++)
-                    {
-                        if ((diff_rate[i] < 0.01) || (diff_rate[i] > 1000.0))
-                        {
-                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                            exit (1);
-                        }
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (1);
-                }
-            }
             if (strcmp (long_options[option_index].name, "cropped") == 0) {
                 if (optarg) {
-                    numCropRegions++;
-                    cropRegions = (Region *) realloc (cropRegions, sizeof(Region) * numCropRegions);
+                    loc_context.numCropRegions++;
+                    loc_context.cropRegions = (Region *) realloc (loc_context.cropRegions, sizeof(Region) * loc_context.numCropRegions);
                     int stat = sscanf (optarg, "%d,%d,%d,%d",
-                                       &cropRegions[numCropRegions-1].col,
-                                       &cropRegions[numCropRegions-1].row,
-                                       &cropRegions[numCropRegions-1].w,
-                                       &cropRegions[numCropRegions-1].h);
+                                       &loc_context.cropRegions[loc_context.numCropRegions-1].col,
+                                       &loc_context.cropRegions[loc_context.numCropRegions-1].row,
+                                       &loc_context.cropRegions[loc_context.numCropRegions-1].w,
+                                       &loc_context.cropRegions[loc_context.numCropRegions-1].h);
                     if (stat != 4) {
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
@@ -1242,10 +844,10 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             if (strcmp (long_options[option_index].name, "analysis-region") == 0) {
                 if (optarg) {
                     int stat = sscanf (optarg, "%d,%d,%d,%d",
-                                       &chipRegion.col,
-                                       &chipRegion.row,
-                                       &chipRegion.w,
-                                       &chipRegion.h);
+                                       &loc_context.chipRegion.col,
+                                       &loc_context.chipRegion.row,
+                                       &loc_context.chipRegion.w,
+                                       &loc_context.chipRegion.h);
                     if (stat != 4) {
                         fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                         exit (EXIT_FAILURE);
@@ -1256,147 +858,365 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (long_options[option_index].name, "beadfind-type") == 0) {
-                beadfindType = optarg;
-                if (beadfindType != "differential" && beadfindType != "original") {
-                    fprintf (stderr, "*Error* - Illegal option to --beadfind-type: %s, valid options are 'differential' or 'original'\n",
-                             beadfindType.c_str());
+            if (strcmp (long_options[option_index].name, "cropped-region-origin") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%d,%d",
+                                       &loc_context.cropped_region_x_offset,
+                                       &loc_context.cropped_region_y_offset);
+                    if (stat != 2) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
+
+            // end spatial context about the chip ------------------------------------------------
+
+            // System context: file manipulation, directories and names -----------------------------------
+
+
+            if (strcmp (lOption, "well-stat-file") == 0) {
+                if (sys_context.wellStatFile)
+                    free(sys_context.wellStatFile);
+                sys_context.wellStatFile = strdup(optarg);
+            }
+
             if (strcmp (long_options[option_index].name, "wells-format") == 0) {
-                wellsFormat = optarg;
-                if (wellsFormat != "legacy" && wellsFormat != "hdf5") {
+                sys_context.wellsFormat = optarg;
+                if (sys_context.wellsFormat != "legacy" && sys_context.wellsFormat != "hdf5") {
                     fprintf (stderr, "*Error* - Illegal option to --wells-format: %s, valid options are 'legacy' or 'hdf5'\n",
-                             wellsFormat.c_str());
+                             sys_context.wellsFormat.c_str());
                     exit (EXIT_FAILURE);
                 }
+            }
+
+            if (strcmp (lOption, "output-dir") == 0) {
+                sys_context.wells_output_directory = strdup (optarg);
+            }
+            
+            if (strcmp (lOption, "basecaller-output-dir") == 0) {
+                sys_context.basecaller_output_directory = strdup (optarg);
+            }
+            
+            // End system context files -------------------------------------------------------------
+
+
+            // All beadfind options in this section, please ---------------------------------
+            
+            if (strcmp (long_options[option_index].name, "beadfind-type") == 0) {
+                bfd_control.beadfindType = optarg;
+                if (bfd_control.beadfindType != "differential" && bfd_control.beadfindType != "original") {
+                    fprintf (stderr, "*Error* - Illegal option to --beadfind-type: %s, valid options are 'differential' or 'original'\n",
+                             bfd_control.beadfindType.c_str());
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp(lOption, "use-beadmask") == 0) {
+                bfd_control.beadMaskFile = strdup (optarg);
+            }
+            if (strcmp(lOption, "beadmask-categorized") == 0) {
+                bfd_control.maskFileCategorized = 1;
             }
             if (strcmp (long_options[option_index].name, "beadfind-basis") == 0) {
-                bfType = optarg;
-                if (bfType != "signal" && bfType != "buffer") {
+                bfd_control.bfType = optarg;
+                if (bfd_control.bfType != "signal" && bfd_control.bfType != "buffer") {
                     fprintf (stderr, "*Error* - Illegal option to --beadfind-basis: %s, valid options are 'signal' or 'buffer'\n",
-                             bfType.c_str());
+                             bfd_control.bfType.c_str());
                     exit (EXIT_FAILURE);
                 }
             }
             if (strcmp (long_options[option_index].name, "beadfind-dat") == 0) {
-                bfDat = optarg;
+                bfd_control.bfDat = optarg;
             }
             if (strcmp (long_options[option_index].name, "beadfind-bgdat") == 0) {
-                bfBgDat = optarg;
+                bfd_control.bfBgDat = optarg;
             }
             if (strcmp(long_options[option_index].name, "beadfind-minlive") == 0) {
-                bfMinLiveRatio = atof (optarg);
+                bfd_control.bfMinLiveRatio = atof (optarg);
             }
-            if (strcmp(long_options[option_index].name, "beadfind-minlivesnr") == 0) {
-                bfMinLiveLibSnr = atof (optarg);
+            if (strcmp(long_options[option_index].name, "beadfind-minlivesnr") == 0 ||
+                    strcmp(long_options[option_index].name, "beadfind-min-lib-snr") == 0) {
+                bfd_control.bfMinLiveLibSnr = atof (optarg);
             }
-            if (strcmp(long_options[option_index].name, "beadfind-tf-filter-quantile") == 0) {
-                bfTfFilterQuantile = atof (optarg);
+            if (strcmp(long_options[option_index].name, "beadfind-min-tf-snr") == 0) {
+                bfd_control.bfMinLiveTfSnr = atof (optarg);
             }
-            if (strcmp(long_options[option_index].name, "beadfind-lib-filter-quantile") == 0) {
-                bfLibFilterQuantile = atof (optarg);
+            if (strcmp(long_options[option_index].name, "beadfind-lib-filt") == 0) {
+                bfd_control.bfLibFilterQuantile = atof (optarg);
             }
-            if (strcmp(long_options[option_index].name, "beadfind-use-proj") == 0) {
-                bfUseProj = atoi (optarg);
+            if (strcmp(long_options[option_index].name, "beadfind-tf-filt") == 0) {
+                bfd_control.bfTfFilterQuantile = atof (optarg);
             }
             if (strcmp(long_options[option_index].name, "beadfind-skip-sd-recover") == 0) {
-                skipBeadfindSdRecover = atoi (optarg);
+                bfd_control.skipBeadfindSdRecover = atoi (optarg);
             }
             if (strcmp(long_options[option_index].name, "beadfind-thumbnail") == 0) {
-	      beadfindThumbnail = atoi (optarg);
+                bfd_control.beadfindThumbnail = atoi (optarg);
             }
             if (strcmp(long_options[option_index].name, "beadfind-lagone-filt") == 0) {
-	      beadfindLagOneFilt = atoi (optarg);
-            }
-            if (strcmp (long_options[option_index].name, "num-flows-to-fit") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    numFlowsToFitCafie1 = (int) input;
-                }
-            }
-            if (strcmp (long_options[option_index].name, "num-flows-increment") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    numFlowsIncrement = (int) input;
-                }
+                bfd_control.beadfindLagOneFilt = atoi (optarg);
             }
             if (strcmp (long_options[option_index].name, "bead-washout") == 0) {
-                SINGLEBF = false;
+                bfd_control.SINGLEBF = false;
             }
-            if (strcmp (long_options[option_index].name, "hilowfilter") == 0) {
-                ToLower(optarg);
-                if (strcmp (optarg, "true") == 0 ||
-                        strcmp (optarg, "on") == 0 ||
-                        atoi(optarg) == 1)
-                {
-                    hilowPixFilter = 1;
-                }
-                else
-                {
-                    hilowPixFilter = 0;
+
+            // End of beadfind control ---------------------------------
+
+
+            // All bkg_control options in this section, please ------------------------
+            if (strcmp (lOption, "save-wells-freq") == 0) {
+              bkg_control.saveWellsFrequency = atoi(optarg);
+              fprintf (stdout, "Saving wells every %d blocks.\n", bkg_control.saveWellsFrequency);
+              if (bkg_control.saveWellsFrequency < 1 || bkg_control.saveWellsFrequency > 100) {
+                fprintf (stderr, "Option Error, must be between 1 and 100: %s %s\n", long_options[option_index].name,optarg);
+                exit (EXIT_FAILURE);
+              }
+
+            }            
+           if (strcmp (lOption, "clonal-filter-bkgmodel") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    bkg_control.enableBkgModelClonalFilter = false;
+                } else if (!strcmp(optarg,"on")) {
+                    bkg_control.enableBkgModelClonalFilter = true;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
                 }
             }
-            if (strcmp (lOption, "gpuworkload") == 0) {
-                int stat = sscanf (optarg, "%f", &gpuWorkLoad);
+             if (strcmp (lOption, "xtalk-correction") == 0) {
+                if (!strcmp(optarg,"off")) {
+                    bkg_control.enableXtalkCorrection = false;
+                } else if (!strcmp(optarg,"on")) {
+                    bkg_control.enableXtalkCorrection = true;
+                } else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp(lOption, "flag-bubbles") == 0) {
+                bkg_control.filterBubbles = 1;
+            }
+            if (strcmp (long_options[option_index].name, "bkg-debug-param") == 0) {
+              bkg_control.bkgModelHdf5Debug = atoi(optarg);
+            }
+            if (strcmp (lOption, "bkg-relax-krate-constraint") == 0) {
+                int stat = sscanf (optarg, "%d", &bkg_control.relaxKrateConstraint);
                 if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } else if ((gpuWorkLoad > 1) || (gpuWorkLoad < 0)) {
+                } else if (bkg_control.relaxKrateConstraint < 0) {
+                    fprintf (stderr, "Option Error: %s must specify a positive value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (lOption, "bkg-damp-kmult") == 0) {
+                int stat = sscanf (optarg, "%f", &bkg_control.damp_kmult);
+                if (stat != 1) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                } else if (bkg_control.damp_kmult < 0) {
+                    fprintf (stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+
+            if (strcmp (long_options[option_index].name, "bkg-emphasis") == 0) {
+                sPtr = strchr(optarg,',');
+                if (sPtr) {
+                    int stat = sscanf (optarg, "%f,%f", &bkg_control.bkg_model_emphasis_width, &bkg_control.bkg_model_emphasis_amplitude);
+                    if (stat != 2) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (long_options[option_index].name, "dntp-uM") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%f", &bkg_control.dntp_uM);
+                    if (stat != 1) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (long_options[option_index].name, "bkg-ampl-lower-limit") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%f", &bkg_control.AmplLowerLimit);
+                    if (stat != 1) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }           if (strcmp (long_options[option_index].name, "bkg-effort-level") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%d", &bkg_control.bkgModelMaxIter);
+                    if (stat != 1) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+
+                    if (bkg_control.bkgModelMaxIter < 5)
+                    {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (EXIT_FAILURE);
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                }
+            }
+            if (strcmp (long_options[option_index].name, "gopt") == 0) {
+                bkg_control.gopt = optarg;
+                if (strcmp(bkg_control.gopt, "disable") == 0 || strcmp(bkg_control.gopt, "opt") == 0);
+                else
+                {
+                    FILE *gopt_file = fopen(bkg_control.gopt,"r");
+                    if (gopt_file != NULL)
+                        fclose(gopt_file);
+                    else {
+                        fprintf (stderr, "Option Error: %s cannot open file %s\n", long_options[option_index].name,optarg);
+                        exit (1);
+                    }
+                }
+            }
+            if (strcmp (long_options[option_index].name, "xtalk") == 0) {
+                bkg_control.xtalk = optarg;
+                if (strcmp(bkg_control.xtalk, "disable") == 0 || strcmp(bkg_control.xtalk, "opt") == 0);
+                else
+                {
+                    FILE *tmp_file = fopen(bkg_control.xtalk,"r");
+                    if (tmp_file != NULL)
+                        fclose(tmp_file);
+                    else {
+                        fprintf (stderr, "Option Error: %s cannot open file %s\n", long_options[option_index].name,optarg);
+                        exit (1);
+                    }
+                }
+            }
+
+            if (strcmp (long_options[option_index].name, "krate") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%f,%f,%f,%f", &bkg_control.krate[0],&bkg_control.krate[1],&bkg_control.krate[2],&bkg_control.krate[3]);
+                    if (stat != 4) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (1);
+                    }
+
+                    for (int i=0;i < 3;i++)
+                    {
+                        if ((bkg_control.krate[i] < 0.01) || (bkg_control.krate[i] > 100.0))
+                        {
+                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                            exit (1);
+                        }
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (1);
+                }
+            }
+            if (strcmp (long_options[option_index].name, "kmax") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%f,%f,%f,%f", &bkg_control.kmax[0],&bkg_control.kmax[1],&bkg_control.kmax[2],&bkg_control.kmax[3]);
+                    if (stat != 4) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (1);
+                    }
+
+                    for (int i=0;i < 3;i++)
+                    {
+                        if ((bkg_control.kmax[i] < 0.01) || (bkg_control.kmax[i] > 100.0))
+                        {
+                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                            exit (1);
+                        }
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (1);
+                }
+            }
+            if (strcmp (long_options[option_index].name, "diffusion-rate") == 0) {
+                if (optarg) {
+                    int stat = sscanf (optarg, "%f,%f,%f,%f", &bkg_control.diff_rate[0],&bkg_control.diff_rate[1],&bkg_control.diff_rate[2],&bkg_control.diff_rate[3]);
+                    if (stat != 4) {
+                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                        exit (1);
+                    }
+
+                    for (int i=0;i < 3;i++)
+                    {
+                        if ((bkg_control.diff_rate[i] < 0.01) || (bkg_control.diff_rate[i] > 1000.0))
+                        {
+                            fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                            exit (1);
+                        }
+                    }
+                }
+                else {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (1);
+                }
+            }            if (strcmp (lOption, "gpuworkload") == 0) {
+                int stat = sscanf (optarg, "%f", &bkg_control.gpuWorkLoad);
+                if (stat != 1) {
+                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
+                    exit (EXIT_FAILURE);
+                } else if ((bkg_control.gpuWorkLoad > 1) || (bkg_control.gpuWorkLoad < 0)) {
                     fprintf (stderr, "Option Error: %s must specify a value between 0 and 1 (%s invalid).\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
             if (strcmp (lOption, "numgputhreads") == 0) {
-                int stat = sscanf (optarg, "%d", &numGpuThreads);
+                int stat = sscanf (optarg, "%d", &bkg_control.numGpuThreads);
                 if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } else if (numGpuThreads <= 0 || numGpuThreads >=5 ) {
+                } else if (bkg_control.numGpuThreads <= 0 || bkg_control.numGpuThreads >=5 ) {
                     fprintf (stderr, "Option Error: %s must specify a value between 1 and 4 (%s invalid).\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
             if (strcmp (lOption, "numcputhreads") == 0) {
-                int stat = sscanf (optarg, "%d", &numCpuThreads);
+                int stat = sscanf (optarg, "%d", &bkg_control.numCpuThreads);
                 if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } else if (numCpuThreads <= 0) {
+                } else if (bkg_control.numCpuThreads <= 0) {
                     fprintf (stderr, "Option Error: %s must specify a value greater than 0 (%s invalid).\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
                 }
             }
             if (strcmp (lOption, "readaheaddat") == 0) {
-                int stat = sscanf (optarg, "%d", &readaheadDat);
+                int stat = sscanf (optarg, "%d", &bkg_control.readaheadDat);
                 if (stat != 1) {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } else if (readaheadDat <= 0) {
+                } else if (bkg_control.readaheadDat <= 0) {
                     fprintf (stderr, "Option Error: %s must specify a value greater than 0 (%s invalid).\n", long_options[option_index].name,optarg);
                     exit (EXIT_FAILURE);
-                } 
-            }
-
-
-            if (strcmp (long_options[option_index].name, "flowlimit") == 0) {
-                if (validIn (optarg, &input)) {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-                else {
-                    flowLimitSet = (unsigned int) input;
                 }
             }
-
-            if (strcmp (lOption, "bkg-dbg-trace") == 0) {
+           if (strcmp (lOption, "bkg-dbg-trace") == 0) {
                 sPtr = strchr(optarg,'x');
                 if (sPtr) {
                     Region dbg_reg;
@@ -1407,7 +1227,7 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                         exit (EXIT_FAILURE);
                     }
 
-                    BkgTraceDebugRegions.push_back(dbg_reg);
+                    bkg_control.BkgTraceDebugRegions.push_back(dbg_reg);
                 }
                 else {
                     fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
@@ -1415,25 +1235,9 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                 }
             }
 
-            if (strcmp (long_options[option_index].name, "cropped-region-origin") == 0) {
-                if (optarg) {
-                    int stat = sscanf (optarg, "%d,%d",
-                                       &cropped_region_x_offset,
-                                       &cropped_region_y_offset);
-                    if (stat != 2) {
-                        fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                        exit (EXIT_FAILURE);
-                    }
-                }
-                else {
-                    fprintf (stderr, "Option Error: %s %s\n", long_options[option_index].name,optarg);
-                    exit (EXIT_FAILURE);
-                }
-            }
+            // end bkg model control----------
 
-            if (strcmp (lOption, "output-dir") == 0) {
-                OUTPUTDIR_OVERRIDE = strdup (optarg);
-            }
+
             free (lOption);
 
             break;
@@ -1445,10 +1249,10 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             **  When this is set, we override the find-washouts default by
             **  setting the preRun filename to NULL.
             */
-            snprintf (preRunbfFileBase, 256, "%s", optarg);
+            snprintf (bfd_control.preRunbfFileBase, 256, "%s", optarg);
             //sprintf (preRunbfFileBase, "");
-            bfFileBase[0] = '\0';
-            SINGLEBF = true;
+            bfd_control.bfFileBase[0] = '\0';
+            bfd_control.SINGLEBF = true;
             break;
         case 'c':
             fprintf (stderr,"\n* * * * * * * * * * * * * * * * * * * * * * * * * *\n");
@@ -1457,18 +1261,13 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             fprintf (stderr,"* * * * * * * * * * * * * * * * * * * * * * * * * *\n\n");
             exit (EXIT_FAILURE);
             break;
-        case 'F': // use cf/ie/dr from file
-            libPhaseEstimator = "from-file";
-            cfiedrRegionsX = 13;
-            cfiedrRegionsY = 12;
-            break;
         case 'f':   // maximum frames
             if (validIn (optarg, &input)) {
                 fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                 exit (EXIT_FAILURE);
             }
             else {
-                maxFrames = (int) input;
+                img_control.maxFrames = (int) input;
             }
             break;
         case 'h': // command help
@@ -1483,14 +1282,14 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    lowerIntegralBound = (int) input;
+                    no_control.lowerIntegralBound = (int) input;
                 }
                 if (validIn (++sPtr, &input)) {
                     fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    upperIntegralBound = (int) input;
+                    no_control.upperIntegralBound = (int) input;
                 }
             }
             else {
@@ -1502,10 +1301,10 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
             for (unsigned int i = 0; i < strlen (optarg); i++)
                 optarg[i] = tolower(optarg[i]);
             if (strcmp (optarg, "off") == 0) {
-                KEYPASSFILTER = false;
+                flt_control.KEYPASSFILTER = false;
             }
             else if (strcmp (optarg, "on") == 0) {
-                KEYPASSFILTER = true;
+                flt_control.KEYPASSFILTER = true;
             }
             else {
                 fprintf (stderr, "Option Error: %c %s\n", c,optarg);
@@ -1518,19 +1317,12 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                 exit (EXIT_FAILURE);
             }
             else {
-                minPeakThreshold = (int) input;
+                no_control.minPeakThreshold = (int) input;
             }
             break;
         case 'v':   //version
             fprintf (stdout, "%s", IonVersion::GetFullVersion("Analysis").c_str());
             exit (EXIT_SUCCESS);
-            break;
-        case 'A': // auto calculate cafie for library reads per region
-            libPhaseEstimator = "lev-mar-cafiesolver";
-            // if regions are still 1x1, assume they were not set, and provide a decent default for a 314 chip of 13x12
-            cfiedrRegionsX = 13;
-            cfiedrRegionsY = 12;
-            // MGD note - this is just not the right way to do things, would much rather have the cafie region size be the input, and it can calculate the number of regions needed - this way it can scale to other chip types... and when the chip density/mm changes, we would then also want to scale so that region sizes roughly match a physical dimension
             break;
         case 'R': // use cfiedr in regions
             sPtr = strchr(optarg,'x');
@@ -1540,14 +1332,14 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    cfiedrRegionsX = (int) input;
+                    cfe_control.cfiedrRegionsX = (int) input;
                 }
                 if (validIn (++sPtr, &input)) {
                     fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    cfiedrRegionsY = (int) input;
+                    cfe_control.cfiedrRegionsY = (int) input;
                 }
             }
             else {
@@ -1563,14 +1355,14 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    blockSizeX = (int) input;
+                    cfe_control.blockSizeX = (int) input;
                 }
                 if (validIn (++sPtr, &input)) {
                     fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    blockSizeY = (int) input;
+                    cfe_control.blockSizeY = (int) input;
                 }
             }
             else {
@@ -1586,23 +1378,20 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    cfiedrRegionSizeX = (int) input;
+                    cfe_control.cfiedrRegionSizeX = (int) input;
                 }
                 if (validIn (++sPtr, &input)) {
                     fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                     exit (EXIT_FAILURE);
                 }
                 else {
-                    cfiedrRegionSizeY = (int) input;
+                    cfe_control.cfiedrRegionSizeY = (int) input;
                 }
             }
             else {
                 fprintf (stderr, "Option Error: %c %s\n", c,optarg);
                 exit (EXIT_FAILURE);
             }
-            break;
-        case 'D': // Separate first-pass to calculate droop
-            usePass1Droop = true;
             break;
         case '?':
             /* getopt_long already printed an error message.*/
@@ -1617,30 +1406,93 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
     // Pick up any non-option arguments (ie, source directory)
     for (c = optind; c < argc; c++)
     {
-        dirExt = argv[c];
+        sys_context.dat_source_directory = argv[c];
         break; //cause we only expect one non-option argument
     }
 
-    if (!dirExt) {
-        dirExt = (char *) malloc (2);
-        snprintf (dirExt, 1, ".");  // assume current directory if not provided as an argument
+    // @TODO: this is all post-processing after options are established
+
+    sys_context.GenerateContext(mod_control.USE_RAWWELLS); // find our directories
+    flow_context.DetectFlowFormula(sys_context,mod_control.USE_RAWWELLS);  // if we didn't set it, search for it
+    flt_control.RecognizeFlow(flow_context.flowOrder);  // must be after flow order is established, of course
+    loc_context.FindDimensionsByType(sys_context.dat_source_directory);
+    cfe_control.EchoDerivedChipParams(loc_context.chip_len_x,loc_context.chip_len_y); // must be after dimensions
+}
+
+void SpatialContext::FindDimensionsByType(char *dat_source_directory)
+{
+      char *chipType = GetChipId(dat_source_directory);
+    ChipIdDecoder::SetGlobalChipId(chipType);  // @TODO: bad coding style, function side effect setting global variable
+    int dims[2];
+    GetChipDim(chipType, dims, dat_source_directory);  // @what if we're doing from wells and there are no dats?
+    chip_len_x = dims[0];
+    chip_len_y = dims[1];
+}
+
+
+void FilterControlOpts::RecognizeFlow(char *flowFormula)
+{
+    // Set some options that depend of flow order (unless explicitly set in command line)
+    map<string,double>::iterator it;
+    // cafieResMaxValue
+    it = cafieResMaxValueByFlowOrder.find(string(flowFormula));
+    if (!cafieResMaxValueOverride && it != cafieResMaxValueByFlowOrder.end()) {
+        cafieResMaxValue = it->second;
+    }
+
+    // Test some dependencies between options
+    if (cafieResMinFlow >= cafieResMaxFlow) {
+        fprintf (stderr, "value of --cafie-residual-filter-min-flow must be strictly less than that of --cafie-residual-filter-max-flow.\n");
+        exit (EXIT_FAILURE);
+    }
+}
+
+
+void SystemContext::GenerateContext(int from_wells)
+{
+      if (!dat_source_directory) {
+        dat_source_directory = (char *) malloc (2);
+        snprintf (dat_source_directory, 1, ".");  // assume current directory if not provided as an argument
     }
 
     // Test for a valid data source directory
     // Exception: if this is a re-analysis from wells file, then we can skip this test.
-    if (isDir(dirExt) == false && (USE_RAWWELLS == 0)) {
-        fprintf (stderr, "'%s' is not a directory.  Exiting.\n", dirExt);
+    if (isDir(dat_source_directory) == false && (from_wells == 0)) {
+        fprintf (stderr, "'%s' is not a directory.  Exiting.\n", dat_source_directory);
         exit (EXIT_FAILURE);
     }
 
+    // standard output directory
+    if (!wells_output_directory) {
+        experimentName = (char*) malloc (3);
+        strcpy (experimentName, "./");
+    } else {
+        if (NO_SUBDIR) {
+            experimentName = strdup (wells_output_directory);
+        } else {
+            experimentName = experimentDir (dat_source_directory, wells_output_directory);    // subDir is created with this name
+        }
+
+    }
+
+    if (!basecaller_output_directory) {
+        basecaller_output_directory = strdup(experimentName);  // why is this duplicated?
+    }
+
+}
+
+void FlowContext::DetectFlowFormula(SystemContext &sys_context, int from_wells)
+{
+// @TODO: obviously needs to be refactored into flow routine
+// expand flow formula = flowOrder into appropriate number of flows
     //Determine total number of flows in experiment or previous analysis
-    if (USE_RAWWELLS == 0) {
-        numTotalFlows = GetTotalFlows(dirExt);
+    if (from_wells == 0) {
+        numTotalFlows = GetTotalFlows(sys_context.dat_source_directory);
         assert (numTotalFlows > 0);
     }
     else {
         // Get total flows from processParams.txt
-        numTotalFlows = atoi (GetProcessParam(wellsFilePath, "numFlows"));
+        numTotalFlows = atoi (GetProcessParam(sys_context.wellsFilePath, "numFlows"));
         assert (numTotalFlows > 0);
     }
 
@@ -1650,8 +1502,8 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         if (flowOrder)
             free (flowOrder);
         // Get flow order from the explog.txt file
-        if (USE_RAWWELLS == 0) {
-            flowOrder = GetPGMFlowOrder (dirExt);
+        if (from_wells == 0) {
+            flowOrder = GetPGMFlowOrder (sys_context.dat_source_directory);
             assert (flowOrder != NULL);
             numFlowsPerCycle = strlen (flowOrder);
             assert (numFlowsPerCycle > 0);
@@ -1659,7 +1511,7 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         // Get flow order from the processParams.txt file
         else
         {
-            flowOrder = GetProcessParam (wellsFilePath, "flowOrder");
+            flowOrder = GetProcessParam (sys_context.wellsFilePath, "flowOrder");
             assert (flowOrder != NULL);
             numFlowsPerCycle = strlen (flowOrder);
             assert (numFlowsPerCycle > 0);
@@ -1670,62 +1522,18 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
     // to limit these values
     if (flowLimitSet) {
         //support user specified number of flows
-        numTotalFlows = (flowLimitSet < numTotalFlows ? flowLimitSet:numTotalFlows);
+        numTotalFlows = (flowLimitSet < numTotalFlows ? flowLimitSet: numTotalFlows);
         assert (numTotalFlows > 0);
     }
+}
 
-    // Set some options that depend of flow order (unless explicitly set in command line)
-    map<string,double>::iterator it;
-    // cafieResMaxValue
-    it = cafieResMaxValueByFlowOrder.find(string(flowOrder));
-    if (!cafieResMaxValueOverride && it != cafieResMaxValueByFlowOrder.end()) {
-        cafieResMaxValue = it->second;
-    }
-    // percentPositiveFlowsMaxValue
-    it = percentPositiveFlowsMaxValueByFlowOrder.find(string(flowOrder));
-    if (!percentPositiveFlowsMaxValueOverride && it != percentPositiveFlowsMaxValueByFlowOrder.end()) {
-        percentPositiveFlowsMaxValue = it->second;
-    }
-    // percentPositiveFlowsMinValue
-    it = percentPositiveFlowsMinValueByFlowOrder.find(string(flowOrder));
-    if (!percentPositiveFlowsMinValueOverride && it != percentPositiveFlowsMinValueByFlowOrder.end()) {
-        percentPositiveFlowsMinValue = it->second;
-    }
-
-    // Test some dependencies between options
-    if (cafieResMinFlow >= cafieResMaxFlow) {
-        fprintf (stderr, "value of --cafie-residual-filter-min-flow must be strictly less than that of --cafie-residual-filter-max-flow.\n");
-        exit (EXIT_FAILURE);
-    }
-    if (percentPositiveFlowsMinFlow >= percentPositiveFlowsMaxFlow) {
-        fprintf (stderr, "value of --percent-positive-flow-filter-min-flow must be strictly less than that of --percent-positive-flow-filter-max-flow.\n");
-        exit (EXIT_FAILURE);
-    }
-    if (percentPositiveFlowsMinValue >= percentPositiveFlowsMaxValue) {
-        fprintf (stderr, "value of --percent-positive-flow-filter-min-value must be strictly less than that of --percent-positive-flow-filter-max-value.\n");
-        exit (EXIT_FAILURE);
-    }
-    if (perFlowScale) {
-        if (perFlowScaleVal.size() < numTotalFlows) {
-            fprintf (stderr, "%d per-flow scaling factors supplied for %d flows to analyze - exiting.\n",(int)perFlowScaleVal.size(),numTotalFlows);
-            exit (EXIT_FAILURE);
-        } else if (perFlowScaleVal.size() > numTotalFlows) {
-            fprintf (stderr, "%d per-flow scaling factors supplied for %d flows to analyze - OK, but perhaps not what was intended?\n",(int)perFlowScaleVal.size(),numTotalFlows);
-        }
-    }
-    
-    //ChipType properties
-    char *chipType = GetChipId(dirExt);
-    ChipIdDecoder::SetGlobalChipId(chipType);
-    int dims[2];
-    GetChipDim(chipType, dims);
-    chip_len_x = dims[0];
-    chip_len_y = dims[1];
-
+void CafieControlOpts::EchoDerivedChipParams(int chip_len_x, int chip_len_y)
+{
+    //@TODO: isolate to cfe_control
     //overwrite cafie region size (13x12)
     if ((cfiedrRegionSizeX != 0) && (cfiedrRegionSizeY != 0) && (blockSizeX != 0) && (blockSizeY != 0)) {
         std::cout << "INFO: blockSizeX: " << blockSizeX << " ,blockSizeY: " << blockSizeY << std::endl;
-        cfiedrRegionsX = blockSizeX / cfiedrRegionSizeX;
+        cfiedrRegionsX = blockSizeX /cfiedrRegionSizeX;
         cfiedrRegionsY = blockSizeY / cfiedrRegionSizeY;
         std::cout << "INFO: cfiedrRegionsX: " << cfiedrRegionsX << " ,cfiedrRegionsY: " << cfiedrRegionsY << std::endl;
     }
@@ -1747,74 +1555,60 @@ void CommandLineOpts::WriteProcessParameters ()
     for (int i = 0; i < numArgs; i++)
         fprintf (fpLog, "%s ", argvCopy[i]);
     fprintf (fpLog, "\n");
-    fprintf (fpLog, "dataDirectory = %s\n", dirExt);
-    fprintf (fpLog, "runId = %s\n", runId);
-    fprintf (fpLog, "flowOrder = %s\n", flowOrder);
-    fprintf (fpLog, "wantDotFixes = %s\n", (wantDotFixes?"true":"false"));
+    fprintf (fpLog, "dataDirectory = %s\n", sys_context.dat_source_directory);
+    fprintf (fpLog, "runId = %s\n", sys_context.runId);
+    fprintf (fpLog, "flowOrder = %s\n", flow_context.flowOrder);
     fprintf (fpLog, "washFlow = %d\n", GetWashFlow());
-    fprintf (fpLog, "libraryKey = %s\n", libKey);
-    fprintf (fpLog, "tfKey = %s\n", tfKey);
-    fprintf (fpLog, "minNumKeyFlows = %d\n", minNumKeyFlows);
-    fprintf (fpLog, "maxNumKeyFlows = %d\n", maxNumKeyFlows);
-    fprintf (fpLog, "numFlows = %d\n", numTotalFlows);
-    fprintf (fpLog, "cyclesProcessed = %d\n", numTotalFlows/4);
-    fprintf (fpLog, "framesProcessed = %d\n", maxFrames);
-    fprintf (fpLog, "framesInData = %d\n", totalFrames);
+    fprintf (fpLog, "libraryKey = %s\n", key_context.libKey);
+    fprintf (fpLog, "tfKey = %s\n", key_context.tfKey);
+    fprintf (fpLog, "minNumKeyFlows = %d\n", key_context.minNumKeyFlows);
+    fprintf (fpLog, "maxNumKeyFlows = %d\n", key_context.maxNumKeyFlows);
+    fprintf (fpLog, "numFlows = %d\n", flow_context.numTotalFlows);
+    fprintf (fpLog, "cyclesProcessed = %d\n", flow_context.numTotalFlows/4); // @TODO: may conflict with PGM now
+    fprintf (fpLog, "framesProcessed = %d\n", img_control.maxFrames);
+    fprintf (fpLog, "framesInData = %d\n", img_control.totalFrames);
     //fprintf (fpLog, "framesPerSecond = %f\n", img.GetFPS());
-    fprintf (fpLog, "minPeakThreshold = %d\n", minPeakThreshold);
-    fprintf (fpLog, "lowerIntegrationTime = %d\n", lowerIntegralBound);
-    fprintf (fpLog, "upperIntegrationTime = %d\n", upperIntegralBound);
-    fprintf (fpLog, "bkgModelUsed = %s\n", (USE_BKGMODEL ? "true":"false"));
-    fprintf (fpLog, "nucTraceCorrectionUsed = %s\n", (NUC_TRACE_CORRECT ? "true":"false"));
-    fprintf (fpLog, "scaledSolve2Used = %s\n", (SCALED_SOLVE2 ? "true":"false"));
-    fprintf (fpLog, "cafieResFilterTrainingUsed = %s\n", (cafieResFilterTraining ? "true":"false"));
-    fprintf (fpLog, "cafieResFilterCallingUsed = %s\n", (cafieResFilterCalling ? "true":"false"));
-    fprintf (fpLog, "cafieResFilterTFsUsed = %s\n", (cafieResFilterTFs ? "true":"false"));
-    fprintf (fpLog, "sequenceAllLibUsed = %s\n", (sequenceAllLib ? "true":"false"));
-    fprintf (fpLog, "cafieResMaxFlow = %d\n", cafieResMaxFlow);
-    fprintf (fpLog, "cafieResMinFlow = %d\n", cafieResMinFlow);
-    fprintf (fpLog, "cafieResMaxValue = %lf\n", cafieResMaxValue);
-    fprintf (fpLog, "numFlowsToFit = %d\n", numFlowsToFitCafie1);
-    fprintf (fpLog, "numFlowsIncrement = %d\n", numFlowsIncrement);
-    fprintf (fpLog, "numCFIEDRFitPasses = %d\n", numCFIEDRFitPasses);
-    fprintf (fpLog, "droopMode = %s\n", droopMode);
-    fprintf (fpLog, "basecaller = %s\n", basecaller.c_str());
-    fprintf (fpLog, "percentPositiveFlowsFilterCallingUsed = %s\n", (percentPositiveFlowsFilterCalling ? "true":"false"));
-    fprintf (fpLog, "percentPositiveFlowsFilterTrainingUsed = %s\n", (percentPositiveFlowsFilterTraining ? "true":"false"));
-    fprintf (fpLog, "percentPositiveFlowsFilterTFsUsed = %s\n", (percentPositiveFlowsFilterTFs ? "true":"false"));
-    fprintf (fpLog, "percentPositiveFlowsMaxFlow = %d\n", percentPositiveFlowsMaxFlow);
-    fprintf (fpLog, "percentPositiveFlowsMinFlow = %d\n", percentPositiveFlowsMinFlow);
-    fprintf (fpLog, "percentPositiveFlowsMaxValue = %lf\n", percentPositiveFlowsMaxValue);
-    fprintf (fpLog, "percentPositiveFlowsMinValue = %lf\n", percentPositiveFlowsMinValue);
-    fprintf (fpLog, "clonalFilterTraining = %s\n", (clonalFilterTraining ? "true":"false"));
-    fprintf (fpLog, "clonalFilterSolving = %s\n", (clonalFilterSolving ? "true":"false"));
-    fprintf (fpLog, "hpScaleFactorUsed = %lf\n",hpScaleFactor);
-    if (TF_CAFIE_CORRECTION == 0) {
-        fprintf (fpLog, "TFcf-ie-dr values used = %0.5lf %0.5lf %0.5lf\n", TFcfOverride, TFieOverride, TFdrOverride);
+    fprintf (fpLog, "minPeakThreshold = %d\n", no_control.minPeakThreshold);
+    fprintf (fpLog, "lowerIntegrationTime = %d\n", no_control.lowerIntegralBound);
+    fprintf (fpLog, "upperIntegrationTime = %d\n", no_control.upperIntegralBound);
+    fprintf (fpLog, "bkgModelUsed = %s\n", (mod_control.USE_BKGMODEL ? "true":"false"));
+    fprintf (fpLog, "nucTraceCorrectionUsed = %s\n", (no_control.NUC_TRACE_CORRECT ? "true":"false"));
+    fprintf (fpLog, "cafieResFilterTrainingUsed = %s\n", (flt_control.cafieResFilterTraining ? "true":"false"));
+    fprintf (fpLog, "cafieResFilterCallingUsed = %s\n", (flt_control.cafieResFilterCalling ? "true":"false"));
+    fprintf (fpLog, "cafieResFilterTFsUsed = %s\n", (flt_control.cafieResFilterTFs ? "true":"false"));
+    fprintf (fpLog, "cafieResMaxFlow = %d\n", flt_control.cafieResMaxFlow);
+    fprintf (fpLog, "cafieResMinFlow = %d\n", flt_control.cafieResMinFlow);
+    fprintf (fpLog, "cafieResMaxValue = %lf\n", flt_control.cafieResMaxValue);
+    fprintf (fpLog, "basecaller = %s\n", cfe_control.basecaller.c_str());
+    fprintf (fpLog, "percentPositiveFlowsFilterCallingUsed = %s\n", (flt_control.percentPositiveFlowsFilterCalling ? "true":"false"));
+    fprintf (fpLog, "percentPositiveFlowsFilterTrainingUsed = %s\n", (flt_control.percentPositiveFlowsFilterTraining ? "true":"false"));
+    fprintf (fpLog, "percentPositiveFlowsFilterTFsUsed = %s\n", (flt_control.percentPositiveFlowsFilterTFs ? "true":"false"));
+    fprintf (fpLog, "clonalFilterTraining = %s\n", (flt_control.clonalFilterTraining ? "true":"false"));
+    fprintf (fpLog, "clonalFilterSolving = %s\n", (flt_control.clonalFilterSolving ? "true":"false"));
+    if (cfe_control.libPhaseEstimator == "override") {
+        fprintf (fpLog, "Libcf-ie-dr values used = %0.5lf %0.5lf %0.5lf\n", cfe_control.LibcfOverride, cfe_control.LibieOverride, cfe_control.LibdrOverride);
     }
-    if (libPhaseEstimator == "override") {
-        fprintf (fpLog, "Libcf-ie-dr values used = %0.5lf %0.5lf %0.5lf\n", LibcfOverride, LibieOverride, LibdrOverride);
-    }
-    fprintf (fpLog, "nearest-neighborParameters = Inner: (%d,%d) Outer: (%d,%d)\n", NNinnerx, NNinnery, NNouterx, NNoutery);
-    fprintf (fpLog, "Advanced beadfind = %s\n", BF_ADVANCED ? "enabled":"disabled");
-    fprintf (fpLog, "minTFFlows = %d\n", minTFFlows);
-    fprintf (fpLog, "minTFScore = %0.2lf\n", minTFScore);
-    fprintf (fpLog, "cfiedroopRegions = %d (%dx%d)\n", cfiedrRegionsX * cfiedrRegionsY,cfiedrRegionsX,cfiedrRegionsY);
-    fprintf (fpLog, "cfiedroopRegion dimensions = %dx%d\n", (int) ceil(cols/(double)cfiedrRegionsX), (int) ceil(rows/(double)cfiedrRegionsY));
-    fprintf (fpLog, "numCafieSolveFlows = %d\n", numCafieSolveFlows);
-    fprintf (fpLog, "use pinned wells = %s\n", USE_PINNED ? "true":"false");
-    fprintf (fpLog, "use exclusion mask = %s\n", exclusionMaskSet ? "true":"false");
+    fprintf (fpLog, "nearest-neighborParameters = Inner: (%d,%d) Outer: (%d,%d)\n", img_control.NNinnerx, img_control.NNinnery, img_control.NNouterx, img_control.NNoutery);
+    
+    fprintf (fpLog, "Advanced beadfind = %s\n", bfd_control.BF_ADVANCED ? "enabled":"disabled");
+    fprintf (fpLog, "cfiedroopRegions = %d (%dx%d)\n", cfe_control.cfiedrRegionsX * cfe_control.cfiedrRegionsY,cfe_control.cfiedrRegionsX,cfe_control.cfiedrRegionsY);
+    fprintf (fpLog, "cfiedroopRegion dimensions = %dx%d\n", (int) ceil(loc_context.cols/(double)cfe_control.cfiedrRegionsX), (int) ceil(loc_context.rows/(double)cfe_control.cfiedrRegionsY));
+    fprintf (fpLog, "numCafieSolveFlows = %d\n", cfe_control.numCafieSolveFlows);
+    fprintf (fpLog, "use pinned wells = %s\n", no_control.USE_PINNED ? "true":"false");
+    fprintf (fpLog, "use exclusion mask = %s\n", loc_context.exclusionMaskSet ? "true":"false");
     fprintf (fpLog, "Version = %s\n", IonVersion::GetVersion().c_str());
     fprintf (fpLog, "Build = %s\n", IonVersion::GetBuildNum().c_str());
     fprintf (fpLog, "SvnRev = %s\n", IonVersion::GetSvnRev().c_str());
-    fprintf (fpLog, "Chip = %d,%d\n", chip_len_x,chip_len_y);
-    fprintf (fpLog, "Block = %d,%d,%d,%d\n", chip_offset_x,chip_offset_y,cols,rows);
-    for (int q=0;q<numCropRegions;q++)
-        fprintf (fpLog, "Cropped Region = %d,%d,%d,%d\n", cropRegions[q].col,cropRegions[q].row,cropRegions[q].w,cropRegions[q].h);
-    fprintf (fpLog, "Analysis Region = %d,%d,%d,%d\n", chipRegion.col,chipRegion.row,chipRegion.col+chipRegion.w,chipRegion.row+chipRegion.h);
-    fprintf (fpLog, "numRegions = %d\n", numRegions);
-    fprintf (fpLog, "regionRows = %d\nregionCols = %d\n", regionsY, regionsX);
-    fprintf (fpLog, "regionSize = %dx%d\n", regionXSize, regionYSize);
+    
+    fprintf (fpLog, "Chip = %d,%d\n", loc_context.chip_len_x,loc_context.chip_len_y);
+    fprintf (fpLog, "Block = %d,%d,%d,%d\n", loc_context.chip_offset_x,loc_context.chip_offset_y,loc_context.cols,loc_context.rows);
+    for (int q=0;q<loc_context.numCropRegions;q++)
+        fprintf (fpLog, "Cropped Region = %d,%d,%d,%d\n", loc_context.cropRegions[q].col,loc_context.cropRegions[q].row,loc_context.cropRegions[q].w,loc_context.cropRegions[q].h);
+
+    fprintf (fpLog, "Analysis Region = %d,%d,%d,%d\n", loc_context.chipRegion.col,loc_context.chipRegion.row,loc_context.chipRegion.col+loc_context.chipRegion.w,loc_context.chipRegion.row+loc_context.chipRegion.h);
+    fprintf (fpLog, "numRegions = %d\n", loc_context.numRegions);
+    fprintf (fpLog, "regionRows = %d\nregionCols = %d\n", loc_context.regionsY, loc_context.regionsX);
+    fprintf (fpLog, "regionSize = %dx%d\n", loc_context.regionXSize, loc_context.regionYSize);
     //fprintf (fpLog, "\tRow Column Height Width\n");
     //for (int i=0;i<numRegions;i++)
     //  fprintf (fpLog, "[%3d] %5d %5d %5d %5d\n", i, regions[i].row, regions[i].col,regions[i].h,regions[i].w);
@@ -1824,8 +1618,8 @@ void CommandLineOpts::WriteProcessParameters ()
 FILE * CommandLineOpts::InitFPLog ()
 {
     char file[] = "processParameters.txt";
-    char *fileName = (char *) malloc (strlen (experimentName) + strlen (file) + 2);
-    sprintf (fileName, "%s/%s", experimentName, file);
+    char *fileName = (char *) malloc (strlen (sys_context.experimentName) + strlen (file) + 2);
+    sprintf (fileName, "%s/%s", sys_context.experimentName, file);
     fopen_s(&fpLog, fileName, "wb");
     if (!fpLog) {
         perror (fileName);
@@ -1843,7 +1637,7 @@ FILE * CommandLineOpts::InitFPLog ()
 //  Raw dir names are R_YYYY_MM_DD_hh_mm_ss_XXX_description
 //  Results directory ("experiment" directory) will be 'description'_username_YY_MM_DD_seconds-in-day
 //
-char *CommandLineOpts::experimentDir (char *rawdataDir, char *dirOut)
+char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
 {
     char *expDir = NULL;
     char *timeStamp = NULL;
@@ -1882,53 +1676,6 @@ char *CommandLineOpts::experimentDir (char *rawdataDir, char *dirOut)
 
     free (timeStamp);
     return (expDir);
-}
-
-void readPerFlowScaleFile(vector<float> &perFlowScaleVal, char *perFlowScaleFile) {
-    char *buf = (char*) calloc(1,PER_FLOW_SCALE_MAX_LINE_LEN * sizeof(char));
-    size_t bufSize = PER_FLOW_SCALE_MAX_LINE_LEN;
-    FILE *fp = fopen(perFlowScaleFile, "r");
-    if (fp) {
-        int bytes_read = getline(&buf,&bufSize,fp);
-        if (bytes_read == -1) {
-            fprintf (stderr, "Failed to read first line of file %s\n", perFlowScaleFile);
-            exit (EXIT_FAILURE);
-        } else {
-            int nFlow=0;
-            int stat = sscanf(buf, "%d", &nFlow);
-            if (stat != 1) {
-                fprintf (stderr, "Invalid entry on first line of file %s\n", perFlowScaleFile);
-                exit (EXIT_FAILURE);
-            } else if (nFlow <= 0) {
-                fprintf (stderr, "First entry should be a positive integer in %s\n", perFlowScaleFile);
-                exit (EXIT_FAILURE);
-            } else {
-                perFlowScaleVal.resize(nFlow);
-                for (int i=0; i<nFlow; i++) {
-                    bytes_read = getline(&buf,&bufSize,fp);
-                    if (bytes_read == -1) {
-                        fprintf (stderr, "Failed to read line %d of file %s\n", (i+1), perFlowScaleFile);
-                        exit (EXIT_FAILURE);
-                    } else {
-                        float val=0;
-                        stat = sscanf(buf, "%f", &val);
-                        if (stat != 1) {
-                            fprintf (stderr, "Invalid entry on line %d of file %s\n", (i+1), perFlowScaleFile);
-                            exit (EXIT_FAILURE);
-                        } else if (val <= 0) {
-                            fprintf (stderr, "Entry should be a positive float in line %d of %s\n", (i+1), perFlowScaleFile);
-                        } else {
-                            perFlowScaleVal[i] = val;
-                        }
-                    }
-                }
-            }
-        }
-        fclose(fp);
-    } else {
-        fprintf (stderr, "Failed to open per-flow scale file %s\n", perFlowScaleFile);
-        exit (EXIT_FAILURE);
-    }
 }
 
 void readBasecallSubsetFile(char *basecallSubsetFile, set< pair <unsigned short,unsigned short> > &basecallSubset) {

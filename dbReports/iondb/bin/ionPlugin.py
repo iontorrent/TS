@@ -8,21 +8,13 @@ import datetime
 import traceback
 import json
 
-try:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    import iondb.settings as settings
-except ImportError:
-    sys.path.pop()
-    sys.path.append("../")
-    sys.path.append("../../")
-    import iondb.settings as settings
-
+from djangoinit import settings
 from iondb.plugins import PluginRunner
 
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 21578 $")
+__version__ = filter(str.isdigit, "$Revision: 22640 $")
 
 # Setup log file logging
 try:

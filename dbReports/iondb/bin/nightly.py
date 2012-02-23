@@ -25,7 +25,8 @@ def get_recips():
     return ret
 
 RECIPS = get_recips()
-SENDER = "donotreply@iontorrent.com" #"cases@ionsw.fogbugz.com"
+#RECIPS = ['Mel.Davey@Lifetech.com']
+SENDER = "donotreply@iontorrent.com"
 TEMPLATE_NAME = "rundb/ion_nightly.html"
 
 def reports_to_text(reports):
@@ -42,17 +43,41 @@ def send_nightly():
     resultsList = models.Results.objects.filter(timeStamp__gt=timerange)
 
     # for each result, its either the first result generated, or not.  If first, it goes into the new results list, else into the old
+    # so first result is either the first thumbnail, or if no thumbnails, the first full report
     resultsNew = []
     resultsOld = []
+    resultsThumbsNew = []
 
     for result in resultsList:
         if (result.status == 'Completed'):
             exp = result.experiment
             rset = exp.results_set.all().order_by('timeStamp')
-            if (rset[0].pk == result.pk):
-                resultsNew.append(result)
-            else:
-               resultsOld.append(result)
+            # now find the first thumbnail, if its the result we are looking at, its new
+            # else find the first non-thumbnail, and if its the result we are looking at, then add to new,
+            # else add to old
+            firstThumb = None
+            firstFull = None
+            for i in range(0, len(rset), 1):
+               testResult = rset[i]
+               if (firstThumb is None) and (testResult.resultsName[-3:] == '_tn'):
+                   firstThumb = testResult
+               if (firstFull is None) and (testResult.resultsName[-3:] != '_tn'):
+                   firstFull = testResult
+
+            added = False
+            if firstThumb is not None:
+                if firstThumb.pk == result.pk:
+                    resultsThumbsNew.append(result)
+                    added = True
+            # we could exclude adding the full report if we already added the thumb, but tricky since we would need a field to modify in each result indicating we just added it
+
+            if not added and firstFull is not None:
+                if firstFull.pk == result.pk:
+                    resultsNew.append(result)
+                    added = True
+
+            if not added:
+                resultsOld.append(result)
 
     #resultsOld = resultsOld.order_by('timeStamp')
     #resultsNew = resultsNew.order_by('timeStamp')
@@ -75,14 +100,20 @@ def send_nightly():
     lbmsNew = [res.best_lib_metrics for res in resultsNew]
     tfmsNew = [res.best_metrics for res in resultsNew]
     linksNew = [web_root+res.reportLink for res in resultsNew]
-    
+
+    lbmsThumbsNew = [res.best_lib_metrics for res in resultsThumbsNew]
+    tfmsThumbsNew = [res.best_metrics for res in resultsThumbsNew]
+    linksThumbsNew = [web_root+res.reportLink for res in resultsThumbsNew]
+ 
     #find the sum of the q17 bases
     hqBaseSum = 0
     for res in resultsNew:
         if res.best_lib_metrics:
-            if res.best_lib_metrics.align_sample:
+            if not res.best_lib_metrics.align_sample == 0:
+                hqBaseSum = hqBaseSum + res.best_lib_metrics.q17_mapped_bases
+            if res.best_lib_metrics.align_sample == 1:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.extrapolated_mapped_bases_in_q17_alignments
-            if not res.best_lib_metrics.align_sample:
+            if not res.best_lib_metrics.align_sample == 2:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.q17_mapped_bases
 
     tmpl = loader.get_template(TEMPLATE_NAME)
@@ -90,6 +121,8 @@ def send_nightly():
                                 [(r,t,lb,l) for r,t,lb,l in zip(resultsOld,tfmsOld,lbmsOld,linksOld) if t or l],
                             "reportsNew":
                                 [(r,t,lb,l) for r,t,lb,l in zip(resultsNew,tfmsNew,lbmsNew,linksNew) if t or l],
+                            "reportsThumbsNew":
+                                [(r,t,lb,l) for r,t,lb,l in zip(resultsThumbsNew,tfmsThumbsNew,lbmsThumbsNew,linksThumbsNew) if t or l],
                             "webroot":web_root,
                             "sitename":site_name,
                             "hq_base_num_new":hqBaseSum,

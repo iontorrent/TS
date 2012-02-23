@@ -12,110 +12,21 @@
 
 #define PER_FLOW_SCALE_MAX_LINE_LEN 1024
 
-class CommandLineOpts {
-public:
-    CommandLineOpts(int argc, char *argv[]);
-    ~CommandLineOpts();
-    
-    void DefaultBkgModelControl();
-    void DefaultCAFIEControl();
-    void DefaultBeadfindControl();
-    void DefaultFilterControl();
-    void DefaultWellControl();
-
-    void GetOpts(int argc, char *argv[]);
-    void WriteProcessParameters();
-    FILE *InitFPLog();
-    char *GetExperimentName() {
-        return (experimentName);
-    }
-    int GetWashFlow() {
-        int hasWashFlow = HasWashFlow(dirExt);
-        return (hasWashFlow < 0 ? 0 : hasWashFlow);
-    }
-    void PrintHelp();
-    int GetNumFlows() {
-        return (numTotalFlows);
-    }
-
-    /*---   options variables       ---*/
-    char *dirExt;
-    char *OUTPUTDIR_OVERRIDE;
-    char dirOut[MAX_PATH_LENGTH];
-    char *beadMaskFile;
-    int maskFileCategorized;
-    char bfFileBase[MAX_PATH_LENGTH];
-    char preRunbfFileBase[MAX_PATH_LENGTH];
-    char wellsFileName[MAX_PATH_LENGTH];
-    char tmpWellsFile[MAX_PATH_LENGTH];
-    int numRegions;
-    int numCafieSolveFlows;
-    int lowerIntegralBound; // Frame 15...(used to be 20, Added a little more at the start for bkgModel)
-    int upperIntegralBound; // Frame 60
-    int minPeakThreshold;
-    int totalFrames;
-    int maxFrames; // Set later from the first raw image header.
-    char *sPtr;
-    bool KEYPASSFILTER;
-
-    //bool tryAllReads = true; // this determines what TF's we track to determine cf/ie/dr - normally would be set to false but TF's with lib key are being handled right now - risk that we include non-TF's as part of the cf/ie/dr calcs
-    bool tryAllReads; // this determines what TF's we track to determine cf/ie/dr - normally would be set to false but TF's with lib key are being handled right now - risk that we include non-TF's as part of the cf/ie/dr calcs
-    int NUC_TRACE_CORRECT;
-    std::string libPhaseEstimator;
-    int TF_CAFIE_CORRECTION;
-    char *TFoverride;
-    int cfiedrRegionsX, cfiedrRegionsY;
-    int cfiedrRegionSizeX, cfiedrRegionSizeY;
-    int blockSizeX, blockSizeY;
-    bool usePass1Droop; // when set to true, we calculate droop as an independent param estimate, then just solve cf & ie
-    int NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
-    double minTFScore; // if we can't score this TF with 85% confidence, its unknown
-    // int     minSeqBases = 14; // if TF doesn't have this many bases, its ignored
-    int minTFFlows; // 8 flows for key, plus at least one more cycle, or we ignore this TF
-    int alternateTFMode; // better tuning for TF processing
-    int cols;
-    int rows;
-    int regionXOrigin;
-    int regionYOrigin;
-    int regionXSize;
-    int regionYSize;
-    int regionsX;
-    int regionsY;
-    Region *cropRegions;
-    int numCropRegions;
-    int USE_RAWWELLS;
-    int flowTimeOffset;
-    int cafieFlowMax;
-    int minTFCount;
-    double LibcfOverride;
-    double LibieOverride;
-    double LibdrOverride;
-    double TFcfOverride;
-    double TFieOverride;
-    double TFdrOverride;
-    double initial_cf;
-    double initial_ie;
-    double initial_dr;
-    char runId[6];
-    int NNinnerx;
-    int NNinnery;
-    int NNouterx;
-    int NNoutery;
-    char *libKey;
-    char *tfKey;
-    char *flowOrder;
-    bool flowOrderOverride;
-    int neighborSubtract;
-    int numGroupsPerRegion;
-    bool USE_BKGMODEL;
+// define overall program flow
+class ModuleControlOpts{
+  public:
     int BEADFIND_ONLY;
-    int noduds;
-    bool SINGLEBF;
-    bool NormalizeZeros;
-    int singleCoreCafie;
-    int USE_PINNED;
-    int BF_ADVANCED;
-    int LOCAL_WELLS_FILE;
+    bool USE_BKGMODEL;
+    int USE_RAWWELLS;
+    bool WELLS_FILE_ONLY;
+
+    void DefaultControl();
+};
+
+// What does the bkg-model section of the software need to know?
+class BkgModelControlOpts{
+  public:
+    int bkgModelHdf5Debug;
     float bkg_model_emphasis_width;
     float bkg_model_emphasis_amplitude;
     float dntp_uM;
@@ -127,48 +38,65 @@ public:
     float kmax[4];
     float diff_rate[4];
     int no_rdr_fit_first_20_flows;
-    int *flowOrderIndex;
-    int SCALED_SOLVE2;
-    int NONLINEAR_HP_SCALE;
-    int wantPerWellCafie;
-    char *droopMode;
-    double hpScaleFactor;
-    char wellsFilePath[MAX_PATH_LENGTH];
-    char *wellStatFile;
-    bool dotFixDebug;
-    std::string basecaller;
-    char *regionCafieDebugFile;
-    bool wantDotFixes;
-    int doCafieResidual;
-    int nUnfilteredLib;
-    char *unfilteredLibDir;
-    char *beadSummaryFile;
-    char *experimentName;
-    int maxNumKeyFlows;
-    int minNumKeyFlows;
-    bool exclusionMaskSet;
-    int skiptfbasecalling;
-    int numCFIEDRFitPasses;
-    int sequenceAllLib;
-    int minReadLength;
-    int hilowPixFilter;
-    bool useCafieHPIgnoreList; // defaults to false - just ignore all HP's when estimating
-    int *cafieHPIgnoreList; // list of HP's to ignore
-    int numCafieHPIgnoreList;
-    bool cafieFitIgnoreLowQual;
-    int ignoreChecksumErrors; // set to true to force corrupt checksum files to load anyway - beware!
-    // Options related to filtering reads by percentage of positive flows
+    int var_kmult_only;
+    int generic_test_flag;
+    bool enableXtalkCorrection;
+    bool enableBkgModelClonalFilter;
+    int relaxKrateConstraint;
+    float damp_kmult; // dampen kmult variation
+    int bkgDebugParam;
+    // temporary: dump debugging information for all beads, not just one
+   int debug_bead_only;
+    // commandline options for GPU for background model computation
+    float gpuWorkLoad;
+    int numGpuThreads;
+    int numCpuThreads;
+
+    int vectorize;
+    // only the row and col fields are used to specify location of debug regions
+    std::vector<Region> BkgTraceDebugRegions;
+    int readaheadDat;
+    int saveWellsFrequency;
+    int filterBubbles;
+    
+    void DefaultBkgModelControl();
+
+};
+
+class BeadfindControlOpts{
+  public:
+    double bfMinLiveRatio;
+    double bfMinLiveLibSnr;
+    double bfMinLiveTfSnr;
+    double bfTfFilterQuantile;
+    double bfLibFilterQuantile;
+    int skipBeadfindSdRecover;
+    int beadfindThumbnail; // Is this a thumbnail chip where we need to skip smoothing across regions?
+    int beadfindLagOneFilt;
+    char *beadMaskFile;
+    int maskFileCategorized;
+    char bfFileBase[MAX_PATH_LENGTH];
+    char preRunbfFileBase[MAX_PATH_LENGTH];
+    int noduds;
+    std::string beadfindType;
+    std::string bfType; // signal or buffer
+    std::string bfDat;
+    std::string bfBgDat;
+    bool SINGLEBF;
+    int BF_ADVANCED;
+    
+    void DefaultBeadfindControl();
+    ~BeadfindControlOpts();
+};
+
+
+class FilterControlOpts{
+  public:
     int percentPositiveFlowsFilterTraining;
     int percentPositiveFlowsFilterCalling;
     int percentPositiveFlowsFilterTFs;
-    int percentPositiveFlowsMaxFlow;
-    int percentPositiveFlowsMinFlow;
-    double percentPositiveFlowsMaxValue;
-    bool percentPositiveFlowsMaxValueOverride;
-    std::map<std::string,double> percentPositiveFlowsMaxValueByFlowOrder; // For holding flow-specific values.
-    double percentPositiveFlowsMinValue;
-    bool percentPositiveFlowsMinValueOverride;
-    std::map<std::string,double> percentPositiveFlowsMinValueByFlowOrder; // For holding flow-specific values.
+    bool KEYPASSFILTER;
+    // Options related to filtering reads by percentage of positive flows
     // Options related to filtering reads by putative clonality
     int clonalFilterTraining;
     int clonalFilterSolving;
@@ -181,72 +109,212 @@ public:
     double cafieResMaxValue;
     bool cafieResMaxValueOverride; // Will be true if the value is explicitly set on command line
     std::map<std::string,double> cafieResMaxValueByFlowOrder; // For holding flow-specific values.
-    // Options related to doing basecalling on just a subset of wells
+    // too short!
+    int minReadLength;
+
+    // unfiltered summary
+    int nUnfilteredLib;
+    char *unfilteredLibDir;
+    char *beadSummaryFile;
+    
+    void DefaultFilterControl();
+    void RecognizeFlow(char *flowFormula);
+    ~FilterControlOpts();
+};
+
+
+class CafieControlOpts{
+  public:
+    int singleCoreCafie;
+    double LibcfOverride;
+    double LibieOverride;
+    double LibdrOverride;
+    std::string libPhaseEstimator;
+    std::string basecaller;
+    int cfiedrRegionsX, cfiedrRegionsY;
+    int cfiedrRegionSizeX, cfiedrRegionSizeY;
+    int blockSizeX, blockSizeY;
+    int numCafieSolveFlows;
+
+    int doCafieResidual;
     char *basecallSubsetFile;
     std::set< std::pair <unsigned short,unsigned short> > basecallSubset;
-    // Options related to per-flow scaling
-    bool perFlowScale;
-    char *perFlowScaleFile;
-    std::vector<float> perFlowScaleVal;
-    int numFlowsToFitCafie1; // num flows to cafie fit pass 1
-    int numFlowsIncrement; // multiple pass increment
-    double cfiedrKeepPercent; // 0.0 = median, 1.0 = mean, 0.6 = truncated mean
+
+    // should this be in system context?
     std::string phredTableFile;
-    unsigned int numFlowsPerCycle;
+    
+    void DefaultCAFIEControl();
+    void EchoDerivedChipParams(int chip_len_x, int chip_len_y);
+    ~CafieControlOpts();
+};
+
+// handles file i/o and naming conventions
+class SystemContext{
+  public:
+     char *dat_source_directory;
+    char *wells_output_directory;
+    char *basecaller_output_directory;
+    
+    char wellsFileName[MAX_PATH_LENGTH];
+    char tmpWellsFile[MAX_PATH_LENGTH];
+    char runId[6];
+    char wellsFilePath[MAX_PATH_LENGTH];
+    char *wellStatFile;
+    char *experimentName;
+    int NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
+    int LOCAL_WELLS_FILE;
     std::string wellsFormat;
-    std::string beadfindType;
-    int filterBubbles;
-    int bkgDebugParam;
-    bool enableXtalkCorrection;
-    bool enableBkgModelClonalFilter;
-    int relaxKrateConstraint;
-    float damp_kmult; // dampen kmult variation
-    std::string bfType; // signal or buffer
-    std::string bfDat;
-    std::string bfBgDat;
-    double bfMinLiveRatio;
-    double bfMinLiveLibSnr;
-    double bfTfFilterQuantile;
-    double bfLibFilterQuantile;
-    int bfUseProj;
 
-    int skipBeadfindSdRecover;
-    int beadfindThumbnail; // Is this a thumbnail chip where we need to skip smoothing across regions?
-    int beadfindLagOneFilt;
-    // commandline options for GPU for background model computation
-    float gpuWorkLoad;
-    int numGpuThreads;
-    int numCpuThreads;
+    char *experimentDir(char *rawdataDir, char *dirOut);
+    void DefaultSystemContext();
+    void GenerateContext(int from_wells);
+    ~SystemContext();
+};
 
-    int vectorize;
-    int outputPinnedWells;
-
-    int cropped_region_x_offset;
+// cropping, displacing, locating items on the chip
+// some of this is probably part of bkgmodel controls (analysis regions)
+// some of this is also probably part of Image tracking 
+class SpatialContext{
+  public:
+    int numRegions;
+      int cols;
+    int rows;
+    int regionXOrigin;
+    int regionYOrigin;
+    int regionXSize;
+    int regionYSize;
+    int regionsX;
+    int regionsY;
+    Region *cropRegions;
+    int numCropRegions;
+     int cropped_region_x_offset;
     int cropped_region_y_offset;
     int chip_offset_x;
     int chip_offset_y;
     int chip_len_x;
     int chip_len_y;
-    int readaheadDat;
+     struct Region chipRegion;
 
-    // only the row and col fields are used to specify location of debug regions
-    std::vector<Region> BkgTraceDebugRegions;
+     // do we have regions that are known to be excluded
+   bool exclusionMaskSet;
 
+   void FindDimensionsByType(char *dat_source_directory);
+     void DefaultSpatialContext();
+     ~SpatialContext();
+};
+
+// control options on loading dat files
+class ImageControlOpts{
+  public:
+     int totalFrames;
+    int maxFrames; // Set later from the first raw image header.
+      int NNinnerx;
+    int NNinnery;
+    int NNouterx;
+    int NNoutery;
+     int hilowPixFilter;
+    int ignoreChecksumErrors; // set to true to force corrupt checksum files to load anyway - beware!
+    int flowTimeOffset;
+    // do diagnostics?
+   int outputPinnedWells;
+
+  void DefaultImageOpts();
+};
+
+class KeyContext{
+  public:
+     char *libKey;
+    char *tfKey;
+    int maxNumKeyFlows;
+    int minNumKeyFlows;
+    
+    void DefaultKeys();
+    ~KeyContext();
+};
+
+// track the flow formula which gets translated at least 4 separate times in the code into the actual flows done by the PGM
+// obvious candidate for centralized code
+class FlowContext{
+  public:
+      char *flowOrder;
+    bool flowOrderOverride;
+     int *flowOrderIndex;  // obviously this contains the nuc type per flow for all flows
+   unsigned int numFlowsPerCycle;
+    unsigned int flowLimitSet;
+    unsigned int numTotalFlows;
+
+   void DefaultFlowFormula();
+   void DetectFlowFormula(SystemContext &sys_context, int from_wells); // if not specified, go find it out
+   ~FlowContext();
+};
+
+class ObsoleteOpts{
+  public:
+    int NUC_TRACE_CORRECT;
+    int USE_PINNED;
+    int lowerIntegralBound; // Frame 15...(used to be 20, Added a little more at the start for bkgModel)
+    int upperIntegralBound; // Frame 60
+    int minPeakThreshold;
+    int neighborSubtract;
+
+    void Defaults();
+};
+
+
+
+class CommandLineOpts {
+public:
+    CommandLineOpts(int argc, char *argv[]);
+    ~CommandLineOpts();
+
+    void GetOpts(int argc, char *argv[]);
+    void WriteProcessParameters();
+    FILE *InitFPLog();
+    char *GetExperimentName() {
+        return (sys_context.experimentName);
+    }
+    int GetWashFlow() {
+        int hasWashFlow = HasWashFlow(sys_context.dat_source_directory);
+        return (hasWashFlow < 0 ? 0 : hasWashFlow);
+    }
+    void PrintHelp();
+    int GetNumFlows() {
+        return (flow_context.numTotalFlows);
+    }
     struct Region GetChipRegion() {
-        return chipRegion;
+        return loc_context.chipRegion;
     }
 
-    /*---   end options variables   ---*/
+    /*---   options variables       ---*/
+    // how the overall program flow will go
+     ModuleControlOpts mod_control;
+    // what context describes the local system environment
+    SystemContext sys_context;
+    
+    // What does each module need to know?
+    BkgModelControlOpts bkg_control;
+    BeadfindControlOpts bfd_control;
+    FilterControlOpts flt_control;
+    CafieControlOpts cfe_control;
+    ImageControlOpts img_control;
+    
+    // these appear obsolete and useless
+    ObsoleteOpts no_control;
+
+    // what context describes the chip, the flow order used, and the keys
+    // note these are three separate semantic entities
+    SpatialContext loc_context;
+    KeyContext key_context;
+    FlowContext flow_context;
+
+   /*---   end options variables   ---*/
     FILE *fpLog;
 
 protected:
-    unsigned int numTotalFlows;
 private:
     int numArgs;
-    unsigned int flowLimitSet;
     char **argvCopy;
-    char *experimentDir(char *rawdataDir, char *dirOut);
-    struct Region chipRegion;
+    char *sPtr; // only used internally, I believe
 };
 
 #endif // COMMANDLINEOPTS_H

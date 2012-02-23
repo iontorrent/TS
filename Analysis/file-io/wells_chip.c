@@ -51,7 +51,7 @@ wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int
       ion_error(__func__, "-1 == chip->num_rows", Exit, OutOfRange);
   }
   if(0 != (chip->header->num_wells % chip->num_rows)) { // sanity check
-      ion_error(__func__, "0 != (chip->header->num_wells \% chip->num_cols)", Exit, OutOfRange);
+      ion_error(__func__, "0 != (chip->header->num_wells % chip->num_cols)", Exit, OutOfRange);
   }
   chip->num_cols = chip->header->num_wells / chip->num_rows; // set the # of rows
   if(0 != fsetpos(fp, &fpos)) { // reset position

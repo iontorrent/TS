@@ -1,0 +1,16 @@
+--- a/include/spdfd.h	2011-10-28 15:08:00.938439911 -0400
++++ b/include/spdfd.h	2008-03-13 17:28:19.000000000 -0400
+@@ -32,11 +32,10 @@
+ };
+ 
+ 
+-inline LaSpdFactDouble::LaSpdFactDouble(): S_(), size_(0), gdim_(0)
++inline LaSpdFactDouble::LaSpdFactDouble(): size_(0), gdim_(0), S_()
+ {}
+ 
+-inline LaSpdFactDouble::LaSpdFactDouble(int m,int n):S_(m,n), 
+-                size_(n), gdim_(m)
++inline LaSpdFactDouble::LaSpdFactDouble(int m,int n): size_(n), gdim_(m), S_(m,n)
+ {}
+ 
+ inline LaSpdFactDouble::LaSpdFactDouble(const LaSpdFactDouble &X)

@@ -15,7 +15,7 @@ void SetChipTypeFromWells(RawWells &rawWells);
 void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType);
 void SetWellsToLiveBeadsOnly(RawWells &rawWells, Mask *maskPtr);
 void CopyTmpWellFileToPermanent(CommandLineOpts &clo, char *experimentName);
-void MakeNewTmpWellsFile(CommandLineOpts &clo, char *experimentName);
+void MakeNewTmpWellsFile(SystemContext &sys_context, char *experimentName);
 void CleanupTmpWellsFile(CommandLineOpts &clo);
 
 #endif // WELLFILEMANIPULATION_H

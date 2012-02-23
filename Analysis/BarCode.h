@@ -69,6 +69,7 @@ class barcode {
 		bool bcmatch_destroy (bcmatch *bcm);
 		int GetNumBarcodes() {return num_barcodes;}
 		char *GetBarcode(int index) {if (barcodes) return barcodes[index].barcode; else return NULL;}
+		char *GetBarcodeId(int index) {if (barcodes) return barcodes[index].id_str; else return NULL;}
 		void SetKey(char *key, int keyLen);
 		void SetFlowOrder(char *flowOrder);
 		void SetRTDebug (bool _flag) {rtbug = _flag;}

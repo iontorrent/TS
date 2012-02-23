@@ -47,7 +47,7 @@ class DifSepOpt {
     regionYSize = 100;
     mask = NULL;
     justBeadfind = false;
-    clusterTrim = .02;
+    clusterTrim = .01;
     bfNeighbors = 3;
     samplingStep = 10;
     signalBased = true;
@@ -57,8 +57,8 @@ class DifSepOpt {
     noduds = false;
     filterLagOneSD = false;
     iqrMult = 3;
-    tfFilterQuantile = 2;
-    libFilterQuantile = 1.5;
+    tfFilterQuantile = .5;
+    libFilterQuantile = .5;
     useProjectedCurve = true;
   }
 
@@ -128,7 +128,8 @@ class DifferentialSeparator : public AvgKeyIncorporation {
     LibKey,
     TFKey,
     EmptyWell,
-    LowKeySignal
+    LowKeySignal,
+    KeyLowSignalFilt
   };
 
   enum WellType {
@@ -180,7 +181,7 @@ class DifferentialSeparator : public AvgKeyIncorporation {
   void SetKeys(const std::vector<KeySeq> &_keys) {keys = _keys;	}
 
   /** Set the keys from Analysis binary format. */
-  void SetKeys(SequenceItem *seqList, int numSeqListItems, float minLibSnr=5.5);
+  void SetKeys(SequenceItem *seqList, int numSeqListItems, float minLibSnr, float minTfSnr);
 
   /** Utility function to print keys to stdout. */
   void PrintKey(const KeySeq &k, int kIx);
@@ -302,7 +303,7 @@ class DifferentialSeparator : public AvgKeyIncorporation {
                       std::ostream &refOut,
                       std::ostream &bgOut);
 
-  ZeromerModelBulk<double> zModelBulk;
+
   RegionAvgKeyReporter<double> mRegionIncorpReporter;
   ReportSet reportSet;
   Mask mask;
@@ -310,6 +311,7 @@ class DifferentialSeparator : public AvgKeyIncorporation {
   std::vector<char> keyAssignments;
   std::vector<KeySeq> keys;
   std::vector<float> t0;
+  ZeromerModelBulk<double> zModelBulk;
   vector<KeyFit> wells;
   Col<double> mTime;
 };

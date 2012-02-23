@@ -83,6 +83,7 @@ int main(int argc, char *argv[])
   bool listMatch = false;
   int sampleSize = 1;
   int randNum;
+  int random_seed=0;
   
   char		name[256];
   uint16_t	*flowgram_values; // [NUMBER_OF_FLOWS_PER_READ];
@@ -107,6 +108,15 @@ int main(int argc, char *argv[])
 	randomflag = true;
 	argcc++;
 	sampleSize = atoi(argv[argcc]);
+	break;
+	
+      case 'r':	// Random seed
+	argcc++;
+	random_seed = atoi(argv[argcc]);
+	if(random_seed<0) {
+	  fprintf (stderr, "-r option should specify a nonnegative random seed\n");
+	  exit (1);
+	}
 	break;
 	
       case 's':	// Offset to apply to quality scores
@@ -135,25 +145,19 @@ int main(int argc, char *argv[])
     argcc++;
   }
   
-  if (!inFileName) {
-    fprintf (stdout, "No input sff file specified\n");
-    fprintf (stdout, "Usage: %s [-n sample-size] [-d] sff-filename\n", argv[0]);
+  if (!inFileName || !randomflag) {
+    if (!inFileName)
+      fprintf (stdout, "No input sff file specified\n");
+    if (!randomflag)
+      fprintf (stdout, "No sample size specified\n");
+    fprintf (stdout, "Usage: %s -n sample-size sff-filename\n", argv[0]);
     fprintf (stdout, "\t-n Specify sample size.\n");
     fprintf (stdout, "\t-o Specify output sff file name.\n");
+    fprintf (stdout, "\t-r Sets random seed (default 0).\n");
     fprintf (stdout, "\t-d Prints debug information.\n");
     fprintf (stdout, "\t-s To use in conjunction with -q option, specifies an offset to be applied to quality scores.\n");
     exit (1);
   }
-  if (!randomflag) {
-    fprintf (stdout, "No sample size specified\n");
-    fprintf (stdout, "Usage: %s [-n sample-size] [-d] sff-filename\n", argv[0]);
-    fprintf (stdout, "\t-n Specify sample size.\n");
-    fprintf (stdout, "\t-o Specify output sff file name.\n");
-    fprintf (stdout, "\t-d Prints debug information.\n");
-    fprintf (stdout, "\t-s To use in conjunction with -q option, specifies an offset to be applied to quality scores.\n");
-    exit (1);
-  }
-  
   
   
   //Create output filename from input filename if it wasn't specified
@@ -199,6 +203,7 @@ int main(int argc, char *argv[])
   ch_out.header_length = h.header_length;
   ch_out.key_length = h.key_length;
   ch_out.number_of_flows_per_read = h.number_of_flows_per_read;
+  ch_out.flowgram_format_code = h.flowgram_format_code;
   
   ByteSwap8(h.index_offset);
   ByteSwap4(h.index_length);
@@ -267,7 +272,7 @@ int main(int argc, char *argv[])
 
   // Create list of random reads via reservoir sampling 
   // Set random seed to 0 for reproducible behaviour
-  srand(0);
+  srand(random_seed);
   for(int i=0,j=0; i< numReads; i++){
     if(i<sampleSize){
       chosenArray[j] = i;

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+\egrep -h -w "^(eval.*)?use" circos ../lib/* | sed 's/^.*use //' | sed 's/"//' | egrep -v "^(circos|strict|vars|warnings)" | grep -v "^lib " | sed 's/;$//' | sed 's/ qw.*//' | cut -d " " -f 1 | sort -u 

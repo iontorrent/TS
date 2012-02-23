@@ -72,7 +72,17 @@
 
       $.each(friends, hey);
 
-      $("input").attr("readonly", true);
+      $.ajax({
+        url: "/rundb/external_ip/",
+        dataType: "text",
+        success: function(address){
+         $("#externalIP").text(address);
+        },
+        error: function() {
+         $("#externalIP").text("Unable to determine")
+        }
+      });
+
     });
   </script>
   <style type="text/css">
@@ -152,11 +162,6 @@
       margin: 0;
       border: none;
     }
-
-    #network input {
-      border: none;
-      background: transparent;
-    }
   </style>
 {% endblock %}
 
@@ -179,10 +184,13 @@
 
             <p style="display: inline-block;">{{ network.mac }}</p>
             <br style="clear: both;"/>
+            <p style="display: inline-block; width: 100px;">Public IP:</p>
+            <p id="externalIP" style="display: inline-block;">Attempting to detect</p>
+            <br style="clear: both;"/>
 
             <fieldset class="host_settings">
               <div id="mode">
-                {{ network.data.mode }}
+                {{ network.form.mode }}
               </div>
               <div>
                 {{ network.form.address.label_tag }}
@@ -201,22 +209,23 @@
                   {{ network.form.nameservers }}
                 </div>
             </fieldset>
-            {% if network.data.proxy_address %}
             <div id="proxy_server" class="inline-fields">
               <label>Proxy server</label>
               <abbr title="Address">{{ network.form.proxy_address }}</abbr>
               <abbr title="Port">{{ network.form.proxy_port }}</abbr>
             </div>
-            {% if network.data.proxy_username %}
             <div id="proxy_login" class="inline-fields">
               <label>Proxy login</label>
               <abbr title="Username">{{ network.form.proxy_username }}</abbr>
               <abbr title="Password">{{ network.form.proxy_password }}</abbr>
             </div>
-            {% endif %}
-            {% else %}
-              <p>No proxy settings configured.</p>
-            {% endif %}
+            {{ network.form.collab_ip.label_tag }}
+            {{ network.form.collab_ip }}
+            <div>
+              <input type="submit" value="Update"
+                     style="margin: 10px 38px 0 100px; display: inline-block"/>
+              <input type="reset" value="Reset" style="display: inline-block;"/>
+            </div>
           </form>
         </div>
         <table id="neighborhood"

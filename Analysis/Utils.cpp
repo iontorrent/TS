@@ -243,6 +243,11 @@ char	*GetPGMFlowOrder (char *path)
 //
 bool validIn (char *inStr, long *value)
 {
+    if (inStr == NULL) {
+        fprintf(stderr, "input string is null\n");
+        return EXIT_FAILURE;
+    }
+
     char *endPtr = NULL;
     
     errno = 0;
@@ -699,9 +704,8 @@ char * GetChipId (const char *dir)
     if (filepath) free (filepath);
     return (NULL);
 }
-#endif
 
-void GetChipDim(const char *type, int dims[2])
+void GetChipDim(const char *type, int dims[2], const char *dir)
 {
   if (type != NULL) {
     if (strncmp ("314",type,3) == 0) {
@@ -716,6 +720,33 @@ void GetChipDim(const char *type, int dims[2])
     } else if (strncmp ("318",type,3) == 0) {
       dims[0] = 3392;
       dims[1] = 3792;
+    } else if (strncmp ("900",type,4) == 0) {
+
+        // Method using the explog.txt
+        char *argument = NULL;
+        char *filepath = NULL;
+        filepath = getExpLogPath(dir);
+        long value;
+
+        argument = GetExpLogParameter (filepath,"Rows");
+        if (validIn (argument, &value)) {
+            fprintf (stderr, "Error getting rows from explog.txt\n");
+            dims[1] = 0;
+        }
+        else {
+            //fprintf (stderr, "Rows: '%s' '%d'\n", argument, (int) value);
+            dims[1] = (int) value;
+        }
+
+        argument = GetExpLogParameter (filepath,"Columns");
+        if (validIn (argument, &value)) {
+            fprintf (stderr, "Error getting columns from explog.txt\n");
+            dims[0] = 0;
+        }
+        else {
+            //fprintf (stderr, "Columns: '%s' '%d'\n", argument, (int) value);
+            dims[0] = (int) value;
+        }
     } else {
       dims[0] = 0;
       dims[1] = 0;
@@ -725,6 +756,7 @@ void GetChipDim(const char *type, int dims[2])
     dims[1] = 0;
   }
 }
+#endif
 
 int	GetNumLines (char *filename)
 {
@@ -888,7 +920,7 @@ void FillInDirName(const string &path, string &dir, string &file) {
 void init_salute()
 {
 	char banner[256];
-	sprintf (banner, "/usr/bin/figlet -f script Analysis %s 2>/dev/null", IonVersion::GetVersion().c_str());
+	sprintf (banner, "/usr/bin/figlet -m0 Analysis %s 2>/dev/null", IonVersion::GetVersion().c_str());
 	if (system(banner))
 	{
 		// figlet did not execute;
@@ -1146,6 +1178,7 @@ void TrimString(std::string &str) {
   else
     str.clear(); 
 }
+
 int totalMemOnTorrentServer()
 {
     const int totalMem = 48*1024*1024; // defaults to T7500

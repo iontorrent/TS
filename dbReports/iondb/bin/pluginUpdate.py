@@ -7,14 +7,8 @@ import os
 import optparse
 import json
 
-try:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-    import iondb.settings as settings
-except ImportError:
-    sys.path.pop()
-    sys.path.append("../")
-    sys.path.append("../../")
-    import iondb.settings as settings
+import djangoinit
+from django.conf import settings
 
 import xmlrpclib
 import time
@@ -22,7 +16,7 @@ import time
 import socket
 from iondb.anaserve import client
 
-def UpdatePluginStatus(pk,plugin, msg , host="127.0.0.1", port = settings.IPLUGIN_PORT, method="update"):
+def UpdatePluginStatus(pk, plugin, version, msg, host="127.0.0.1", port = settings.IPLUGIN_PORT, method="update"):
     """
     Updates a plugins status through XMLRPC
     """
@@ -50,14 +44,19 @@ def UpdatePluginStatus(pk,plugin, msg , host="127.0.0.1", port = settings.IPLUGI
             else:
                 raise "Unable to connect to plugin daemon after multiple attempts"
 
-    print "Plugin %s Status Successfully Updated." % plugin
+    print "Plugin '%s' Successfully Updated" % plugin
 
 if __name__ == '__main__':
 
     options = optparse.OptionParser(description = 'Update a plugins status and json dataStore through the ionPlugin daeamon')
 
     options.add_option('-i', '--pk'     , dest = 'pk'     , action = 'store', default = "")
-    options.add_option('-p', '--plugin' , dest = 'plugin' , action = 'store', default = "")
+    options.add_option('-p', '--plugin' , dest = 'plugin' , action = 'store', default = "") ## Plugin Name
+    options.add_option('-v', '--version' , dest = 'pluginversion' , action = 'store', default = "") ## Plugin Version
+
+    # More precise identifiers
+    #options.add_option('-k', '--pluginkey' , dest = 'pluginkey' , action = 'store', default = "") ## Plugin DB Key
+    options.add_option('-r', '--resultkey', dest = 'resultkey' , action = 'store', default = "") ## ResultKey
 
     options.add_option('-s', '--msg' , dest = 'msg' , action = 'store', default = "",
                        help="Status message to set (if --convert is set status codes into verbose messages)")
@@ -66,7 +65,7 @@ if __name__ == '__main__':
                        help="Convert Unix exit codes provided with --msg (-s) into verbose messages")
 
     options.add_option('-m', '--method' , dest = 'method' , action = 'store', default = "update",
-                       help="The XML-RPC Method to use, defaults to 'update'")
+                       help="[DEPRECATED, IGNORED] The XML-RPC Method to use, defaults to 'update'")
 
     options.add_option('-j', '--jsonpath' , dest = 'jsonpath' , action = 'store', default = "",
                        help="Path to the JSON file to PUT")
@@ -74,7 +73,11 @@ if __name__ == '__main__':
 
     (options, argv) = options.parse_args(sys.argv)
 
-    opts = { "pk" : options.pk, "plugin" : options.plugin }
+    # Provide a placeholder value for unspecified version
+    if not options.pluginversion: options.pluginversion = '0'
+
+    # Check required options
+    opts = { "pk" : options.pk, "plugin" : options.plugin, "version": options.pluginversion }
 
     goodArgs = True
     for key, value in opts.iteritems():
@@ -85,33 +88,37 @@ if __name__ == '__main__':
         else:
             print key,
             print value
-
     if not goodArgs:
         print "Bad args"
         sys.exit(1)
 
-    # Borrowed from TLScript
-    try:
-        # SHOULD BE settings.QMASTERHOST, but this always seems to be "localhost"
-        act_qmaster = os.path.join(settings.SGE_ROOT, settings.SGE_CELL, 'common', 'act_qmaster')
-        master_node = open(act_qmaster).readline().strip()
-    except IOError:
-        master_node = "localhost"
+    # Set a status using 'update' method.
+    if options.msg:
+        updateMessage = options.msg
 
-    updateMessage = options.msg
+        if options.convert:
+           if updateMessage == "1":
+               updateMessage = "Error"
+           elif updateMessage == "0":
+               updateMessage = "Completed"
+           else:
+               updateMessage = "Error"
 
-    if options.convert:
-        if updateMessage == "1":
-            updateMessage = "Error"
-        elif updateMessage == "0":
-            updateMessage = "Completed"
-        else:
-            updateMessage = "Error"
+        # TODO Ensure message is in allowed values
+
+        updater = UpdatePluginStatus(options.pk,
+                                     options.plugin, options.pluginversion,
+                                     updateMessage,
+                                     settings.IPLUGIN_HOST,
+                                     settings.IPLUGIN_PORT,
+                                     'update'
+                                     )
+        print "Set the Status of the plugin '%s' on report '%s' to %s" % (options.plugin, options.pk,options.msg)
 
 
     if options.jsonpath:
         try:
-            updateMessage = open(os.path.join(options.jsonpath,"results.json")).read()
+            updateJSON = open(os.path.join(options.jsonpath,"results.json")).read()
         except:
             print "Error could not read the json file ", options.jsonpath
             sys.exit(1)
@@ -122,15 +129,13 @@ if __name__ == '__main__':
             print "Error could not parse the json file ", options.jsonpath
             sys.exit(1)
 
-    updater = UpdatePluginStatus(options.pk,
-                                 options.plugin,
-                                 updateMessage,
-                                 master_node,
-                                 settings.IPLUGIN_PORT,
-                                 options.method
-                                 )
+        updater = UpdatePluginStatus(options.pk,
+                                     options.plugin, options.pluginversion,
+                                     updateMessage,
+                                     settings.IPLUGIN_HOST,
+                                     settings.IPLUGIN_PORT,
+                                     'resultsjson'
+                                     )
 
-    print "Set the Status of the plugin %s to %s" % (options.pk, updateMessage)
-
-
+        print "Posted results store for plugin '%s'" % options.plugin
 

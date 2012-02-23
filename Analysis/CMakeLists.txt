@@ -10,6 +10,9 @@ mark_as_advanced(ION_DO_BACKGROUND)
 option(ION_USE_CUDA "Compile CUDA code" ON)
 mark_as_advanced(ION_USE_CUDA)
 
+option(ION_USE_SYSTEM_CUDA "Use CUDA system libraries" OFF)
+mark_as_advanced(ION_USE_SYSTEM_CUDA)
+
 option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 
@@ -29,6 +32,13 @@ endif()
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
 
+#custom ExternalProject_add with timeout feature
+IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.1)
+  SET(CMAKE_MODULE_PATH
+    ${CMAKE_MODULE_PATH}
+    ${CMAKE_CURRENT_SOURCE_DIR}/CMake
+  )
+ENDIF ()
 include(ExternalProject)
 
 if(ION_USE_CUDA)
@@ -38,7 +48,7 @@ endif()
 
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
@@ -54,16 +64,59 @@ configure_file (
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 #set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
 
+if(ION_USE_CUDA)
+    if (NOT ION_USE_SYSTEM_CUDA)
+        set(proj_name "cudatoolkit")
+#        set(proj_version "4.0.17-10.10")
+        set(proj_version "4.0.0RC")
+        set(proj_name_version "${proj_name}-${proj_version}")
+
+        set(CUDA_TOOLKIT_ROOT_DIR "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/")
+        set(CUDA_INCLUDE_DIRS "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/include")
+        set(CUDA_NVCC_EXECUTABLE "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/bin/nvcc")
+        set(CUDA_CUDART_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcudart.so")
+        set(CUDA_TOOLKIT_INCLUDE "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/include")
+        set(CUDA_cublas_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcublas.so")
+        set(CUDA_cufft_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcufft.so")
+        set(CUDA_VERBOSE_BUILD OFF)
+        set(CUDA_VERSION "4.0")
+        set(CUDA_64_BIT_DEVICE_CODE ON)
+        include(${CMAKE_ROOT}/Modules/FindCUDA.cmake)
+
+        # bash cudatoolkit_4.0.17_linux_64_ubuntu10.10.run --nox11 --noexec --target cudatoolkit_4.0.17_linux_64_ubuntu10.10
+        # GZIP=--best tar czf cudatoolkit_4.0.17_linux_64_ubuntu10.10.tar.gz cudatoolkit_4.0.17_linux_64_ubuntu10.10/
+        ExternalProject_add(${proj_name}
+            PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
+#            URL "http://updates.iontorrent.com/updates/software/external/cudatoolkit_4.0.17_linux_64_ubuntu10.10.tar.gz"
+            URL "http://updates.iontorrent.com/updates/software/external/cudatoolkit-4.0.0RC.tar.gz"
+#            URL_MD5 ""
+            TIMEOUT "3600"
+            CONFIGURE_COMMAND ""
+            BUILD_COMMAND ""
+            INSTALL_COMMAND ""
+        )
+    else()
+        find_package(CUDA REQUIRED)
+    endif()
+    include_directories(${CUDA_INCLUDE_DIRS})
+    message(STATUS "CUDA_LIBRARIES: ${CUDA_LIBRARIES}")
+    message(STATUS "CUDA_INCLUDE_DIRS: ${CUDA_INCLUDE_DIRS}")
+endif()
+
 if (NOT ION_USE_SYSTEM_FFTW)
-  set(LIBFFTWFILE "${PROJECT_SOURCE_DIR}/../external/fftw-3.2.2/.libs/libfftw3.a")
-  add_custom_command(OUTPUT ${LIBFFTWFILE}
-    COMMAND "./configure" "--enable-static" "--with-pic"
-    COMMAND "make"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/fftw-3.2.2")
-  add_library(LIBFFTW STATIC IMPORTED)
-  set_property(TARGET LIBFFTW PROPERTY IMPORTED_LOCATION ${LIBFFTWFILE})
-  include_directories("${PROJECT_SOURCE_DIR}/../external/fftw-3.2.2/api")
-  set(ION_FFTW_LIBS LIBFFTW)
+  set(proj_name "fftw")
+  set(proj_version "3.3")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
+    URL "http://updates.iontorrent.com/updates/software/external/fftw-3.3.tar.gz"
+#    URL_MD5 "0728ab3ec0ebb06631ab3b80a5c3d130"
+    CONFIGURE_COMMAND ${ION_TS_EXTERNAL}/${proj_name_version}/src/${proj_name}/configure
+    --enable-static --with-pic
+    --prefix=${ION_TS_EXTERNAL}/${proj_name_version}
+  )
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
+  set(ION_FFTW_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libfftw3.a")
 else()
   set(ION_FFTW_LIBS libfftw3.a)
 endif()
@@ -74,30 +127,14 @@ if(NOT ION_USE_SYSTEM_HDF5)
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
-    URL "${ION_TS_EXTERNAL}/hdf5-1.8.8.tar.gz"
+    URL "http://updates.iontorrent.com/updates/software/external/hdf5-1.8.8.tar.gz"
 #    URL_MD5 1196e668f5592bfb50d1de162eb16cff
     CONFIGURE_COMMAND ${ION_TS_EXTERNAL}/${proj_name_version}/src/${proj_name}/configure
     --with-pic=yes --disable-shared --with-pthread --enable-threadsafe
     --prefix=${ION_TS_EXTERNAL}/${proj_name_version}
   )
-
-  set(HDF5FILE "${PROJECT_SOURCE_DIR}/../external/hdf5-1.8.7/hdf5/lib/libhdf5.a")
-  add_custom_command(OUTPUT ${HDF5FILE}
-    COMMAND "./configure" "--with-pic=yes" "--disable-shared" "--with-pthread" "--enable-threadsafe"
-    COMMAND "make"
-    COMMAND "make" "install"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/hdf5-1.8.7")
-
-  set (HDF5Experiment 0)
-  if(${HDF5Experiment})
-    include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
-    set(ION_HDF5_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libhdf5.a")
-  else()
-    add_library(HDF5 STATIC IMPORTED)
-    set_property(TARGET HDF5 PROPERTY IMPORTED_LOCATION ${HDF5FILE})
-    include_directories("${PROJECT_SOURCE_DIR}/../external/hdf5-1.8.7/src")
-    set(ION_HDF5_LIBS HDF5)
-  endif()
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
+  set(ION_HDF5_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libhdf5.a")
 else()
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
@@ -105,23 +142,37 @@ else()
 endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
-  set(ARMAFILE "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0/libarmadillo.so")
-  add_custom_command(OUTPUT ${ARMAFILE}
-    COMMAND "cmake" "."
-    COMMAND "make"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0")
-  include_directories("${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0/include")
+  set(proj_name "armadillo")
+  set(proj_version "1.1.0.ion0")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}_proj
+    PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
+    URL "http://updates.iontorrent.com/updates/software/external/armadillo-1.1.0.tar.gz"
+#    URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
+    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.patch"
+  )
+  set(ION_ARMADILLO_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib64/libarmadillo.so")
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
+else()
+  set(ION_ARMADILLO_LIBS "armadillo")
 endif()
 
-if(ION_DO_BACKGROUND)
-    set(LIBLAPACKPPFILE "${PROJECT_SOURCE_DIR}/../external/lapackpp-2.5.3/src/.libs/liblapackpp.a")
-    add_custom_command(OUTPUT ${LIBLAPACKPPFILE}
-        COMMAND "./configure" "--enable-static" "--with-pic"
-        COMMAND "make"
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/lapackpp-2.5.3")
-    add_library(LIBLAPACKPP STATIC IMPORTED)
-    set_property(TARGET LIBLAPACKPP PROPERTY IMPORTED_LOCATION ${LIBLAPACKPPFILE})
-    include_directories("${PROJECT_SOURCE_DIR}/../external/lapackpp-2.5.3/include")
+if( 1 )
+  set(proj_name "lapackpp")
+  set(proj_version "2.5.4")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
+    URL "http://updates.iontorrent.com/updates/software/external/lapackpp-2.5.4.tar.gz"
+#    URL_MD5 9ad74fb73fbcbf378c36a19a5dccbda7
+    CONFIGURE_COMMAND ${ION_TS_EXTERNAL}/${proj_name_version}/src/${proj_name}/configure
+    --enable-static --with-pic
+    --prefix=${ION_TS_EXTERNAL}/${proj_name_version}
+    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/lapackpp-2.5.4.patch"
+  )
+  set(ION_LAPACKPP_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/liblapackpp.a")
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include/lapackpp")
 endif()
 
 set(LIBKMEANSFILE "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7/libkmeans.a")
@@ -141,69 +192,41 @@ include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.
 
 
 if (NOT ION_USE_SYSTEM_SAMTOOLS)
-  ExternalProject_add(samtools
-#    PREFIX samtools
-    URL "${ION_TS_EXTERNAL}/samtools-0.1.18.tar.gz"
-    #URL_MD5
+  set(proj_name "samtools")
+  set(proj_version "0.1.18")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
+    URL "http://updates.iontorrent.com/updates/software/external/samtools-0.1.18.tar.gz"
+    #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
     # in source build
-    BINARY_DIR "${ION_TS_EXTERNAL}/samtools-0.1.18"
-    SOURCE_DIR "${ION_TS_EXTERNAL}/samtools-0.1.18"
-#    BINARY_DIR "${CMAKE_BINARY_DIR}/samtools/src/samtools"
+    BINARY_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
+    SOURCE_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
     PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.18.patch"
     CONFIGURE_COMMAND ""
     BUILD_COMMAND "/usr/bin/make" "CFLAGS=-fPIC" "<SOURCE_DIR>/Makefile" "lib"
     INSTALL_COMMAND ""
   )
-  include_directories("${PROJECT_SOURCE_DIR}/../external/samtools-0.1.18")
-  set(ION_SAMTOOLS_LIBS "${PROJECT_SOURCE_DIR}/../external/samtools-0.1.18/libbam.a")
-#  include_directories("${CMAKE_BINARY_DIR}/samtools/src/samtools")
-#  set(ION_SAMTOOLS_LIBS "${CMAKE_BINARY_DIR}/samtools/src/samtools/libbam.a")
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}")
+  set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/libbam.a")
 else()
     set(ION_SAMTOOLS_LIBS libbam.a)
     include_directories("/usr/include/samtools")
 endif()
 
 
-# Find External Libraries
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/../buildTools/cmake/Modules")
-set(EXTRA_INCLUDES)
-set(EXTRA_LIBS)
-
-set(BACKGROUND_SRC)
-if(ION_DO_BACKGROUND)
-    include_directories("${PROJECT_SOURCE_DIR}/BkgModel")
-    include_directories("${PROJECT_SOURCE_DIR}/Phase")
-    include_directories("${PROJECT_SOURCE_DIR}/Separator")
-    set(BACKGROUND_SRC BkgModel/BkgModel.cpp Phase/CafieSolver.cpp)
-    find_package(CLAPACK REQUIRED)
-    set(EXTRA_INC ${EXTRA_INC} ${CLAPACK_INCLUDE_DIR})
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${CLAPACK_LIBRARIES})
-
-    find_package(CBLAS REQUIRED)
-    set(EXTRA_INC ${EXTRA_INC} ${CBLAS_INCLUDE_DIR})
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${CBLAS_LIBRARIES})
-
-    set(EXTRA_LIBS ${EXTRA_LIBS} LIBLAPACKPP libblas-3gf.a)
-endif()
-
-include_directories(${EXTRA_INC})
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel")
+include_directories("${PROJECT_SOURCE_DIR}/BaseCaller")
+include_directories("${PROJECT_SOURCE_DIR}/Separator")
 
 # CUDA Files
 if(ION_USE_CUDA)
-  FIND_PACKAGE(CUDA)
-  if(CUDA_FOUND STREQUAL "TRUE")
     SET( CUDA_NVCC_FLAGS "--use_fast_math" "-gencode=arch=compute_20,code=compute_20" )
     CUDA_COMPILE(CUDA_TEMP_FILES BkgModel/BkgModel.cu SHARED)
-    include_directories(${CUDA_INCLUDE_DIRS})
-  endif()
 endif()
 
 # Ion Analysis Library
 add_library(ion-analysis
-    ${HDF5FILE}
-    ${LIBLAPACKPPFILE}
-    ${ARMAFILE}
-    ${LIBFFTWFILE}
     ${LIBKMEANSFILE}
 
     ${PROJECT_BINARY_DIR}/IonVersion.cpp
@@ -229,41 +252,43 @@ add_library(ion-analysis
     Mask.cpp
     RawWells.cpp
     RawWellsV1.cpp
-    Trimmer.cpp
     SFFWrapper.cpp
     Stats.cpp
-    TFs.cpp
     Utils.cpp
     TrackProgress.cpp
-    Flow.cpp
     ImageSpecClass.cpp
     ImageLoader.cpp
+    SeqList.cpp
     ProcessImageToWell.cpp
     RegionTimingCalc.cpp
     WellFileManipulation.cpp
     cudaWrapper.cpp
     Zeromer.cpp
     
-    BaseCaller.cpp
-    BaseCallerLogFiles.cpp
-    PerBaseQual.cpp
-    RegionWellsReader.cpp
     OptArgs.cpp
     bivariate_gaussian.cpp
     mixed.cpp
     flow_utils.cpp
-    OrderedRegionSFFWriter.cpp
     
-    Phase/PhaseSim.cpp
-    Phase/PhaseSolve.cpp
-    Phase/PhaseFit.cpp
-    Phase/PhaseFitCfIe.cpp
-    Phase/DPTreephaser.cpp
-    Phase/RegionAnalysis.cpp
+    BaseCaller/BaseCaller.cpp
+    BaseCaller/BaseCallerLogFiles.cpp
+    BaseCaller/PerBaseQual.cpp
+    BaseCaller/RegionWellsReader.cpp
+    BaseCaller/OrderedRegionSFFWriter.cpp
+    BaseCaller/PhaseSim.cpp
+    BaseCaller/PhaseSolve.cpp
+    BaseCaller/PhaseFit.cpp
+    BaseCaller/PhaseFitCfIe.cpp
+    BaseCaller/DPTreephaser.cpp
+    BaseCaller/RegionAnalysis.cpp
+    BaseCaller/CafieSolver.cpp
     
     BkgModel/MathOptim.cpp
+    BkgModel/MathUtil.cpp
     BkgModel/DNTPRiseModel.cpp
+    BkgModel/NucStepCache.cpp
     BkgModel/DiffEqModel.cpp
+    BkgModel/Hydrogen.cpp
     BkgModel/MultiFlowModel.cpp
     BkgModel/BeadParams.cpp
     BkgModel/BeadTracker.cpp
@@ -271,6 +296,8 @@ add_library(ion-analysis
     BkgModel/RegionTracker.cpp
     BkgModel/BeadScratch.cpp
     BkgModel/LevMarState.cpp
+    BkgModel/DarkMatter.cpp
+    BkgModel/DarkHalo.cpp
     BkgModel/EmphasisVector.cpp
     BkgModel/CrossTalkSpec.cpp
     BkgModel/BkgFitOptim.cpp
@@ -283,12 +310,12 @@ add_library(ion-analysis
     BkgModel/BkgFitStructures.cpp
     BkgModel/FitControl.cpp
     BkgModel/MultiLevMar.cpp
-    
+    BkgModel/BkgModel.cpp
+
     crop/Acq.cpp
     BFReference.cpp
     Traces.cpp
 
-    ${BACKGROUND_SRC}
     FileEquivalent.cpp
     BubbleFilter.cpp
     ChipIdDecoder.cpp
@@ -308,12 +335,18 @@ add_library(ion-analysis
   	OptionArgs.cpp
   	LoggerBase.cpp
   	Logger.cpp
+	H5File.cpp
     ${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
 )
+add_dependencies(ion-analysis IONVERSION samtools fftw lapackpp armadillo_proj hdf5)
+if(ION_USE_CUDA)
+  if(NOT ION_USE_SYSTEM_CUDA)
+    add_dependencies(ion-analysis cudatoolkit)
+  endif()
+endif()
 
-add_dependencies(ion-analysis IONVERSION samtools hdf5)
-target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} LIBKMEANS ${EXTRA_LIBS} file-io z)
+target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} LIBKMEANS ${ION_LAPACKPP_LIBS} blas lapack file-io z)
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
 )
@@ -334,22 +367,22 @@ target_link_libraries( SFFExtract_sam ion-analysis pthread)
 add_executable(Crop crop/Crop.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Crop IONVERSION TCLAP)
 target_link_libraries(Crop ion-analysis pthread)
-install(TARGETS Crop DESTINATION /usr/local/bin)
+install(TARGETS Crop DESTINATION bin)
 
 add_executable(Blocks crop/Blocks.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Blocks IONVERSION)
 target_link_libraries(Blocks ion-analysis pthread)
-install(TARGETS Blocks DESTINATION /usr/local/bin)
+install(TARGETS Blocks DESTINATION bin)
 
 add_executable(MergeImages crop/MergeImages.cpp crop/MergeAcq.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeImages IONVERSION)
 target_link_libraries(MergeImages ion-analysis pthread)
-install(TARGETS MergeImages DESTINATION /usr/local/bin)
+install(TARGETS MergeImages DESTINATION bin)
 
 add_executable(MergeDats crop/MergeDats.cpp crop/MergeAcq.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeDats IONVERSION)
 target_link_libraries(MergeDats ion-analysis pthread)
-install(TARGETS MergeDats DESTINATION /usr/local/bin)
+install(TARGETS MergeDats DESTINATION bin)
 
 add_executable( GetRawAvgTraces GetRawAvgTraces.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Crop IONVERSION TCLAP)
@@ -370,7 +403,7 @@ target_link_libraries(SFFStats ion-analysis pthread)
 add_executable(KeypassMetrics KeypassMetrics.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(KeypassMetrics IONVERSION TCLAP)
 target_link_libraries(KeypassMetrics ion-analysis pthread)
-install(TARGETS KeypassMetrics DESTINATION /usr/local/bin)
+install(TARGETS KeypassMetrics DESTINATION bin)
 
 add_executable(HeatMaps HeatMaps.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(HeatMaps IONVERSION TCLAP)
@@ -397,12 +430,12 @@ if(ION_DO_BACKGROUND)
     add_dependencies(Analysis IONVERSION TCLAP)
 
     if (ION_USE_CUDA)
-        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread ${CUDA_LIBRARIES} lapack_atlas atlas)
+        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas ${CUDA_LIBRARIES})
     else()
         target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas)
     endif()
 
-    install(TARGETS Analysis DESTINATION /usr/local/bin)
+    install(TARGETS Analysis DESTINATION bin)
 
     add_executable(bkgFit bkgFit.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
     add_dependencies(bkgFit IONVERSION TCLAP)
@@ -416,22 +449,30 @@ endif()
 add_executable(ShowWell ShowWell.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(ShowWell IONVERSION TCLAP)
 target_link_libraries(ShowWell ion-analysis pthread)
-install(TARGETS ShowWell DESTINATION /usr/local/bin)
+install(TARGETS ShowWell DESTINATION bin)
 
-add_executable(TFMapper TFMapper.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(TFMapper TestFragments/TFMapper.cpp TestFragments/TFs.cpp 
+    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TFMapper IONVERSION TCLAP)
 target_link_libraries(TFMapper ion-analysis pthread)
-install(TARGETS TFMapper DESTINATION /usr/local/bin)
+install(TARGETS TFMapper DESTINATION bin)
 
-add_executable(TFMapperIterative TFMapperIterative.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(TFMapperIterative IONVERSION TCLAP)
-target_link_libraries(TFMapperIterative ion-analysis pthread)
-install(TARGETS TFMapperIterative DESTINATION /usr/local/bin)
+add_executable(TFReferenceGenerator TestFragments/TFReferenceGenerator.cpp TestFragments/TFs.cpp
+    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(TFReferenceGenerator IONVERSION TCLAP)
+target_link_libraries(TFReferenceGenerator ion-analysis pthread)
+install(TARGETS TFReferenceGenerator DESTINATION bin)
+
+add_executable(TFTorturer TestFragments/TFTorturer.cpp 
+    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(TFTorturer IONVERSION TCLAP)
+target_link_libraries(TFTorturer ion-analysis ${ION_SAMTOOLS_LIBS} pthread)
+install(TARGETS TFTorturer DESTINATION bin)
 
 # add_executable(WellsTimer WellsTimer.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(WellsTimer IONVERSION TCLAP)
 # target_link_libraries(WellsTimer ion-analysis pthread)
-# install(TARGETS WellsTimer DESTINATION /usr/local/bin)
+# install(TARGETS WellsTimer DESTINATION bin)
 
 add_executable(AnalyzeHPErrs AnalyzeHPErrs.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(AnalyzeHPErrs IONVERSION TCLAP)
@@ -443,8 +484,7 @@ target_link_libraries(MeasureXTalk ion-analysis pthread)
 
 add_executable(WellCrossTalk WellCrossTalk.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(WellCrossTalk IONVERSION TCLAP)
-target_link_libraries(WellCrossTalk ion-analysis pthread)
-
+target_link_libraries(WellCrossTalk ion-analysis pthread ${ION_ARMADILLO_LIBS})
 
 add_executable(SFFSummary
         SFFSummary/SFFSummary.cpp
@@ -453,22 +493,22 @@ add_executable(SFFSummary
 )
 target_link_libraries(SFFSummary ion-analysis file-io pthread)
 add_dependencies(SFFSummary IONVERSION TCLAP)
-install(TARGETS SFFSummary DESTINATION /usr/local/bin)
+install(TARGETS SFFSummary DESTINATION bin)
 
 add_executable(BeadmaskParse BeadmaskParse.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskParse IONVERSION TCLAP)
 target_link_libraries(BeadmaskParse ion-analysis pthread)
-install(TARGETS BeadmaskParse DESTINATION /usr/local/bin)
+install(TARGETS BeadmaskParse DESTINATION bin)
 
 add_executable(BeadmaskMerge BeadmaskMerge.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskMerge IONVERSION TCLAP)
 target_link_libraries(BeadmaskMerge ion-analysis pthread)
-install(TARGETS BeadmaskMerge DESTINATION /usr/local/bin)
+install(TARGETS BeadmaskMerge DESTINATION bin)
 
 add_executable(MergeWells MergeWells.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeWells IONVERSION TCLAP)
 target_link_libraries(MergeWells ion-analysis pthread)
-install(TARGETS MergeWells DESTINATION /usr/local/bin)
+install(TARGETS MergeWells DESTINATION bin)
 
 add_executable(Mask2TE Mask2TE.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Mask2TE IONVERSION TCLAP)
@@ -529,7 +569,7 @@ add_executable(SFFTrim
 )
 target_link_libraries(SFFTrim ion-analysis file-io pthread)
 add_dependencies(SFFTrim IONVERSION TCLAP)
-install(TARGETS SFFTrim DESTINATION /usr/local/bin)
+install(TARGETS SFFTrim DESTINATION bin)
 
 add_executable(SFFSearch
         SFFTrim/SFFSearch.cpp
@@ -544,17 +584,17 @@ add_executable(alignStats
 )
 target_link_libraries(alignStats ion-analysis z ${ION_SAMTOOLS_LIBS} pthread)
 add_dependencies(alignStats IONVERSION TCLAP)
-install(TARGETS alignStats DESTINATION /usr/local/bin)
+install(TARGETS alignStats DESTINATION bin)
 
 add_executable(SFFRead fastqsim/SFFRead.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFRead IONVERSION TCLAP)
 target_link_libraries(SFFRead ion-analysis pthread)
-install(TARGETS SFFRead DESTINATION /usr/local/bin)
+install(TARGETS SFFRead DESTINATION bin)
 
 add_executable(SFFMerge SFFMerge.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFMerge IONVERSION)
 target_link_libraries(SFFMerge ion-analysis)
-install(TARGETS SFFMerge DESTINATION /usr/local/bin)
+install(TARGETS SFFMerge DESTINATION bin)
 
 add_executable(SFFFilter fastqsim/SFFFilter.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFFilter IONVERSION TCLAP)
@@ -563,7 +603,7 @@ target_link_libraries(SFFFilter ion-analysis pthread)
 add_executable(SFFRandom fastqsim/SFFRandom.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFRandom IONVERSION TCLAP)
 target_link_libraries(SFFRandom ion-analysis pthread)
-install(TARGETS SFFRandom DESTINATION /usr/local/bin)
+install(TARGETS SFFRandom DESTINATION bin)
 
 add_executable(SFFAggregator fastqsim/SFFAggregate.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFAggregator IONVERSION TCLAP)
@@ -592,66 +632,76 @@ target_link_libraries(BFMaskAggregator ion-analysis pthread)
 add_executable(RawWellsEquivalent RawWellsEquivalent.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(RawWellsEquivalent IONVERSION TCLAP)
 target_link_libraries(RawWellsEquivalent ion-analysis pthread)
-install(TARGETS RawWellsEquivalent DESTINATION /usr/local/bin)
+install(TARGETS RawWellsEquivalent DESTINATION bin)
 
 add_executable(DiffSeparator Separator/DiffSeparator.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(DiffSeparator IONVERSION TCLAP)
-target_link_libraries(DiffSeparator ion-analysis  pthread )
-install(TARGETS DiffSeparator DESTINATION /usr/local/bin)
+target_link_libraries(DiffSeparator ion-analysis pthread ${ION_ARMADILLO_LIBS})
+install(TARGETS DiffSeparator DESTINATION bin)
 
 add_executable(CountBubbles CountBubbles.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(CountBubbles IONVERSION TCLAP)
 target_link_libraries(CountBubbles ion-analysis  pthread )
-install(TARGETS CountBubbles DESTINATION /usr/local/bin)
+install(TARGETS CountBubbles DESTINATION bin)
 
 # add_executable(RawWellsDump RawWellsDump.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(RawWellsDump IONVERSION TCLAP)
 # target_link_libraries(RawWellsDump ion-analysis  pthread )
-# install(TARGETS RawWellsDump DESTINATION /usr/local/bin)
+# install(TARGETS RawWellsDump DESTINATION bin)
 
 add_executable(PinnedWell PinnedWell.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(PinnedWell IONVERSION TCLAP)
 target_link_libraries(PinnedWell ion-analysis  pthread )
-install(TARGETS PinnedWell DESTINATION /usr/local/bin)
+install(TARGETS PinnedWell DESTINATION bin)
 
 # add_executable(LiveNeighbors LiveNeighbors.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(LiveNeighbors IONVERSION TCLAP)
 # target_link_libraries(LiveNeighbors ion-analysis  pthread )
-# install(TARGETS LiveNeighbors DESTINATION /usr/local/bin)
+# install(TARGETS LiveNeighbors DESTINATION bin)
 
 add_executable(readDat readDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readDat IONVERSION)
 target_link_libraries(readDat ion-analysis pthread)
-install(TARGETS readDat DESTINATION /usr/local/bin)
+install(TARGETS readDat DESTINATION bin)
 
 add_executable(readWells readWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readWells IONVERSION)
 target_link_libraries(readWells ion-analysis pthread)
-install(TARGETS readWells DESTINATION /usr/local/bin)
+install(TARGETS readWells DESTINATION bin)
 
 add_executable(SFFEquivalent SFFEquivalent.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFEquivalent IONVERSION TCLAP)
 target_link_libraries(SFFEquivalent ion-analysis pthread)
-install(TARGETS SFFEquivalent DESTINATION /usr/local/bin)
+install(TARGETS SFFEquivalent DESTINATION bin)
 
 add_executable(iontools file-io/main.c file-io/sff_check.c ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(iontools IONVERSION TCLAP)
 target_link_libraries(iontools ion-analysis file-io pthread)
-install(TARGETS iontools DESTINATION /usr/local/bin)
+install(TARGETS iontools DESTINATION bin)
 
 add_executable(barcodeSplit barcodeSplit.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(barcodeSplit IONVERSION TCLAP)
 target_link_libraries(barcodeSplit ion-analysis)
-install(TARGETS barcodeSplit DESTINATION /usr/local/bin)
+install(TARGETS barcodeSplit DESTINATION bin)
 
 add_executable(barcodeMaskParse barcodeMaskParse.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(barcodeMaskParse IONVERSION TCLAP)
 target_link_libraries(barcodeMaskParse ion-analysis)
-install(TARGETS barcodeMaskParse DESTINATION /usr/local/bin)
+install(TARGETS barcodeMaskParse DESTINATION bin)
 
-add_executable(BruteForcePhase Phase/BruteForcePhase.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(BruteForcePhase IONVERSION TCLAP)
-target_link_libraries(BruteForcePhase ion-analysis z ${ION_SAMTOOLS_LIBS} pthread )
+
+add_executable(SFFUtils
+  SFFUtils/SFFUtils.cpp
+  SFFUtils/SFFUtilsSummary.cpp
+  SFFSummary/SFFSummary.cpp
+  SFFUtils/SFFUtilsRead.cpp
+  ../buildTools/dbgmem.cpp
+  ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(SFFUtils IONVERSION TCLAP)
+target_link_libraries(SFFUtils ion-analysis file-io pthread)
+install(TARGETS SFFUtils DESTINATION bin)
+
+
 
 # Setup for testing and gtest in particular, only needed once in file before tests.
 enable_testing()
@@ -771,22 +821,21 @@ if(GTEST_FOUND)
         add_test(SFFTrimTest SFFTrim_Test --gtest_output=xml:./)
 endif()
 
-install(FILES "${PROJECT_SOURCE_DIR}/DefaultTFs.conf" DESTINATION config RENAME "DefaultTFs.conf.dist")
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_314.bin" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_316.bin" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_318.bin" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_324.bin" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_314" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_316" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_318" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_324" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION /usr/share/man/man1)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_314" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_316" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_318" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_314.param" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_316.param" DESTINATION config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_318.param" DESTINATION config)
+install(FILES "${PROJECT_SOURCE_DIR}/DefaultTFs.conf" DESTINATION ${ION_INSTALL_PREFIX}/config RENAME "DefaultTFs.conf.dist")
+install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_314.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_316.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_318.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_324.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_324" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/gopt_314.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/gopt_316.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 # perl modules used by plugins for json file parsing
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/common-sense-3.4.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION "/tmp/pModIn")
@@ -797,6 +846,13 @@ install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Carp-Assert-0.20.tar.gz" D
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IPC-System-Simple-1.21.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/autodie-2.10.tar.gz" DESTINATION "/tmp/pModIn")
+
+install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
+
+if(NOT ION_USE_SYSTEM_ARMADILLO)
+   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.ion0/lib64/libarmadillo.so.1" DESTINATION lib)
+   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.ion0/lib64/libarmadillo.so.1.1.0" DESTINATION lib)
+endif()
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this

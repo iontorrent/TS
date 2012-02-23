@@ -39,6 +39,13 @@ class GlobalDefaultsForBkgModel
   static  float  d_default[NUMNUC];
   static  float  kmax_default[NUMNUC];
   static  float  krate_adj_limit[NUMNUC];
+  static float sigma_mult_default[NUMNUC];
+  static float t_mid_nuc_delay_default[NUMNUC];
+  
+  static float nuc_flow_frame_width;
+  static int time_left_avg;
+  static int time_start_detail;
+  static int time_stop_detail;
   
   static float dampen_kmult;
   
@@ -54,7 +61,8 @@ class GlobalDefaultsForBkgModel
   static  bool no_RatioDrift_fit_first_20_flows;
   
   static char *xtalk_name; // really bad, but I can't pass anything through analysis at all!!!
-
+  static bool var_kmult_only; // always do variable kmult override
+  static bool generic_test_flag; // control any features that I'm just testing
 
 // Here's a bunch of functions to make us happy
   static void   SetGoptDefaults(char *gopt);
@@ -99,6 +107,9 @@ static int IsDoubleTap(int flow)
      return(0);
    return(1);
 }
+  static bool GetVarKmultControl(){return(var_kmult_only);};
+  static void SetVarKmultControl(bool _var_kmult_only){var_kmult_only = _var_kmult_only;};
+  static void SetGenericTestFlag(bool _generic_test_flag){generic_test_flag = _generic_test_flag;};
 
   static void ReadXtalk(char *name);
   static void SetChipType(char *name);

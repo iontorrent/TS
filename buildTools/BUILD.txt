@@ -34,7 +34,10 @@ QUICK START on Ubuntu 11.04 (=Natty) (EXPERIMENTAL)
         libatlas-dev \
         gfortran \
         zlib1g-dev \
+        libarmadillo-dev \
         libgsl0-dev
+
+   set ION_USE_CUDA:BOOL=OFF and ION_USE_SYSTEM_ARMADILLO:BOOL=ON
 
    ./buildTools/build.sh
 

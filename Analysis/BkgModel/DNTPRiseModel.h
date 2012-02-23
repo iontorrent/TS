@@ -11,13 +11,15 @@
 #define MIN_PROC_THRESHOLD  (0.01)
 
 // exportable math
-int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma);
+int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, bool splineflag);
 int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma);
 int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float tangent_zero, float tangent_one);
+int MeasuredNucRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma);
 
 class DntpRiseModel
 {
 public:
+  bool splineflag;
     // constructs an object that can compute the [DNTP] above the wells as a function of time
     // given:
     //  C: the [dNTP] in the reagent bottle

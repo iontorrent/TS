@@ -11,7 +11,7 @@ def get_selected_plugins():
     will only put the plugins in the list that are selected in the 
     interface'''
     try:
-        pg = models.Plugin.objects.filter(selected=True).exclude(path='')
+        pg = models.Plugin.objects.filter(selected=True)
     except:
         return ""
     ret = []

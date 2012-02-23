@@ -143,8 +143,8 @@ private:
     int* active_bead_list_cuda;
     bead_params* eval_params_cuda;
     bead_params* params_nn_cuda;
-    bead_params* params_low_cuda;
-    bead_params* params_high_cuda;
+    bound_params* params_low_cuda;
+    bound_params* params_high_cuda;
 
     // GPU memory (local parameters)
     reg_params* new_rp_cuda;
@@ -275,6 +275,7 @@ private:
     float* ap_cuda;
     float* ep_cuda;
     float* step_cuda;
+    int* done_cuda;
 
 
     // members for single flow fit

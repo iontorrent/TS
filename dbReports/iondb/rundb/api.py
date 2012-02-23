@@ -3,6 +3,7 @@
 from tastypie.resources import ModelResource, Resource
 from tastypie.constants import ALL, ALL_WITH_RELATIONS
 from tastypie import fields
+import glob
 
 from iondb.rundb import models
 
@@ -30,7 +31,7 @@ from tastypie.utils.mime import build_content_type
 from iondb.rundb.views import barcodeData, findVersions
 import iondb.rundb.admin
 
-from iondb.plugin_json import *
+from ion.utils.plugin_json import *
 from iondb.plugins import runner
 
 #custom query
@@ -60,7 +61,7 @@ from django.conf.urls.defaults import url
 
 import tasks
 
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 def field_dict(field_list):
     """will build a dict with to tell TastyPie to allow filtering by everything"""
@@ -193,11 +194,13 @@ class ResultsResource(BaseMetadataResource):
        urls = [
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/plugin%s$" % (self._meta.resource_name, trailing_slash()),
                     self.wrap_view('dispatch_plugin'), name="api_dispatch_plugin"),
+           url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/pluginresults%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_pluginResults'), name="api_dispatch_pluginResults"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/pluginstore%s$" % (self._meta.resource_name, trailing_slash()),
                     self.wrap_view('dispatch_pluginstore'), name="api_dispatch_pluginstore"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/barcode%s$" % (self._meta.resource_name, trailing_slash()),
                self.wrap_view('dispatch_barcode'), name="api_dispatch_barcode"),
-            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/metadata%s$" % (self._meta.resource_name, trailing_slash()),
+           url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/metadata%s$" % (self._meta.resource_name, trailing_slash()),
                 self.wrap_view('dispatch_metadata'), name="api_dispatch_metadata")
         ]
 
@@ -240,37 +243,23 @@ class ResultsResource(BaseMetadataResource):
         results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
-
-        #we want to get the dir name, so we can grab junk from the plugin_out dir
-        #do we return a list of all the html?
-        #do we have to provide a full url to the page?
-
-        #when the SGE job is done it should it call a call back to let the page know it is done?
-
-        #for now we will return the plugin state
         pluginStatus = {}
         pluginStatus["pluginState"] = results.getPluginState()
-
-        #get the plugin files
         pluginPath = os.path.join(results.get_report_dir(),"plugin_out")
-
         pluginFiles = {}
         pluginDirs = [ name for name in os.listdir(pluginPath) if os.path.isdir(os.path.join(pluginPath, name)) ]
         for pluginDir in pluginDirs:
             htmlFiles = [pfile for pfile in os.listdir(os.path.join(pluginPath, pluginDir)) if (pfile.endswith(".html") or pfile.endswith(".php"))]
-            #get rid of _out
             pluginDir = ''.join(pluginDir.split())[:-4]
             pluginFiles[pluginDir] = htmlFiles
-
         pluginStatus["pluginFiles"] = pluginFiles
 
-        # Show results for output folders without database records
         for plugin in pluginStatus["pluginFiles"].keys():
             if plugin not in pluginStatus["pluginState"]:
                 pluginStatus["pluginState"][plugin] = 'Unknown'
-
         return self.create_response(request, pluginStatus)
-
+    
+    
     def post_plugin(self, request, **kwargs):
         """
         Expects dict with a plugin to run, with an optional plugin config dict
@@ -302,12 +291,7 @@ class ResultsResource(BaseMetadataResource):
         reportList = report.split("/")[:-1]
         reportUrl = ("/").join(reportList)
 
-        # URL ROOT is a relative path, no hostname,
-        # as there is no canonical hostname
-        #url_root = hostname + reportUrl
-        url_root = reportUrl
-
-        log = logging.getLogger('iondb.rundb.api.ResultsResource')
+        url_root = hostname + reportUrl
 
         for plugin_name in plugins:
             try:
@@ -326,24 +310,22 @@ class ResultsResource(BaseMetadataResource):
 
             plugin_output_dir = os.path.join(result.get_report_dir(),"plugin_out", plugin_orm.name + "_out")
 
-            #get the plan json
-            plan_json = models.PlannedExperiment.objects.filter(planShortID=result.planShortID())
-            if plan_json:
-                plan_json = serializers.serialize("json", plan_json)
-                plan_json = json.loads(plan_json)
-                plan_json = plan_json[0]["fields"]
-            else:
-                plan_json = {}
-
             #this will have to be built, at least in part for all the plugins sent in the list
+            sigproc_results = "."
+            basecaller_results = "."
+            alignment_results = "."
+
             env={
                 'pathToRaw':result.experiment.unique,
+                'report_root_dir':result.get_report_dir(),
                 'analysis_dir':result.get_report_dir(),
+                'sigproc_dir':os.path.join(result.get_report_dir(),sigproc_results),
+                'basecaller_dir':os.path.join(result.get_report_dir(),basecaller_results),
+                'alignment_dir':os.path.join(result.get_report_dir(),alignment_results),
                 'libraryKey':result.experiment.libraryKey,
                 'results_dir' : plugin_output_dir,
                 'net_location' : hostname,
                 'testfrag_key':'ATCG',
-                'plan': plan_json
             }
 
             # if thumbnail
@@ -353,7 +335,7 @@ class ResultsResource(BaseMetadataResource):
 
             plugin={
                 'name':plugin_orm.name,
-                'path':plugin_orm.path
+                'path':plugin_orm.path,
             }
 
             start_json = make_plugin_json(env,plugin,result.pk,"plugin_out",url_root)
@@ -371,7 +353,7 @@ class ResultsResource(BaseMetadataResource):
             ret = launcher.callPluginXMLRPC(start_json)
 
             if not ret:
-                log.error('Unable to launch plugin: %s', plugin_orm.name) # See ionPlugin.log for details
+                logger.error('Unable to launch plugin: %s', plugin_orm.name) # See ionPlugin.log for details
                 pluginresult.state = 'Error'
                 pluginresult.save()
 
@@ -406,6 +388,91 @@ class ResultsResource(BaseMetadataResource):
             return HttpBadRequest()
 
         return HttpAccepted()
+
+
+    def dispatch_pluginResults(self, request, **kwargs):
+        request_method = request.method.lower()
+        if request_method not in ("get", "post", "put"):
+            raise ImmediateHttpResponse(response=HttpMethodNotAllowed())
+
+        if request_method in ("get"):
+            method = getattr(self, "%s_pluginResults" % request_method, None)
+        else:
+            # Delegate to existing put_plugin and post_plugin methods
+            method = getattr(self, "%s_plugin" % request_method, None)
+
+        if method is None:
+            raise ImmediateHttpResponse(response=HttpNotImplemented())
+
+        self.is_authenticated(request)
+        self.is_authorized(request)
+        self.throttle_check(request)
+
+        # All clear. Process the request.
+        response = method(request, **kwargs)
+
+        # Add the throttled request.
+        self.log_throttled_access(request)
+
+        # If what comes back isn't a ``HttpResponse``, assume that the
+        # request was accepted and that some action occurred. This also
+        # prevents Django from freaking out.
+        if not isinstance(response, HttpResponse):
+            return HttpAccepted()
+
+        return response
+
+    def get_pluginResults(self, request, **kwargs):
+
+        results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        if results is None:
+            return HttpGone()
+
+        pluginresults = {}
+        for pluginresult in results.pluginresult_set.all():
+            pname = pluginresult.plugin.name
+            # FIXME - handle multiple versions
+            if pname in pluginresults:
+                logger.warn("Got two plugins with same name: %s", pname)
+            pluginresults[pname] = pluginresult
+
+        #pluginStatus = {}
+        #pluginStatus["pluginState"] = results.getPluginState() #Nidhi - Get the values from database. Refer models.py
+
+        pluginPath = os.path.join(results.get_report_dir(),"plugin_out")
+
+        pluginArray = []
+        pluginDict = {}
+        pluginDirs = [ name for name in os.listdir(pluginPath) if os.path.isdir(os.path.join(pluginPath, name)) ]
+        for pluginDir in pluginDirs:
+            if pluginDirs in ('.', '..'):
+                continue
+            pluginFiles = {}
+            htmlFiles = [pfile for pfile in os.listdir(os.path.join(pluginPath, pluginDir)) if (pfile.endswith(".html") or pfile.endswith(".php"))]
+            #htmlFiles = [pfile for pfile in glob(os.path.join(pluginDir, "*.html"))]
+            #get rid of _out
+            pluginDir = ''.join(pluginDir.split())[:-4]
+            #pluginFiles[pluginDir] = htmlFiles
+            pluginFiles["Files"] = htmlFiles
+            if pluginDir in pluginresults:
+                p = pluginresults[pluginDir]
+                plugin = p.plugin
+                pluginFiles["State"] = p.state
+                pluginFiles["Name"] = plugin.name
+                pluginFiles["Version"] = plugin.version
+                pluginFiles["about"] = "TBD. Scrape from torrent circuit xml"
+            else:
+                pluginFiles["State"] = 'Unknown'
+                #plugin = models.Plugin.objects.get(name=pluginDir) # FIXME handle multiple versions
+                pluginFiles["Name"] = pluginDir # plugin.name
+                pluginFiles["Version"] = "?"    # plugin.version
+                pluginFiles["Description"] = "TBD" # plugin.description. Keeping it for now. Prototyping purposes
+                pluginFiles["Type"] = "Ion Plugin" # may or may not be needed. This is to create a prototype for Select Plugins to run page.
+            pluginArray.append(pluginFiles)
+
+        #return self.create_response(request, pluginDict)
+        return self.create_response(request, pluginArray)
+
 
     #TODO: extend the scheme so the docs can be auto generated
     def dispatch_pluginstore(self, request, **kwargs):
@@ -1023,6 +1090,21 @@ class PublisherResource(ModelResource):
         return self._build_reverse_url("api_dispatch_detail", kwargs=kwargs)
 
 
+class ContentResource(ModelResource):
+    publisher = ToOneField(PublisherResource, 'publisher')
+    
+    class Meta:
+        queryset = models.Content.objects.all()
+
+        # allow ordering and filtering by all fields
+        field_list = models.Content._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = Authentication()
+        authorization = Authorization()
+
+
 class ContentUploadResource(ModelResource):
 
     class Meta:
@@ -1037,24 +1119,7 @@ class ContentUploadResource(ModelResource):
         authorization = Authorization()
 
 
-class ContentResource(ModelResource):
-    publisher = ToOneField(PublisherResource, 'publisher')
-    contentupload = ToOneField(ContentUploadResource, 'contentupload')
-
-    class Meta:
-        queryset = models.Content.objects.all()
-
-        # allow ordering and filtering by all fields
-        field_list = models.Content._meta.get_all_field_names()
-        ordering = field_list
-        filtering = field_dict(field_list)
-
-        authentication = Authentication()
-        authorization = Authorization()
-
-
 class UserEventLogResource(ModelResource):
-    upload = ToOneField(ContentUploadResource, 'upload')
 
     class Meta:
         queryset = models.UserEventLog.objects.all()

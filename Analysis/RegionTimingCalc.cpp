@@ -62,13 +62,13 @@ void FillOneRegionTimingParameters(RegionTiming *region_time, Region *regions, i
 //
       FindStartingParametersForBkgModel(my_initial_params, my_fit_residual, avg_sig, avg_len);
 
-      printf(
+     /* printf(
         "Region:(%d,%d) A:%f, sigma:%f, t_mid_nuc:%f, tau:%f, res:%f t0:%d\n",
         regions[r].col, regions[r].row,
         my_initial_params.A, my_initial_params.sigma,
         my_initial_params.t_mid_nuc, my_initial_params.tau,
         my_fit_residual,
-        T0Start);
+        T0Start);*/ // now dumped directly to file
         
         region_time[r].t_mid_nuc = T0Start + my_initial_params.t_mid_nuc;
         region_time[r].t_sigma = my_initial_params.sigma;

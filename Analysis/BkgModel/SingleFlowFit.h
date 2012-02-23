@@ -35,20 +35,21 @@ class single_flow_optimizer
     BkgModSingleFlowFitKrateParams pboundkrate;
     
     float decision_threshold[NUMFB];
+    bool var_kmult_only;
     
     single_flow_optimizer();
     ~single_flow_optimizer();
     void SetUpperLimitAmplFit(float AmplLim,float krateLim, float dmultLim);
     void SetLowerLimitAmplFit(float AmplLim,float krateLim, float dmultLim);
-    void AllocLevMar(TimeCompression &time_c, PoissonCDFApproxMemo *math_poiss, float damp_kmult);
+    void AllocLevMar(TimeCompression &time_c, PoissonCDFApproxMemo *math_poiss, float damp_kmult, bool var_kmult_only);
     void Delete();
     void FitKrateOneFlow(int fnum, float *evect, 
-                                            bead_params *p, float *signal_corrected, float *nucRise, 
-                                            int *i_start, flow_buffer_info &my_flow, TimeCompression &time_c, 
+                                            bead_params *p, error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, 
+                                            int l_i_start, flow_buffer_info &my_flow, TimeCompression &time_c,
                                             EmphasisClass &emphasis_data,RegionTracker &my_regions);
-    void FitThisOneFlow(int fnum, float *evect, bead_params *p,  float *signal_corrected, float *nucRise, int *i_start,
+    void FitThisOneFlow(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
                                            flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
-    void FitOneFlow(int fnum, float *evect, bead_params *p,  float *signal_corrected, float *nucRise, int *i_start,
+    void FitOneFlow(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
                                            flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
                                            void FillDecisionThreshold(float *nuc_threshold, int *my_nucs);
 };

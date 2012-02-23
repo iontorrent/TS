@@ -185,13 +185,14 @@ restart_workers () {
 
 check_status () {
     PID_FILES=`echo $CELERYD_PID_FILE|sed 's/%n/*/'`
-    pids=`cat $PID_FILES`
-    if [ $pids != "" ]
+    pids=`cat $PID_FILES 2> /dev/null` || pids=""
+    if [ "$pids" != "" ];
     then
         echo "Celery is running with pids:"
         echo $pids
     else
         echo "No Celery node processes."
+        exit 1
     fi
 }
 

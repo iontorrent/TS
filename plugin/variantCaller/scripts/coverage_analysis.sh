@@ -152,11 +152,11 @@ if [ -n "$READSTATS" ]; then
     fi
   fi
   echo "Percent reads on target: $PTREADS" >> "${WORKDIR}/$READSTATS"
-  MREADS=`samtools depth "$BAMFILE" | awk '{c+=$3} END {print c+0}'`
+  MREADS=`samtools depth "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
   echo "Number of mapped bases:  $MREADS" >> "${WORKDIR}/$READSTATS"
   PTREADS="100.0%"
   if [ -n "$BEDFILE" ]; then
-    TREADS=`samtools depth -b "$BEDFILE" "$BAMFILE" | awk '{c+=$3} END {print c+0}'`
+    TREADS=`samtools depth -b "$BEDFILE" "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
     if [ "$TREADS" -gt 0 ]; then
       PTREADS=`echo "$TREADS $MREADS" | awk '{printf("%.2f%%"),100*$1/$2}'`
     else
@@ -168,10 +168,10 @@ fi
  
 # Basic coverage stats
 if [ -n "$BEDFILE" ]; then
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {print gs}' "$BEDFILE"`
+  gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
   COVERAGE_ANALYSIS="samtools depth -b \"$BEDFILE\" \"$BAMFILE\" 2> /dev/null | awk -f $RUNDIR/coverage_analysis.awk -v genome=$gnm_size"
 else
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $2} END {print gs}' "$GENOME"`
+  gnm_size=`awk 'BEGIN {gs = 0} {gs += $2} END {printf "%.0f",gs+0}' "$GENOME"`
   COVERAGE_ANALYSIS="samtools depth \"$BAMFILE\" 2> /dev/null | awk -f $RUNDIR/coverage_analysis.awk -v genome=$gnm_size"
 fi
 eval "$COVERAGE_ANALYSIS $OUTCMD" >&2

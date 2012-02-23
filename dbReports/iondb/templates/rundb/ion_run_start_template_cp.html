@@ -54,6 +54,12 @@
             </tr>
 
             <tr>
+              <th>(fromRaw, fromWells, fromSFF)</th>
+              <td>{{rpf.blockArgs}}</td>
+              <td class="error">{{rpf.blockArgs.errors}}</td>
+            </tr>
+
+            <tr>
                 <th>Library Key</th>
                 <td>{{rpf.libraryKey}}</td>
                 <td class="error">{{rpf.libraryKey.errors}}</td>
@@ -93,7 +99,6 @@
       </tbody>
     </table>
     </div>
-    {{rpf.qname}}
     <input id="submitButton" style="margin-top: 15px;" type="submit" value="Start Analysis" name="submit"/>
   </form>
 </div>

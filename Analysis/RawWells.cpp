@@ -677,6 +677,18 @@ void RawWells::OpenForIncrementalRead() {
   H5Eget_auto2( H5E_DEFAULT, &old_func, &old_client_data);
   H5Eset_auto2( H5E_DEFAULT, NULL, NULL);
   mHFile = H5Fopen(mFilePath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  if (mChunk.rowHeight <= 0) {
+    mChunk.rowStart = 0;
+    mChunk.rowHeight = 1;
+  }
+  if (mChunk.colWidth <= 0) {
+    mChunk.colStart = 0;
+    mChunk.colWidth = 1;
+  }
+  if (mChunk.flowDepth <= 0) {
+    mChunk.flowStart = 0;
+    mChunk.flowDepth = 1;
+  }
   if (mHFile >= 0) {
     mIsLegacy = false;
     mCurrentWell = 0;
@@ -713,6 +725,7 @@ void RawWells::ReadWells() {
       wellsInSubset++;
     }
   }
+  
   mFlowData.resize((uint64_t)wellsInSubset * mChunk.flowDepth);
   fill(mFlowData.begin(), mFlowData.end(), -1.0f);
   for (currentRowStart = mChunk.rowStart, currentRowEnd = mChunk.rowStart + min((size_t)stepSize, mChunk.rowHeight); 

@@ -57,6 +57,7 @@ class CrossTalkSpecification
     void SetStandardGrid();
     void SetNewQuadGrid();
     void SetHexGrid();
+    void SetAggressiveHexGrid();
     void SetNewHexGrid();
     float ClawBackBuffering(int nei_total);
     void ReadCrossTalkFromFile(char *);

@@ -37,6 +37,26 @@ SimplifyGenerateRedHydrogensFromNucRise<-function(
   return(val)
 }
 
+DerivativeGenerateRedHydrogensFromNucRise<-function(
+    nucRise, sub_steps,
+    deltaFrame, my_start, 
+    maxConc, 
+    amplitude, copies,
+    krate, kmax, diffusion
+){
+
+	val <- .Call("DerivativeCalculateCumulativeIncorporationHydrogensR",
+	      nucRise,sub_steps,
+        deltaFrame, my_start,
+        maxConc, 
+        amplitude,copies, 
+        krate,kmax,diffusion,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}
+
+
 
 ComplexGenerateRedHydrogensFromNucRise<-function(
     nucRise, sub_steps,
@@ -86,6 +106,18 @@ CalculateNucRiseSigma<-function(
   maxConc, t_mid_nuc, sigma
 ){
 	val <- .Call("CalculateNucRiseSigmaR",
+        timeFrame, sub_steps,
+        maxConc, t_mid_nuc, sigma,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}
+
+CalculateNucRiseMeasured<-function(
+  timeFrame, sub_steps,
+  maxConc, t_mid_nuc, sigma
+){
+	val <- .Call("CalculateNucRiseMeasuredR",
         timeFrame, sub_steps,
         maxConc, t_mid_nuc, sigma,
           PACKAGE="torrentR"

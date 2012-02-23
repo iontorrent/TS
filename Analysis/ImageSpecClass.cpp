@@ -25,13 +25,12 @@ int ImageSpecClass::LeadTimeForChipSize()
   }
   else {
     if ((rows * cols) > 10000000)
-      return(1); // 318
+      return(2); // 318
     if ((rows * cols) > 2000000)
       return(4); // 316
     else
       return(20);
   }
-
 }
 
 /********************************************************************
@@ -43,10 +42,10 @@ void ImageSpecClass::DeriveSpecsFromDat(CommandLineOpts &clo, int numFlows, char
   Image img;
   img.SetImgLoadImmediate(false);
   img.SetNumAcqFiles(numFlows);
-  img.SetIgnoreChecksumErrors(clo.ignoreChecksumErrors);
-  char *firstAcqFile = (char *) malloc(strlen(clo.dirExt) + strlen(
+  img.SetIgnoreChecksumErrors(clo.img_control.ignoreChecksumErrors);
+  char *firstAcqFile = (char *) malloc(strlen(clo.sys_context.dat_source_directory) + strlen(
                                          acqPrefix) + 10);
-  sprintf(firstAcqFile, "%s/%s%04d.dat", clo.dirExt, acqPrefix, 0);
+  sprintf(firstAcqFile, "%s/%s%04d.dat", clo.sys_context.dat_source_directory, acqPrefix, 0);
 
   if (!img.LoadRaw(firstAcqFile, 0, true, false))
   {
@@ -56,35 +55,35 @@ void ImageSpecClass::DeriveSpecsFromDat(CommandLineOpts &clo, int numFlows, char
   free(firstAcqFile);
 
   img.SetDir(experimentName);
-  img.SetFlowOffset(clo.flowTimeOffset);
+  img.SetFlowOffset(clo.img_control.flowTimeOffset);
 
   // grab rows & cols here - as good a place as any
   rows = img.GetImage()->rows;
   cols = img.GetImage()->cols;
   scale_of_chip = rows*cols;
-  clo.chip_offset_x = img.GetImage()->chip_offset_x;
-  clo.chip_offset_y = img.GetImage()->chip_offset_y;
-  clo.rows = rows;
-  clo.cols = cols;
+  clo.loc_context.chip_offset_x = img.GetImage()->chip_offset_x;
+  clo.loc_context.chip_offset_y = img.GetImage()->chip_offset_y;
+  clo.loc_context.rows = rows;
+  clo.loc_context.cols = cols;
 
   vfr_enabled= img.VFREnabled();
 
   // this globally limits the Loadraw method and other methods to process only this many frames (for speed)
-  clo.totalFrames = img.GetMaxFrames();
-  if (clo.maxFrames != 0)
+  clo.img_control.totalFrames = img.GetMaxFrames();
+  if (clo.img_control.maxFrames != 0)
   {
     // command-line override of the frames to analyze
-    clo.maxFrames = (clo.maxFrames > clo.totalFrames ? clo.totalFrames
-                     : clo.maxFrames);
-    img.SetMaxFrames(clo.maxFrames);
+    clo.img_control.maxFrames = (clo.img_control.maxFrames > clo.img_control.totalFrames ? clo.img_control.totalFrames
+                     : clo.img_control.maxFrames);
+    img.SetMaxFrames(clo.img_control.maxFrames);
   }
   else
   {
-    clo.maxFrames = clo.totalFrames; // set to total frames in image.
+    clo.img_control.maxFrames = clo.img_control.totalFrames; // set to total frames in image.
   }
   uncompFrames = img.GetUnCompFrames();
-  timestamps = new int[clo.maxFrames];
-  memcpy(timestamps,img.GetImage()->timestamps,sizeof(int)*clo.maxFrames);
+  timestamps = new int[clo.img_control.maxFrames];
+  memcpy(timestamps,img.GetImage()->timestamps,sizeof(int)*clo.img_control.maxFrames);
   // Deallocate image memory
   img.Close();
 }

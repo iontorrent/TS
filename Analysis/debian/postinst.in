@@ -33,7 +33,7 @@ case "$1" in
         cd $staging
         rm -rf $module ${module%.tar.gz}
     done
-    
+    ldconfig 
     ;;
 esac
 

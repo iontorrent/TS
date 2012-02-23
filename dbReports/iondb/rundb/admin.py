@@ -39,6 +39,7 @@ def network(request):
     if request.method == "POST" and "network-mode" in request.POST:
         form = forms.NetworkConfigForm(request.POST, prefix="network")
         if form.is_valid():
+            # TS* is updated by the form controller forms.NetworkConfigForm
             form.save()
         else:
             logger.warning("User entered invalid network settings:\n%s" % str(form.errors))
@@ -159,9 +160,15 @@ def ot_log(request):
         log = open("/tmp/OTstatus").readlines()
         log = [line.strip() for line in log]
         if len(log) == 0:
-            log = "Waiting for update to run...."
-    except:
-        log = "OneTouch update is no longer running, <a href='/admin'>you can leave this page.</a>"
+            log = 'OneTouch update is running <img src="/site_media/jquery/colorbox/images/loading.gif"/>'
+        else:
+            log = log
+        if log[-1] == "STARTED":
+            log = 'OneTouch update is running <img src="/site_media/jquery/colorbox/images/loading.gif"/>'
+        if log[-1] == "DONE":
+            log = "OneTouch update finished! <a href='/admin'>You can leave this page</a>"
+    except IOError:
+        log = 'OneTouch update is waiting to start <img src="/site_media/jquery/colorbox/images/loading.gif"/>'
 
     response = http.HttpResponse(log, content_type=mime)
     return response
@@ -169,14 +176,21 @@ def ot_log(request):
 def updateOneTouch(request):
     """provide a simple interface to allow one touch updates"""
 
+    #TODO: OT update does not provide useful log into in the case of found OTs
     if request.method=="POST":
 
         if not os.path.exists("/tmp/OTlock"):
             otLockFile = open("/tmp/OTlock",'w')
             otLockFile.write("Update Started")
-            async = tasks.updateOneTouch.delay()
             otLockFile.close()
-            state = "OneTouch update has started"
+            try:
+                otStatusFile = open("/tmp/OTstatus",'w')
+                otStatusFile.write("STARTED")
+                otStatusFile.close()
+            except:
+                pass
+            async = tasks.updateOneTouch.delay()
+            state = 'OneTouch update is waiting to start <img src="/site_media/jquery/colorbox/images/loading.gif"/>'
         else:
             state = "Error: OneTouch update was already in progress"
 

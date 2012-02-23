@@ -194,7 +194,7 @@ if [ $USTARTS -eq 1 ]; then
 
   # Check number of mapped reads for early exit
   SUMFILE="$WORKDIR1/summary.txt"
-  NUMREADS=`awk -F ':' '$1=="Number of mapped reads" {v=$2} END {print (v+0)}' "$SUMFILE"`
+  NUMREADS=`awk -F ':' '$1=="Number of mapped reads" {v=$2} END {printf "%.0f",v+0}' "$SUMFILE"`
   if [ $NUMREADS -eq 0 ]; then
     echo "No mapped reads: Skipping unique starts analysis." >&2
     ln -sf "$BAMFILE" "$BAMFILE2"

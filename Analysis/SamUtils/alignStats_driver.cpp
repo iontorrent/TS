@@ -22,6 +22,8 @@
 #include "Utils.h"
 #include "OptArgs.h"
 #include "alignStats.h"
+#include <sys/types.h>
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -38,6 +40,7 @@ int main(int argc, const char* argv[])
 	opts.ParseCmdLine(argc, argv);
 	AlignStats::options opt;
 	get_options(opt, opts);
+
 	
 	// Open a BAM file:	
 	string extension = get_file_extension(opt.bam_file);
@@ -128,7 +131,8 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.truncate_soft_clipped,		"true",					'T',"cutClippedBases");
 	opts.GetOption(opt.three_prime_clip,			"0",					'C',"3primeClip");
 	opts.GetOption(opt.round_phred_scores,			"true", 				'X',"roundPhredScores");
-        opts.GetOption(opt.five_prime_justify,			"true", 				'P',"5primeJustify");
+    opts.GetOption(opt.five_prime_justify,			"true", 				'P',"5primeJustify");
+    opts.GetOption(opt.output_dir,                "",                       'd',"outputDir");
 
 
 
@@ -199,38 +203,46 @@ void usage() {
 	
 	
 	<< endl;
-	
-	
-	
 }
 
 	
-
+bool make_output_dir(string output_dir) { 
+  //just to simplify, set output prefix to output_dir + "/" + output_prefix
+  if (mkdir( output_dir.c_str(), 0777) == -1) {
+    return false;
+  } else {
+    return true;
+  }
+  
+}
 
 bool check_args(AlignStats::options& opt) {
 	if (opt.help_flag) {
 		return false;
 	}
-	
-	
-		
 	if (!opt.stdin_sam_flag && !opt.stdin_bam_flag && opt.list_of_files.length() == 0) {
-		
-		string extension = get_file_extension(opt.bam_file);
-		
+		string extension = get_file_extension(opt.bam_file);		
 		if ((extension != "sam" && extension != "bam") && (extension != "SAM" && extension != "BAM")) {
                     cerr << "[alignStats] Error!\n"
                             "[alignStats] The user needs to provide an input file [-i]\n"
                             "[alignStats] Exiting." << endl;
                         return false;
 		}
-		
-		
-	
-	}
-		
+	}	
+  if ( opt.output_dir.length() > 0) {
+    struct stat st;
+    if (stat(opt.output_dir.c_str(), &st) != 0) {
+      if ( !make_output_dir( opt.output_dir ) ) {
+        cerr << "[alignStats] Error!" << endl
+        << "[alignStats] Unable to create output directory: " << opt.output_dir << endl
+        << "[alignStats] Exiting." << endl;
+        return false;
+      }
+    }
+    opt.out_file = opt.output_dir + "/" + opt.out_file;
+    opt.align_summary_file = opt.output_dir + "/" + opt.align_summary_file;
+  }
 	return true;
-	
 }
 
 

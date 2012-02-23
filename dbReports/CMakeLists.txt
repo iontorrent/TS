@@ -50,7 +50,6 @@ configure_file (
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/../buildTools/terms-of-use.txt" DESTINATION /var/www/licenses)
-install(FILES "${PROJECT_SOURCE_DIR}/python/ion/web/db/writers/systemStatsZip.php" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/TorrentServerSplash.jpg" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/favicon.ico" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/index.html" DESTINATION /var/www)
@@ -79,15 +78,6 @@ install(PROGRAMS iondb/bin/celery.conf DESTINATION /opt/ion/config)
 
 install(PROGRAMS iondb/settings.py DESTINATION iondb RENAME settings.py.dist)
 
-# Add ION_INSTALL_PREFIX to system python path so iondb modules can be found
-file(WRITE ${PROJECT_BINARY_DIR}/iondb.pth "${ION_INSTALL_PREFIX}\n")
-install(FILES ${PROJECT_BINARY_DIR}/iondb.pth DESTINATION ${PYTHON_SITE_PACKAGES})
-
-
-install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
-    USE_SOURCE_PERMISSIONS
-    PATTERN ".svn" EXCLUDE
-)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
@@ -96,11 +86,13 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
+    ion-pipeline,
     zeroinstall-injector,
     postgresql,
 	php5,
     python-celery (>= 2.4.0),
 	python-django (>= 1.3.1),
+    rabbitmq-server,
     python-django-celery,
     python-django-kombu,
 	python-matplotlib,

@@ -8,6 +8,14 @@
   <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
 
   <script>
+
+    //helper
+    if(!String.prototype.startsWith){
+        String.prototype.startsWith = function (str) {
+            return !this.indexOf(str);
+        }
+    }
+
     $(function () {
 
       $("#downloadPluginButton").button();
@@ -17,34 +25,43 @@
         $.colorbox({inline:true, width:"90%", href:"#downloadPlugin"});
       });
 
-
       $("#downloadPluginButton").click(function () {
         urlVAL = $("#downloadPluginURL").val();
         downloadPluginJSON = { "url":urlVAL };
         downloadPluginJSON = JSON.stringify(downloadPluginJSON);
         $.ajax({
-          type:'POST',
-          url:"/rundb/api/v1/plugin/install/",
-          contentType:"application/json; charset=utf-8",
-          data:downloadPluginJSON,
-          dataType:"json",
-          async:false,
-          beforeSend:function () {
-            if ($("#downloadPluginURL").val() != ""){
+            type:'POST',
+            url:"/rundb/api/v1/plugin/install/",
+            contentType:"application/json; charset=utf-8",
+            data:downloadPluginJSON,
+            dataType:"json",
+            async:false,
+            beforeSend:function () {
+
+                if ($("#downloadPluginURL").val() === ""){
+                    $("#downloadPluginError").html("Error: The Plugin URL must be provided.");
+                    return false;
+                }
+
+                linkValid = false;
+
+                if ($("#downloadPluginURL").val().startsWith("http://") || $("#downloadPluginURL").val().startsWith("https://")  ){
+                    linkValid = true;
+                }
+
+                if (linkValid){
+                    $("#downloadPlugin").html("");
+                    $("#downloadPlugin").html("<span>Initializing plugin download <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+                }else{
+                    $("#downloadPluginError").html("Error: The Plugin URL must start with http:// or https:// ");
+                    return false;
+                }
+            },
+            success:function () {
                 $("#downloadPlugin").html("");
-                $("#downloadPlugin").html("<span>Initializing plugin download <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
-            }else{
-                $("#downloadPluginError").html("Error: The Plugin URL must be provided.");
-                return False;
+                $("#downloadPlugin").html("<span>Starting plugin download page will reload</span>");
+                setTimeout(function () {window.location.reload();}, 1000);
             }
-          },
-          success:function () {
-            $("#downloadPlugin").html("");
-            $("#downloadPlugin").html("<span>Starting plugin download page will reload</span>");
-            setTimeout(function () {
-              window.location.reload();
-            }, 1000);
-          }
         });
       });
 
@@ -409,11 +426,11 @@
    <!-- This contains the hidden div for the pluginDownloader-->
 <div style="display:none">
 	<div id="downloadPlugin" style="padding:10px; background:#fff;">
-        <p>Please enter the HTTP URL of the Zip file that contains the Torrent Suite Plugin that you want to install</p>
+        <p>Please enter the Torrent Circuit URL for the plugin you wish to install</p>
         <input type="text" size="100" id="downloadPluginURL" />
         </br>
         </br>
-        <div id="downloadPluginButton">download</div>
+        <div id="downloadPluginButton">Download</div>
         <span id="downloadPluginError"></span>
 	</div>
 </div>

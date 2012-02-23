@@ -5,6 +5,8 @@ set -e
 echo "preinst $@"
 case "$1" in
 	install|upgrade)
+    # Silence RabbitMQ's disruptive installation pop-up
+    echo "rabbitmq-server rabbitmq-server/upgrade_previous note" | debconf-set-selections
     if [ -e	"/etc/init.d/ionCrawler" ]; then
 		invoke-rc.d ionCrawler stop
 	fi

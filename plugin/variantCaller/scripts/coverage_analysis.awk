@@ -38,12 +38,12 @@ END {
   ave = cum > 0 ? sum/cum : 0;
   std = cum > 1 ? sqrt((cum*sum_sq_coverage[1] - sum*sum)/(cum*(cum-1))) : 0;
   p2m = int(0.2*abc+0.5);
-  #printf "Base reads on target:    %d\n",sum;
-  printf "Bases in target regions: %d\n",genome;
-  #printf "Bases covered (at least 1x): %d\n",numpile;
+  #printf "Base reads on target:    %.0f\n",sum;
+  printf "Bases in target regions: %.0f\n",genome;
+  #printf "Bases covered (at least 1x): %.0f\n",numpile;
   printf "Average base coverage depth: %.2f\n",abc;
   printf "Uniformity of coverage:      %.2f%%\n",cum_coverage[p2m]*scl;
-  #printf "Maximum base read depth: %d\n",maxdepth;
+  #printf "Maximum base read depth: %.0f\n",maxdepth;
   #printf "Average base read depth: %.2f\n",ave;
   #printf "Std.Dev base read depth: %.2f\n",std;
   printf "Coverage at 1x:   %.3f%%\n",numpile*scl;

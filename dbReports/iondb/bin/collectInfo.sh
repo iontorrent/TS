@@ -112,11 +112,11 @@ echo
 echo "=================================================================="
 echo "Required processes"
 echo "PYTHON DAEMONS"
-service ionCrawler status
-service ionJobServer status
-service ionArchive status
-service ionPlugin status
-service celeryd status
+ps aux|grep crawler.py|grep -v grep
+ps aux|grep serve.py|grep -v grep
+ps aux|grep backup.py|grep -v grep
+ps aux|grep ionPlugin.py|grep -v grep
+ps aux|grep celeryd|grep -v grep
 echo
 echo "SGE DAEMONS"
 ps aux|grep sge|grep -v grep
@@ -143,33 +143,35 @@ echo "Disk Space"
 #
 #/sbin/tune2fs -l /dev/sda1 2>&1
 
-#   Startup Scripts
-echo
-echo "=================================================================="
-echo "Startup Scripts"
-
-daemons=(
-	postgresql
-    nfs-kernel-server
-    postfix
-    sgeexec
-    sgemaster
-    ntp
-    dhcp3-server
-    apache2
-    tomcat
-    ionArchive
-    ionCrawler
-    ionJobServer
-    ionPlugin
-    celeryd
-    RSM_Launch
-    )
+if [ -f /opt/ion/.masternode ]; then
+    #   Startup Scripts
+    echo
+    echo "=================================================================="
+    echo "Startup Scripts"
     
-for d in ${daemons[@]}; do
-	echo "Checking ${d}:"
-	find /etc/rc* -name \*${d}\*
-done
+    daemons=(
+        postgresql
+        nfs-kernel-server
+        postfix
+        sgeexec
+        sgemaster
+        ntp
+        dhcp3-server
+        apache2
+        tomcat
+        ionArchive
+        ionCrawler
+        ionJobServer
+        ionPlugin
+        celeryd
+        RSM_Launch
+        )
+        
+    for d in ${daemons[@]}; do
+        echo "Checking ${d}:"
+        find /etc/rc* -name \*${d}\*
+    done
+fi
 
 #	zombie Processes
 echo
@@ -183,12 +185,6 @@ echo "=================================================================="
 echo "Network Time Protocol"
 echo
 /usr/bin/ntpq -p
-
-echo
-echo "=================================================================="
-echo "Database Information"
-echo
-/opt/ion/iondb/bin/db_check.sh
 
 exit 0
 

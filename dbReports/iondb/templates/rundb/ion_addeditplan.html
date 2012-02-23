@@ -73,9 +73,9 @@
 
             formData = $("#planForm").toObject();
 
-            //if cycles is not set remove it from the JSON
-            if(formData["cycles"] === "" ) {
-                delete formData["cycles"];
+            //if flows is not set remove it from the JSON
+            if(formData["flows"] === "" ) {
+                delete formData["flows"];
             }
 
             $.ajax({
@@ -157,8 +157,8 @@
         </div>
 
         <div class="ctrlHolder">
-            <label for="cycles">Flows</label>
-            <input value="{{ plan.cycles|blankIfNone }}" name="cycles" id="cycles" size="35" maxlength="512" type="text" class="textInput validateIntegerNoZero "/>
+            <label for="flows">Flows</label>
+            <input value="{{ plan.flows|blankIfNone }}" name="flows" id="flows" size="35" maxlength="512" type="text" class="textInput validateIntegerNoZero "/>
             <p class="formHint">Number of PGM flows to run for this experiment</p>
         </div>
 
@@ -240,10 +240,10 @@
             <select id="seqKitBarcode" name="seqKitBarcode">
                 <option value=""></option>
                 {%  for seqKit in seqKits %}
-                    {% ifequal seqKit.name plan.seqKitBarcode %}
-                        <option SELECTED value="{{ seqKit }}">{{ seqKit }} ({{ seqKit.sap }})</option>
+                    {% ifequal seqKit.sap plan.seqKitBarcode %}
+                        <option SELECTED value="{{ seqKit.sap }}">{{ seqKit }} ({{ seqKit.sap }})</option>
                     {% else %}
-                        <option value="{{ seqKit }}">{{ seqKit }} ({{ seqKit.sap }})</option>
+                        <option value="{{ seqKit.sap }}">{{ seqKit }} ({{ seqKit.sap }})</option>
                     {% endifequal %}
                 {% endfor %}
             </select>

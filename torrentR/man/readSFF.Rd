@@ -11,7 +11,9 @@
     sffFile,
     col=numeric(),
     row=numeric(),
-    maxBases=150
+    maxBases=250,
+    nSample=0,
+    randomSeed=1
   )
 }
 \arguments{
@@ -27,6 +29,15 @@
     The returned bases, quality scores and flowIndex values will be truncated to this length.  The
     identity of reads that have been truncated by this limit can be established be comparing the
     return values of length and fullLength which report the trimmed and untrimmed lengths respectively.
+  }
+  \item{nSample}{
+    As an alternative to explicitly specifying a subset of reads to load via the
+    col and row arguments, a number of reads to randomly sample can be specified
+    via the nSample option.
+  }
+  \item{randomSeed}{
+    Can be used to specify the random seed when getting a random sample of
+    reads.  Must be a positive integer.
   }
 }
 \value{

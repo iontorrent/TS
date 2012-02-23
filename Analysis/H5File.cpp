@@ -1,6 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <iostream>
 #include "H5File.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -12,12 +13,12 @@ void H5DataSet::Init(size_t id) {
   mDatatype = H5_NULL; // @todo - do we need both mType and mDataType?
   mParent = NULL;
   mRank = 0;
-  mCompression = 0;
+  mCompression = 5;
   mType = 0;
   mSize = 0;
 }
 
-void H5DataSet::SetDataspace(int rank, hsize_t *dims, hsize_t *chunking, int type) {
+void H5DataSet::SetDataspace(int rank, const hsize_t dims[], const hsize_t chunking[], int type) {
   mRank = rank;
   mDims.resize(rank);
   mChunking.resize(rank);
@@ -145,13 +146,11 @@ hid_t H5File::GetOrCreateGroup(hid_t location, const std::string &groupPath, std
     return g;
   }
   else { // recurse down a level
-    first = groupPath.substr(0,pos);
+    first = groupPath.substr(0,pos+1);
     second = groupPath.substr(pos+1, groupPath.length());
     hid_t g = location;
-    if (pos > 0) {
-      g = H5Gopen(location, first.c_str(), H5P_DEFAULT);
-      freeList.push_back(g);
-    }
+    g = H5Gopen(location, first.c_str(), H5P_DEFAULT);
+    freeList.push_back(g);
     if (g <= 0) {
       g = H5Gcreate(location, first.c_str(), 0,  H5P_DEFAULT, H5P_DEFAULT);
       freeList.push_back(g);
@@ -206,7 +205,7 @@ void H5File::Open(bool overwrite) {
   if (isH5 && !overwrite) {
     mHFile = H5Fopen(mName.c_str(), H5F_ACC_RDWR,  H5P_DEFAULT);
   }
-  else if(overwrite) {
+  else if(overwrite || !isFile(mName.c_str())) {
     mHFile = H5Fcreate(mName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
   }
   if (mHFile < 0) {
@@ -233,8 +232,8 @@ bool H5File::IsH5File(const std::string &path) {
 
 H5DataSet * H5File::CreateDataSet(const std::string &name,
                                   hsize_t rank,
-                                  hsize_t *dims,
-                                  hsize_t *chunking,
+                                  const hsize_t dims[],
+                                  const hsize_t chunking[],
                                   int compression,
                                   hid_t type) {
   size_t id = mCurrentId;

@@ -26,6 +26,8 @@ typedef enum
 #define SINGLETON 1
 #define FIRSTINDEX 0
 
+#define POSTKEY 7
+
 typedef struct
 {
     unsigned int PartialDerivMask;

@@ -154,7 +154,7 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vec
   int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
   if (mDoRegionalBgSub) {
     GridMesh<float> grid;
-    grid.Init(raw->rows, raw->rows, mRegionYSize, mRegionXSize);
+    grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
     int numBin = grid.GetNumBin();
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     for (int binIx = 0; binIx < numBin; binIx++) {
@@ -224,7 +224,7 @@ void BFReference::CalcSignalReference2(const std::string &datFile, const std::st
   trace.CalcT0(true);
   if (mDoRegionalBgSub) {
     GridMesh<float> grid;
-    grid.Init(raw->rows, raw->rows, mRegionYSize, mRegionXSize);
+    grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
     int numBin = grid.GetNumBin();
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     for (int binIx = 0; binIx < numBin; binIx++) {

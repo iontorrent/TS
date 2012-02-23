@@ -377,11 +377,10 @@ def convert_int_to_float(log):
 def resize_varchar(table, col,length):
     q("""ALTER TABLE %s ALTER COLUMN "%s" TYPE varchar(%s);""" % (table, col, length))
 
-def convert_int_to_bigint(log):
+def convert_int_to_bigint(log,tablename,metricslist):
     """Human Genome is large enough to need a bigint column"""
-    qmetrics = ["genomesize"]
-    for field in qmetrics:
-        q("""ALTER TABLE rundb_libmetrics ALTER COLUMN "%s" TYPE bigint;""" % field)
+    for field in metricslist:
+        q("""ALTER TABLE "%s" ALTER COLUMN "%s" TYPE bigint;""" % (tablename,field))
 
 def add_lib_metrics_float(log):
     def check(tablename): 
@@ -997,20 +996,14 @@ def move_plugin_reports(log):
                     state = 'Error'
                 elif re_complete.search(state):
                     state = 'Complete'
-                elif state == '':
+                else:
                     """ Unknown is now a valid state """
                     state = 'Unknown'
-                else:
                     log.write("Unknown State: '%s' = '%s'\n" % (pluginName, state))
-                    # Truncate long strings to fit in 20 char field
-                    if len(state) > 20:
-                        state = (string[:18] + "+")
 
             if pluginName not in plugins:
                 log.write("No plugin record found for: '" + str(pluginName) + "' Creating placeholder.\n")
-                new_plugin = models.Plugin(name=pluginName,version='0',
-                                           path='',date=datetime.now(),
-                                           active=False,selected=False,autorun=False)
+                new_plugin = models.Plugin(name=pluginName,version='0',path='',active=False,selected=False,autorun=False)
                 new_plugin.save()
                 plugins[pluginName] = new_plugin
 
@@ -1018,15 +1011,15 @@ def move_plugin_reports(log):
 
             # Update existing records
             with transaction.commit_on_success():
-                (pluginreport,created) = models.PluginResult.objects.get_or_create(plugin=plugin,result=result)
-                if created:
-                    count_new += 1
-                else:
+                #pluginreport = models.PluginResult.objects.get_or_create(plugin=plugin, result=result)
+                try:
+                    pluginreport = models.PluginResult.objects.get(plugin=plugin, result=result)
+                    pluginreport.state = state
+                    pluginreport.store = store
                     count_update += 1
-
-                pluginreport.state = state
-                pluginreport.store = store
-
+                except models.PluginResult.DoesNotExist:
+                    pluginreport = models.PluginResult(plugin=plugin, result=result, state=state, store=store)
+                    count_new += 1
                 try:
                     pluginreport.save()
                 except:
@@ -1037,11 +1030,13 @@ def move_plugin_reports(log):
     if count_new or count_update:
         log.write('Migrated %d plugin results from Results to PluginReport. (%d new, %d updated)\n' % (count_new + count_update, count_new, count_update))
 
-    if count_errors:
-        log.write('ERROR: Found %d invalid records. Original values recorded in migrate.log.' % count_errors)
-
     ## Remove columns!
-    q("""ALTER TABLE rundb_results DROP COLUMN "pluginState", DROP COLUMN "pluginStore";""")
+    if count_errors == 0:
+        q("""ALTER TABLE rundb_results DROP COLUMN "pluginState", DROP COLUMN "pluginStore";""")
+    else:
+        ## NOTE: Leaving behind these columns will end up clobbering results from any plugins which are re-run since the original migration
+        log.write('ERROR: Found %d invalid records. Preserving existing pluginState/pluginStore.' % count_errors)
+        raise Exception('Invalid Plugin Records found. Migration failed')
 
 if __name__ == '__main__':
     hasdb = False
@@ -1166,20 +1161,37 @@ if __name__ == '__main__':
         # Plugin inactivation and feed url
         add_char_field(f, "rundb_plugin", "url", 256)
         add_bool_field(f, "rundb_plugin", ["active"], True)
-        # Mark any missing plugins as inactive
-        q("""UPDATE rundb_plugin SET active=False WHERE path='';""");
+        q("""UPDATE rundb_plugin SET active=False,selected=False WHERE path='';""");
 
         # Extend Content to track it's upload
         add_upload_to_content(f, 'rundb_content', 'contentupload', 'rundb_contentupload', 'INTEGER')
         add_text_field(f,"rundb_contentupload", "meta")
 
-
         # Call ./manage.py syncdb
         from django.core import management
         management.call_command('syncdb')
 
-        #change int to bigint for human genome size
-        convert_int_to_bigint(f)
+        #change int to bigint
+        columnlist = ["genomesize",
+                      'q7_mapped_bases','q7_qscore_bases',
+                      'q10_mapped_bases','q10_qscore_bases',
+                      'q17_mapped_bases','q17_qscore_bases',
+                      'q20_mapped_bases','q20_qscore_bases',
+                      'q47_mapped_bases','q47_qscore_bases',
+                      'sampled_mapped_bases_in_q7_alignments',
+                      'sampled_mapped_bases_in_q10_alignments',
+                      'sampled_mapped_bases_in_q17_alignments',
+                      'sampled_mapped_bases_in_q20_alignments',
+                      'sampled_mapped_bases_in_q47_alignments',
+                      'extrapolated_mapped_bases_in_q7_alignments',
+                      'extrapolated_mapped_bases_in_q10_alignments',
+                      'extrapolated_mapped_bases_in_q17_alignments',
+                      'extrapolated_mapped_bases_in_q20_alignments',
+                      'extrapolated_mapped_bases_in_q47_alignments',
+                      ]
+        convert_int_to_bigint(f,'rundb_libmetrics',columnlist)
+        columnlist = ["q0_bases",'q17_bases','q20_bases']
+        convert_int_to_bigint(f,'rundb_qualitymetrics',columnlist)
 
         move_plugin_reports(f)
 
@@ -1189,7 +1201,5 @@ if __name__ == '__main__':
         # But it cannot be run in a transaction,
         # and django connections are # automatically wrapped in transactions...
 
-        f.close()
-        
+    f.close()
     sys.exit(0)
-

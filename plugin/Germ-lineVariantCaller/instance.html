@@ -1,0 +1,189 @@
+<!DOCTYPE html> 
+<html> 
+	<head> 
+		
+		<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+		<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+		<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+		<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+		<script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+		<link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
+		
+		<style type='text/css'> 
+			#formwrap {
+				line-height: 2em;
+				margin: 10px;
+				padding: 10px;
+				height: 130px;
+				text-align: center;
+			}
+			
+			body {
+				font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+				font-size: 14px;
+			}
+		</style>
+		 
+		<script type='text/javascript'> 
+			$(function() {
+			  
+			  $.fn.serializeObject = function()
+				  {
+				  var o = {};
+				  var a = this.serializeArray();
+				  $.each(a,
+						 function() {
+						 if (o[this.name] != null) {
+						 if (!o[this.name].push) {
+						 o[this.name] = [o[this.name]];
+						 }
+						 o[this.name].push(this.value || '');
+						 } else {
+						 o[this.name] = this.value || '';
+						 }
+						 });
+				  return o;
+			  };
+			  
+			  $(function() {
+				$('#postbutton').click(function() {
+					   obj =  $('#pluginconfig').serializeObject();
+					   
+					   pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+					   pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+					   
+					   pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+					   
+					   $.ajax({
+							  type: 'POST',
+							  url: pluginURL,
+							  contentType: "application/json; charset=utf-8",
+							  data: pluginAPIJSON,
+							  dataType: "json",
+							  success: function () {parent.$.fn.colorbox.close();}
+							  });
+					   });
+				})
+			  
+			  
+			  });
+			</script> 
+			
+			<script type='text/javascript'>
+				$(function() {
+				function testFieldStrictlyPositive(field) {
+					if ('default' == field.value) {
+						return;
+					}
+					var regExpr = new RegExp("^[1-9]\d+$");
+					if (!regExpr.test(field.value)) {
+						field.value="default";
+						alert("This field must be greater than zero, defaulting to: " + field.value);
+					}
+				}
+				
+				function testFieldNonNegative(field) {
+					if ('default' == field.value) {
+						return;
+					}
+					var regExpr = new RegExp("^\d+$");
+					if (!regExpr.test(field.value)) {
+						field.value="default";
+						alert("This field must be greater than or equal to zero, defaulting to: " + field.value);
+					}
+				}
+				
+				function testFieldInteger(field) {
+					if ('default' == field.value) {
+						return;
+					}
+					var regExpr = new RegExp("^-?\d+$");
+					if (!regExpr.test(field.value)) {
+						field.value="default";
+						alert("This field must bean integer, defaulting to: " + field.value);
+					}
+				}
+
+				$("#postbutton").button();
+$("#postbutton").css("margin",20);
+				});
+			</script>
+		
+	</head> 
+	<body> 
+		<div id="formwrap">
+			<input id="postbutton" type="submit" value="Submit the Plugin"></input>
+			<div id="adv_parent" class="report_block">
+				<h2 id="adv" >Advanced Options<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a></h2>
+				<div align="center">
+					Warning: advanced options are for expert users only.
+					<br/><br/>
+					Below you will find a number of options for this plugin.  If you are unsure about their value, please keep/set them as "default".
+					<form id="pluginconfig" align="center"> 
+						<h2>SAMTools (mpileup):</h2>
+						<table align="center">
+							<tr><td>(-d) max per-BAM depth to avoid excessive memory usage:</td><td><input type="text" name="samtools_max_depth" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-L) max per-sample depth for INDEL calling:</td><td><input type="text" name="samtools_max_depth_indel" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-Q) skip bases with baseQ/BAQ smaller than INT:</td><td><input type="text" name="samtools_min_baseq" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-h) skip bases with baseQ/BAQ smaller than INT:</td><td><input type="text" name="samtools_hp_coeff" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-o) Phred-scaled gap open sequencing error probability:</td><td><input type="text" name="samtools_phred_gapo" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-e) Phred-scaled gap extension seq error probability:</td><td><input type="text" name="samtools_phred_gape" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-m) minimum gapped reads for indel candidates:</td><td><input type="text" name="samtools_min_gapped_reads" value="default" onblur="testFieldNonNegative(this);"/></td></tr>	
+						</table>
+						<h2>BCFTools (view):</h2>
+						<table align="center">
+							<tr><td>(-i) indel-to-substitution ratio:</td><td><input type="text" name="bcftools_indel_to_sub_ratio" value="default" onblur="testFieldInteger(this);"/></td></tr>
+						</table>
+						<h2>Variant Filtering (vcf_filter.pl)</h2>
+						<table align="center">
+							<tr><td>(-d) minimum read depth</td><td><input type="text" name="vcf_filter_min_read_depth" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-D) maximum read depth</td><td><input type="text" name="vcf_filter_max_read_depth" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>(-w) SNP within INT bp around a gap to be filtered</td><td><input type="text" name="vcf_filter_win_snp_adj_gaps" value="default" onblur="testFieldNonNegative(this);"/></td></tr>
+							<tr><td>(-W) window size for filtering adjacent gaps</td><td><input type="text" name="vcf_filter_win_indel_adj_gaps" value="default" onblur="testFieldNonNegative(this);"/></td></tr>
+							<tr><td>(-s) minimum read depth for SNPs on each strand</td><td><input type="text" name="vcf_filter_snps_strand_depth" value="default" onblur="testFieldNonNegative(this);"/></td></tr>
+							<tr><td>(-S) minimum read depth for INDELs on each strand</td><td><input type="text" name="vcf_filter_indels_strand_depth" value="default" onblur="testFieldNonNegative(this);"/></td></tr>
+							<tr><td>(-S) minimum read depth for homopolymer INDELs on each strand</td><td><input type="text" name="vcf_filter_hps_strand_depth" value="default" onblur="testFieldNonNegative(this);"/></td></tr>
+						</table>
+						<h2>Plugin Config</h2>
+						<table align="center">
+							<tr><td>The number of variants to display in the variant summary</td><td><input type="text" name="plugin_out_top_num" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>The maximum indel length to plot</td><td><input type="text" name="plots_max_indel_length" value="default" onblur="testFieldStrictlyPositive(this);"/></td></tr>
+							<tr><td>The maximum coverage to plot</td><td><input type="text" name="plots_max_coverage" value="default" onblur="testFieldStrictlyPlositive(this);"/></td></tr>
+							<tr><td>Run the plugin using the existing variant calls</td><td><input type="radio" name="html_only" value="true">True<br/><input type="radio" name="html_only" value="default" checked>False</tr>
+						</table>
+					</form> 
+				</div>
+			</div>
+		</div>
+		<br>
+		<script>
+			$('.expandCollapseButton').toggle(function() {
+				if ( $(this).attr('title') == 'Collapse Section'){
+					$(this).css('background-position','right top');
+					$(this).attr('title','Expand Section');
+				}else{
+					$(this).css('background-position','left top');
+					$(this).attr('title','Collapse Section');
+				}
+			}, function() {
+				if ( $(this).attr('title') == 'Expand Section'){
+					$(this).css('background-position','left top');
+					$(this).attr('title','Collapse Section');
+				}else{
+					$(this).css('background-position','right top');
+					$(this).attr('title','Expand Section');
+				}
+			});
+
+			$('.expandCollapseButton').click(function(event){
+				$(event.target).parent().parent().toggleClass('small');
+				$(event.target).parent().next().slideToggle();
+			});
+
+			$('#adv .expandCollapseButton').css('background-position','right top');
+			$('#adv .expandCollapseButton').attr('title','Expand Section');
+			$('#adv').parent().toggleClass('small');
+			$('#adv').next().toggle();
+		</script>
+    </body> 
+</html> 

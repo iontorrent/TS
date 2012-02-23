@@ -53,6 +53,7 @@ public:
 		: bam_file("") 
 		, bam_index("")
 		, out_file("Default")
+        , output_dir("")
 		, genome_info("")
 		, read_to_keep_file("")
 		, read_to_reject_file("")
@@ -83,11 +84,12 @@ public:
 		, truncate_soft_clipped(true)
 		, three_prime_clip(0)
 		, round_phred_scores(false)
-                , five_prime_justify(false)
+        , five_prime_justify(false)
 		{}
 		string			bam_file; /**< a string representing the absolute path to a bam file, or just a file name*/
 		string			bam_index; /**< a string representing the absolute path to a bam file index*/
 		string			out_file;  /**< a string representing the absolute path to the prefix of output file names [Default: "Default"] */
+        string          output_dir; /**< a string representing the path to an output directory, will try and make this directory if it doesn't exist already */
 		string			genome_info; /**< a string representing the absolute path to a genome.info.txt file (internal Ion Torrent file format [Default: ""] */
 		string			read_to_keep_file; /**< File with list of read IDs to use [Default: ""] */
 		string			read_to_reject_file; /**< File with list of read IDs to ignore [Default: ""] */
@@ -148,7 +150,7 @@ public:
 		bool round_phred_scores; /**< boolean value to allow rounding in the phred score calculations to handle the colloquial definition
 									  of a "100 Q17" which means 2 errors in 100 bases.
 									*/
-                bool five_prime_justify; /**< boolean whether to follow indel justification done by mapper or force 5prime */
+        bool five_prime_justify; /**< boolean whether to follow indel justification done by mapper or force 5prime */
 	};
 	
 	/**

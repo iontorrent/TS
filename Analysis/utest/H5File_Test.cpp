@@ -2,10 +2,11 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <stdio.h>
+#include <armadillo>
 #include "H5File.h"
 
 using namespace std;
-
+using namespace arma;
 TEST(H5Handle_Test, QuickMatrixTest) {
   Mat<float> mymat = ones<Mat<float> >(5,3);
   Mat<float>::iterator i;
@@ -78,7 +79,8 @@ TEST(H5Handle_Test, WriteReadTest) {
 
     size_t starts[] = {0,0};
     size_t ends[] = {3,4};
-    ds->WriteRangeData(starts, ends, ArraySize(data), data);
+    //ds->WriteRangeData(starts, ends, ArraySize(data), data);
+	ds->WriteRangeData(starts, ends, data);
     ds->Close();
   }
   { 
@@ -104,7 +106,8 @@ TEST(H5Handle_Test, WriteReadTest) {
       for (size_t i = 11; i >= 8; i--) {
         update[count++] = i;
       }
-      ds->WriteRangeData(starts, ends, ArraySize(update), update);
+      //ds->WriteRangeData(starts, ends, ArraySize(update), update);
+	  ds->WriteRangeData(starts, ends, update);
       float query[12];
       size_t rstarts[] = {0,0};
       size_t rends[] = {3,4};

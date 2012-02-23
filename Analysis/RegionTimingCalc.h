@@ -25,7 +25,6 @@
 #include <armadillo>
 
 #include "cudaWrapper.h"
-#include "Flow.h"
 #include "Image.h"
 #include "Region.h"
 #include "Mask.h"

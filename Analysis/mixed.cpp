@@ -22,35 +22,23 @@
 using namespace std;
 using namespace arma;
 
-static const float ppf_cutoff = 0.84;
-
 typedef pair<int,int>   well_coord;
 typedef set<well_coord> well_set;
 
-template <class Ran0, class Ran1>
-bool key_is_good(Ran0 observed, Ran1 ideal_begin, Ran1 ideal_end)
-{
-    bool good = true;
-    for(Ran1 ideal=ideal_begin; ideal<ideal_end; ++ideal, ++observed)
-        good = good and round(*observed) == *ideal;
-    return good;
-}
-
-void make_filter(clonal_filter& filter, filter_counts& counts, deque<float>& ppf, deque<float>& ssq);
-void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, int nlib, Mask& mask, RawWells& wells, const vector<int>& key_ionogram);
+void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram);
 well_set sample_lib(Mask& mask, int nsamp);
 
-void make_filter(clonal_filter& filter, filter_counts& counts, int nlib, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
+void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
 {
     // Make a clonality filter from a sample of reads from a RawWells file.
     // Record number of reads in sample that are caught by each filter.
     deque<float>  ppf;
     deque<float>  ssq;
-    count_sample(counts, ppf, ssq, nlib, mask, wells, key_ionogram);
+    count_sample(counts, ppf, ssq, mask, wells, key_ionogram);
     make_filter(filter, counts, ppf, ssq);
 }
 
-void make_filter(clonal_filter& filter, filter_counts& counts, deque<float>& ppf, deque<float>& ssq)
+void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq)
 {
     // Make a clonality filter from ppf and ssq for a sample of reads.
     // Record number of putative clonal and mixed reads in the sample.
@@ -62,7 +50,7 @@ void make_filter(clonal_filter& filter, filter_counts& counts, deque<float>& ppf
     if(converged){
         bivariate_gaussian clonal(mean[0], sigma[0]);
         bivariate_gaussian mixed( mean[1], sigma[1]);
-        filter = clonal_filter(clonal, mixed, ppf_cutoff, converged);
+        filter = clonal_filter(clonal, mixed, mixed_ppf_cutoff(), converged);
     }
 
     if(converged){
@@ -75,7 +63,7 @@ void make_filter(clonal_filter& filter, filter_counts& counts, deque<float>& ppf
     }
 }
 
-void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, int nlib, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
+void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
 {
     // Take sample of reads from a RawWells file, and apply some simple
     // filters to identify problem reads.
@@ -85,8 +73,8 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, i
     WellData data;
     unsigned int nflows = wells.NumFlows();
     vector<float> nrm(nflows);
-    int flow0 = 12;
-    int flow1 = 72;
+    int flow0 = mixed_first_flow();
+    int flow1 = mixed_last_flow();
     wells.ResetCurrentRegionWell();
     while(!wells.ReadNextRegionData(&data)){
         // Skip if this is not in the sample:
@@ -114,7 +102,7 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, i
 
         // Skip possible super-mixed beads:
         float perc_pos = percent_positive(nrm.begin()+flow0, nrm.begin()+flow1);;
-        if(perc_pos > ppf_cutoff){
+        if(perc_pos > mixed_ppf_cutoff()){
             ++counts._nsuper;
             continue;
         }
@@ -208,7 +196,7 @@ bool fit_normals(vec2 mean[2], mat22 sgma[2], vec2& alpha, const deque<float>& p
             // Accumulate weighted sums for re-estimating moments:
             for(int j=0; j<nsamp; ++j){
                 // Skip reads outside the poisson range for ppf:
-                if(ppf_cutoff < ppf[j])
+                if(mixed_ppf_cutoff() < ppf[j])
                     continue;
 
                 // Each read gets two weights, reflecting the likelyhoods of that

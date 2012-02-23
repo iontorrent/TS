@@ -82,7 +82,7 @@ def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, flowse
 
 def IndelCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, flowseq, outDir ):
     # bedfile and flowseq not currently employed
-    fixedprms = "--dynamic-space-size 6144 --function write-alignment-n-deviation-lists-from-sam --fs-align-jar-args 'VALIDATION_STRINGENCY=SILENT' --java-bin-args _Xmx4G"
+    fixedprms = "--dynamic-space-size 9216 --function write-alignment-n-deviation-lists-from-sam --fs-align-jar-args 'VALIDATION_STRINGENCY=SILENT' --java-bin-args _Xmx4G"
     if paramstr == "":
         paramstr = "--min-variant-freq ,0.15 --min-num-reads ,3 --strand-prob ,0 --min-mapq ,2"
     else:

@@ -9,7 +9,7 @@ import json
 
 sys.path.append('/opt/ion/')
 from iondb.plugins import PluginRunner
-from iondb.plugin_json import *
+from ion.utils.plugin_json import *
 
 """
     Ion Plugin Shell -- Run barebones plugin launch.sh scripts from command line
@@ -28,7 +28,12 @@ def getLaunchArguments():
     parser.add_option("-p", dest="dirname",  help="specify the plugin directory")
     parser.add_option("-u", dest="url_root",  help="specify the URL root of the results directory")
     parser.add_option("-j", dest="json_file",  help="specify the json parameters file")
-    return parser.parse_args()
+    (opt, args) = parser.parse_args()
+    if not args:
+        parser.print_usage()
+        print >>sys.stderr, "ERROR: You must specify a script name to run."
+        sys.exit(1)
+    return (opt, args)
 
 def preparePluginEnvironment(opt):
     env = {
@@ -40,7 +45,7 @@ def preparePluginEnvironment(opt):
         if hasattr(opt, key):
             env[key] = getattr(opt,key)
         else:
-            print "Warning: %s not specified" % key
+            print >>sys.stderr, "Warning: %s not specified" % key
 
     # plan from parent json
     parent_json_fname = os.path.join(opt.analysis_dir, "ion_params_00.json")
@@ -48,11 +53,10 @@ def preparePluginEnvironment(opt):
     with open(parent_json_fname, 'r') as f:
         parent_json = json.loads(f.read())
     if 'plan' in parent_json:
-        env['plan'] = json.dumps(parent_json['plan'], separators=(',', ':'))
-    # Note: primary key is in parent_json too. Could avoid extra read of key file
-
+        env['plan'] = parent_json['plan']
+    if 'pk' in parent_json:
+        env['pk'] = parent_json['pk']
     return env
-
 
 if __name__ == '__main__':
     origargs = sys.argv
@@ -69,19 +73,22 @@ if __name__ == '__main__':
     else:
         # These options are required if there is no json file
         if not opt.dirname:
-            print "Error: Cannot run without -p dirname"
+            print >>sys.stderr, "ERROR: Cannot run without -p dirname"
             sys.exit(1)
         if not opt.analysis_dir:
-            print "Error: Cannot run without -a analysis dir"
+            print >>sys.stderr, "ERROR: Cannot run without -a analysis dir"
             sys.exit(1)
         (plugin_root, plugin_name) = os.path.split(opt.dirname)
         plugin = { 'path': opt.dirname, 'name': plugin_name}
         try:
             primary_key = open(os.path.join(opt.analysis_dir, "primary.key")).readline()
             primary_key = primary_key.split("=")[1].strip()
-        except:
-            primary_key = None
-            print " #### Error, unable to get the primary key. Status will not be updated, and results will not be visible via the Torrent Server"
+        except IOError:
+            if 'pk' in env:
+                primary_key = env['pk']
+            else:
+                primary_key = None
+                print >>sys.stderr, "ERROR: unable to get the primary key. Status will not be updated, and results will not be visible via the Torrent Server"
         start_json = make_plugin_json(env,plugin,primary_key,basefolder,opt.url_root)
 
     if opt.results_dir:

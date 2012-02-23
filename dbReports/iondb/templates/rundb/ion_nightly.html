@@ -10,8 +10,9 @@
 <title>{% block title %}{% endblock title %}</title>
 </head>
 <body>
-  {% block pre_content %}
 <div id="body" style="width:100%;">
+
+  {% block pre_content %}
   <div style="float:left; margin-left:8px; margin-top:2px;">
     <img src="{% abs_media images/raw_name_small.png %}" alt="IonTorrent Systems"/>
   </div>
@@ -76,7 +77,7 @@
 	  {% endifequal %}
       
       
-      {# extrapolated alignment data #}
+          {# extrapolated alignment data #}
 	  {% ifequal lbm.align_sample 1 %}
 	      <td ALIGN="center">{{r.experiment.library}}*</td>
 		  <td ALIGN="right">{{lbm.extrapolated_q7_alignments|ion_readable}}</td>
@@ -87,19 +88,29 @@
 	  {% endifequal %}
 	  
 	  
-	  {% ifnotequal lbm.align_sample 0 %}
-		  {% ifnotequal lbm.align_sample 1 %}
-		  	<td>none</td>
-		  	<td>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  {% endifnotequal %}
-	  {% endifnotequal %}
+          {# Extrapolated thumbnail data #}
+          {% ifequal lbm.align_sample 2 %}
+              <td ALIGN="center">{{r.experiment.library}}</td>
+                  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+              <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+          {% endifequal %}
+
+          {# unhandled sample type #}
+	  {% if lbm.align_sample > 2 %}
+              <td>none</td>
+              <td>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+	  {% endif %}
 		  	
 	  
 	  
-	  <td ALIGN="right">{{lbm.sysSNR}}</td>
+	  <td ALIGN="right">{{lbm.sysSNR|floatformat:2}}</td>
 	</tr>
     <tr  colspan="11"style="background-color:{%cycle 'inherit' '#AAA' %};">
       <td colspan="11">Notes: {{r.experiment.notes}}</td>
@@ -129,16 +140,19 @@
     {% else %}
     <p><b>No reports were generated today.</b></p>
     {% endif %}
-    {% endblock %}
+    </div>
+    {% endblock content %}
     
     {% block content2 %}
   <div style="width:100%; background-color:#DDD;
 	      margin-top:16px; margin-left:auto;
 	      margin-right:auto; padding:8px;">
+    {% if reportsOld %}
+
     <p>
     <h2><center>Re-analyzed Run Results</center></h2>
     </p>
-    {% if reportsOld %}
+
     <table style="width: 100%; border-collapse: collapse;">
       <thead style="text-align:left;">
         <tr>
@@ -177,7 +191,7 @@
 	  {% endifequal %}
       
       
-      {# extrapolated alignment data #}
+          {# extrapolated alignment data #}
 	  {% ifequal lbm.align_sample 1 %}
 	      <td ALIGN="center">{{r.experiment.library}}*</td>
 		  <td ALIGN="right">{{lbm.extrapolated_q7_alignments|ion_readable}}</td>
@@ -186,18 +200,27 @@
 		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_300q17_reads|ion_readable}}</td>
 	      <td ALIGN="right">{{lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable}}</td>
 	  {% endifequal %}
-	  
-	  {% ifnotequal lbm.align_sample 0 %}
-		  {% ifnotequal lbm.align_sample 1 %}
-		  	<td>none</td>
-		  	<td>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  	<td bgcolor=#88CC88>0</td>
-		  {% endifnotequal %}
-	  {% endifnotequal %}
+
+          {# Extrapolated thumbnail data #}
+          {% ifequal lbm.align_sample 2 %}
+              <td ALIGN="center">{{r.experiment.library}}</td>
+                  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+              <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+          {% endifequal %}
+
+	  {% if lbm.align_sample > 2 %}
+              <td>none</td>
+              <td>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+	  {% endif %}
       
-	  <td ALIGN="right">{{lbm.sysSNR}}</td>
+	  <td ALIGN="right">{{lbm.sysSNR|floatformat:2}}</td>
 	</tr>
     <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
       <td colspan="11">Notes: {{r.experiment.notes}}</td>
@@ -206,16 +229,107 @@
 	{% endfor %}
     </tbody>
     </table>
+    </br>
     {% else %}
-    <p><b>No reports were generated today.</b></p>
+    <p><b>No re-analysis reports were generated today.</b></p>
+    </br>
     {% endif %}
+
+    {% if reportsThumbsNew %}
+    <p>
+    <h2><center>New Thumbnail Results</center></h2>
+    </p>
+    <table style="width: 100%; border-collapse: collapse;">
+      <thead style="text-align:left;">
+        <tr>
+          <th ALIGN="left" rowspan="2">Name</th>
+          <th ALIGN="center" rowspan="2">Chip Type</th>
+          <th ALIGN="center" rowspan="2">Project</th>
+          <th ALIGN="center" rowspan="2">Sample</th>
+          <th ALIGN="center" rowspan="2">Reference</th>
+          <th ALIGN="right" rowspan="2">AQ7 Reads</th>
+          <th ALIGN="center" colspan="3">AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2">AQ17 bases</th>
+          <th ALIGN="right" rowspan="2">SNR</th>
+        </tr>
+        <tr>
+          <th ALIGN="right">100 bp</th>
+          <th ALIGN="right">200 bp</th>
+          <th ALIGN="right">300 bp</th>
+        </tr>
+      </thead>
+      <tbody>
+	{% for r,tfm,lbm,link in reportsThumbsNew %}{% spaceless %}
+	<tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+	  <td><a href="{{link}}">{{r.resultsName}}</a></td>
+      <td ALIGN="center">{{r.experiment.chipType}}</td>
+      <td ALIGN="center">{{r.experiment.project}}</td>
+      <td ALIGN="center">{{r.experiment.sample}}</td>
+	  
+	  {#Full alignment data #}
+	  {% ifequal lbm.align_sample 0 %}
+	      <td ALIGN="center">{{r.experiment.library}}</td>
+		  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+	  {% endifequal %}
+      
+      
+          {# extrapolated alignment data #}
+	  {% ifequal lbm.align_sample 1 %}
+	      <td ALIGN="center">{{r.experiment.library}}*</td>
+		  <td ALIGN="right">{{lbm.extrapolated_q7_alignments|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_100q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_200q17_reads|ion_readable}}</td>
+		  <td ALIGN="right" bgcolor=#88CC88>{{lbm.extrapolated_300q17_reads|ion_readable}}</td>
+	      <td ALIGN="right">{{lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable}}</td>
+	  {% endifequal %}
+
+          {# Extrapolated thumbnail data #}
+          {% ifequal lbm.align_sample 2 %}
+              <td ALIGN="center">{{r.experiment.library}}</td>
+                  <td ALIGN="right">{{lbm.q7_alignments|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i100Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i200Q17_reads|ion_readable}}</td>
+                  <td ALIGN="right" bgcolor=#AAFFAA>{{lbm.i300Q17_reads|ion_readable}}</td>
+              <td ALIGN="right">{{lbm.q17_mapped_bases|ion_readable}}</td>
+          {% endifequal %}
+
+	  {% if lbm.align_sample > 2 %}
+              <td>none</td>
+              <td>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+	  {% endif %}
+      
+	  <td ALIGN="right">{{lbm.sysSNR|floatformat:2}}</td>
+	</tr>
+    <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+      <td colspan="11">Notes: {{r.experiment.notes}}</td>
+	</tr>
+	{% endspaceless %}
+	{% endfor %}
+    </tbody>
+    </table>
+    </br>
+    {% else %}
+    <p><b>no new thumbnail reports</b></p>
+    </br>
+    {% endif %}
+    </div>
+
     <p>
       Something missing? This daily message only includes reports that have
       completed successfully. Reports which have not yet completed and
       experiments for which no reports have been created will not appear.     
     </p>
+    </br>
     {% endblock content2 %}
-  </div>
+
 </div>
 </body>
 </html>

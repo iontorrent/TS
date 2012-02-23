@@ -28,11 +28,38 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/Alignment" DESTINATION "plugins"
     USE_SOURCE_PERMISSIONS
     PATTERN ".svn" EXCLUDE)
 
+# Germ-lineVariantCaller
+#
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/Germ-lineVariantCaller" DESTINATION "plugins"
+    USE_SOURCE_PERMISSIONS
+    PATTERN ".svn" EXCLUDE)
+set(BGZIP "${PROJECT_SOURCE_DIR}/../external/tabix-0.2.5/bgzip")
+set(TABIX "${PROJECT_SOURCE_DIR}/../external/tabix-0.2.5/tabix")
+add_custom_target(tabix ALL
+    COMMAND "make"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/tabix-0.2.5"
+    COMMENT "Building tabix source")
+install(PROGRAMS ${BGZIP} DESTINATION "plugins/Germ-lineVariantCaller")
+install(PROGRAMS ${TABIX} DESTINATION "plugins/Germ-lineVariantCaller")
+
+# AmpliSeqCancerVariantCaller
+#
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/AmpliSeqCancerVariantCaller" DESTINATION "plugins"
+    USE_SOURCE_PERMISSIONS
+    PATTERN ".svn" EXCLUDE)
+
 # RunRecognition 
 #
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/RunRecognitION" DESTINATION "plugins"
     USE_SOURCE_PERMISSIONS
     PATTERN ".svn" EXCLUDE)
+
+# targetSeqCoverage plugin
+#
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/targetSeqCoverage" DESTINATION "plugins"
+    USE_SOURCE_PERMISSIONS
+    PATTERN ".svn" EXCLUDE)
+install(PROGRAMS ${PROJECT_SOURCE_DIR}/targetSeqCoverage/targetFiles/getTargets.php DESTINATION /var/www)
 
 # coverageAnalysis 
 #
@@ -55,7 +82,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/plugin_functions" DESTINATION "plugins")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita, ion-dbreports")
 set(CPACK_PACKAGE_DESCRIPTION "Plugins for the Torrent Browser. These plugins, when present will be executed, post analysis pipeline run, to generate additional results.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

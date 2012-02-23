@@ -13,7 +13,6 @@
 #include "Mask.h"
 #include "Region.h"
 #include "Zeromer.h"
-#include "TFs.h"
 #include "LinuxCompat.h"
 #include "IonVersion.h"
 
@@ -194,9 +193,9 @@ int main(int argc, char *argv[])
 
 
 	// make the ionogram for the key
-	TFs tf(flowOrder);
 	int ionogram[numKeyFlows];
-	tf.GenerateIonogram(key, strlen(key), ionogram);
+	seqToFlow(key,strlen(key),ionogram,numKeyFlows,flowOrder,strlen(flowOrder));
+
 
 	// for each flow, make an avg trace from all keypassed library beads
 	char acqFileName[MAX_PATH_LENGTH];

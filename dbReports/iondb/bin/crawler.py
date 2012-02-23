@@ -57,7 +57,7 @@ import logregexp as lre
 import urllib
 import string
 
-__version__ = filter(str.isdigit, "$Revision: 21186 $")
+__version__ = filter(str.isdigit, "$Revision: 23661 $")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -65,7 +65,6 @@ ENTRY_RE = re.compile(r'^(?P<name>[^:]+)[:](?P<value>.*)$')
 CLEAN_RE = re.compile(r'\s|[/]+')
 TIMESTAMP_RE = models.Experiment.PRETTY_PRINT_RE
 
-DEBUG = False
 
 # These strings will be displayed in Runs Page under FTP Status field
 RUN_STATUS_COMPLETE = "Complete"
@@ -100,7 +99,7 @@ class CrawlLog(object):
         # set up debug logging
         self.errors = logging.getLogger('crawler')
         self.errors.propagate = False
-        self.errors.setLevel(logging.INFO)
+        self.errors.setLevel(logging.DEBUG)
         try:
             fname = path.join(self.PRIVILEGED_BASE,self.BASE_LOG_NAME)
             infile = open(fname, 'a')
@@ -306,26 +305,29 @@ def getFlowOrder(rawString):
     #Initialize return value
     flowOrder = ''
     
-    #Capitalize all lowercase
-    rawString = string.upper(rawString)
+    #Capitalize all lowercase; strip leading and trailing whitespace
+    rawString = string.upper(rawString).strip()
     
-    #Define translation table
-    table = {
-            "R1":'G',
-            "R2":'C',
-            "R3":'A',
-            "R4":'T',
-            "T":'T',
-            "A":'A',
-            "C":'C',
-            "G":'G'}
-            
-    #Loop thru the tokenized rawString extracting the nukes in order and append to return string
-    for c in rawString.split(" "):
-        try:
-            flowOrder += table[c]
-        except KeyError:
-            pass
+    # If there are no space characters, it is 'new' format
+    if rawString.find(' ') == -1:
+        flowOrder = rawString
+    else:
+        #Define translation table
+        table = {
+                "R1":'G',
+                "R2":'C',
+                "R3":'A',
+                "R4":'T',
+                "T":'T',
+                "A":'A',
+                "C":'C',
+                "G":'G'}
+        #Loop thru the tokenized rawString extracting the nukes in order and append to return string
+        for c in rawString.split(" "):
+            try:
+                flowOrder += table[c]
+            except KeyError:
+                pass
 
     # Add a safeguard.
     if len(flowOrder) < 4:
@@ -342,7 +344,6 @@ def exp_kwargs(d,folder):
         ("chiptype", "chipType"),
         ("chipbarcode", "chipBarcode"),
         ("user_notes", "notes"),
-        ("autoanalyze", "autoAnalyze"),
         ("seqbarcode", "seqKitBarcode"),
         ("autoanalyze", "autoAnalyze"),
         ("prebeadfind", "usePreBeadfind"),
@@ -367,11 +368,9 @@ def exp_kwargs(d,folder):
         ret[k2] = d.get(k1,'')
     for k,v in full_maps:
         ret[k] = v
-    if 'localhost' in settings.QMASTERHOST:
-        ret['storageHost'] = 'localhost'    # Data is on primary server
-    else:
-        ret['storageHost'] = os.uname()[1]  # Data is on secondary server
-    
+    #N.B. this field is not used
+    ret['storageHost'] = 'localhost'
+
     # If Flows keyword is defined in explog.txt...
     if ret['flows'] != "":
         # Cycles should be based on number of flows, not cycles published in log file
@@ -385,12 +384,40 @@ def exp_kwargs(d,folder):
     if ret['barcodeId'].lower() == 'none':
         ret['barcodeId'] = ''
         
-    # blocked datasets are indicated by presence of RegionStatus keywords
-    if 'regionstatus' in d or 'tilestatus' in d or 'blockstatus' in d:
+    # blocked datasets are indicated by presence of BlockStatus keywords
+    if 'blockstatus' in d:
         ret['rawdatastyle'] = 'tiled'
-        ret['autoAnalyze'] = True
+        ret['autoAnalyze'] = False
+        for bs in d['blocks']:
+            if bs.find('thumbnail') > 0:
+                continue
+            arg = bs.split(',')[4].strip()
+            if int(arg.split(':')[1]) == 1:
+                ret['autoAnalyze'] = True
+                logger.errors.debug ("Block Run. Detected at least one block to auto-run analysis")
+                break
+        if ret['autoAnalyze'] == False:
+            logger.errors.debug ("Block Run. auto-run whole chip has not been specified")
     else:
         ret['rawdatastyle'] = 'single'
+        
+    # Limit input sizes to defined field widths in models.py
+    ret['notes'] = ret['notes'][:128]
+    ret['expDir'] = ret['expDir'][:512]
+    ret['expName'] = ret['expName'][:128]
+    ret['pgmName'] = ret['pgmName'][:64]
+    ret['unique'] = ret['unique'][:512]
+    ret['storage_options'] = ret['storage_options'][:200]
+    ret['project'] = ret['project'][:64]
+    ret['sample'] = ret['sample'][:64]
+    ret['library'] = ret['library'][:64]
+    ret['chipBarcode'] = ret['chipBarcode'][:64]
+    ret['seqKitBarcode'] = ret['seqKitBarcode'][:64]
+    ret['chipType'] = ret['chipType'][:32]
+    ret['flowsInOrder'] = ret['flowsInOrder'][:512]
+    ret['libraryKey'] = ret['libraryKey'][:64]
+    ret['barcodeId'] = ret['barcodeId'][:128]
+    ret['reverse_primer'] = ret['reverse_primer'][:128]
 
     return ret
 
@@ -409,34 +436,6 @@ def exp_from_kwargs(kwargs,logger, save=True):
         ret.save()
     logger.add_experiment(ret)
     return ret
-
-#def emit_crawl_dirs():
-#    """Print to standard out the JSON containing the names of all
-#    directories potentially containing experiment data."""
-#    import StringIO
-#    oldout = sys.stdout
-#    buf = StringIO.StringIO()
-#    sys.stdout = buf
-#    dirs = construct_crawl_directories()
-#    serial = json.dumps(dirs)
-#    sys.stdout = oldout
-#    buf.close()
-#    print serial
-#
-#def get_crawl_dirs_mp():
-#    """Spawn another process to query the database and generate the list
-#    of directories to crawl. The reason for spawning this process is to
-#    avoid a memory leak due to Django queries.
-#    """
-#    args = (sys.executable, "-c", "from crawler import emit_crawl_dirs;"
-#            + " emit_crawl_dirs()")
-#    proc = subprocess.Popen(args, stdout=subprocess.PIPE,
-#                            stderr=subprocess.STDOUT)
-#    out,er = proc.communicate()
-#    if proc.returncode == 0:
-#        return json.loads(out)
-#    else:
-#        raise ValueError("Query process failed")    
 
 def construct_crawl_directories(logger):
     """Query the database and build a list of directories to crawl.
@@ -486,17 +485,26 @@ def construct_crawl_directories(logger):
 
 def get_percent(exp):
     """get the percent complete to make a progress bar on the web interface"""
+    
     def filecount(dir_name):
         return len(glob.glob(path.join(dir_name, "acq*.dat")))
+        
+    if 'blockstatus' in exp.log:
+        #N.B. Hack - we check ftp status of thumbnail data only
+        expDir = path.join(exp.expDir,'thumbnail')
+    else:
+        expDir = exp.expDir
+        
     flowspercycle = get_flow_per_cycle(exp) #if we exclude the wash flow which is no longer output
     expectedFiles = float(exp.flows)
-    file_count = float(filecount(exp.expDir))
+    file_count = float(filecount(expDir))
     try: # don't want zero division to kill us
         percent_complete = int((file_count/expectedFiles)*100)
     except:
         percent_complete = 0 
     if percent_complete >= 99:  # make the bar never quite reach 100% since we don't count beadfind files
         percent_complete = 99
+            
     return percent_complete 
 
 def sleep_delay(start,current,delay):
@@ -548,26 +556,32 @@ def generate_http_post(exp,logger):
             if chip.name in chipName:
                 ret = ret + " " + chip.args
         return ret
+    def which_queue (expDir):
+        if expDir.endswith('thumbnail'):
+            return 'True'
+        else:
+            return 'False'
+    
     params = urllib.urlencode({'report_name':get_name_from_json(exp,'autoanalysisname'),
-                               'tf_config':'',
-                               'path':exp.expDir,
-                               'args':get_default_command(exp.chipType),
-                               'submit': ['Start Analysis'],
-                               'qname':settings.SGEQUEUENAME,
-                               })
+                            'tf_config':'',
+                            'path':exp.expDir,
+                            'args':get_default_command(exp.chipType),
+                            'submit': ['Start Analysis'],
+                            'do_thumbnail':which_queue(exp.expDir)})
+    logger.errors.debug (params)
     headers = {"Content-type": "text/html",
                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
     try:
         f = urllib.urlopen('http://%s/rundb/newanalysis/%s/0' % (settings.QMASTERHOST, exp.pk), params)
-        f.read()
-        f.close()
+        response = f.read()
+        #logger.errors.debug(response)
     except:
         logger.errors.error('could not autostart %s' % exp.expName)
         logger.errors.debug(traceback.format_exc())
         try:
             f = urllib.urlopen('https://%s/rundb/newanalysis/%s/0' % (settings.QMASTERHOST, exp.pk), params)
-            f.read()
-            f.close()
+            response = f.read()
+            #logger.errors.debug(response)
         except:
             logger.errors.error('could not autostart %s' % exp.expName)
             logger.errors.debug(traceback.format_exc())
@@ -653,12 +667,13 @@ def get_flow_per_cycle(exp):
     data = exp.log
     im = 'image_map'
     if im in data:
-        try:
-            # when Image Map is "Image Map: 4 0 r4 1 r3 2 r2 3 r1" or "4 0 T 1 A 2 C 3 G"
-            flows=int(data[im].split(' ')[0])
-        except:
+        # If there are no space characters in the string, its the 'new' format
+        if data[im].strip().find(' ') == -1:
             # when Image Map is "Image Map: tacgtacgtctgagcatcgatcgatgtacagc"
             flows=len(data[im])
+        else:
+            # when Image Map is "Image Map: 4 0 r4 1 r3 2 r2 3 r1" or "4 0 T 1 A 2 C 3 G"
+            flows=int(data[im].split(' ')[0])
         return flows
     else:
         return 4 #default to 4 if we have no other information
@@ -674,6 +689,7 @@ def get_last_file(exp):
 
 def check_for_completion(exp):
     """Check if a the ftp is really complete or if we need to wait"""
+        
     file_list = []
     file_list.append(get_last_file(exp))
     if exp.usePreBeadfind:
@@ -686,9 +702,15 @@ def check_for_completion(exp):
         if check_for_critical(exp,'explog_final.txt'):
             return True # run is complete; true
         
+        if 'blockstatus' in exp.log:
+            #N.B. Hack - we check status of thumbnail data only
+            expDir = path.join(exp.expDir,'thumbnail')
+        else:
+            expDir = exp.expDir
+            
         #check for required files
         for file in file_list:
-            if not check_for_file(exp.expDir,file):
+            if not check_for_file(expDir,file):
                 exp.ftpStatus = RUN_STATUS_MISSING
                 exp.save()
                 return False
@@ -707,50 +729,19 @@ def check_analyze_early(exp):
         wantAnalyzeEarly = data.get('analyzeearly')
 
     # for blocked datasets, the global setting for analyzeearly needs to be true
-    if 'regionstatus' in data or 'tilestatus' in data or 'blockstatus' in data:
-        wantAnalyzeEarly = True
-        
+    if 'blockstatus' in data:
+        for bs in data['blocks']:
+            if bs.find('thumbnail') > 0:
+                continue
+            arg = bs.split(',')[5].strip()
+            if int(arg.split(':')[1]) == 1:
+                wantAnalyzeEarly = True
+                logger.errors.debug ("Block Run. Detected at least one block to analyze early")
+                break
+        if wantAnalyzeEarly == False:
+            logger.errors.debug ("Block Run. analyze early has not been specified")
+
     return wantAnalyzeEarly
-
-def thumbnailMerge(exp,logger):
-    '''Trigger creation of a thumbnail image set from the two individual thumbnails
-    provided currently by blocked datasets.
-    Make system call to merge command line tool.
-    '''
-    # Is this a blocked dataset that should have a thumbnail created.
-    if 'blockstatus' in exp.log:
-    
-        topDir = os.path.join(exp.expDir,'thumbnail_top')
-        bottomDir = os.path.join(exp.expDir,'thumbnail_bottom')
-        outDir = os.path.join(exp.expDir,'thumbnail')
-        
-        if os.path.exists(outDir):
-            logger.errors.debug ("Thumbnail directory %s does exist already" % outDir)
-            return False
-        
-        # Check for valid directory paths
-        if not os.path.isdir(topDir):
-            topDir = os.path.join(exp.expDir,'X-1_Y1')
-            if not os.path.isdir(topDir):
-                logger.errors.debug ("Required subdir is missing (X-1_Y1 or thumbnail_top")
-                return True
-            
-        if not os.path.isdir(bottomDir):
-            bottomDir = os.path.join(exp.expDir,'X-1_Y0')
-            if not os.path.isdir(bottomDir):
-                logger.errors.debug ("Required subdir is missing (X-1_Y0 or thumbnail_bottom")
-                return True
-        
-        # Create the output directory so we can open a log file
-        os.mkdir(outDir)
-        # Open a log file
-        logfh = open(os.path.join(outDir,'MergeDatserrout.log'),'wb')
-        # Launch a process into the wind.  Hope it finishes.  maybe you should submit a job instead?
-        args = ['MergeDats','-s',topDir,'-t',bottomDir,'-o',outDir]
-        proc = subprocess.Popen(args,stderr=subprocess.STDOUT,stdout=logfh)
-        logger.errors.debug ("MergeDats launched: %s" % outDir)
-
-    return False
 
 def raw_data_exists(dir):
     '''Checks if raw data files exist yet or subdirectories exist yet (Block data runs)'''
@@ -766,13 +757,35 @@ def raw_data_exists(dir):
         return True
     return False
 
+def analyzeearly_thumbnail(exp):
+    
+    if 'blockstatus' in exp.log:
+        for bs in exp.log['blocks']:
+            if bs.find('thumbnail') > 0:
+                arg = bs.split(',')[5].strip()
+                if int(arg.split(':')[1]) == 1:
+                    logger.errors.info ("Request to analyze-early thumbnail analysis")
+                    return True
+    
+    return False
+
+def autorun_thumbnail(exp):
+
+    if 'blockstatus' in exp.log:
+        for bs in exp.log['blocks']:
+            if bs.find('thumbnail') > 0:
+                arg = bs.split(',')[4].strip()
+                if int(arg.split(':')[1]) == 1:
+                    logger.errors.info ("Request to auto-run thumbnail analysis")
+                    return True
+        
+    return False
+
 def crawl(folders,logger):
     """Crawl over ``folders``, reporting information to the ``CrawlLog``
     ``logger``."""
     logger.errors.debug("checking %d directories" % len(folders))
-    #TODO: Refactor this section, bearing in mind that the construct_crawl_directories()
-    #TODO: no longer returns ALL directories, but only the directories of those runs
-    #TODO: which are not yet finished transferring.
+    
     for f in folders:
         text = load_log(f,LOG_BASENAME)
         logger.errors.debug("checking directory %s" % f)
@@ -787,50 +800,58 @@ def crawl(folders,logger):
             kwargs = exp_kwargs(d,f)
             exp = exp_from_kwargs(kwargs, logger, False)
             if exp is not None:
-                # Identify 'alpha' machine by lack of 'autoanalyze' parameter in explog.txt
-                if not DEBUG and not check_for_autoanalyze(exp):
-                    if check_for_file(exp.expDir,'beadfind_post_0003.dat'):
-                        exp.ftpStatus = RUN_STATUS_COMPLETE
-                        exp.save()
-                # If we are using a 'beta' we have more options open for checking ftp completion
-                elif not DEBUG and check_for_completion(exp):
+                
+                #--------------------------------
+                # Update FTP Transfer Status
+                #--------------------------------
+                if check_for_completion(exp):
+                    # FTP transfer is complete
                     if exp.ftpStatus == RUN_STATUS_ABORT or exp.ftpStatus == RUN_STATUS_SYS_CRIT:
-                        exp.log = json.dumps(parse_log(load_log(f,LOG_FINAL_BASENAME)), indent=4)
-                        exp.save()
                         logger.errors.info("Aborted: %s" % f)
                     else:
                         exp.ftpStatus = RUN_STATUS_COMPLETE
-                        exp.log = json.dumps(parse_log(load_log(f,LOG_FINAL_BASENAME)), indent=4)
-                        exp.save()
-                        if exp.autoAnalyze and not check_analyze_early(exp):
-                            if thumbnailMerge(exp,logger): # Create thumbnail from dataset
-                                continue
-                            generate_http_post(exp,logger) #auto start analysis
-                            thumbnail_report_post(exp,logger)
-                            logger.errors.info("Starting auto analysis: %s" % f)
-                # if we fall through, it is still transferring...
+                        
+                    exp.log = json.dumps(parse_log(load_log(f,LOG_FINAL_BASENAME)), indent=4)
+                    exp.save()
                 else:
                     if exp.ftpStatus != RUN_STATUS_MISSING:
-                        #exp.ftpStatus = "Transferring"
                         exp.ftpStatus = get_percent(exp)
                         exp.save()
                         logger.errors.info("Transferring: %s" % f)
-                # check separately that we want to start the run before the ftp is complete
-                # the check in this case is that autoanalysis=True and AnalyzeEarly=True
-                if exp.autoAnalyze and check_analyze_early(exp):
-                    # check that there isn't already one started
-                    try:
-                        res = exp.results_set.all()                        
-                        if not res:
-                            if thumbnailMerge(exp,logger): # Create thumbnail from dataset
-                                continue
-                            generate_http_post(exp,logger) #auto start analysis
-                            thumbnail_report_post(exp,logger)
-                            logger.errors.info("Starting auto analysis: %s" % f)
-                    except:
-                        logger.errors.error(traceback.format_exc())
+                
+                #--------------------------------
+                # Handle auto-run analysis
+                #--------------------------------
+                res = exp.results_set.all()
+                if not res:
+                    logger.errors.debug ("No auto-run analysis has been started")
+                    # Check if auto-run for whole chip has been requested
+                    if exp.autoAnalyze:
+                        logger.errors.debug ("  auto-run whole chip analysis has been requested")
+                        if check_analyze_early(exp) or check_for_completion(exp):
+                            logger.errors.info ("  Start a whole chip auto-run analysis job")
+                            generate_http_post(exp,logger)
+                        else:
+                            logger.errors.info ("  Do not start a whole chip auto-run job yet")
+                    else:
+                        logger.errors.info ("  auto-run whole chip analysis has not been requested")
+                    
+                    # Check if auto-run for thumbnail has been requested
+                    # But only if its a block dataset
+                    if 'blockstatus' in exp.log:
+                        if autorun_thumbnail(exp):
+                            logger.errors.debug ("auto-run thumbnail analysis has been requested") 
+                            if analyzeearly_thumbnail(exp) or check_for_completion(exp):
+                                logger.errors.info ("  Start a thumbnail auto-run analysis job")
+                                thumbnail_report_post(exp,logger)
+                            else:
+                                logger.errors.info ("  Do not start a thumbnail auto-run job yet")
+                        else:
+                           logger.errors.info ("auto-run thumbnail analysis has not been requested")
+                    else:
+                        logger.errors.debug ("This is not a block dataset")
                 else:
-                    logger.errors.debug ("autoAnalyze or analyzeEarly are not set")
+                    logger.errors.info ("auto-run analysis already triggered")
             else:
                 logger.errors.debug ("exp is empty for %s" % f)
         else:

@@ -24,7 +24,7 @@
     // turn off async JavaScript so we can easily get/set var names
     $.ajaxSetup({async: false});
     // get the reference for the current report - TS_result is defined in run verison of this script
-    var reportUrl = '/rundb/api/v1/results/' + TB_result;
+    var reportUrl = '/rundb/api/v1/results/' + TB_result  + '/?format=json';
     var referenceID;
     $.get( reportUrl, function(data)
     {

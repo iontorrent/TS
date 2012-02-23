@@ -24,6 +24,7 @@ from django.conf import settings
 import zipfile
 import os.path
 import sys
+import re
 
 def unzip(dir, file):
     extractDir = os.path.join(settings.PLUGIN_PATH, os.path.splitext(file)[0])
@@ -153,19 +154,50 @@ def downloadChunks(url):
 
     return file
 
-
 @task
 def downloadGenome(url, genomeID):
     """download a genome, and update the genome model"""
     downloadChunks(url)
 
+import zeroinstallHelper
+
+def get_version(pluginscript):
+    VERSION=re.compile(r'VERSION=\"?([\d\.]+)\"?')
+    try:
+        with open(pluginscript, 'r') as f:
+            for line in f:
+                m = VERSION.search(line)
+                if m:
+                    return m.group(1)
+    except:
+        print("Failed to parse VERSION from '%s'", pluginscript)
+        return "0"
+    return "0"
 
 @task
 def downloadPlugin(url, plugin):
     """download a plugin and unzip that it"""
-    downloaded = downloadChunks(url)
     plugin.status["installStatus"] = "downloading"
     plugin.save()
+
+    if not url.endswith(".zip"):
+        feed = True
+    else:
+        feed = False
+
+    if feed:
+        try:
+            downloaded  = zeroinstallHelper.downloadZeroFeed(url)
+            feedName = zeroinstallHelper.getFeedName(url)
+        except:
+            plugin.status["installStatus"] = "failed"
+            plugin.status["result"] = str(sys.exc_info()[1][0])
+            plugin.save()
+            return False
+        plugin.url = url
+        plugin.save()
+    else:
+        downloaded = downloadChunks(url)
 
     if not downloaded:
         plugin.status["installStatus"] = "failed"
@@ -176,18 +208,31 @@ def downloadPlugin(url, plugin):
     plugin.status["installStatus"] = "installed"
 
     #for now rename it to the name of the zip file
-    plugin.name = os.path.splitext(os.path.basename(url))[0]
-    plugin.path = os.path.join(settings.PLUGIN_PATH, plugin.name )
-    plugin.save()
-    unzipStatus = unzip_archive(plugin.path, downloaded)
-    #clean up
-    os.unlink(downloaded)
-    os.rmdir(os.path.dirname(downloaded))
-    if unzipStatus:
-        plugin.status["result"] = "unzipped"
+    if not feed:
+        plugin.name = os.path.splitext(os.path.basename(url))[0]
+        plugin.path = os.path.join(settings.PLUGIN_PATH, plugin.name )
+        plugin.save()
+
+        unzipStatus = unzip_archive(plugin.path, downloaded)
+        #clean up
+        os.unlink(downloaded)
+        os.rmdir(os.path.dirname(downloaded))
+        if unzipStatus:
+            plugin.status["result"] = "unzipped"
+        else:
+            plugin.status["result"] = "failed to unzip"
+        plugin.save()
     else:
-        plugin.status["result"] = "failed to unzip"
-    plugin.save()
+        pluginDirs = [ name for name in os.listdir(downloaded) if os.path.isdir(os.path.join(downloaded, name)) ]
+        if pluginDirs:
+            plugin.path = os.path.join(downloaded,pluginDirs[0])
+        plugin.status["result"] = "0install"
+        plugin.selected = True
+        plugin.active = True
+        #get version using the same function used in views.py
+        plugin.version = get_version(os.path.join(plugin.path,"launch.sh"))
+        plugin.name = feedName.replace(" ","")
+        plugin.save()
 
 
 @task
@@ -311,15 +356,22 @@ def updateOneTouch():
         #remove the OTstatus file if it exists
         if os.path.exists("/tmp/OTstatus"):
             os.unlink("/tmp/OTstatus")
+        #touch the status file
+        otStatus = open("/tmp/OTstatus",'w').close()
+        #run the onetouch update script
+        try:
+            updateStatus = findHosts.findOneTouches()
+        except:
+            updateStatus = "FAILED"
         otStatus = open("/tmp/OTstatus",'w')
-        updateStatus = findHosts.findOneTouches()
-        otStatus.write(str(updateStatus))
+        otStatus.write(str(updateStatus) + "\n")
+        otStatus.write( "DONE\n")
         otStatus.close()
         #now remove the lock
         os.unlink("/tmp/OTlock")
-        os.unlink("/tmp/OTstatus")
         return True
 
     return False
+
 
 

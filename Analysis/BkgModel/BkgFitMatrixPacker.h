@@ -14,7 +14,11 @@
 
 #include <lapackpp.h>
 #include <spdfd.h>
+#ifdef ION_USE_MKL
+#include <mkl_cblas.h>
+#else
 #include <cblas.h>
+#endif
 
 //#define BKG_FIT_MAX_FLOWS   20
 
@@ -137,7 +141,7 @@ public:
         jtj = new LaSpdMatDouble(fi.output_len,fi.output_len);
         rhs.resize(fi.output_len);
         delta.resize(fi.output_len);
-
+	
         // TODO: There is an easier way to do this, but it wasn't working for me...something stupid...
         for (int i=0;i < fi.output_len;i++)
             for (int j=0;j < fi.output_len;j++)
@@ -178,6 +182,9 @@ public:
 
     LinearSolverResult GetOutput(float *dptr,double lambda)
     {
+      // Jacobian is J
+      // Approximate Hessian matrix of partial derivatives is J'J = jtj
+      //  Solve for delta: (J'J + lamda.I).delta = (rhs = J'(x - f(phat))
         bool delta_ok = true;
 //        LaSymmMatDouble jtj_lambda;
         LaSpdMatDouble jtj_lambda;

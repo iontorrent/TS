@@ -111,19 +111,19 @@ END {
   p2m = int(0.2*abc+0.5);
   if( basereads > 0 )
   {
-    printf "Total aligned base reads:     %d\n",basereads;
-    printf "Total base reads on target:   %d\n",sum;
+    printf "Total aligned base reads:     %.0f\n",basereads;
+    printf "Total base reads on target:   %.0f\n",sum;
     printf "Percent base reads on target: %.2f%%\n",100*(sum/basereads);
   }
   else
   {
-    printf "Total base reads on target:   %d\n",sum;
+    printf "Total base reads on target:   %.0f\n",sum;
   }
-  printf "Bases in targeted reference: %d\n",genome;
-  printf "Bases covered (at least 1x): %d\n",numpile;
+  printf "Bases in targeted reference: %.0f\n",genome;
+  printf "Bases covered (at least 1x): %.0f\n",numpile;
   printf "Average base coverage depth: %.2f\n",abc;
   printf "Uniformity of coverage:      %.2f%%\n",cum_coverage[p2m]*scl;
-  printf "Maximum base read depth: %d\n",maxdepth;
+  printf "Maximum base read depth: %.0f\n",maxdepth;
   printf "Average base read depth: %.2f\n",ave;
   printf "Std.Dev base read depth: %.2f\n",std;
   printf "Target coverage at 1x:   %.3f%%\n",numpile*scl;

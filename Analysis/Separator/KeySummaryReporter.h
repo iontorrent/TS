@@ -18,34 +18,20 @@ template <class T>
 class KeyRegionSummary {
 
 public:
-  KeyRegionSummary(int sampSize=1000) {
+  KeyRegionSummary(int sampSize=5000) {
     mSampleSize = sampSize;
   }
   
   void Init(int nRows, int nCols, int rowStep, int colStep, const KeySeq &key) {
     mKey = key;
     mGlobalTraces.resize(key.usableKeyFlows);
-    mRegionAvgTraces.resize(key.usableKeyFlows);
-    for (size_t flowIx = 0; flowIx < mRegionAvgTraces.size(); flowIx++) {
-      mRegionAvgTraces[flowIx].Init(nRows, nCols, rowStep, colStep);
-    }
   }
 
   void Report(const KeyFit &fit, 
               const Mat<T> &wellFlows,
               const Mat<T> &refFlows,
               const Mat<T> &predicted) {
-    for (size_t flowIx = 0; flowIx < mRegionAvgTraces.size() && flowIx < wellFlows.n_cols; flowIx++) {
-      std::vector<SampleQuantiles<float> > &regionTrace = mRegionAvgTraces[flowIx].GetItem(mRegionAvgTraces[flowIx].GetBin(fit.wellIdx));
-      if (regionTrace.size() < wellFlows.n_rows) {
-        if (regionTrace.size() > 0) {
-          ION_ABORT("Shouldn't have different sizes.");
-        }
-        regionTrace.resize(wellFlows.n_rows);
-        for (size_t i = 0; i < regionTrace.size(); i++) {
-          regionTrace[i].Init(mSampleSize);
-        }
-      }
+    for (size_t flowIx = 0; flowIx < mGlobalTraces.size() && flowIx < wellFlows.n_cols; flowIx++) {
       if (mGlobalTraces[flowIx].size() < wellFlows.n_rows) {
         if (mGlobalTraces[flowIx].size() > 0) {
           ION_ABORT("Shouldn't have different sizes.");
@@ -57,29 +43,15 @@ public:
       }
       for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
         float d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
-        regionTrace[frameIx].AddValue(d);
         mGlobalTraces[flowIx][frameIx].AddValue(d);
       }
     }
   }
 
   void Finish() {
-    mGlobalAvg.resize(mRegionAvgTraces.size());
-    for (size_t flowIx = 0; flowIx < mRegionAvgTraces.size(); flowIx++) {
-      for (size_t binIx = 0; binIx < mRegionAvgTraces[flowIx].GetNumBin(); binIx++) {
-        std::vector<SampleQuantiles<float> > &regionTrace = mRegionAvgTraces[flowIx].GetItem(binIx);
-        if (regionTrace.empty() || regionTrace[0].GetNumSeen() < mMinCount) {
-          continue;
-        }
-        if (mGlobalAvg[flowIx].size() < regionTrace.size()) {
-          mGlobalAvg[flowIx].resize(regionTrace.size());
-        }
-        for (size_t frameIx = 0; frameIx < regionTrace.size(); frameIx++) {
-          mGlobalAvg[flowIx][frameIx].AddValue(regionTrace[frameIx].GetMedian());
-        }
-      }
+    mGlobalAvg.resize(mGlobalTraces.size());
+    for (size_t flowIx = 0; flowIx < mGlobalTraces.size(); flowIx++) {
       if (mGlobalAvg[flowIx].empty()) {
-        ION_WARN("Key: " + mKey.name + " for flow: " + ToStr(flowIx) +  " Using global median.");
         mGlobalAvg[flowIx].resize(mGlobalTraces[flowIx].size());
         for (size_t frameIx = 0; frameIx < mGlobalAvg[flowIx].size(); frameIx++) {
           mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx].GetMedian());
@@ -95,8 +67,6 @@ public:
 private:
   int mSampleSize;
   KeySeq mKey;
-  // Per flow grid mesh of vector of 
-  std::vector<GridMesh<std::vector<SampleQuantiles<float> > > >  mRegionAvgTraces;
   std::vector<std::vector<SampleQuantiles<float> > > mGlobalTraces;
   std::vector<std::vector<SampleStats<T> > > mGlobalAvg;
   const static int mMinCount = 100;

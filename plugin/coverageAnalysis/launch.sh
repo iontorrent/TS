@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
-VERSION="2.0.1.0"
+VERSION="2.0.1.1"
 
 # Disable excess debug output for test machine
 #set +o xtrace
@@ -14,13 +14,13 @@ PLUGIN_DEV_FULL_LOG=0;          # 1 for coverage analysis log, 2 for additional 
 if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
   OLD_IFS="$IFS"
   IFS=";"
-  PLAN_INFO=(`${DIRNAME}/parse_plan.py ${RESULTS_DIR}/startplugin.json`)
+  PLAN_INFO=(`${DIRNAME}/parse_plan.py ${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json`)
   IFS=$OLD_IFS
   PLUGINCONFIG__LIBRARYTYPE=${PLAN_INFO[0]}
   PLUGINCONFIG__TARGETREGIONS=${PLAN_INFO[1]}
   if [ -z "$PLUGINCONFIG__LIBRARYTYPE" ]; then
-    rm -f "${RESULTS_DIR}/results.json"
-    HTML="${RESULTS_DIR}/${PLUGINNAME}.html"
+    rm -f "${TSP_FILEPATH_PLUGIN_DIR}/results.json"
+    HTML="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGINNAME}.html"
     echo '<html><body>' > "$HTML"
     if [ -f "${DIRNAME}/html/logo.sh" ]; then
       source "${DIRNAME}/html/logo.sh"
@@ -92,16 +92,16 @@ if [ -n "$PLUGIN_TARGETS" ]; then
     exit 1
   fi
 fi
-if ! [ -d "$RESULTS_DIR" ]; then
-  echo "ERROR: Failed to locate output directory $RESULTS_DIR" >&2
+if ! [ -d "$TSP_FILEPATH_PLUGIN_DIR" ]; then
+  echo "ERROR: Failed to locate output directory $TSP_FILEPATH_PLUGIN_DIR" >&2
   exit 1
 fi
 
 # Definition of file names, locations, etc., used by plugin
-BARCODES_LIST="${RESULTS_DIR}/barcodeList.txt"
+BARCODES_LIST="${TSP_FILEPATH_PLUGIN_DIR}/barcodeList.txt"
 SCRIPTSDIR="${DIRNAME}/scripts"
 PLUGIN_OUT_BAM_NAME=`echo ${TSP_FILEPATH_BAM} | sed -e 's_.*/__g'`
-JSON_RESULTS="${RESULTS_DIR}/results.json"
+JSON_RESULTS="${TSP_FILEPATH_PLUGIN_DIR}/results.json"
 HTML_RESULTS="${PLUGINNAME}.html"
 HTML_ROWSUMS="${PLUGINNAME}_rowsum"
 
@@ -164,7 +164,7 @@ run ()
   EXIT_CODE="$?"
   if [ ${EXIT_CODE} != 0 ]; then
     echo "status code '${EXIT_CODE}' while running '$*'" >&2
-    rm -f "${RESULTS_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
+    rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
     exit 1
   fi
 }
@@ -176,7 +176,7 @@ run_coverage_analysis ()
 {
   local RESDIR="$1"
   local BAMFILE="$2"
-  local RUNCOV="${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${RESULTS_DIR}\" -D \"$RESDIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"$BAMFILE\""
+  local RUNCOV="${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$RESDIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"$BAMFILE\""
   if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
     echo "\$ $RUNCOV" >&2
   fi
@@ -209,10 +209,10 @@ if [ -f $TSP_FILEPATH_BARCODE_TXT ]; then
 fi
 
 # Get local copy of js and css
-run "mkdir -p ${RESULTS_DIR}/js";
-run "cp ${DIRNAME}/js/*.js ${RESULTS_DIR}/js/.";
-run "mkdir -p ${RESULTS_DIR}/css";
-run "cp ${DIRNAME}/css/*.css ${RESULTS_DIR}/css/.";
+run "mkdir -p ${TSP_FILEPATH_PLUGIN_DIR}/js";
+run "cp ${DIRNAME}/js/*.js ${TSP_FILEPATH_PLUGIN_DIR}/js/.";
+run "mkdir -p ${TSP_FILEPATH_PLUGIN_DIR}/css";
+run "cp ${DIRNAME}/css/*.css ${TSP_FILEPATH_PLUGIN_DIR}/css/.";
 
 echo -e "\nResults folder initialized." >&2
 
@@ -228,7 +228,7 @@ if [ $PLUGIN_PADSIZE -gt 0 ];then
     echo "WARNING: Could not create padded targets file; genome (.fai) file does not exist at $GENOME" >&2
     echo "- Continuing without padded targets analysis." >&2
   else
-    PADDED_TARGETS="${RESULTS_DIR}/padded_targets_$PLUGIN_PADSIZE.bed"
+    PADDED_TARGETS="${TSP_FILEPATH_PLUGIN_DIR}/padded_targets_$PLUGIN_PADSIZE.bed"
     PADCMD="${DIRNAME}/padbed/padbed.sh $LOGOPT \"$PLUGIN_TARGETS\" \"$GENOME\" $PLUGIN_PADSIZE \"$PADDED_TARGETS\""
     eval "$PADCMD" >&2
     if [ $? -ne 0 ]; then
@@ -250,7 +250,7 @@ write_html_footer
 COV_PAGE_WIDTH=$BC_COV_PAGE_WIDTH
 
 # Remove previous results to avoid displaying old before ready
-rm -f "${RESULTS_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
+rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
 
 # Check for barcodes
 if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
@@ -260,21 +260,21 @@ else
   ln -sf "$TSP_FILEPATH_BAM" .
   ln -sf "${TSP_FILEPATH_BAM}.bai" .
   # Write a front page for non-barcode run
-  HTML="${RESULTS_DIR}/${HTML_RESULTS}"
+  HTML="${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}"
   write_html_header "$HTML" 15;
   echo "<h3><center>${PLUGIN_OUT_BAM_NAME}</center></h3>" >> "$HTML"
   display_static_progress "$HTML";
   write_html_footer "$HTML";
   # Run on single bam
-  run_coverage_analysis "$RESULTS_DIR" "$TSP_FILEPATH_BAM"
+  run_coverage_analysis "$TSP_FILEPATH_PLUGIN_DIR" "$TSP_FILEPATH_BAM"
   # Write json output
   write_json_header;
-  write_json_inner "${RESULTS_DIR}/all_reads" "summary.txt" "all_reads" 2;
+  write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
   echo "," >> "$JSON_RESULTS"
-  write_json_inner "${RESULTS_DIR}/all_reads" "summary.txt" "all_reads" 2;
+  write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
   write_json_footer;
-  rm -f "${RESULTS_DIR}/$HTML_ROWSUMS"
+  rm -f "${TSP_FILEPATH_PLUGIN_DIR}/$HTML_ROWSUMS"
 fi
 # Remove after successful completion
-rm -f "${RESULTS_DIR}/header" "${RESULTS_DIR}/footer" "${RESULTS_DIR}/startplugin.json" "$PADDED_TARGETS" "$BARCODES_LIST"
+rm -f "${TSP_FILEPATH_PLUGIN_DIR}/header" "${TSP_FILEPATH_PLUGIN_DIR}/footer" "${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json" "$PADDED_TARGETS" "$BARCODES_LIST"
 

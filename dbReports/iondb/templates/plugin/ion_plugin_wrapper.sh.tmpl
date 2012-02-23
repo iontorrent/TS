@@ -55,6 +55,10 @@ cmd_line_args "$@"
 #
 # RAW_DATA_DIR
 # ANALYSIS_DIR
+# REPORT_ROOT_DIR
+# SIGPROC_DIR
+# BASECALLER_DIR
+# ALIGNMENT_DIR
 # LIBRARY_KEY
 # TESTFRAG_KEY
 # RESULTS_DIR
@@ -159,7 +163,7 @@ set -o xtrace
     -a "${ANALYSIS_DIR}" \
     -l "${LIBRARY_KEY}" \
     -t "${TESTFRAG_KEY}" \
-    -o "${RESULTS_DIR}" \
+    -o "${TSP_FILEPATH_PLUGIN_DIR}" \
     -p "${DIRNAME}" \
     -u "${URL_ROOT}"
 # -j "${JSON_FILE}"
@@ -177,11 +181,11 @@ elapsedtime=$[($endtime - $starttime)]
 echo "pluginelapsedtime: ${PLUGINNAME},${elapsedtime}"
 
 {% if runinfo.pk %}
-python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin_name }} --convert --msg $RETVAL
+python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk }} --plugin "{{ runinfo.plugin.name }}" --version "{{ runinfo.plugin.version }}" --convert --msg $RETVAL
 #now if there is a file named results.json send PUT that to the REST API.
 if [ -f results.json ]
 then
-    python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk}} --plugin {{ runinfo.plugin_name }} --method=resultsjson --jsonpath=`pwd`
+    python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk}} --plugin "{{ runinfo.plugin.name }}"  --version "{{ runinfo.plugin.version }}" --jsonpath=`pwd`
 fi
 {% endif %}
 

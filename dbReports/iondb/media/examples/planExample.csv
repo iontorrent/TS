@@ -1,1 +1,1 @@
-planName,sample,project,cycles,runType,library,barcodeId,seqKitBarcode,autoAnalyze,preAnalysis,notes
+planName,sample,project,flows,runType,library,barcodeId,seqKitBarcode,autoAnalyze,preAnalysis,bedfile,regionfile,notes

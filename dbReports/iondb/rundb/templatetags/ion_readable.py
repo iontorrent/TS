@@ -23,6 +23,11 @@ def ion_readable(value):
         val2 = math.floor(val*10)
         val2 = val2 / 10
         text = "%.1f" % val2
+        if text[-1:] == '0':
+            text = text.split('.')[0]
+        textIntPart = text.split('.')[0]
+        if len(textIntPart) > 2:
+            text = textIntPart
         converted_text = str(text) + charlist[charindex]
     else:
         converted_text = str(value)

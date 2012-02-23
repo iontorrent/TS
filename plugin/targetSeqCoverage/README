@@ -1,0 +1,19 @@
+Installation of new target region files
+---------------------------------------
+
+New target files may be added to the targetFiles directory and will appear in the targetSeqCoverage
+plugin GUI for selection provided they follow the following naming convention:
+  <prefix>targetseq.<ref>.<targets id>.bed
+
+"targetseq." and ".bed" are mandatory and used to identify the file and parse the file name.
+<prefix> may be any valid string unix file name characters, but spaces are not recommended.
+<ref> should reflect the actual genome (short name) the targets refer to, e.g. "hg19".
+<targets id> is any suitable (short) name for the target set.
+
+For Ion TargetSeq, a valid targets (BED) file must have at least the 3 mandatory fields,
+<chromosome name>, <start> and <end> separated by a single tab character, defined for each target (per line).
+Additional fields, e.g. the individual target id, are permissible and ignorred.
+BED track lines (begining with "track") are ignorred but if multiple track lines are present only the first
+first track is read as targets.
+Ion TragetSeq files should be sorted (chromosome>start>end) and the target regions non-overlapping (merged).
+

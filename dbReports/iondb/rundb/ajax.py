@@ -129,6 +129,12 @@ def change_storage(request, pk, value):
             return http.HttpResponseNotFound
 
         exp = shortcuts.get_object_or_404(models.Experiment, pk=pk)
+        
+        # When changing from Archive option to Delete option, need to reset
+        # the user acknowledge field
+        if exp.storage_options == 'A' and value == 'D':
+            exp.user_ack = 'U'
+            
         exp.storage_options = value
         exp.save()
         return http.HttpResponse()

@@ -9,7 +9,16 @@ if ! which python; then
     exit 1
 fi
 
-rm -f ${RESULTS_DIR}/${PLUGINNAME}_block.html
-rm -f ${RESULTS_DIR}/leaderboard.html
+if [ -e ${RESULTS_DIR}/${PLUGINNAME}_block.html ]; then
+    rm -f ${RESULTS_DIR}/${PLUGINNAME}_block.html
+fi
+
+if [ -e ${RESULTS_DIR}/leaderboard.html ];  then
+    rm -f ${RESULTS_DIR}/leaderboard.html
+fi
+
 python $DIRNAME/run_recognition_plugin.py $DIRNAME ${RESULTS_DIR}
-rm ${RESULTS_DIR}/startplugin.json
+
+if [ -e ${RESULTS_DIR}/startplugin.json ]; then
+    rm ${RESULTS_DIR}/startplugin.json
+fi

@@ -100,7 +100,7 @@ def BuildTrackingMetrics(metricRecordList, site):
                     pluginDict = None
                     if metricRecord.plugin:
                         try:
-                            pluginDict = rep.pluginStore[metricRecord.pluginStore]
+                            pluginDict = rep.getPluginStore()[metricRecord.pluginStore]
                         except:
                             pluginDict = None
                         if pluginDict is not None:
@@ -148,7 +148,15 @@ def BuildMetrics(metricRecordList, site):
     print "forcing libmetrics loading"
     theLen = len(libList) # force load of database table across net
 
-    # make a lookup table of library metrics pcsRecord.chip, k
+    pluginResults = models.PluginResult.objects.using(site).select_related() 
+    print "forcing pluginResults loading"
+    theLen = len(pluginResults) # force load of database table across net
+
+    plugins = models.Plugin.objects.using(site).select_related()
+    print "forcing plugins loading"
+    theLen = len(plugins) # force load of database table across net
+
+    # make a lookup table of library metrics pk
     print 'Building library metrics hash...'
     libpk_hash = []
     num = 0
@@ -161,6 +169,21 @@ def BuildMetrics(metricRecordList, site):
             for i in range(0, delta+1): # now why can't python simply resize the list when I perform assignments?
                 libpk_hash.append(-1)
         libpk_hash[pk] = num
+        num = num + 1
+
+    # make a lookup table of plugin results pk
+    print 'Building plugin results hash...'
+    pluginHashDict = {}
+    for plugin in plugins:
+        pluginHashDict[plugin.name] = []
+        whichPluginHash = pluginHashDict[plugin.name]
+        for i in range(0, largest+1):
+            whichPluginHash.append(-1)
+    num = 0
+    for pluginResult in pluginResults:
+        pk = pluginResult.result.pk
+        whichPluginHash = pluginHashDict[pluginResult.plugin.name]
+        whichPluginHash[pk] = num
         num = num + 1
 
     # loop through all metrics, updating top 5 (numBest) list for each
@@ -211,7 +234,11 @@ def BuildMetrics(metricRecordList, site):
                     pluginDict = None
                     if metricRecord.plugin:
                         try:
-                            pluginDict = rep.pluginStore[metricRecord.pluginStore]
+                            # pluginDict = rep.getPluginStore()[metricRecord.pluginStore]
+
+                            whichPluginHash = pluginHashDict[metricRecord.pluginStore]
+                            pluginDictIndex = whichPluginHash[rep.pk]
+                            pluginDict = pluginResults[pluginDictIndex].store
                         except:
                             pluginDict = None
                         if pluginDict is not None:

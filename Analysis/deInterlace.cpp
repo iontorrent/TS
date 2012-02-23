@@ -41,6 +41,7 @@
 #define PLACEKEY  0xdeadbeef
 #define IGNORE_CKSM_TYPE_ALL    0x01
 #define IGNORE_CKSM_TYPE_1FRAME 0x02
+#define IGNORE_ALWAYS_RETURN    0x04
 //#define DEBUG
 
 typedef struct{
@@ -201,7 +202,7 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 	int total_errcnt=0;
 	unsigned int Transitions = 0;
 	unsigned short adder16;
-	unsigned short prevValue = 0;
+//	unsigned short prevValue = 0;
 	unsigned int cksum=0;
 	unsigned int tmpcksum=0;
 	//	unsigned short skip=0;
@@ -227,7 +228,10 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 	CompPtr = GetFileData(fd, offset, len, cksum);
 	if(CompPtr == NULL) {
         free(unInterlacedData);
-		exit(2);
+		if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+			return 0;
+		else
+			exit(-1);
     }
 
 	CompPtr += sizeof(struct _file_hdr) + sizeof(struct _expmt_hdr_v3);
@@ -298,7 +302,10 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 		if(CompPtr == NULL)
 		{
 			printf("corrupt file! Failed to get file data\n");
-			exit(2);
+			if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+				return 0;
+			else
+				exit(-1);
 		}
 
 
@@ -329,7 +336,10 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 			if(CompPtr == NULL)
 			{
 				printf("corrupt file\n");
-				exit(2);
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
 			}
 
 			// read in the first frame directly
@@ -358,7 +368,10 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 			{
 				printf("corrupt file!  Bad Sentinel\n");
 				if(!(ignoreErrors&IGNORE_CKSM_TYPE_ALL))
-					exit(2);
+				{
+					if(!(ignoreErrors&IGNORE_ALWAYS_RETURN))
+						exit(-1);
+				}
 			}
 
 			FreeFileData(fd);
@@ -369,7 +382,10 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 		if(CompPtr == NULL)
 		{
 			printf("Failed to get file data\n");
-			exit(2);
+			if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+				return 0;
+			else
+				exit(-1);
 		}
 
 
@@ -416,7 +432,7 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 				{
 				case 8:
 					val = *PrevPtr++ + *CompPtr++;
-					prevValue = val;
+//					prevValue = val;
 					if (x >= mincols && x < maxcols && y >= minrows && y
 							< maxrows)
 					{
@@ -428,7 +444,7 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 					adder16 = *(unsigned char *) (CompPtr + 1)
 							| ((*(unsigned char *) CompPtr) << 8);
 					val = *PrevPtr++ + *((short *) &adder16);
-					prevValue = val;
+//					prevValue = val;
 					if (x >= mincols && x < maxcols && y >= minrows && y
 							< maxrows)
 					{
@@ -442,7 +458,12 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 					{
 						printf("corrupt file\n");
 						if(!(ignoreErrors&IGNORE_CKSM_TYPE_ALL))
-							exit(2);
+						{
+							if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+								return 0;
+							else
+								exit(-1);
+						}
 					}
 					break;
 				}
@@ -459,7 +480,12 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 			printf("transitions don't match!!\n");
 			printf("corrupt file\n");
 			if(!(ignoreErrors&IGNORE_CKSM_TYPE_ALL))
-				exit(2);
+			{
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
+			}
 		}
 		if (total != frameHdr.total)
 		{
@@ -473,7 +499,12 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 				printf("totals don't match!! Err'd frames:%d\n",total_errcnt);
 				printf("corrupt file\n");
 				if(!(ignoreErrors&IGNORE_CKSM_TYPE_ALL))
-					exit(2);
+				{
+					if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+						return 0;
+					else
+						exit(-1);
+				}
 			}
 		}
 		
@@ -495,7 +526,12 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 			printf("checksums don't match %x %x %x-%x-%x-%x\n",cksum,tmpcksum,cksmPtr[0],cksmPtr[1],cksmPtr[2],cksmPtr[3]);
 			printf("corrupt file\n");
 			if(!(ignoreErrors&IGNORE_CKSM_TYPE_ALL))
-				exit(2);
+			{
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
+			}
 		}
 	}
 	FreeFileData(fd);
@@ -523,6 +559,119 @@ int LoadCompressedImage(DeCompFile *fd, short *out, int rows, int cols, int tota
 #define __debugbreak()
 #endif
 
+void InterpolateFramesBeforeT0(int* regionalT0, short *out, int rows, int cols, int start_frame, int end_frame, 
+    int mincols, int minrows, int maxcols, int maxrows, int x_region_size, int y_region_size, int* timestamps) {
+
+    int num_regions_x = cols/x_region_size; 
+    int num_regions_y = rows/y_region_size;
+    if(cols%x_region_size)
+        num_regions_x++;
+    if(rows%y_region_size)
+	num_regions_y++;
+
+    short* firstFrame = out;
+    short* imageFramePtr = NULL;
+    int y_reg, x_reg, nelems_x, nelems_y, x, y, realx, realy;
+    int regionNum, t0, midFrameNum;
+    short* leftFramePtr = NULL, *rightFramePtr = NULL, *imagePtr = NULL, *lastFrame = NULL, *startFrame = NULL; 
+    short* midFrame = NULL;
+    short* t0PlusTwoFrame = NULL, *t0PlusTwoFramePtr = NULL, *midFramePtr = NULL;
+    unsigned int startX = 0, endX = 0;
+    for (int frame=1; frame<=end_frame; ++frame) {
+        if (frame >= start_frame && frame <= end_frame)
+	    imageFramePtr = out + ((frame-start_frame)*(maxcols-mincols)*(maxrows-minrows));
+	else
+	    imageFramePtr = NULL;
+
+        for(y_reg = minrows/y_region_size;y_reg < num_regions_y;y_reg++)
+	{
+	    for(x_reg = mincols/x_region_size;x_reg < num_regions_x;x_reg++)
+	    {
+                regionNum = y_reg*num_regions_x+x_reg;
+                t0 = regionalT0[regionNum];   
+                if (t0 < 0)
+                    continue;
+                if (t0 >= frame) {
+                    midFrameNum = t0/2;
+                    if (frame < midFrameNum) {
+                        startFrame = firstFrame;
+                        lastFrame = out + ((t0-start_frame)*(maxcols-mincols)*(maxrows-minrows));
+                        startX = timestamps[0];
+                        endX = timestamps[midFrameNum];
+                    }
+                    else if (frame == midFrameNum) {
+		        midFrame = out + ((t0-start_frame)*(maxcols-mincols)*(maxrows-minrows));
+                    }
+                    else {
+			lastFrame = out + ((t0 + 1 -start_frame)*(maxcols-mincols)*(maxrows-minrows));
+			t0PlusTwoFrame = out + ((t0 + 2 -start_frame)*(maxcols-mincols)*(maxrows-minrows));
+                        startFrame = out + ((t0-start_frame)*(maxcols-mincols)*(maxrows-minrows)); 
+                        startX = timestamps[midFrameNum];
+                        endX = timestamps[t0 + 1];
+                    }
+		    nelems_x = x_region_size;
+		    nelems_y = y_region_size;
+
+		    if (((x_reg+1)*x_region_size) > cols)
+			    nelems_x = cols - x_reg*x_region_size;
+		    if (((y_reg+1)*y_region_size) > rows)
+			    nelems_y = rows - y_reg*y_region_size;
+
+		    realy=y_reg*y_region_size;
+		    for(y = 0;y<(int)nelems_y;y++,realy++)
+		    {
+		        realx=x_reg*x_region_size;
+			imagePtr = (imageFramePtr + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+			leftFramePtr = (startFrame + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+			rightFramePtr = (lastFrame + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+                        if (frame == midFrameNum) {
+                            midFramePtr = (midFrame + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+                        }
+                        else if (frame > midFrameNum) {
+                            t0PlusTwoFramePtr = (t0PlusTwoFrame + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+                        }
+
+			for(x=0;x<(int)nelems_x;)
+			{
+			    // interpolate
+                            if (frame < midFrameNum) {
+			        if(imageFramePtr) {
+                                    if(realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows) 
+                                        *imagePtr = (short)(((float)(*rightFramePtr - *leftFramePtr) / ((float)endX - (float)startX))*((float)timestamps[frame] - (float)startX)) + *leftFramePtr;
+                                    imagePtr++;
+                                }
+                                rightFramePtr++;
+                             }
+                             else if (frame == midFrameNum) {
+				if(imageFramePtr) {
+                                    if(realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows)
+                                        *imagePtr = *midFramePtr;
+                                    imagePtr++;
+                                }
+                                midFramePtr++;
+                             }
+                             else {
+                                float avg = (*rightFramePtr + *t0PlusTwoFramePtr) / 2;
+				if(imageFramePtr) {
+                                    if(realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows) 
+                                        *imagePtr = (short)(((avg - (float)*leftFramePtr) / ((float)endX - (float)startX))*((float)timestamps[frame] - (float)startX)) + *leftFramePtr;                                   
+                                    imagePtr++;
+                                }
+                                rightFramePtr++;
+                                t0PlusTwoFramePtr++;
+                             }
+                             leftFramePtr++;
+                             x++;
+                             realx++;
+			}
+		    }
+		}
+            }
+        }
+    }
+}
+
+
 
 // inputs:
 //        fd:  input file descriptor
@@ -539,21 +688,19 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 {
 	int frameStride = rows * cols;
 	short *imagePtr = (short *) out;
-	unsigned char *CompPtr,*LastCompPtr,*StartCompPtr;
+	unsigned char *CompPtr,*StartCompPtr;
 	unsigned char *cksmPtr;
-	short *PrevPtr;
 	int frame, x, y, len;
 	unsigned short val;
-	short Val[8];
-	unsigned int state = 0,LastState=0; // first entry better be a state change
+	short Val[8]={0};
+	unsigned int state = 0/*,LastState=0*/; // first entry better be a state change
 	unsigned int total = 0;
 	unsigned int Transitions = 0;
 	unsigned int cksum=0;
 	unsigned int tmpcksum=0;
-//	unsigned int doneOnce[20] = {0};
 
 	struct _expmt_hdr_cmp_frame frameHdr;
-	unsigned short *WholeFrameOrig = NULL, *WholeFrame = NULL;
+	unsigned short *WholeFrameOrig = NULL, *LocalWholeFrameOriginal=NULL,*WholeFrame = NULL,*PrevWholeFrame=NULL,*PrevWholeFrameOriginal=NULL;
 	unsigned short *unInterlacedData = NULL;
 	short *imageFramePtr = NULL;
 #ifdef DEBUG
@@ -561,11 +708,13 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 	unInterlacedData = (unsigned short *)malloc(2*frameStride);
 #endif
 
-	WholeFrameOrig = WholeFrame = (unsigned short *) malloc(2 * frameStride);
+	WholeFrameOrig = LocalWholeFrameOriginal = WholeFrame = (unsigned short *) malloc(2 * frameStride);
 
 	uint32_t y_reg,x_reg,i;
 	uint32_t nelems_x,nelems_y;
 	int realx,realy;
+	int WholeImage=0;
+	uint32_t roff=0;
 //	unsigned char rgroupCksum,groupCksum;
 
 	uint32_t num_regions_x = cols/x_region_size;
@@ -579,6 +728,16 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 	CompPtr = (unsigned char *)GetFileData(fd, 0, offset,cksum);
 	FreeFileData(fd); // for cksum
 
+        // regional t0
+        int numRegions = num_regions_x*num_regions_y;
+        int regionalT0[numRegions];
+        for (int reg=0; reg < numRegions; ++reg)
+            regionalT0[reg] = -1;
+
+	if ((start_frame == 0) && (mincols == 0) && (minrows == 0) &&
+		(maxcols == cols) && (maxrows == rows))
+		WholeImage=1;
+
 	for (frame = 0; frame <= end_frame; frame++)
 	{
 		if (frame >= start_frame && frame <= end_frame)
@@ -586,51 +745,38 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 		else
 			imageFramePtr = NULL;
 
-		WholeFrame = WholeFrameOrig;
-		PrevPtr = (short *) WholeFrame;
-
-#ifdef DEBUG
-		len = 2*frameStride + sizeof(struct _expmt_hdr_cmp_frame);
-		CompPtr = GetFileData(fd,offset,len,cksum);
-		if(CompPtr == NULL)
-		{
-			printf("corrupt file\n");
-			exit(2);
+		PrevWholeFrameOriginal = LocalWholeFrameOriginal;
+		if(WholeImage && imageFramePtr)
+		{ // optimization... in the case of getting the whole frame, just write into one location....
+			WholeFrame = (short unsigned int *)imageFramePtr;
+			imageFramePtr = NULL;
 		}
+		else
+		{
+			WholeFrame = WholeFrameOrig;
+		}
+		LocalWholeFrameOriginal = WholeFrame;
 
-
-		frameHdr.timestamp = *(unsigned int *)CompPtr;
-		CompPtr += 4;
-
-		UnCompressPtr = (unsigned short *)CompPtr;
-		for(y=0;y<frameStride;y++)
-		unInterlacedData[y] = BYTE_SWAP_2(UnCompressPtr[y]);
-
-		CompPtr += 2*frameStride;
-		memcpy(&frameHdr.len,CompPtr,sizeof(frameHdr)-4);
-
-#else
-
-
-		len = sizeof(struct _expmt_hdr_cmp_frame);
-
+		len = 8;
 		CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
 		if(CompPtr == NULL)
 		{
 			__debugbreak();
 			printf("corrupt file! Failed to get file data\n");
-			exit(2);
+			if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+				return 0;
+			else
+				exit(-1);
 		}
 
-
-		memcpy(&frameHdr, CompPtr, len);
-#endif
+		frameHdr.timestamp  = *(unsigned int *)CompPtr;
+		CompPtr += 4;
+		frameHdr.Compressed = *(unsigned int *)CompPtr;
+		CompPtr += 4;
 		ByteSwap4(frameHdr.Compressed);
-		ByteSwap4(frameHdr.Transitions);
-		ByteSwap4(frameHdr.len);
-		ByteSwap4(frameHdr.sentinel);
 		ByteSwap4(frameHdr.timestamp);
-		ByteSwap4(frameHdr.total);
+		FreeFileData(fd);
+		offset += len;
 
 //		printf("hdr: offset=%d Comp=%d\n",offset,frameHdr.Compressed);
 
@@ -640,20 +786,16 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 
 		if(!frameHdr.Compressed)
 		{
-			// subtract off the un-used bytes from the checksum
-			for(y=8;y<len;y++)
-				cksum -= (unsigned char)CompPtr[y];
-			FreeFileData(fd);
-			offset += 8; // special because we didn't use the whole header
-
-
 			len = rows*cols*2;
 			CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
 			if(CompPtr == NULL)
 			{
 				__debugbreak();
 				printf("corrupt file\n");
-				exit(2);
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
 			}
 
 			// read in the first frame directly
@@ -679,6 +821,47 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 		}
 		else
 		{
+#ifdef DEBUG
+
+			len = 2*frameStride;
+			CompPtr = (unsigned char *)GetFileData(fd,offset,len,cksum);
+			if(CompPtr == NULL)
+			{
+				printf("corrupt file\n");
+				exit(2);
+			}
+
+			UnCompressPtr = (unsigned short *)CompPtr;
+			for(y=0;y<frameStride;y++)
+			unInterlacedData[y] = /*BYTE_SWAP_2(*/UnCompressPtr[y]/*)*/;
+
+			FreeFileData(fd);
+			offset += len;
+
+#endif
+
+
+			len = sizeof(struct _expmt_hdr_cmp_frame)-8;
+
+			CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
+			if(CompPtr == NULL)
+			{
+				__debugbreak();
+				printf("corrupt file! Failed to get file data\n");
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
+			}
+
+
+			memcpy(&frameHdr.len, CompPtr, len);
+
+			ByteSwap4(frameHdr.Transitions);
+			ByteSwap4(frameHdr.len);
+			ByteSwap4(frameHdr.sentinel);
+			ByteSwap4(frameHdr.total);
+
 			if (frameHdr.sentinel != PLACEKEY)
 			{
 				printf("corrupt file!  No Sentinel\n");
@@ -699,7 +882,10 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 			{
 				__debugbreak();
 				printf("Failed to get file data\n");
-				exit(2);
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
 			}
 
 			memcpy(&reg_offsets[0],CompPtr,num_regions_x*num_regions_y*4);
@@ -712,7 +898,10 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 			{
 				__debugbreak();
 				printf("Failed to get file data\n");
-				exit(2);
+				if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+					return 0;
+				else
+					exit(-1);
 			}
 			memcpy(&reg_offsets[0],CompPtr,num_regions_x*num_regions_y*4);
 			FreeFileData(fd);
@@ -729,25 +918,42 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 		{
 			for(x_reg = mincols/x_region_size;x_reg < num_regions_x;x_reg++)
 			{
-				if(StartCompPtr)
+				roff = reg_offsets[y_reg*num_regions_x+x_reg];
+                if (roff != 0xFFFFFFFF) 
 				{
-					CompPtr = StartCompPtr + reg_offsets[y_reg*num_regions_x+x_reg] - sizeof(frameHdr) + 8;
-				}
-				else
-				{
-					int loffset = reg_offsets[y_reg*num_regions_x+x_reg] - sizeof(frameHdr) + 8;
-					int tlen = 3*x_region_size*y_region_size;
-					if(tlen > ((int)frameHdr.len - loffset - 16))
-						tlen = frameHdr.len-loffset-16;
-					CompPtr = (unsigned char *)GetFileData(fd,offset+loffset,tlen,cksum);
+                    //printf("Region inside window: %d ",regionNum);
+			           if (regionalT0[y_reg*num_regions_x+x_reg] == -1) {
+                                       if (frame == 1) {
+				           regionalT0[y_reg*num_regions_x+x_reg] = -2;
+                                       }
+                                       else 
+                                           regionalT0[y_reg*num_regions_x+x_reg] = frame;
+                                    }
 
-					if(CompPtr == NULL)
+
+					if(StartCompPtr)
 					{
-						__debugbreak();
-						printf("Failed to get file data\n");
-						exit(2);
+						CompPtr = StartCompPtr + reg_offsets[y_reg*num_regions_x+x_reg] - sizeof(frameHdr) + 8;
 					}
+					else
+					{
+						int loffset = reg_offsets[y_reg*num_regions_x+x_reg] - sizeof(frameHdr) + 8;
+						int tlen = 3*x_region_size*y_region_size;
+						if(tlen > ((int)frameHdr.len - loffset - 16))
+							tlen = frameHdr.len-loffset-16;
+						CompPtr = (unsigned char *)GetFileData(fd,offset+loffset,tlen,cksum);
 
+						if(CompPtr == NULL)
+						{
+							__debugbreak();
+							printf("Failed to get file data\n");
+							if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+								return 0;
+							else
+								exit(-1);
+						}
+
+					}
 				}
 				state = 0; // first entry better be a state change
 				nelems_x = x_region_size;
@@ -765,16 +971,31 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 //					ptr = (int16_t *)(frame_data + ((y+(y_reg*y_region_size))*w + (x_reg*x_region_size)));
 					// calculate imagePtr
 					realx=x_reg*x_region_size;
-					imagePtr = (imageFramePtr + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+					if(imageFramePtr)
+						imagePtr = (imageFramePtr + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
+					else
+						imagePtr = NULL;
 					// calculate WholeFrame
-					WholeFrame = (WholeFrameOrig + (realy*cols + realx));
+					WholeFrame = (LocalWholeFrameOriginal + (realy*cols + realx));
+					PrevWholeFrame = (PrevWholeFrameOriginal + (realy*cols + realx));
 
 					for(x=0;x<(int)nelems_x;)
 					{
+                        if (roff == 0xFFFFFFFF) 
+						{
+							if(imagePtr)
+							{
+								if(realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows)
+									*imagePtr = *WholeFrame;
+								 imagePtr++;
+							}
+                            *WholeFrame++ = *PrevWholeFrame++;
+                            realx++;
+                            x++;
+                            continue;
+                        }
 						if ((unsigned char) CompPtr[0] == KEY_0)
 						{
-							LastState = state;
-							LastCompPtr = CompPtr;
 							if ((unsigned char) CompPtr[1] == KEY_16_1)
 								state = 16;
 							else
@@ -892,8 +1113,9 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 
 						for(i=0;i<8;i++)
 						{
-							Val[i] += WholeFrame[i];
+							Val[i] += PrevWholeFrame[i];
 						}
+						PrevWholeFrame += 8;
 
 						for(i=0;i<8;i++)
 						{
@@ -950,482 +1172,8 @@ int LoadCompressedRegionImage(DeCompFile *fd, short *out, int rows, int cols, in
 		offset += len;
 	}
 
-	if(mincols==0 && maxcols == cols && minrows==0 && maxrows==rows)
-	{
-		len = 4;
-		cksmPtr = (unsigned char *)GetFileData(fd, offset, len,tmpcksum);
-		if ((end_frame >= (totalFrames-1)) && cksmPtr)
-		{
-			// there is a checksum?
-			tmpcksum = cksmPtr[3];
-			tmpcksum |= cksmPtr[2] << 8;
-			tmpcksum |= cksmPtr[1] << 16;
-			tmpcksum |= cksmPtr[0] << 24;
-			if(tmpcksum != cksum)
-			{
-				printf("checksums don't match %x %x %x-%x-%x-%x\n",cksum,tmpcksum,cksmPtr[0],cksmPtr[1],cksmPtr[2],cksmPtr[3]);
-				printf("corrupt file\n");
-				if(!ignoreErrors)
-					exit(2);
-			}
-		}
-		FreeFileData(fd);
-	}
-	free(reg_offsets);
-
-#ifdef DEBUG
-	free(unInterlacedData);
-#endif
-	// try to get a checksum at the end of the file...
-	// if it's there, use it to validate the file.
-	// oterwise, ignore it...
-
-	if (WholeFrameOrig)
-		free(WholeFrameOrig);
-
-	CloseFile(fd);
-
-	return 1;
-}
-
-int LoadRegionBasedAcqImage(DeCompFile *fd, short *out, int rows, int cols, int totalFrames,
-		int start_frame, int end_frame, int *timestamps, int mincols,
-		int minrows, int maxcols, int maxrows,
-		int x_region_size, int y_region_size, unsigned int offset, bool ignoreErrors)
-
-{
-	int frameStride = rows * cols;
-	short *imagePtr = (short *) out;
-	unsigned char *CompPtr,*LastCompPtr,*StartCompPtr;
-	unsigned char *cksmPtr;
-	short *PrevPtr;
-	int frame, x, y, len;
-	unsigned short val;
-	short Val[8];
-	unsigned int state = 0,LastState=0; // first entry better be a state change
-	unsigned int total = 0;
-	unsigned int Transitions = 0;
-	unsigned int cksum=0;
-	unsigned int tmpcksum=0;
-//	unsigned int doneOnce[20] = {0};
-
-	struct _expmt_hdr_cmp_frame frameHdr;
-	unsigned short *WholeFrameOrig = NULL, *WholeFrame = NULL;
-	unsigned short *unInterlacedData = NULL;
-	short *imageFramePtr = NULL;
-#ifdef DEBUG
-	unsigned short *UnCompressPtr;
-	unInterlacedData = (unsigned short *)malloc(2*frameStride);
-#endif
-
-	WholeFrameOrig = WholeFrame = (unsigned short *) malloc(2 * frameStride);
-
-	uint32_t y_reg,x_reg,i;
-	uint32_t nelems_x,nelems_y;
-	int realx,realy;
-//	unsigned char rgroupCksum,groupCksum;
-
-	uint32_t num_regions_x = cols/x_region_size;
-	uint32_t num_regions_y = rows/y_region_size;
-	if(cols%x_region_size)
-		num_regions_x++;
-	if(rows%y_region_size)
-		num_regions_y++;
-
-	uint32_t *reg_offsets = (uint32_t *)malloc(num_regions_x*num_regions_y*4);
-	CompPtr = (unsigned char *)GetFileData(fd, 0, offset,cksum);
-	FreeFileData(fd); // for cksum
-
-	for (frame = 0; frame <= end_frame; frame++)
-	{
-		if (frame >= start_frame && frame <= end_frame)
-			imageFramePtr = out + ((frame-start_frame)*(maxcols-mincols)*(maxrows-minrows));
-		else
-			imageFramePtr = NULL;
-
-		WholeFrame = WholeFrameOrig;
-		PrevPtr = (short *) WholeFrame;
-
-#ifdef DEBUG
-		len = 2*frameStride + sizeof(struct _expmt_hdr_cmp_frame);
-		CompPtr = GetFileData(fd,offset,len,cksum);
-		if(CompPtr == NULL)
-		{
-			printf("corrupt file\n");
-			exit(2);
-		}
-
-
-		frameHdr.timestamp = *(unsigned int *)CompPtr;
-		CompPtr += 4;
-
-		UnCompressPtr = (unsigned short *)CompPtr;
-		for(y=0;y<frameStride;y++)
-		unInterlacedData[y] = BYTE_SWAP_2(UnCompressPtr[y]);
-
-		CompPtr += 2*frameStride;
-		memcpy(&frameHdr.len,CompPtr,sizeof(frameHdr)-4);
-
-#else
-
-
-		len = sizeof(struct _expmt_hdr_cmp_frame);
-
-		CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
-		if(CompPtr == NULL)
-		{
-			__debugbreak();
-			printf("corrupt file! Failed to get file data\n");
-			exit(2);
-		}
-
-
-		memcpy(&frameHdr, CompPtr, len);
-#endif
-		ByteSwap4(frameHdr.Compressed);
-		ByteSwap4(frameHdr.Transitions);
-		ByteSwap4(frameHdr.len);
-		ByteSwap4(frameHdr.sentinel);
-		ByteSwap4(frameHdr.timestamp);
-		ByteSwap4(frameHdr.total);
-
-		//printf("hdr: offset=%d Comp=%d\n",offset,frameHdr.Compressed);
-
-		// Get TimeStamp
-		if (timestamps && (frame >= start_frame) && (frame <= end_frame))
-			timestamps[frame - start_frame] = frameHdr.timestamp;
-
-                //printf("Frame num: %d Time: %d\n", frame, frameHdr.timestamp);
-		if(!frameHdr.Compressed)
-		{
-			// subtract off the un-used bytes from the checksum
-			for(y=8;y<len;y++)
-				cksum -= (unsigned char)CompPtr[y];
-			FreeFileData(fd);
-			offset += 8; // special because we didn't use the whole header
-
-
-			len = rows*cols*2;
-			CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
-			if(CompPtr == NULL)
-			{
-				__debugbreak();
-				printf("corrupt file\n");
-				exit(2);
-			}
-
-			// read in the first frame directly
-			for (y = 0; y < rows; y++)
-			{
-				for (x = 0; x < cols; x++)
-				{
-					val = *(unsigned short *) CompPtr;
-					if (imageFramePtr && x >= mincols && x < maxcols && y >= minrows && y < maxrows)
-					{
-						*imageFramePtr++ = (short) (BYTE_SWAP_2(val) & 0x3fff);
-					}
-					*WholeFrame = (short) (BYTE_SWAP_2(val) & 0x3fff);
-					total += *WholeFrame++;
-
-					CompPtr += 2;
-				}
-			}
-                        
-			FreeFileData(fd);
-			offset += len;
-                        //printf("offset: %d\n", offset);
-			continue;  // done with this frame
-		}
-		else
-		{
-			if (frameHdr.sentinel != PLACEKEY)
-			{
-				printf("corrupt file!  No Sentinel\n");
-				__debugbreak();
-				if(!ignoreErrors)
-					exit(2);
-			}
-
-			FreeFileData(fd);
-			offset += len;
-                        //printf("offset: %d\n", offset);
-		}
-		len = frameHdr.len - sizeof(frameHdr) + 8;
-		if(minrows==0 && mincols==0 && maxrows==rows && maxcols==cols)
-		{
-			StartCompPtr = CompPtr = (unsigned char *)GetFileData(fd, offset, len,cksum);
-			//printf("frame=%d len=%d\n",frame,len);
-			if(CompPtr == NULL)
-			{
-				__debugbreak();
-				printf("Failed to get file data\n");
-				exit(2);
-			}
-
-			memcpy(&reg_offsets[0],CompPtr,num_regions_x*num_regions_y*4);
-		}
-		else
-		{
-			StartCompPtr = NULL;
-			CompPtr = (unsigned char *)GetFileData(fd,offset,num_regions_x*num_regions_y*4,cksum);
-			if(CompPtr == NULL)
-			{
-				__debugbreak();
-				printf("Failed to get file data\n");
-				exit(2);
-			}
-			memcpy(&reg_offsets[0],CompPtr,num_regions_x*num_regions_y*4);
-			FreeFileData(fd);
-		}
-		for(i=0;i<num_regions_x*num_regions_y;i++)
-			reg_offsets[i] = BYTE_SWAP_4(reg_offsets[i]);
-		// the offsets are now ready
-//		CompPtr += num_regions_x*num_regions_y*4; // go past the direct indexes
-
-		total = 0;
-		Transitions = 0;
-	        int regionNum = 0;
-		for(y_reg = minrows/y_region_size;y_reg < num_regions_y;y_reg++)
-		{
-			for(x_reg = mincols/x_region_size;x_reg < num_regions_x;x_reg++)
-			{
-                                regionNum = y_reg*num_regions_x+x_reg;
-                                if (reg_offsets[y_reg*num_regions_x+x_reg] != 0xFFFFFFFF) {
-                                    //printf("Region inside window: %d ",regionNum);
-				    if(StartCompPtr)
-				    {
-					CompPtr = StartCompPtr + reg_offsets[regionNum] - sizeof(frameHdr) + 8;
-				    }
-				    else
-				    {
-					int loffset = reg_offsets[regionNum] - sizeof(frameHdr) + 8;
-					int tlen = 3*x_region_size*y_region_size;
-					if(tlen > ((int)frameHdr.len - loffset - 16))
-						tlen = frameHdr.len-loffset-16;
-					CompPtr = (unsigned char *)GetFileData(fd,offset+loffset,tlen,cksum);
-
-					if(CompPtr == NULL)
-					{
-						__debugbreak();
-						printf("Failed to get file data\n");
-						exit(2);
-					}
-				    }
-                                }
-                                else {
-                                    //printf("Region outside window: %d Total: %x\n", regionNum, total);
-				}     
-                           
-				state = 0; // first entry better be a state change
-				nelems_x = x_region_size;
-				nelems_y = y_region_size;
-
-				if (((x_reg+1)*x_region_size) > (uint32_t)cols)
-					nelems_x = cols - x_reg*x_region_size;
-				if (((y_reg+1)*y_region_size) > (uint32_t)rows)
-					nelems_y = rows - y_reg*y_region_size;
-
-				realy=y_reg*y_region_size;
-
-				for(y = 0;y<(int)nelems_y;y++,realy++)
-				{
-//					ptr = (int16_t *)(frame_data + ((y+(y_reg*y_region_size))*w + (x_reg*x_region_size)));
-					// calculate imagePtr
-					realx=x_reg*x_region_size;
-					imagePtr = (imageFramePtr + ((realy - minrows)*(maxcols-mincols) + (realx - mincols)));
-					// calculate WholeFrame
-					WholeFrame = (WholeFrameOrig + (realy*cols + realx));
-
-					for(x=0;x<(int)nelems_x;)
-					{
-                                                if (reg_offsets[y_reg*num_regions_x+x_reg] == 0xFFFFFFFF) {
-                                                    if(realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows)
-                                                        *imagePtr = *WholeFrame;
-                                                     imagePtr++;
-                                                     WholeFrame++;
-                                                     realx++;
-                                                     x++;
-                                                    continue;
-                                                }
-						if ((unsigned char) CompPtr[0] == KEY_0)
-						{
-							LastState = state;
-							LastCompPtr = CompPtr;
-							if ((unsigned char) CompPtr[1] == KEY_16_1)
-								state = 16;
-							else
-								state = CompPtr[1] & 0xf;
-							CompPtr += 2;
-							Transitions++;
-						}
-
-						switch (state)
-						{
-						case 3:
-							// get 8 values
-							Val[0] = (CompPtr[0] >> 5) & 0x7;
-							Val[1] = (CompPtr[0] >> 2) & 0x7;
-							Val[2] = ((CompPtr[0] << 1) & 0x6) | ((CompPtr[1] >> 7) & 1);
-							Val[3] = ((CompPtr[1] >> 4) & 0x7);
-							Val[4] = ((CompPtr[1] >> 1) & 0x7);
-							Val[5] = ((CompPtr[1] << 2) & 0x4) | ((CompPtr[2] >> 6) & 3);
-							Val[6] = ((CompPtr[2] >> 3) & 0x7);
-							Val[7] = ((CompPtr[2] ) & 0x7);
-							CompPtr += 3;
-							break;
-
-						case 4:
-							Val[0] = (CompPtr[0] >> 4) & 0xf;
-							Val[1] = (CompPtr[0]) & 0xf;
-							Val[2] = (CompPtr[1] >> 4) & 0xf;
-							Val[3] = (CompPtr[1]) & 0xf;
-							Val[4] = (CompPtr[2] >> 4) & 0xf;
-							Val[5] = (CompPtr[2]) & 0xf;
-							Val[6] = (CompPtr[3] >> 4) & 0xf;
-							Val[7] = (CompPtr[3]) & 0xf;
-							CompPtr += 4;
-							break;
-
-						case 5:
-							Val[0] = (CompPtr[0] >> 3) & 0x1f;
-							Val[1] = ((CompPtr[0] << 2) & 0x1c) | ((CompPtr[1] >> 6) & 0x3);
-							Val[2] = (CompPtr[1] >> 1) & 0x1f;
-							Val[3] = ((CompPtr[1] << 4) & 0x10) | ((CompPtr[2] >> 4) & 0xf);
-							Val[4] = ((CompPtr[2] << 1) & 0x1e) | ((CompPtr[3] >> 7) & 0x1);
-							Val[5] = (CompPtr[3] >> 2) & 0x1f;
-							Val[6] = ((CompPtr[3] << 3) & 0x18) | ((CompPtr[4] >> 5) & 0x7);
-							Val[7] = (CompPtr[4]) & 0x1f;
-							CompPtr += 5;
-							break;
-
-						case 6:
-							Val[0] = (CompPtr[0] >> 2) & 0x3f;
-							Val[1] = ((CompPtr[0] << 4) & 0x30) | ((CompPtr[1] >> 4) & 0xf);
-							Val[2] = ((CompPtr[1] << 2) & 0x3c) | ((CompPtr[2] >> 6) & 0x3);
-							Val[3] = (CompPtr[2] & 0x3f);
-							Val[4] = (CompPtr[3] >> 2) & 0x3f;
-							Val[5] = ((CompPtr[3] << 4) & 0x30) | ((CompPtr[4] >> 4) & 0xf);
-							Val[6] = ((CompPtr[4] << 2) & 0x3c) | ((CompPtr[5] >> 6) & 0x3);
-							Val[7] = (CompPtr[5] & 0x3f);
-							CompPtr += 6;
-							break;
-
-
-						case 7:
-							Val[0] = (CompPtr[0] >> 1) & 0x7f;
-							Val[1] = ((CompPtr[0] << 6) & 0x40) | ((CompPtr[1] >> 2) & 0x3f);
-							Val[2] = ((CompPtr[1] << 5) & 0x60) | ((CompPtr[2] >> 3) & 0x1f);
-							Val[3] = ((CompPtr[2] << 4) & 0x70) | ((CompPtr[3] >> 4) & 0x0f);
-							Val[4] = ((CompPtr[3] << 3) & 0x78) | ((CompPtr[4] >> 5) & 0x07);
-							Val[5] = ((CompPtr[4] << 2) & 0x7c) | ((CompPtr[5] >> 6) & 0x3);
-							Val[6] = ((CompPtr[5] << 1) & 0x7e) | ((CompPtr[6] >> 7) & 0x1);
-							Val[7] = (CompPtr[6] & 0x7f);
-							CompPtr += 7;
-							break;
-
-						case 8:
-							Val[0] = CompPtr[0];
-							Val[1] = CompPtr[1];
-							Val[2] = CompPtr[2];
-							Val[3] = CompPtr[3];
-							Val[4] = CompPtr[4];
-							Val[5] = CompPtr[5];
-							Val[6] = CompPtr[6];
-							Val[7] = CompPtr[7];
-							CompPtr += 8;
-							break;
-
-						case 16:
-							Val[0] = (CompPtr[0] << 8) | CompPtr[1];
-							Val[1] = (CompPtr[2] << 8) | CompPtr[3];
-							Val[2] = (CompPtr[4] << 8) | CompPtr[5];
-							Val[3] = (CompPtr[6] << 8) | CompPtr[7];
-							Val[4] = (CompPtr[8] << 8) | CompPtr[9];
-							Val[5] = (CompPtr[10] << 8) | CompPtr[11];
-							Val[6] = (CompPtr[12] << 8) | CompPtr[13];
-							Val[7] = (CompPtr[14] << 8) | CompPtr[15];
-							CompPtr += 16;
-							break;
-
-						default:
-							{
-								printf("corrupt file\n");
-								__debugbreak();
-								if(!ignoreErrors)
-									exit(2);
-							}
-							break;
-
-						}
-
-//						groupCksum = *CompPtr++;
-
-						if(state != 16)
-						{
-							for(i=0;i<8;i++)
-								Val[i] -= 1 << (state-1);
-						}
-
-						for(i=0;i<8;i++)
-						{
-							Val[i] += WholeFrame[i];
-						}
-
-						for(i=0;i<8;i++)
-						{
-//							rgroupCksum += (unsigned char)Val[i];
-							if (imageFramePtr)
-							{
-								if(realx >= mincols && realx < maxcols && realy >= minrows && realy	< maxrows)
-									*imagePtr = Val[i];
-								imagePtr++;
-							}
-							total += Val[i];
-							if (unInterlacedData && Val[i] != unInterlacedData[y
-									* cols + x])
-								printf("doesn't match %x %x\n", Val[i],
-										unInterlacedData[y * cols + x]);
-
-							*WholeFrame++ = Val[i];
-							x++;
-							realx++;
-						}
-//						if(rgroupCksum != groupCksum)
-//						{
-//							printf("Here's a problem %x %x!!\n",groupCksum,rgroupCksum);
-//							exit(-1);
-//						}
-					}
-				}
-				if(StartCompPtr == NULL)
-				{
-					FreeFileData(fd);
-				}
-			}
-		}
-                 
-		if(mincols==0 && maxcols == cols && minrows==0 && maxrows==rows)
-		{
-			if (Transitions != frameHdr.Transitions)
-			{
-				printf("transitions don't match %x %x!!\n",Transitions,frameHdr.Transitions);
-				printf("corrupt file\n");
-				__debugbreak();
-				if(!ignoreErrors)
-					exit(2);
-			}
-			if (total != frameHdr.total)
-			{
-				printf("totals don't match!! %x %x %d\n",total,frameHdr.total,offset + len);
-				printf("corrupt file\n");
-				__debugbreak();
-				if(!ignoreErrors)
-					exit(2);
-			}
-		}
-		FreeFileData(fd);
-		offset += len;
-	}
+        InterpolateFramesBeforeT0(regionalT0, out, rows, cols, start_frame, end_frame, 
+            mincols, minrows, maxcols, maxrows, x_region_size, y_region_size, timestamps);
 
 	if(mincols==0 && maxcols == cols && minrows==0 && maxrows==rows)
 	{
@@ -1464,9 +1212,6 @@ int LoadRegionBasedAcqImage(DeCompFile *fd, short *out, int rows, int cols, int 
 
 	return 1;
 }
-
-
-
 
 
 static int chan_interlace[] =
@@ -1667,7 +1412,10 @@ int LoadImage(char *fname, short *out, int offset, int interlaceType,
 	if(fd == NULL)
 	{
 		printf("failed to open %s\n",fname);
-		exit(-1);
+		if(ignoreErrors&IGNORE_ALWAYS_RETURN)
+			return 0;
+		else
+			exit(-1);
 	}
 
 	if (maxcols == 0)
@@ -1680,18 +1428,12 @@ int LoadImage(char *fname, short *out, int offset, int interlaceType,
 		rc = LoadCompressedImage(fd, out, rows, cols, totalFrames, start_frame, end_frame,
 				timestamps, mincols, minrows, maxcols, maxrows,ignoreErrors);
 	}
-	else if (interlaceType == 5)
+	else if ((interlaceType == 5) || (interlaceType == 6))
 	{
 		rc = LoadCompressedRegionImage(fd, out, rows, cols, totalFrames, start_frame, end_frame,
 				timestamps, mincols, minrows, maxcols, maxrows,
 				x_region_size,y_region_size,offset,ignoreErrors);
 	}
-        else if (interlaceType == 6) 
-        {
-		rc = LoadRegionBasedAcqImage(fd, out, rows, cols, totalFrames, start_frame, end_frame,
-				timestamps, mincols, minrows, maxcols, maxrows,
-				x_region_size,y_region_size,offset,ignoreErrors);
-        }
 	else
 	{
 		rc = LoadUnCompressedImage(fd, out, offset, interlaceType, rows, cols,
@@ -1750,7 +1492,7 @@ extern "C" int __declspec(dllexport) deInterlace_c(
 
 	DeCompFile *fd;
 	struct _file_hdr hdr;
-	unsigned short frames, channels, interlaceType, uncompFrames=0;
+	unsigned short frames, interlaceType, uncompFrames=0;
 	int rows, cols;
 	int x_region_size=0,y_region_size=0;
 	int offset = 0;
@@ -1788,7 +1530,7 @@ extern "C" int __declspec(dllexport) deInterlace_c(
 		cols = BYTE_SWAP_2(expHdr.cols);
 		frames = BYTE_SWAP_2(expHdr.frames_in_file);
 		uncompFrames = BYTE_SWAP_2(expHdr.uncomp_frames_in_file);
-		channels = BYTE_SWAP_2(expHdr.channels);
+//		channels = BYTE_SWAP_2(expHdr.channels);
 		interlaceType = BYTE_SWAP_2(expHdr.interlaceType);
 		//unsigned int sample_rate = BYTE_SWAP_4(expHdr.sample_rate);
 		//unsigned short frame_interval = BYTE_SWAP_2(expHdr.frame_interval);
@@ -1899,14 +1641,14 @@ extern "C" int __declspec(dllexport) deInterlaceData(
 	if(fp)
 	{
 		fprintf(fp,"deInterlaceData called with\n");
-		fprintf(fp,"fname=%s\n",fname);
-		fprintf(fp,"_out=%p %p\n",_out,(_out?*_out:NULL));
-		fprintf(fp,"start_frame %d\n",start_frame);
-		fprintf(fp,"end_frame %d\n",end_frame);
-		fprintf(fp,"mincols %d\n",mincols);
-		fprintf(fp,"minrows %d\n",minrows);
-		fprintf(fp,"maxcols %d\n",maxcols);
-		fprintf(fp,"maxrows %d\n",maxrows);
+		fprintf(fp,"  fname=%s\n",fname);
+		fprintf(fp,"  _out=%p %p\n",_out,(_out?*_out:NULL));
+		fprintf(fp,"  start_frame %d\n",start_frame);
+		fprintf(fp,"  end_frame %d\n",end_frame);
+		fprintf(fp,"  mincols %d\n",mincols);
+		fprintf(fp,"  minrows %d\n",minrows);
+		fprintf(fp,"  maxcols %d\n",maxcols);
+		fprintf(fp,"  maxrows %d\n",maxrows);
 		fclose(fp);
 	}
 #endif
@@ -1924,12 +1666,28 @@ extern "C" int __declspec(dllexport) deInterlaceHdr(
 #endif
         char *fname, int *_rows, int *_cols, int *_frames, int *_unCompFrames)
 {
+#if 0
+	char fname2[256];
+
+	sprintf(fname2,"%s_params",fname);
+	FILE *fp = fopen(fname2,"w");
+	if(fp)
+	{
+		fprintf(fp,"deInterlaceHdr called with\n");
+		fprintf(fp,"  fname=%s\n",fname);
+		fprintf(fp,"  rows %d\n",*_rows);
+		fprintf(fp,"  cols %d\n",*_cols);
+		fprintf(fp,"  frames %d\n",*_frames);
+		fprintf(fp,"  uncompFrames %d\n",*_unCompFrames);
+		fclose(fp);
+	}
+#endif
 	return deInterlace_c(fname,NULL,NULL,_rows,_cols,_frames,_unCompFrames,0,0,0,0,0,0,false);
 }
 
 
 
-#if 0
+#ifdef WIN32
 int main(int argc, char *argv[])
 {
 	int start_frame = 0;

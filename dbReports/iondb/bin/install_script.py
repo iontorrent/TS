@@ -57,7 +57,7 @@ def mungeScript(filePath):
         os.system(com)
         print "R&D mod to TLScript carried out"
     except:
-        print "Could not hack up the TLScript.py.  Sorry Rob."
+        print "Could not hack up %s.  Sorry Rob." % filePath
                 
     
 def add_location():
@@ -552,7 +552,7 @@ if __name__=="__main__":
     try:
         if os.path.isfile (int_test_file):
             # Modify the TLScript.py for R&D internal use
-            mungeScript(sys.argv[1])
+            mungeScript('/usr/lib/python2.6/dist-packages/ion/reports/BlockTLScript.py')
             
         addScript(sys.argv[1])
     except:
@@ -676,6 +676,7 @@ if __name__=="__main__":
     try:
         add_sequencing_kit('IonSeqKit','Ion Sequencing Kit','4468997')
         add_sequencing_kit('IonSeq200Kit','Ion Sequencing 200 Kit','4471258')
+        add_sequencing_kit('IonPGM200Kit','Ion PGM(tm) 200 Sequencing Kit','4474004')
     except:
         print "Adding sequencing_kit failed"
         print traceback.format_exc()

@@ -27,6 +27,31 @@
 #include "Utils.h"
 #include "PinnedWellReporter.h"
 
+void DetermineCropWidthAndHeight(int& cropx, int& cropy, int& cropw, int& croph, int w, int h) {
+    if(cropw == 0)
+    {
+        cropx = 0;
+	cropw = w;
+    }
+    if(croph == 0)
+    {
+	cropy = 0;
+	croph = h;
+    }
+    if(cropw & 7)
+    {
+	cropw += 7;
+	cropw  &= ~7;
+    }
+    if(croph & 7)
+    {
+	croph += 7;
+	croph &= ~7;
+    }
+}
+
+
+
 void usage(int cropx, int cropy, int cropw, int croph) {
   fprintf (stdout, "Crop - Utility to extract a subregion from a raw data set.  Output directory is created named './converted'.\n");
   fprintf (stdout, "options:\n");
@@ -43,6 +68,10 @@ void usage(int cropx, int cropy, int cropw, int croph) {
   fprintf (stdout, "   -v\tPrints version information and exits.\n");
   fprintf (stdout, "   -c\tOutput a variable rate frame compressed data set.  Default to whole chip\n");
   fprintf (stdout, "   -n\tOutput a non-variable rate frame compressed data set.\n");
+  fprintf (stdout, "   -r\tOutput a regional t0 based dataset.\n");
+  fprintf (stdout, "   -g\tProvide exclusion mask file for the chip type for which crop is being run. Should be supplied when -r is supplied.\n");
+  fprintf (stdout, "   -e\tProvide t0 file for the chip type for which crop is being run. Should be supplied when -r is supplied.\n");
+  fprintf (stdout, "   -l\tOutput a time compressed dataset pegged at max acquisition time of 5s.\n");
   fprintf (stdout, "   -d\tOutput directory.\n");
   fprintf (stdout, "\n");
   fprintf (stdout, "usage:\n");
@@ -53,13 +82,21 @@ void usage(int cropx, int cropy, int cropw, int croph) {
 
 int main(int argc, char *argv[])
 {
-	int cropx = 624, cropy = 125, cropw = 100, croph = 100;
+	//int cropx = 624, cropy = 125, cropw = 100, croph = 100;
+	int cropx = 0, cropy = 0, cropw = 0, croph = 0;
 	char *expPath  = const_cast<char*>(".");
 	char *destPath = const_cast<char*>("./converted");
 	char *oneFile = NULL;
 	int alternate_sampling=0;
 	int doAscii = 0;
 	int vfc = 1;
+        int regBasedAcq = 0;
+        int TimeBasedAcq = 0;
+        int excludeMask = 0;
+        int useSeparatorT0File = true;
+        char* separatorIn = const_cast<char*>("./separator.summary.txt");
+        char* t0In = const_cast<char*>("./T0file.txt");
+        char* excludeMaskFile = "/opt/ion/config/exclusionMask_318.bin";
 	int dont_retry = 0;
 	if (argc == 1) {
 	  usage(cropx, cropy, cropw, croph);
@@ -136,7 +173,26 @@ int main(int argc, char *argv[])
 				argcc++;
 				destPath = argv[argcc];
 			break;
-
+                        case 'r':
+				regBasedAcq=1;
+			break;
+			case 'l':
+				TimeBasedAcq=1;
+			break;
+		        case 't':
+                                argcc++;
+                                separatorIn = argv[argcc];	
+                        break;
+                        case 'e':
+                                argcc++;
+                                t0In = argv[argcc];	
+                                useSeparatorT0File = false;
+                        break;
+                        case 'g':
+                                argcc++; 
+                                excludeMaskFile = argv[argcc];
+                                excludeMask = 1;
+                        break;
 			default:
 				argcc++;
 				fprintf (stdout, "\n");
@@ -210,14 +266,29 @@ int main(int argc, char *argv[])
 		if (loader.LoadRaw(name, 0, allocate, false)) {
 			allocate = false;
 			const RawImage *raw = loader.GetImage();
+                        DetermineCropWidthAndHeight(cropx, cropy, cropw, croph, raw->cols, raw->rows);
 			struct timeval tv;
 			double startT;
 			double stopT;
 			gettimeofday(&tv, NULL);
 			startT = (double) tv.tv_sec + ((double) tv.tv_usec/1000000);
 
-			printf("Converting raw data %d %d frames: %d UncompFrames: %d\n", raw->cols, raw->rows, raw->frames, raw->uncompFrames);
 			saver.SetData(&loader);
+                        if (regBasedAcq && i == 0) {
+
+                            if (excludeMask)
+                                saver.GenerateExcludeMaskRegions((const char*)excludeMaskFile);
+
+                            if (useSeparatorT0File)
+                                saver.PopulateCroppedRegionalAcquisitionWindow((const char*)separatorIn, "t0Map.txt", 
+                                    cropx, cropy, cropw, croph, raw->timestamps[0]);
+                            else 
+                                saver.ParseT0File((const char*)t0In, "t0Map.txt", 
+                                    cropx, cropy, cropw, croph, raw->timestamps[0]);
+                            
+
+                        }
+			printf("Converting raw data %d %d frames: %d UncompFrames: %d\n", raw->cols, raw->rows, raw->frames, raw->uncompFrames);
 			if (doAscii) {
 				if (!saver.WriteAscii(destName, cropx, cropy, cropw, croph))
 					break;
@@ -225,15 +296,25 @@ int main(int argc, char *argv[])
 			else {
 				if(vfc)
 				{
-					if (!saver.WriteVFC(destName, cropx, cropy, cropw, croph))
-						break;
-				}
-				else
-				{
-					if (!saver.Write(destName, cropx, cropy, cropw, croph))
-						break;
-				}
-			}
+                                            if (regBasedAcq) {
+                                                if (!saver.WriteFrameAveragedRegionBasedAcq(destName, cropx, cropy, cropw, croph)) 
+                                                    break;                                                            
+                                            }
+                                            else if (TimeBasedAcq) { 
+                                                if (!saver.WriteTimeBasedAcq(destName, cropx, cropy, cropw, croph))   
+                                                    break;                                                            
+                                            }
+                                            else { 
+                                                if (!saver.WriteVFC(destName, cropx, cropy, cropw, croph))            
+                                                    break;                                                            
+                                            }                                                                         
+                                } 
+                                else                                                                                  
+                                {       
+                                        if (!saver.Write(destName, cropx, cropy, cropw, croph))                       
+                                                break;                                                                
+                                }                                         		
+                        }
 			gettimeofday(&tv, NULL);
 			stopT = (double) tv.tv_sec + ((double) tv.tv_usec/1000000);
 			printf("Converted: %s in %0.2lf sec\n", name,stopT - startT);
@@ -249,4 +330,5 @@ int main(int argc, char *argv[])
 		}
 	}
 }
+
 

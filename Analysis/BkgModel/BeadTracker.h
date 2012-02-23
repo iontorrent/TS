@@ -11,7 +11,7 @@
 #include <math.h>
 #include <assert.h>
 #include <set>
-#include <vector>
+#include <ostream>
 #include "BeadParams.h"
 #include "DiffEqModel.h"
 #include "Mask.h"
@@ -35,17 +35,15 @@ class BeadTracker{
 public:
     // bead parameters
     int  numLBeads;
-    bead_params *params_high;
-    bead_params *params_low;
+    bound_params *params_high;
+    bound_params *params_low;
     bead_params *params_nn;
-
-    std::vector<float> ppf;
-    std::vector<float> ssq;
 
     SequenceItem *seqList;
     int numSeqListItems;
 
     int DEBUG_BEAD;
+    int max_emphasis; // current maximum emphasis vector (?)
     
     // a property of the collection of beads
     // spatially oriented bead data
@@ -62,6 +60,7 @@ public:
     void InitBeadParams();
     void InitRandomSample(Mask& bf, Region& region, const std::set<int>& sample);
     void InitModelBeadParams();
+
     void InitLowBeadParams();
     void InitHighBeadParams();
     void SelectDebugBead();
@@ -71,23 +70,18 @@ public:
     void LimitBeadEvolution(bool first_block, float R_change_max, float copy_change_max);
     float KeyNormalizeReads();
     float KeyNormalizeOneBead(int ibd);
-    void SelectKeyFlowValuesFromBeadIdentity(int *keyval, float *observed, int my_key_id, int keyLen);
+    void SelectKeyFlowValuesFromBeadIdentity(int *keyval, float *observed, int my_key_id, int &keyLen);
     void SelectKeyFlowValues(int *keyval,float *observed, int keyLen);
     void ResetFlowParams(int bufNum, int flow);
-    void LockKeyFlows(int ibd);
-    void UnLockKeyFlows(int ibd);
-    void LockAllBeadKeys();
-    void UnLockAllBeadKeys();
-    void AllBeadAverageError();
-    int UpdateClonalFilter();
-    int FindClonalReads();
+
+    void CheckKey();
+    void UpdateClonalFilter();
+    void FinishClonalFilter();
     float FindMeanDmult();
     void RescaleDmult(float scale);
     float CenterDmult();
     void RescaleRatio(float scale);
-    void MeanResidualByFlow(float *flow_res_mean);
-    void RescaleResidualByMeanPerFlow(float *flow_res_mean);
-    void DetectCorrupted();
+
     // likely not the right place for this, but does iterate over beads
     int FindKeyID(Mask *bfMask, int ax, int ay);
     void AssignKeyID(Region *region, Mask *bfmask);

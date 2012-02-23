@@ -30,7 +30,7 @@ class JSONEncoder(DjangoJSONEncoder):
 
 def dumps(value):
     assert isinstance(value, dict)
-    return simplejson.dumps(value, cls=JSONEncoder)
+    return simplejson.dumps(value, cls=JSONEncoder, separators=(',', ':'))
 
 def loads(txt):
    try:

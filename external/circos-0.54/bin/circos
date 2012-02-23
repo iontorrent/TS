@@ -1,0 +1,273 @@
+#!/bin/env perl
+
+=pod
+
+=head1 NAME
+
+                                    ____ _
+                                   / ___(_)_ __ ___ ___  ___
+                                  | |   | | '__/ __/ _ \/ __|
+                                  | |___| | | | (_| (_) \__ \
+                                   \____|_|_|  \___\___/|___/
+
+                                                round is good
+
+circos - generate publication-quality, circularly-composited plots 
+    of data and annotations layered on chromosome ideograms
+
+=head1 SYNOPSIS
+
+  circos -conf circos.conf [-silent] [-debug] [-help] [-man] 
+
+=head1 DESCRIPTION
+
+This is a command line interface to Circos. Most settings are meant to be passed using a configuration file.
+
+All command line options listed below can be defined in the configuration file. Defining them on the command line is useful when using a configuration template for many images.
+
+=head1 OPTIONS
+
+=head2 Configuration
+
+=over
+
+=item -configfile FILE
+
+Name of configuration file. This is required.
+
+=back
+
+=head2 Ideograms
+
+=over
+
+=item -chromosomes STRING
+
+=item -chromosomes_order STRING
+
+=item -chromosomes_scale STRING
+
+=item -chromosomes_radius STRING
+
+Defines list, order, scale and radius of ideograms.
+
+=back
+
+=head2 Output Format
+
+=over
+
+=item -png
+
+=item -24bit
+
+=item -svg
+
+Toggles output of PNG and SVG files. 
+
+When using transparency, make sure that PNG output is 24-bit.
+
+=back
+
+=head2 Output Paths
+
+=over 
+
+=item -outputdir DIR
+
+=item -outputfile FILE
+
+Change the output directory and filename.
+
+=back 
+
+=head2 Input Format
+
+=over
+
+=item -file_delim DELIMITER
+
+Specify the file delimiter for all input data files. By default this
+is a space. Use a tab if you want to have multi-word records in the
+data files (e.g. multi word labels).
+
+=back
+
+=head2 Custom Fields
+
+=over
+
+=item -usertext1 STRING
+
+=item -usertext2 STRING
+
+=item -usertext3 STRING
+
+=item -usertext4 STRING
+
+Custom fields that can be used to change any string in the
+configuration file. The fields are referenced in the configuration
+file using C<__$CONF{usertext1}__>, etc. This is useful if you are
+creating multiple versions of an image with different settings.
+
+For example, in the configuration file you can have
+
+  <link segdup>
+  radius = __$CONF{usertext1}__r
+
+and then call Circos
+
+  bin/circos ... -usertext1 0.9
+  bin/circos ... -usertext1 0.5
+
+=back
+
+=head2 Ticks
+
+=over
+
+=item -show_ticks, -noshow_ticks
+
+=item -show_tick_labels, -noshow_tick_labels
+
+Toggle display of ticks and tick labels.
+
+=back 
+
+=head2 Image Maps
+
+=over
+
+=item -image_map_use
+
+=item -image_map_name MAPNAME
+
+=item -image_map_file FILE
+
+=item -image_map_missing_parameter { exit | removeparam | removeurl }
+
+Controls image map settings. See
+
+  http://mkweb.bcgsc.ca/circos/tutorials/lessons/image_maps
+
+=back
+
+=head2 Debugging
+
+=over
+
+=item -silent 
+
+Generate no reporting.
+
+=item -verbose
+
+Generate verbose reporting.
+
+=item -debug
+
+Turn on debugging output.
+
+=back
+
+=cut
+
+use strict;
+use warnings;
+use FindBin;
+use Getopt::Long;
+use Pod::Usage;
+
+use lib "$FindBin::RealBin";
+use lib "$FindBin::RealBin/../lib";
+use lib "$FindBin::RealBin/lib";
+use Circos;
+
+my %OPT;
+GetOptions(\%OPT,
+	   'imagemap',
+	   'silent',
+	   'verbose+',
+	   'chromosomes=s',
+	   'chromosomes_order=s',
+	   'chromosomes_scale=s',
+	   'chromosomes_radius=s',
+	   'show_ticks!',
+	   'show_tick_labels!',
+	   'outputdir=s',
+	   'outputfile=s',
+	   'usertext1=s',
+	   'usertext2=s',
+	   'usertext3=s',
+	   'usertext4=s',
+	   'tagname',
+	   'png',
+	   'svg',
+	   '24bit',
+	   'file_delim=s',
+	   'image_map_name=s',
+	   'image_map_file=s',
+	   'image_map_use',
+	   'image_map_missing_parameter',
+	   'configfile=s',
+	   'help',
+	   'man',
+	   'debug+'
+	  );
+
+pod2usage() if $OPT{'help'};
+
+pod2usage(-verbose=>2) if $OPT{'man'};
+
+printf("debug: using configuration file input %s\n",$OPT{configfile});
+Circos->run(%OPT);
+
+# -------------------------------------------------------------------
+
+=pod
+
+=head1 AUTHOR
+
+Martin Krzywinski E<lt>martink@bcgsc.caE<gt> L<http://mkweb.bcgsc.ca>
+
+=head1 RESOURCES
+
+L<http://mkweb.bcgsc.ca/circos>
+
+=head1 CITING
+
+If you are using Circos in a publication, please cite as
+
+Krzywinski, M., J. Schein, I. Birol, J. Connors, R. Gascoyne,
+D. Horsman, S. Jones, and M. Marra. 2009. Circos: an Information
+Aesthetic for Comparative Genomics. Genome Res 19:1639-1645.
+
+=head1 CONTRIBUTORS
+
+Ken Youens-Clark E<lt>kyclark@gmail.comE<gt>
+
+=head1 SEE ALSO
+
+Hive plots L<http://www.hiveplot.com>
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2004-2011 Martin Krzywinski, all rights reserved.
+
+This file is part of the Genome Sciences Centre Perl code base.
+
+This script is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This script is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this script; if not, write to the Free Software Foundation,
+Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+=cut

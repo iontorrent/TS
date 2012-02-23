@@ -111,6 +111,85 @@ public:
     }
     PoissonCDFApproxMemo *math_poiss;
 
+    #define PROJECTION_STOP_THRESHOLD   (0.1)
+
+    // does the fit using a completely different (and faster) alternative
+    void ProjectionSearch(float *y)
+    {
+        float tmp_eval[len];
+        float tmp_data[len];
+        float A_guess;
+        float A_new;
+
+        // pre-multiply data by emphasis vector
+        MultiplyVectorByVector(tmp_data, y, residualWeight, len);
+
+        // evalutate function at the current amplitude estimate
+        A_guess = p->Ampl[fnum];
+
+        bool done = false;
+        int iter_cnt = 0;
+        // only allow a few iterations here.  Reads that try to go beyond this are generally poor quality reads
+        // with a very low copy count that can sometimes oscillate and fail to converge.
+        while(!done && (iter_cnt < 30))
+        {
+            iter_cnt++;
+
+            // if the estimate is really small evaluate it at A=PROJECTION_STOP_THRESHOLD
+            if (A_guess < PROJECTION_STOP_THRESHOLD) A_guess = PROJECTION_STOP_THRESHOLD;
+            SingleFlowIncorporationTrace(A_guess,fval_cache);
+            MultiplyVectorByVector(tmp_eval, fval_cache, residualWeight, len);
+    
+            // compute the scaling
+            float denom = cblas_sdot(len,tmp_eval,1,tmp_eval,1);
+            float amult = (cblas_sdot(len,tmp_eval,1,tmp_data,1)/denom);
+            A_new = amult * A_guess;
+
+            // if we are very unlucky...we may have had a divide by zero here
+            if ((A_new != A_new) || (denom == 0.0))
+            {
+                A_new = A_guess;
+                done = true;
+                continue;
+            }
+                
+            // check for min value
+            if (A_new < min_params.Ampl)
+            {
+                A_new = params.Ampl = min_params.Ampl;
+
+                if (enable_fval_cache)
+                    SingleFlowIncorporationTrace(A_new,fval_cache);
+                done = true;
+                continue;
+            }
+
+            // check for max value
+            if (A_new > max_params.Ampl)
+            {
+                A_new = params.Ampl = max_params.Ampl;
+
+                if (enable_fval_cache)
+                    SingleFlowIncorporationTrace(A_new,fval_cache);
+                done = true;
+                continue;
+            }
+
+            // check for done condition (change is less than 1-mer)
+            if (fabs(A_new-A_guess) < PROJECTION_STOP_THRESHOLD)
+            {
+                params.Ampl = A_new;
+                if (enable_fval_cache)
+                    MultiplyVectorByScalar(fval_cache,amult,len);
+                done = true;
+                continue;
+            }
+
+            // do another iteration if necessary
+            A_guess = A_new;
+        }
+    }
+
 protected:
     virtual void Evaluate(float *y, float *params) {
         SingleFlowIncorporationTrace(*params,y);

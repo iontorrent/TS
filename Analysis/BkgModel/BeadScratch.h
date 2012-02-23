@@ -14,7 +14,8 @@
 #include "DiffEqModel.h"
 #include "TimeCompression.h"
 #include "MathOptim.h"
-#include "RegionTracker.h"  
+#include "RegionTracker.h"
+#include "BkgTrace.h"
 
 
 // hold temporary values for a bead
@@ -35,9 +36,11 @@ class BeadScratchSpace{
     // emphasis vector for all flows for this bead
     float   *custom_emphasis;
     float   custom_emphasis_scale[NUMFB];
+    int WhichEmphasis[NUMFB]; // current emphasis indexing used in creating custom_emphasis
     // hold current traces for bead with whatever correction has been done
     float *observed;
     float *shifted_bkg;
+    float cur_shift; // cached tshift for checking if we're current
 
 
     // some buffer sizes for mnemonic purposes
@@ -49,13 +52,15 @@ class BeadScratchSpace{
     void Allocate(int npts,int num_derivatives);
     void ResetXtalkToZero();
     void FillEmphasis(int *my_emphasis, float *source_emphasis[],float *source_emphasis_scale);
-    void FillObserved(FG_BUFFER_TYPE *fg_buffers,int ibd);
+    void SetEmphasis(float *Ampl, int max_emphasis);
+    void CreateEmphasis(float *source_emphasis[], float *source_emphasis_scale);
+    void FillObserved(BkgTrace &my_trace,int ibd);
+    void FillShiftedBkg(BkgTrace &my_trace, float tshift, bool force_fill);
     float CalculateFitError(float *per_flow_output, int numfb);
-    
+    void MultiFlowReturnResiduals(float *y_minus_f);
+    void MultiFlowReturnFval(float *out, int numfb);
 };
 
-
-void CopySignalForFits(float *signal_x, FG_BUFFER_TYPE *pfg, int len);
 
 
 #endif // BEADSCRATCH_H

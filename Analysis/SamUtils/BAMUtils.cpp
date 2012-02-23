@@ -303,11 +303,11 @@ void BAMUtils::dna() {
 				count++;
 				
 			}
-			bool is_error = false;
+			//bool is_error = false;
 
 			if (i.op() == 'S') {
 				soft_clipped_bases += i.len();
-				is_error = true;
+				//is_error = true;
 
 			}
 

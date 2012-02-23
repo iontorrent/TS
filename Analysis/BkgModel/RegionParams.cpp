@@ -99,7 +99,7 @@ void reg_params_setStandardHigh(reg_params *cur, float t0_start)
 
 
   cur->tshift    = 6.5;
-  cur->nuc_shape.sigma = 5.5;
+  cur->nuc_shape.sigma = 8.5; // increase for super slow project
   cur->RatioDrift = 5.0;
   cur->CopyDrift = 1.0;
 
@@ -109,10 +109,10 @@ void reg_params_setStandardHigh(reg_params *cur, float t0_start)
   cur->krate[GNUCINDEX] = 100.0;
   cur->sens = 250.0;       // counts per 10K protons generated
 
-  cur->d[TNUCINDEX] =  50000.0;
-  cur->d[ANUCINDEX] =  50000.0;
-  cur->d[CNUCINDEX] =  50000.0;
-  cur->d[GNUCINDEX] =  50000.0;
+  cur->d[TNUCINDEX] =  1000.0; // decreased
+  cur->d[ANUCINDEX] =  1000.0;
+  cur->d[CNUCINDEX] =  1000.0;
+  cur->d[GNUCINDEX] =  1000.0;
 
   cur->kmax[TNUCINDEX] = 20000.0;
   cur->kmax[ANUCINDEX] = 20000.0;
@@ -208,6 +208,22 @@ void reg_params_setKmax(reg_params *cur, float *kmax_default)
   cur->kmax[ANUCINDEX] = kmax_default[ANUCINDEX];
   cur->kmax[CNUCINDEX] = kmax_default[CNUCINDEX];
   cur->kmax[GNUCINDEX] = kmax_default[GNUCINDEX];
+}
+
+void reg_params_setSigmaMult(reg_params *cur, float *sigma_mult_default)
+{
+  cur->nuc_shape.sigma_mult[TNUCINDEX] = sigma_mult_default[TNUCINDEX];
+  cur->nuc_shape.sigma_mult[ANUCINDEX] = sigma_mult_default[ANUCINDEX];
+  cur->nuc_shape.sigma_mult[CNUCINDEX] = sigma_mult_default[CNUCINDEX];
+  cur->nuc_shape.sigma_mult[GNUCINDEX] = sigma_mult_default[GNUCINDEX];
+}
+
+void reg_params_setT_mid_nuc_delay (reg_params *cur, float *t_mid_nuc_delay_default)
+{
+  cur->nuc_shape.t_mid_nuc_delay[TNUCINDEX] = t_mid_nuc_delay_default[TNUCINDEX];
+  cur->nuc_shape.t_mid_nuc_delay[ANUCINDEX] = t_mid_nuc_delay_default[ANUCINDEX];
+  cur->nuc_shape.t_mid_nuc_delay[CNUCINDEX] = t_mid_nuc_delay_default[CNUCINDEX];
+  cur->nuc_shape.t_mid_nuc_delay[GNUCINDEX] = t_mid_nuc_delay_default[GNUCINDEX];
 }
 
 void reg_params_setSens(reg_params *cur, float sens_default)

@@ -7,7 +7,7 @@
 # cmake build system
 
 MODULES=${MODULES-"
-	Analysis 
+	Analysis
 	alignTools
 	dbReports
 	torrentR
@@ -20,7 +20,7 @@ for M in $MODULES; do
 		for MM in $MODULES; do
 			if [ -d "$MM" ]; then
 				echo " - $MM"
-			else 
+			else
 				echo " - $MM (not found)"
 			fi
 		done
@@ -41,7 +41,7 @@ for MODULE in $MODULES; do
 		cd build/$MODULE
 		cmake $@ -G 'Unix Makefiles' ../../$MODULE
         if [ "$?" != 0 ]; then LOCALERR=1; fi
-		make  
+		make -j3
         if [ "$?" != 0 ]; then LOCALERR=1; fi
 		make test
         if [ "$?" != 0 ]; then LOCALERR=1; fi
@@ -49,9 +49,9 @@ for MODULE in $MODULES; do
         if [ "$?" != 0 ]; then LOCALERR=1; fi
         find . -name _CPack_Packages | xargs rm -rf
 # do not delete; only used for official builds
-        if [ -x ../../$MODULE/srcmkr.sh ]; then
-            ../../$MODULE/srcmkr.sh
-        fi
+#        if [ -x ../../$MODULE/srcmkr.sh ]; then
+#            ../../$MODULE/srcmkr.sh
+#        fi
         if [ "$LOCALERR" != 0 ]; then
             false
         else

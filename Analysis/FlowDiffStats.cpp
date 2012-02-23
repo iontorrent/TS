@@ -51,8 +51,8 @@ void FlowDiffStats::Init(int maxH, unsigned int nCol, unsigned int nRow, unsigne
   }
   mColBinSize = colBinSize;
   mRowBinSize = rowBinSize;
-  mColBins = (int)(ceil((double)mCol/(double)colBinSize));
-  mRowBins = (int)(ceil((double)mRow/(double)rowBinSize));
+  mColBins = (int)(ceil((float)mCol/(float)colBinSize));
+  mRowBins = (int)(ceil((float)mRow/(float)rowBinSize));
   mFlowBinnedHpSig.resize(mColBins);
   for(unsigned int iCol=0; iCol < mColBins; iCol++) {
     mFlowBinnedHpSig[iCol].resize(mRowBins);
@@ -249,8 +249,8 @@ void FlowDiffStats::RecordFlowHPStats(int row, int col, std::vector<int> &refere
     }
   }
 
-  unsigned int rowBin = (unsigned int)(ceil(row/(int) mRowBinSize));
-  unsigned int colBin = (unsigned int)(ceil(col/(int) mColBinSize));
+  unsigned int rowBin = (unsigned int)(ceil(row/(float) mRowBinSize));
+  unsigned int colBin = (unsigned int)(ceil(col/(float) mColBinSize));
   for (size_t flowIx = 0; flowIx < numFlows; flowIx++) {
     if (reference[flowIx] < mMaxHomo) {
       //      float value = mWellVals[row][col][flowIx];

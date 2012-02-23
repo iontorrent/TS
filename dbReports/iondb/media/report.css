@@ -107,6 +107,8 @@ tbody tr{
 		background: #e4e5e4 url("/site_media/images/table-heading-background.gif") 0 60% repeat-x; 
 }
 
+
+
 h4{
 	margin-left: 20px;
 }
@@ -333,3 +335,34 @@ tbody tr.over+tr td {
 	width: 73px;
 	height: 60px;
 }
+
+/* Styling for plugin Dialog box*/
+ul.expandable li {
+    margin-bottom: 0px;
+    margin-top:0;
+    height:20px;
+    border-bottom:1px solid #c0c0c0;
+    font-weight: normal;
+    color: #545454;
+    padding-top:4px;
+    margin-top:0;
+    font-family:"Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
+}
+
+ul.expandable li span{
+    font-size:14px;
+}
+
+ul.expandable {
+     list-style-type:square;
+     padding-left:10px;
+     margin-left:10px;
+}
+
+ul.expandable li a {
+     font-size:14px;
+     padding-top:4px;
+     margin-top:0;
+    text-decoration:none;
+}
+
