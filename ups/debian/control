@@ -1,0 +1,16 @@
+Section: misc
+Priority: optional
+Homepage: http://www.iontorrent.com
+Standards-Version: 3.6.2
+
+Package: ion-tsups
+Maintainer: Ion Torrent Systems <torrentdev@iontorrent.com>
+#Pre-Depends: ion-tsconfig (>= 1.1-7)
+Depends: nut (>=2.4.3)
+Architecture: all
+Copyright: LICENSE.txt
+Changelog: debian/changelog
+Postinst: debian/postinst.in
+Prerm: debian/prerm.in
+Description: This package installs and configures UPS monitoring for Torrent Server 
+

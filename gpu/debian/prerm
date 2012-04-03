@@ -1,0 +1,34 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+#set -x
+#echo "prerm $@"
+# Notes:
+# To delete NVIDIA drivers, ???
+# To delete cuda toolkit, delete directory /usr/local/cuda
+
+case "$1" in
+	remove)
+        # only if drivers were installed do we uninstall them
+        if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
+            cd @ION_INSTALL_PREFIX@/devdriver
+            ./nvidia-installer --uninstall --ui=none
+            cd - >/dev/null
+        fi
+    	rm -rf @ION_INSTALL_PREFIX@/devdriver
+        rm -rf /etc/modprobe.d/nvidia-installer-disable-nouveau.conf
+        sed -i "/create_nvidia_files/d" /etc/rc.local
+        rm -f /etc/ld.so.conf.d/cuda.conf
+        ldconfig
+    ;;
+    upgrade)
+        # only if drivers were installed do we uninstall them
+        if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
+            cd @ION_INSTALL_PREFIX@/devdriver
+            ./nvidia-installer --uninstall --ui=none
+            cd - >/dev/null
+        fi
+    ;;
+esac
+
+exit 0

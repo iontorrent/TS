@@ -1,0 +1,63 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+case "$1" in
+
+    upgrade|remove)
+
+	#------------------
+	# Stop the daemons
+    #------------------
+    invoke-rc.d nut stop
+    
+    #----------
+	# ups.conf
+    #----------
+	FILE=/etc/nut/ups.conf
+    
+    if [ -r ${FILE}.orig ]; then
+    	mv ${FILE}.orig ${FILE}
+    fi
+    
+    #----------
+	# nut.conf
+    #----------
+	FILE=/etc/nut/nut.conf
+    
+    if [ -r ${FILE}.orig ]; then
+    	mv ${FILE}.orig ${FILE}
+    fi
+    
+    #-------------
+    # upsmon.conf
+    #-------------
+    FILE=/etc/nut/upsmon.conf
+    
+    if [ -r ${FILE}.orig ]; then
+    	mv ${FILE}.orig ${FILE}
+    fi
+    
+    #-----------
+	# upsd.users
+    #-----------
+	FILE=/etc/nut/upsd.users
+    if [ -r ${FILE}.orig ]; then
+    	mv ${FILE}.orig ${FILE}
+    fi
+      
+    #-----------
+	# upsd.conf
+    #-----------
+    FILE=/etc/nut/upsd.conf
+    if [ -r ${FILE}.orig ]; then
+    	mv ${FILE}.orig ${FILE} 
+    fi
+    
+    # Remove the nut package
+    #?????Can we call apt-get from this script?
+    ;;
+    
+    *)	# catch-all
+    echo "ERROR.  $1 not handled by $0"
+    ;;
+esac

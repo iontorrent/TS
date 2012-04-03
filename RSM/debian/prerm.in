@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# stop the RSM_TS Agent
+if [ -e "/etc/init.d/RSM_Launch" ]; then
+	/etc/init.d/RSM_Launch stop
+fi
+
+# remove any files we might have generated
+rm -f /opt/ion/RSM/TSConfig.txt
+

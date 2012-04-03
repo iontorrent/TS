@@ -1,0 +1,12 @@
+status: 301
+content-length: 0
+content-location: http://localhost/rundb/api/v1/fileserver?format=json
+vary: Accept-Encoding
+server: Apache/2.2.14 (Ubuntu)
+-content-encoding: gzip
+location: http://localhost/rundb/api/v1/fileserver/?format=json
+date: Sat, 24 Dec 2011 15:34:51 GMT
+-x-permanent-redirect-url: http://localhost/rundb/api/v1/fileserver/?format=json
+content-type: text/html; charset=utf-8
+-varied-accept-encoding: gzip, deflate
+

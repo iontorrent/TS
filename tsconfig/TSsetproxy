@@ -1,0 +1,248 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+
+#--------------------------------------
+#--- Include function definition file
+#--------------------------------------
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/ts_functions
+
+#--------------------------------------
+# Functions
+#--------------------------------------
+function print_help ()
+{
+    echo
+    echo "Usage: $0 [option]..."
+    echo -e "\t--address                 Proxy address (example: 'http://proxy.net')"
+    echo -e "\t--port                    Proxy port number (default: 3128)"
+    echo -e "\t--username                Username for authentication"
+    echo -e "\t--password                Password for authentication"
+    echo -e "\t--remove                  Removes proxy setting"
+    echo -e "\t--debug, -d               Prints script commands when executing (set -x)"
+    echo -e "\t--demo                    Prints what changes would be executed only.  No changes are made"
+    echo -e "\t--help, -h                Prints command line args"
+    echo -e "\t--version, -v             Prints version"
+    echo
+    echo "Executing the command with no options will force prompting of each parameter"
+    echo
+}
+
+#--------------------------------------
+# Trap exit
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+
+#--------------------------------------
+# Default settings
+#--------------------------------------
+version=`echo '$Revision: 21948 $'|awk '{print $2}'`
+DEMO=0
+interactive=1
+REMOVE=0
+environment="/etc/environment"
+
+# Log command line arguments
+cmdline=${@}
+
+#--------------------------------------
+# command line argument parsing
+#--------------------------------------
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '--help'|'-h')
+            print_help
+            exit 0
+        ;;
+        
+        '--version'|'-v')
+            echo "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+            exit 0
+        ;;
+        
+        '--debug'|'-d')
+        set -x
+        ;;
+        
+        '--demo')
+        DEMO=1
+        ;;
+        
+        '--address')
+        shift
+        proxy_addr=$1
+        interactive=0
+        ;;
+        
+        '--port')
+        shift
+        proxy_port=$1
+        interactive=0
+        ;;
+        
+        '--username')
+        shift
+        username=$1
+        ;;
+        
+        '--password')
+        shift
+        password=$1
+        ;;
+        
+        '--remove')
+        REMOVE=1
+        ;;
+        
+        *)
+        log "Unknown option: $1"
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSsetproxy --help for options."
+        exit 1
+        ;;
+        
+    esac
+    shift
+done
+
+needs_root
+# Log command line arguments
+log "$cmdline"
+
+#--------------------------------------
+# Handle remove argument and skip the rest
+#--------------------------------------
+if [ $REMOVE -eq 1 ]; then
+    if [ $DEMO -eq 1 ]; then
+        echo
+        echo "Current $environment file contents are:"
+        echo
+        cat $environment
+        echo
+        echo "Would be modified to:"
+        echo
+        sed "/^http_proxy/d" $environment
+        echo
+    else
+        # Remove existing proxy setting
+        sed -i "/^http_proxy/d" $environment
+        unset http_proxy
+        echo -e "\nRebooting will ensure the http_proxy environment variable is cleared.\n"
+    fi
+    log "$0 completed successfully"
+    exit 0
+fi
+
+if [ -z $proxy_addr ]; then
+    repeat=1
+    while [ $repeat -eq 1 ]
+    do
+        read -p "Enter http proxy address: " answer
+        case $answer in
+            "")
+            echo "No address entered. Ctrl-C to cancel."
+            repeat=1
+            ;;
+            *)
+            proxy_addr=$answer
+            repeat=0
+        esac
+    done
+fi
+
+# check for trailing slash
+if echo $proxy_addr | grep -E "\/$"; then
+    proxy_addr=$(echo $proxy_addr | sed -E "s:/$::")
+fi
+
+# check for http prefix
+if ! echo $proxy_addr | grep -E "^https?:\/\/"; then
+    proxy_addr="http://"$proxy_addr
+fi
+
+if [ -z $proxy_port ]; then
+    # = get prox port = #
+    read -p "Enter http proxy port number [3128]: " answer
+    case $answer in
+        "")
+        echo "Use default port 3128"
+        proxy_port=3128
+        ;;
+        *)
+        proxy_port=$answer
+    esac
+fi
+#TODO: test for valid port
+
+if [ $interactive -eq 1 ]; then
+    # Query for the optional parameters: username password for authentication
+        # = get user name and password = #
+    read -p "Enter the username for proxy authentication: " answer
+    case $answer in
+        "")
+        echo "no authentication is set"
+        nouser=1
+        ;;
+        *)
+        nouser=0
+        username=$answer
+    esac
+    if [ $nouser -eq 0 ]; then
+        read -p "Enter the password for proxy authentication: " answer
+        case $answer in
+            "")
+            echo "no password is set. No authentication will be set."
+            nouser=1
+            ;;
+            *)
+            password=$answer
+        esac
+    fi
+    if [ $nouser -eq 0 ]; then
+        proxy_addr=$(echo $proxy_addr | sed -E "s:^(https?\://):\1$username\:$password@:")
+    fi
+else
+    # Handle username password command line arguments
+    if [ ! -z $username ]; then
+        if [ ! -z $password ]; then
+            proxy_addr=$(echo $proxy_addr | sed -E "s:^(https?\://):\1$username\:$password@:")
+        else
+            echo "ERROR: username specified but no password provided"
+            exit 1
+        fi
+    else
+        # no username provided; skip authentication
+        :
+    fi
+    
+fi
+
+if [ $DEMO -eq 1 ]; then
+    # Print what would happen and exit
+    echo
+    echo "Current contents of $environment:"
+    echo
+    cat $environment
+    echo
+    echo "will be written to $environment:"
+    echo
+    echo "http_proxy=$proxy_addr:$proxy_port"
+    echo
+else
+    # = remove previous proxy information
+    sed -i '/http_proxy/d' $environment
+
+    # = write to $environment file and reload it
+    echo "http_proxy="$proxy_addr:$proxy_port >> $environment
+    source $environment
+    echo "http_proxy is set to "$http_proxy
+fi
+log "$0 completed successfully"
+exit 0

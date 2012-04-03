@@ -1,0 +1,10 @@
+*.user
+*.suo
+*.plg
+*.ncb
+*.opt
+Debug
+Debug_SSL
+Release
+Release_SSL
+Cobf

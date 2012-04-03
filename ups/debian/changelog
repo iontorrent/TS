@@ -1,0 +1,30 @@
+ion-tsups (1.0-0) lucid; urgency=low
+
+  * Candidate release
+
+ -- Bernard Puc <bpuc@thing1>  Fri, 04 Mar 2011 14:20:20 -0500
+
+ion-tsups (0.1-0) stable; 
+
+  * Further changes to config files which fix connection errors
+  
+ -- Ion Torrent <torrentdev@iontorrent.com>  Fri, 04 Mar 2011 14:00:00 -0400
+
+ion-tsups (0.0-3) stable; 
+
+  * Added command to stop the nut daemons to prerm script
+  
+ -- Ion Torrent <torrentdev@iontorrent.com>  Fri, 04 Mar 2011 14:00:00 -0400
+
+ion-tsups (0.0-2) stable; 
+
+  * All configuration files are set for Torrent Server
+  
+ -- Ion Torrent <torrentdev@iontorrent.com>  Fri, 04 Mar 2011 14:00:00 -0400
+
+ion-tsups (0.0-1) stable; 
+
+  * Initial revision
+  
+ -- Ion Torrent <torrentdev@iontorrent.com>  Thu, 03 Mar 2011 14:00:00 -0400
+

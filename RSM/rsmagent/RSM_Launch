@@ -1,0 +1,80 @@
+#!/bin/bash
+
+function start()
+{
+  pid=`pidof RSMAgent_TS`
+  if [ "$pid" == "" ]
+  then
+    echo -n "Starting service: RSMAgent_TS"
+    echo serialnumber:`dmidecode -s system-serial-number` > /opt/ion/RSM/serial_number.alt
+    start-stop-daemon --start --chuid ionadmin --background --chdir "/opt/ion/RSM" --exec "/opt/ion/RSM/RSMAgent.sh"
+  else
+    echo "RSMAgent_TS already running?"
+  fi
+  return 0
+}
+
+function stop()
+{
+  pid=`pidof RSMAgent_TS`
+  if [ "$pid" != "" ]
+  then
+    echo "stopping service: RSMAgent_TS"
+    kill -2 $pid
+    sleep 1
+  else
+    echo "service: RSMAgent_TS not running"
+  fi
+  return 0
+}
+
+function status()
+{
+  pid=`pidof RSMAgent_TS`
+  if [ "$pid" == "" ]
+  then
+    echo "RSMAgent_TS is not running"
+  else
+    echo "RSMAgent_TS is running"
+  fi
+  return 0
+}
+
+result=0
+
+case "$1" in
+  reload)                                   # Reload the service configuration.
+    stop
+    start
+    result=$?
+    ;;
+
+  restart)                                  # Restart the service.
+    stop
+    start
+    result=$?
+    ;;
+
+  start)                                    # Start the service.
+    start
+    result=$?
+    ;;
+
+  status)                                   # Determine if service is running.
+    status
+    result=$?
+    ;;
+
+  stop)                                     # Stop the service.
+    stop
+    result=$?
+    ;;
+
+  *)                                        # Otherwise display usage info.
+    echo -n "Usage: $0 {reload|restart|start|status|stop}"
+    ;;
+esac
+
+echo                                        # Force a linefeed.
+exit $result
+

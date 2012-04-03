@@ -1,0 +1,4 @@
+# Version for target of current development cycle
+MAJOR=2
+MINOR=1
+RELEASE=0

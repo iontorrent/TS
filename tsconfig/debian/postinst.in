@@ -1,0 +1,29 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+
+case "$1" in
+    configure)
+        
+        OLD_INSTALL_PREFIX="/etc/torrentserver"
+        if [ ! -d $OLD_INSTALL_PREFIX ]; then
+            mkdir $OLD_INSTALL_PREFIX
+        fi
+
+		mkdir -p /var/log/ion
+        chmod a+w /var/log/ion
+        
+        # remove the previous entry
+        sed -i '/.*TSchkconfig.*/d' /etc/rc.local
+        sed -i '/clear/d' /etc/rc.local
+        # make sure clear is AFTER TSchkconfig
+        sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
+        sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
+    ;;
+esac
+
+exit 0
+
+

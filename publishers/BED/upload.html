@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery.form.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/form2object/form2object.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/form2object/jquery.toObject.js"></script>
+  <link type="text/css" href="/site_media/jquery/css/default.uni-form.css"
+        rel="Stylesheet"/>
+  <script type="text/javascript">
+    $(function() {
+      $('#bedSimple').submit(function() {
+        formData = JSON.stringify($("#meta_form").toObject());
+        $("#meta").val(formData);
+        return true;
+      });
+      $.getJSON("/rundb/api/v1/referencegenome/", function(result) {
+          $.each(result.objects, function(index, ref) {
+              $("#references").append('<option value="' + ref.short_name + '">'+ ref.name + '</option>');
+          });
+      });
+      $('#hotspot_help_text').hide();
+      $('#hotspot_help_button').click(function(){
+        $('#hotspot_help_text').slideToggle(300);
+      });
+    });
+  </script>
+</head>
+<body>
+
+
+<form id="meta_form" onsubmit="return false;">
+  <h1>Upload a BED file:</h1>
+  <label for="reference">Reference </label>
+  <select id="references" name="reference">
+    
+  </select>
+
+  <label for="hotspot" >Hotspot </label>
+  <input type="checkbox" name="hotspot" /> <a href="#" id="hotspot_help_button">?</a>
+</form>
+<p id="hotspot_help_text">A "HotSpot" type BED file defines regions or individual bases where variants are expected to occur.  For example Insertion/Deletion or SNP type variants.  The HotSpot BED file may be used by Plugins to present the variants that occur at defined points within the larger amplified or enriched region to the user.  An example of this can be seen in the Unified Variant Caller in the first and second tables of the output report.  The HotSpot BED file used by the AmpliSeqTM Cancer Panel Kit can be found on the Ion Community (link to where, searching is not finding me anything Gianluca where is the file?) and is also available in the file links output for the Unified Variant Caller.</p>
+<form id="bedSimple" method="POST" class="uniForm" enctype="multipart/form-data">
+    <div style="margin-top: 10px;">
+      <input id="file" type="file" name="file"/>
+    </div>
+    <input id="meta" type="hidden" name="meta" value="{}" />
+    <div class="buttonHolder" id="upload_button">
+      <input id="upload" type="submit" value="Upload">
+    </div>
+</form>
+
+
+</body>
+</html>

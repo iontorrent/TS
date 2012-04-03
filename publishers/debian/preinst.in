@@ -1,0 +1,23 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+#set -x
+echo "preinst $@"
+
+PUBLISHERS=/results/publishers
+UPLOADS=/results/uploads
+
+case "$1" in
+    install|upgrade)
+        mkdir -p $PUBLISHERS $UPLOADS
+        chown root:www-data $PUBLISHERS $UPLOADS
+        chmod 777 $PUBLISHERS
+        chmod 777 $UPLOADS
+    ;;
+    
+    abort-install|abort-upgrade)
+       rmdir --ignore-fail-on-non-empty $PUBLISHERS $UPLOADS 
+    ;;
+esac
+
+exit 0

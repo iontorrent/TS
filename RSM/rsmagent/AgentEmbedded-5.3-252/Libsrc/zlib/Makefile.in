@@ -1,0 +1,76 @@
+# Makefile for zlib
+# Copyright (C) 1995-2002 Jean-loup Gailly.
+# For conditions of distribution and use, see copyright notice in zlib.h 
+
+# To compile and test, type:
+#   ./configure; make test
+# The call of configure is optional if you don't have special requirements
+# If you wish to build zlib as a shared library, use: ./configure -s
+
+# To install /usr/local/lib/libz.* and /usr/local/include/zlib.h, type:
+#    make install
+# To install in $HOME instead of /usr/local, use:
+#    make install prefix=$HOME
+
+CC=cc
+
+CFLAGS=-O $(EXTRA_CFLAGS)
+#CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
+#CFLAGS=-g -DDEBUG
+#CFLAGS=-O3 -Wall -Wwrite-strings -Wpointer-arith -Wconversion \
+#           -Wstrict-prototypes -Wmissing-prototypes
+
+VER=1.1.4
+LIBS=libz.a
+
+AR=ar
+RANLIB=ranlib
+TAR=tar
+SHELL=/bin/sh
+
+prefix = $(TOP_DIR)/lib
+libdir = ${prefix}/lib
+includedir = ${prefix}/include
+
+OBJS = adler32.o compress.o crc32.o gzio.o uncompr.o deflate.o trees.o \
+       zutil.o inflate.o infblock.o inftrees.o infcodes.o infutil.o inffast.o
+
+all: $(LIBS)
+
+libz.a: $(OBJS)
+	$(AR) rc $@ $(OBJS)
+	-@ ($(RANLIB) $@ || true) >/dev/null 2>&1
+
+install: $(LIBS)
+	mkdir -p $(libdir)
+	ln -f libz.a $(libdir)
+	mkdir -p $(includedir)
+	ln -f zlib.h $(includedir)
+	ln -f zconf.h $(includedir)
+
+clean:
+	rm -f *.o *~ libz.a
+
+distclean:	clean
+
+depend:
+	makedepend -- $(CFLAGS) -- *.[ch]
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
+adler32.o: zlib.h zconf.h
+compress.o: zlib.h zconf.h
+crc32.o: zlib.h zconf.h
+deflate.o: deflate.h zutil.h zlib.h zconf.h
+gzio.o: zutil.h zlib.h zconf.h
+infblock.o: infblock.h inftrees.h infcodes.h infutil.h zutil.h zlib.h zconf.h
+infcodes.o: zutil.h zlib.h zconf.h
+infcodes.o: inftrees.h infblock.h infcodes.h infutil.h inffast.h
+inffast.o: zutil.h zlib.h zconf.h inftrees.h
+inffast.o: infblock.h infcodes.h infutil.h inffast.h
+inflate.o: zutil.h zlib.h zconf.h infblock.h
+inftrees.o: zutil.h zlib.h zconf.h inftrees.h
+infutil.o: zutil.h zlib.h zconf.h infblock.h inftrees.h infcodes.h infutil.h
+trees.o: deflate.h zutil.h zlib.h zconf.h trees.h
+uncompr.o: zlib.h zconf.h
+zutil.o: zutil.h zlib.h zconf.h  

@@ -1,0 +1,17 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+#set -x
+#echo "postrm $@"
+case "$1" in
+	abort-install)
+		rm -rf @ION_INSTALL_PREFIX@/devdriver
+        rm -rf /etc/modprobe.d/nvidia-installer-disable-nouveau.conf
+        sed -i "/create_nvidia_files/d" /etc/rc.local
+        rm -f /etc/ld.so.conf.d/cuda.conf
+        ldconfig
+    ;;
+esac
+
+exit 0
+

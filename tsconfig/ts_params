@@ -1,0 +1,24 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Torrent Server Parameters
+#
+
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+TSCONFIG_LOG_DIR='/var/log/ion'
+TSCONFIG_INSTALL_LOG='tsconfig_install.log'
+TSCONFIG_LOG_BASENAME='tsconf.log'
+TSCONFIG_DIR='/etc/torrentserver'
+TSCONFIG_CONF='tsconf.conf'
+TSCONFIG_MINT_CONF_DIR='mint-config'
+SGE_ROOT=/var/lib/gridengine/
+SGE_CELL=iontorrent
+TEXT_WARN_MSG=( "#\n",
+"# WARNING\n",
+"# This file has been configured and/or optimized for the Torrent Server.\n",
+"# It is recommended that you do not alter or edit this file.\n",
+"#\n",
+"# Changing this file may break your Torrent Server immediately or problems\n",
+"# may not surface till a later software update.  Resolution of problems\n",
+"# will likely be delayed because of custom modifications to this file.\n"
+)

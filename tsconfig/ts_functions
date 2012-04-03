@@ -1,0 +1,2654 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+DEBUG=0
+set -e
+#---    ---#
+function print_help()
+{
+    echo
+    echo "Usage: TSconfig [options]"
+    echo -e "\t--configure-server            Configure this server as a head node"
+    #echo -e "\t--configure-compute           Configure this server as a compute node"
+    echo -e "\t--configure-pgm-support       Add support for direct connected PGMs"
+    #echo -e "\t--remove-pgm-support          Remove support for raw data (PGMs)"
+    echo -e "\t--change-hostname, -r         Change the server's hostname"
+    echo -e "\t--update-torrent-suite, -s    Update Ion software packages"
+    echo -e "\t--configure-timezone, -z      Set timezone."
+    echo -e "\t--configure-postfix, -p       Configure postfix mailer"
+    #echo -e "\t--configure-static-ip         Set up static ip address"
+    echo -e "\t--help, -h                    Prints command line args"
+    echo -e "\t--version                     Prints version"
+    echo
+    echo "Advanced options:"
+    echo -e "\t--debug, -d                   Turns on verbose shell execution"
+    echo -e "\t--eth-dev, -e <device>        Specify ethernet device (default=eth0)"
+    echo -e "\t--apt-usb                     Use Ion Install USB drive for deb pkg repository"
+    #echo -e "\t--unconfigure-server          Unconfigures head-node or compute-node specific settings"
+    echo -e "\t--skip-init                   Do not execute passwd reset, timezone setup during --configure* operations"
+    echo -e "\t--skip-pgm-config             Disables FTP,DHCP,IPTABLES configuration during --configure* operations"
+    echo
+}
+#---    ---#
+function how_many_options ()
+{
+    CNT=0
+    if [ $CONF_HEAD_NODE -gt 0 ]; then ((CNT++)); fi
+    if [ $CONF_COMPUTE_NODE -gt 0 ]; then ((CNT++)); fi
+    #if [ $CONF_PGM_SUPPORT -gt 0 -a $CONF_HEAD_NODE -eq 0 ]; then ((CNT++)); fi
+    #if [ $REMOVE_PGM_SUPPORT -gt 0 ]; then ((CNT++)); fi
+    if [ $CONF_PROXY -gt 0 ]; then ((CNT++)); fi
+    if [ $DELETE_PROXY -gt 0 ]; then ((CNT++)); fi
+    if [ $UPDATE_SOFTWARE -gt 0 ]; then ((CNT++)); fi
+    if [ $UPDATE_HOSTNAME -gt 0 ]; then ((CNT++)); fi
+    if [ $CONF_TIME_ZONE -gt 0 ]; then ((CNT++)); fi
+    if [ $CONF_POSTFIX -gt 0 ]; then ((CNT++)); fi
+    if [ $UNCONF_SERVER -gt 0 ]; then ((CNT++)); fi
+    if [ $CONF_STATIC_IP -gt 0 ]; then ((CNT++)); fi
+
+    echo $CNT
+    return $CNT
+}
+
+#--------------------------------------
+# Install/Update Master Server
+#--------------------------------------
+function config_head_node()
+{
+
+    echo "Head Node Configuration:"
+
+    # Check tag
+    if ! is_master; then
+        echo "WARNING: This server is configured as a compute node."
+        echo "To configure this server as a master node, first run the unconfigure command"
+        echo "Then run TSconfig --configure-server"
+        error "$0:$LINENO" "This server is configured as a compute node"
+    fi
+    
+    # ensure tag is correct for master node
+    touch /opt/ion/.masternode
+    write_conf_file
+    
+    # Install/Update system-level software packages
+    install_system_packages
+    config_system_packages
+    
+    # Install/Update Torrent Suite software packages
+    install_ion_packages
+
+    return 0
+}
+
+#--------------------------------------
+# Install/Update Compute Server
+#--------------------------------------
+function config_compute_node ()
+{
+
+    echo "Compute Node Configuration:"
+
+    # Check tag
+    if is_master; then
+        echo "WARNING: This server is configured as a master node."
+        echo "To configure this server as a compute node, first run the unconfigure command"
+        echo "Then run TSconfig --configure-compute"
+        error "$0:$LINENO" "This server is configured as a master node"
+    fi
+
+    # ensure tag is correct for compute node
+    touch /opt/ion/.computenode
+    write_conf_file
+    
+    # Get name of head node server
+    get_user_input_compute    
+    
+    # Remove gridengine packages to force re-init
+    apt-get --assume-yes --force-yes purge gridengine-common gridengine-client gridengine-exec
+    
+    # Install/Update system-level software packages
+    install_system_packages
+    config_system_packages
+    
+    # Install/Update Torrent Suite software packages
+    install_ion_packages
+
+    return 0
+}
+
+#--------------------------------------
+# Update Torrent Suite Software
+#--------------------------------------
+function config_ionSoftware()
+{
+    ion_daemon_ctrl stop
+    
+    install_system_packages
+
+    config_system_packages
+    
+    install_ion_packages
+}
+
+
+#---    Undoes the master node configuration operations ---#
+#---    Remove SGE
+#---    Remove Apache2
+#---    Remove postgresql
+#---    Remove PGM support (???? here????)
+#---                                                    ---#
+function unconfigure_head_node()
+{
+    # Remove gridengine
+    apt-get --assume-yes --force-yes purge gridengine-master gridengine-qmon gridengine-exec gridengine-common gridengine-client
+    
+    # Remove postgresql
+    apt-get --assume-yes --force-yes remove postgresql postgresql-8.4
+
+    # Remove apache2
+    apt-get --assume-yes --force-yes purge apache2 apache2.2-common apache2.2-bin apache2-utils apache2-mpm-prefork
+
+    # Remove NFS exports configuration
+    sed -i 's:^/results\s.*::' /etc/exports
+    sed -i 's:^/opt/sge.*::' /etc/exports  # legacy code created these; pre-2.0
+
+    # Remove master-node specific ion packages
+    apt-get --assume-yes --force-yes remove ion-plugins ion-rndplugins ion-referenceLibrary ion-docs ion-rsmts ion-sampledata ion-pgmupdates ion-publishers ion-onetouchupdater
+
+    # Remove ion-dbreports settings.py
+    rm -f /opt/ion/iondb/settings.py
+    # Clean up directories
+    rm -rf /opt/ion/RSM
+    # Do not remove contents of these directories: may contain user-added data
+    #rm -rf /results/referenceLibrary
+    #rm -rf /results/plugins
+    #rm -rf /results/publishers
+    #rm -rf /results/uploads
+
+    # Remove network supporting external PGMs
+    remove_pgm_support
+
+    #TODO: remove ftp server
+    #   stop vsftpd daemon
+    service vsftpd stop
+    #   remove vsftpd package
+    apt-get --assume-yes --force-yes remove vsftpd
+    #   remove ionguest user
+    deluser --remove-home --force ionguest
+    delgroup ionguest
+    #   remove vsftpd configure files
+    rm -f /etc/vsftpd.allowed_users
+    
+    # Remove server designation
+    rm -f /opt/ion/.masternode
+    # Clean the tsconf.conf file
+    #sed -i 's/^mode:.*/mode:none/' $TSCONFIG_DIR/$TSCONFIG_CONF
+    rm -f $TSCONFIG_DIR/$TSCONFIG_CONF
+    
+    return 0
+}
+
+#---    ---#
+function unconfigure_compute_node ()
+{
+    echo "unconfigure_compute_node NOT IMPLEMENTED"
+
+    # Remove packages
+    aptitude purge apache2
+    aptitude purge postgresql
+
+    # remove /opt/ion/.computenode
+    rm -f /opt/ion/.computenode
+
+    # TODO: clean tsconf.conf file
+    sed -i 's/^mode:.*/mode:none/' $TSCONFIG_DIR/$TSCONFIG_CONF
+
+    return 0
+}
+
+#---    ---#
+function config_pgm_support()
+{
+    log "Configure support for PGMs"
+    echo -e "\tConfiguring as raw data server"
+
+    config_iptables
+    config_PGM_interface
+    config_ftp
+    invoke-rc.d networking restart
+    config_dhcp
+    config_ntp_server
+    
+    #export raw data directory if this is a secondary master only
+    if is_master; then
+        # On Head Node, /results is already exported
+        echo -e "\tExporting Raw_Data_Fileserver directory"
+    else
+        echo -e "\tExporting Raw_Data_Fileserver directory"
+        # unmount large partition (/results)
+        umount -l /results || true
+        # make new mountpoint
+        mkdir -p /pgmdata1
+        # change ionguest ftp directory
+        rm -f /home/ionguest/results
+        ln -s /pgmdata1 /home/ionguest/results
+        # rename mountpoint for large partition /dev/mapper/<hostname>-results
+        sed -i "s;\(^/dev/mapper/.*-results[[:space:]]\)/results;\1 /pgmdata1;" /etc/fstab
+        mount /pgmdata1
+        export_directory /pgmdata1
+    fi
+
+    return 0
+}
+
+function remove_pgm_support ()
+{
+    #/etc/iptables
+    if [ -e /etc/iptables.rules ]; then
+        #--- Delete previous definitions ---#
+        sed -i '/Torrent Server/d' /etc/iptables.rules 2>/dev/null
+        sed -i '/*filter/,/COMMIT/d' /etc/iptables.rules 2>/dev/null
+        sed -i '/*nat/,/COMMIT/d' /etc/iptables.rules 2>/dev/null
+    fi
+
+    #/etc/network interfaces
+    #if valid_port eth1; then ifdown eth1; fi
+    #if valid_port eth2; then ifdown eth2; fi
+    #if valid_port eth3; then ifdown eth3; fi
+    #if valid_port eth4; then ifdown eth4; fi
+    
+    #--- Remove any previous definitions for interfaces ---#
+    sed -i '/auto eth1/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth2/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth3/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    #--- delete all trailing blank lines at end of file ---#
+    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+
+    #--- Delete any existing config file ---#
+    if [ -w /etc/dnsmasq.d/ion-dhcp ]; then
+        rm -f /etc/dnsmasq.d/ion-dhcp
+    fi
+
+    #--- Backup old config file ---#
+    if [ -w /etc/dhcp3/dhcpd.conf.old ]; then
+        mv /etc/dhcp3/dhcpd.conf.old /etc/dhcp3/dhcpd.conf
+    fi
+
+    #---    Edit dhclient.conf          ---#
+    if [ -e /etc/dhcp3/dhclient.conf.orig ]; then
+        mv /etc/dhcp3/dhclient.conf.orig /etc/dhcp3/dhclient.conf
+    fi
+
+    # Cleanup pgm hosts definitions
+    rm -f /etc/hosts-dnsmasq
+    # Cleanup /etc/hosts (for very old installations only)
+    sed -i '/^192.168.201.10[[:blank:]]pgm1/d' /etc/hosts
+    sed -i '/^192.168.202.10[[:blank:]]pgm2/d' /etc/hosts
+    sed -i '/^192.168.203.10[[:blank:]]pgm3/d' /etc/hosts
+    sed -i '/^192.168.204.10[[:blank:]]pgm4/d' /etc/hosts
+    
+    service dhcp3-server stop
+    service dnsmasq stop
+    apt-get --assume-yes --force-yes purge dhcp3-server dnsmasq
+    
+    return 0
+}
+
+#---    ---#
+function ion_daemon_ctrl()
+{
+    case $1 in
+        start)
+        if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer start; fi
+        if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler start; fi
+        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive start; fi
+        if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin start; fi
+        if [ -e /etc/init.d/celeryd ]; then invoke-rc.d celeryd start; fi
+        ;;
+        stop)
+        if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer stop; fi
+        if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler stop; fi
+        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive stop; fi
+        if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin stop; fi
+        if [ -e /etc/init.d/celeryd ]; then invoke-rc.d celeryd stop; fi
+        ;;
+        restart)
+        if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer restart; fi
+        if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler restart; fi
+        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive restart; fi
+        if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin restart; fi
+        if [ -e /etc/init.d/celeryd  ]; then invoke-rc.d celeryd restart; fi
+        ;;
+        disable-daemons)
+        # Prevent job server daemon from starting at boot
+        update-rc.d -f ionJobServer remove
+        update-rc.d ionJobServer stop 97 2 3 4 5 .
+        # Prevent data crawler daemon from starting at boot
+        update-rc.d -f ionCrawler remove
+        update-rc.d ionCrawler stop 97 2 3 4 5 .
+        # Prevent archiver daemon from starting at boot
+        update-rc.d -f ionArchive remove
+        update-rc.d ionArchive stop 97 2 3 4 5 .
+        # Prevent plugin daemon from starting at boot
+        update-rc.d -f ionPlugin remove
+        update-rc.d ionPlugin stop 97 2 3 4 5 .
+        # Prevent celeryd daemon from starting at boot
+        update-rc.d -f celeryd remove
+        update-rc.d celeryd stop 97 2 3 4 5 .
+        # Prevent apache2 daemon from starting at boot
+        update-rc.d -f apache2 remove
+        update-rc.d apache2 stop 91 2 3 4 5 .
+        ;;
+    esac
+    return 0
+}
+
+#---    ---#
+function network_tests()
+{
+    #---    our tests   ---#
+    #
+    #   Test Case: Not cabled into network
+    #
+    #   Test Case: Cabled, no DHCP
+    #
+    #   Test Case: Cabled, DHCP, no name resolution
+    #
+    #   Test Case:
+    #
+    #---    end docs    ---#
+    device=$1
+    if [ "$device" == "" ]; then
+        echo "No ethernet device specified.  Exiting."
+        return 1
+    fi
+
+    if /sbin/ifconfig $device > /dev/null; then
+        echo "Network device $device is enabled"
+        echo
+    else
+        echo "Network device $device is not enabled"
+        echo
+        return 1
+    fi
+
+    # check for connectivity
+    if (/sbin/ifconfig $device | grep UP | grep MTU &> /dev/null); then
+        echo "GOOD - the '$device' ethernet port is UP"
+    else
+        echo "***ERROR***"
+        echo "The '$device' network port is not UP."
+        echo
+        return 1
+    fi
+
+    # test name resolution
+    hName=$(hostname -f)
+    echo
+    echo "Test name resolution for host $hName"
+    if address=$(dig +short +search $hName); then
+        if [ "$address" != "" ]; then
+            echo
+            echo "Good this server's hostname ($hName) resolves to address $address"
+            echo
+        else
+            echo
+            echo "This server's hostname ($hName) does not resolve to an IP address"
+            echo "using the command: dig +short +search $hName"
+            echo
+        fi
+    else
+        echo
+        echo "This server's hostname ($hName) does not resolve to an IP address"
+        echo "using the command: dig +short +search $hName"
+        echo "returns this error:"
+        echo $address
+        echo
+    fi
+
+
+    if (/bin/netstat -r | grep default &> /dev/null); then
+        echo "GOOD - we can connect to the local network"
+    else
+        echo "a little trouble...  we're not able to find a default route to the local network."
+        echo
+        echo "Double check connectivity.  Possibly something didn't work in the IP configuration."
+        echo "Maybe try rebooting the server to force it to pick up it's IP address again, then"
+        echo "retry this test."
+        echo
+        return 1
+    fi
+
+    # print IP address netmask
+    echo
+    echo "Full Hostname:   $(hostname -f)"
+    echo "Simple Hostname: $(hostname)"
+    echo "Server Domain:   $(hostname -d)"
+    echo
+
+    return 0
+}
+
+#--------------------------------------
+#NOTE: sge_master_node variable is used elsewhere
+#--------------------------------------
+function get_user_input_compute()
+{
+    currentNodeName=$(hostname -f)
+
+    # Get Head Node Hostname
+    noanswer=1
+    while [ $noanswer -eq 1 ]
+    do
+        echo
+        read -p "Enter full hostname of the Head node: " sge_master_node
+        if [ "$sge_master_node" != "" ]; then
+            # Test hostname for connectivity
+            if test_name_resolution $sge_master_node; then
+                noanswer=0
+            else
+                echo "Could not connect to $sge_master_node"
+                echo "Type Ctrl-C to quit or try again"
+            fi
+        fi
+    done
+    # Ion Daemons Hostname
+    noanswer=1
+    while [ $noanswer -eq 1 ]
+    do
+        echo
+        read -e -i $sge_master_node -p "Enter hostname of server where Ion daemons are running: " input
+        idaemon_host="${input:-$sge_master_node}"
+        if [ "$idaemon_host" != "" ]; then
+            # Test hostname for connectivity
+            if test_name_resolution $idaemon_host; then
+                noanswer=0
+            else
+                echo "Could not connect to $idaemon_host"
+                echo "Type Ctrl-C to quit or try again"
+            fi
+        fi
+    done
+
+    #   Ensure the compute node is added as an admin host to SGE configuration.
+    echo
+    echo
+    echo "This hostname '$currentNodeName' must be added as an admin host to the SGE configuration."
+    echo "Log onto $sge_master_node and run this command:"
+    echo "     sudo qconf -ah $currentNodeName"
+    echo
+    echo "This must be done prior to running the SGE configuration on this host"
+    echo
+    echo "Do not continue if this step has not been executed."
+    echo
+    read -p "Press Enter to continue, Ctrl-C to exit"
+    echo
+
+    # Postgresql server is the same as sge qmaster node
+    postgresql_server=$sge_master_node
+    databaseServerPort=5432
+
+    return 0
+}
+
+function change_hostname()
+{
+    oldHostName=$(hostname)
+
+    #--- get user to enter a valid hostname ---#
+    dithering=1
+    while [ $dithering -eq 1 ]
+    do
+        echo -e "\nCurrent hostname is '$oldHostName'"
+        read -p "Enter new hostname: " answer
+        case $answer in
+            "")
+                echo "Huh?"
+                dithering=1
+            ;;
+            "master")
+                echo "Anything except 'master', please.  Its confusing to SGE"
+                dithering=1
+            ;;
+            "ts" | "pgm1" | "pgm2" | "pgm3" | "pgm4")
+                echo "$answer is a reserved hostname for Torrent Server"
+                echo "Please choose another name."
+                dithering=1
+            ;;
+            *\ *)
+                echo "There should not be any spaces in the name"
+                dithering=1
+            ;;
+            *)
+                if ! IsValidHostname $answer; then
+                    echo "Invalid hostname.  Try again"
+                    echo "The only acceptable characters are alphanumerics and hyphens,"
+                    echo "and the host name can not start nor end with a hyphen."
+                    dithering=1
+                else
+                    echo "Changing hostname to $answer"
+                    newHostName=$answer
+                    dithering=0
+                fi
+            ;;
+        esac
+    done
+
+    #---    get user to enter a domain name ---#
+    oldDomainName=$(hostname -f|cut -f2- -d'.')
+    # case of where there is no domainname defined
+    if [ "$oldDomainName" == "$(hostname -f)" ]; then
+        oldDomainName=""
+    fi
+    dithering=1
+    while [ $dithering -eq 1 ]
+    do
+        echo -e "\nCurrent domain name is '$oldDomainName'"
+        read -p "Enter domain name: " answer
+        case $answer in
+            "")
+                echo "No domain name is entered."
+                newDomainName=$answer
+                dithering=0
+            ;;
+            "master")
+                echo "Anything except 'master', please.  Its confusing to SGE"
+                dithering=1
+            ;;
+            *\ * )
+                echo "There shold not be any spaces in the name."
+                dithering=1
+            ;;
+            *)
+                if ! IsValidDomainName $answer; then
+                    echo "Invalid domain name. Try again"
+                    echo "The only acceptable characters are alphanumerics, hyphens, and dots,"
+                    echo "and the domain name can not start nor end with a hyphen or a dot."
+                    dithering=1
+                else
+                    echo "Using domain name '$answer'"
+                    newDomainName=$answer
+                    dithering=0
+                fi
+            ;;
+        esac
+    done
+
+    #---    set FQDN    ---#
+    oldFQDN=$(hostname -f)
+    if [ "${newDomainName}" == "" ]; then
+        newFQDN=${newHostName}
+    else
+        newFQDN=${newHostName}.${newDomainName}
+    fi
+    log "Changing $oldFQDN to $newFQDN"
+
+    log "Backing-up configuration files after hostname change."
+    #--- Change hostname where applicable ---#
+    if [ -f /etc/postfix/main.cf ]; then
+        sed -i "s:\(.*\) = $oldFQDN\(.*\):\1 = $newFQDN\2:" /etc/postfix/main.cf
+        copy_conf_file /etc/postfix/main.cf
+        log "... postfix/main.cf -- updated and backed-up"
+    fi
+    if [ -f /etc/mailname ]; then
+        sed -i "s:$oldFQDN:$newFQDN:" /etc/mailname
+        copy_conf_file /etc/mailname
+        log "... mailname -- updated and backed-up"
+    fi
+    if [ -f /etc/dhcp3/dhclient.conf ]; then
+        sed -i 's/send host-name .*;/send host-name "<hostname>";/' /etc/dhcp3/dhclient.conf
+        copy_conf_file /etc/dhcp3/dhclient.conf
+    fi
+
+    if is_master; then
+        :
+    else
+        sge_delete_host ${oldFQDN}
+    fi
+    
+    # Shutdown SGE
+    /etc/init.d/gridengine-exec stop
+    if is_master; then /etc/init.d/gridengine-master stop; fi
+    
+    #--- Change name of server ---#
+    hostname $newHostName
+    sed -i "s/127.0.1.1.*/127.0.1.1\t$newFQDN\t$newHostName/" /etc/hosts
+    echo ${newHostName} > /etc/hostname
+    copy_conf_file /etc/hosts
+    copy_conf_file /etc/hostname
+    log "... /etc/hosts and hostname -- updated and backed-up."
+
+
+    if is_master; then
+        echo "${newFQDN}" > /var/lib/gridengine/iontorrent/common/act_qmaster
+    else
+        # Compute nodes need to remove themselves from SGE configuration
+        #sge_delete_host ${oldFQDN}
+        :
+    fi
+
+    # Reboot
+    echo
+    read -p "Press Enter when you are ready to reboot the server"
+    shutdown -r now
+}
+
+
+function IsValidHostname ()
+{
+        # Regex from http://stackoverflow.com/questions/106179/regular-expression-to-match-hostname-or-ip-address
+        #regex="^(([a-zA-Z]|[a-zA-Z][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$";
+        # This one does not allow dots but allows starting with a digit
+        regex="^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]))*([A-Za-z]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])$";
+
+        name=$1
+        if [[ $name =~ $regex ]] ; then
+            return 0
+        else
+            # Not valid
+            return 1
+        fi
+}
+
+function IsValidDomainName ()
+{
+        # This one does allow dots and allows starting with a digit
+        regex="^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$";
+
+        name=$1
+        if [[ $name =~ $regex ]] ; then
+            return 0
+        else
+            # Not valid
+            return 1
+        fi
+}
+
+function test_name_resolution ()
+{
+    ## Method relies on external name server; not the best method
+    #name_to_test=$1
+    #/usr/bin/host $name_to_test > /dev/null
+    #stat=$?
+    #return $stat
+
+    # more reliable as it uses /etc/hosts as well as nameserver
+    #   Do not want to test the loopback address, if set so comment it out
+    #   b/c SGE does not like loopback addresses
+    sed -i 's/^127.0.1.1*/#127.0.1.1/' /etc/hosts
+
+    #   Use ping to see if the hostname resolves to outside address
+    name_to_test=$1
+    echo "Testing $name_to_test"
+    if ! ping -c 3 -q $name_to_test 2>&1 >/dev/null; then
+        #echo "Could not ping '$name_to_test'"
+        stat=1
+    else
+        #echo "success"
+        stat=0
+    fi
+
+    #   Return loopback to uncommented state
+    sed -i 's/#127.0.1.1*/127.0.1.1/' /etc/hosts
+
+    return $stat
+}
+
+function get_Netmask ()
+{
+    ETH_DEV=${ETH_DEV-"eth0"}   #default if not defined elsewhere
+    IP=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet / { print $2 } ' | sed -e s/addr://)
+    MASK=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet a/ { print $4 } ' | sed -e s/Mask://)
+    if [ "$IP" = "" ]||[ "$MASK" = "" ]; then
+        local_netmask="0.0.0.0"
+    else
+    dhcp_ip=${IP}
+    local_netmask=$(( `echo $IP | cut -d"." -f 1` & `echo $MASK | cut -d"." -f 1` )).\
+$(( `echo $IP | cut -d"." -f 2` & `echo $MASK | cut -d"." -f 2` )).\
+$(( `echo $IP | cut -d"." -f 3` & `echo $MASK | cut -d"." -f 3` )).\
+$(( `echo $IP | cut -d"." -f 4` & `echo $MASK | cut -d"." -f 4` ))
+    fi
+}
+
+function cleanup_previousInstallations()
+{
+    echo "Cleaning up old files from previous installations"
+
+    #-----------------------------------
+    # Remove deprecated ion software
+    #-----------------------------------
+    apt-get --assume-yes --force-yes remove ion-eaplugins 2>/dev/null || true
+    
+    #---    Clean up /usr/local/lib/python2.6/dist-packages ---#
+    DIR="/usr/local/lib/python2.6/dist-packages/"
+    FILES=(
+            drmaa-0.4b3
+            django-tastypie-0.9.7
+            distribute-0.6.14
+            simplejson-2.1.6
+            calabash-0.0.3
+            argparse-1.2.1
+            jsonpipe-0.0.7
+            Cython-0.15
+            pysam-0.5
+            mimeparse.py
+            mimeparse.pyc
+            easy-install.pth
+            setuptools.pth
+            )
+    for f in ${FILES[@]}; do
+        rm -rf ${DIR}/${f}*
+    done
+
+    # Some files left in /usr/local/bin from jsonpipe-0.0.7 tarball
+    # Required for upgrade from 1.4,1.5 to 2.0
+    rm -f /usr/local/bin/jsonpipe
+    rm -f /usr/local/bin/jsonunpipe
+    rm -f /usr/local/bin/easy_install
+    rm -f /usr/local/bin/easy_install-2.6
+    rm -f /usr/local/bin/cygdb
+    rm -f /usr/local/bin/cython
+
+    # Remove settings.sh from bashrc
+    if grep "/opt/sge/iontorrent/common/settings.sh" ~ionadmin/.bashrc; then
+        # Remove the line
+        sed -i '/\/opt\/sge\/iontorrent\/common\/settings.sh/d' ~ionadmin/.bashrc
+    fi
+
+    # Remove export of SGE directory
+    set +e
+        sed -i '/\/opt\/sge/d' /etc/exports
+        exportfs -ua
+        exportfs -a
+    set -e
+
+    if ps aux|grep sge_execd|grep -v grep > /dev/null; then
+        if [ -f /etc/init.d/sgeexecd ];
+        then
+            echo "Removing legacy tarball SGE"
+            invoke-rc.d sgeexecd stop
+        fi
+    fi
+
+    if ps aux|grep sge_qmaster|grep -v grep > /dev/null; then
+        if [ -f /etc/init.d/sgemaster ];
+        then
+            invoke-rc.d sgemaster stop
+        fi
+    fi
+
+    # Ensure no sge daemons are running any longer - they mess up subsequent configuration steps
+    # and sometimes normal shutdown commands are ineffective.
+    if [ -f /etc/init.d/gridengine-exec ]; then /etc/init.d/gridengine-exec stop; fi
+    if [ -f /etc/init.d/gridengine-master ]; then /etc/init.d/gridengine-master stop; fi
+    for pid in `ps aux|grep sge_|grep -v grep|awk '{print $2}'`; do
+        kill -9 $pid || true
+    done
+    
+    # remove tarball SGE version
+    rm -rf /opt/sge
+    rm -f /etc/init.d/sgeexecd
+    rm -f /etc/init.d/sgemaster
+    
+    # Previous versions <1.5 created malformed /etc/ntp.conf files
+    # Purge the package here and it will get reinstalled with a clean config file
+    apt-get --assume-yes --force-yes purge ntp
+    
+    return 0
+}
+
+function pkg_installation ()
+{
+    if [ -z $1 ]; then
+        echo "ERROR: No package list provided"; return 1
+    else
+        pkg_list=$1
+    fi
+    
+    # function to restore backed-up /etc/apt/sources.list
+    function cleanup_tmp_src_list () { if [ -f $1 ]; then mv $1 /etc/apt/sources.list; fi; }
+    
+    #------------------------------------------------------
+    # Check for valid source of deb files
+    #------------------------------------------------------
+    TMP_SRC_LST=/etc/apt/sources.list._temp
+    # Check to use local USB drive repository
+    if [ $APT_USB -eq 1 ]; then
+        #---                                                                ---#
+        #---    Temporarily override the existing /etc/apt/source.list file ---#
+        #---                                                                ---#
+        if [ -f $TMP_SRC_LST ]; then
+            # error for this to exist, must be from previous error
+            :
+        else
+            mv /etc/apt/sources.list $TMP_SRC_LST
+        fi
+
+        #---                                                                ---#
+        #---    Our install media has a hidden file: .version               ---#
+        #---                                                                ---#
+        verpath=$(find /media -maxdepth 2 -name .version | awk '{print $1}')
+        if [ "${verpath}" == "" ]; then
+            verpath=$(find $PWD -maxdepth 2 -name .version | awk '{print $1}')
+            if [ "${verpath}" == "" ]; then
+                echo "ERROR: Could not find any Torrent Server installation media."
+                echo
+                return 1
+            fi
+        fi
+        mediapath=$(dirname $verpath)
+        echo "deb file:${mediapath}/ updates/" > /etc/apt/sources.list
+    else
+
+        #---                                                        ---#
+        #---    Test for access to update servers                   ---#
+        #---                                                        ---#
+        #TODO: temporary file write should go to /tmp directory
+        errCnt=0
+        if ! wget -nv -o /tmp/_wget.log http://updates.iontorrent.com/updates/software/lucid/Packages.gz; then
+            echo "Failed to contact Ion Software update server (updates.iontorrent.com)."
+            echo -e "\tcan not download files from http://updates.iontorrent.com/updates/software/lucid/"
+            echo -e "\twith wget using http protocol via port 80."
+            echo
+            ((errCnt++)) || true
+        else
+            rm -f Packages.gz
+            echo -e "\nAccess to Ion Torrent Software Update Repository confirmed.\n"
+        fi
+
+        if ! wget -nv -a /tmp/_wget.log http://us.archive.ubuntu.com/ubuntu/dists/lucid-updates/main/binary-amd64/Release; then
+            echo "Failed to contact Ubuntu update server (ubuntu.com)."
+            echo -e "\tcan not download files from http://us.archive.ubuntu.com/ubuntu/dists/lucid-updates/main/binary-amd64/"
+            echo -e "\twith wget using http protocol via port 80."
+            echo
+            ((errCnt++)) || true
+        else
+            rm -f Release
+            echo -e "\nAccess to Ubuntu Update Repository confirmed.\n"
+        fi
+
+        if [ $errCnt -ne 0 ]; then
+            if [ -f /tmp/_wget.log ]; then
+                echo "From wget error log:"
+                cat /tmp/_wget.log
+                rm -f /tmp/_wget.log
+            fi
+            echo -e "\nSoftware update has failed.  Please contact IT with above error messages.\n"
+            return 1
+        fi
+    fi
+    
+    # Undo any package holds we might have enabled previously
+    release_pkg_holds
+    
+    # Set any package holds we may need:
+    set_pkg_holds
+    
+    apt-get update > /dev/null || true
+    if ! apt-get --assume-yes --force-yes install ${pkg_list[@]}; then
+        cleanup_tmp_src_list $TMP_SRC_LST
+        return 1
+    fi
+}
+
+function install_system_packages ()
+{
+	# Cleanup old installations
+	cleanup_previousInstallations
+    
+    # Is there room in /var/ to update?
+    echo "Purging apt repository directory"
+    apt-get clean
+    
+    if is_master; then
+        # Preseed the master gridengine settings
+        debconf-set-selections << EOF
+gridengine-exec         shared/gridenginemaster string $(hostname -f)
+gridengine-common       shared/gridenginecell   string iontorrent
+gridengine-common       shared/gridengineconfig boolean true
+EOF
+    else
+        # Preseed the execute gridengine settings
+        # sge_master_host is user input on initial config; else its defined in this file
+        if [ -z ${sge_master_node} ]; then
+            sge_master_node=$(cat /var/lib/gridengine/iontorrent/common/act_qmaster)
+        fi
+        debconf-set-selections << EOF
+gridengine-exec         shared/gridenginemaster string ${sge_master_node}
+gridengine-common       shared/gridenginecell   string iontorrent
+gridengine-common       shared/gridengineconfig boolean true
+EOF
+    fi
+
+    # postfix install needs preseed
+    debconf-set-selections << EOF
+postfix  shared/chattr  boolean  false
+postfix shared/destinations string quark01.ite, localhost.ite, , localhost
+postfix shared/mailbox_limit string 0
+postfix shared/mailname string quark01.ite
+postfix shared/main_mailer_type string  Internet Site
+postfix shared/mynetworks string 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+postfix shared/procmail boolean false
+postfix shared/protocols string all
+postfix shared/recipient_delim string +
+EOF
+
+    pkg_list=(
+        traceroute
+        arp-scan
+        nmap
+        links
+        lynx
+        minicom
+        mc
+        screen
+        make
+        gdb
+        gcc
+        build-essential
+        imagemagick
+        emacs23
+        vim
+        nano
+        curl
+        whois
+        figlet
+        binutils
+        sshpass
+        tk8.5
+        libmotif3
+        libxpm-dev
+        xorg
+        xfce4
+        tomcat6
+        tomcat6-admin
+        gridengine-common
+        gridengine-client
+        gridengine-exec
+        libdrmaa1.0
+        iptables
+        ntp
+        nfs-kernel-server
+        openssh-server
+        samba
+        zip
+        libz-dev
+        postfix
+        python-pysam
+        python-tastypie
+        python-simplejson
+        python-argparse
+        python-calabash
+        python-jsonpipe
+        python-drmaa
+        python-celery
+        python-django
+        python-django-celery
+        python-django-kombu
+        python-dateutil
+		perl
+        perl-doc    
+    )
+    
+    if is_master; then
+        pkg_list=( ${pkg_list[@]}
+            gridengine-master
+            gridengine-qmon
+            vsftpd
+            postgresql
+            apache2
+            apache2-mpm-prefork
+            libapache2-mod-python
+            libapache2-mod-php5
+            dnsmasq
+            dhcp3-server
+        )
+    fi
+    echo ${pkg_list[@]}
+    if ! pkg_installation ${pkg_list[@]}; then
+        error ${LINENO} "In function install_system_packages"
+    fi
+    return 0
+}
+function install_ion_packages()
+{
+    # Cleanup old installations - this kills sge daemons so commented out
+    #cleanup_previousInstallations
+    
+    pkg_list=(
+        ion-gpu
+        ion-analysis
+        ion-alignment
+        ion-dbreports
+        ion-tsconfig
+        tmap
+        samtools
+        ion-rsmts
+        ion-samita
+        ion-torrentr    
+        )
+    
+    if is_master; then
+        pkg_list=( ${pkg_list[@]}
+            ion-plugins
+            ion-pgmupdates
+            ion-docs
+            ion-referencelibrary
+            ion-sampledata
+            ion-publishers
+            ion-onetouchupdater
+            )
+    fi
+    
+    if ! pkg_installation ${pkg_list[@]}; then
+        error ${LINENO} "In function install_ion_packages"
+    fi
+    
+    # verify package installation
+    ERRCNT=0
+    for i in ${pkg_list[@]}
+    do
+        echo "Verifying $i"
+        if [ "ii" != "$(dpkg -l ${i}|tail -1|awk '{print $1}')" ]; then
+            ((ERRCNT++))
+        fi
+    done
+
+    if [ $ERRCNT -gt 0 ]; then
+        echo
+        echo "There was an error installing Ion software packages."
+        echo "Critical Error."
+        echo "Aborting the configuration now"
+        echo
+        dpkg -l "ion-*" tmap samtools
+        echo
+        exit 1
+    fi
+    
+    #----------------------------------
+    # Make sure Ion system daemons are running
+    #----------------------------------
+    if is_master; then
+        if ! service ionCrawler status > /dev/null; then
+            /etc/init.d/ionCrawler start
+        fi
+        if ! service ionJobServer status > /dev/null; then
+            /etc/init.d/ionJobServer start
+        fi
+        if ! service ionArchive status > /dev/null; then
+            /etc/init.d/ionArchive start
+        fi
+        if ! service ionPlugin status > /dev/null; then
+            /etc/init.d/ionPlugin start
+        fi
+        if ! service celeryd status > /dev/null; then
+            /etc/init.d/celeryd start
+        fi
+    fi
+    return 0
+}
+
+#--------------------------------------
+# System Configuration Operations
+#
+# NOTE: Must be non-interactive
+#--------------------------------------
+function config_system_packages ()
+{
+    
+    if is_master; then
+    #--------------------------------------
+    # Master Node Only Options
+    #--------------------------------------
+        #NOTE: dbreports cannot install until postgres iondb is setup
+        config_postgres
+        #TODO: This seems to be required now
+        a2enmod python
+        
+        #NOTE: apache2 log rotation, original code from ion-dbreports' postinst.in
+        config_apache2
+        
+        if ! config_master_sge; then error ${LINENO} "In function config_master_sge"; fi
+    else
+    #--------------------------------------
+    # Compute Node Only Options
+    #--------------------------------------
+        config_postgres_compute
+        
+        if ! config_compute_sge; then error ${LINENO} "In function config_compute_sge"; fi
+    fi
+    
+    named_core_files
+
+    remote_loghost
+
+    config_grub_menu || true
+        
+    #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
+    initialize_system_users
+}
+
+
+function named_core_files ()
+{
+	# Enable named core files
+	CORESTRING="kernel.core_pattern=core.%e.%p.%h.%t"
+	sed -i "/kernel\.core_pattern/d" /etc/sysctl.conf
+	echo $CORESTRING >> /etc/sysctl.conf
+	sysctl -p
+}
+function remote_loghost()
+{
+	# Enables logs to go to remote host, if remote is configured
+	if [ -w /etc/rsyslog.conf ]
+	then
+		sed -i "/loghost/d" /etc/rsyslog.conf
+		echo "*.* @loghost" >> /etc/rsyslog.conf
+	else
+		echo "Could not edit /etc/rsyslog.conf"
+		echo "This is not a critical edit so continuing with configuration"
+	fi
+}
+function config_grub_menu()
+{
+	if [ -r /etc/default/grub ]; then
+	
+		sed -i 's/\(GRUB_HIDDEN_TIMEOUT_QUIET=\).*/\1false/' /etc/default/grub
+		sed -i 's/\(GRUB_HIDDEN_TIMEOUT=\).*/\15/' /etc/default/grub
+		/usr/sbin/update-grub
+		if [ $? != 0 ]; then
+			echo "update-grub failed."
+			return 1
+		fi
+	else
+		echo "Could not find /etc/default/grub"
+		echo "Could not modify grub config"
+		return 1
+	fi
+	return 0
+}
+
+function release_pkg_holds ()
+{
+    # Releases the hold on all packages with that designation
+    dpkg --get-selections > /tmp/pkgs_installed
+
+    #---    mark all packages as 'install'  ---#
+    sed -i 's/\shold.*/install/' /tmp/pkgs_installed
+
+    #---    put all packages to install ---#
+    cat /tmp/pkgs_installed | dpkg --set-selections
+    rm -f /tmp/pkgs_installed
+}
+
+function set_pkg_holds ()
+{
+    pkgList=(
+        grub-common
+        grub-pc
+    )
+    for pkg in ${pkgList[@]}; do
+        echo "$pkg hold"|dpkg --set-selections
+    done
+}
+
+function initialize_system_users ()
+{
+    echo "Initializing required users and groups"
+    
+    #---										---#
+	#---	Create system user to run plugins	---#
+    #---	Using UID=1100, GID==1100			---#
+    #---										---#
+	pluginUser='ionian'
+	pluginGroup='ionian'
+    if ! getent group | grep -q "^$pluginGroup:" ; then
+        #echo -n "Adding group $pluginGroup.."
+        addgroup --system $pluginGroup --gid 1100 2>/dev/null ||true
+        #echo "..done"
+    fi
+	if ! getent passwd | grep -q "^$pluginUser:"; then
+        #echo -n "Adding system user $pluginUser.."
+    	adduser --system \
+        				 --no-create-home \
+                         --uid 1100 \
+                         --ingroup $pluginGroup \
+                         --disabled-password \
+                         $pluginUser 2>/dev/null || true
+		#echo "..done"
+    fi
+    
+    #---	ionadmin, www-data should be in ionian group	---#
+    if ! groups ionadmin | cut -d: -f2 | grep -qw $pluginGroup; then
+		adduser ionadmin $pluginGroup > /dev/null
+    fi
+    if ! groups www-data | cut -d: -f2 | grep -qw $pluginGroup; then
+		adduser www-data $pluginGroup > /dev/null
+    fi
+    #---    ionadmin should have read/write permission on www-data group    ---#
+    if ! groups ionadmin | cut -d: -f2 | grep -qw www-data; then
+		adduser ionadmin www-data > /dev/null
+    fi
+}
+
+function config_apache2 ()
+{
+    # Default apache logging interval is not good when there is heavy traffic and lots of logging
+    # can clog the /var partition.  We set a file size limit and change logrotate to run once an
+    # hour for apache.
+    local configfile='/etc/logrotate.d/apache2'
+    #--- Set file size limit
+    if [ -w $configfile ]; then
+        # Set number of files to keep
+        sed -i 's/\([[:blank:]]\)rotate.*/\1rotate 30/' $configfile
+        # Set max size of file
+        if ! grep -q size $configfile; then
+            # missing; add it as first option after open brace
+            sed -i 's/{$/&\n\tsize 100M/' $configfile
+        else
+            # exists; make sure its set to value we want
+            sed -i 's/\([[:blank:]]\)size.*/\1size 100M/' $configfile
+        fi
+        # Set compression on all files immediately
+        sed -i "s/\([[:blank:]]\)delaycompress/\1nodelaycompress/" $configfile
+        
+        # Set force rotation daily
+        sed -i "s/\([[:blank:]]\)weekly/\1daily/" $configfile
+    else
+        echo "Could not edit apache2 log rotate config file: $configfile"
+        echo "Not critical so configuration script will continue."
+    fi
+
+    #--- Set apache to run logrotate once per hour (instead of once per day)
+    if ! cp -f /etc/cron.daily/logrotate /etc/cron.hourly/; then
+        echo "There was an error setting up logrotate to run once an hour"
+        echo "Not critical so configuration script will continue."
+    fi
+}
+
+function deny_ssh_access ()
+{
+    deny_user=$1
+    
+    if ! grep ^DenyUsers /etc/ssh/sshd_config; then
+        # DenyUsers directive does not exist; add it
+        echo "DenyUsers $deny_user" >> /etc/ssh/sshd_config
+    else
+        # DenyUsers directive exists; make sure $deny_user is in the list
+        if ! echo $directive|grep -q $deny_user; then
+            # add $deny_user to list of denied users
+            sed -i "/^DenyUsers/ {/$deny_user/! s/.*/& $deny_user/}" /etc/ssh/sshd_config
+        fi
+    fi
+}
+
+function config_ftp()
+{
+    echo "Configuring FTP server"
+    ftpUser="ionguest"
+    ftpPass="ionguest"
+    if [ -f /etc/vsftpd.conf ]; then
+        # create ftp user, if it doesn't yet exist
+        if ! getent passwd | grep -q "^$ftpUser:"; then
+        sudo useradd -m $ftpUser
+        sudo passwd $ftpUser <<EOFftp
+$ftpPass
+$ftpPass
+EOFftp
+        fi
+
+        #Deny ssh access for this user
+        deny_ssh_access $ftpUser
+        
+#        # disable login shell access
+#        # N.B. DO NOT ENABLE!  This diables ftp access
+#        status=$(expect -c "
+#        spawn chsh -s /bin/false $ftpUser
+#        expect {
+#        assword: {send \"$ftpPass\n\"; exp_continue}
+#        }
+#        exit
+#        ")
+
+        # this directory is created elsewhere (?) but want to make sure it exists
+        # N.B. cluster setups probably don't write raw data to /results
+        #mkdir -p /results
+        #chmod 777 /results
+        # create link to /results; directory where the PGMs write their data files.
+        # on cluster nodes, this link might be broken, but thats okay.
+        if [ ! -h /home/$ftpUser/results ]; then
+            ln -s -f /results /home/$ftpUser/results
+        fi
+
+        sed -i "s/^#local_enable.*/local_enable=YES/" /etc/vsftpd.conf
+        sed -i "s/^#write_enable.*/write_enable=YES/" /etc/vsftpd.conf
+        sed -i "s/^#local_umask.*/local_umask=000/" /etc/vsftpd.conf
+
+        #--- Restrict ftp access to ftp user only  ---#
+        # create control file if not existing
+        if [ ! -f /etc/vsftpd.allowed_users ]; then
+            touch /etc/vsftpd.allowed_users
+        fi
+
+        # add ftp user to control file if not existing
+        if ! grep $ftpUser /etc/vsftpd.allowed_users; then
+            echo $ftpUser >> /etc/vsftpd.allowed_users
+        fi
+
+        # add control configuration to conf file if not existing
+        if ! grep ^userlist_deny /etc/vsftpd.conf; then
+            echo "userlist_deny=NO" >> /etc/vsftpd.conf
+        else
+            sed -i "s/userlist_deny.*/userlist_deny=NO/" /etc/vsftpd.conf
+        fi
+        if ! grep ^userlist_enable /etc/vsftpd.conf; then
+            echo "userlist_enable=YES" >> /etc/vsftpd.conf
+        else
+            sed -i "s/userlist_enable.*/userlist_enable=YES/" /etc/vsftpd.conf
+        fi
+        if ! grep ^userlist_file /etc/vsftpd.conf; then
+            echo "userlist_file=/etc/vsftpd.allowed_users" >> /etc/vsftpd.conf
+        else
+            sed -i "s:userlist_file.*:userlist_file=/etc/vsftpd.allowed_users:" /etc/vsftpd.conf
+        fi
+
+        service vsftpd restart
+        return 0
+    else
+        echo "Missing config file.  Is vsftpd package installed?"
+        echo "run apt-get install vsftpd"
+        error ${LINENO} 1
+    fi
+}
+
+function config_master_nfs()
+{
+    echo "Configuring NFS share: exporting /results directory"
+    export_directory "/results"
+}
+
+#---                                            ---#
+#---    Adds given directory to /etc/exports    ---#
+#---                                            ---#
+function export_directory()
+{
+    [ $# -eq 0 ] && { echo "Usage: export_directory <directory>" ; return 1; }
+
+    EXP_DIR=$1
+
+    get_Netmask
+    NETADDR=$local_netmask
+    MASK=32
+    # Need to determine mask from netmask
+    # ie, 192.168.0.0 == 16
+    #     192.168.1.0 == 24
+    if [ $(echo $NETADDR | cut -d"." -f 4) == 0 ]; then
+        MASK=24
+    fi
+    if [ $(echo $NETADDR | cut -d"." -f 3) == 0 ]; then
+        MASK=16
+    fi
+    if [ $(echo $NETADDR | cut -d"." -f 2) == 0 ]; then
+        MASK=8
+    fi
+
+    if [ -f /etc/exports ]; then
+        #
+        #   Export the given directory
+        #
+        
+        #--- delete all previous entries for given directory ---#
+        # TODO: This wipes any customer customization
+        sed -i "s:${EXP_DIR}\s.*::g" /etc/exports
+        sed -i "/^$/d" /etc/exports
+
+        #---    Add given directory to export file  ---#
+        echo -e "${EXP_DIR}\t$NETADDR/$MASK(rw,async,subtree_check)" >> /etc/exports
+        echo -e "${EXP_DIR}\t192.168.0.0/16(rw,async,subtree_check)" >> /etc/exports
+
+        invoke-rc.d nfs-kernel-server restart
+
+        echo
+        echo "${EXP_DIR} directory is shared via NFS"
+        echo "NFS export has been configured with network mask $NETADDR"
+        echo "If this is incorrect, edit /etc/exports and restart with"
+        echo "sudo /etc/init.d/nfs-kernel-server restart"
+        echo
+        return 0
+    else
+        echo "Missing config file.  Is nfs package installed?"
+        echo "Run apt-get install nfs-kernel-server"
+        error ${LINENO} 1
+    fi
+}
+
+function config_postgresql_cluster_access()
+{
+    #
+    # Allow cluster nodes to access database
+    #   Uncomment, if commented-out
+    #   Edit to allow any host to connect
+    #
+    PSCONF=$(find /etc/postgresql -name postgresql.conf 2>/dev/null)
+    sed -i "s/^#listen_addresses/listen_addresses/" $PSCONF
+    sed -i "s/listen_addresses = [^#]*/listen_addresses = '*'\t/" $PSCONF
+
+    PGHBACONF=$(find /etc -name pg_hba.conf 2>/dev/null)
+    # Remove existing cluster access permission line first
+    sed -i '/host\siondb\sion/d' $PGHBACONF
+
+    classA=-1
+    ipadd=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet / { print $2 } ' | sed -e s/addr://)
+    if [ ! -z $ipadd ]; then
+        classA=$(echo ${ipadd} | cut -d"." -f 1)
+        if [ $classA -gt 0 ] && [ $classA -lt 256 ]; then
+            # set permissions to allow access to any server on class A network address.
+            su - postgres -c "echo -e \"host\tiondb\tion\t${classA}.0.0.0/8\ttrust\" >> $PGHBACONF"
+        else
+            echo "In function config_postgresql_cluster_access:"
+            echo "Error determining IP address.  Postgres will likely not allow external server access."
+            echo "If external access to the database is required, (i.e., clustered, multi-node site)"
+            echo "make sure the ${ETH_DEV} port has a valid IP address and re-run set-up"
+        fi
+    else
+        echo "In function config_postgresql_cluster_access:"
+        echo "Error determining IP address.  Postgres will likely not allow external server access."
+        echo "If external access to the database is required, (i.e., clustered, multi-node site)"
+        echo "make sure the ${ETH_DEV} port has a valid IP address and re-run set-up"
+    fi
+
+    if cmd=$(basename $(find /etc/init.d -name postgresql\*)); then
+        invoke-rc.d $cmd restart
+    else
+        echo "Could not restart postgres database"
+    fi
+}
+
+function config_postgres()
+{
+    echo "Postgresql Configuration..."
+
+    # Make sure server is running
+    PS_SCRIPT=$(find /etc/init.d -name "postgres*")
+    if [ "$PS_SCRIPT" != "" ]; then
+        if ! $PS_SCRIPT status; then
+            if ! $PS_SCRIPT start; then
+                echo "Could not start postgres database service"
+                error ${LINENO} 1
+            fi
+        else
+            echo "Postgresql service is running..."
+        fi
+    else
+        echo "Could not find postgres start-up script.  Is postgresql package installed?"
+        error ${LINENO} 1
+    fi
+
+    # Make sure server will start at boot
+    update-rc.d $(basename $PS_SCRIPT) defaults 06
+
+    echo "Configuring postgresql database..."
+    # Prime the database server with the empty ion database
+    if which psql 1>/dev/null; then
+
+sudo -u postgres psql << EOFdb
+CREATE USER ion WITH PASSWORD 'ion';
+CREATE DATABASE iondb;
+GRANT ALL PRIVILEGES ON DATABASE iondb to ion;
+\q
+EOFdb
+
+    else
+        echo "Missing psql executable.  Is postgresql package installed?"
+        echo "run apt-get install postgresql"
+        error ${LINENO} 1
+    fi
+
+    #
+    # Allow access to database from apache webserver
+    #
+    PGHBACONF=$(find /etc -name pg_hba.conf 2>/dev/null)
+    su - postgres -c "sed -i 's/md5/trust/' $PGHBACONF"
+    su - postgres -c "sed -i 's/ident/trust/' $PGHBACONF"
+    su - postgres -c "sed -i 's/ident sameuser/trust/' $PGHBACONF"
+
+    #
+    # Allow access to database from cluster nodes
+    #
+    config_postgresql_cluster_access
+
+    # NOTE: config_postresql_cluster_access function also restarts the database service
+
+    return 0
+
+    #--- NOTES ON POSTGRESQL ---#
+    # To remove an existing database, do the following commands
+    # service ionCrawler stop
+    # service ionJobServer stop
+    # service ionArchive stop
+    # service apache2 stop
+    # dropdb -i -e iondb -U postgres
+}
+
+#---                                                                        ---#
+#---    This leaves intact any existing local dbase, just points to other   ---#
+#---    remote dbase.                                                       ---#
+#---                                                                        ---#
+function config_postgres_compute()
+{
+	postgresql_server=$sge_master_node
+    if [ -z $postgresql_server ]; then
+        echo "hostname of postgresql server is undefined.  cannot continue."
+        error $LINENO 1
+    fi
+    if [ -z $idaemon_host ]; then
+        echo "hostname of headnode server is undefined.  cannot continue."
+        error $LINENO 1
+    fi
+    if [ -z $databaseServerPort ]; then
+        echo "Setting database server port number to default value of 5432"
+        databaseServerPort=5432
+    fi
+    
+    # Check/Create required directory
+    if [ ! -d /etc/torrentserver ]; then
+        mkdir -p /etc/torrentserver
+    fi
+    
+    touch /etc/torrentserver/__init__.py
+    
+    # Write the cluster_settings file
+cat > /etc/torrentserver/cluster_settings.py << EOF
+# Automatically generated file: do not edit
+# Cluster settings for Torrent Suite Compute nodes
+
+DATABASES = {
+  'default': {
+    'ENGINE': 'django.db.backends.postgresql_psycopg2',
+    'NAME': 'iondb',
+    'USER': 'ion',
+    'PASSWORD': 'ion',
+    'HOST': '$postgresql_server',
+    'PORT': '$databaseServerPort'
+  }
+}
+IPLUGIN_HOST = '$idaemon_host'
+JOBSERVER_HOST = '$idaemon_host'
+EOF
+
+    return 0
+}
+
+#---                                            ---#
+#---    Add our warning message to top of file  ---#
+#---                                            ---#
+function add_warning_msg()
+{
+    #
+    #   DON"T USE THIS WITH SCRIPTS WHERE THE TOP LINE
+    #   NEEDS TO SPECIFY AN INTERPRETER
+    #
+
+    file="${1}"
+    if (! grep -q "^# WARNING" ${file}); then
+
+        IFS=$","
+        for l in ${TEXT_WARN_MSG[@]}; do echo -ne $l >>_tmpfile; done
+        unset IFS
+
+        cat ${file} >> _tmpfile
+        cp _tmpfile ${file} && rm _tmpfile
+
+    fi
+}
+
+
+function config_master_torque()
+{
+    # qsub -l nodes=1:ppn=4:gpus=1
+
+    currentNodeName=$(hostname -f)
+    numProcessors=$(grep processor /proc/cpuinfo | wc -l)
+
+    invoke-rc.d pbs_mom stop
+    invoke-rc.d pbs_server stop
+    invoke-rc.d pbs_sched stop
+
+    killall pbs_mom pbs_sched pbs_server || true
+    killall -s SIGKILL pbs_mom pbs_sched pbs_server || true
+
+    update-rc.d pbs_mom defaults
+    update-rc.d pbs_server defaults
+    update-rc.d pbs_sched defaults
+    hostname --long > /var/spool/torque/server_priv/nodes
+    hostname --long > /var/spool/torque/server_name
+    hostname --long > /var/spool/torque/mom_priv/config
+    #ps aux | grep -v grep | grep -q pbs_server || pbs_server -t create
+    invoke-rc.d pbs_server start
+    invoke-rc.d pbs_sched start
+    invoke-rc.d pbs_mom start
+    qmgr -c "s s scheduling=true"
+    qmgr -c "c q batch queue_type=execution"
+    qmgr -c "s q batch started=true"
+    qmgr -c "s q batch enabled=true"
+    qmgr -c "s q batch resources_default.nodes=1"
+    qmgr -c "s q batch resources_default.walltime=3600"
+    qmgr -c "s s default_queue=batch"
+
+    # add node
+    qmgr -c "create node $currentNodeName state=free" -e
+    qmgr -c "set node $currentNodeName np = $numProcessors" -e
+
+    return 0
+}
+
+function default_slots ()
+{    
+    # determine number of slots by number of sockets.  T-7500 have two sockets
+    # with 4 cores in each socket.  T-3500 have one socket.  For now, we use the
+    # number of sockets == number of slots.
+    slots=$(lscpu|grep "^CPU socket"|awk '{print $3}')
+    if [ -z $slots ]; then slots=2; fi
+    echo $slots
+}
+
+function config_master_sge()
+{
+    currentNodeName=$(hostname -f)
+
+    echo "Configuring Sun Grid Engine..."
+
+    # Ensure that the master daemon is running
+    /etc/init.d/gridengine-exec stop
+    /etc/init.d/gridengine-master restart
+    
+    # this is required empirically.  its cheesy and needs to be fixed but it works.
+    # no sleep will fail, 1 sec seems to work, 5 seems safe.
+    sleep 5
+
+    add_warning_msg /etc/hosts
+
+    #---
+    # define the dhcp_ip variable
+    #---
+    get_Netmask
+
+    test -x $(which qconf) || echo "ERROR: cannot execute qconf" || exit 0
+    
+    # add user
+    user_name=$(grep ^name /usr/share/ion-tsconfig/sge-configuration/user.template|awk '{print $2}')
+    if ! qconf -suserl | grep $user_name; then
+        #NOT indempotent
+        if ! qconf -Auser /usr/share/ion-tsconfig/sge-configuration/user.template; then
+            echo "ERROR: SGE config failed setting user"
+            return 1
+        fi
+    fi
+
+    #setup queue
+    qname=$(grep ^qname /usr/share/ion-tsconfig/sge-configuration/queue.template|awk '{print $2}')
+    if ! qconf -sql | grep -q $qname; then
+        #NOT indempotent
+        if ! qconf -Aq /usr/share/ion-tsconfig/sge-configuration/queue.template; then
+            echo "ERROR: SGE config failed setting queue"
+            return 1
+        fi
+        
+        #set number of default slots for this queue
+        set_slots=$(default_slots)
+        if ! qconf -aattr queue slots $set_slots all.q; then
+            echo "ERROR: SGE config failed setting slots"
+            return 1
+        fi
+    fi
+    
+    # add execution host
+    #Wait!  host is already an execution host!  This never executes!
+    if ! qconf -sel | grep -q $currentNodeName; then
+        hosttmpfile=`mktemp`
+        sed s/YOUR_TS_HOSTNAME/$currentNodeName/g /usr/share/ion-tsconfig/sge-configuration/host.template > $hosttmpfile
+        #NOT indempotent
+        if ! qconf -Ae $hosttmpfile; then
+            echo "ERROR: SGE config failed setting host node"
+            return 1
+        fi
+        rm -f $hosttmpfile
+    fi
+
+    # add submission host; indempotent
+    if ! qconf -as $currentNodeName; then
+        echo "ERROR: SGE config failed setting submission host"
+        return 1
+    fi
+    
+    #add host to queue; indempotent
+    if ! qconf -aattr queue hostlist $currentNodeName all.q; then
+        echo "ERROR: SGE config failed setting hostlist"
+        return 1
+    fi
+    
+    # FIXME - get correct number of CPUs;indempotent
+    # if slots are already set, use existing number
+    if qconf -sq all.q|grep -q $currentNodeName; then
+        set_slots=$(qhost -q -h $currentNodeName|grep all.q|awk '{print $3}'|cut -d/ -f 3)
+        if [ -z $set_slots ]; then
+            set_slots=$(default_slots)
+        fi
+    else
+        set_slots=$(default_slots)
+    fi
+    #set number of slots for this host;indempotent
+    if ! qconf -aattr queue slots "[$currentNodeName=$set_slots]" all.q; then
+        echo "ERROR: SGE config failed setting slots"
+        return 1
+    fi
+
+    # Create parallel environment
+    pe_name=$(grep ^pe_name /usr/share/ion-tsconfig/sge-configuration/ion_pe.template|awk '{print $2}')
+    if ! qconf -spl | grep -q $pe_name; then
+        #NOT indempotent
+        if ! qconf -Ap /usr/share/ion-tsconfig/sge-configuration/ion_pe.template; then
+            echo "ERROR: SGE config failed creating ion_pe parallel environment"
+            return 1
+        fi
+    fi
+    
+    # Add parallel environment to the queue; indempotent
+    if ! qconf -aattr queue pe_list ion_pe all.q; then
+        echo "ERROR: SGE config failed adding ion_pe parallel environment"
+        return 1
+    fi
+    
+    # Add ionadmin user as sge admin (if ionadmin is a valid user)
+    if getent passwd | grep -q "^ionadmin:"; then
+        if ! qconf -sm | grep ionadmin; then
+            #NOT indempotent
+            qconf -am ionadmin
+        else
+            echo "WARNING: Could not add ionadmin user as an sge administrator"
+        fi
+    fi
+    
+    #   --------------------------------------------------------------------
+    #   Modify scheduler interval to be 4 seconds
+    #   --------------------------------------------------------------------
+    schedtemp=$(mktemp)
+    qconf -ssconf | sed 's/^schedule_interval.*/schedule_interval                 0:0:04/' > $schedtemp
+    qconf -Msconf $schedtemp
+    rm -f $schedtemp
+
+    #   --------------------------------------------------------------------
+    #   Create an SGE queue for the plugin applications
+    #   --------------------------------------------------------------------
+    # SGE Configuration Changes - Make mem_free a consumable resource
+    COMPLEX=/tmp/complexresources.$$
+    qconf -sc > ${COMPLEX}
+    sed -i 's:^mem_free .*:mem_free            mf         MEMORY      <=   YES         YES        0        0:' ${COMPLEX}
+    qconf -Mc ${COMPLEX}
+
+    setupQueue=1
+    S_RT_LIMIT='12:00:00'       # 12 hours
+    H_RT_LIMIT='12:00:05'
+    S_VMEM_LIMIT='48G'          # Upper limit on mem use
+    H_VMEM_LIMIT='48G'
+    # Setting vmem causes s_stack to default to vmem, which is too
+    # high for threaded tasks. Force down to the normal OS limit of 8M
+    S_STACK_LIMIT='8M'
+
+    #---    Test for existing plugin.q and skip creation if so  ---#
+    if qconf -sq plugin.q > /dev/null; then
+        setupQueue=0
+    fi
+    if [ $setupQueue -eq 1 ]; then
+
+            # Remove a queue
+            #qconf -dq plugin.q 2>/dev/null || true
+
+            # Generate a default cluster queue template file
+            # from existing all.q file
+            qconf -sq all.q > /tmp/pluginqueue.template
+
+            #---                            ---#
+            #---    Queue-specific changes  ---#
+            #---                            ---#
+            # Change name of queue in template
+            sed -i 's/all.q/plugin.q/' /tmp/pluginqueue.template
+
+            # bash shell NB: space after shell string vital
+            sed -i 's:^shell .*:shell                 /bin/bash:' /tmp/pluginqueue.template
+
+            # run time limits
+            sed -i 's/^s_rt.*/s_rt                  12:00:00/' /tmp/pluginqueue.template
+            sed -i 's/^h_rt.*/h_rt                  12:05:00/' /tmp/pluginqueue.template
+
+            # job priority (nice)
+            sed -i 's/^priority.*/priority      10/' /tmp/pluginqueue.template
+
+            # job slots
+
+            # memory limit - sets ulimit -v
+            sed -i "s/^s_vmem.*/s_vmem                  $S_VMEM_LIMIT/" /tmp/pluginqueue.template
+            sed -i "s/^h_vmem.*/h_vmem                  $H_VMEM_LIMIT/" /tmp/pluginqueue.template
+
+            sed -i "s/^s_stack.*/s_stack                  $S_STACK_LIMIT/" /tmp/pluginqueue.template
+
+            # Queue cannot set default value for mem_free or virtual_free complex resources
+            # echo "complex_values   mem_free=20G" >> # /tmp/pluginqueue.template
+
+            # Create new queue from template file
+            # This command returns true when queue already exists or creation error
+            qconf -Aq /tmp/pluginqueue.template
+
+            rm -f /tmp/pluginqueue.template
+    else
+        echo "plugin.q already exists"
+
+        # Ensure that existing queue has non-infinite limits on runtime
+        if qconf -sq plugin.q | grep s_rt | grep INFINITY; then
+            qconf -aattr queue s_rt $S_RT_LIMIT plugin.q
+        fi
+        if qconf -sq plugin.q | grep h_rt | grep INFINITY; then
+            qconf -aattr queue h_rt $H_RT_LIMIT plugin.q
+        fi
+
+        # Ensure that existing queue has non-infinite limits on memory
+        if qconf -sq plugin.q | grep s_vmem | grep INFINITY; then
+            qconf -aattr queue s_vmem $S_VMEM_LIMIT plugin.q
+        fi
+        if qconf -sq plugin.q | grep h_vmem | grep INFINITY; then
+            qconf -aattr queue h_vmem $H_VMEM_LIMIT plugin.q
+        fi
+        if qconf -sq plugin.q | grep s_stack | grep INFINITY; then
+            qconf -aattr queue s_stack $S_STACK_LIMIT plugin.q
+        fi
+    fi
+
+    # SGE: Set per-host maximum mem_free to be node physical mem
+    # Must be manually set to be consumable resource
+    # hostname $1, mem_total $5.
+    qhost | awk 'NR>3 {
+            print "qconf -mattr exechost complex_values mem_free=" $5,$1
+        }' | sh
+    #for node in $(qconf -sel); do
+    #    qconf -mattr exechost complex_values mem_free=48G $node # fixed at 48G
+    #done
+
+    # Restart sge exec daemon
+    #/etc/init.d/gridengine-exec stop
+    #/etc/init.d/gridengine-master restart
+    /etc/init.d/gridengine-exec start
+
+# bpp - this is not necessary with deb package installation, no?
+#    #   Setup sge daemons to start at boot
+#    update-rc.d -f gridengine-exec remove
+#    update-rc.d gridengine-exec defaults
+#    update-rc.d -f gridengine-master remove
+#    update-rc.d gridengine-master defaults
+
+    return 0
+}
+
+
+function config_compute_sge()
+{
+    currentNodeName=$(hostname -f)
+
+    echo "Configuring Sun Grid Engine..."
+
+    # add execution host
+    if ! qconf -sel | grep -q $currentNodeName; then
+        hosttmpfile=`mktemp`
+        sed s/YOUR_TS_HOSTNAME/$currentNodeName/g /usr/share/ion-tsconfig/sge-configuration/host.template > $hosttmpfile
+        #NOT indempotent
+        if ! qconf -Ae $hosttmpfile; then
+            echo "ERROR: SGE config failed setting host node"
+            return 1
+        fi
+        rm -f $hosttmpfile
+    fi
+
+    # FIXME - get correct number of CPUs;indempotent
+    if ! qconf -aattr queue slots "[$currentNodeName=2]" all.q; then
+        echo "ERROR: error setting slots"
+        return 1
+    fi
+
+    # FIXME - get correct memory value;indempotent
+    if ! qconf -mattr exechost complex_values mem_free=48G $currentNodeName; then
+        echo "ERROR: error setting mem_free"
+        return 1
+    fi
+
+    #add host to all.q queue; indempotent
+    if ! qconf -aattr queue hostlist $currentNodeName all.q; then
+        echo "WARNING: SGE config failed adding host to all.q"
+        return 1
+    fi
+    
+    #add host to plugin.q queue; indempotent
+    if ! qconf -aattr queue hostlist $currentNodeName plugin.q; then
+        echo "ERROR: SGE config failed adding host to plugin.q"
+        return 1
+    fi
+
+    # FIXME - get correct number of CPUs;indempotent
+    # if slots are already set, use existing number
+    if qconf -sq plugin.q|grep -q $currentNodeName; then
+        set_slots=$(qhost -q -h $currentNodeName|grep plugin.q|awk '{print $3}'|cut -d/ -f 3)
+        if [ -z $set_slots ]; then
+            set_slots=2
+        fi
+    else
+        set_slots=2
+    fi
+    if ! qconf -aattr queue slots "[$currentNodeName=$set_slots]" plugin.q; then
+        echo "ERROR: error setting slots"
+        return 1
+    fi
+    
+    # Set ourselves as a submit host; indempotent
+    if ! qconf -as $currentNodeName; then
+        echo "ERROR: could not set this host as a submit host"
+        return 1
+    fi
+    
+    # Add ionadmin user as sge admin (if ionadmin is a valid user)
+    if getent passwd | grep -q "^ionadmin:"; then
+        if ! qconf -sm | grep -q ionadmin; then
+            #NOT indempotent
+            qconf -am ionadmin
+        else
+            echo "WARNING: Could not add ionadmin user as an sge administrator"
+        fi
+    fi
+
+    # Restart sge.  in case its not running?
+    /etc/init.d/gridengine-exec restart
+
+    return 0
+}
+
+function config_password()
+{
+    clear
+    echo
+    echo
+    echo "It is critical that you change the default ionadmin password."
+    echo "Failure to do so opens up the potential for malicious hackers"
+    echo "to access your server and data"
+    echo
+    echo
+    while [ 1 ]
+    do
+        echo "Change the password for user ionadmin"
+        if passwd ionadmin; then
+            break
+        else
+            echo -e "\n"
+        fi
+    done
+}
+
+#--------------------------------------
+# This gets called from TSchkconfig which does not do any logging of stdout
+#--------------------------------------
+function change_hostname_sge ()
+{
+    # Variables
+    conffile='/var/lib/gridengine/iontorrent/common/act_qmaster'
+    oldName=$1
+    newName=$2
+        
+    if is_master; then
+        # Step 1 (optional, should already be shut down)
+        #Shutdown SGE daemons on qmaster
+        qconf -ke all || true
+        qconf -km || true
+        #invoke-rc.d gridengine-exec stop
+        #invoke-rc.d gridengine-master stop
+        
+        # Step 2
+        #Renaming and restarting the qmaster and exec daemon
+        echo $newName > ${conffile}
+        /etc/init.d/gridengine-master start
+        /etc/init.d/gridengine-exec start
+        
+        sleep 15
+        
+        # Step 3
+        #store all.q queue configuration
+        qconf -sq all.q > /tmp/allqueue.conf
+        #store plugin.q queue configuration
+        qconf -sq plugin.q > /tmp/pluginqueue.conf
+        
+        #Rename old qmaster hostname in queue configuration files
+        sed -i "s/$oldName/$newName/g" /tmp/allqueue.conf
+        sed -i "s/$oldName/$newName/g" /tmp/pluginqueue.conf
+        
+        #Define the new queues
+        qconf -Mq /tmp/allqueue.conf
+        qconf -Mq /tmp/pluginqueue.conf
+        
+        # add new host as submit host
+        qconf -as ${newName}
+
+        #NOTE: all the compute nodes will now need to be reset to the new qmaster host
+    else
+        set -x
+        echo "Compute Node Renaming in development"
+        # this daemon may fail to start on reboot during renaming operation
+        #invoke-rc.d gridengine-exec stop || true
+        
+        #store all.q queue configuration
+        #qconf -sq all.q > /tmp/allqueue.conf
+        #store plugin.q queue configuration
+        #qconf -sq plugin.q > /tmp/pluginqueue.conf
+        
+        #Rename old qmaster hostname in queue configuration files
+        #sed -i "s/$oldName/$newName/g" /tmp/allqueue.conf
+        #sed -i "s/$oldName/$newName/g" /tmp/pluginqueue.conf
+        
+        #Define the new queues
+        #qconf -Mq /tmp/allqueue.conf
+       #qconf -Mq /tmp/pluginqueue.conf
+        
+        # add new host as submit host
+        #qconf -as ${newName}
+        
+        # Ensure daemon is running.
+        #/etc/init.d/gridengine-exec restart
+        
+        set +x
+    fi
+}
+
+function log ()
+{
+    msg="$@"
+    logout=$TSCONFIG_LOG_DIR/$TSCONFIG_LOG_BASENAME
+    echo "$(date +"%F %H:%M:%S") $(basename $0): $msg"  >> $logout
+}
+
+function config_iptables()
+{
+    # compute nodes get different network subnets
+    if is_master; then isCN=0; else isCN=1; fi
+
+    if [ -e /etc/iptables.rules ]; then
+        #--- Delete previous definitions ---#
+        sed -i '/Torrent Server/d' /etc/iptables.rules 2>/dev/null
+        sed -i '/*filter/,/COMMIT/d' /etc/iptables.rules 2>/dev/null
+        sed -i '/*nat/,/COMMIT/d' /etc/iptables.rules 2>/dev/null
+    fi
+
+#--- Write out the iptables rules file ---#
+cat >> /etc/iptables.rules <<EOFRules
+#iptables.rules for Torrent Server
+*nat
+:PREROUTING ACCEPT [22:1936]
+:POSTROUTING ACCEPT [2:127]
+:OUTPUT ACCEPT [2:127]
+-A POSTROUTING -s 192.168.2${isCN}1.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}2.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}3.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}4.0/24 -o eth0 -j MASQUERADE
+
+COMMIT
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [3:364]
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+COMMIT
+EOFRules
+
+    #---    Add warning message ---#
+    add_warning_msg /etc/iptables.rules
+
+    #--- Enable iptables at network start ---#
+    # Delete line starting up iptables
+    sed -i '/iptables-restore/d' /etc/network/interfaces
+
+    #--- delete all trailing blank lines at end of file ---#
+    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+    echo "pre-up iptables-restore < /etc/iptables.rules" >> /etc/network/interfaces
+
+    return 0
+}
+
+function is_valid_ipaddress ()
+{
+    # Need three dots
+    numdots=$(echo $1|grep -o "\."|wc -l)
+    if [ $numdots -ne 3 ]; then
+        echo "Malformed ipaddress: $1" >&2
+        return 1
+    fi
+    
+    # Need no spaces
+    # numerals only
+    # values from 1 to 255 then 0 to 255 then 1 to 255
+    IFS=" "
+    for num in `echo $1 | awk -F. '{print $1, $4}'`; do
+        if [ $num -ge 1 -a $num -le 255 ]; then
+            # its good
+            :
+        else
+            echo "Invalid IP address: $1"
+            return 1
+        fi
+    done
+    for num in `echo $1 | awk -F. '{print $2, $3}'`; do
+        if [ $num -ge 0 -a $num -le 255 ]; then
+            # its good
+            :
+        else
+            echo "Invalid IP address: $1"
+            return 1
+        fi
+    done
+    return 0
+}
+
+function is_valid_netmask ()
+{
+    # Need three dots
+    numdots=$(echo $1|grep -o "\."|wc -l)
+    if [ $numdots -ne 3 ]; then
+        echo "Malformed ipaddress: $1" >&2
+        return 1
+    fi
+    
+    # Need no spaces
+    # numerals only
+    # values from 1 to 255
+    IFS=" "
+    for num in `echo $1 | awk -F. '{print $1, $2, $3, $4}'`; do
+        if [ $num -ge 0 -a $num -le 255 ]; then
+            # its good
+            :
+        else
+            echo "Invalid netmask: $1"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Checks if an ethernet port exists
+function valid_port ()
+{
+    grep -q $1 /proc/net/dev
+    valid=$?
+    return $valid
+}
+
+function getnetworkIP ()
+{
+    if [ -z $1 ]; then exit 1; fi
+    echo `/sbin/ifconfig $1|grep "inet addr"|awk '{print $2}'|cut -d: -f2`
+}
+function getsubnetmask ()
+{
+    if [ -z $1 ]; then exit 1; fi
+    echo `/sbin/ifconfig $1|grep "inet addr"|awk '{print $4}'|cut -d: -f2`
+}
+function getgateway ()
+{
+    echo `/sbin/route | grep "default"|awk '{print $2}'`
+}
+
+function config_PGM_interface()
+{
+    # compute nodes get different network subnets
+    if is_master; then isCN=0; else isCN=1; fi
+
+    #--- Remove any previous definitions for interfaces ---#
+    sed -i '/auto eth1/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth2/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth3/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
+
+    #--- delete all trailing blank lines at end of file ---#
+    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+
+#--- Add interface definitions ---#
+#
+# Here, we want Head Node subnets to be .201, .202, .203, .204 and
+# compute node subnets to be .211, .212, .213, .214
+# variable ${isCN} is either 0 or 1.
+#
+interfaces=( 1 2 3 4 )
+for i in ${interfaces[@]}; do
+    if (valid_port eth${i}); then
+
+        cat >> /etc/network/interfaces <<EOFNIC
+
+auto eth${i}
+iface eth${i} inet static
+address 192.168.2${isCN}${i}.1
+netmask 255.255.255.0
+EOFNIC
+
+    else
+        echo "interface eth${i} is invalid. Not configured."
+    fi
+
+done
+
+    #--- Enable packet forwarding ---#
+    sed -i 's/^#net.ipv4.ip_forward/net.ipv4.ip_forward/' /etc/sysctl.conf
+    sed -i 's/^net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+
+    sysctl -p
+
+
+    return 0
+}
+
+
+function config_dhcp()
+{
+#--- ENABLE DNS SERVER ---#
+#---                                                                        ---#
+#---    Use DNS provided by dnsmasq; but turn off DHCP provided by dnsmasq  ---#
+#---                                                                        ---#
+    # compute nodes get different network subnets
+    if is_master; then isCN=0; else isCN=1; fi
+
+    #--- Delete any existing config file ---#
+    if [ -w /etc/dnsmasq.d/ion-dhcp ]; then
+        rm -f /etc/dnsmasq.d/ion-dhcp
+    fi
+
+    echo "no-hosts" > /etc/dnsmasq.d/ion-dhcp
+    echo "addn-hosts=/etc/hosts-dnsmasq" >> /etc/dnsmasq.d/ion-dhcp
+    echo "no-dhcp-interface=eth0" >> /etc/dnsmasq.d/ion-dhcp
+    interfaces=( 1 2 3 4 )
+    for i in ${interfaces[@]}; do
+        if valid_port eth${i}; then echo -e "interface=eth${i}\nno-dhcp-interface=eth${i}\n" >> /etc/dnsmasq.d/ion-dhcp; fi
+    done
+
+    #--- Remove any pre-existing entries in /etc/hosts ---#
+    #---    Cleans out older TSconfigged hosts files
+    sed -i '/^192.168.1.1.*/d' /etc/hosts
+    sed -i '/^192.168.201.10.*/d' /etc/hosts
+    sed -i '/^192.168.202.10.*/d' /etc/hosts
+    sed -i '/^192.168.203.10.*/d' /etc/hosts
+    sed -i '/^192.168.204.10.*/d' /etc/hosts
+
+    #---    Overwrite existing hosts-dnsmasq    ---#
+    echo $(date) > /etc/hosts-dnsmasq
+    echo -e "192.168.1.1\tts" >> /etc/hosts-dnsmasq
+    if valid_port eth1; then echo -e "192.168.2${isCN}1.10\tpgm1" >> /etc/hosts-dnsmasq;fi
+    if valid_port eth2; then echo -e "192.168.2${isCN}2.10\tpgm2" >> /etc/hosts-dnsmasq;fi
+    if valid_port eth3; then echo -e "192.168.2${isCN}3.10\tpgm3" >> /etc/hosts-dnsmasq;fi
+    if valid_port eth4; then echo -e "192.168.2${isCN}4.10\tpgm4" >> /etc/hosts-dnsmasq;fi
+
+    add_warning_msg /etc/dnsmasq.d/ion-dhcp
+
+    #---    Enable reading of dnsmasq config file   ---#
+    sed -i 's:^#conf-dir.*:conf-dir=/etc/dnsmasq.d:' /etc/dnsmasq.conf
+
+#--- ENABLE DHCP SERVER ---#
+
+    #--- Backup old config file ---#
+    if [ -w /etc/dhcp3/dhcpd.conf ]; then
+        mv /etc/dhcp3/dhcpd.conf /etc/dhcp3/dhcpd.conf.old
+    fi
+
+    #---                            ---#
+    #--- Write out new config file  ---#
+    #---                            ---#
+cat >> /etc/dhcp3/dhcpd.conf <<EOFDHCP
+ddns-update-style none;
+default-lease-time 86400;
+max-lease-time 172800;
+log-facility local7;
+option domain-name "pgm.local";
+EOFDHCP
+
+interfaces=( 1 2 3 4 )
+for i in ${interfaces[@]}; do
+    if valid_port eth$i; then
+
+        cat >> /etc/dhcp3/dhcpd.conf <<EOFDHCP
+# Ion PGM subnet
+subnet 192.168.2${isCN}$i.0 netmask 255.255.255.0 {
+        range 192.168.2${isCN}$i.10 192.168.2${isCN}$i.10;
+        option subnet-mask  255.255.255.0;
+        option broadcast-address 192.168.2${isCN}$i.255;
+        option routers 192.168.2${isCN}$i.1;
+        option domain-name-servers 192.168.2${isCN}$i.1;
+        option netbios-name-servers 192.168.2${isCN}$i.1;
+}
+EOFDHCP
+
+    else
+        echo "dhcp config: port eth$i invalid, not configuring"
+    fi
+done
+
+
+    add_warning_msg /etc/dhcp3/dhcpd.conf
+
+    #---    Edit dhclient.conf          ---#
+    if [ -e /etc/dhcp3/dhclient.conf ]; then
+        mv /etc/dhcp3/dhclient.conf /etc/dhcp3/dhclient.conf.orig
+    fi
+
+    cat >> /etc/dhcp3/dhclient.conf <<EOFDHCLIENT
+option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
+
+send host-name "<hostname>";
+
+interface "eth0"
+{
+request subnet-mask, broadcast-address, time-offset, routers,
+        domain-name, domain-name-servers, domain-search, host-name,
+        netbios-name-servers, netbios-scope, interface-mtu,
+        rfc3442-classless-static-routes, ntp-servers;
+}
+EOFDHCLIENT
+
+
+    #TODO: Enable proper error checking on return code here
+    service dhcp3-server restart || true
+    
+    return 0
+}
+
+function config_ntp_server ()
+{
+    if [ -w /etc/ntp.conf ]; then
+        if ! grep "^restrict 192.168.0.0" /etc/ntp.conf; then
+            echo "restrict 192.168.0.0 mask 255.255.0.0 nomodify notrap" >> /etc/ntp.conf
+        fi
+        service ntp restart
+    else
+        echo
+        echo "Could not edit ntp.conf"
+        echo
+        echo "You need to contact support in order to"
+        echo "correctly setup the NTP (Network Time Protocol) Service on this"
+        echo "server."
+        echo
+    fi
+}
+
+#---                                ---#
+#--- Test for root permissions      ---#
+#---                                ---#
+function needs_root()
+{
+    if [ $(id -u) != 0 ]; then
+        echo "Please run this script with root permissions:"
+        echo
+        echo "sudo $0"
+        echo
+        exit 1
+    fi
+    return 0
+}
+
+function config_samba()
+{
+    if [ ! -w /etc/samba/smb.conf ]; then
+        echo "Cannot write /etc/samba/smb.conf"
+        return 1
+    else
+        echo "Modifying /etc/samba/smb.conf"
+    fi
+
+    # Remove any Torrent Server setup
+    sed -i '/Torrent Server Settings Start/,/Torrent Server Settings End/d' /etc/samba/smb.conf
+
+    # Append Torrent Server setup
+    echo -e "# Torrent Server Settings Start" >> /etc/samba/smb.conf
+    echo -e "[results]" >> /etc/samba/smb.conf
+    echo -e "\tpath = /results" >> /etc/samba/smb.conf
+    echo -e "\twriteable = no" >> /etc/samba/smb.conf
+    echo -e "guest ok = yes" >> /etc/samba/smb.conf
+    echo -e "# Torrent Server Settings End" >> /etc/samba/smb.conf
+
+    return 0
+}
+
+function rotate_log()
+{
+    MAXINDEX=5
+    # list files in reverse order
+    for file in $(ls -r $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG* 2>/dev/null); do
+        name=$(basename $file)
+        if [ "$name" == "$TSCONFIG_INSTALL_LOG" ]; then
+            # echo "add an extension";
+            # echo "$file -> $file.1"
+            mv $file $file.1
+            continue
+        fi
+
+        extension=${name##*.}
+
+        if [[ $extension -ge $MAXINDEX ]]; then
+            # echo "remove $file";
+            rm -f $file
+        else
+            # echo "increment index extension by 1"
+            # echo "$file -> ${file%.*}.$(($extension+1))"
+            mv $file ${file%.*}.$(($extension+1))
+        fi
+    done
+}
+
+#---                                                            ---#
+#---    This creates the tsconf.conf file                       ---#
+#---    It is an error if the file already exists; in this case ---#
+#---    the file should be edited, not overwritten              ---#
+#---                                                            ---#
+function write_conf_file()
+{
+    conflog="$TSCONFIG_DIR/$TSCONFIG_CONF"
+
+    if [ -e $conflog ]; then
+
+        #--- change the date        ---#
+        sed -i "s/^date:.*/date:`date`/" ${conflog}
+
+        #--- change the hostname    ---#
+        sed -i "s/^hostname:.*/hostname:`hostname -f`/" ${conflog}
+
+        #--- change the ip address  ---#
+        if address=$(dig +short +search `hostname`); then
+            single=`echo $address|awk '{print $1}'`
+            sed -i "s/^ipaddress:.*/ipaddress:$single/" ${conflog}
+        fi
+
+        #--- change the mode    ---#
+        if [ $CONF_HEAD_NODE == 1 ]; then mode="master"; else mode="compute"; fi
+        sed -i "s/^mode:.*/mode:$mode/" ${conflog}
+
+        #--- change the configuration   ---#
+        #TODO: indicate Dual-Torrent Server configuration
+        conf="standalone"
+        sed -i "s/^configuration:.*/configuration:$conf/" ${conflog}
+
+        #--- change the serial number   ---#
+        sn=$(dmidecode -s system-serial-number 2>/dev/null)
+        sed -i "s/^serialnumber:.*/serialnumber:$sn/" ${conflog}
+
+        #--- change the version ---#
+        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@"
+        sed -i "s/^version:.*/version:$version/" ${conflog}
+
+        return 0
+    fi
+
+    #---    configuration record file   ---#
+    echo -n "date:" > $conflog  # overwrites previous contents
+    date >> $conflog
+    echo -n "hostname:" >> $conflog
+    hostname -f >> $conflog
+    echo -n "ipaddress:" >> $conflog
+    #hostname -I|awk '{print $1}' >> $conflog
+    if address=$(dig +short +search `hostname`); then
+        single=`echo $address|awk '{print $1}'`
+        echo $single >> ${conflog}
+    else
+        echo >> ${conflog}
+    fi
+    echo -n "mode:" >> $conflog
+    if [ $CONF_HEAD_NODE == 1 ]; then echo "master" >> $conflog; else echo "compute" >> $conflog; fi
+    echo -n "configuration:" >> $conflog
+    #TODO: indicate Dual-Torrent Server configuration
+    conf="standalone"
+    echo $conf >> $conflog
+    echo -n "serialnumber:" >> $conflog
+    echo $(dmidecode -s system-serial-number 2>/dev/null) >> $conflog
+    echo -n "version:" >> $conflog
+    echo -e "@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@\n" >> $conflog
+
+    return 0
+}
+
+function copy_conf_file()
+{
+    output="$TSCONFIG_SRC_DIR/$TSCONFIG_MINT_CONF_DIR"
+    if [ ! -d $output ]; then
+        mkdir $output
+    fi
+    date_str=$(date +"%Y.%m.%d-%H.%M.%S")
+    if [ -f $1 ]; then
+        fname=$(basename $1)
+        cp -af $1 $output/$fname.$date_str
+    fi
+}
+
+#---                                                                                    ---#
+#---    Manage the symbolic link from ftp client user home to the raw data directory    ---#
+#---                                                                                    ---#
+function ionguest_ftp_symlink ()
+{
+    RAW_DATA_DIR=$1
+
+    if [ -d /home/ionguest ]; then
+        if [ -h /home/ionguest/results ]; then
+            rm -f /home/ionguest/results
+        else
+            echo -e "\nSymbolic link does not exist"
+        fi
+        ln -s ${RAW_DATA_DIR} /home/ionguest/results
+    else
+        echo -e "\nUsual ftp client user does not exist: /home/ionguest\n"
+    fi
+}
+
+function is_master ()
+{
+    master=1
+    if [ -f $TSCONFIG_DIR/$TSCONFIG_CONF ]; then
+        conf=$(grep "^mode:" $TSCONFIG_DIR/$TSCONFIG_CONF|cut -f2 -d":")
+        if [ "$conf" == "master" ]; then
+            master=0
+            #echo "This is master"
+        else
+            master=1
+            #echo "This is compute"
+        fi
+    else
+        echo -e "\nNo $TSCONFIG_CONF configuration file found.\n"
+        if [ -e /opt/ion/.masternode ]; then
+            master=0
+        elif [ -e /opt/ion/.computenode ]; then
+            master=1
+        else
+            echo -e "No file found in /opt/ion either.  Assume its a master"
+            master=0
+        fi
+    fi
+    return $master
+}
+
+#--------------------------------------
+# Error handler called from trap command
+#--------------------------------------
+function error ()
+{
+    local PARENT_LINENO="$1"
+    local MESSAGE="$2"
+    local CODE="${3:-1}"
+    echo
+    echo "================================================================"
+    if [[ -n $MESSAGE ]]; then
+        echo "ERROR on or near line ${PARENT_LINENO}; ${MESSAGE}; exiting with status ${CODE}"
+    else
+        echo "ERROR on or near line ${PARENT_LINENO}; exiting with status ${CODE}"
+    fi
+    echo "================================================================"
+    echo
+    log "ERROR ${CODE}"
+    if [[ -n $MESSAGE ]]; then log "${MESSAGE}"; fi
+    log "LINENO: ${PARENT_LINENO}"
+    exit "${CODE}" 
+}
+
+#---    Delete a host from SGE configuration    ---#
+#---    Downloaded from                         ---#
+#---    http://osdir.com/ml/clustering.gridengine.users/2007-08/msg00135.html
+#---
+function sge_delete_host ()
+{
+    #
+    # Remove a host from the Grid Engine configuration
+    #
+
+    #set +u
+    #set -x
+
+    # define function to print an error message and exit
+    error_exit() {
+        echo "Error: $*"
+        exit 1
+    }
+
+    # restrict the PATH
+    #export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+    #echo args are $*
+
+    # create temporary directory
+    tmpdir=$(mktemp -d '/tmp/sge_delete_node-XXXXXX')
+    if ! cd $tmpdir; then
+        error_exit Unable to change directory to $tmpdir
+    fi
+
+    # validate arguments
+    [ -z "$1" ] && error_exit "usage: $(basename $0) sge-host [...]"
+
+    # delete all the specified hosts
+    for sge_host in $*; do
+
+        for queue in $(qconf -sql); do
+            qconf -purge queue slots $queue@$sge_host
+            qconf -purge queue hostlist $queue@$sge_host
+        done
+        
+        # delete host as submit host
+        qconf -ds $sge_host || echo "Warning: Unable to remove $sge_host from submit host list"
+
+        # delete host as SGE execution host
+        qconf -de $sge_host || echo "Warning: Unable to remove $sge_host from SGE execution host list"
+
+        # delete host from all host groups
+        for host_group in $(qconf -shgrpl); do
+            qconf -dattr hostgroup hostlist $sge_host $host_group || echo "Warning: Unable to remove $sge_host from host group $host_group"
+        done
+        
+        # This has to be the last action
+        # delete host as adminstrative host
+        qconf -dh $sge_host || echo "Warning: Unable to remove $sge_host from admin host list"
+    done
+}

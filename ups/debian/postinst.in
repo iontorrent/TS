@@ -1,0 +1,105 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+case "$1" in
+
+    configure)
+    
+    echo "Configuring NUT for Torrent Server"
+    
+    #----------
+	# ups.conf
+    #----------
+    FILE=/etc/nut/ups.conf
+    if [ -r ${FILE} ]; then
+    	mv ${FILE} ${FILE}.orig
+    fi
+    
+    cat >>${FILE}<<EOF
+[ionups]
+	driver = usbhid-ups
+	port = auto
+	desc = "Zooeey Mama!"
+EOF
+	chown root.nut ${FILE};chmod 640 ${FILE}
+	echo "...${FILE} configured"
+    
+    #-------------
+    # upsmon.conf
+    #-------------
+    FILE=/etc/nut/upsmon.conf
+    if [ -r ${FILE} ]; then
+    	mv ${FILE} ${FILE}.orig
+    fi
+    
+    cat >>${FILE}<<EOF
+MONITOR ionups 1 ionadmin ionadmin master
+MINSUPPLIES 1
+SHUTDOWNCMD "/sbin/shutdown -h +0"
+POLLFREQ 5
+POLLFREQALERT 5
+HOSTSYNC 15
+DEADTIME 15
+POWERDOWNFLAG /etc/killpower
+ NOTIFYMSG ONLINE	"UPS %s on line power"
+ NOTIFYMSG ONBATT	"UPS %s on battery"
+ NOTIFYMSG LOWBATT	"UPS %s battery is low"
+ NOTIFYMSG FSD		"UPS %s: forced shutdown in progress"
+ NOTIFYMSG COMMOK	"Communications with UPS %s established"
+ NOTIFYMSG COMMBAD	"Communications with UPS %s lost"
+ NOTIFYMSG SHUTDOWN	"Auto logout and shutdown proceeding"
+ NOTIFYMSG REPLBATT	"UPS %s battery needs to be replaced"
+ NOTIFYMSG NOCOMM	"UPS %s is unavailable"
+ NOTIFYMSG NOPARENT	"upsmon parent process died - shutdown impossible"
+RBWARNTIME 43200
+NOCOMMWARNTIME 300
+FINALDELAY 5
+EOF
+	chown root.nut ${FILE};chmod 640 ${FILE}
+	echo "...${FILE} configured"
+
+    #-----------
+	# upsd.users
+    #-----------
+	FILE=/etc/nut/upsd.users
+    if [ -r ${FILE} ]; then
+    	mv ${FILE} ${FILE}.orig
+    fi
+    
+    cat >>${FILE}<<EOF
+[ionadmin]
+password = ionadmin
+upsmon master
+EOF
+	chown root.nut ${FILE};chmod 640 ${FILE}
+	echo "...${FILE} configured"
+
+	#-----------
+	# upsd.conf
+    #-----------
+    # Default is to listen to localhost; no change necessary
+
+	#----------
+	# nut.conf
+    # This file has to be last to be configured
+    #----------
+    FILE=/etc/nut/nut.conf
+    if [ -r ${FILE} ]; then
+    	mv ${FILE} ${FILE}.orig
+    fi
+    
+    echo "MODE=standalone" >> ${FILE}
+	echo "...${FILE} configured"
+    
+    #---------------------
+    # Restart the daemons
+    #---------------------
+    invoke-rc.d nut restart
+    
+    ;;
+	
+    *)	# catch-all
+    echo "ERROR.  $1 not handled by $0"
+    ;;
+    
+esac

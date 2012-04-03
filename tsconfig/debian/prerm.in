@@ -1,0 +1,14 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+case "$1" in
+    upgrade)
+    ;;
+    remove)
+        sed -i "/.*TSchkconfig.*/d" /etc/rc.local
+    ;;
+esac
+
+exit 0
