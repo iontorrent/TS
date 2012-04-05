@@ -17,7 +17,9 @@
 #ifdef ION_USE_MKL
 #include <mkl_cblas.h>
 #else
+extern "C" {
 #include <cblas.h>
+}
 #endif
 
 //#define BKG_FIT_MAX_FLOWS   20
