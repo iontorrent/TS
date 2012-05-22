@@ -25,10 +25,27 @@ public:
         pthread_spin_init(&spinlock, 0);
     }
 
-    void Init( void ){
+    void Init( char *runId , string baseCallerDir){
         pthread_spin_lock(&spinlock);
         if( !isInitialized ){
-            predictor_dump.open("Predictors.txt");
+            //string home = getenv("HOME");
+            //string cmd = "mkdir -v " + home + "/QvPredictors";
+            //int retcode = system (cmd.c_str());
+            //string fname = home;
+            //if (retcode != 0)
+            //     fname += "/QvPredictors";
+            string fname = baseCallerDir;
+            fname += "/Predictors.";
+            if (string(runId) != "")
+                    fname += string(runId) + ".";
+            fname += "txt";
+
+            cout << "\n\nDumping predictors from PerBaseQual..." << endl;
+            cout << "baseCallerDir: " << baseCallerDir << endl;
+            cout << "runId: " << runId << endl;
+            cout << "Predictor output: " << fname << endl;
+
+            predictor_dump.open(fname.c_str());
             isInitialized = true;
         }
         pthread_spin_unlock(&spinlock);
@@ -203,11 +220,9 @@ float PerBasePredictors::GetPredictor2( int base ) const
     /* protect at start/end of read */
     int val1 = base - 1;
     int val2 = base + 1;
-
     if ( val1 < 0 ) {
         val1 = 0;
     }
-
     if ( val2 >= NumBases() ) {
         val2 = NumBases() - 1;
     }
@@ -217,7 +232,6 @@ float PerBasePredictors::GetPredictor2( int base ) const
             locnoise = fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) );
         }
     }
-
     return locnoise;
 }
 
@@ -228,6 +242,75 @@ float PerBasePredictors::GetPredictor3( void ) const
 {
     return -noiseValue;
 }
+
+/* Predictor 4 - Homopolymer count - # of consecutive bases equal to the input base, including itself; 6 bins */
+float PerBasePredictors::GetPredictor4( int base ) const
+{
+    return homopols.at(base);
+}
+
+
+/* Predictor 5 - CAFIE error - the number of bases identical to the current flow in the previous cycle; 7 bins */
+// For Treephaser: Penalty indicating deletion after the called base
+float PerBasePredictors::GetPredictor5( int base ) const
+{
+   	return penaltyMismatch.at(base);
+}
+
+
+/* Predictor 6 - Local noise - max of 'noise' 10 BASES FORWARD around a base.  Noise is max{abs(val - round(val))}; 20 bins */
+float PerBasePredictors::GetPredictor6( int base ) const
+{
+    float noise = 0;
+    int bandWidth = 5;
+    /* protect at start/end of read */
+    int val1 = base - bandWidth;
+    int val2 = base + bandWidth;
+    if ( val1 < 0 ) {
+        val1 = 0;
+    }
+    if ( val2 >= NumBases() ) {
+        val2 = NumBases() - 1;
+    }
+
+    int nCount = 0;
+    for ( int j = val1;j <= val2 && j < BASE_SIZE;j++ ) {
+		noise += fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) );
+		nCount++;
+    }
+	if ( nCount > 0 )
+		noise /= nCount;
+    return noise;
+}
+
+
+float PerBasePredictors::GetPredictor( int pred, int base ) const
+{
+    switch ( pred ) {
+
+        case 0:
+            return GetPredictor1( base );
+
+        case 1:
+            return GetPredictor2( base );
+
+        case 2:
+            return GetPredictor3();
+
+        case 3:
+            return GetPredictor4( base );
+
+        case 4:
+            return GetPredictor5( base );
+
+        case 5:
+            return GetPredictor6( base );
+
+        default:
+            throw std::string( "Wrong predictor index" );
+    }
+}
+
 
 /* recalculate Offset for Predictor6
  * NewCutOff0 = (s_0 * m_1 + s_1 * m_0)/(s_1 + s_0)
@@ -332,82 +415,6 @@ void PerBasePredictors::CalculateCutoff( float cutoff0, float cutoff1 )
 }
 
 
-
-/* Predictor 4 - Homopolymer count - # of consecutive bases equal to the input base, including itself; 6 bins */
-float PerBasePredictors::GetPredictor4( int base ) const
-{
-    return homopols.at(base);
-}
-
-
-/* Predictor 5 - CAFIE error - the number of bases identical to the current flow in the previous cycle; 7 bins */
-// For Treephaser: Penalty indicating deletion after the called base
-float PerBasePredictors::GetPredictor5( int base ) const
-{
-   	return penaltyMismatch.at(base);
-}
-
-
-/* Predictor 6 - Local noise - max of 'noise' 10 BASES FORWARD around a base.  Noise is max{abs(val - round(val))}; 20 bins */
-float PerBasePredictors::GetPredictor6( int base ) const
-{
-
-    float noise = 0;
-
-    int bandWidth = 5;
-    /* protect at start/end of read */
-    int val1 = base - bandWidth;
-    int val2 = base + bandWidth;
-
-    if ( val1 < 0 ) {
-        val1 = 0;
-    }
-
-    if ( val2 >= NumBases() ) {
-        val2 = NumBases() - 1;
-    }
-
-    int nCount = 0;
-
-    for ( int j = val1;j <= val2 && j < BASE_SIZE;j++ ) {
-		noise += fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) );
-		nCount++;
-    }
-
-	if ( nCount > 0 )
-		noise /= nCount;
-
-    return noise;
-}
-
-float PerBasePredictors::GetPredictor( int pred, int base ) const
-{
-    switch ( pred ) {
-
-        case 0:
-            return GetPredictor1( base );
-
-        case 1:
-            return GetPredictor2( base );
-
-        case 2:
-            return GetPredictor3();
-
-        case 3:
-            return GetPredictor4( base );
-
-        case 4:
-            return GetPredictor5( base );
-
-        case 5:
-            return GetPredictor6( base );
-
-        default:
-            throw std::string( "Wrong predictor index" );
-    }
-}
-
-
 std::vector<int> PerBasePredictors::calculateSameNucOffset( std::string flowOrder )
 {
     
@@ -442,8 +449,9 @@ std::vector<int> PerBasePredictors::calculateSameNucOffset( std::string flowOrde
 }
 
 
-bool PerBaseQual::Init( ChipIdEnum _phredVersion, const std::string& flowOrder, const std::string& _phredTableFile )
+bool PerBaseQual::Init( ChipIdEnum _phredVersion, const string &basecallerOutputDirectory, const string& flowOrder, const string& _phredTableFile, char *runId)
 {
+    mBaseCallerDir = basecallerOutputDirectory;
     ifstream source;
     
     pbq.setFlowOrder( flowOrder );
@@ -468,7 +476,7 @@ bool PerBaseQual::Init( ChipIdEnum _phredVersion, const std::string& flowOrder, 
 				phredFileName.assign( "_318" );
 				break;
 			default:
-				cout << "phredVersion = " << phredVersion << ", use default "<< ChipId314 << endl;
+                          //				cout << "phredVersion = " << phredVersion << ", use default "<< ChipId314 << endl;
 				//ION_ABORT( "ERROR: unexpected phred score version requested." );
 				phredFileName.assign( "_314" );
 				break;
@@ -520,7 +528,7 @@ bool PerBaseQual::Init( ChipIdEnum _phredVersion, const std::string& flowOrder, 
     }
 
 #ifdef DUMP_PREDICTORS
-    predictorSaver.Init();
+    predictorSaver.Init(runId,mBaseCallerDir);
 #endif
     isInitialized = true;
 
@@ -553,13 +561,15 @@ int PerBaseQual::CalculatePerBaseScore( int base )
     for ( int k = 0; k < nPredictors; ++k ) {
         predictor_save << pred[k] << " ";
     }
+    // output flow number for matching with other predictors file generated somewhere else
+    predictor_save << pbq.getFlowNumber(base);
     predictor_save << endl;
 #endif
 
     for (int k = 0; k < nPredictors; k++)
     	pred[k] = std::min(pred[k],phredTableMaxValues[k]);
     
-    for ( int j = 0; j < nPhredCuts; ++j ) {
+    for ( int j = 0; j < nPhredCuts; ++j ) { // number of rows/lines in the table
         bool ret = true;
 
 //        for ( int k = 0; k < nPredictors; ++k ) {
@@ -574,7 +584,7 @@ int PerBaseQual::CalculatePerBaseScore( int base )
 
         if ( ret ) {
             //cerr << j << " " << static_cast<int>( phredTableData[nPredictors][j] ) << endl;
-            return static_cast<int>( phredTableData[nPredictors][j] );
+            return static_cast<int>( phredTableData[nPredictors][j] ); // last item in the line is the QV
         }
     }
 

@@ -24,7 +24,7 @@ barcode_load_list ()
         BARCODE_IDS[$BCN]=${BARCODE_ID}
         BARCODE_ROWSUM[$BCN]=$ROWSUM_NODATA
 
-        BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE}_${PLUGIN_OUT_BAM_NAME}"
+        BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE}_${PLUGIN_BAM_FILE}"
         if [ -f ${BARCODE_BAM} ]; then
             BARCODES_OK[${BCN}]=1
         else
@@ -102,8 +102,10 @@ barcode_links ()
         echo "      <tr>" >> "$HTML"
         if [ ${BARCODES_OK[$BCN]} -eq 1 ]; then
             echo "       <td style=\"text-align:left\"><a style=\"cursor:help\" href=\"${BARCODE}/${HTML_RESULTS}\"><span title=\"Click to view the detailed coverage report for barcode ${BARCODE}\">${BARCODE}</span></a></td>" >> "$HTML"
+        elif [ ${BARCODES_OK[$BCN]} -eq 2 ]; then
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"An error occurred while processing data for barcode ${BARCODE}\" style=\"color:red\">${BARCODE}</span></td>" >> "$HTML"
         else
-            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"No Data for barcode ${BARCODE}\" style=\"color:darkred\">${BARCODE}</span></td>" >> "$HTML"
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"No Data for barcode ${BARCODE}\" style=\"color:grey\">${BARCODE}</span></td>" >> "$HTML"
         fi
         echo "           ${BARCODE_ROWSUM[$BCN]}" >> "$HTML"
         echo "      </tr>" >> "$HTML"
@@ -141,22 +143,11 @@ barcode ()
     # Yes, there are barcodes
     echo "There are barcodes!" >&2
     
-    # Unzip barcode BAMs to the original results folder IF the unzipped files do not already exist there
-    # As of 2.0 this is a backwards compatibility feature, since the files should always be there from 2.0
     local LOGOPT="> /dev/null"
     if [ "$PLUGIN_DEV_FULL_LOG" -eq 1 ]; then
         echo "" >&2
         LOGOPT=""
     fi
-    if [ -f ${ANALYSIS_DIR}/*.barcode.bam.zip ]; then
-        run "unzip -n -d ${ANALYSIS_DIR} ${ANALYSIS_DIR}/*.barcode.bam.zip $LOGOPT"
-    fi
-    if [ -f ${ANALYSIS_DIR}/*.barcode.bam.bai.zip ]; then
-        run "unzip -n -d ${ANALYSIS_DIR} ${ANALYSIS_DIR}/*.barcode.bam.bai.zip $LOGOPT"
-    elif [ -f ${ANALYSIS_DIR}/*.barcode.bai.zip ]; then
-        run "unzip -n -d ${ANALYSIS_DIR} ${ANALYSIS_DIR}/*.barcode.bai.zip $LOGOPT"
-    fi
-
     # Load bar code data
     local BARCODES
     local BARCODE_IDS
@@ -183,7 +174,7 @@ barcode ()
     do
         BARCODE=${BARCODES[$BCN]}
         BARCODE_DIR="${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE}"
-        BARCODE_BAM="${BARCODE}_${PLUGIN_OUT_BAM_NAME}"
+        BARCODE_BAM="${BARCODE}_${PLUGIN_BAM_FILE}"
         NLINE=`expr ${BCN} + 1`
 
         # ensure old data is not retained
@@ -195,17 +186,32 @@ barcode ()
             run "mkdir -p ${BARCODE_DIR}"
             run "ln -s ${ANALYSIS_DIR}/${BARCODE_BAM} ${BARCODE_DIR}/${BARCODE_BAM}";
             run "ln -s ${ANALYSIS_DIR}/${BARCODE_BAM}.bai ${BARCODE_DIR}/${BARCODE_BAM}.bai";
-            run_coverage_analysis "$BARCODE_DIR" "${BARCODE_DIR}/${BARCODE_BAM}"
-            if [ -f "${BARCODE_DIR}/${HTML_ROWSUMS}" ]; then
-                BARCODE_ROWSUM[$BCN]=`cat "${BARCODE_DIR}/$HTML_ROWSUMS"`
-                rm -f "${BARCODE_DIR}/${HTML_ROWSUMS}"
+            # unfortunately the run_coverage_analysis() function cannot be called here
+            # as the error from subshell needs to be fully processed in calling method
+            # - returning from any function after subshell appears to exit entire process
+            local RT=0
+            eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$BARCODE_DIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"${BARCODE_DIR}/${BARCODE_BAM}\"" || RT=$?
+            if [ $RT -ne 0 ]; then
+                BC_ERROR=1
+                if [ "$CONTINUE_AFTER_BARCODE_ERROR" -eq 0 ]; then
+                    exit 1
+                else
+                    BARCODES_OK[${BCN}]=2
+                fi
+            else
+                if [ -f "${BARCODE_DIR}/${HTML_ROWSUMS}" ]; then
+                    BARCODE_ROWSUM[$BCN]=`cat "${BARCODE_DIR}/$HTML_ROWSUMS"`
+                    rm -f "${BARCODE_DIR}/${HTML_ROWSUMS}"
+                fi
+                NUSED=`expr ${NUSED} + 1`
+	        barcode_append_to_json_results $BARCODE $NUSED;
             fi
-            NUSED=`expr ${NUSED} + 1`
-	    barcode_append_to_json_results $BARCODE $NUSED;
         fi
 	barcode_partial_table "$HTMLOUT" $NLINE
     done
-
     # finish up with json
     write_json_footer 1;
+    if [ "$BC_ERROR" -ne 0 ]; then
+        exit 1
+    fi
 }

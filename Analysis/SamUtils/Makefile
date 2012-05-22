@@ -1,18 +1,21 @@
-CC=g++
-ANALYSIS=../
+CC=clang++
+ANALYSIS=../Util/
 #samtools library must be made already, run make lib in the samtools directory to get it
 SAMTOOLS=../../external/samtools-0.1.18/
 CFLAGS=-g -Wall -DALIGNSTATS_IGNORE
 LDFLAGS=-L. -L$(SAMTOOLS) -L$(SAMTOOLS)/bcftools/ -L./types/ -lpthread -lbam -lz
 EXE_FILES = alignStats SamVsSam
+EXAMPLE_FILES = example
 .PHONY: all clean
 
 all: $(EXE_FILES)
 
 clean:
 	-rm $(EXE_FILES) *.o types/*.o
-	-rm $(ANALYSIS)/OptArgs.o
-	-rm $(ANALYSIS)/Utils.o
+	-rm $(ANALYSIS)/*.o
+
+examples: $(EXAMPLE_FILES)
+	$(CC) $(CFLAGS) -o example example.o types/*.o BAMReader.o BAMUtils.o $(ANALYSIS)/Utils.o $(LDFLAGS)
 
 example: types/Cigar.o types/Sequence.o types/BAMRead.o types/MD.o BAMUtils.o BAMReader.o example.o
 	$(CC) $(CFLAGS) -o example types/*.o example.o BAMUtils.o BAMReader.o $(LDFLAGS) $(ANALYSIS)/Utils.o

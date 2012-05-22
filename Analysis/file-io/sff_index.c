@@ -76,8 +76,8 @@ sff_index_init()
 // TODO: should we change the header:
 // - must trake index_length
 // - assumes row-major order
-void
-sff_index_create(sff_file_t *fp_in, sff_file_t *fp_out, int32_t num_rows, int32_t num_cols, int32_t type)
+sff_index_t*
+sff_index_create(sff_file_t *fp_in, sff_header_t *fp_out_header, int32_t num_rows, int32_t num_cols, int32_t type)
 {
   int64_t len = 0;
   int32_t i, prev_row, prev_col, row, col;
@@ -206,38 +206,17 @@ sff_index_create(sff_file_t *fp_in, sff_file_t *fp_out, int32_t num_rows, int32_
   idx->offset[len-1] = prev_pos;
 
   // update the index offset in the header
-  fp_out->header->index_offset = fp_in_start; // insert between the header and sff entries
+  fp_out_header->index_offset = fp_in_start; // insert between the header and sff entries
   // update the index length in the header
-  fp_out->header->index_length = sff_index_length(idx);
+  fp_out_header->index_length = sff_index_length(idx);
   // update the offsets based on the index length
   for(i=0;i<len;i++) {
       if(UINT64_MAX != idx->offset[i]) {
-          idx->offset[i] += fp_out->header->index_length;
+          idx->offset[i] += fp_out_header->index_length;
       }
   }
-  // seek to the beginning
-  if(0 != fseek(fp_out->fp, 0, SEEK_SET)) {
-      ion_error(__func__, "fseek", Exit, ReadFileError);
-  }
-  // overwrite the header
-  if(0 == sff_header_write(fp_out->fp, fp_out->header)) {
-      ion_error(__func__, "sff_header_write", Exit, WriteFileError);
-  }
-  // write the index 
-  sff_index_write(fp_out->fp, idx);
 
-  // seek the input file to the beginning of the the entries
-  if(0 != fseek(fp_in->fp, fp_in_start, SEEK_SET)) {
-      ion_error(__func__, "fseek", Exit, ReadFileError);
-  }
-  // write the sff entries
-  while(NULL != (sff = sff_read(fp_in))) {
-      sff_write(fp_out, sff);
-      sff_destroy(sff);
-  }
-
-  // destroy the index
-  sff_index_destroy(idx);
+  return idx;
 }
 
 sff_index_t *
@@ -385,6 +364,9 @@ sff_index_create_main(int argc, char *argv[])
   int c;
   sff_file_t *fp_in, *fp_out;
   int32_t num_rows, num_cols, type;
+  sff_header_t *fp_out_header;
+  sff_index_t* index;
+  sff_t *sff;
 
   num_rows = num_cols = -1;
   type = SFF_INDEX_ALL;
@@ -444,9 +426,26 @@ sff_index_create_main(int argc, char *argv[])
       }
 
       fp_in = sff_fopen(argv[optind], "rb", NULL, NULL);
-      fp_out = sff_fdopen(fileno(stdout), "wb", fp_in->header, NULL);
+      fp_out_header = sff_header_clone(fp_in->header);
+      index = sff_index_create(fp_in, fp_out_header, num_rows, num_cols, type);
 
-      sff_index_create(fp_in, fp_out, num_rows, num_cols, type);
+      fp_out = sff_fdopen(fileno(stdout), "wbi", fp_out_header, index);
+
+      // seek the input file to the beginning of the the entries, which is the same
+      // location as where the index begins in the output file.
+      if(0 != fseek(fp_in->fp, fp_out_header->index_offset, SEEK_SET)) {
+	ion_error(__func__, "fseek", Exit, ReadFileError);
+      }
+
+      // write the sff entries
+      while(NULL != (sff = sff_read(fp_in))) {
+	sff_write(fp_out, sff);
+	sff_destroy(sff);
+      }
+
+      // destroy the header.  Don't destroy index, sff_fclose does that
+      sff_header_destroy(fp_out_header);
+      //      sff_index_destroy(index);
 
       sff_fclose(fp_in);
       sff_fclose(fp_out);

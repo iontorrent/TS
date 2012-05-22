@@ -19,6 +19,8 @@ extern int
 sff_sort_main(int argc, char *argv[]);
 extern int
 sff_check_main(int argc, char *argv[]);
+extern int
+rn_check_main(int argc, char *argv[]);
 
 static int 
 usage()
@@ -36,6 +38,7 @@ usage()
   fprintf(stderr, "         sffindex        create an indexed SFF file\n");
   fprintf(stderr, "         sffsort        sort a SFF file\n");
   fprintf(stderr, "         sffcheck       check a SFF file\n");
+  fprintf(stderr, "         rncheck        check the read name hash\n");
   fprintf(stderr, "\n");
   return 1;
 }
@@ -57,6 +60,7 @@ main(int argc, char *argv[])
   else if(0 == strcmp(argv[1], "sffindex")) return sff_index_create_main(argc-1, argv+1);
   else if(0 == strcmp(argv[1], "sffsort")) return sff_sort_main(argc-1, argv+1);
   else if(0 == strcmp(argv[1], "sffcheck")) return sff_check_main(argc-1, argv+1);
+  else if(0 == strcmp(argv[1], "rncheck")) return rn_check_main(argc-1, argv+1);
   else {
       fprintf(stderr, "unrecognized command '%s'\n", argv[1]);
       return 1;

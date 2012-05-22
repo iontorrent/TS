@@ -128,7 +128,7 @@ fi
 # Get absolute file paths to avoid link issues in HTML
 WORKDIR=`readlink -n -f "$WORKDIR"`
 REFERENCE=`readlink -n -f "$REFERENCE"`
-BAMFILE=`readlink -n -f "$BAMFILE"`
+#BAMFILE=`readlink -n -f "$BAMFILE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 # Create subfolders if not already present
@@ -192,59 +192,50 @@ if [ $USTARTS -eq 1 ]; then
   TBAMSORT="$WORKDIR/$BAMNAME.ustarts.sort"
   BAMFILE2="$WORKDIR/$BAMNAME.ustarts.bam"
 
-  # Check number of mapped reads for early exit
-  SUMFILE="$WORKDIR1/summary.txt"
-  NUMREADS=`awk -F ':' '$1=="Number of mapped reads" {v=$2} END {printf "%.0f",v+0}' "$SUMFILE"`
-  if [ $NUMREADS -eq 0 ]; then
-    echo "No mapped reads: Skipping unique starts analysis." >&2
-    ln -sf "$BAMFILE" "$BAMFILE2"
-    ln -sf "${BAMFILE}.bai" "${BAMFILE2}.bai"
+  REMDUP="perl $RUNDIR/remove_pgm_duplicates.pl $LOGOPT -u \"$BAMFILE\" > \"$TSAMFILE\""
+  eval "$REMDUP" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: remove_pgm_duplicates.pl failed." >&2
+    echo "\$ $REMDUP" >&2
+    #exit 1;
+  fi
+
+  if [ $SHOWLOG -eq 1 ]; then
+    echo -e "\nCreating sorted BAM and BAI files..." >&2
+  fi
+
+  SAMCMD="samtools view -S -b -t \"$GENOME\" -o \"$BAMFILE2\" \"$TSAMFILE\" &> /dev/null"
+  eval "$SAMCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: SAMtools command failed." >&2
+    echo "\$ $SAMCMD" >&2
+    #exit 1;
   else
-    REMDUP="perl $RUNDIR/remove_pgm_duplicates.pl $LOGOPT -u \"$BAMFILE\" > \"$TSAMFILE\""
-    eval "$REMDUP" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nERROR: remove_pgm_duplicates.pl failed." >&2
-      echo "\$ $REMDUP" >&2
-      #exit 1;
-    fi
-
     if [ $SHOWLOG -eq 1 ]; then
-      echo -e "\nCreating sorted BAM and BAI files..." >&2
+      echo "> $BAMFILE2" >&2
     fi
+  fi
 
-    SAMCMD="samtools view -S -b -t \"$GENOME\" -o \"$BAMFILE2\" \"$TSAMFILE\" &> /dev/null"
-    eval "$SAMCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nERROR: SAMtools command failed." >&2
-      echo "\$ $SAMCMD" >&2
-      #exit 1;
-    else
-      if [ $SHOWLOG -eq 1 ]; then
-        echo "> $BAMFILE2" >&2
-      fi
-    fi
+  #SAMCMD="samtools sort \"$BAMFILE2\" \"$TBAMSORT\""
+  #eval "$SAMCMD" >&2
+  #if [ $? -ne 0 ]; then
+  #  echo -e "\nERROR: SAMtools command failed." >&2
+  #  echo "\$ $SAMCMD" >&2
+  #  #exit 1;
+  #else
+  #  mv "$TBAMSORT.bam" "$BAMFILE2"
+  #fi
+  rm -f "$TSAMFILE"
 
-    SAMCMD="samtools sort \"$BAMFILE2\" \"$TBAMSORT\""
-    eval "$SAMCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nERROR: SAMtools command failed." >&2
-      echo "\$ $SAMCMD" >&2
-      #exit 1;
-    else
-      mv "$TBAMSORT.bam" "$BAMFILE2"
-    fi
-    rm -f "$TSAMFILE"
-  
-    SAMCMD="samtools index \"$BAMFILE2\""
-    eval "$SAMCMD" >&2
-    if [ $? -ne 0 ]; then
-      echo -e "\nERROR: SAMtools command failed." >&2
-      echo "\$ $SAMCMD" >&2
-      #exit 1;
-    else
-      if [ $SHOWLOG -eq 1 ]; then
-        echo "> ${BAMFILE2}.bai" >&2
-      fi
+  SAMCMD="samtools index \"$BAMFILE2\""
+  eval "$SAMCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: SAMtools command failed." >&2
+    echo "\$ $SAMCMD" >&2
+    #exit 1;
+  else
+    if [ $SHOWLOG -eq 1 ]; then
+      echo "> ${BAMFILE2}.bai" >&2
     fi
   fi
 

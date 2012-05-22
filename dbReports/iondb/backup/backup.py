@@ -1,10 +1,7 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
 import datetime
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 import os
 from os import path
 import shutil
@@ -37,7 +34,13 @@ last_exp_size = 0
 #Global
 gl_experiments = {}
 
-__version__ = filter(str.isdigit, "$Revision: 23638 $")
+__version__ = filter(str.isdigit, "$Revision: 29400 $")
+
+# TODO: these are defined in crawler.py as well.  Needs to be consolidated.
+RUN_STATUS_COMPLETE = "Complete"
+RUN_STATUS_MISSING  = "Missing File(s)"
+RUN_STATUS_ABORT    = "User Aborted"
+RUN_STATUS_SYS_CRIT = "Lost Chip Connection"
 
 
 class Email():
@@ -101,6 +104,8 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
     
     Filter out grace period runs based on start time, runs marked Keep
     
+    TODO: Filter out runs whose FTP status indicates they are still transferring
+    
     Return n oldest experiments to archive or delete
     
     Remove only mode is important feature to protect against the condition wherein the archive volume is not available
@@ -129,6 +134,11 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
             if location == None:
                 continue
             
+            if not os.path.isdir(e.expDir):
+                #TODO: This is an error - this experiment no longer exists on filesystem and should be marked as such
+                # with a Backup object instance.
+                continue
+                
             # TODO: instead of using the experiment date field, which is set to when the experiment was performed
             # use the file timestamp of the first (or last?) .dat file when calculating grace period
             EXPERIMENTAL = True
@@ -144,6 +154,18 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
             if diff < (grace_period * 3600):    #convert hours to seconds
                 log.info ('Within grace period: %s' % e.expName)
                 continue
+# TS-2736 Do not archive/delete Runs that are still FTP transferring.
+# What about runs that are stuck forever?  Without this test, those types of runs eventually get archived or deleted
+# with this test in place, they will stay on server forever.
+#            # If run is still transferring, skip
+#            if e.ftpStatus.strip() == RUN_STATUS_COMPLETE or \
+#               e.ftpStatus.strip() == RUN_STATUS_ABORT or \
+#               e.ftpStatus.strip() == RUN_STATUS_MISSING or \
+#               e.ftpStatus.strip() == RUN_STATUS_SYS_CRIT:
+#                pass
+#            else:
+#                logger.errors.debug("Skip this one, still transferring: %s" % e.expName)
+#                continue
             
             experiment = Experiment(e,
                                     str(e.expName),
@@ -207,7 +229,11 @@ def server_and_location(experiment):
     return loc
 
 def get_server_full_space(cur_loc):
-    fileservers = models.FileServer.objects.filter(location=cur_loc)
+    try:
+        fileservers = models.FileServer.objects.filter(location=cur_loc)
+        num = len(fileservers)
+    except:
+        log.error(traceback.print_exc())
     ret = []
     for fs in fileservers:
         if path.exists(fs.filesPrefix):
@@ -221,7 +247,11 @@ def free_percent(path):
     return (path,100-(float(freeSpace)/float(totalSpace)*100))
 
 def add_to_db(exp, path, archived):
+    # Update dbase Experiment object's user_ack field
     e = models.Experiment.objects.get(pk=exp.get_pk())
+    e.user_ack = 'D'
+    e.save()
+    # Create dbase Backup object for this Experiment
     kwargs = {"experiment": e,
               "backupName": exp.name, 
               "isBackedUp": archived,
@@ -232,7 +262,7 @@ def add_to_db(exp, path, archived):
     ret.save()
     return ret
 
-def backup(log, experiments, backupDrive, number_to_backup, backupFreeSpace, bwLimit, backup_pk, email, ADMIN_EMAIL):
+def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupFreeSpace, bwLimit, backup_pk, email, ADMIN_EMAIL):
     global last_exp_size
     # Flag for debugging: set to True to not really delete or archive
     JUST_TESTING = False
@@ -307,12 +337,8 @@ def backup(log, experiments, backupDrive, number_to_backup, backupFreeSpace, bwL
             except:
                 log.error(traceback.format_exc())
             add_to_db(exp, linkPath, True)
-            exp.user_ack = 'D'
-            exp.save()
         elif removecomplete and not JUST_TESTING:
             add_to_db(exp, 'DELETED', False)
-            exp.user_ack = 'D'
-            exp.save()
         else:
             log.info("copycomplete returned: %s" % copycomplete)
             log.info("removecomplete returned: %s" % removecomplete)
@@ -355,7 +381,9 @@ def remove_dir(log,expDir):
     
 def get_params(cur_loc,log):
     try:
-        bk = models.BackupConfig.objects.get(location=cur_loc)
+        #Why do we need cur_loc?  Commenting out for now...
+        #bk = models.BackupConfig.objects.get(location=cur_loc)
+        bk = models.BackupConfig.objects.all()[0]
         return True,{'NUMBER_TO_BACKUP':bk.number_to_backup,
                      'TIME_OUT':bk.timeout,
                      'BACKUP_DRIVE_PATH':bk.backup_directory,
@@ -512,6 +540,7 @@ def removeRuns(log, cur_loc, isConf, params):
     email = Email()
     updateNeeded = False
     try:
+        set_status(log,"Reviewing System")
         NUMBER_TO_BACKUP            = params['NUMBER_TO_BACKUP']
         PERCENT_FULL_BEFORE_BACKUP  = params['BACKUP_THRESHOLD']
         ADMIN_EMAIL                 = params['EMAIL']
@@ -530,10 +559,10 @@ def removeRuns(log, cur_loc, isConf, params):
                 if len(gl_experiments) == 0:
                     log.info("No datasets are valid to process")
                 else:
-                    updateNeeded = backup(log, gl_experiments[serverPath], BACKUP_DRIVE_PATH, 
+                    updateNeeded = dispose_experiments(log, gl_experiments[serverPath], BACKUP_DRIVE_PATH, 
                            NUMBER_TO_BACKUP, backupFreeSpace, 
                            BANDWIDTH_LIMIT, BACKUP_PK, email, ADMIN_EMAIL)
-        #set_status(log,"Idle")
+        set_status(log,"Idle")
     except:
         log.error(traceback.format_exc())
         set_status(log,"ERROR")

@@ -68,6 +68,7 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "media/favicon.ico" EXCLUDE
     PATTERN "iondb/index.html" EXCLUDE
     PATTERN "iondb/docsnotfound.html" EXCLUDE
+    PATTERN "iondb/wsgi/iontorrent.conf.in" EXCLUDE
 )
 install(PROGRAMS iondb/bin/ionArchive DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionCrawler DESTINATION /etc/init.d)
@@ -75,9 +76,18 @@ install(PROGRAMS iondb/bin/ionJobServer DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionPlugin DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/celeryd DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/celery.conf DESTINATION /opt/ion/config)
-
 install(PROGRAMS iondb/settings.py DESTINATION iondb RENAME settings.py.dist)
 
+configure_file (
+    "${PROJECT_SOURCE_DIR}/iondb/wsgi/iontorrent.conf.in"
+    "${PROJECT_BINARY_DIR}/apache2/iontorrent.conf" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/apache2/iontorrent.conf" DESTINATION /etc/apache2/conf.d)
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server" DESTINATION /etc/apache2/sites-available)
+
+# Add ION_INSTALL_PREFIX to system python path so iondb modules can be found
+file(WRITE ${PROJECT_BINARY_DIR}/iondb.pth "${ION_INSTALL_PREFIX}\n")
+install(FILES ${PROJECT_BINARY_DIR}/iondb.pth DESTINATION ${PYTHON_SITE_PACKAGES})
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
@@ -87,12 +97,12 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     ion-pipeline,
-    zeroinstall-injector,
+    zeroinstall-injector (>= 1.5),
     postgresql,
-	php5,
+    php5,
+    libapache2-mod-wsgi,
     python-celery (>= 2.4.0),
 	python-django (>= 1.3.1),
-    rabbitmq-server,
     python-django-celery,
     python-django-kombu,
 	python-matplotlib,
@@ -109,8 +119,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-dateutil,
     python-argparse,
     python-tastypie (>= 0.9.10),
+	python-drmaa,
     samtools (>= 0.1.18),
-    python-dev")
+    python-dev,
+  rabbitmq-server,
+  tmap (>=0.3.7)")
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

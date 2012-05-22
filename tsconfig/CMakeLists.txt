@@ -22,11 +22,11 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/debian/prerm" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSconfig"
+	"${PROJECT_SOURCE_DIR}/bin/TSconfig"
 	"${PROJECT_BINARY_DIR}/TSconfig" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSchkconfig"
+	"${PROJECT_SOURCE_DIR}/bin/TSchkconfig"
 	"${PROJECT_BINARY_DIR}/TSchkconfig" @ONLY
 )
 configure_file (
@@ -38,20 +38,24 @@ configure_file (
 	"${PROJECT_BINARY_DIR}/ts_params" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSstaticip"
+	"${PROJECT_SOURCE_DIR}/bin/TSstaticip"
 	"${PROJECT_BINARY_DIR}/TSstaticip" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSsetproxy"
+	"${PROJECT_SOURCE_DIR}/bin/TSsetproxy"
 	"${PROJECT_BINARY_DIR}/TSsetproxy" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSquery"
+	"${PROJECT_SOURCE_DIR}/bin/TSquery"
 	"${PROJECT_BINARY_DIR}/TSquery" @ONLY
 )
 configure_file (
-	"${PROJECT_SOURCE_DIR}/TSdns"
+	"${PROJECT_SOURCE_DIR}/bin/TSdns"
 	"${PROJECT_BINARY_DIR}/TSdns" @ONLY
+)
+configure_file (
+	"${PROJECT_SOURCE_DIR}/bin/TSwrapper"
+	"${PROJECT_BINARY_DIR}/TSwrapper" @ONLY
 )
 
 
@@ -61,10 +65,29 @@ install(PROGRAMS "${PROJECT_BINARY_DIR}/TSstaticip" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSsetproxy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSquery" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSdns" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_BINARY_DIR}/TSwrapper" DESTINATION sbin )
 install(FILES "${PROJECT_BINARY_DIR}/ts_functions" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_BINARY_DIR}/ts_params" DESTINATION share/ion-tsconfig )
+install(FILES "${PROJECT_SOURCE_DIR}/config/iptables.rules" DESTINATION share/ion-tsconfig )
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/sge-configuration" DESTINATION share/ion-tsconfig
 	PATTERN ".svn" EXCLUDE)
+
+#################################
+# Install python library files
+#################################
+FIND_PACKAGE(PythonInterp)
+# Determine python site-packages or dist-packages directory
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
+        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+#install(DIRECTORY ion_tsconfig DESTINATION ${PYTHON_SITE_PACKAGES}
+#    USE_SOURCE_PERMISSIONS
+#    PATTERN ".svn" EXCLUDE
+#)
+install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
+install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")

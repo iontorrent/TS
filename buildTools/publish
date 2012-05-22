@@ -24,6 +24,9 @@ for arg in $*; do
 	PKGFILE=$arg
 done
 
+# Flag control Packages.gz file creation
+UPDATE_PKGFILE=1
+
 #---    We convert all arguments to lower case  ---#
 while [ $# != 0 ]; do
     case ${1,,} in
@@ -35,6 +38,9 @@ while [ $# != 0 ]; do
     ;;
     '--patch')
     	PUBDIR="patchtest"
+    ;;
+    '--no-pkgfile')
+        UPDATE_PKGFILE=0
     ;;
     esac
     shift
@@ -71,12 +77,13 @@ if [ "$file" == "" ]; then
    exit 1
 fi
 
-echo "Writing new Packages.gz file"
-ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
-if [ $? -ne 0 ]
-then
-	echo "There was an error creating the Packages.gz file"
-	exit 1
+if [ $UPDATE_PKGFILE == 1 ]; then
+    echo "Writing new Packages.gz file"
+    ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
+    if [ $? -ne 0 ]
+    then
+        echo "There was an error creating the Packages.gz file"
+        exit 1
+    fi
 fi
-
 exit 0

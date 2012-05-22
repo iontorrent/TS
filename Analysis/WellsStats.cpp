@@ -15,6 +15,7 @@
 
 #include "RawWells.h"
 #include "Histogram.h"
+#include "Utils.h"
 
 struct LookupInfo {
 	int r;

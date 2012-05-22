@@ -19,7 +19,12 @@ extern "C" {
       */
     sff_read_t *
       sff_read_read(FILE *fp, sff_header_t *gh, sff_read_header_t *rh);
-      
+    
+    ion_string_t* 
+	  sff_read_get_read_bases(sff_read_t* rd, int left_clip, int right_clip);
+	ion_string_t* 
+	  sff_read_get_read_quality_values(sff_read_t* rd, int left_clip, int right_clip);    
+    
     /*! 
       @param  fp  the file pointer to which to write
       @param  gh  the sff global header

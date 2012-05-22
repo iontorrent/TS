@@ -8,13 +8,12 @@ use File::Basename;
 use Getopt::Long;
 
 my $opt = {
-  "readFile"               => undef,
-  "readFileBase"           => undef,
+  "readFile"               => [],
+  "readFileBase"           => [],
   "readFileType"           => undef,
   "genome"                 => undef,
   "filter-length"          => undef,
   "out-base-name"          => undef,
-  "trim-length"            => undef,
   "start-slop"             => 0,
   "sample-size"            => 0,
   "max-plot-read-len"      => 400,
@@ -22,7 +21,9 @@ my $opt = {
   "threads"                => &numCores(),
   "aligner"                => "tmap",
   "aligner-opts-rg"        => undef,                 # primary options (for -R to TMAP)
-  "aligner-opts-extra"     => "stage1 --stage-seed-freq-cutoff 0.1 map1 map2 map3", # this could include stage and algorithm options
+  "aligner-opts-extra"     => "stage1 map1 map2 map3", # this could include stage and algorithm options
+  "aligner-opts-pairing"   => "-Q 2 -S 1 -b 200 -c 30 -d 3", # read pairing-specific options
+  "bidirectional"          => 0, # if true then will pass tmap --bidirectional option
   "aligner-format-version" => undef,
   "align-all-reads"        => 0,
   "genome-path"            => ["/referenceLibrary","/results/referenceLibrary","/opt/ion/referenceLibrary"],
@@ -36,10 +37,9 @@ my $opt = {
 };
 
 GetOptions(
-  "i|input=s"                => \$opt->{"readFile"},
+  "i|input=s@"                => \$opt->{"readFile"},
   "g|genome=s"               => \$opt->{"genome"},
   "o|out-base-name=s"        => \$opt->{"out-base-name"},
-  "t|trim-length=i"          => \$opt->{"trim-length"},
   "s|start-slop=i"           => \$opt->{"start-slop"},
   "n|sample-size=i"          => \$opt->{"sample-size"},
   "l|filter-length=i"        => \$opt->{"filter-length"},
@@ -49,6 +49,8 @@ GetOptions(
   "d|aligner=s"              => \$opt->{"aligner"},
   "aligner-opts-rg=s"        => \$opt->{"aligner-opts-rg"},
   "aligner-opts-extra=s"     => \$opt->{"aligner-opts-extra"},
+  "aligner-opts-pairing=s"   => \$opt->{"aligner-opts-pairing"},
+  "bidirectional"            => \$opt->{"bidirectional"},
   "c|align-all-reads"        => \$opt->{"align-all-reads"},
   "a|genome-path=s@"         => \$opt->{"genome-path"},
   "p|sam-parsed"             => \$opt->{"sam-parsed"},
@@ -64,22 +66,56 @@ GetOptions(
 unlink($opt->{"logfile"}) if(-e $opt->{"logfile"});
 
 # Determine how many reads are being aligned, make sure there is at least one
-my $nReads = &getReadNumber($opt->{"readFile"},$opt->{"readFileType"});
-if($nReads==0) {
-  print STDERR "WARNING: $0: no reads to align in ".$opt->{"readFile"}."\n";
-  #exit(0);
+my @nReads = ();
+foreach my $readFile (@{$opt->{"readFile"}}) {
+  my $n = &getReadNumber($readFile,$opt->{"readFileType"});
+  print STDERR "WARNING: $0: no reads to align in $readFile\n" if($n==0);
+  push(@nReads,$n);
+  if($n != $nReads[0]) {
+    print STDERR "WARNING: $0: expected ".$nReads[0]." reads but found $n while parsing $readFile\n";
+    exit(1);
+  }
 }
-print "Aligning $nReads reads from ".$opt->{"readFile"}."\n";
-
+my $nReads = $nReads[0];
+print "Aligning $nReads reads from ".join(" and ",@{$opt->{"readFile"}})."\n";
 
 # Find the location of the genome index
 my $indexVersion = defined($opt->{"aligner-format-version"}) ? $opt->{"aligner-format-version"} : &getIndexVersion();
 my($refDir,$refInfo,$refFasta,$infoFile) = &findReference($opt->{"genome-path"},$opt->{"genome"},$opt->{"aligner"},$indexVersion);
+
+if(defined($opt->{"aligner-opts-rg"}) && ($opt->{"aligner-opts-rg"}=~/-R "SM:([^"]+)"/)) {
+  my $project = $1;
+  print "Checking if $refDir/project/$project exists\n";
+  if ($project && -r "$refDir/project/$project") {
+    print "Found hard-coded genomes, checking if readFile pattern matches\n";
+    open(PROJ, "$refDir/project/$project");
+    my $readFileName = $opt->{"readFile"}[0];
+    $readFileName =~ s/.*\///;
+    while (<PROJ>) {
+      chomp;
+      my ($pattern, $genome) = split /\t/;
+      if ($readFileName =~ /^$pattern/) {
+        print "Attemping to change genome from ".$opt->{"genome"}." to $genome for ".$opt->{"readFile"}[0]."\n";
+        $opt->{"genome"} = $genome;
+        my ($newrefDir,$newrefInfo,$newrefFasta,$newinfoFile) = &findReference($opt->{"genome-path"},$opt->{"genome"},$opt->{"aligner"},$indexVersion);
+        if ($newrefDir) {
+          ($refDir,$refInfo,$refFasta,$infoFile) = ($newrefDir,$newrefInfo,$newrefFasta,$newinfoFile);
+          last;
+          }
+        else {
+          print "Cannot find hard-coded genome $genome\n";
+        }
+      }
+    }
+    close(PROJ);
+  }
+}
+
 print "Aligning to reference genome in $refDir\n";
 
 
 # If out base name was not specified then derive from the base name of the input file
-$opt->{"out-base-name"} = $opt->{"readFileBase"} if(!defined($opt->{"out-base-name"}));
+$opt->{"out-base-name"} = $opt->{"readFileBase"}[0] if(!defined($opt->{"out-base-name"}));
 
 # If not specifying that all reads be aligned, if sample size is not set via command-line and if the genome
 # info file has a specification, then set sampling according to it.
@@ -98,12 +134,15 @@ if($opt->{"sample-size"} > 0) {
   } else {
     die "$0: sampling is only possible when input file is in sff format\n" if($opt->{"readFileType"} ne "sff");
     print "Aligning random sample of ".$opt->{"sample-size"}." from total of $nReads reads\n";
-    my $sampledSff   = &extendSuffix($opt->{"readFile"},"sff","sampled");
+    for(my $iReadFile=0; $iReadFile < @{$opt->{"readFile"}}; $iReadFile++) {
+      my $readFile = $opt->{"readFile"}[$iReadFile];
+      my $sampledSff = &extendSuffix($readFile,"sff","sampled");
 
-    my $command1 = sprintf("SFFRandom -n %s -o %s %s 2>>%s",$opt->{"sample-size"},$sampledSff,$opt->{"readFile"},$opt->{"logfile"});
-    die "$0: Failure during random sampling of reads\n" if(&executeSystemCall($command1));
+      my $command1 = sprintf("SFFRandom -n %s -o %s %s 2>>%s",$opt->{"sample-size"},$sampledSff,$readFile,$opt->{"logfile"});
+      die "$0: Failure during random sampling of reads\n" if(&executeSystemCall($command1));
 
-    $opt->{"readFile"} = $sampledSff;
+      $opt->{"readFile"}[$iReadFile] = $sampledSff;
+    }
   }
 }
 
@@ -114,21 +153,7 @@ if(!defined($opt->{"filter-length"})) {
 }
 
 
-# Truncate reads, if requested
-my $truncatedFile = undef;
-if(defined($opt->{"trim-length"})) {
-  $truncatedFile = &extendSuffix($opt->{"readFile"},$opt->{"readFileType"},"truncated");
-  if($opt->{"readFileType"} eq "fastq") {
-    my $commandTrim = sprintf("trimfastq.pl -i %s -o %s -l %s 2>>%s",$opt->{"readFile"},$truncatedFile,$opt->{"trim-length"},$opt->{"logfile"});
-    die "$0: Failure during truncation of reads\n" if(&executeSystemCall($commandTrim));
-  } else {
-    die "$0: don't know how to truncate reads of format ".$opt->{"readFileType"}."\n";
-  }
-}
-
-
 # Do the alignment
-my $fileToAlign = defined($opt->{"trim-length"}) ? $truncatedFile : $opt->{"readFile"};
 my $bamBase = $opt->{"output-dir"} . "/" . basename($opt->{"out-base-name"});
 my $bamFile = $bamBase.".bam";
 my $alignStartTime = time();
@@ -136,14 +161,20 @@ if($opt->{"aligner"} eq "tmap") {
   my $command = "tmap mapall";
   $command .= " -n ".$opt->{"threads"};
   $command .= " -f $refFasta";
-  $command .= " -r $fileToAlign";
-  $command .= " -Y";
+  $command .= " -r ".join(" -r ",@{$opt->{"readFile"}});
   $command .= " -v";
+  # For the moment it seems -Y cannot be used with tmap pairing options - need to fix
+  if(@{$opt->{"readFile"}} > 1) {
+    $command .= " ".$opt->{"aligner-opts-pairing"};
+  } else {
+    $command .= " -Y";
+  }
+  $command .= " --bidirectional" if($opt->{"bidirectional"});
   $command .= " ".$opt->{"aligner-opts-rg"} if(defined($opt->{"aligner-opts-rg"}));
   die if(!defined($opt->{"aligner-opts-extra"}));
   $command .= " ".$opt->{"aligner-opts-extra"};
   $command .= " 2>> ".$opt->{"logfile"};
-  $command .= " | samtools view -Sbu - | samtools sort -m 1000000000 - $bamBase";
+  $command .= " | samtools view -Sbu - | samtools sort -m 8000000000 - $bamBase";
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));
 } else {
@@ -188,7 +219,6 @@ print "Alignment post-processing time: $postAlignTime minutes\n";
 #}
 
 # Cleanup files
-unlink($truncatedFile) if(defined($opt->{"trim-length"}) && (-e $truncatedFile));
 my @qScores = split(",",$opt->{"qscores"});
 foreach my $qScore (@qScores) {
   my $covFile = $opt->{"out-base-name"}.".$qScore.coverage";
@@ -254,9 +284,12 @@ sub checkArgs {
   for my $key (keys %$opt) {
     if(!defined($opt->{$key})) {
       print "    $key:\"undef\"\n";
-    }
-    else {
+    } elsif (! ref($opt->{$key})) {
       print "    $key: \"" . $opt->{$key} . "\"\n";
+    } elsif (UNIVERSAL::isa($opt->{$key},'ARRAY')) {
+      print "    $key: \"" . join("\",\n      \"",@{$opt->{$key}}) . "\"\n";
+    } else {
+      print "    $key: UNRECOGNIZED TYPE\n";
     }
   }
   
@@ -266,15 +299,29 @@ sub checkArgs {
     $badArgs = 1;
     print STDERR "ERROR: $0: must specify a positive number of threads\n";
   }
-  if(!defined($opt->{"readFile"})) {
+  my $nReadFiles = scalar @{$opt->{"readFile"}};
+  if($nReadFiles < 1 || $nReadFiles > 2) {
     $badArgs = 1;
-    print STDERR "ERROR: $0: must specify input reads with -i or --input option\n";
-  } elsif($opt->{"readFile"} =~ /^(.+)\.(fasta|fastq|sff)$/i) {
-    $opt->{"readFileBase"} = $1;
-    $opt->{"readFileType"} = lc($2);
+    print STDERR "ERROR: $0: must specify at least one file of input reads with -i or --input option\n" if($nReadFiles < 1);
+    print STDERR "ERROR: $0: must specify at most two files of input reads with -i or --input option\n" if($nReadFiles > 2);
   } else {
-    $badArgs = 1;
-    print STDERR "ERROR: $0: suffix of input reads filename must be one of (.fasta, .fastq, .sff)\n";
+    my $first=1;
+    foreach my $readFile (@{$opt->{"readFile"}}) {
+      if($readFile =~ /^(.+)\.(fasta|fastq|sff)$/i) {
+        my $readFileType = $2;
+        push(@{$opt->{"readFileBase"}},$1);
+        if($first) {
+          $first = 0;
+          $opt->{"readFileType"} = lc($readFileType);
+        } elsif($opt->{"readFileType"} ne lc($readFileType)) {
+          $badArgs = 1;
+          print STDERR "ERROR: $0: input read files should have same suffix\n";
+        }
+      } else {
+        $badArgs = 1;
+        print STDERR "ERROR: $0: suffix of input reads filename $readFile should be one of (.fasta, .fastq, .sff)\n";
+      }
+    }
   }
   if(!defined($opt->{"genome"})) {
     $badArgs = 1;
@@ -297,18 +344,17 @@ sub usage () {
 
 usage: $0
   Required args:
-    -i,--input myReads         : Single file to align (fasta/fastq/sff)
+    -i,--input myReads         : File to align (fasta/fastq/sff).  Use twice
+                                 for paired read mapping
     -g,--genome mygenome       : Genome to which to align
   Optional args:
     -o,--out-base-name          : Base name for output files.  Default is to
-                                  use same base name as input file
+                                  use same base name as (first) input file
     -l,--filter-length len      : alignments based on reads this short or
                                   shorter will be ignored when compiling
                                   alignment summary statistics.  If not
                                   specified will be taken from
                                   genome.info.txt, otherwise will be set to 20bp
-    -t,--trim-length len        : Length to which to truncate reads.  By default
-                                  no trimming is applied.
     -s,--start-slop nBases      : Number of bases at 5' end of read that can be
                                   ignored when scoring alignments
     -n,--sample-size nReads     : Number of reads to sample.  If not specified
@@ -320,11 +366,16 @@ usage: $0
     -b,--threads nThreads       : Number of threads to use - default is the
                                   number of physical cores
     -d,--aligner tmap           : The aligner to use - currently only tmap
-    --aligner-opts-rg options   : SAM Read Group options aligner-specific options
+    --aligner-opts-rg opts      : SAM Read Group options aligner-specific options
                                   (ex. "-R" for TMAP)
-    --aligner-opts-extra options : Additional extra options to pass to aligner 
+    --aligner-opts-extra opts   : Additional extra options to pass to aligner 
                                   (if this is not specified, "stage1 map1 map2 map3" 
                                   will be used).
+    --aligner-opts-pairing opts : Pairing options to supply to tmap when two input
+                                  read files are provided (if this is not specified,
+                                  "-Q 2 -S 1 -b 200 -c 100 -d 3 -L -l 5" will be used).
+    --bidirectional             : Indicates that reads are bidirectional merged reads
+                                  so that the BAM flag will be appropriately set
     -c,--align-all-reads        : Over-ride possible sampling, align all reads
     -a,--genome-path /dir       : Path in which references can be found.  Can
                                   be specified multiple times.  By default

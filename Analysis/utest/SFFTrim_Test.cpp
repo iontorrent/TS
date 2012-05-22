@@ -3,9 +3,9 @@
 // Created on: 10/13/2010
 //     Author: Keith Moulton
 //
-// Latest revision:   $Revision: 11153 $
-// Last changed by:   $Author: sdavidson@iontorrent.com $
-// Last changed date: $Date: 2011-04-14 00:06:54 -0400 (Thu, 14 Apr 2011) $
+// Latest revision:   $Revision: 25441 $
+// Last changed by:   $Author: csugnet@iontorrent.com $
+// Last changed date: $Date: 2012-02-24 10:35:21 -0800 (Fri, 24 Feb 2012) $
 //
 
 #include <sys/types.h>
@@ -16,7 +16,7 @@
 #include <string>
 #include <iostream>
 #include "../SFFTrim/adapter_searcher.h"
-#include "../Utils.h"
+#include "Utils.h"
 using namespace std;
 class SFFTrimTest : public ::testing::Test {
 	

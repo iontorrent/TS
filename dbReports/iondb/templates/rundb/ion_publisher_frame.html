@@ -1,5 +1,4 @@
 {% extends "rundb/ion_base_template.html" %}
-
 {% block pagination_holder %}{% endblock %}
 {% block controls_holder %}{% endblock %}
 
@@ -13,7 +12,8 @@
       <div class="clear">
         <div class="left_heading left">{{ pub.name }} Upload</div>
       </div>
-      <iframe style="border: none;" width="100%" height="500" src="/rundb/publish/frame/{{ pub.name }}"></iframe>
+      <iframe style="border: none;" width="100%" height="500"
+              src="/rundb/publish/frame/{{ pub.name }}"></iframe>
     </div>
     <div class="roundedcornr_bottom_526903">
       <div></div>

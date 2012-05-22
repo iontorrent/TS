@@ -9,9 +9,6 @@
 #include <vector>
 #include <iostream>
 #include "hdf5.h"
-#include "Mask.h"
-#include "Utils.h"
-#include "IonErr.h"
 
 struct WellHeader {
   unsigned int numWells;

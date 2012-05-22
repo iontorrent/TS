@@ -1,0 +1,160 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+#
+# Purpose: Configure Domain Name Lookup Servers
+#
+
+#--------------------------------------
+# Include function definition file
+#--------------------------------------
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/ts_functions
+
+#--------------------------------------
+# Functions
+#--------------------------------------
+function print_help ()
+{
+    echo
+    echo "Usage: TSdns (--dns nameservers|--remove) [option]..."
+    echo -e "\t--dns                         Define one or more comma delimited dns servers"
+    echo -e "\t--debug, -d                   Prints script commands when executing (set -x)"
+    echo -e "\t--demo                        Prints what changes would be executed only.  No changes are made"
+    echo -e "\t--help, -h                    Prints command line args"
+    echo -e "\t--version, -v                 Prints version"
+    echo
+    echo "Executing the command with no options will force prompting of each parameter"
+    echo
+}
+
+#--------------------------------------
+# Trap exit
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+
+#--------------------------------------
+# Default settings
+#--------------------------------------
+version=`echo '$Revision: 25712 $'|awk '{print $2}'`
+user_confirm=0
+DEMO=0
+REMOVE=0
+
+# Log command line arguments
+cmdline=${@}
+
+#--------------------------------------
+# command line argument parsing
+#--------------------------------------
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '--help'|'-h')
+            print_help
+            exit 0
+        ;;
+        
+        '--version'|'-v')
+            echo "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+            exit 0
+        ;;
+        
+        '--debug'|'-d')
+        set -x
+        ;;
+        
+        '--demo')
+        DEMO=1
+        ;;
+        
+        '--dns')
+        # expect comma delimited with no spaces
+        shift
+        rawdns="$1"
+        IFS=","
+        for ip in ${rawdns[@]}; do
+            if ! is_valid_ipaddress ${ip}; then
+                log "ERROR: invalid IP address specified:'${ip}'"
+            exit 1
+        fi
+        done
+        ;;
+        
+        '--remove')
+        REMOVE=1
+        ;;
+        
+        *)
+        log "Unknown option: $1"
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSdns --help for options."
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+needs_root
+log "$cmdline"
+
+#--------------------------------------
+# Handle the remove case first
+#--------------------------------------
+if [ $REMOVE -eq 1 ]; then
+    conffile=/etc/resolv.conf
+    cp $conffile /tmp
+    tmpconffile="/tmp/$(basename $conffile)"
+    sed -i '/nameserver/ d' $tmpconffile
+
+else
+
+    #--------------------------------------
+    # DNS servers are defined
+    #--------------------------------------
+    if [ ! -z "$rawdns" ]; then
+        conffile=/etc/resolv.conf
+        cp $conffile /tmp
+        tmpconffile="/tmp/$(basename $conffile)"
+        sed -i '/nameserver/ d' $tmpconffile
+        
+        dnservers=( $(echo "$rawdns"|sed 's/,/ /g') )
+        for server in ${dnservers[@]}; do
+            echo "nameserver $server" >> $tmpconffile
+        done
+    else
+        #ERROR: neither --remove nor --dns were supplied
+        log "ERROR: missing required command line option"
+        echo ================================================================
+        echo "ERROR: missing required command line option"
+        echo ================================================================
+        print_help
+        exit 1
+    fi
+fi
+
+#--------------------------------------
+# Make or display the change
+#--------------------------------------
+if [ $DEMO -eq 1 ]; then
+    # Show the new file and exit
+    echo
+    echo "This is the current /etc/resolv.conf:"
+    echo
+    cat $conffile
+    echo
+    echo "This is what the new /etc/resolv.conf file would look like:"
+    echo
+    cat $tmpconffile
+    echo
+    exit 0
+else
+    cp $tmpconffile $conffile
+    echo "/etc/resolv.conf has been modified."
+    exit 0
+fi

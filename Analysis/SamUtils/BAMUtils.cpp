@@ -8,19 +8,15 @@
  *  Copyright 2011 Life Technologies. All rights reserved.
  *
  */
-
+#include "BAMUtils.h"
+#include "Utils.h"
+#include <math.h>
 #include <locale>
 #include <iostream>
 #include <cstdlib>
 #include <string>
 #include <sstream>
-#include <math.h>
-#include "Utils.h"
-
-
-#include <math.h>
-
-#include "BAMUtils.h"
+#include <vector>
 
 //constructors
 
@@ -57,7 +53,7 @@ BAMUtils::BAMUtils(BAMRead& BAM_record, std::string qscores, coord_t slop,
                 bool IUPAC_Flag, bool Keep_IUPAC, bool Truncate_Soft_Clipped, 
                 int error_table_min_len, int error_table_max_len, 
                 int error_table_step_size, int three_prime_clip, 
-                bool rounding_phred_scores, bool Five_Prime_Justify):
+                bool rounding_phred_scores, bool Five_Prime_Justify, std::string &Flow_Order):
           bam_record(BAM_record), 
           q_scores(qscores), 
           num_slop(slop), 
@@ -65,8 +61,7 @@ BAMUtils::BAMUtils(BAMRead& BAM_record, std::string qscores, coord_t slop,
 {
 	_init();
 	
-	/*bam_record = BAM_record;
-	q_scores = qscores;*/
+	flow_order = Flow_Order;
 	
 	iupac_flag = IUPAC_Flag;
 	keep_iupac = Keep_IUPAC;
@@ -76,7 +71,7 @@ BAMUtils::BAMUtils(BAMRead& BAM_record, std::string qscores, coord_t slop,
 	set_slop_bases(slop);
 	init_error_table(error_table_min_len, error_table_max_len, error_table_step_size);
 	round_phred_scores = rounding_phred_scores;
-        five_prime_justify = Five_Prime_Justify;
+    five_prime_justify = Five_Prime_Justify;
 	_crunch_data();
 
 }
@@ -138,8 +133,16 @@ void BAMUtils::_init() {
 	keep_iupac = true;
 	truncate_soft_clipped = true;
 	is_three_prime_soft_clipped = false;
-        round_phred_scores = true;
-        five_prime_justify = false;
+    round_phred_scores = true;
+    five_prime_justify = false;
+    _region_homo_err = 0;
+    _region_mm_err = 0;
+    _region_indel_err = 0;
+    _region_ins_err = 0;
+    _region_del_err = 0;
+    _region_clipped = false;
+	flow_order = "";
+	max_aligned_flow = -1;
 }
 
 
@@ -154,16 +157,22 @@ void BAMUtils::_crunch_data() {
 		reverse();
 	}
         
-        //shift indels to 5'
-        if (five_prime_justify)
-            left_justify();
+    //shift indels to 5'
+    if (five_prime_justify)
+        left_justify();
 	//cip soft clipped portions of read
 	if (total_three_prime_ignore > 0)
 		remove_bases_before_soft_clipped();
-
-	score_alignments(q_scores);
-
-
+	
+	int startBase = 0;
+	int stopBase = 0;
+	bool calcRegionError = bam_record.get_region_base_positions(&startBase, &stopBase);
+	
+	_region_clipped = false;
+		
+    if(calcRegionError) adjust_region_base_positions(&startBase, &stopBase, pad_target, &_region_clipped); 
+	
+	score_alignments(q_scores, calcRegionError, startBase, stopBase);
 	
 	calc_error();
 	
@@ -178,7 +187,6 @@ void BAMUtils::remove_bases_before_soft_clipped() {
 		if (static_cast<unsigned int>(total_three_prime_ignore) < pad_match.length() ) {
 
 			adjusted_three_prime_trim_len = 0;
-			using namespace std;
 			int num_matches = 0;
 			for (int j = (pad_match.length() - 1); ( (j >= 0) && (num_matches < total_three_prime_ignore) ); j--) {
 				//if (pad_match[j] != '|') {
@@ -254,8 +262,9 @@ std::string BAMUtils::to_string() {
 		strm << get_phred_len((strtol(q_score_vec[i].c_str(),NULL, 10)));
 		strm << "\t";
 	}
-	
-	
+
+	strm << get_full_q_length();
+	strm << "\t";
 	
 	return strm.str();
 	
@@ -398,7 +407,7 @@ int BAMUtils::left_justify() {
     unsigned int i;
 
     for (i = 0; i < pad_match.length(); i++) {
-        if('-' == pad_source[i]) { // deletion
+        if('-' == pad_target[i]) { // deletion
             if(0 == prev_del) {
                 start_del = i;
             }
@@ -423,11 +432,11 @@ int BAMUtils::left_justify() {
             if(1 == prev_del) { // previous was an deletion
                 start_del--;
                 while(0 <= start_del && // bases remaining to examine 
-                      pad_source[start_del] != '-' && // hit another deletion 
+                      pad_target[start_del] != '-' && // hit another deletion 
                       pad_source[start_del] != '-' && // hit an insertion 
                       pad_source[start_del] == pad_source[end_del]) { // src pad_target base matches pad_target base 
                     // swap end_del and start_del for the target and pad_match
-                    c = pad_source[end_del]; pad_source[end_del] = pad_source[start_del]; pad_source[start_del] = c;
+                    c = pad_target[end_del]; pad_target[end_del] = pad_target[start_del]; pad_target[start_del] = c;
                     c = pad_match[end_del]; pad_match[end_del] = pad_match[start_del]; pad_match[start_del] = c;
                     start_del--;
                     end_del--;
@@ -439,9 +448,9 @@ int BAMUtils::left_justify() {
             else if(1 == prev_ins) { // previous was an insertion
                 start_ins--;
                 while(0 <= start_ins && // bases remaining to examine
-                      pad_source[start_ins] != '-' && // hit another deletion 
+                      pad_target[start_ins] != '-' && // hit another deletion 
                       pad_source[start_ins] != '-' && // hit an insertion 
-                      pad_source[start_ins] == pad_source[end_ins]) { // src target base matches dest target base 
+                      pad_target[start_ins] == pad_target[end_ins]) { // src target base matches dest target base 
                     // swap end_ins and start_ins for the pad_target and pad_match
                     c = pad_source[end_ins]; pad_source[end_ins] = pad_source[start_ins]; pad_source[start_ins] = c;
                     c = pad_match[end_ins]; pad_match[end_ins] = pad_match[start_ins]; pad_match[start_ins] = c;
@@ -449,17 +458,17 @@ int BAMUtils::left_justify() {
                     end_ins--;
                     justified = 1;
                 }
-                end_ins++; // e decremented when we exited the loop 
-                i = end_ins;
+                end_ins++; // we decremented when we exited the loop 
+                i = end_ins;                
             }
             else {
-                i++;
+                //i++;
             }
             // reset
             prev_del = prev_ins = 0;
             start_del = start_ins = end_del = end_ins = -1;
         }
-    }
+    }     
     return justified;
 }
 
@@ -635,8 +644,6 @@ void BAMUtils::padded_alignment() {
 	std::cerr << "pad_target: " << pad_target << std::endl;
 	std::cerr << "pad_match : " << pad_match << std::endl;
 	*/
-
-
 }
 
 void BAMUtils::reverse() {
@@ -677,10 +684,46 @@ void BAMUtils::reverse_comp(std::string& c_dna) {
 	
 }
 
+//faster if you leave this part out
+void BAMUtils::calc_error() {
+	q_err = 0;
+	homo_err = 0;
+	mm_err = 0;
+	indelErr = 0;
+	
+	
+	std::vector<std::string> q_score_vec;
+	split(q_scores, ',', q_score_vec);
+	
+    int loop_limit = static_cast<int>( pad_source.length() );//get_phred_len(strtol(q_score_vec[0].c_str(), NULL, 10));
+	for (int i = get_slop(); i < loop_limit; i++) {
+		if (pad_match[i] != '|') {
+			q_err++;
+			//check homopol
+			if (pad_source[i] != '-' && 
+				((i > 0 && (pad_source[i-1] == pad_source[i])) ||
+				 (i+1 < static_cast<int>( pad_target.length() ) && (pad_source[i+1] == pad_source[i])))) {
+					homo_err++;
+			}
+			else if(pad_target[i] != '-' &&
+					((i > 0 && (pad_target[i-1] == pad_target[i])) ||
+					 (i+1 < static_cast<int>( pad_target.length() ) && (pad_target[i+1] == pad_target[i])))) {
+						
+					homo_err++;
+			}
+			if ((pad_source[i] != '-') && (pad_target[i] != '-')) {
+				mm_err++;
+			} else {
+				indelErr++;
+			}
+			
+		}
+	}
 
-
-
-void BAMUtils::score_alignments(const std::string& qscores ) {
+}
+	
+	
+void BAMUtils::score_alignments(const std::string& qscores, bool calc_region_error, int startBase, int stopBase) {
 
 	
 	
@@ -690,17 +733,66 @@ void BAMUtils::score_alignments(const std::string& qscores ) {
 	t_len = 0;
 	phred_lens.clear();
 
+	int first_aligned_flow=0;
+	std::string first_aligned_flow_bam_tag = "ZF";
+	bool score_flows = (flow_order != "");
+	if(score_flows && bam_record.get_optional_field(first_aligned_flow_bam_tag,first_aligned_flow)) {
+		score_flows = true;
+		//std::cout << get_name() << "\tfirst aligned flow = " << first_aligned_flow << ", flow order = " << flow_order << "\n";
+	}
+
 	equiv_len = std::tr1::unordered_map<coord_t, coord_t>(pad_source.length());
 	int consecutive_error = 0;
+
+	// flow-based error determination
+	int current_flow = first_aligned_flow;
+	max_aligned_flow = -1;
+	char prev_target_base = ' ';
+	char next_target_base = ' ';
+	unsigned int next_target_base_index = 0;
+
+	//region-errors
+	_region_homo_err = 0;
+	_region_mm_err = 0;
+	_region_indel_err = 0;
+	_region_ins_err = 0;
+	_region_del_err = 0;	
+	
 	//using namespace std;
 	for (int i = 0; (unsigned int)i < pad_source.length(); i++) {
-		//cerr << " i: " << i << " n_qlen: " << n_qlen << " t_len: " << t_len << " t_diff: " << t_diff << endl;
+		//std::cerr << " i: " << i << " n_qlen: " << n_qlen << " t_len: " << t_len << " t_diff: " << t_diff << std::endl;
 		if (pad_source[i] != '-') {
 			t_len = t_len + 1;
 		}
 		
 		if (pad_match[i] != '|') {
 			t_diff = t_diff + 1;
+			//region-errors: start			
+			if(calc_region_error && i>=startBase && i <=stopBase){
+				if (pad_source[i] == '-' && 
+						((i > 0 && (pad_target[i-1] == pad_target[i])) ||
+								(i+1 < static_cast<int>( pad_target.length() ) && (pad_target[i+1] == pad_target[i])))) {
+						_region_homo_err++; 
+				}
+				else if(pad_target[i] == '-' &&
+						((i > 0 && (pad_source[i-1] == pad_source[i])) ||
+								(i+1 < static_cast<int>( pad_source.length() ) && (pad_source[i+1] == pad_source[i])))) {						
+						_region_homo_err++;
+				}
+				if ((pad_source[i] != '-') && (pad_target[i] != '-')) {
+					_region_mm_err++;
+				} else {
+					_region_indel_err++;
+					if((pad_source[i] == '-') && (pad_target[i] != '-')){
+						_region_ins_err++;
+					}
+					if((pad_source[i] != '-') && (pad_target[i] == '-')){
+						_region_del_err++;
+					}								
+				}			
+			}
+			//region-errors end
+			
 			//need to check if this is worthy of a CF/IE style error
 			/*
 			 * Rationale for the below
@@ -723,7 +815,7 @@ void BAMUtils::score_alignments(const std::string& qscores ) {
 			consecutive_error = 0;
 			match_base = match_base + 1;
 		}
-		if (pad_target[i] != '-'/* && pad_target[i] != '+'*/) { //if deletion or clipping
+		if (pad_target[i] != '-') {
 			n_qlen = n_qlen + 1;
 		}
 		equiv_len[i] = t_len;
@@ -731,7 +823,78 @@ void BAMUtils::score_alignments(const std::string& qscores ) {
 			error_table[ n_qlen ] = consecutive_error;
 		}
 
+		if(score_flows) {
+			// Figure out what flow we are in
+			char thisBase = pad_target[i];
+
+			if (pad_target[i] != '-') {
+				// Not a deletion in the read, so only advance flow if we're in a new homopolymer
+				if(prev_target_base != ' ' && thisBase != prev_target_base) {
+					while(flow_order[(++current_flow) % flow_order.length()] != thisBase) {
+					}
+				}
+				prev_target_base = thisBase;
+			} else {
+				// In a deletion.  So what to do depends on the deleted base:
+				//   if alignment hasn't started yet or the deleted base matches previous read HP
+				//     don't advance the flow
+				//   otherwise
+				//     if there is not another read base then we're done
+				//     if there is another read base
+				//       if deletion matches next read base, advance the flow to next read base
+				//       otherwise look for an intermediate flow (possibly the current flow) matching the deletion
+				//       if none found, leave flow as-is
+				char deleted_base = pad_source[i];
+				if((prev_target_base != ' ') && (deleted_base != prev_target_base)) {
+					// find next target base, if we don't already know it
+					if(next_target_base_index <= (unsigned int)i) {
+						for(next_target_base_index=i+1; next_target_base_index < pad_target.length(); next_target_base_index++) {
+							if(pad_target[next_target_base_index] != '-') {
+								next_target_base = pad_target[next_target_base_index];
+								break;
+							}
+						}
+					}
+					if(next_target_base != ' ') {
+						// find flow for next target base
+						int next_flow = current_flow;
+						if(next_target_base != prev_target_base) {
+							while(flow_order[next_flow % flow_order.length()] != next_target_base) {
+								next_flow++;
+							}
+						}
+						if(deleted_base == next_target_base) {
+							current_flow = next_flow;
+							prev_target_base = next_target_base;
+						} else {
+							int flow = 0;
+							for(flow=current_flow; flow < next_flow; flow++) {
+								if(flow_order[flow % flow_order.length()] == deleted_base) {
+									current_flow = flow;
+									prev_target_base = deleted_base;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+  
+			if(current_flow > max_aligned_flow)
+				max_aligned_flow = current_flow;
+			if(consecutive_error > 0) {
+				flow_err.push_back(current_flow);
+				flow_err_bases.push_back(consecutive_error);
+			}
+		}
 	}
+
+	//if(score_flows) {
+	//	std::cout << "aligned to flow " << max_aligned_flow << "\n";
+	//	std::cout << flow_err.size() << " flow errors\n";
+	//	for(unsigned int i=0; i<flow_err.size(); i++)
+	//		std::cout << flow_err[i] << "\t" << flow_err_bases[i] << "\n";
+	//}
 	
 	//get qual vals from  bam_record
 	std::vector<std::string> q_score_vec;
@@ -782,9 +945,9 @@ void BAMUtils::score_alignments(const std::string& qscores ) {
 			loc_err = prev_t_diff;
 		}
 		
-		while ((loc_len > 0) && ((int)i >= num_slop) && i > 0) {
+		while ((loc_len > 0) && (static_cast<int>(i) >= num_slop) && i > 0) {
 
-			if (q_len_vec[k] == 0 && (((loc_err / double(loc_len))) <= Q[k]) /*&& (equivalent_length(loc_len) != 0)*/) {
+			if (q_len_vec[k] == 0 && (((loc_err / static_cast<double>(loc_len))) <= Q[k]) /*&& (equivalent_length(loc_len) != 0)*/) {
 				//coord_t eqv_len = equivalent_length(loc_len);
 
 				coord_t eqv_len = loc_len;
@@ -824,48 +987,30 @@ void BAMUtils::score_alignments(const std::string& qscores ) {
 }
 
 
+void BAMUtils::adjust_region_base_positions(int* start_base, int* stop_base, std::string this_pad_target, bool *region_clipped)
+{
+	int non_del_base = 0;
+	bool start_base_counted = false;
+	bool stop_base_counted = false;
 
-//faster if you leave this part out
-void			BAMUtils::calc_error() {
-	q_err = 0;
-	homo_err = 0;
-	mm_err = 0;
-	indelErr = 0;
-	
-	
-	std::vector<std::string> q_score_vec;
-	split(q_scores, ',', q_score_vec);
-	
-	coord_t loop_limit = get_phred_len(strtol(q_score_vec[0].c_str(), NULL, 10));
-	for (int i = get_slop(); i < loop_limit; i++) {
-		if (pad_match[i] != '|') {
-			q_err++;
-			//check homopol
-			if (pad_source[i] != '-' && 
-				((i > 0 && (pad_source[i-1] == pad_source[i])) ||
-				 (i+1 < (int) pad_source.length() && (pad_source[i+1] == pad_source[i])))) {
-					homo_err++;
-			}
-			else if(pad_target[i] != '-' &&
-					((i > 0 && (pad_target[i-1] == pad_target[i])) ||
-					 (i+1 < (int) pad_target.length() && (pad_target[i+1] == pad_target[i])))) {
-						
-					homo_err++;
-			}
-			if ((pad_source[i] != '-') && (pad_target[i] != '-')) {
-				mm_err++;
-			} else {
-				indelErr++;
-			}
-
-			
+	for (int i = 0; (unsigned int)i < this_pad_target.size(); i++) {	
+		if(this_pad_target[i] != '-') non_del_base++; 
+		if(*start_base == (non_del_base-1) && start_base_counted == false ){
+			*start_base = i;
+			start_base_counted = true;			
 		}
+		if(*stop_base == (non_del_base-1)){
+			*stop_base = i;
+			stop_base_counted = true;	
+			break;
+		}	
 	}
-
+	if(stop_base_counted==false){
+		*stop_base = (*stop_base < (static_cast<int>(this_pad_target.size())-1)?(*stop_base):(static_cast<int>(this_pad_target.size())-1));
+		*region_clipped = true;
+		}
+	
 }
-	
-	
-
 
 
 

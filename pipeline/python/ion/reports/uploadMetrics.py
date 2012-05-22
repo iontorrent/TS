@@ -9,15 +9,18 @@ import traceback
 sys.path.append('/opt/ion/')
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 from django.db import models
+from django.db import connection
 from iondb.rundb import models
 from os import path
 import subprocess
-from ion.reports import parseBeadfind, parseTFstats
+from ion.reports import parseBeadfind
+from ion.utils.blockprocessing import parse_metrics
+from ion.utils.textTo import textToDict
 
-def getCurrentAnalysis(tfMetrics, procMetrics, beadMetrics, filterMetrics, res):
+def getCurrentAnalysis(procMetrics, res):
     def get_current_version():
         ver_map = {'analysis':'an','alignment':'al','dbreports':'db', 'tmap' : 'tm' }
-        a = subprocess.Popen('/opt/ion/iondb/bin/lversionChk.sh', shell=True, stdout=subprocess.PIPE)
+        a = subprocess.Popen('ion_versionCheck.py', shell=True, stdout=subprocess.PIPE)
         ret = a.stdout.readlines()
         ver = {}
         for i in ret:
@@ -30,69 +33,77 @@ def getCurrentAnalysis(tfMetrics, procMetrics, beadMetrics, filterMetrics, res):
 
     res.analysisVersion = get_current_version()
     if procMetrics != None:
+        res.processedflows =  procMetrics.get('numFlows',0)
         res.processedCycles = procMetrics.get('cyclesProcessed',0)
         res.framesProcessed = procMetrics.get('framesProcessed',0)
     res.save()
     return res
 
-def addTfMetrics(tfMetrics, procParams, beadMetrics, filterMetrics, keyPeak, BaseCallerMetrics, res):
+def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
     ###Populate metrics for each TF###
-    tf_metric_map = {'matchMismatchMean':'Match',
-                     'matchMismatchMode':'MatchMode',
-                     'Q10Mean':'Avg Q10 read length',
-                     'Q10Mode':'Q10Mode',
-                     'Q17Mean':'Avg Q17 read length',
-                     'Q17Mode':'Q17Mode' ,
-                     'SysSNR':'System SNR',
-                     'hqReadCount':'50Match',
-                     'Q10ReadCount':'50Q10',
-                     'aveQ10ReadCount':'50Q10A',
-                     'Q17ReadCount':'50Q17',
-                     'aveQ17ReadCount':'50Q17A',
-                     'keypass':'Num',
-                     }
+    
+    if tfMetrics == None:
+        return
 
-    if tfMetrics != None:                 
-        for tf, metrics in tfMetrics.iteritems(): 
-           if tf != 'LIB':
-                kwargs = {'report':res,
-                          'name':tf,
-                          'aveHqReadCount':0.0, 
-                          'preCorrSNR':0.0,
-                          'postCorrSNR':0.0, 
-                          'aveKeyCount':keyPeak.get('Test Fragment','0'),
-                          'HPAccuracy':metrics.get('Per HP accuracy','0'),
-                          'rawOverlap':metrics.get('Raw signal overlap','0'),
-                          'corOverlap':metrics.get('Corrected signal overlap','0'),
-                          'sequence':metrics.get('TF Seq','None'),
-                          'Q10Histo':metrics.get('Q10','0'),
-                          'Q17Histo':metrics.get('Q17','0'),
-                          'matchMismatchHisto':metrics.get('Match-Mismatch','0'),
-                          'HPSNR':metrics.get('Raw HP SNR','0'),
-                          'CF':0.0,
-                          'IE':0.0,
-                          'DR':0.0,
-                          'error':0.0,
-                          'number':metrics.get('Num','0'),
-                          'rawIonogram':metrics.get('Avg Ionogram','0'),
-                          'corrIonogram':metrics.get('Corrected Avg Ionogram','0')
-                          }
-                for dbname, key in tf_metric_map.iteritems():
-                    kwargs[dbname]=set_type(metrics.get(key, '0'))
-                
-                try:
-                    kwargs['CF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
-                    kwargs['IE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
-                    kwargs['DR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
-                except:
-                    kwargs['CF'] = 0.0
-                    kwargs['IE'] = 0.0
-                    kwargs['DR'] = 0.0
-                
-                tfm = models.TFMetrics(**kwargs)
-                tfm.save()            
+    for tf, metrics in tfMetrics.iteritems():
+        
+        HPSNR = metrics.get('Raw HP SNR',[0])
+        hpAccNum = metrics.get('Per HP accuracy NUM',[0])
+        hpAccDen = metrics.get('Per HP accuracy DEN',[0])
+        avgIonogram = [a/float(b) for a,b in zip(metrics.get('Avg Ionogram NUM',[0]),metrics.get('Avg Ionogram DEN',[0]))]
+        corIonogram = [a/float(b) for a,b in zip(metrics.get('Corrected Avg Ionogram NUM',[0]),metrics.get('Corrected Avg Ionogram DEN',[0]))]
+        
+        kwargs = {'report'                  : res,
+                  'name'                    : tf,
+                  'sequence'                : metrics.get('TF Seq','None'),
+                  'number'                  : metrics.get('Num',0.0),
+                  'keypass'                 : metrics.get('Num',0.0),   # Deprecated, populating by next best thing
+                  'aveKeyCount'             : keyPeak.get('Test Fragment','0'),
+                  'SysSNR'                  : metrics.get('System SNR',0.0),
 
-def addAnalysisMetrics(tfMetrics, procParams, beadMetrics, filterMetrics, BaseCallerMetrics, res):
+                  'Q10Histo'                : ' '.join(map(str,metrics.get('Q10',[0]))),
+                  'Q10Mean'                 : metrics.get('Q10 Mean',0.0),
+                  'Q10Mode'                 : metrics.get('Q10 Mean',0.0), # Deprecated, populating by next best thing
+                  'Q10ReadCount'            : metrics.get('50Q10',0.0),
+                  
+                  'Q17Histo'                : ' '.join(map(str,metrics.get('Q17',[0]))),
+                  'Q17Mean'                 : metrics.get('Q17 Mean',0.0),
+                  'Q17Mode'                 : metrics.get('Q17 Mean',0.0), # Deprecated, populating by next best thing
+                  'Q17ReadCount'            : metrics.get('50Q17',0.0),
+
+                  'HPAccuracy'              : ', '.join('%d : %d/%d' % (x,y[0],y[1]) for x,y in enumerate(zip(hpAccNum,hpAccDen))),
+                  'HPSNR'                   : ', '.join('%d : %f' % x for x in enumerate(HPSNR)),
+                  'rawIonogram'             : ' '.join(map(str,avgIonogram)),
+                  'corrIonogram'            : ' '.join(map(str,corIonogram)),
+                  
+                  'aveHqReadCount'          : 0.0,      # Deprecated
+                  'preCorrSNR'              : 0.0,      # Deprecated
+                  'postCorrSNR'             : 0.0,      # Deprecated 
+                  'rawOverlap'              : '0',      # Deprecated
+                  'corOverlap'              : '0',      # Deprecated
+                  'error'                   : 0.0,      # Deprecated
+                  'matchMismatchHisto'      : '0',      # Deprecated
+                  'matchMismatchMean'       : 0.0,      # Deprecated
+                  'matchMismatchMode'       : 0.0,      # Deprecated
+                  'hqReadCount'             : 0.0,      # Deprecated
+                  'aveQ10ReadCount'         : 0.0,      # Deprecated
+                  'aveQ17ReadCount'         : 0.0,      # Deprecated
+                  }
+        
+        try:
+            kwargs['CF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']   # Deprecated, populating by next best thing
+            kwargs['IE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']   # Deprecated, populating by next best thing
+            kwargs['DR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']   # Deprecated, populating by next best thing
+        except:
+            kwargs['CF'] = 0.0
+            kwargs['IE'] = 0.0
+            kwargs['DR'] = 0.0
+        
+        tfm = models.TFMetrics(**kwargs)
+        tfm.save()
+
+
+def addAnalysisMetrics(beadMetrics, filterMetrics, BaseCallerMetrics, res):
     #print 'addAnalysisMetrics'
     analysis_metrics_map = {'libLive':'Library live beads',
                             'libKp':'Library keypass filter',
@@ -481,21 +492,6 @@ def addQualityMetrics(QualityMetrics, res):
     quality = models.QualityMetrics(**kwargs)
     quality.save()
 
-def parse_metrics(fileIn):
-    """Takes a text file where a '=' is the delimter 
-    in a key value pair and return a python dict of those values """
-    
-    f = open(fileIn, 'r')
-    data = f.readlines()
-    f.close()
-    ret = {}
-    for line in data:
-        l = line.strip().split('=')
-        key = l[0].strip()
-        value = l[-1].strip()
-        ret[key]=value
-    return ret
-
 def pluginStoreInsert(pluginDict):
     """insert plugin data into the django database"""
     print "Insert Plugin data into database"
@@ -546,14 +542,16 @@ def updateStatus(primarykeyPath, status, reportLink = False):
 
     res.save()
 
-def writeDbFromFiles(tfPath, procParams, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, primarykeyPath, uploadStatusPath):
+def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, primarykeyPath, uploadStatusPath):
 
     tfMetrics = None
     if os.path.exists(tfPath):
         try:
-            tfMetrics = parseTFstats.generateMetricsData(tfPath)
+            file = open(tfPath, 'r')
+            tfMetrics = json.load(file)
+            file.close()
         except:
-            print "ERROR: failed to create tfMetrics object"
+            print "ERROR: failed to create tfMetrics object from file %s" % tfPath
             tfMetrics = None
             traceback.print_exc()
     else:
@@ -612,12 +610,20 @@ def writeDbFromFiles(tfPath, procParams, beadPath, filterPath, libPath, status, 
         keyPeak['Test Fragment'] = 0
         keyPeak['Library'] = 0
 
+    procParams = None
+    if os.path.exists(procPath):
+        procParams = textToDict(procPath)
+
     writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath)
 
 
 def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath):
     print "writeDbFromDict"
 
+    # We think this will fix "DatabaseError: server closed the connection unexpectedly"
+    # which happens rather randomly.
+    connection.close()
+    
     f = open(primarykeyPath, 'r')
     pk = f.readlines()
     pkDict = {}
@@ -634,29 +640,28 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
     res = models.Results.objects.get(pk=rpk)
     if status != None:
         res.status = status
-        res.reportLink = res.log
-    else:
-        res.status = 'Completed'
-        res.timeStamp = datetime.datetime.now()
+        if status != 'Completed':
+           res.reportLink = res.log
+    res.timeStamp = datetime.datetime.now()
     res.save()
 
     try:
         e.write('Updating Analysis\n')
-        getCurrentAnalysis(tfMetrics, procParams, beadMetrics, filterMetrics, res)
+        getCurrentAnalysis(procParams, res)
     except:
         e.write("Failed getCurrentAnalysis\n")
         print traceback.format_exc()
         print sys.exc_info()[0]
     try:
         e.write('Adding TF Metrics\n')
-        addTfMetrics(tfMetrics, procParams, beadMetrics, filterMetrics, keyPeak, BaseCallerMetrics, res)
+        addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res)
     except:
         e.write("Failed addTfMetrics\n")
         print traceback.format_exc()
         print sys.exc_info()[0]
     try:
         e.write('Adding Analysis Metrics\n')
-        addAnalysisMetrics(tfMetrics, procParams, beadMetrics, filterMetrics, BaseCallerMetrics, res)
+        addAnalysisMetrics(beadMetrics, filterMetrics, BaseCallerMetrics, res)
     except:
         e.write("Failed addAnalysisMetrics\n")
         print traceback.format_exc()
@@ -693,19 +698,19 @@ if __name__=='__main__':
 
     status = None
 
-    tfPath = os.path.join(folderPath, BASECALLER_RESULTS, 'TFMapper.stats')
-    procParams = None
-#    procPath = os.path.join(folderPath, SIGPROC_RESULTS, 'processParameters.txt')
+    tfPath = os.path.join(folderPath, BASECALLER_RESULTS, 'TFStats.json')
+    procPath = os.path.join(SIGPROC_RESULTS,"processParameters.txt")
     beadPath = os.path.join(folderPath, SIGPROC_RESULTS, 'bfmask.stats')
     filterPath = os.path.join(folderPath, SIGPROC_RESULTS, 'filterMetrics.txt')
     alignmentSummaryPath = os.path.join(folderPath, ALIGNMENT_RESULTS, 'alignment.summary')
-    keyPath = None
+    primarykeyPath = os.path.join(folderPath, 'primary.key')
     BaseCallerJsonPath = os.path.join(folderPath, BASECALLER_RESULTS, 'BaseCaller.json')
     QualityPath = os.path.join(folderPath, BASECALLER_RESULTS, 'quality.summary')
-    keyPath = 'raw_peak_signal'
+    keyPath = os.path.join(folderPath, 'raw_peak_signal')
+    uploadStatusPath = os.path.join(folderPath, 'status.txt')
 
     writeDbFromFiles(tfPath,
-                     procParams,
+                     procPath,
                      beadPath,
                      filterPath,
                      alignmentSummaryPath,

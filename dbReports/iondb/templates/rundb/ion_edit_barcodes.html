@@ -1,187 +1,166 @@
 {% extends "rundb/ion_base_template.html" %}
+
 {% block extra_head %}
-
-{% load pagetools %}
-
+  {% load pagetools %}
 {% endblock extra_head %}
+
 {% block pagination_holder %}{% endblock %}
+
 {% block controls_holder %}{% endblock %}
 
 {% block full_page_content %}
+  <script type="text/javascript"
+          src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+  <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css"
+        type="text/css"/>
 
-<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
-<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
-
-    <style>
-
+  <style>
     #toolbar {
-        padding: .5em;
-        margin: 1px;
-        margin-bottom: 6px;
-        overflow: hidden;
+      padding: .5em;
+      margin: 1px;
+      margin-bottom: 6px;
+      overflow: hidden;
     }
 
-    .bumpdown{
-        padding-bottom: 5px;
+    .bumpdown {
+      padding-bottom: 5px;
     }
 
-    #addBarcodeButton{
-        float: left;
+    #addBarcodeButton {
+      float: left;
     }
 
-    #deleteButton{
-        float: right;
+    #deleteButton {
+      float: right;
+    }
+  </style>
+
+  <script type="text/javascript">
+    function strip() {
+      $("tr").removeClass("row1");
+      $("tr").removeClass("row2");
+      $("tr:odd").addClass("row1");
+      $("tr:even").addClass("row2");
     }
 
-    </style>
-    
-<script type="text/javascript">
+    $(document).ready(function () {
+      strip();
 
-    function strip(){
-        $("tr").removeClass("row1");
-        $("tr").removeClass("row2");
-        $("tr:odd").addClass("row1");
-        $("tr:even").addClass("row2");
-    }
+      $("#toolbar").addClass("ui-widget-header ui-corner-all");
 
-    $(document).ready(function(){
-     strip();
+      //get the barcode set name
+      var barcodeName = "{{ barcodes.0.name }}";
 
-     $("#toolbar").addClass("ui-widget-header ui-corner-all");
+      $("#addBarcodeButton").button({
+        icons: {
+          primary: 'ui-icon-plusthick'
+        }});
 
-     //get the barcode set name
-     var barcodeName = "{{ barcodes.0.name }}";
+      $("#deleteButton").button({
+        icons: {
+          primary: 'ui-icon-closethick'
+        }});
 
-     $("#addBarcodeButton").button({
-                 icons: {
-                     primary: 'ui-icon-plusthick'
-                 }} );
+      $("#deleteButton").click(function () {
+        apprise('Are you sure you would like to remove all the barcodes in this set?', {'verify': true}, function (r) {
+          if (r) {
+            $.post("/rundb/deletebarcodeset/" + barcodeName, function () {
+              window.location.href = '{% url rundb.genomes.references %}';
+            });
 
-     $("#deleteButton").button({
-                 icons: {
-                     primary: 'ui-icon-closethick'
-                 }} );
+          }
+        });
+      });
 
-     $("#deleteButton").click(function(){
-          apprise('Are you sure you would like to remove all the barcodes in this set?', {'verify':true}, function(r)
-                {
-                if(r)
-                    {
-                        $.post("/rundb/deletebarcodeset/" + barcodeName, function(){
-                            window.location.href='{% url rundb.genomes.references %}';
-                        });
+      $("#addBarcodeButton").click(function () {
 
-                    }
-                });
-     });
+        window.location = "/rundb/addeditbarcode/" + barcodeName;
 
-     $("#addBarcodeButton").click(function(){
-
-         window.location = "/rundb/addeditbarcode/" + barcodeName ;
-
-     });
-     $(".deleteLink").live("click",function(){
+      });
+      $(".deleteLink").live("click", function () {
         var barID = $(this).attr("alt");
-         apprise('Are you sure you would like to remove this barcode?', {'verify':true}, function(r)
-         {
-             if(r)
-             {
-                 $.post("/rundb/deletebarcode/" + barID, function(){
-                     var barRow = "#row_" + barID;
-                     $(barRow).remove();
-                     strip();
-                 });
+        apprise('Are you sure you would like to remove this barcode?', {'verify': true}, function (r) {
+          if (r) {
+            $.post("/rundb/deletebarcode/" + barID, function () {
+              var barRow = "#row_" + barID;
+              $(barRow).remove();
+              strip();
+            });
 
-             }
-         });
+          }
+        });
 
-     });
+      });
 
- });
+    });
+  </script>
 
-</script>
-
-            <div style="margin-top: 25px">
-
-            <div class="roundedcornr_box_526903">
-                <div class="roundedcornr_top_526903"><div></div></div>
-                <div class="roundedcornr_content_526903">
-
-                    <div class="clear">
-                        <div class="left_heading left bumpdown">Barcodes in {{ barcodes.0.name }}</div>
-                    </div>
-                
-                    <div class="bounded_container clear">
-
-
-                        <div id="toolbar">
-
-                            <div id="addBarcodeButton">Add Barcode</div>
-                            <div id="deleteButton">Delete Barcode Set</div>
-
-                        </div>
-
-                        <table>
-                            <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Sequence</th>
-                                <th>Adapter</th>
-                                <th>Flow Order</th>
-                                <th>Score Mode</th>
-                                <th>Score Cutoff</th>
-                                <th>Annotation</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {% for bar in barcodes %}{% spaceless %}
-                                <tr class="graphable" id="row_{{bar.pk}}">
-
-                                    <td>
-                                        <a href="/rundb/addeditbarcode/{{ barcodes.0.name }}?barcode={{ bar.pk }}"> {{ bar.id_str|blankIfNone}}</a>
-                                    </td>
-
-                                    <td>
-                                        {{ bar.sequence|blankIfNone}}
-                                    </td>
-
-                                    <td>
-                                        {{ bar.adapter|blankIfNone}}
-                                    </td>
-
-                                    <td>
-                                        {{ bar.floworder|blankIfNone}}
-                                    </td>
-
-                                    <td>
-                                        {{ bar.score_mode}}
-                                    </td>
-
-                                    <td>
-                                        {{ bar.score_cutoff}}
-                                    </td>
-
-                                    <td>
-                                        {{ bar.annotation|blankIfNone}}
-                                    </td>
-
-                                </tr>
-                            {% endspaceless %}
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                </div>
-                <div class="roundedcornr_bottom_526903"><div></div></div>
-            </div>
+  <div style="margin-top: 25px">
+    <div class="roundedcornr_box_526903">
+      <div class="roundedcornr_top_526903">
+        <div></div>
+      </div>
+      <div class="roundedcornr_content_526903">
+        <div class="clear">
+          <div class="left_heading left bumpdown">Barcodes
+            in {{ barcodes.0.name }}</div>
         </div>
-    <br /> <br />
-    <div>
-
-
+        <div class="bounded_container clear">
+          <div id="toolbar">
+            <div id="addBarcodeButton">Add Barcode</div>
+            <div id="deleteButton">Delete Barcode Set</div>
+          </div>
+          <table>
+            <thead>
+            <tr>
+              <th>ID</th>
+              <th>Sequence</th>
+              <th>Adapter</th>
+              <th>Flow Order</th>
+              <th>Score Mode</th>
+              <th>Score Cutoff</th>
+              <th>Annotation</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for bar in barcodes %}{% spaceless %}
+              <tr class="graphable" id="row_{{bar.pk}}">
+                <td>
+                  <a href="/rundb/addeditbarcode/{{ barcodes.0.name }}?barcode={{ bar.pk }}"> {{ bar.id_str|blankIfNone }}</a>
+                </td>
+                <td>
+                  {{ bar.sequence|blankIfNone }}
+                </td>
+                <td>
+                  {{ bar.adapter|blankIfNone }}
+                </td>
+                <td>
+                  {{ bar.floworder|blankIfNone }}
+                </td>
+                <td>
+                  {{ bar.score_mode }}
+                </td>
+                <td>
+                  {{ bar.score_cutoff }}
+                </td>
+                <td>
+                  {{ bar.annotation|blankIfNone }}
+                </td>
+              </tr>
+            {% endspaceless %}
+            {% endfor %}
+            </tbody>
+          </table>
         </div>
-
+      </div>
+      <div class="roundedcornr_bottom_526903">
+        <div></div>
+      </div>
     </div>
+  </div>
+  <br/>
+  <br/>
+  <div></div>
 
+  </div>
 {% endblock full_page_content %}

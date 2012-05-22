@@ -15,6 +15,26 @@
 
 using namespace samutils_types;
 
+/*TODO:
+ 1:  be able to get # of flows
+ 2:  get flow order
+ 3:  return flow signals
+ */
+
+std::vector<int>  BAMRead::get_fz(int num_flows) {
+  //return flow signals from this read
+  std::vector<int> flow_sigs(num_flows);
+  
+  uint8_t* flow_ptr = bam_aux_get(bam_record.get(), "FZ" );
+  // for number of flows, set the corresponding flow in the vector 
+  // set each flow value to the vector
+  for( int i = 0; i < num_flows; i++ ) {
+    flow_sigs[i] = *(flow_ptr + i);
+  }
+  
+  return flow_sigs;
+}
+
 
 
 Cigar BAMRead::get_cigar() {

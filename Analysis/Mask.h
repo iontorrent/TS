@@ -59,34 +59,34 @@ class Mask {
 		int ToIndex(int row, int col) const { return row * w + col; }
 		void IndexToRowCol(int idx, int &row, int &col) const { row = idx / w; col = idx % w; }
 		const unsigned short *GetMask() {return mask;}
-		uint16_t GetBarcodeId(int x, int y);
-		bool	Match(int x, int y, MaskType type, int method = MATCH_ANY);
-		bool	Match(int n, MaskType type, int method = MATCH_ANY);
+		uint16_t GetBarcodeId(int x, int y) const;
+		bool	Match(int x, int y, MaskType type, int method = MATCH_ANY) const;
+		bool	Match(int n, MaskType type, int method = MATCH_ANY) const;
         void    Set(int x, int y, MaskType type);
         void    SetBarcodeId(int x, int y, uint16_t barcodeId);
         void	AddThese(Mask *fromMask, MaskType these);
 		void	SetThese(Mask *fromMask, MaskType these);
-		int	GetCount(MaskType these);
-		int	GetCount(MaskType these, Region region);
-		int GetCountExact(MaskType val);
-		int	Export(char *fileName, MaskType these);
-		int	Export(char *fileName, MaskType these, Region region);
-		int MaskList(char *fileName, MaskType these);
-		int MaskList(char *fileName, MaskType these, Region region);
-		int WriteRaw (const char *fileName);
+		int	GetCount(MaskType these) const;
+		int	GetCount(MaskType these, Region region) const;
+		int GetCountExact(MaskType val) const;
+		int	Export(char *fileName, MaskType these) const;
+		int	Export(char *fileName, MaskType these, Region region) const;
+		int MaskList(char *fileName, MaskType these) const;
+		int MaskList(char *fileName, MaskType these, Region region) const;
+		int WriteRaw (const char *fileName) const;
 		int SetMask (const char *fileName);
-		int DumpStats (Region region, char *fileName, bool showWashouts = true);
+		int DumpStats (Region region, char *fileName, bool showWashouts = true) const;
 		unsigned short & operator [](int n) {return mask[n];}
 		unsigned short lookup(int n){return (*this)[n];}
 		int32_t Crop(int32_t width, int32_t height, int32_t top,
 			     int32_t left);
-		void validateMask ();
+		void validateMask () const;
 		void MarkCrop (Region region, MaskType);
 		void MarkRegion (Region region, MaskType);
 		void CropRegions (Region *regions, int numRegions, MaskType these);
 		// For now just check for 318 width.
 
-		bool isHexPack() { return isHex || h == 3792; }
+		bool isHexPack() const { return isHex || h == 3792; }
 		static Region chipSubRegion;
 
 		/**
@@ -102,17 +102,17 @@ class Mask {
 		 *    row even  (-1,-1), *(0,-1), (1,-1), (1,0), *(0,1), (-1,0),
 		 * 
 		 */
-		void GetNeighbors (int row, int col, std::vector<int> &wells);
+		void GetNeighbors (int row, int col, std::vector<int> &wells) const;
 
 		/* Append the neighbor index or -1 for off grid as appropriate. */
-		void AddNeighbor(int row, int col, int rOff, int cOff, std::vector<int> &wells);
+		void AddNeighbor(int row, int col, int rOff, int cOff, std::vector<int> &wells) const;
 
 		/* Fill in the neighbors for a hex grid starting in lower left neighbor. Note that
 		   odd and even rows have different behavior */
-		void GetHexNeighbors(int row, int col, std::vector<int> &wells);
+		void GetHexNeighbors(int row, int col, std::vector<int> &wells) const;
 
 		/* Fill in neigbors for a square grid starting in lower left neighbor. */
-		void GetSquareNeigbors(int row, int col, std::vector<int> &wells);
+		void GetSquareNeigbors(int row, int col, std::vector<int> &wells) const;
 
 		void CalculateLiveNeighbors();
 

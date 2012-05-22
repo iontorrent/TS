@@ -1,105 +1,106 @@
 {% extends "rundb/ion_base_template.html" %}
 {% block extra_head %}
-<script type="text/javascript" language="javascript"
-	src="/site_media/jquery/js/jgcharts.pack.js"></script>
+  <script type="text/javascript" language="javascript"
+          src="/site_media/jquery/js/jgcharts.pack.js"></script>
 {% endblock extra_head %}
 {% block pagination_holder %}{% endblock %}
-{% block current_tab%}about{% endblock %}
+{% block current_tab %}about{% endblock %}
 {% block controls_holder %}{% endblock %}
 
 {% block full_page_content %}
 
 
-    {#  start link section #}
+  {#  start link section #}
 
+  <div class="roundedcornr_box_526903">
+    <div class="roundedcornr_top_526903">
+      <div></div>
+    </div>
+    <div class="roundedcornr_content_526903">
+      <div class="clear">
+        <div class="left_heading left">More Information and Assistance</div>
+      </div>
+      <div class="bounded_container clear">
+        <table>
+          <thead></thead>
+          <tbody>
+          <tr class="row2" id="">
+            <td>
+              <span class="small_indent">
+                <a href="http://ioncommunity.iontorrent.com">IonCommunity</a>
+              </span>
+            </td>
+          </tr>
+          <tr class="row1" id="">
+            <td>
+              <span class="small_indent">
+                <a href="http://iontorrent.com/support">Support</a>
+              </span>
+            </td>
+          </tr>
+          <tr class="row2" id="">
+            <td>
+              <span class="small_indent">
+                <a href="/ion-docs/Home.html">Local documentation</a>
+              </span>
+            </td>
+          </tr>
+          <tr class="row1" id="">
+            <td>
+              <span class="small_indent">
+                <a href="/rundb/info">System support</a>
+              </span>
+            </td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="roundedcornr_bottom_526903">
+      <div></div>
+    </div>
+  </div>
+
+  {#  start of version section  #}
+  <div style="margin-top: 25px">
     <div class="roundedcornr_box_526903">
-        <div class="roundedcornr_top_526903"><div></div></div>
-        <div class="roundedcornr_content_526903">
-
-            <div class="clear">
-                <div class="left_heading left">More Information and Assistance</div>
-
-
-            </div>
-            <div class="bounded_container clear">
-
-                <table>
-                    <thead>
-                    </thead>
-                    <tbody>
-
-                    <tr class="row2" id="">
-                        <td>
-                            <span class="small_indent"><a href="http://ioncommunity.iontorrent.com">IonCommunity</a></span>
-                        </td>
-                    </tr>
-
-                    <tr class="row1" id="">
-                        <td>
-                            <span class="small_indent"><a href="http://iontorrent.com/support">Support</a></span>
-                        </td>
-                    </tr>
-
-                    <tr class="row2" id="">
-                        <td>
-                            <span class="small_indent"> <a href="/ion-docs/Home.html">Local documentation</a></span>
-                        </td>
-                    </tr>
-
-                    <tr class="row1" id="">
-                        <td>
-                            <span class="small_indent"> <a href="/rundb/info">System support</a></span>
-                        </td>
-                    </tr>
-
-
-                    </tbody>
-                </table>
-            </div>
-
+      <div class="roundedcornr_top_526903">
+        <div></div>
+      </div>
+      <div class="roundedcornr_content_526903">
+        <div>
+          <div class="clear">
+            <div class="left_heading left">Releases</div>
+          </div>
+          <div class="bounded_container clear">
+            <table>
+              <col width="60%"></col>
+              <col width="40%"></col>
+              <thead></thead>
+              <tbody>
+              <tr class="row1">
+                <td>
+                  <span class="big_indent"><strong>Torrent Suite</strong></span>
+                </td>
+                <td align="left"><strong>{{ meta }}</strong></td>
+              </tr>
+              {% for label,version in about.items %}
+                <tr class="{% cycle 'row2' 'row1' %}" id="">
+                  <td>
+                    <span class="extra_big_indent">&#8227; {{ label }}</span>
+                  </td>
+                  <td align="left">{{ version }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="roundedcornr_bottom_526903"><div></div></div>
+      </div>
+      <div class="roundedcornr_bottom_526903">
+        <div></div>
+      </div>
     </div>
-
-    {#  start of version section  #}
-    <div style="margin-top: 25px">
-
-    <div class="roundedcornr_box_526903">
-
-        <div class="roundedcornr_top_526903"><div></div></div>
-        <div class="roundedcornr_content_526903">
-
-            <div>
-                <div class="clear">
-                    <div class="left_heading left">Releases</div>
-                </div>
-                <div class="bounded_container clear">
-                    <table>
-                        <col width="60%"></col>
-                        <col width="40%"></col>
-                        <thead>
-                        </thead>
-                        <tbody>
-
-                        <tr class="row1">
-                            <td><span class="big_indent"><strong>Torrent Suite</strong></span> </td>
-                            <td align="left"><strong>{{meta}}</strong></td>
-                        </tr>
-                        {% for label,version in about.items %}
-                            <tr class="{% cycle 'row2' 'row1' %}" id="">
-                                <td><span class="extra_big_indent">&#8227; {{label}}</span></td>
-                                <td align="left">{{version}}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div>
-        <div class="roundedcornr_bottom_526903"><div></div></div>
-    </div>
-
-    </div>
+  </div>
 {% endblock full_page_content %}
 

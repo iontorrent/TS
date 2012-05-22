@@ -34,7 +34,7 @@ RawWellsV1::RawWellsV1(const char *_experimentPath, const char *_rawWellsName, i
   flowValuesSize = 0;
   dataBlockSize = 0;
   hMFile = NULL;
-  hFile = NULL;
+  hFile = 0;
   memset (&hdr, 0, sizeof(hdr));
   memset (&data, 0, sizeof(data));
 
@@ -54,7 +54,7 @@ RawWellsV1::RawWellsV1(const char *_experimentPath, const char *_rawWellsName)
   flowValuesSize = 0;
   dataBlockSize = 0;
   hMFile = NULL;
-  hFile = NULL;
+  hFile = 0;
   memset (&hdr, 0, sizeof(hdr));
   memset (&data, 0, sizeof(data));
 }

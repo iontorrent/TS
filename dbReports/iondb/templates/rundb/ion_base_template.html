@@ -1,32 +1,34 @@
-{% load pagetools %}
-<!DOCTYPE html>
-
+{% load pagetools %}<!DOCTYPE html>
 <html>
 <head>
   <!--[if IE]>
     <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
   <![endif]-->
-
   <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
-  <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet"/>
-  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
-
-
-  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
-  <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-
-
-  <script type="text/javascript" src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
-  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+  <link type="text/css"
+        href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css"
+        rel="Stylesheet"/>
+  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet"
+        type="text/css"/>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
+  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet"
+        type="text/css"/>
   <script type="text/javascript" src="/site_media/scripts.js"></script>
-  <script type="text/javascript" src="/site_media/detectmobilebrowser.js"></script>
-
+  <script type="text/javascript"
+          src="/site_media/detectmobilebrowser.js"></script>
+  <script src="/site_media/js/underscore.js"></script>
+  <script src="/site_media/js/backbone.js"></script>
+  <script src="/site_media/js/messagebox.js"></script>
 
   {% block extra_head %}
   {% endblock extra_head %}
-
   <script>
-    $(document).ready(function() {
+    $(document).ready(function () {
       var CURRENT_TAB = "{% block current_tab %}{% endblock %}";
       if (CURRENT_TAB != "") {
         $("#" + CURRENT_TAB + " .tabtext").addClass("selected");
@@ -35,24 +37,32 @@
       {% endblock extra-plugin %}
     });
   </script>
-  <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser{% block title %}{% endblock title %}</title>
+  <title>
+    {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent
+    Browser{% block title %}{% endblock title %}</title>
 </head>
 <body>
 <div class="all all_width">
   {% block topbar %}
-  <div class="topbar">
-    {% block site-title %}
-      <h1 id="sitename">{{ base_site_name }}</h1>
-    {% endblock site-title %}
-    <div class="logoholder">
-      <a href="http://www.iontorrent.com/">
-        <img src="/site_media/images/logo_top_right_banner.png"
-             alt="IonTorrent Systems, Inc." style="border:none;"/>
-      </a>
+    <div class="topbar">
+      {% block site-title %}
+        <h1 id="sitename">{{ base_site_name }}</h1>
+      {% endblock site-title %}
+      <div class="logoholder">
+        <a href="http://www.iontorrent.com/">
+          <img src="/site_media/images/logo_top_right_banner.png"
+               alt="IonTorrent Systems, Inc." style="border:none;"/>
+        </a>
+      </div>
+      {% include "rundb/tabs.html" %}
     </div>
-    {% include "rundb/tabs.html" %}
-  </div>
-  <div class="darkline">&nbsp;</div>
+    <div class="darkline">&nbsp;</div>
+    <div id="global_messages"></div>
+    <script>
+      $(function(){
+        inbox = new MessageBox({models: {{global_messages|safe}} });
+      });
+    </script>
   {% endblock topbar %}
 
   {% block controls_holder %}
@@ -89,134 +99,136 @@
       </div>
     </div>
   {% endif %}
-    {% block override_full_page_content %}
-        <div class="contentarea centered">
-    {% endblock override_full_page_content %}
+  {% block override_full_page_content %}
+    <div class="contentarea centered">
+  {% endblock override_full_page_content %}
 
-    {% block full_page_content %}
+  {% block full_page_content %}
 
-      <div class="roundedcornr_box_526903">
-        <div class="roundedcornr_top_526903">
-          <div></div>
-        </div>
-        <div class="roundedcornr_content_526903">
-          {% block content %}
-          {% endblock content %}
-        </div>
-        <div class="roundedcornr_bottom_526903">
-          <div></div>
-        </div>
+    <div class="roundedcornr_box_526903">
+      <div class="roundedcornr_top_526903">
+        <div></div>
       </div>
+      <div class="roundedcornr_content_526903">
+        {% block content %}
+        {% endblock content %}
       </div>
-      {% if use_content2 %}
-        <br/>
-        <div class="contentarea centered">
-          <div class="roundedcornr_box_526903">
-            <div class="roundedcornr_top_526903">
-              <div></div>
-            </div>
-            <div class="roundedcornr_content_526903">
-              {% block content2 %}
-              {% endblock content2 %}
-            </div>
-            <div class="roundedcornr_bottom_526903">
-              <div></div>
-            </div>
+      <div class="roundedcornr_bottom_526903">
+        <div></div>
+      </div>
+    </div>
+    </div>
+    {% if use_content2 %}
+      <br/>
+      <div class="contentarea centered">
+        <div class="roundedcornr_box_526903">
+          <div class="roundedcornr_top_526903">
+            <div></div>
+          </div>
+          <div class="roundedcornr_content_526903">
+            {% block content2 %}
+            {% endblock content2 %}
+          </div>
+          <div class="roundedcornr_bottom_526903">
+            <div></div>
           </div>
         </div>
-      {% endif %}
-      {% if use_content3 %}
-        <br/>
-        <div class="contentarea centered">
-          <div class="roundedcornr_box_526903">
-            <div class="roundedcornr_top_526903">
-              <div></div>
-            </div>
-            <div class="roundedcornr_content_526903">
-              {% block content3 %}
-              {% endblock content3 %}
-            </div>
-            <div class="roundedcornr_bottom_526903">
-              <div></div>
-            </div>
+      </div>
+    {% endif %}
+    {% if use_content3 %}
+      <br/>
+      <div class="contentarea centered">
+        <div class="roundedcornr_box_526903">
+          <div class="roundedcornr_top_526903">
+            <div></div>
+          </div>
+          <div class="roundedcornr_content_526903">
+            {% block content3 %}
+            {% endblock content3 %}
+          </div>
+          <div class="roundedcornr_bottom_526903">
+            <div></div>
           </div>
         </div>
-      {% endif %}
-      {% block pagination_holder %}
-        <div class="centered">
-          <div class="roundedcornr_box_526903">
-            <div class="roundedcornr_top_526903">
-              <div></div>
-            </div>
-            <div class="roundedcornr_content_526903">
-              {% block pagination %}
-                <div class="paginator clear">{% spaceless %}
-                  {% near_range paginator %}
-                  <div class="larrow">
-                    {% if paginator.has_previous %}
-                      {% icon ui-icon-circle-arrow-w %}
-                        ?page={{ paginator.previous_page_number }}
-                        &{{ getURL|safe }}
-                      {% endicon %}
-                    {% else %}
-                      {% icon "ui-icon-circle-arrow-w ui-state-disabled" %}#
-                      {% endicon %}
-                    {% endif %}
-                  </div>
-
-                  <span class="current">
-                    {% for ndx in page_number_range %}
-                      {% ifequal ndx paginator.number %}
-                        <strong>{{ ndx }}</strong>
-                      {% else %}
-                        <a href="?page={{ndx}}{% if getURL %}&{{getURL|safe}}{% endif %}">
-                          {{ ndx }}
-                        </a>
-                      {% endifequal %}
-                      {% if not forloop.last %}&nbsp;{% endif %}
-                    {% endfor %}
-                  </span>
-
-                  <div class="rarrow">
-                    {% if paginator.has_next %}
-                      {% icon "ui-icon-circle-arrow-e" %}
-                        ?page={{ paginator.next_page_number }}&{{ getURL|safe }}
-                      {% endicon %}
-                    {% else %}
-                      {% icon "ui-icon-circle-arrow-e ui-state-disabled" %}#
-                      {% endicon %}
-                    {% endif %}
-
-                  </div>
-                {% endspaceless %}
+      </div>
+    {% endif %}
+    {% block pagination_holder %}
+      <div class="centered">
+        <div class="roundedcornr_box_526903">
+          <div class="roundedcornr_top_526903">
+            <div></div>
+          </div>
+          <div class="roundedcornr_content_526903">
+            {% block pagination %}
+              <div class="paginator clear">{% spaceless %}
+                {% near_range paginator %}
+                <div class="larrow">
+                  {% if paginator.has_previous %}
+                    {% icon ui-icon-circle-arrow-w %}
+                      ?page={{ paginator.previous_page_number }}
+                      &{{ getURL|safe }}
+                    {% endicon %}
+                  {% else %}
+                    {% icon "ui-icon-circle-arrow-w ui-state-disabled" %}#
+                    {% endicon %}
+                  {% endif %}
                 </div>
-                <div class="clear"></div>
-              {% endblock pagination %}
-            </div>
-            <div class="roundedcornr_bottom_526903">
-              <div></div>
-            </div>
+
+                <span class="current">
+                  {% for ndx in page_number_range %}
+                    {% ifequal ndx paginator.number %}
+                      <strong>{{ ndx }}</strong>
+                    {% else %}
+                      <a href="?page={{ndx}}{% if getURL %}&{{getURL|safe}}{% endif %}">
+                        {{ ndx }}
+                      </a>
+                    {% endifequal %}
+                    {% if not forloop.last %}&nbsp;{% endif %}
+                  {% endfor %}
+                </span>
+
+                <div class="rarrow">
+                  {% if paginator.has_next %}
+                    {% icon "ui-icon-circle-arrow-e" %}
+                      ?page={{ paginator.next_page_number }}&{{ getURL|safe }}
+                    {% endicon %}
+                  {% else %}
+                    {% icon "ui-icon-circle-arrow-e ui-state-disabled" %}#
+                    {% endicon %}
+                  {% endif %}
+                </div>
+              {% endspaceless %}
+              </div>
+              <div class="clear"></div>
+            {% endblock pagination %}
+          </div>
+          <div class="roundedcornr_bottom_526903">
+            <div></div>
           </div>
         </div>
-      {% endblock pagination_holder %}
+      </div>
+    {% endblock pagination_holder %}
 
-    {% endblock full_page_content %}
+  {% endblock full_page_content %}
 
   {% block footer %}
-  <div class="clear"></div>
-  <div class="footer">
-    <!--<a href="/admin/">Administer</a><br/>-->
-    <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a
-          href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;<a
-          href=/licenses/terms-of-use.txt>Terms of Use</a><br/>
-    Copyright&nbsp;&copy; 2011
-    <a href="http://www.iontorrent.com/">Life Technologies Corporation</a>
-    <br/>
-    This product should be used for research use only
-
-  </div>
+    <div class="clear"></div>
+    <div class="footer">
+      <!--<a href="/admin/">Administer</a><br/>-->
+      <a href=http://www.iontorrent.com/support>Request Support</a>
+      &nbsp;|&nbsp;
+      <a href=/ion-docs/Home.html>Help/Documentation</a>
+      &nbsp;|&nbsp;
+      <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+      <br/>
+      Copyright&nbsp;&copy; 2012
+      <a href="http://www.iontorrent.com/">Life Technologies Corporation</a>
+      <br/>
+      This product should be used for research use only
+    </div>
   {% endblock footer %}
-</div> <!-- end div-all -->
+</div>
+<!-- end div-all -->
 </body>
 </html>
 

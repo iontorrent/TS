@@ -262,3 +262,15 @@ ion_parse_range(const char *str, int32_t *start, int32_t *end)
   }
   return -1;
 }
+
+int
+rn_check_main(int argc, char *argv[])
+{
+  int32_t i;
+  for(i=1;i<argc;i++) {
+      char id[32]="\0";
+      ion_run_to_readname(id, argv[i], strlen(argv[i]));
+      fprintf(stderr, "%s -> %s\n", argv[i], id);
+  }
+  return 0;
+}

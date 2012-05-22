@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2010-2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 set -e
 
@@ -10,6 +10,18 @@ case "$1" in
     if [ -d /var/log/anaserve ]; then
     	rm -rf /var/log/anaserve
     fi
+    
+    # remove sys-V init script links
+    DAEMONS=(
+        ionCrawler
+        ionJobServer
+        ionArchive
+        ionPlugin
+        celeryd
+        )
+    for DAEMON in ${DAEMONS[@]}; do
+        update-rc.d ${DAEMON} remove || true
+    done
     ;;
 esac
 

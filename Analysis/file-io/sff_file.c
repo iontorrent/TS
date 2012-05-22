@@ -84,6 +84,10 @@ sff_fileopen(const char *filename, int filedes, const char *mode, sff_header_t *
   }
   else if(NULL != strstr(mode, "w")) {
       sff_file->header = sff_header_clone(header);
+
+      if(NULL==strstr(mode,"i") || NULL == index) 
+	sff_file->header->index_length = sff_file->header->index_offset = 0; /* strip out index */
+
       // write the header
       if(0 == sff_header_write(sff_file->fp, sff_file->header)) {
           ion_error(__func__, filename, Exit, WriteFileError);

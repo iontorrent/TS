@@ -1,21 +1,22 @@
 {% extends "rundb/ion_base_template.html" %}
 {% block extra_head %}
-<script language="javascript" type="text/javascript"
-	src="/site_media/runliveness.js"></script>
+  <script language="javascript" type="text/javascript"
+          src="/site_media/runliveness.js"></script>
 {% endblock extra_head %}
 {% block pagination_holder %}{% endblock %}
 {% block controls_holder %}{% endblock %}
 {% block content %}
-<div class="hidden" id="analysis_liveness_info">
-  <a href="{% url rundb.ajax.analysis_liveness pk %}">_</a>
-</div>
-<div>
+  <div class="hidden" id="analysis_liveness_info">
+    <a href="{% url rundb.ajax.analysis_liveness pk %}">_</a>
+  </div>
+  <div>
     <div class="margins">
-        <h2>{{name}}</h2>
-        <div id="analysis_liveness_display">
-          <span>Evaluating analysis status...</span>  
-	  <ul id="links" class="hidden"></ul>
-        </div>
+      <h2>{{ name }}</h2>
+
+      <div id="analysis_liveness_display">
+        <span>Evaluating analysis status...</span>
+        <ul id="links" class="hidden"></ul>
+      </div>
     </div>
-</div>
+  </div>
 {% endblock %}

@@ -18,8 +18,14 @@ extern "C" {
       @return     a pointer to the sff read header read in
       */
     sff_read_header_t *
-      sff_read_header_read(FILE *fp);
-
+      sff_read_header_read(FILE *fp);    
+ 
+    void 
+    sff_read_header_get_clip_values(sff_read_header_t* rh,
+									int trim_flag,
+									int *left_clip,
+									int *right_clip);
+    
     /*! 
       @param  fp  the file pointer to which to write
       @param  rh  a pointer to the sff read header to write 

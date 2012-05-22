@@ -6,6 +6,7 @@ import logging
 import subprocess
 from optparse import OptionParser
 import json
+import re
 
 sys.path.append('/opt/ion/')
 from iondb.plugins import PluginRunner
@@ -58,11 +59,43 @@ def preparePluginEnvironment(opt):
         env['pk'] = parent_json['pk']
     return env
 
+def getVersion(launchscript):
+    # Regex to capture version strings from launch.sh
+    # Flanking Quotes optional, but help delimit
+    # Leading values ignored, usually '#VERSION' or '# VERSION'
+    # Must be all-caps VERSION
+    # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
+    import re
+    from distutils.version import LooseVersion
+    VERSION=re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
+    try:
+        with open(launchscript, 'r') as f:
+            for line in f:
+                m = VERSION.search(line)
+                if m:
+                    v = m.group(1)
+                    # Validate and canonicalize version string,
+                    # according to distutils.version.LooseVersion semantics
+                    try:
+                        v = LooseVersion(v)
+                    except ValueError:
+                        print >> sys.stderr, "Version in file does not conform to LooseVersion rules: '%d'" % v
+                    return str(v)
+    except:
+        print >> sys.stderr, "ERROR: Failed to parse VERSION from '%s'" % launchscript
+        import traceback
+        traceback.print_exc()
+
+    return "0"
+
 if __name__ == '__main__':
     origargs = sys.argv
     (opt, args) = getLaunchArguments()
 
-    env = preparePluginEnvironment(opt)
+    if opt.version:
+        print getVersion(args[0])
+        sys.exit(0)
+
     basefolder = 'plugin_out'
 
     start_json = {}
@@ -80,6 +113,7 @@ if __name__ == '__main__':
             sys.exit(1)
         (plugin_root, plugin_name) = os.path.split(opt.dirname)
         plugin = { 'path': opt.dirname, 'name': plugin_name}
+        env = preparePluginEnvironment(opt)
         try:
             primary_key = open(os.path.join(opt.analysis_dir, "primary.key")).readline()
             primary_key = primary_key.split("=")[1].strip()

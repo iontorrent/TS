@@ -89,7 +89,7 @@ if have_bed:
 # assumes input file has forward+reverse read coverage (Uppercase fields) and reverse coverage (Lowercase fields)
 inf = open(sys.argv[1],'r')
 out = open(sys.argv[2],'w')
-out.write("Chromosome\tPosition\tRegion ID\tHotSpot ID\tReference\tCoverage\tCov A\tCov C\tCov G\tCov T\tCov+\tCov-\tCov DEL\n")
+out.write("Chrom\tPosition\tTarget ID\tHotSpot ID\tRef\tCov\tA Reads\tC Reads\tG Reads\tT Reads\t+Cov\t-Cov\tDeletions\n")
 
 for lines in inf:
     if lines[0]=='#':
@@ -100,7 +100,6 @@ for lines in inf:
         # forward/reverse coverage does not include coverage by deletions
         cov_r = int(cov_a) + int(cov_c) + int(cov_g) + int(cov_t)
         cov_f = int(cov) - int(cov_D) - cov_r
-        sys.stdout.write("    <tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%d</td><td>%s</td></tr>\n" % (contig,position,region_id,hotspot_id,ref,cov,cov_A,cov_C,cov_G,cov_T,cov_f,cov_r,cov_D))
         out.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\n" % (contig,position,region_id,hotspot_id,ref,cov,cov_A,cov_C,cov_G,cov_T,cov_f,cov_r,cov_D))
 out.close()
 inf.close()

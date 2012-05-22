@@ -124,7 +124,7 @@ fi
 # Get absolute file paths to avoid link issues in HTML
 WORKDIR=`readlink -n -f "$WORKDIR"`
 REFERENCE=`readlink -n -f "$REFERENCE"`
-BAMFILE=`readlink -n -f "$BAMFILE"`
+#BAMFILE=`readlink -n -f "$BAMFILE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 ROOTNAME="$WORKDIR/$BAMNAME"

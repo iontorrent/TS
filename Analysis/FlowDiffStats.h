@@ -119,9 +119,6 @@ public:
 
   void RecordFlowHPStats(int row, int col, std::vector<int> &reference, std::vector<int> &read);
 
-  /** Tokenize a line based on "\t" */
-  static void ChopLine(std::vector<std::string> &words, const std::string &line, char delim='\t');
-
   /** Get the next alignment sequence from the Default.sam.parsed file. */
   bool GetNextAlignment(std::string &name, std::string &genomic, std::string &read, int &row, int &col, int minVal);
 
@@ -148,7 +145,7 @@ public:
 			   int numFlows) = 0;
 
   // Called after FilterAndCompare completes
-  virtual void FinishComparison(int numFlows) {}
+  virtual void FinishComparison(int /*numFlows*/) {}
 
  protected:
 

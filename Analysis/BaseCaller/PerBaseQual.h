@@ -17,6 +17,7 @@
 
 #include "RawWells.h"
 #include "ChipIdDecoder.h"
+#include "Utils.h"
 
 const int nPredictors = 6;
 
@@ -44,6 +45,7 @@ class PerBasePredictors
         void setFlowOrder( const std::string& flowOrder ) { sameNucOffset = calculateSameNucOffset( flowOrder ); }
         
         int MapFlowToBase( int flow );
+        int getFlowNumber( int base) {return baseflow[base];}
 
         void setWellName( const std::string& _pixelName ) {
             pixelName = _pixelName;
@@ -97,6 +99,7 @@ class PerBaseQual
     private:
         std::stringstream predictor_save;
         std::string wellName, phredFileName;
+        std::string mBaseCallerDir;
         bool isInitialized;
         std::vector< std::vector< float > > phredTableData;
         std::vector< float > phredTableMaxValues;
@@ -113,7 +116,7 @@ class PerBaseQual
             phredTableMaxValues.resize( nPredictors );
         };
 
-        bool Init( ChipIdEnum _phredVersion, const std::string& flowOrder = std::string(""), const std::string& _phredTableFile = std::string( "" ) );
+        bool Init( ChipIdEnum _phredVersion, const std::string &basecallerOutputDirectory, const std::string& flowOrder = std::string(""), const std::string& _phredTableFile = std::string( "" ), char * runId = "");
 
         int GenerateQualityPerBaseTreephaser( std::vector<float> &_penaltyResidual, std::vector<float> &_penaltyMismatch,  weight_vec_t &correctedFlowValue, weight_vec_t &cafieResidual, std::vector< uint8_t > &baseFlowIndex, int _maxFlowLimit=INT_MAX );
         int GenerateQualityPerBase( weight_vec_t &correctedFlowValue, weight_vec_t &cafieResidual, std::vector< uint8_t > &baseFlowIndex, int _maxFlowLimit = INT_MAX );

@@ -1,0 +1,20 @@
+#!/bin/bash
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+
+#---                                    ---#
+#--- Include function definition file	---#
+#---                                    ---#
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/ts_functions
+
+if [ $# -ne 1 ]; then
+    echo "Just one argument is required"
+    exit 1
+fi
+
+# Here we execute the function named on the command line.
+$1
+
+exit 0
+

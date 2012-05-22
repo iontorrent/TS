@@ -13,6 +13,7 @@ more information.
 """
 
 import datetime
+import json
 from decimal import Decimal
 from django.db import models
 from django.conf import settings
@@ -30,11 +31,11 @@ class JSONEncoder(DjangoJSONEncoder):
 
 def dumps(value):
     assert isinstance(value, dict)
-    return simplejson.dumps(value, cls=JSONEncoder, separators=(',', ':'))
+    return json.dumps(value, cls=JSONEncoder, separators=(',', ':'))
 
 def loads(txt):
    try:
-       value = simplejson.loads(
+       value = json.loads(
            txt,
            parse_float=Decimal,
            encoding=settings.DEFAULT_CHARSET

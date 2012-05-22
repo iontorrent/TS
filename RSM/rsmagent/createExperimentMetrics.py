@@ -52,6 +52,7 @@ if __name__=="__main__":
               'serial_number',
               'run_number',
               'chipbarcode',
+              'chiptype',
               'seqbarcode',
               'flows',
               'cycles',

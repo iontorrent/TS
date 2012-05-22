@@ -1,0 +1,84 @@
+#!/bin/bash
+# (c) Copyright 2012 Ion Torrent Systems, Inc. All Rights Reserved. 
+
+GPU_ERROR=0
+
+# ===============================================
+# = Check the presence of GPU card on PCI slots =
+# ===============================================
+echo
+echo "=================================================================="
+echo "GPU in PCI Slots:"
+
+out=$(lspci | grep 'controller: nVidia')
+if [[ -n $out ]]; then
+     rev=$(echo $out | grep 'rev ff')
+     if [[ -z $rev ]]; then
+         echo $out
+     else
+         echo $rev
+         echo 'ERROR: GPU not functional (rev ff)'
+		 (( GPU_ERROR += 1 ))
+     fi
+else
+     echo 'ERROR: GPU not found.'
+	 (( GPU_ERROR += 1 ))
+fi
+
+
+# ======================================
+# = Check the presence of CUDA library =
+# ======================================
+echo
+echo "=================================================================="
+echo "CUDA Library:"
+
+CUDA_DIR='/usr/local/cuda/lib64'
+if [[ -d $CUDA_DIR ]]; then
+	ls -l $CUDA_DIR
+else
+	echo 'ERROR: CUDA library not found.'
+	(( GPU_ERROR += 1 ))
+fi
+
+
+# =====================
+# = Nvidia SMI output =
+# =====================
+echo
+echo "=================================================================="
+echo "nvidia-smi output:"
+
+if (which nvidia-smi >/dev/null); then
+	if [ $GPU_ERROR -eq 0 ]; then
+		nvidia-smi -q -f /tmp/nvidia-smi.out
+		if [ $? ]; then
+			cat /tmp/nvidia-smi.out
+		else
+			"ERROR: problem with nvidia-smi"
+			(( GPU_ERROR += 1 ))
+		fi
+	else
+		echo "Did not run nvidia-smi due to above errors"
+	fi
+fi
+
+# TODO:
+# * add output of /opt/ion/gpu/deviceQuery
+# * add output of /opt/ion/gpu/bandwidthTest
+
+
+# ===============================
+# = Check log files in /var/log =
+# ===============================
+echo
+echo "=================================================================="
+echo "Nvidia log message:"
+
+grep NVRM /var/log/{kern*,dmesg*,message*,syslog*}
+
+
+# ========================================
+# = Exit Status Based on the Above Tests =
+# ========================================
+exit $GPU_ERROR

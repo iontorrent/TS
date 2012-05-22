@@ -5,9 +5,7 @@ import xmlrpclib
 import socket
 import time
 import string
-
 import os
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 
 from django.conf import settings
 import django.template
@@ -21,7 +19,6 @@ import logging
 
 class PluginRunner():
     def __init__(self):
-
         # Default Settings
         self.context = {
             'memory': '8G',

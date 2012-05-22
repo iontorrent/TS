@@ -40,8 +40,12 @@ if [ ! -z "${JOB_ID}" ]; then
     if [ "${NSLOTS:-0}" -gt 1 ]; then echo "Slots: ${NSLOTS}"; cat "$TMP/machines"; fi
 fi
 
+# Set initial 'Started' status, now that we have started executing
+ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin_name }} --msg 'Started'
+
 # Load function library
-sourcefile=$(find {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions)
+sourcefile=/results/plugins/plugin_functions
+#$(find {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions)
 if [[ ! -e $sourcefile ]]; then
     echo "FATAL: Unable to find plugin_functions library"
     exit 1
@@ -165,8 +169,8 @@ set -o xtrace
     -t "${TESTFRAG_KEY}" \
     -o "${TSP_FILEPATH_PLUGIN_DIR}" \
     -p "${DIRNAME}" \
-    -u "${URL_ROOT}"
-# -j "${JSON_FILE}"
+    -u "${URL_ROOT}" \
+    -j "${json_fname}"
 {% endif %}
 )
 # ===================================================
@@ -181,11 +185,12 @@ elapsedtime=$[($endtime - $starttime)]
 echo "pluginelapsedtime: ${PLUGINNAME},${elapsedtime}"
 
 {% if runinfo.pk %}
-python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk }} --plugin "{{ runinfo.plugin.name }}" --version "{{ runinfo.plugin.version }}" --convert --msg $RETVAL
-#now if there is a file named results.json send PUT that to the REST API.
-if [ -f results.json ]
-then
-    python /opt/ion/iondb/bin/pluginUpdate.py --pk {{ runinfo.pk}} --plugin "{{ runinfo.plugin.name }}"  --version "{{ runinfo.plugin.version }}" --jsonpath=`pwd`
+# Both pluginUpdate commands set a 'Complete' or 'Error' status based on RETVAL
+if [ -f results.json ]; then
+    # if there is a file named results.json send PUT that to the REST API as well
+    ion-plugin-status --pk {{ runinfo.pk}} --plugin {{ runinfo.plugin.name }} --version "{{ runinfo.plugin.version }}" --convert --msg ${RETVAL} --jsonpath=${RESULTS_DIR}
+else
+    ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin.name }} --version "{{ runinfo.plugin.version }}" --convert --msg ${RETVAL}
 fi
 {% endif %}
 

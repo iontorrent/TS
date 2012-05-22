@@ -10,6 +10,9 @@
 #include "ion_util.h"
 #include "sff_read_header.h"
 
+#define min(a,b) ( (a) < (b) ? (a) : (b) )
+#define max(a,b) ( (a) > (b) ? (a) : (b) )
+
 static inline void
 sff_read_header_ntoh(sff_read_header_t *rh)
 {
@@ -158,4 +161,27 @@ sff_read_header_destroy(sff_read_header_t *rh)
   if(NULL == rh) return;
   ion_string_destroy(rh->name);
   free(rh);
+}
+
+void
+sff_read_header_get_clip_values(sff_read_header_t* rh,
+								int trim_flag,
+								int *left_clip,
+								int *right_clip) {
+    if (trim_flag) {
+        (*left_clip)  =
+            (int) max(1, max(rh->clip_qual_left, rh->clip_adapter_left));
+
+        // account for the 1-based index value
+        *left_clip = *left_clip - 1;
+
+        (*right_clip) = (int) min(
+              (rh->clip_qual_right    == 0 ? rh->n_bases : rh->clip_qual_right   ),
+              (rh->clip_adapter_right == 0 ? rh->n_bases : rh->clip_adapter_right)
+        );
+    }
+    else {
+        (*left_clip)  = 0;
+        (*right_clip) = (int) rh->n_bases;
+    }
 }

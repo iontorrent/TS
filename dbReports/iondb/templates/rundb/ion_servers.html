@@ -4,334 +4,391 @@
 {% block controls_holder %}{% endblock %}
 
 {% block pre_content %}
+  <script type="text/javascript">
+    $(document).ready(function () {
 
-    <script type="text/javascript">
+      $(".id_storage_options").change(function () {
+        if ($(this).val() === "D") {
+          $("#" + $(this).data("runname")).show();
+        } else {
+          $("#" + $(this).data("runname")).hide();
+        }
+      });
 
-    $(document).ready(function(){
+      $(".acknowledgeButton").click(function () {
+        runpk = $(this).data("runpk");
 
-	$(".id_storage_options").change(function(){
-		if ($(this).val() === "D"){
-			$("#" + $(this).data("runname")).show();
-		}else{
-			$("#" + $(this).data("runname")).hide();
-		}
-	});
+        if ($(this).prop("checked")) {
+          runstate = "A"
+        } else {
+          runstate = "S"
+        }
 
-        $(".acknowledgeButton").click(function(){
-            runpk = $(this).data("runpk");
-
-            if ($(this).prop("checked")){
-                runstate = "A"
-            }else{
-                runstate = "S"
-            }
-
-            $.ajax({
-                url : '/rundb/expack/',
-                dataType : 'json',
-                type : 'POST',
-                async : false,
-                contentType : "application/json; charset=utf-8",
-                data:"runpk=" + runpk + "&runstate=" + runstate,
-                success : function(data) {
-                }
-            });
-
+        $.ajax({
+          url: '/rundb/expack/',
+          dataType: 'json',
+          type: 'POST',
+          async: false,
+          contentType: "application/json; charset=utf-8",
+          data: "runpk=" + runpk + "&runstate=" + runstate,
+          success: function (data) {
+          }
         });
 
+      });
+
     });
+  </script>
 
-    </script>
-
-<div>
-  <div class="clear">
-    <div class="left_heading"><b>Jobs Server</b></div>
-  </div>
-  <div class="clear"></div>
-  <p></p>
-  <table>
-    <thead>
-      <tr>
-        <th>Hostname</th><th>IP</th><th>Status</th>
-        <th>Job Count</th><th>Uptime</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for name,ip,up,nrunning,uptime in jobs.servers %}{% spaceless %}
-      <tr class="{% cycle 'row1' 'row2' %}">
-            <td>{{name}}</td><td>{{ip}}</td>
-            <td>{% if up %}Running{% else %}Down{% endif %}</td>
-            <td>{% if up %}{{nrunning}}{% else %}-{% endif %}</td>
-            <td>
-              {% if up %}
-              {% if uptime.days %}
-              {{uptime.days}} day{{uptime.days|pluralize}},
-              {% endif %}
-              {% if uptime.hours %}
-              {{uptime.hours}} hour{{uptime.hours|pluralize}},
-              {% endif %}
-              {{uptime.minutes}} minute{{uptime.minutes|pluralize}},
-              {{uptime.seconds}} second{{uptime.seconds|pluralize}}
-              {% else %}-{% endif %}
-            </td>
-      </tr>
-      {% endspaceless %}{% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endblock pre_content %}
-
-{% block content %}
-<div>
-{% if not jobs.jobs %}
-    <p class="centered_message">No active jobs.</p>
-{% else %}
+  <div>
     <div class="clear">
-      <div class="left_heading">Active Jobs</div>
+      <div class="left_heading"><b>Jobs Server</b></div>
     </div>
     <div class="clear"></div>
+    <p></p>
+    <table>
+      <thead>
+      <tr>
+        <th>Hostname</th>
+        <th>IP</th>
+        <th>Status</th>
+        <th>Job Count</th>
+        <th>Uptime</th>
+      </tr>
+      </thead>
+      <tbody>
+      {% for name,ip,up,nrunning,uptime in jobs.servers %}{% spaceless %}
+        <tr class="{% cycle 'row1' 'row2' %}">
+          <td>{{ name }}</td>
+          <td>{{ ip }}</td>
+          <td>{% if up %}Running{% else %}Down{% endif %}</td>
+          <td>{% if up %}{{ nrunning }}{% else %}-{% endif %}</td>
+          <td>
+            {% if up %}
+              {% if uptime.days %}
+                {{ uptime.days }} day{{ uptime.days|pluralize }},
+              {% endif %}
+              {% if uptime.hours %}
+                {{ uptime.hours }} hour{{ uptime.hours|pluralize }},
+              {% endif %}
+              {{ uptime.minutes }} minute{{ uptime.minutes|pluralize }},
+              {{ uptime.seconds }} second{{ uptime.seconds|pluralize }}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+      {% endspaceless %}{% endfor %}
+      </tbody>
+    </table>
+    <div class="clear" style="height: 20px;"></div>
     <table>
       <thead>
         <tr>
-          <th>Name</th><th>Job/PID</th><th>Type</th>
-          <th>Status Message</th><th>Report</th><th><!--Terminate--></th>
+          <th>Service Name</th>
+          <th>Status</th>
         </tr>
       </thead>
       <tbody>
-        {% for sname,name,pid,result,atype,msg,report,experiment in jobs.jobs %}
-        {% spaceless %}
-        <tr class="{% cycle 'row1' 'row2' %}">
-          <td>{{name}}</td><td>{{pid}}</td><td>{{atype}}</td><td>{{msg}}</td>
-
-
-        {#only provide links to the report if they exist#}
-        {% if report.report_exist %}
-          <td><a href="{{report.reportLink}}">{{report.resultsName}}</a></td>
-        {%else%}
-          <td>{{report.resultsName}}</td>
-        {%endif%}
-
-          <td class="termtd">
-        <a href="javascript:build_control_dialogue('{% url rundb.ajax.control_job report.pk "term" %}', '{{ report.resultsName }}')">
-          Terminate
-        </a>
-          </td>
-        </tr>
-        {% endspaceless %}{% endfor %}
+        {% for name, status in processes %}
+          <tr class="{% cycle 'row1' 'row2' %}">
+            <td>{{name}}</td>
+            <td>
+              {% if status %}
+                Running
+              {% else %}
+                <b>Down</b>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
       </tbody>
     </table>
-    <div id="control_dialogue" class="control_dialogue"
-         title="Confirm Termination">
-      <p>Are you sure you want to terminate <span id="job_name"></span>?</p>
-      <div id="control_button_holder">
-        <div id="term_button_holder">
-          <input type="button" name="terminate" value="Terminate"/>
-        </div>
-        <div id="cancel_button_holder">
-          <input type="button" name="cancel" value="Cancel"/>
+  </div>
+{% endblock pre_content %}
+
+{% block content %}
+  <div>
+    {% if not jobs.jobs %}
+      <p class="centered_message">No active jobs.</p>
+    {% else %}
+      <div class="clear">
+        <div class="left_heading">Active Jobs</div>
+      </div>
+      <div class="clear"></div>
+      <table>
+        <thead>
+        <tr>
+          <th>Name</th>
+          <th>Job/PID</th>
+          <th>Type</th>
+          <th>Status Message</th>
+          <th>Report</th>
+          <th><!--Terminate--></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for sname,name,pid,result,atype,msg,report,experiment in jobs.jobs %}
+          {% spaceless %}
+            <tr class="{% cycle 'row1' 'row2' %}">
+              <td>{{ name }}</td>
+              <td>{{ pid }}</td>
+              <td>{{ atype }}</td>
+              <td>{{ msg }}</td>
+              {#only provide links to the report if they exist#}
+              {% if report.report_exist %}
+                <td>
+                  <a href="{{report.reportLink}}">{{ report.resultsName }}</a>
+                </td>
+              {% else %}
+                <td>{{ report.resultsName }}</td>
+              {% endif %}
+
+              <td class="termtd">
+                <a href="javascript:build_control_dialogue('{% url rundb.ajax.control_job report.pk "term" %}', '{{ report.resultsName }}')">
+                  Terminate
+                </a>
+              </td>
+            </tr>
+          {% endspaceless %}{% endfor %}
+        </tbody>
+      </table>
+      <div id="control_dialogue" class="control_dialogue"
+           title="Confirm Termination">
+        <p>Are you sure you want to terminate
+          <span id="job_name"></span>
+          ?
+        </p>
+        <div id="control_button_holder">
+          <div id="term_button_holder">
+            <input type="button" name="terminate" value="Terminate"/>
+          </div>
+          <div id="cancel_button_holder">
+            <input type="button" name="cancel" value="Cancel"/>
+          </div>
         </div>
       </div>
-    </div>
-    </div>
-    <div id="control_status_dialogue" class="control_dialogue">
-      <p id="job_status_text"></p>
-    </div>
-{% endif %}
+      </div>
+      <div id="control_status_dialogue" class="control_dialogue">
+        <p id="job_status_text"></p>
+      </div>
+    {% endif %}
 
 {% endblock content %}
 
 {% block content2 %}
-<div class="left_heading"><b>Crawler</b></div>
-<div class="clear">
-{% if crawler.result_dict %}
-<div class="centered_message">The crawler is online.</div>
-<p></p>
-<table>
-  <tbody>
-    <tr class="row1">
-      {% with crawler.result_dict.elapsed as e %}
-      <th>Crawler Uptime</th>
-      <td>{% spaceless %}
-	{% if e.days %}{{e.days}} day{{e.days|pluralize}}, {% endif %}
-	{% if e.days or e.hours %}
-	{{e.hours}} hour{{e.hours|pluralize}},
-	{% endif %}
-	{{e.minutes}} minute{{e.minutes|pluralize}},
-	{{e.seconds}} second{{e.seconds|pluralize}}
-      {% endspaceless %}</td>
-      {% endwith %}
-    </tr>
-    <tr class="row2">
-      <th>Number of Runs Added</th><td>{{crawler.result_dict.nfound}}</td>
-    </tr>
-    <tr class="row1">
-      <th>Recently Added Runs</th>
-      <td>
-	{% for exp in crawler.result_dict.exprs %}
-	<div>
-	  {{exp}}
-	</div>
-	{% endfor %}
-      </td>
-    </tr>
-    <tr class="row2">
-      <th>Currently Inspecting Folder</th><td>{{crawler.result_dict.folder}}</td>
-    </tr>
-    <tr class="row1">
-      <th>State</th>
-      <td>
-	<b>{{crawler.result_dict.state.0|capfirst}}</b>
-	for the last {{crawler.result_dict.state.1|floatformat:2}} seconds.
-      </td>
-    </tr>
-    <tr class="row2">
-      <th>Running on Host</th><td>{{crawler.result_dict.hostname}}</td>
-    </tr>
-  </tbody>
-</table>
-{% else %}
-<p class="centered_message">The crawler is offline.</p>
-{% endif %}
+  <div class="left_heading"><b>Crawler</b></div>
+  <div class="clear">
+  {% if crawler.result_dict %}
+    <div class="centered_message">The crawler is online.</div>
+    <p></p>
+    <table>
+      <tbody>
+      <tr class="row1">
+        {% with crawler.result_dict.elapsed as e %}
+          <th>Crawler Uptime</th>
+          <td>{% spaceless %}
+            {% if e.days %}{{ e.days }} day{{ e.days|pluralize }}, {% endif %}
+            {% if e.days or e.hours %}
+              {{ e.hours }} hour{{ e.hours|pluralize }},
+            {% endif %}
+            {{ e.minutes }} minute{{ e.minutes|pluralize }},
+            {{ e.seconds }} second{{ e.seconds|pluralize }}
+          {% endspaceless %}</td>
+        {% endwith %}
+      </tr>
+      <tr class="row2">
+        <th>Number of Runs Added</th>
+        <td>{{ crawler.result_dict.nfound }}</td>
+      </tr>
+      <tr class="row1">
+        <th>Recently Added Runs</th>
+        <td>
+          {% for exp in crawler.result_dict.exprs %}
+            <div>
+              {{ exp }}
+            </div>
+          {% endfor %}
+        </td>
+      </tr>
+      <tr class="row2">
+        <th>Currently Inspecting Folder</th>
+        <td>{{ crawler.result_dict.folder }}</td>
+      </tr>
+      <tr class="row1">
+        <th>State</th>
+        <td>
+          <b>{{ crawler.result_dict.state.0|capfirst }}</b> for the
+          last {{ crawler.result_dict.state.1|floatformat:2 }} seconds.
+        </td>
+      </tr>
+      <tr class="row2">
+        <th>Running on Host</th>
+        <td>{{ crawler.result_dict.hostname }}</td>
+      </tr>
+      </tbody>
+    </table>
+  {% else %}
+    <p class="centered_message">The crawler is offline.</p>
+  {% endif %}
 {% endblock content2 %}
 
 {% block content3 %}
-<div>
-<div class="clear">
-  <a name="archive"></a>
-  <div class="left_heading left"><b>Archive</b></div>
-  <div class="right_heading">
-    {% if archive.backups %}
-    {% else %}
-    <input type="submit" value="Add" name="add"
-	   onclick="javascript:window.location.href='{% url rundb.views.edit_backup 0 %}';"/>
-    {% endif %}
-  </div>
-</div>
-<div class="bounded_container clear">
-{% if archive.backups %}
-<table>
-  <thead>
-    <tr>
-      <th></th><th>Enabled</th><th>Archive Directory</th><th>Mounted</th>
-      <th>Status</th><th>Activity Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for bu in archive.backups %}{% spaceless %}
-    <tr class="{% cycle 'row1' 'row2' %}">
-      <td><a href="{% url rundb.views.edit_backup bu.pk %}">Edit</a></td>
-      <td class='archive_td'>
-	<input {% if bu.online %}checked{% endif %}
-	       type='checkbox' id='enableArchive_{{bu.pk}}'/>
-      </td>
-      <td>{{bu.backup_directory}}</td>
-      
-      {% if bu.check_if_online %}
-      <td>Mounted</td>
+  <div>
+  <div class="clear">
+    <a name="archive"></a>
+    <div class="left_heading left"><b>Archive</b></div>
+    <div class="right_heading">
+      {% if archive.backups %}
       {% else %}
-      <td>Not Mounted</td>
+        <input type="submit" value="Add" name="add"
+               onclick="javascript:window.location.href='{% url rundb.views.edit_backup 0 %}';"/>
       {% endif %}
-      {% if archive.status %}
-      <td>Online</td>
-      <td>{{bu.status}}</td>
-      {% else %} 
-      <td>Offline</td>
-      <td>-</td>
-      {% endif %}
-    </tr>
-    {% endspaceless %}
-    {% endfor %}
-  </tbody>
-</table>
-    <div id="advancedSec">
-          <div class="left_heading left">
-          <img src="arch_gone.png">
-          <img src="file_server_status.png">
-          <img src="per_file_server_status.png">
-          <img src="archive_drivespace.png">
-          <img src="residence_time.png">
+    </div>
+  </div>
+  <div class="bounded_container clear">
+    {% if archive.backups %}
+      <table>
+        <thead>
+        <tr>
+          <th></th>
+          <th>Enabled</th>
+          <th>Archive Directory</th>
+          <th>Mounted</th>
+          <th>Status</th>
+          <th>Activity Status</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for bu in archive.backups %}{% spaceless %}
+          <tr class="{% cycle 'row1' 'row2' %}">
+            <td>
+              <a href="{% url rundb.views.edit_backup bu.pk %}">Edit</a>
+            </td>
+            <td class='archive_td'>
+              <input {% if bu.online %}checked{% endif %} type='checkbox'
+                     id='enableArchive_{{bu.pk}}'/>
+            </td>
+            <td>{{ bu.backup_directory }}</td>
+
+            {% if bu.check_if_online %}
+              <td>Mounted</td>
+            {% else %}
+              <td>Not Mounted</td>
+            {% endif %}
+            {% if archive.status %}
+              <td>Online</td>
+              <td>{{ bu.status }}</td>
+            {% else %}
+              <td>Offline</td>
+              <td>-</td>
+            {% endif %}
+          </tr>
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+      <div id="advancedSec">
+      <div class="left_heading left">
+        <img src="arch_gone.png">
+        <img src="file_server_status.png">
+        <img src="per_file_server_status.png">
+        <img src="archive_drivespace.png">
+        <img src="residence_time.png">
       </div>
       <div class="clear"></div>
 
       <br/>
-{% if archive.to_archive %}
+      {% if archive.to_archive %}
 
         <div id="progress_box" class="ui-widget">
-            <div class="ui-state-error ui-corner-all" style="margin: 50px; padding: 30px;">
-                <p>
-                    A Run will not be removed unless authorized.
-                </p>
-                <p>
-                    Click the Acknowledge check box to authorize removal.
-                </p>
-            </div>
+          <div class="ui-state-error ui-corner-all"
+               style="margin: 50px; padding: 30px;">
+            <p>
+              A Run will not be removed unless authorized.
+            </p>
+            <p>
+              Click the Acknowledge check box to authorize removal.
+            </p>
+          </div>
         </div>
 
-      <table>
-            {% for key,values in archive.to_archive.items %}
-                {% if values %}
-                    <div class="right_heading">
-                        <thead>
-                            <tr>
-                                <th>{{key}}</th>
-                            </tr>
-                            <tr>
-                                <th>Run</th>
-                                <th>Run Date</th>
-                                <th>Storage Option</th>
-                                <th>Acknowledge Delete</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for v in values %}
-                             <tr class="{% cycle 'row1' 'row2' %}">
-                                <td>{{v.name}}</td>
+        <table>
+          {% for key,values in archive.to_archive.items %}
+            {% if values %}
+              <div class="right_heading">
+                <thead>
+                <tr>
+                  <th>{{ key }}</th>
+                </tr>
+                <tr>
+                  <th>Run</th>
+                  <th>Run Date</th>
+                  <th>Storage Option</th>
+                  <th>Acknowledge Delete</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for v in values %}
+                  <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{ v.name }}</td>
+                    <td>{{ v.date }}</td>
+                    <td class='storage_td'>
+                      <form id='{{v.pk}}_{{v.prettyname}}'>
+                        <select name="storage_options"
+                                data-runname="{{ v.name|slugify }}"
+                                class="id_storage_options">
+                          <option value="KI"
+                                  {% ifequal v.store_opt "KI" %}selected="selected"{% else %}{% endifequal %}>
+                            Keep
+                          </option>
+                          <option value="A"
+                                  {% ifequal v.store_opt "A" %}selected="selected"{% else %}{% endifequal %}>
+                            Archive Raw
+                          </option>
+                          <option value="D"
+                                  {% ifequal v.store_opt "D" %}selected="selected"{% else %}{% endifequal %}>
+                            Delete Raw
+                          </option>
+                        </select>
+                      </form>
+                    </td>
+                    <td>
+                      {% ifequal v.store_opt "D" %}
+                        <div id="{{ v.name|slugify }}" class="acknowledgeGroup"
+                             style="display: inline;">
+                      {% else %}
+                        <div id="{{ v.name|slugify }}" class="acknowledgeGroup"
+                             style="display: none;">
+                      {% endifequal %}
+                      {% spaceless %}
+                        <input id="{{ v.name|slugify }}_box"
+                               data-runpk="{{ v.pk }}" class="acknowledgeButton"
+                               type="checkbox"
+                                {% ifequal v.user_ack "A" %}
+                               CHECKED
+                                {% endifequal %}
+                                />
+                      {% endspaceless %}
 
-                                <td>{{v.date}}</td>
+                      <label class="acknowledgeLabel"
+                             for="{{ v.name|slugify }}_box">Acknowledge
+                      </label>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </div>
+              <div class="clear"></div>
+            {% endif %}
+          {% endfor %}
+        </table>
 
-                                <td class='storage_td'>
-                                  <form id='{{v.pk}}_{{v.prettyname}}'>
-                                    <select name="storage_options" data-runname="{{ v.name|slugify }}" class="id_storage_options">
-                                        <option value="KI" {% ifequal v.store_opt "KI" %}selected="selected"{% else %}{% endifequal %}>Keep</option>
-                                        <option value="A" {% ifequal v.store_opt "A" %}selected="selected"{% else %}{% endifequal %}>Archive Raw</option>
-                                        <option value="D"{% ifequal v.store_opt "D" %}selected="selected"{% else %}{% endifequal %}>Delete Raw</option>
-                                    </select>
-                                  </form>
-                                </td>
-
-                                <td>
-				{% ifequal v.store_opt "D" %}
-				<div id="{{ v.name|slugify }}" class="acknowledgeGroup"	style="display: inline;">
-				{% else %} 
-				<div id="{{ v.name|slugify }}" class="acknowledgeGroup"	style="display: none;">
-				{% endifequal %}
-                                {% spaceless %}
-                                    <input id="{{ v.name|slugify }}_box" data-runpk="{{ v.pk }}" class="acknowledgeButton" type="checkbox"
-                                    {% ifequal v.user_ack "A" %}
-                                            CHECKED
-                                    {% endifequal %}
-                                    />
-                                {% endspaceless %}
-
-                                    <label class="acknowledgeLabel" for="{{ v.name|slugify }}_box">Acknowledge</label>
-				</div>
-                                </td>
-
-                             </tr>
-                            {% endfor %}
-                        </tbody>
-                    </div>
-                <div class="clear"></div>
-                {% endif %}
-            {% endfor %}
-      </table>
-
-{% endif %}
-{% else %}
-<div class="centered_message">No archives configured.</div>
-<br/>
-{% endif %}
-</div>
-</div>
+      {% endif %}
+    {% else %}
+      <div class="centered_message">No archives configured.</div>
+      <br/>
+    {% endif %}
+    </div>
+  </div>
 {% endblock content3 %}
 

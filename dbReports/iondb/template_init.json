@@ -1,0 +1,47 @@
+
+[
+  {
+    "model": "rundb.template",
+    "pk": 1,
+    "fields": {
+      "name": "TF_A",
+      "sequence": "TGTTTTAGGGTCCCCGGGGTTAAAAGGTTTCGAACTCAACAGCTGTCTGGCAGCTCGCTCTACGATCTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "key": "ATCG",
+      "comments": " ",
+      "isofficial": true
+    }
+  },
+  {
+    "model": "rundb.template",
+    "pk": 2,
+    "fields": {
+      "name": "TF_B",
+      "sequence": "TGAAGCCCTTTTCCCGGTGAAAAGCGTAGTTACGGTACCGGACTTTAGGTCGACCAGCTAGACGATCTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "key": "ATCG",
+      "comments": " ",
+      "isofficial": true
+    }
+  },
+  {
+    "model": "rundb.template",
+    "pk": 3,
+    "fields": {
+      "name": "TF_C",
+      "sequence": "TACGAGCGTGTAGACGTGTCGTACGTGCGACGTAGTGAGTATACATGCTCTGACACTATGTACGATCTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "key": "ATCG",
+      "comments": " ",
+      "isofficial": true
+    }
+  },
+  {
+    "model": "rundb.template",
+    "pk": 4,
+    "fields": {
+      "name": "TF_D",
+      "sequence": "TTGCGCGCGCTGTGAATGCGCTGCTGTCGAATCGCGCTGCGCTGAACGTCGCGTGCGCGAACGATCTGAGACTGCCAAGGCACACAGGGGATAGG",
+      "key": "ATCG",
+      "comments": " ",
+      "isofficial": true
+    }
+  }
+]

@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
-# Author: Daniel Cuevas
 
 use strict;
 use warnings;
@@ -29,43 +28,62 @@ my $skipErrs = 1;
 my $ref = "";
 my $refFile = undef;
 my $bedName = undef;
+my $ua = LWP::UserAgent->new;
+my $apiUrl = "http://localhost/rundb/api/v1/";
 
-# Find reference from meta file
+# Find reference using TS API
 if( $opt->{"metaFile"} ) {
 	open(MFILE,"<",$opt->{"metaFile"}) or die "FATAL ERROR: Cannot open $opt->{'metaFile'}: $!\n";
 	my $line = <MFILE>;
 	chomp $line;
 	my $json = decode_json($line);
 	$ref = $json->{"reference"};
-	$refFile = "/results/referenceLibrary/tmap-f2/$ref/$ref.fasta.fai";
+	# Query API to get reference path
+	my $url = $apiUrl."referencegenome/?format=json&short_name=".$ref;
+	my $resp = $ua->get($url);
+	if( !$resp->is_success ) {
+		error("FATAL DEV ERROR: Couldn't access '$url' to obtain reference genome file path.",1,1);
+	}
+	$resp = decode_json($resp->content);
+	$refFile = $resp->{"objects"}[0]->{"reference_path"}."/".$ref.".fasta.fai";
 	if( ! -e $refFile ) {
 		error("FATAL ERROR: '$refFile' does not exist.",1,1);
 		$refFile = undef;
 	}
 }
 
-# Get bed file name
+# Process bed file name
 foreach( split(/\//,$opt->{"bedFile"}) ) {
 	$bedName = $_;
 }
 
-# Be sure file does not have parenthesis
-if( $bedName =~ m/[()]/ ) {
-	error("Error: Parentheses '()' are not allowed in file names. Please rename your file.",1,1);
+# Be sure file does not have illegal characters
+if( $bedName =~ m/([^a-zA-Z0-9._-])/g ) {
+	error("Error: Illegal character '$1' found in file name. Only alphanumeric characters [a-z,A-Z,0-9], ".
+			"periods [.], hyphens [-], and underscores [_] are allowed in file names. Please correct and try again.",1,1);
 }
 
+# Process bed file extension
+if( $bedName !~ m/\.bed/i ) {
+	# File does not have .bed extension
+	# Send a warning to user and add on extension
+	error("Warning: '.bed' extension not found. Adding on to end of filename.",1,0);
+	$bedName .= ".bed";
+}
+# If bed file extension has an uppercase character,
+# replace with lowercase characters
+$bedName =~ s/\.(Bed|bEd|beD|BEd|BeD|bED|BED)$/\.bed/;
+
 # Check if file already exists
-my $ua = LWP::UserAgent->new;
-my $url = "http://localhost/rundb/api/v1/content/?format=json&publisher_name=BED&path__endswith=/$bedName";
+my $url = $apiUrl."content/?format=json&publisher_name=BED&path__endswith=/".$bedName;
 my $response = $ua->get($url);
 if( !$response->is_success ) {
-	error("FATAL DEV ERROR: Couldn't access 'http://localhost/rundb/api/v1/content/?format=json&publisher_name=BED&path__endswith=/$bedName'.",1,1);
+	error("FATAL ERROR: Couldn't access '$url'.",1,1);
 }
 my $resp = decode_json($response->content);
 if( $resp->{"meta"}{"total_count"} > 0 ) {
 	error("Error: The file $bedName already exists. Please rename your file.",1,1);
 }
-
 
 # Make directories if non-existent
 mkpath("$opt->{'directory'}/$ref/unmerged/plain/");
@@ -100,6 +118,7 @@ close FFILE;
 ### Begin validation ###
 my ($nonEmpty,$inputLine,$isDetail,$lineNum,$trackCols,$regionNum,
 	@plainLines,@detailLines,@plainMLines,%lineMap,$lineMapIdx);
+my $col1Warn = 0;
 my %stats = ("totRgns" => 0, "bigRgn" => 0, "bigRgnStr" => "",
 		"smallRgn" => undef, "smallRgnStr" => "", "sumRgns" => 0);
 my %mStats = ("totRgns" => 0, "bigRgn" => 0, "bigRgnStr" => "",
@@ -112,7 +131,7 @@ for( my $i = 0; $i <= $#prebfile; $i++ ) {
 	my $lineNum = $i+1;
 	my $line = $prebfile[$i];
 	if( $line =~ s/\r\n// ) {
-		error("Warning : DOS line ending(s) found. Correcting.",1,0) unless $printedDos;
+		error("Warning: DOS line ending(s) found. Correcting.",1,0) unless $printedDos;
 		$printedDos = 1;
 		push(@bfile,$line);
 	}
@@ -141,8 +160,6 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		# Check that this is the first line
 		# If not, send warning and don't process other lines
 		if( $lineNum != 1 ) {
-			# Print out lines so far
-			###sortPrint(\%lineMap,\@plainLines,\@detailLines,\@plainMLines,$isDetail);
 			# Send out warning message and end processing
 			error("Warning @ line $lineNum: Track line only allowed on first line. Ignoring all lines after this.",1,0);
 			last;
@@ -157,13 +174,14 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		# Check if "type=bedDetail" exists
 		if( $inputLine =~ m/type=bedDetail/ ) {
 			$isDetail = 1;
+			######## Removing track line printing to plain files ########
 			# Remove 'type=bedDetail' for plain
-			my $pLine = $inputLine;
-			$pLine =~ s/\s+type=bedDetail\s*?//;
+			###my $pLine = $inputLine;
+			###$pLine =~ s/\s+type=bedDetail\s*?//;
 			# Check if anything is left in track line to print to plain
-			if( $pLine !~ m/^track\s*$/ ) {
-				print PBED $pLine."\n";
-			}
+			###if( $pLine !~ m/^track\s*$/ ) {
+			###	print PBED $pLine."\n";
+			###}
 			print DBED $inputLine."\n";
 			###print MPBED $pLine."\n";
 			print MDBED $inputLine."\n";
@@ -176,6 +194,11 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		}
 	}
 	else { # Region line
+		# Check if a track line must be created for detailed files
+		if( $lineNum == 1 ) {
+			print DBED "track type=bedDetail\n";
+			print MDBED "track type=bedDetail\n";
+		}
 		my @lineConts = split(/\t/,$inputLine);
 		my $numCols = $#lineConts+1;
 		
@@ -205,7 +228,7 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		if( $isDetail ) {
 			$col7 = chkCol478($lineConts[$trackCols-2],$lineNum,7);
 			$col8 = chkCol478($lineConts[$trackCols-1],$lineNum,8);
-			$col1 = chkCol1($lineConts[0],$lineNum);
+			$col1 = chkCol1($lineConts[0],$lineNum.\$col1Warn);
 			$col2 = chkCol2($col1,$lineConts[1],$lineNum);
 			$col3 = chkCol3($col1,$lineConts[2],$lineNum);
 			if( $trackCols == 5 ) {
@@ -214,12 +237,11 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 			else {
 				$col4 = chkCol478($lineConts[3],$lineNum,4);
 			}
-			###$col4 = ($trackCols == 5) ? $col1.":".($col2+1)."-".$col3 : chkCol478($lineConts[3],$lineNum,4);
 			$col5 = ($trackCols <= 6) ? 0 : chkCol5($lineConts[4],$lineNum);
 			$col6 = ($trackCols <= 7) ? "+" : chkCol6($lineConts[5],$lineNum);
 		}
 		else {
-			$col1 = chkCol1($lineConts[0],$lineNum);
+			$col1 = chkCol1($lineConts[0],$lineNum,\$col1Warn);
 			$col2 = chkCol2($col1,$lineConts[1],$lineNum);
 			$col3 = chkCol3($col1,$lineConts[2],$lineNum);
 			if( $trackCols == 3 ) {
@@ -253,10 +275,6 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		$nonEmpty = 1;
 	}
 	
-	# Sort and print all data if at final line
-	###if( $i == $#bfile ) {
-	###	sortPrint(\%lineMap,\@plainLines,\@detailLines,\@plainMLines,$isDetail);
-	###}
 }# End for loop through BED file
 
 # If not Non-empty
@@ -342,7 +360,6 @@ sub registerError {
 	my ($errMsg,$error) = @_;
 	
 	# First post message to log
-	my $ua = LWP::UserAgent->new;
 	my $req = HTTP::Request->new(POST => 'http://localhost/rundb/api/v1/log/');
 	$req->content_type('application/json');
 	$req->content('{"upload":"/rundb/api/v1/contentupload/'.$opt->{'id'}.'/", "text":"'.$errMsg.'"}');
@@ -378,7 +395,7 @@ sub chkTrack {
 	# Split contents
 	my @lineConts = quotewords('\s+',1,$line);
 	unless( @lineConts ) {
-		error("Error @ line $lineNum: track line incorrectly formatted with quotes ($line).",1,$skipErrs);
+		error("Error @ line $lineNum: track line incorrectly formatted with quotes.",1,$skipErrs);
 	}
 	# Cycle through line objects
 	foreach my $obj (@lineConts) {
@@ -387,18 +404,18 @@ sub chkTrack {
 		# Correct key=value format
 		my ($key,$val) = split(/=/,$obj);
 		if( !defined $val ) {
-			error("Error @ line $lineNum: track element expected [key]=[value] format ($obj).",1,$skipErrs);
+			error("Error @ line $lineNum: track element expected [key]=[value] format.",1,$skipErrs);
 			return undef;
 		}
 		# No white space without quotes
 		if( $val =~ m/\s/ && (substr($val,0,1) ne '"' || substr($val,-1,1) ne '"') ) {
-			error("Error @ line $lineNum: track element cannot have white space without surrounding quotes ($obj).",1,$skipErrs);
+			error("Error @ line $lineNum: track element cannot have white space without surrounding quotes.",1,$skipErrs);
 			return undef;
 		}
 		# Quotes only at ends
 		my $tmp = substr($val,1,length($val)-2);
 		if( $tmp =~ m/"/ ) {
-			error("Error @ line $lineNum: quotes only allowed at beginning or end of track element ($obj).",1,$skipErrs);
+			error("Error @ line $lineNum: quotes only allowed at beginning or end of track element.",1,$skipErrs);
 			return undef;
 		}
 	}
@@ -406,15 +423,37 @@ sub chkTrack {
 	return $line;
 }
 sub chkCol1 {
-	my ($obj,$lineNum) = @_;
+	my ($obj,$lineNum,$col1Warn) = @_;
 	# White space
 	if( $obj =~ s/\s+//g ) {
 		error("Warning @ line $lineNum, column 1: Whitespace found. Correcting.",1,0);
 	}
 	# Non-letter/number
+	# Allow dots, underscores, hyphens, colons, and plus signs to pass but warn
 	if( $obj =~ m/[^a-zA-Z0-9]/ ) {
-		error("Error @ line $lineNum, column 1: Non-letter/number character found ($obj).",1,$skipErrs);
-		return undef;
+		# Check if bad characters exist
+		my $errmsg = "";
+		my $warnChars = "";
+		if( $obj =~ m/([^a-zA-Z0-9._:|+-])/ ) {
+			$errmsg = "Error @ line $lineNum, column 1: illegal character found '$1'. ".
+			"Only alphanumeric characters [a-z,A-Z,0-9], periods, hyphens, underscores, ".
+			"plus signs, and vertical bars are allowed here. Please correct and try again.";
+			error($errmsg,1,$skipErrs);
+			return undef;
+		}
+		# Check if warning characters exist
+		if( !$$col1Warn) {
+			if( $obj =~ m/[._:|+-]/g ) {
+				$errmsg = "Warning @ line $lineNum, column 1: non-alphanumeric character(s) found. ".
+				"Be sure this is correct as it may cause errors in downstream processes.";
+				error($errmsg,1,0);
+				$$col1Warn = 1;
+			}
+			if( $obj =~ s/:/_/g ) {
+				error("Warning @ line $lineNum, column 1: replacing colon(s) ':' with underscore(s) '_'.",1,0);
+				$$col1Warn = 1;
+			}
+		}
 	}
 	# Reference fai
 	if( !exists $faiConts{$obj} ) {
@@ -530,6 +569,7 @@ sub sortPrint {
 	# Sort
 	my (@tmpOrder,@finalOrder);
 	foreach my $chrom(@refOrder) {
+		$chrom =~ s/\|/\\\|/g;
 		@tmpOrder = grep { $_ =~ m/^$chrom\t/ } @$detailLines;
 
 		push(@finalOrder,(map { $lineMap->{$_->[0]} }
@@ -541,6 +581,12 @@ sub sortPrint {
 						} map { [$_,split(/\t/,$_)] } @tmpOrder)
 		);
 	}
+	
+	# Clear temp array
+	@tmpOrder = ();
+
+	# Check for any identical regions
+	ckIdenticalRegions(\@finalOrder,$plainMLines);
 
 	# Print out final order
 	# Merge overlapping regions
@@ -605,6 +651,42 @@ sub sortPrint {
 	print MDBED $prevDLine;
 	my $len = $prevInfo[2]-$prevInfo[1]-1;
 	ckStats(1,$prevDLine,$len);
+}
+
+sub ckIdenticalRegions {
+	my ($finalOrder,$bedLines) = @_;
+	my $prevChrom = "";
+	my $prevStart = -1;
+	my $prevEnd = -1;
+	my $simRegions = 1;
+	my @currInfo = ();
+	foreach my $idx(@{$finalOrder}) {
+		@currInfo = split(/\t/,$bedLines->[$idx]);
+		if( $currInfo[0] eq $prevChrom &&
+			$currInfo[1] == $prevStart &&
+			$currInfo[2] == $prevEnd ) {
+			
+			# Identical region found
+			# Increment region counter
+			++$simRegions;
+		}
+		elsif( $simRegions != 1 ) {
+			# Similar regions found before
+			# Send warning to user
+			error("Warning: $simRegions identical regions found for '$prevChrom $prevStart $prevEnd'.'",1,0);
+			# Reset
+			$simRegions = 1;
+		}
+		$prevChrom = $currInfo[0];
+		$prevStart = $currInfo[1];
+		$prevEnd = $currInfo[2];
+	}
+	# Check if we ended within an exact region
+	if( $simRegions != 1 ) {
+		# Similar regions found before
+		# Send warning to user
+		error("Warning: $simRegions identical regions found for '$prevChrom $prevStart $prevEnd'.'",1,0);
+	}
 }
 
 sub ckStats {

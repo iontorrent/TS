@@ -183,6 +183,7 @@ public:
 			return tid_lens[tid];
 		}
 		
+                ~iterator();
 		
 	private:
 		friend class BAMReader;
@@ -422,11 +423,112 @@ public:
 	 
 	 @return	bam_header_t*		pointer to the header
 	 */
-	const bam_header_t* get_header() const {
+	const bam_header_t* get_header_ptr() const {
 			
 		return bam_header;
 		
 	}
+  
+  class BAMHeader {
+  public:
+ 
+    class ReadGroup {
+        private:
+      friend class BAMHeader;
+      ReadGroup();
+      
+      std::string   group_id;
+      std::string   sequencing_center;
+      std::string   flow_order;
+      std::string   key_sequence;
+      std::string   description;
+      std::string   date_time;
+      std::string   library;
+      std::string   program;
+      int64_t       predicted_median_insert_size;
+      std::string   sequencing_platform;
+      std::string   platform_unit;
+      std::string   sample_name;
+      int           num_flows;
+      int           key_length;
+      
+    public:
+      std::string   get_read_group_id() {
+        return group_id;
+      }
+      std::string   get_sequencing_center() {
+        return sequencing_center;
+      }
+      std::string   get_flow_order() {
+        return flow_order;
+      }
+      std::string   get_key_sequence() {
+        return key_sequence;
+      }
+      std::string   get_description() {
+        return description;
+      }
+      std::string   get_date_time() {
+        return date_time;
+      }
+      std::string   get_library() {
+        return library;
+      }
+      std::string   get_program() {
+        return program;
+      }
+      int64_t       get_predicted_median_insert_size() {
+        return predicted_median_insert_size;
+      }
+      std::string   get_sequencing_platform() {
+        return sequencing_platform;
+      }
+      std::string   get_sample_name() {
+        return sample_name;
+      }
+      
+      std::string get_platform_unit() {
+        return platform_unit;
+      }
+      int         get_number_of_flows() {
+        return num_flows;
+      }
+      std::string to_string();    
+    };
+  
+    
+    int        number_of_read_groups() {
+      return read_groups.size();
+    }
+    ReadGroup& get_read_group(unsigned int id);
+  
+  private:
+    //friends!  so BAMReader can access this ctor
+    friend class BAMReader;
+
+    //ctor
+    BAMHeader();    
+    //init functions
+    void          init(bam_header_t* header);
+    
+    //no copying
+    //BAMHeader(const BAMHeader&);
+    //BAMHeader& operator=(const BAMHeader&);
+
+    //member vars
+    bam_header_t* header_ptr;
+
+    std::vector<ReadGroup>  read_groups;
+    ReadGroup               default_group; //a default return value to avoid lots of object creation
+    
+    
+    char** parse_read_group( char** rg_list, char type[2], char key_tag[2], int* num_entries );
+
+  };
+  
+  BAMHeader& get_header() {
+    return bam_header_object;
+  }
 
 private:
 	
@@ -434,6 +536,7 @@ private:
 	samfile_t*		file_p;//file pointer
 	bam_index_t*	bam_index;
 	bam_header_t*	bam_header;
+        BAMHeader       bam_header_object;
 	
 	//typedefs
 	strvec			ref_list;
@@ -443,6 +546,8 @@ private:
 	std::string		bam_file;
 	std::string		index_file;
 	bool			file_open;
+	std::string		flow_order;
+	std::string		key_sequence;
 	
 	// No copying:
 	BAMReader(const BAMReader&);

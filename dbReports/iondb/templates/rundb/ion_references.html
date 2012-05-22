@@ -9,6 +9,37 @@
 {% block controls_holder %}{% endblock %}
 
 {% block full_page_content %}
+  {% if not_current_genomes %}
+    <div id="sys_messages">
+      <div id="rebuild_alert" class="alert alert-block">
+        <a class="close" data-dismiss="alert">×</a>
+        Due to the upgrade of TMAP, the TMAP specific index files for your
+        references are stale, and need to be rebuilt by TMAP for each
+        reference before that reference can be used for alignments.  We ask
+        you to manually initiate this process because the index rebuild may
+        take a few hours for larger genomes during which time use of the
+        server is unadvisable.
+        <p>
+          We recommend you rebuild all indices at the end of the work day;
+          however, you will find controls to rebuild each index manually on that
+          index's page.
+        </p>
+        <p>
+          <button id="rebuild_all">Rebuild All Now</button>
+        </p>
+      </div>
+    </div>
+    <script src="/site_media/jquery/js/alert.js"></script>
+    <script>
+      $(function(){ $("#rebuild_all").click(function(){
+        $.get("/rundb/rebuild_index/all", function(data){
+          $("#rebuild_alert").hide();
+          $("#sys_messages").append('<div class="alert alert-block alert-success"><a class="close" data-dismiss="alert">×</a>Now rebuilding  ' + data.references.length + ' references! Refresh the page to view their status.</div>').fadeIn('slow');
+        });
+      });});
+    </script>
+  {% endif %}
+
   {# current genomes #}
   <div>
     <div class="roundedcornr_box_526903">
@@ -137,7 +168,8 @@
               {% for tf in templates %}{% spaceless %}
                 <tr class="{% cycle 'row1' 'row2' %} graphable"
                     id="{{tf.pk}}_row">
-                  <td><a href="javascript:toggleTr('{{tf.pk}}')">{{ tf.name }}
+                  <td>
+                    <a href="javascript:toggleTr('{{tf.pk}}')">{{ tf.name }}
                   </td>
                   <td class='testfrag_td'>
                     <input {% if tf.isofficial %}checked{% endif %}
@@ -150,7 +182,9 @@
                   <td colspan="5">
                     <div id="{{tf.pk}}_holder" class="hidden margins">
                       <div>
-                        <a href="{% url rundb.views.edit_template tf.pk %}">Edit</a>
+                        <a href="{% url rundb.views.edit_template tf.pk %}">
+                          Edit
+                        </a>
                       </div>
                       <table>
                         <tr>
@@ -168,13 +202,13 @@
                       </table>
                       <div id="{{tf.pk}}_graph" class="graph_holder"></div>
                       <a href="javascript:toggleTr('{{tf.pk}}')"
-                         class="closelink">Close</a>
+                         class="closelink">Close
+                      </a>
                     </div>
                   </td>
                 </tr>
               {% endspaceless %}
               {% endfor %}
-
               </tbody>
             </table>
           </div>

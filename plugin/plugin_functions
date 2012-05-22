@@ -165,13 +165,13 @@ function backwards_compatible()
 function makeVarsFromJson()
 {
     IFS=$'\n'
-    for line in $(/usr/bin/jsonpipe < $1);do
+    for line in $(jsonpipe < $1);do
         if echo $line|egrep -q '({}|\[])'; then
             :
         else
             line=$(echo $line|sed 's:^/::g')
             var_name=$(echo $line|awk '{print $1}')
-            var_val=$(echo $line|awk '{print $2}'|sed 's/"//g')
+            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g')
             index=$(basename $var_name)
 
             # var_name ends in a number, its an array variable
@@ -182,14 +182,14 @@ function makeVarsFromJson()
                 #convert to uppercase
                 var_name=$(echo ${var_name^^}|sed 's:/:__:g')
                 #echo $var_name[$index]=$var_val
-                eval $var_name[$index]=$var_val
+                eval $var_name[$index]="$var_val"
                 export ${var_name}
             else
                 #convert slashes to double underscore
                 #convert to uppercase
                 var_name=$(echo ${var_name^^}|sed 's:/:__:g')
                 #echo $var_name=$var_val
-                export eval $var_name=$var_val
+                export eval $var_name="$var_val"
             fi
 
         fi 
@@ -248,24 +248,34 @@ function input_validation()
 # =========================================
 function define_local_vars ()
 {
-    export TSP_RUN_NAME=$(grep '^Run Name' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_RUN_DATE=$(grep '^Run Date' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'=')
-    export TSP_ANALYSIS_NAME=$(grep 'Analysis Name' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_ANALYSIS_DATE=$(grep 'Analysis Date' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'=')
-    export TSP_ANALYSIS_CYCLES=$(grep 'Analysis Cycles' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_PROJECT=$(grep 'Project' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_LIBRARY=$(grep 'Library' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_SAMPLE=$(grep 'Sample' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_PGM_NAME=$(grep 'PGM' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/ //g')
-    export TSP_NOTES="$(grep 'Notes' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'=')"
-    export TSP_CHIPTYPE=$(grep 'Chip Type' ${ANALYSIS_DIR}/expMeta.dat | cut -f2 -d'='|sed 's/[ \"]//g')
+    if [ -f ${ANALYSIS_DIR}/expMeta.dat ]; then
+        EXPMETA_PATH=${ANALYSIS_DIR}/expMeta.dat
+    else
+        EXPMETA_PATH=${ANALYSIS_DIR}/../expMeta.dat
+    fi
+    
+    export TSP_RUN_NAME=$(grep '^Run Name' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_RUN_DATE=$(grep '^Run Date' ${EXPMETA_PATH} | cut -f2 -d'=')
+    export TSP_ANALYSIS_NAME=$(grep '^Analysis Name' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_ANALYSIS_DATE=$(grep '^Analysis Date' ${EXPMETA_PATH} | cut -f2 -d'=')
+    export TSP_ANALYSIS_CYCLES=$(grep '^Analysis Cycles' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_PROJECT=$(grep '^Project' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_LIBRARY=$(grep '^Library' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_SAMPLE=$(grep 'Sample' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_PGM_NAME=$(grep '^PGM' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_NOTES="$(grep '^Notes' ${EXPMETA_PATH} | cut -f2 -d'=')"
+    export TSP_CHIPTYPE=$(grep '^Chip Type' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/[ \"]//g')
 
     export TSP_FILEPATH_OUTPUT_STEM=${ANALYSIS_DIR}/${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
     export TSP_URLPATH_OUTPUT_STEM=${URL_ROOT}/${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
 
     # FASTA File Locator
-    # FIXME: Hardcoded reference version path
-    GENPATH='/results/referenceLibrary/tmap-f2'
+    if [ "$RUNINFO__TMAP_VERSION" != "" ]; then
+        GENPATH="/results/referenceLibrary/$RUNINFO__TMAP_VERSION"
+    else
+        echo "WARNING: Using hardcoded path to genome index files!"
+        GENPATH="/results/referenceLibrary/tmap-f3"
+    fi
     fastafile=$(find $GENPATH -maxdepth 2 -name ${TSP_LIBRARY}.fasta|head -1)
     export TSP_FILEPATH_GENOME_FASTA=
     export TSP_URLPATH_GENOME_FASTA=
@@ -310,8 +320,11 @@ function define_local_vars ()
     export TSP_FILEPATH_BARCODE_TXT=${ANALYSIS_DIR}/barcodeList.txt
     export TSP_URLPATH_BARCODE_TXT=${URL_ROOT}/barcodeList.txt
     
-    # /results/plugins/scratch
-    export TSP_PLUGIN_SCRATCH=${DIRNAME}/../scratch
+    # /results/plugins/scratch  # ${DIRNAME}/../scratch
+    export TSP_PLUGIN_SCRATCH=/results/plugins/scratch
+
+    # Clearer alias for DIRNAME
+    export PLUGIN_PATH=${DIRNAME}
 }
 
 #*! @function

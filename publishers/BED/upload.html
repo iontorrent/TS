@@ -18,11 +18,13 @@
         $("#meta").val(formData);
         return true;
       });
+      {% if not genome %}
       $.getJSON("/rundb/api/v1/referencegenome/", function(result) {
           $.each(result.objects, function(index, ref) {
               $("#references").append('<option value="' + ref.short_name + '">'+ ref.name + '</option>');
           });
       });
+      {% endif %}
       $('#hotspot_help_text').hide();
       $('#hotspot_help_button').click(function(){
         $('#hotspot_help_text').slideToggle(300);
@@ -34,16 +36,22 @@
 
 
 <form id="meta_form" onsubmit="return false;">
-  <h1>Upload a BED file:</h1>
+{% if genome  %}
+  <h1>Upload a BED file for {{genome}}: </h1>
+{% else %}
+  <h1>Upload a BED file: </h1>
+{% endif %}
   <label for="reference">Reference </label>
   <select id="references" name="reference">
-    
+    {% if genome %}
+    <option value="{{genome}}"> {{genome}} </option>
+    {% endif %}
   </select>
 
   <label for="hotspot" >Hotspot </label>
   <input type="checkbox" name="hotspot" /> <a href="#" id="hotspot_help_button">?</a>
 </form>
-<p id="hotspot_help_text">A "HotSpot" type BED file defines regions or individual bases where variants are expected to occur.  For example Insertion/Deletion or SNP type variants.  The HotSpot BED file may be used by Plugins to present the variants that occur at defined points within the larger amplified or enriched region to the user.  An example of this can be seen in the Unified Variant Caller in the first and second tables of the output report.  The HotSpot BED file used by the AmpliSeqTM Cancer Panel Kit can be found on the Ion Community (link to where, searching is not finding me anything Gianluca where is the file?) and is also available in the file links output for the Unified Variant Caller.</p>
+<p id="hotspot_help_text">A "HotSpot" type BED file defines regions or individual bases where variants are expected to occur.</p>
 <form id="bedSimple" method="POST" class="uniForm" enctype="multipart/form-data">
     <div style="margin-top: 10px;">
       <input id="file" type="file" name="file"/>

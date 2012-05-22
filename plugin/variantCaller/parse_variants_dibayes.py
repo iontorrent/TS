@@ -49,14 +49,14 @@ if( have_bed ):
 
 inf = open(sys.argv[1],'r')
 out = open(sys.argv[2],'w')
-out.write("Chromosome\tPosition\tGene Symb\tTarget ID\tVarType\tPloidy\tRef\tVariant\tVarFreq\tP-value\tCoverage\tRefCov\tVarCov\n")
+out.write("Chrom\tPosition\tGene Sym\tTarget ID\tType\tPloidy\tRef\tVariant\tVar Freq\tP-value\tCoverage\tRef Cov\tVar Cov\n")
 for lines in inf:
     if lines[0]=='#':
         continue
     else:
         fields = lines.split('\t')
         info = fields[9].split(':')
-        attr={}
+#        attr={}
         # ploidy
         gt = fields[9][0:string.find(fields[9], ':')]
         if re.search('0', gt):
@@ -80,9 +80,10 @@ for lines in inf:
                 else:
                    if len(alt) > 1:
                       varType = 3 # MNP
-        for i in fields[7].split(';'):
-            k,v = i.split('=')
-            attr[k]=v
+# commented in 2.2
+#        for i in fields[7].split(';'):
+#            k,v = i.split('=')
+#            attr[k]=v
         if (float(fields[5]) > 2500.0):
             fields[5]='2500.0'
         qual = math.pow(10,(-0.1*float(fields[5])))

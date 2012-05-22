@@ -1,0 +1,94 @@
+# Configuration file written by the Torrent Browser package, please do not alter it
+<Directory /var/www/output*>
+    # Allow localhost without auth
+    Order allow,deny
+    Allow from localhost
+    Satisfy Any
+
+    AuthType Basic
+    AuthName "Torrent Browser"
+    Require valid-user
+    AuthUserFile /dev/null
+    AuthBasicProvider wsgi
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+
+    AuthBasicAuthoritative Off
+
+    SetHandler none
+    Options FollowSymLinks MultiViews Indexes
+    DirectoryIndex Default_Report.php index.html index.htm index.php log.html drmaa_stdout.txt
+</Directory>
+
+<Location "/rundb">
+    # Allow localhost without auth
+    Order allow,deny
+    Allow from localhost
+    Satisfy Any
+
+    AuthType Basic
+    AuthName "Torrent Browser"
+    Require valid-user
+    AuthUserFile /dev/null
+    AuthBasicProvider wsgi
+
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+    WSGIPassAuthorization On
+</Location>
+WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+
+<Location "/admin">
+    # admin app uses django internal auth, not apache basic
+    #AuthType Basic
+    #AuthName "Torrent Browser"
+    ## Require group admin
+    #Require valid-user
+    #AuthUserFile /dev/null
+    #AuthBasicProvider wsgi
+
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+    WSGIPassAuthorization On
+</Location>
+WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+
+<Location "/ion-docs">
+    ErrorDocument 404 /docsnotfound.html
+</Location>
+
+## Enable compression for json results
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+## Exclude some entries from log files
+<IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "/robots.txt" dontlog
+    SetEnvIf Request_URI "/favicon.ico" dontlog
+
+    # Polling from the messages API
+    SetEnvIf Request_URI "/rundb/api/v1/message/" dontlog
+    # Polling from RSM agent
+    SetEnvIf Request_URI "/rundb/api/v1/fileserver" dontlog
+    # Polling from progress bars
+    SetEnvIf Request_URI "/rundb/progress_bar/" dontlog
+    SetEnvIf Request_URI "/rundb/reports/progressbox" dontlog
+
+    #Exclude all internal traffic?
+    #SetEnvIf Remote_Addr "127.0.0.1" dontlog
+    # Exclude all auxiliary files
+    #SetEnvIfNoCase Request_URI "\.(jpg)|(png)|(css)|(js)|(ico)$" dontlog
+
+    # CustomLog entry in virtual host ends with env=!dontlog
+</IfModule>
+
+<filesMatch "(progress_bar|progressbox)">
+FileETag None
+<ifModule mod_headers.c>
+Header unset ETag
+Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+Header set Pragma "no-cache"
+Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+</ifModule>
+</filesMatch>

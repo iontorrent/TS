@@ -1,49 +1,48 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html>
-  <head>
+<head>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+  <link type="text/css"
+        href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css"
+        rel="Stylesheet"/>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="/site_media/report.css"
+        media="screen"/>
+  <script type="text/javascript">
+    $(document).ready(function () {
 
-                <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-                <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
-                <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
-                <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-                <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-                <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
-
-
-
-<script type="text/javascript">
-
-$(document).ready(function() {   
-
-        //do the row mouse hover
-        $(".noheading tbody tr, .heading tbody tr").live("mouseover", function(){
-                $(this).addClass("table_hover");
-        });
-
-
-        $(".noheading tbody tr, .heading tbody tr").live("mouseout",function(){
-                $(this).removeClass("table_hover");
-        });
+      //do the row mouse hover
+      $(".noheading tbody tr, .heading tbody tr").live("mouseover", function () {
+        $(this).addClass("table_hover");
+      });
 
 
+      $(".noheading tbody tr, .heading tbody tr").live("mouseout", function () {
+        $(this).removeClass("table_hover");
+      });
 
-       $(".heading tr:odd").addClass("zebra");
-        var keys    = [];
-        var konami  = '38,38,40,40,37,39,37,39,66,65';
 
-        $(document)
+      $(".heading tr:odd").addClass("zebra");
+      var keys = [];
+      var konami = '38,38,40,40,37,39,37,39,66,65';
+
+      $(document)
               .keydown(
-                    function(e) {
-                          keys.push( e.keyCode );
-                        if ( keys.toString().indexOf( konami ) >= 0 ){
-                                        $(".zebra").css("background-color","#FF0080");
-                            keys = [];
-                      }
-          }
-          );
-});
-
-</script>
+              function (e) {
+                keys.push(e.keyCode);
+                if (keys.toString().indexOf(konami) >= 0) {
+                  $(".zebra").css("background-color", "#FF0080");
+                  keys = [];
+                }
+              }
+      );
+    });
+  </script>
 </head>
 </html>

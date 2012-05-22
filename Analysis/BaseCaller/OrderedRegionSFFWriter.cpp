@@ -40,8 +40,8 @@ OrderedRegionSFFWriter::~OrderedRegionSFFWriter()
 }
 
 
-void OrderedRegionSFFWriter::OpenForWrite(const char *experimentName, const char *sffFileName,
-    int _numRegions, int _numFlows, const char *flowChars, const char *keySequence)
+void OrderedRegionSFFWriter::OpenForWrite(const string& sffFileName,
+    int _numRegions, int _numFlows, const string& flowChars, const string& keySequence)
 {
   numReads = 0;
   numRegionsWritten = 0;
@@ -51,11 +51,8 @@ void OrderedRegionSFFWriter::OpenForWrite(const char *experimentName, const char
   regionDropbox.clear();
   regionDropbox.resize(numRegions);
 
-  char fileName[strlen(experimentName) + strlen(sffFileName) + 2];
-  sprintf(fileName, "%s/%s", experimentName, sffFileName);
-
-  sff_header_t *sff_header = sff_header_init1(numReads, numFlows, flowChars, keySequence);
-  sff_file = sff_fopen(fileName, "wb", sff_header, NULL);
+  sff_header_t *sff_header = sff_header_init1(numReads, numFlows, (char*)flowChars.c_str(), (char*)keySequence.c_str());
+  sff_file = sff_fopen((char*)sffFileName.c_str(), "wb", sff_header, NULL);
   sff_header_destroy(sff_header);
 
   sff = sff_init1();
@@ -126,12 +123,7 @@ void OrderedRegionSFFWriter::PhysicalWriteRegion(int iRegion)
     sff->rheader->clip_adapter_right = well->clipAdapterRight;
 
     // initialize the read
-    uint16_t  flowgram[numFlows];
-    for(int iFlow = 0; iFlow < numFlows; iFlow++) {
-        int flowVal = (int)(well->flowIonogram[iFlow]*100.0+0.5);
-        flowgram[iFlow] = (flowVal < 0) ? 0 : flowVal;
-    }
-    sff->read->flowgram = flowgram;
+    sff->read->flowgram = &(well->flowIonogram[0]);
     sff->read->flow_index = &(well->baseFlowIndex[0]);
     sff->read->bases->s = &(well->baseCalls[0]);
     sff->read->quality->s = (char *)&(well->baseQVs[0]);

@@ -11,11 +11,7 @@ import fnmatch
 from types import GeneratorType
 from itertools import product
 import csv
-
-try:
-    import json
-except:
-    import simplejson as json
+import json
 
 from django import shortcuts, template
 from django.utils.datastructures import SortedDict

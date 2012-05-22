@@ -8,15 +8,16 @@ DESCR="Create tsv and image files of mapped read coverage to a reference."
 USAGE="USAGE:
   $CMD [options] <reference.fasta> <BAM file>"
 OPTIONS="OPTIONS:
-  -h --help Report usage and help
-  -l Log progress to STDERR
+  -h --help Report usage and help.
+  -l Log progress to STDERR.
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
   -D <dirpath> Path to Directory where results are written. Default: ./
-  -O <file> Output file name for text data (per analysis). Use '-' for STDOUT. Default: 'summary.txt'
-  -R <file> Output file name for reads and base coverage data. Default: None created
-  -B <file> Limit coverage to targets specified in this BED file
-  -V <file> Filepath table list of called Variants
-  -P <file> Padded targets BED file for padded target coverage analysis"
+  -O <file> Output file name for text data (per analysis). Use '-' for STDOUT. Default: 'summary.txt'.
+  -R <file> Output file name for reads and base coverage data. Default: None created.
+  -B <file> Limit coverage to targets specified in this BED file.
+  -V <file> Filepath table list of called Variants.
+  -U <file> Unfiltered BAM for statistics. If used then input BAM is assumed to be filtered.
+  -P <file> Padded targets BED file for padded target coverage analysis."
 
 # should scan all args first for --X options
 if [ "$1" = "--help" ]; then
@@ -32,8 +33,9 @@ OUTFILE="summary.txt"
 PADBED=""
 VARSFILE=""
 READSTATS=""
+UFBAM=""
 
-while getopts "hlB:G:D:O:P:V:R:" opt
+while getopts "hlB:G:D:O:P:V:R:U:" opt
 do
   case $opt in
     l) SHOWLOG=1;;
@@ -44,6 +46,7 @@ do
     P) PADBED=$OPTARG;;
     V) VARSFILE=$OPTARG;;
     R) READSTATS=$OPTARG;;
+    U) UFBAM=$OPTARG;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
        exit 0;;
     \?) echo $USAGE >&2
@@ -122,12 +125,15 @@ elif [ -n "$INDELSFILE" -a ! -f "$INDELSFILE" ]; then
 elif [ -n "$PADBED" -a ! -f "$PADBED" ]; then
   echo "ERROR: Padded reference targets (bed) file does not exist at $PADBED" >&2
   exit 1;
+elif [ -n "$UFBAM" -a ! -f "$UFBAM" ]; then
+  echo "ERROR: Unfiltered mapped reads (bam) file does not exist at $UFBAM" >&2
+  exit 1;
 fi
 
 # Get absolute file paths to avoid link issues in HTML
 WORKDIR=`readlink -n -f "$WORKDIR"`
 REFERENCE=`readlink -n -f "$REFERENCE"`
-BAMFILE=`readlink -n -f "$BAMFILE"`
+#BAMFILE=`readlink -n -f "$BAMFILE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 ROOTNAME="$WORKDIR/$BAMNAME"
@@ -142,7 +148,13 @@ fi
 if [ -n "$READSTATS" ]; then
   MREADS=`samtools view -c -F 4 "$BAMFILE"`
   PTREADS="100.0%"
-  echo "Number of mapped reads:  $MREADS" > "${WORKDIR}/$READSTATS"
+  if [ -n "$UFBAM" ]; then
+    UFMREADS=`samtools view -c -F 4 "$UFBAM"`
+    echo "Number of mapped reads:  $UFMREADS" > "${WORKDIR}/$READSTATS"
+    echo "Number of filtered reads:  $MREADS" >> "${WORKDIR}/$READSTATS"
+  else
+    echo "Number of mapped reads:  $MREADS" > "${WORKDIR}/$READSTATS"
+  fi
   if [ -n "$BEDFILE" ]; then
     TREADS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
     if [ "$TREADS" -gt 0 ]; then
@@ -182,7 +194,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Extract numbers of SNP and INDEL calls
-AWK_COUNTREC='$0!~/^\s*$/ {if(++c>1){hes+=$3;hms+=$4;hei+=$5;hmi+=$6}} END {printf "Heterozygous SNPs:   %d\nHomozygous SNPs:     %d\nHeterozygous INDELs: %d\nHomozygous INDELs:   %d\n",hes,hms,hei,hmi}'
+AWK_COUNTREC='$0!~/^\s*$/ {if(++c>1){var+=$2;hes+=$3;hms+=$4;hei+=$5;hmi+=$6}} END {printf "Heterozygous SNPs:   %d\nHomozygous SNPs:     %d\nHeterozygous INDELs: %d\nHomozygous INDELs:   %d\n",hes,hms,hei,hmi;var-=hes+hms+hei+hmi;if(var>0){printf "No Call Variants:    %d\n",var}}'
 if [ -n "$VARSFILE" ]; then
   COVERAGE_ANALYSIS="awk '$AWK_COUNTREC' \"$VARSFILE\""
   eval "$COVERAGE_ANALYSIS $OUTCMD" >&2

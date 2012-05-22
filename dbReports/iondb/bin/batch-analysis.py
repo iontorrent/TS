@@ -9,10 +9,7 @@ The name of this text file must be provided as the first arg.
 """
 
 import datetime
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 import logging
 from logging import handlers as loghandlers
 import os

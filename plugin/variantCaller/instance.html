@@ -26,10 +26,12 @@
     // get the reference for the current report - TS_result is defined in run verison of this script
     var reportUrl = '/rundb/api/v1/results/' + TB_result + '/?format=json';
     var referenceID;
+    var pluginOutDir;
     $.get( reportUrl, function(data)
     {
      var rl = data.log;
      var reportParams = rl.replace("log.html","ion_params_00.json");
+     pluginOutDir = data.filesystempath + '/plugin_out/';
      $.getJSON( reportParams, function(data)
      {
       // from report data get the short reference name
@@ -37,7 +39,27 @@
      });
     });
     document.getElementById('referenceid').innerHTML = referenceID;
-    var refBedURL = '/rundb/api/v1/content/?format=json&publisher__name=BED&path__startswith=/' + referenceID + '/unmerged/detail/';
+
+    function addBamSelection(dir) {
+      var getBamListCmd = '/pluginMedia/variantCaller/getTargets.php?ext=bam&dir=';
+      $.getJSON( getBamListCmd+dir, function(data) {
+        $.each( data, function( intIndex, objValue ) {
+          var j = objValue.lastIndexOf('.bam')
+          if( j > 0 )
+          {
+            var targfile = dir+'/'+objValue
+            var targ = objValue.substring(0,j)
+            $("#mergedbam").append("<option value='" + targfile + "'>" +  targ + "</option>")
+          }
+        });
+      });
+    }
+
+    addBamSelection(pluginOutDir+'combineBarcodes_out');
+    addBamSelection(pluginOutDir+'combineAlignments_out');
+    addBamSelection('/results/imported/alignment/'+referenceID);
+
+    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + referenceID + '/unmerged/detail/';
     $.get( refBedURL, function(data)
     {
       $.each( data.objects, function(intIndex,result)
@@ -62,7 +84,24 @@
        }
       });
     });
- 
+
+    $("#librarytype").change(function() {
+      var opt = $("#librarytype option:selected").val();
+      if( opt == "ampliseq" ) {
+        $("#ptrim").show();
+        $("#tpadding").hide();
+        $("#ustarts").hide();
+      } else if( opt == "targetseq" ) {
+        $("#ptrim").hide();
+        $("#tpadding").show();
+        $("#ustarts").show();
+      } else {
+        $("#ptrim").hide();
+        $("#tpadding").hide();
+        $("#ustarts").hide();
+      }
+    });
+
     $.fn.serializeObject = function()
     {
      var o = {};
@@ -86,6 +125,7 @@
      $('#postbutton').click( function()
      {
       // pass user selection with spaces translated to underscores
+      document.variantcaller.mergedbam_id.value = document.getElementById('mergedbam')[document.variantcaller.mergedbam.selectedIndex].text;
       var libName = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].text;
       document.variantcaller.librarytype_id.value = libName.replace(/\s/g,'_');
       var usrSel = document.getElementById('variationtype')[document.variantcaller.variationtype.selectedIndex].text;
@@ -115,46 +155,53 @@
       {
        document.variantcaller.targetloci_merge.value = hotspots.substr(0,i) + '/merged/plain/' + hotspots.substr(i+17);
       }
-      // confirm user selction combos - may later include library specific targets fields
+      // confirm user selection combos - may later include library specific targets fields
       var libType = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].value;
-      if( libType == "fullgenome" )
-      {
-       if( targets != "" || hotspots != "" )
-       {
+      if( libType == "fullgenome" ) {
+       if( targets != "" || hotspots != "" ) {
         var msg = "Selecting Targeted or Hotspot regions is typically not appropriate for Library Type: " + libName;
         msg += ". (Variants will be considered in these just regions.)";
         msg += "\n\nDo you wish to continue?";
         if( !confirm(msg) ) return false;
        }
-      }
-      else
-      {
-       if( targets == "" )
-       {
-        var msg = "Targeted regions selection is typically appropriate for Library Type: " + libName;
-        msg += ". (Variants may be reported in non-enriched regions where coverage is low.)";
-        msg += "\n\nDo you wish to continue?";
-        if( !confirm(msg) ) return false;
+       $("#trimreads").attr("checked",false);
+       $("#uniquestarts").attr("checked",false);
+       $("#padtargets").attr("value","0");
+      } else {
+       if( targets == "" && hotspots == "" ) {
+        var msg = "A Targeted Regions or Hotspot Regions selection is required for Library Type: " + libName;
+        alert(msg);
+        return false;
        }
+       if( libType == "ampliseq" ) {
+        $("#uniquestarts").attr("checked",false);
+        $("#padtargets").attr("value","0");
+       } else {
+        $("#trimreads").attr("checked",false);
+       }
+      }
+      // only the checked state value can be set (always "" for unchecked)
+      $("#trimreads").attr("value", $("#trimreads").attr("checked") ? "Yes" : "");
+      $("#uniquestarts").attr("value", $("#uniquestarts").attr("checked") ? "Yes" : "");
+      var regex = /^[0-9]+$/;
+      var padval = $("#padtargets").attr("value");
+      if( !regex.test(padval) )
+      {
+       alert("Target padding value must be a non-negative integer (>=0).");
+       return false;
       }
       // serialize user selections and run the plugin
       obj = $('#variantcaller').serializeObject();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
       pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
-      $.ajax({
-       type: 'POST',
-       url: pluginURL,
-       async: false,
-       contentType: "application/json; charset=utf-8",
+      $.ajax({ type: 'POST', url: pluginURL, async: false, contentType: "application/json; charset=utf-8", data: pluginAPIJSON, dataType: "json",
        success: function(data)
        {
         $("#json_result").html(
          '<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
         setTimeout("parent.$.fn.colorbox.close()",2000);
-       },
-       data: pluginAPIJSON,
-       dataType: "json"
+       }
       });
      });
     });
@@ -165,13 +212,19 @@
 
 <body>
  <div align="center">
-  <form id="variantcaller" name="variantcaller" align="center">
+  <form id="variantcaller" name="variantcaller" style="margin-left:auto;margin-right:auto">
    <h1>Torrent Variant Caller Plugin</h1>
    <table cellpadding="5px">
     <tr>
      <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for variant calling.">Reference Genome:</span></td>
      <td><div id="referenceid"></div></td>
     </tr>
+    <tr>
+     <td><span class="help"
+       title="Select the read alignments you wish to analyze. If the combineAlignments plugin has been run for this report then the resulting combined aligmnents will be listed and available for selection. (Additonal imported alignments may also be listed here if uploaded to your server by an administrator.) Otherwise the only option is 'Current Report'.">
+       Aligned Reads:</span></td>
+     <td><select id="mergedbam" name="mergedbam"><option value="">Current Report</option></select></td> </tr>
+    <tr>
     <tr>
      <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
      <td><select id="librarytype" name="librarytype" style="width:120px">
@@ -190,13 +243,31 @@
     <tr>
     <td><span class="help"
        title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Notes below.">
-       Targeted regions:</span></td>
+       Targeted Regions:</span></td>
      <td><select id="targetregions" name="targetregions" style="width:300px"><option value="">None</option></select></td>
     <tr>
      <td><span class="help"
        title="Select the 'hotspot' regions (variant loci) matching your reference and enriched fragment library. See Description and Notes below.">
-       Hotspot regions:</span></td>
+       Hotspot Regions:</span></td>
      <td><select id="targetloci" name="targetloci" style="width:300px"><option value="">None</option></select></td>
+    </tr>
+    <tr id="ptrim" style="display:none">
+    <td><span class="help"
+       title="Trim reads to amplicon targets. Primarily to avoid variant sites from being covered by residual primers from overlapping amplicons.">
+       Trim Reads:</span></td>
+     <td><input type="checkbox" id="trimreads" name="trimreads" checked="checked" value="Yes"/></td>
+    <tr>
+    <tr id="tpadding" style="display:none">
+     <td><span class="help"
+       title="Number of bases target regions are extended at both ends. A value greater than 0 allows variants to be detected in regions where individual reads overlap the boundaries of targeted regions.">
+       Target Padding:</span></td>
+     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td>
+    </tr>
+    <tr id="ustarts" style="display:none">
+     <td><span class="help"
+       title="Analyze variants for a sampling of on-target reads using just one read starting at each reference position for both read orientations. This removes bias due to non-uniform library enrichment but produces a most conservative representation of target coverage.">
+       Use Unique Starts:</span></td>
+     <td><input type="checkbox" id="uniquestarts" name="uniquestarts" value="No"/></td> 
     </tr>
    </table>
    <br/>
@@ -204,6 +275,7 @@
     <input id="postbutton" type="submit" value="Submit">
    </div>
    <input type="hidden" id="librarytype_id" name="librarytype_id"/>
+   <input type="hidden" id="mergedbam_id" name="mergedbam_id"/>
    <input type="hidden" id="variationtype_id" name="variationtype_id"/>
    <input type="hidden" id="targetregions_id" name="targetregions_id"/>
    <input type="hidden" id="targetloci_id" name="targetloci_id"/>
@@ -223,6 +295,10 @@
     <p>
      A run will fail almost immediately (after queuing) if your selected targeted regions do not appear to match
      the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
+    <p>
+     NOTE: This plugin is designed to work with alignment files containing Ion Torrent flowspace information and will fail
+     to call variants for older alignments without flow order information or combined alignments that generated from runs
+     using differrent same flow sequences.</p>
    </div>
   </form>
   </div>

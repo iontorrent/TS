@@ -57,7 +57,7 @@ case "$1" in
             echo "Installing $LIB"
             rm -f $LIB # clear any previous downloaded files
             wget http://updates.iontorrent.com/plugins/$LIB;
-            R CMD INSTALL $LIB
+            R CMD INSTALL -l $DIR $LIB
             rm -f $LIB
         fi
     done

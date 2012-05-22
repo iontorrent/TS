@@ -54,7 +54,7 @@ jQuery.fn.uniform = function(settings) {
         alpha     : '%s should contain only letters (without special characters or numbers)',
         alphanum  : '%s should contain only numbers and letters (without special characters)',
         annospace : '%s should contain only numbers, letters, and the following: . - _ ',
-        phrase    : '%s should contain only alphabetic characters, numbers, spaces, and the following: . , - _ () * # :',
+        phrase    : '%s should contain only alphabetic characters, numbers, spaces, and the following: . - _ ',
         phone     : '%s should be a phone number',
         date      : '%s should be a date (mm/dd/yyyy)',
         callback  : 'Failed to validate %s field. Validator function (%s) is not defined!',
@@ -363,7 +363,7 @@ jQuery.fn.uniform = function(settings) {
          * @param string caption
          */
         validatePhrase : function(field, caption) {
-            if((field.val() == '') || field.val().match(/^[\w\d\.\-_\(\)\*'# :,]+$/i)) {
+            if((field.val() == '') || field.val().match(/^[\w\d\.\-_ ]+$/i)) {
                 return true;
             } else {
                 return i18n('phrase', caption);

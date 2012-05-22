@@ -31,12 +31,6 @@ case "$1" in
         rm -f /results/analysis/output/disabled/tmap-*
     fi
 
-    rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html"
-
-	if [ -e "$SETTINGS" ]; then
-		echo "Not removing settings file '$SETTINGS' which may contain user modifications"
-	fi
-
 	if [ "$1" = "remove" ]; then
 		if [ -d /opt/ion/iondb ]; then
 			find "@ION_INSTALL_PREFIX@/iondb" -name "*.pyc" -exec rm -f {} \;
@@ -73,25 +67,12 @@ case "$1" in
 
 	# remove our tmp files
 	rm "$FILE" "$FILE2"
-    
-    #---	Reinstate the apache2 stock configuration	---#
-    if [ -s /etc/apache2/httpd.conf.old ]; then
-    	mv /etc/apache2/httpd.conf.old /etc/apache2/httpd.conf
-        invoke-rc.d apache2 restart
-    fi
-	files=(
-        /sbin/shutdown
-        /usr/bin/at
-        /usr/bin/aptitude
-        /usr/bin/apt-get
-        /usr/sbin/TSconfig
-        )
-#    for file in ${files[@]}; do
-#		sed -i "s:$file::" /etc/sudoers
-#    	sed -i 's/,,/,/g' /etc/sudoers
-#    	sed -i 's/,$//' /etc/sudoers
-#    done
 
+    #----------------------------------
+    # Remove files created during package install
+    #----------------------------------
+    rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html"
+    rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base_plugin.html"
     
     ;;
 esac

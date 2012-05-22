@@ -46,6 +46,7 @@ int showHelp ()
 	fprintf (stdout, "   -h, --help\tShow command line options and exit\n");
 	fprintf (stdout, "   -i, --input\tSpecify SFF file to sort\n");
 	fprintf (stdout, "   -s, --sff\tCreate sff files in addition to fastq\n");
+	fprintf (stdout, "   -l, --filter\tFilter threshold, if greater than 0 writes barcodeFilter.txt\n");
 	fprintf (stdout, "   -m, --score-mode\tSet the score mode and threshold for barcode classification match in XvY format, default is 0v0.9 (score mode 0, threshold value 0.9)\n");	
 	fprintf (stdout, "   -z, --score-hist-mode\tPrint mode for score hist. file.  0- off, 1- best bc, 2- all bc.\n");
 	fprintf (stdout, "   -k, --bfmask-file\tBead find mask file used to find dimensions. Default: bfmask.bin\n");
@@ -202,7 +203,7 @@ int main (int argc, char *argv[])
 			
 			case 'l':{	// output file with filter switch based on number of barcode reads
 				int ret = sscanf (optarg, "%lf", &filter);
-				if (ret < 1) filter = 0.01;
+				if (ret < 1 || filter < 0) filter = 0.0;
 				
 			  }	break;
 			

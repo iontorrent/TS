@@ -143,36 +143,19 @@ endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "1.1.0.ion0")
+  set(proj_version "2.4.0")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}_proj
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
-    URL "http://updates.iontorrent.com/updates/software/external/armadillo-1.1.0.tar.gz"
-#    URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
+    URL "http://updates.iontorrent.com/updates/software/external/armadillo-2.4.0.tar.gz"
+    #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.patch"
+    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0.patch"
   )
-  set(ION_ARMADILLO_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib64/libarmadillo.so")
+  set(ION_ARMADILLO_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libarmadillo.so")
   include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
 else()
   set(ION_ARMADILLO_LIBS "armadillo")
-endif()
-
-if( 1 )
-  set(proj_name "lapackpp")
-  set(proj_version "2.5.4")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
-    URL "http://updates.iontorrent.com/updates/software/external/lapackpp-2.5.4.tar.gz"
-#    URL_MD5 9ad74fb73fbcbf378c36a19a5dccbda7
-    CONFIGURE_COMMAND ${ION_TS_EXTERNAL}/${proj_name_version}/src/${proj_name}/configure
-    --enable-static --with-pic
-    --prefix=${ION_TS_EXTERNAL}/${proj_name_version}
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/lapackpp-2.5.4.patch"
-  )
-  set(ION_LAPACKPP_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/liblapackpp.a")
-  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include/lapackpp")
 endif()
 
 set(LIBKMEANSFILE "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7/libkmeans.a")
@@ -214,15 +197,23 @@ else()
     include_directories("/usr/include/samtools")
 endif()
 
-
+include_directories("${PROJECT_SOURCE_DIR}/Replay")
+include_directories("${PROJECT_SOURCE_DIR}/AnalysisOrg")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/MathModel")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Bookkeeping")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Fitters")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA")
 include_directories("${PROJECT_SOURCE_DIR}/BaseCaller")
 include_directories("${PROJECT_SOURCE_DIR}/Separator")
+include_directories("${PROJECT_SOURCE_DIR}/Util")
+#this has enough files now to justify own directory
+include_directories("${PROJECT_SOURCE_DIR}/Image")
 
 # CUDA Files
 if(ION_USE_CUDA)
     SET( CUDA_NVCC_FLAGS "--use_fast_math" "-gencode=arch=compute_20,code=compute_20" )
-    CUDA_COMPILE(CUDA_TEMP_FILES BkgModel/BkgModel.cu SHARED)
+    CUDA_COMPILE(CUDA_TEMP_FILES BkgModel/CUDA/BkgModel.cu SHARED)
 endif()
 
 # Ion Analysis Library
@@ -231,97 +222,145 @@ add_library(ion-analysis
 
     ${PROJECT_BINARY_DIR}/IonVersion.cpp
 
-    CommandLineOpts.cpp
     BarCode.cpp
-    deInterlace.cpp
+    
+    Mask.cpp
+
+    RawWells.cpp
+    RawWellsV1.cpp
+
+    BubbleFilter.cpp
+    
+    Image/deInterlace.cpp
+    Image/Image.cpp
+    Image/ChipIdDecoder.cpp
+    Image/LSRowImageProcessor.cpp
+    Image/PinnedInFlow.cpp
+    Image/PinnedWellReporter.cpp
+    
+    SFFWrapper.cpp
     
     Separator/DualGaussMixModel.cpp
     Separator/Separator.cpp
     Separator/DifferentialSeparator.cpp
     Separator/KeyClassifier.cpp
     Separator/KClass.cpp
-    H5File.cpp
+    Separator/BFReference.cpp
+    Separator/Traces.cpp
 
+    Util/H5File.cpp
+    Util/IonErr.cpp
+    Util/Utils.cpp
+    Util/OptArgs.cpp
+    Util/OptionArgsBase.cpp
+    Util/OptionArgs.cpp
+    Util/LoggerBase.cpp
+    Util/Logger.cpp
+    Util/bivariate_gaussian.cpp
+    Util/flow_utils.cpp
+
+    AnalysisOrg/CommandLineOpts.cpp
+    AnalysisOrg/SystemContext.cpp
+    AnalysisOrg/SpatialContext.cpp
+    AnalysisOrg/BkgControlOpts.cpp
+    AnalysisOrg/BeadfindControlOpts.cpp
+    AnalysisOrg/BaseCallerControlOpts.cpp
+    AnalysisOrg/FilterControlOpts.cpp
+    AnalysisOrg/ImageControlOpts.cpp
+    AnalysisOrg/ImageSpecClass.cpp
+    AnalysisOrg/ImageLoader.cpp
+    AnalysisOrg/ProcessImageToWell.cpp
+    AnalysisOrg/RegionTimingCalc.cpp
+    AnalysisOrg/SeqList.cpp
+    AnalysisOrg/WellFileManipulation.cpp
+    AnalysisOrg/GlobalDefaultsFromBkgControl.cpp
+    AnalysisOrg/BkgDataPointers.cpp
+    AnalysisOrg/BkgFitterTracker.cpp
+    AnalysisOrg/EmptyTraceTracker.cpp
+    AnalysisOrg/SeparatorInterface.cpp
+    AnalysisOrg/BkgModelHdf5.cpp
+    AnalysisOrg/MaskFunctions.cpp
+    AnalysisOrg/cudaWrapper.cpp
+    AnalysisOrg/TrackProgress.cpp
+    
+    Region.cpp
+    LinuxCompat.cpp
+    Stats.cpp
+
+    LevMarFitterV2.cpp
+    
+    mixed.cpp
+    # T0CalcMt.cpp
+
+    Histogram.cpp
     SffDiffStats.cpp
     GenomeDiffStats.cpp
     FlowDiffStats.cpp
-    Histogram.cpp
-    Image.cpp
-    IonErr.cpp
-    LinuxCompat.cpp
-    Mask.cpp
-    RawWells.cpp
-    RawWellsV1.cpp
-    SFFWrapper.cpp
-    Stats.cpp
-    Utils.cpp
-    TrackProgress.cpp
-    ImageSpecClass.cpp
-    ImageLoader.cpp
-    SeqList.cpp
-    ProcessImageToWell.cpp
-    RegionTimingCalc.cpp
-    WellFileManipulation.cpp
-    cudaWrapper.cpp
-    Zeromer.cpp
     
-    OptArgs.cpp
-    bivariate_gaussian.cpp
-    mixed.cpp
-    flow_utils.cpp
-    
-    BaseCaller/BaseCaller.cpp
-    BaseCaller/BaseCallerLogFiles.cpp
     BaseCaller/PerBaseQual.cpp
     BaseCaller/RegionWellsReader.cpp
     BaseCaller/OrderedRegionSFFWriter.cpp
-    BaseCaller/PhaseSim.cpp
-    BaseCaller/PhaseSolve.cpp
-    BaseCaller/PhaseFit.cpp
-    BaseCaller/PhaseFitCfIe.cpp
     BaseCaller/DPTreephaser.cpp
     BaseCaller/RegionAnalysis.cpp
-    BaseCaller/CafieSolver.cpp
+    BaseCaller/PhaseEstimator.cpp
     
-    BkgModel/MathOptim.cpp
-    BkgModel/MathUtil.cpp
-    BkgModel/DNTPRiseModel.cpp
-    BkgModel/NucStepCache.cpp
-    BkgModel/DiffEqModel.cpp
-    BkgModel/Hydrogen.cpp
-    BkgModel/MultiFlowModel.cpp
-    BkgModel/BeadParams.cpp
-    BkgModel/BeadTracker.cpp
-    BkgModel/RegionParams.cpp
-    BkgModel/RegionTracker.cpp
-    BkgModel/BeadScratch.cpp
-    BkgModel/LevMarState.cpp
-    BkgModel/DarkMatter.cpp
-    BkgModel/DarkHalo.cpp
-    BkgModel/EmphasisVector.cpp
-    BkgModel/CrossTalkSpec.cpp
-    BkgModel/BkgFitOptim.cpp
-    BkgModel/BkgTrace.cpp
-    BkgModel/SingleFlowFit.cpp
-    BkgModel/BkgSearchAmplitude.cpp
+    BkgModel/MathModel/MathOptim.cpp
+
+    BkgModel/MathModel/PoissonCdf.cpp
+    BkgModel/MathModel/DNTPRiseModel.cpp
+    BkgModel/MathModel/DiffEqModel.cpp
+    BkgModel/MathModel/DiffEqModelVec.cpp
+    BkgModel/MathModel/Hydrogen.cpp
+
+    BkgModel/MathModel/MathUtil.cpp
+    BkgModel/MathModel/MiscVec.cpp
+    BkgModel/MathModel/MultiFlowModel.cpp
+
+    BkgModel/Bookkeeping/BeadParams.cpp
+    BkgModel/Bookkeeping/BeadTracker.cpp
+    BkgModel/Bookkeeping/RegionParams.cpp
+    BkgModel/Bookkeeping/RegionTracker.cpp
+    BkgModel/Bookkeeping/FlowBuffer.cpp
+    BkgModel/Bookkeeping/NucStepCache.cpp
+    BkgModel/Bookkeeping/TimeCompression.cpp
+    BkgModel/Bookkeeping/EmphasisVector.cpp
+    BkgModel/Bookkeeping/BkgTrace.cpp
+    BkgModel/Bookkeeping/EmptyTrace.cpp
+    BkgModel/Bookkeeping/DarkHalo.cpp
+    BkgModel/Bookkeeping/CrossTalkSpec.cpp
+    BkgModel/Bookkeeping/XtalkCurry.cpp
+    BkgModel/Bookkeeping/TraceCurry.cpp
+    BkgModel/Bookkeeping/BeadScratch.cpp
+
+    BkgModel/Fitters/FitControl.cpp
+    BkgModel/Fitters/MultiLevMar.cpp
+    BkgModel/Fitters/LevMarState.cpp
+    BkgModel/Fitters/BkgFitMatrixPacker.cpp
+    BkgModel/Fitters/BkgFitStructures.cpp
+    BkgModel/Fitters/BkgFitOptim.cpp
+    BkgModel/Fitters/SingleFlowFit.cpp
+    BkgModel/Fitters/RefineFit.cpp
+    BkgModel/Fitters/TraceCorrector.cpp
+    BkgModel/Fitters/BkgSearchAmplitude.cpp
+    BkgModel/Fitters/DarkMatter.cpp
+    
     BkgModel/GlobalDefaultsForBkgModel.cpp
-    BkgModel/TimeCompression.cpp
-    BkgModel/Vectorization.cpp
-    BkgModel/BkgFitStructures.cpp
-    BkgModel/FitControl.cpp
-    BkgModel/MultiLevMar.cpp
     BkgModel/BkgModel.cpp
 
+    Replay/FileBkgReplay.cpp
+    Replay/H5Replay.cpp
+    Replay/PinnedInFlowReplay.cpp
+    Replay/EmptyTraceReplay.cpp
+    Replay/RegionTrackerReplay.cpp
+    Replay/BkgModelReplay.cpp
+
     crop/Acq.cpp
-    BFReference.cpp
-    Traces.cpp
+    
 
     FileEquivalent.cpp
-    BubbleFilter.cpp
-    ChipIdDecoder.cpp
-    LSRowImageProcessor.cpp
-    PinnedWellReporter.cpp
+    
     ${PROJECT_SOURCE_DIR}/../external/fstrcmp/fstrcmp.cpp
+    
     SamUtils/types/Cigar.cpp
     SamUtils/types/Qual.cpp
     SamUtils/types/Sequence.cpp
@@ -331,22 +370,20 @@ add_library(ion-analysis
     SamUtils/BAMUtils.cpp
     SamUtils/alignStats.cpp
 
-  	OptionArgsBase.cpp
-  	OptionArgs.cpp
-  	LoggerBase.cpp
-  	Logger.cpp
-	H5File.cpp
     ${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
 )
-add_dependencies(ion-analysis IONVERSION samtools fftw lapackpp armadillo_proj hdf5)
+add_dependencies(ion-analysis IONVERSION samtools fftw armadillo_proj hdf5)
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
     add_dependencies(ion-analysis cudatoolkit)
+    # Changes J30
+    #add_dependencies(ion-analysis cudatoolkit armadillo_proj)
   endif()
 endif()
 
-target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} LIBKMEANS ${ION_LAPACKPP_LIBS} blas lapack file-io z)
+target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} LIBKMEANS blas lapack lapack_atlas atlas file-io z)
+
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
 )
@@ -368,6 +405,11 @@ add_executable(Crop crop/Crop.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}
 add_dependencies(Crop IONVERSION TCLAP)
 target_link_libraries(Crop ion-analysis pthread)
 install(TARGETS Crop DESTINATION bin)
+
+add_executable(ChkDat crop/ChkDat.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(ChkDat IONVERSION TCLAP)
+target_link_libraries(ChkDat ion-analysis pthread)
+install(TARGETS ChkDat DESTINATION bin)
 
 add_executable(Blocks crop/Blocks.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Blocks IONVERSION)
@@ -400,11 +442,6 @@ add_executable(SFFStats SFFStats.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_D
 add_dependencies(SFFStats IONVERSION TCLAP)
 target_link_libraries(SFFStats ion-analysis pthread)
 
-add_executable(KeypassMetrics KeypassMetrics.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(KeypassMetrics IONVERSION TCLAP)
-target_link_libraries(KeypassMetrics ion-analysis pthread)
-install(TARGETS KeypassMetrics DESTINATION bin)
-
 add_executable(HeatMaps HeatMaps.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(HeatMaps IONVERSION TCLAP)
 target_link_libraries(HeatMaps ion-analysis pthread)
@@ -426,48 +463,62 @@ add_dependencies(teMasks2Bin IONVERSION TCLAP)
 target_link_libraries(teMasks2Bin ion-analysis pthread)
 
 if(ION_DO_BACKGROUND)
-    add_executable(Analysis Analysis.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+    add_executable(Analysis AnalysisOrg/Analysis.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
     add_dependencies(Analysis IONVERSION TCLAP)
 
     if (ION_USE_CUDA)
         target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas ${CUDA_LIBRARIES})
     else()
-        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas)
+        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas )
     endif()
 
     install(TARGETS Analysis DESTINATION bin)
 
-    add_executable(bkgFit bkgFit.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-    add_dependencies(bkgFit IONVERSION TCLAP)
-    if (ION_USE_CUDA)
-        target_link_libraries(bkgFit ion-analysis pthread ${CUDA_LIBRARIES})
-    else()
-        target_link_libraries(bkgFit ion-analysis pthread)
-    endif()
+#    add_executable(bkgFit bkgFit.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#    add_dependencies(bkgFit IONVERSION TCLAP)
+#    if (ION_USE_CUDA)
+#        target_link_libraries(bkgFit ion-analysis pthread ${CUDA_LIBRARIES} ${ION_ARMADILLO_LIBS})
+#    else()
+#	target_link_libraries(bkgFit ion-analysis ${GTEST_BOTH_LIBRARIES} gsl gslcblas pthread lapack_atlas atlas)
+#    endif()
 endif()
+
+## Standalone BaseCaller
+add_executable(BaseCaller 
+    BaseCaller/BaseCaller.cpp
+    BaseCaller/BaseCallerFilters.cpp
+    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(BaseCaller IONVERSION TCLAP)
+target_link_libraries(BaseCaller ion-analysis gsl gslcblas pthread lapack_atlas atlas)
+install(TARGETS BaseCaller DESTINATION bin)
+
+## Standalone BaseCaller - Lite
+add_executable(BaseCallerLite BaseCaller/BaseCallerLite.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(BaseCallerLite IONVERSION TCLAP)
+target_link_libraries(BaseCallerLite ion-analysis gsl gslcblas pthread lapack_atlas atlas)
 
 add_executable(ShowWell ShowWell.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(ShowWell IONVERSION TCLAP)
 target_link_libraries(ShowWell ion-analysis pthread)
 install(TARGETS ShowWell DESTINATION bin)
 
-add_executable(TFMapper TestFragments/TFMapper.cpp TestFragments/TFs.cpp 
-    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(TFMapper TestFragments/TFMapper.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TFMapper IONVERSION TCLAP)
-target_link_libraries(TFMapper ion-analysis pthread)
+target_link_libraries(TFMapper ion-analysis ${ION_SAMTOOLS_LIBS} pthread)
 install(TARGETS TFMapper DESTINATION bin)
 
-add_executable(TFReferenceGenerator TestFragments/TFReferenceGenerator.cpp TestFragments/TFs.cpp
-    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(TFReferenceGenerator IONVERSION TCLAP)
-target_link_libraries(TFReferenceGenerator ion-analysis pthread)
-install(TARGETS TFReferenceGenerator DESTINATION bin)
 
-add_executable(TFTorturer TestFragments/TFTorturer.cpp 
-    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(TFTorturer IONVERSION TCLAP)
-target_link_libraries(TFTorturer ion-analysis ${ION_SAMTOOLS_LIBS} pthread)
-install(TARGETS TFTorturer DESTINATION bin)
+add_executable(PairedEndErrorCorrection
+   ${PROJECT_BINARY_DIR}/IonVersion.cpp
+   SFFCorrection/Alignment.cpp
+   SFFCorrection/Cell.cpp
+   SFFCorrection/semaphore.cpp
+   SFFCorrection/Sequence.cpp
+   SFFCorrection/sffCorrection.cpp
+   SFFCorrection/SmithWaterman.cpp)
+add_dependencies(PairedEndErrorCorrection IONVERSION TCLAP)
+target_link_libraries(PairedEndErrorCorrection file-io pthread)
+install(TARGETS PairedEndErrorCorrection DESTINATION bin)
 
 # add_executable(WellsTimer WellsTimer.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(WellsTimer IONVERSION TCLAP)
@@ -485,6 +536,13 @@ target_link_libraries(MeasureXTalk ion-analysis pthread)
 add_executable(WellCrossTalk WellCrossTalk.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(WellCrossTalk IONVERSION TCLAP)
 target_link_libraries(WellCrossTalk ion-analysis pthread ${ION_ARMADILLO_LIBS})
+
+# add_executable(Recall
+# 	Recall/Recall.cpp
+# 	../buildTools/dbgmem.cpp
+# 	${PROJECT_BINARY_DIR}/IonVersion.cpp)
+# target_link_libraries(Recall ion-analysis file-io)
+# install(TARGETS Recall DESTINATION bin)
 
 add_executable(SFFSummary
         SFFSummary/SFFSummary.cpp
@@ -556,13 +614,6 @@ if( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
         set_target_properties(file-io PROPERTIES COMPILE_FLAGS "-fPIC")
 endif( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
 
-add_executable(phaseSolveTest
-        phaseTests/phaseSolveTest.cpp
-        ${PROJECT_BINARY_DIR}/IonVersion.cpp
-)
-target_link_libraries(phaseSolveTest ion-analysis file-io gsl pthread)
-add_dependencies(phaseSolveTest IONVERSION TCLAP)
-
 add_executable(SFFTrim
         SFFTrim/SFFTrim.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp
@@ -590,6 +641,11 @@ add_executable(SFFRead fastqsim/SFFRead.cpp ../buildTools/dbgmem.cpp ${PROJECT_B
 add_dependencies(SFFRead IONVERSION TCLAP)
 target_link_libraries(SFFRead ion-analysis pthread)
 install(TARGETS SFFRead DESTINATION bin)
+
+add_executable(SFFProtonMerge SFFProtonMerge.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(SFFProtonMerge IONVERSION)
+target_link_libraries(SFFProtonMerge ion-analysis)
+install(TARGETS SFFProtonMerge DESTINATION bin)
 
 add_executable(SFFMerge SFFMerge.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFMerge IONVERSION)
@@ -644,6 +700,16 @@ add_dependencies(CountBubbles IONVERSION TCLAP)
 target_link_libraries(CountBubbles ion-analysis  pthread )
 install(TARGETS CountBubbles DESTINATION bin)
 
+add_executable(TraceDriver BkgModel/Examples/TraceDriver.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(TraceDriver IONVERSION TCLAP)
+target_link_libraries(TraceDriver ion-analysis  pthread )
+
+
+# add_executable(ImageT0 ImageT0.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+# add_dependencies(ImageT0 IONVERSION TCLAP)
+# target_link_libraries(ImageT0 ion-analysis  -lunwind pthread -lprofiler )
+# install(TARGETS ImageT0 DESTINATION bin)
+
 # add_executable(RawWellsDump RawWellsDump.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(RawWellsDump IONVERSION TCLAP)
 # target_link_libraries(RawWellsDump ion-analysis  pthread )
@@ -661,7 +727,8 @@ install(TARGETS PinnedWell DESTINATION bin)
 
 add_executable(readDat readDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readDat IONVERSION)
-target_link_libraries(readDat ion-analysis pthread)
+#target_link_libraries(readDat ion-analysis pthread)
+target_link_libraries(readDat ion-analysis ${GTEST_BOTH_LIBRARIES} gsl gslcblas pthread lapack_atlas atlas)
 install(TARGETS readDat DESTINATION bin)
 
 add_executable(readWells readWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
@@ -756,9 +823,6 @@ if(GTEST_FOUND)
         add_executable(AnalysisIntegrationTest itest/AnalysisIntegrationTest.cpp)
         target_link_libraries(AnalysisIntegrationTest ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
   # For each test file
-        add_executable(PhaseFitCfIe_Test utest/PhaseFitCfIe_Test.cpp)
-        target_link_libraries(PhaseFitCfIe_Test ion-analysis ${GTEST_BOTH_LIBRARIES})
-        add_test(PhaseFitCfIeTest PhaseFitCfIe_Test --gtest_output=xml:./)
 
         add_executable(IonErr_Test utest/IonErr_Test.cpp)
         target_link_libraries(IonErr_Test ion-analysis ${GTEST_BOTH_LIBRARIES})
@@ -772,14 +836,6 @@ if(GTEST_FOUND)
         # target_link_libraries(Wells_Test ion-analysis ${ION_HDF5_LIBS} ${GTEST_BOTH_LIBRARIES} pthread z)
         # add_test(WellsTest Wells_Test --gtest_output=xml:./)
 
-        add_executable(PhaseSim_Test utest/PhaseSim_Test.cpp)
-        target_link_libraries(PhaseSim_Test ion-analysis ${GTEST_BOTH_LIBRARIES})
-        add_test(PhaseSimTest PhaseSim_Test --gtest_output=xml:./)
-
-        add_executable(PhaseSolve_Test utest/PhaseSolve_Test.cpp)
-        target_link_libraries(PhaseSolve_Test ion-analysis ${GTEST_BOTH_LIBRARIES})
-        add_test(PhaseSolveTest PhaseSolve_Test --gtest_output=xml:./)
-
         add_executable(DualGaussMixModel_Test utest/DualGaussMixModel_Test.cpp)
         target_link_libraries(DualGaussMixModel_Test ion-analysis ${GTEST_BOTH_LIBRARIES})
         add_test(DualGaussMixModelTest DualGaussMixModel_Test --gtest_output=xml:./)
@@ -789,8 +845,12 @@ if(GTEST_FOUND)
         # add_test(ZeromerDiffTest ZeromerDiff_Test --gtest_output=xml:./)
 
         add_executable(FindSlopeChange_Test utest/FindSlopeChange_Test.cpp)
-        target_link_libraries(FindSlopeChange_Test ion-analysis ${GTEST_BOTH_LIBRARIES} )
-        add_test(FindSlopeChangeTest FindSlopeChange_Test --gtest_output=xml:./)
+        target_link_libraries(FindSlopeChange_Test ion-analysis ${GTEST_BOTH_LIBRARIES} blas lapack_atlas atlas )
+#        add_test(FindSlopeChangeTest FindSlopeChange_Test --gtest_output=xml:./)
+
+        add_executable(T0Model_Test utest/T0Model_Test.cpp)
+        target_link_libraries(T0Model_Test ion-analysis ${GTEST_BOTH_LIBRARIES} blas lapack_atlas atlas)
+        add_test(T0ModelTest T0Model_Test --gtest_output=xml:./)
 
         # add_executable(KeyClassifier_Test utest/KeyClassifier_Test.cpp)
         # target_link_libraries(KeyClassifier_Test ion-analysis ${GTEST_BOTH_LIBRARIES}  )
@@ -821,37 +881,47 @@ if(GTEST_FOUND)
         add_test(SFFTrimTest SFFTrim_Test --gtest_output=xml:./)
 endif()
 
-install(FILES "${PROJECT_SOURCE_DIR}/DefaultTFs.conf" DESTINATION ${ION_INSTALL_PREFIX}/config RENAME "DefaultTFs.conf.dist")
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_314.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_316.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_318.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/exclusionMask_324.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/excludeMask_324" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/phredTable.txt_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_314.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_316.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+#files used for configuration
+#not actually source files at all
+install(FILES "${PROJECT_SOURCE_DIR}/config/DefaultTFs.conf" DESTINATION ${ION_INSTALL_PREFIX}/config RENAME "DefaultTFs.conf.dist")
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_314.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_316.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_318.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_324.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_324" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_314.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_900.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
 # perl modules used by plugins for json file parsing
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/common-sense-3.4.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-XS-2.32.tar.gz" DESTINATION "/tmp/pModIn")
 # perl modules used by plugins for ???
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Carp-Assert-0.20.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IPC-System-Simple-1.21.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/pModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/autodie-2.10.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Carp-Assert-0.20.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IO-All-0.44.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IPC-System-Simple-1.21.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/List-MoreUtils-0.33.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Log-Log4perl-1.35.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Perl6-Slurp-0.050000.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Regexp-Common-2011121001.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION "/tmp/pModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/pModIn")
 
 install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
-   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.ion0/lib64/libarmadillo.so.1" DESTINATION lib)
-   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-1.1.0.ion0/lib64/libarmadillo.so.1.1.0" DESTINATION lib)
+   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0/lib/libarmadillo.so.2" DESTINATION lib)
+   install(FILES "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0/lib/libarmadillo.so.2.4.0" DESTINATION lib)
 endif()
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)

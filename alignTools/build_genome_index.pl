@@ -7,6 +7,7 @@ use FileHandle;
 use File::Copy;
 use Cwd;
 use Getopt::Long;
+#use Path::Class qw / dir file /;
 
 my $opt = {
   "autoFix"           => undef,
@@ -15,7 +16,8 @@ my $opt = {
   "genomeNameLong"    => undef,
   "genomeVersion"     => undef,
   "compressed"        => undef,
-  "picardDir"         => "/opt/picard/picard-tools-1.52/",
+  "tmapDir"           => "/usr/bin/",
+  "picardDir"         => "/opt/picard/picard-tools-current/",
   "readSampleSize"    => 0,
   "readExcludeLength" => 0,
   "help"              => 0,
@@ -28,6 +30,7 @@ GetOptions(
   "l|genome-name-long=s"    => \$opt->{"genomeNameLong"},
   "v|genome-version=s"      => \$opt->{"genomeVersion"},
   "c|compressed=s"          => \$opt->{"compressed"},
+  "t|tmap-dir=s"            => \$opt->{"tmapDir"},
   "p|picard-dir=s"          => \$opt->{"picardDir"},
   "read-sample-size=i"      => \$opt->{"readSampleSize"},
   "read-exclude-length=i"   => \$opt->{"readExcludeLength"},
@@ -74,6 +77,7 @@ usage: $0
     -a,--auto-fix                      : Attempt to fix common fasta format issues
     -c,--compressed hg19.fasta         : Expand a compressed zip. Requires name
     									 fasta as an argument.
+    -t,--tmapDir /path/to/tmap         : Location of TMAP executable
     -p,--picard-dir /path/to/picard    : Location of Picard jar files
     --read-sample-size 10000           : Number of reads to randomly sample for
                                          alignment.  Default is to align all
@@ -87,6 +91,7 @@ EOF
 my $outDir    = $opt->{"genomeNameShort"};
 my $shortName = $opt->{"genomeNameShort"};
 my $fastaFile = $opt->{"fastaFile"};
+#$opt->{'tmapDir'} = dir($opt->{'tmapDir'})->absolute();
 
 #try to uncompress a zip file
 if($opt->{"compressed"}) {
@@ -98,11 +103,12 @@ if($opt->{"compressed"}) {
 
 die "$0: input file $fastaFile does not exist\n" if(! -e $fastaFile);
 die "$0: input file $fastaFile exists but is not readable\n" if(! -r $fastaFile);
-my $origFastaFile = &checkInput($fastaFile,defined($opt->{"autoFix"})?1:0);
+my($origFastaFile,$origFastaChecksum,$fastaChecksum) = &checkInput($fastaFile,defined($opt->{"autoFix"})?1:0);
 &prepareOutDir($outDir);
 my $indexVersion = &getIndexVersion();
 my $genomeLength = &makeIndex($outDir,$shortName,$fastaFile,$origFastaFile,$indexVersion);
-&makeInfoFile($outDir,$shortName,$genomeLength,$indexVersion,$opt);
+&makeInfoFile($outDir,$shortName,$genomeLength,$indexVersion,$origFastaChecksum,$fastaChecksum,$opt);
+`md5sum $outDir/* > $outDir/$shortName.md5sum.txt`;
 exit(0);
 
 sub checkInput {
@@ -114,6 +120,7 @@ sub checkInput {
   my $returnString = "";
   my $returnErrString = "";
   my $origFastaFile = "";
+  my $origFastaChecksum = "";
   if(&executeSystemCall($command,\$returnString,\$returnErrString)) {
     print STDERR "$returnErrString\n";
     print STDERR "$returnString\n";
@@ -131,6 +138,7 @@ sub checkInput {
         print STDERR "$0: problem encountered when moving $fastaFile to $origFastaFile and $fastaFile.fix to $fastaFile.\n\n";
        	die;
     }
+    $origFastaChecksum = &getChecksum($origFastaFile);
   }
   elsif($autoFix) {
     if(&executeSystemCall("rm -f $fastaFile.fix",\$returnString,\$returnErrString)) {
@@ -139,13 +147,14 @@ sub checkInput {
         print STDERR "$0: problem encountered when removing $fastaFile.fix.\n\n";
     }
   }
+  my $fastaChecksum = &getChecksum($fastaFile);
 
-  return($origFastaFile);
+  return($origFastaFile,$origFastaChecksum,$fastaChecksum);
 }
 
 sub getIndexVersion {
 
-  my $command = "tmap index --version";
+  my $command = "$opt->{'tmapDir'}/tmap index --version";
   my $indexVersion = undef;
   die "$0: Problem encountered determining tmap format version\n" if(&executeSystemCall($command,\$indexVersion));
   chomp $indexVersion if(defined($indexVersion));
@@ -154,7 +163,7 @@ sub getIndexVersion {
 }
 
 sub makeInfoFile {
-  my($outDir,$shortName,$genomeLength,$indexVersion,$opt) = @_;
+  my($outDir,$shortName,$genomeLength,$indexVersion,$origFastaChecksum,$fastaChecksum,$opt) = @_;
 
   my $infoFileName = "$outDir/$shortName.info.txt";
   my $infoFh = FileHandle->new("> $infoFileName") || die "$0: problem writing $infoFileName: $!\n";
@@ -163,7 +172,9 @@ sub makeInfoFile {
   print $infoFh join("\t",("genome_version",$opt->{"genomeVersion"}))."\n";
   print $infoFh join("\t",("genome_length", $genomeLength))."\n";
   print $infoFh join("\t",("index_version", $indexVersion))."\n";
+  print $infoFh join("\t",("fasta_md5checksum", $fastaChecksum))."\n";
   # Write the optional fields
+  print $infoFh join("\t",("original_fasta_md5checksum", $origFastaChecksum ))."\n"  if($origFastaChecksum ne "");
   print $infoFh join("\t",("read_sample_size",   $opt->{"readSampleSize"}   ))."\n" if($opt->{"readSampleSize"}    > 0);
   print $infoFh join("\t",("read_exclude_length",$opt->{"readExcludeLength"}))."\n" if($opt->{"readExcludeLength"} > 0);
   close($infoFh);
@@ -196,7 +207,7 @@ sub makeIndex {
   chdir $outDir || die "$0: unable to chdir to output dir $outDir\n";
   print STDOUT "Making tmap index...\n";
   my $tmapLogFile = "tmap.log";
-  $command = "tmap index -f $fastaFileCopy -v 2>> $tmapLogFile";
+  $command = "$opt->{'tmapDir'}/tmap index -f $fastaFileCopy -v 2>> $tmapLogFile";
   die "$0: Problem encountered making tmap index, check tmap log file $outDir/$tmapLogFile for details.\n" if(&executeSystemCall($command));
   print STDOUT "  ...tmap index complete\n";
 
@@ -216,7 +227,7 @@ sub makeIndex {
   warn "WARNING: $picardErr\n" if($picardErr ne "");
 
   # determine genome length
-  $command = "tmap refinfo $fastaFileCopy | grep \"^length\" | tail -n 1 | cut -f2";
+  $command = "$opt->{'tmapDir'}/tmap refinfo $fastaFileCopy | grep \"^length\" | tail -n 1 | cut -f2";
   die "$0: Problem encountered determining genome length\n" if(&executeSystemCall($command,\$genomeLength));
   chomp $genomeLength;
 
@@ -322,4 +333,21 @@ sub makePicardDictFile {
   }
 
   return("");
+}
+
+
+sub getChecksum {
+  my ($inFile) = @_;
+
+  my $command = "md5sum $inFile";
+  my $returnString = "";
+  my $returnErrString = "";
+  if(&executeSystemCall($command,\$returnString,\$returnErrString)) {
+    print STDERR "$returnString\n";
+    print STDERR "$0: problem encountered getting checksum of $inFile - command is:\n$command\n";
+    die;
+  }
+  $returnString = $1 if($returnString =~ /^(\S+)\s+/);
+
+  return($returnString);
 }

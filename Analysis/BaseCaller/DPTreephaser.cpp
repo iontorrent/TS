@@ -91,7 +91,7 @@ void DPTreephaser::SetModelParameters(double cf, double ie, double dr)
 
 
 
-void BasecallerRead::SetDataAndKeyNormalize(float *flowValues, int _numFlows, int *keyVec, int numKeyFlows)
+void BasecallerRead::SetDataAndKeyNormalize(const float *flowValues, int _numFlows, const int *keyVec, int numKeyFlows)
 {
   numFlows = _numFlows;
   measurements.resize(numFlows);
@@ -350,8 +350,8 @@ void BasecallerRead::Normalize(int fromFlow, int toFlow)
   for (int iFlow = fromFlow; ((iFlow < toFlow) && (iFlow < numFlows)); iFlow++) {
     if ((solution[iFlow] > 0) && (((int)solution[iFlow]) < 5)) {
 
-//      xy += HpScaleWeight[(int)solution[iFlow]] * measurements[iFlow] * prediction[iFlow];
-      xy += HpScaleWeight[(int)solution[iFlow]] * normalizedMeasurements[iFlow] * prediction[iFlow];
+      xy += HpScaleWeight[(int)solution[iFlow]] * measurements[iFlow] * prediction[iFlow];
+//      xy += HpScaleWeight[(int)solution[iFlow]] * normalizedMeasurements[iFlow] * prediction[iFlow];
       yy += HpScaleWeight[(int)solution[iFlow]] * prediction[iFlow] * prediction[iFlow];
     }
   }
@@ -361,10 +361,11 @@ void BasecallerRead::Normalize(int fromFlow, int toFlow)
     Divisor = xy / yy;
 
   for (int iFlow = 0; iFlow < numFlows; iFlow++)
-//    normalizedMeasurements[iFlow] = measurements[iFlow] / Divisor;
-    normalizedMeasurements[iFlow] /= Divisor;
+    normalizedMeasurements[iFlow] = measurements[iFlow] / Divisor;
+//    normalizedMeasurements[iFlow] /= Divisor;
 
-  miscNormalizer *= Divisor;
+//  miscNormalizer *= Divisor;
+  miscNormalizer = Divisor;
 }
 
 

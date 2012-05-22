@@ -1,192 +1,200 @@
 <html>
-    <head>
-
-        <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-        <script type="text/javascript" src="/site_media/jquery/js/protovis/dm.protovis.js"></script>
-        <script type="text/javascript" src="/site_media/jquery/js/protovis/jquery.tipsy.js"></script>
-        <script type="text/javascript" src="/site_media/jquery/js/protovis/tipsy.js"></script>
-        <link href="/site_media/jquery/js/protovis/tipsy.css" type="text/css" rel="stylesheet"/>
-
-    </head>
-
+<head>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/protovis/dm.protovis.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/protovis/jquery.tipsy.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/protovis/tipsy.js"></script>
+  <link href="/site_media/jquery/js/protovis/tipsy.css" type="text/css"
+        rel="stylesheet"/>
+</head>
 <body>
-
 {% ifnotequal data "false" %}
 
-                <div id="box"></div>
+  <div id="box"></div>
 
-    <script>
-            //get querystring values
-            var qs = (function(a) {
-                if (a == "") return {};
-                var b = {};
-                for (var i = 0; i < a.length; ++i)
-                {
-                    var p=a[i].split('=');
-                    if (p.length != 2) continue;
-                    b[p[0]] = decodeURIComponent(p[1].replace(/\+/g, " "));
-                }
-                return b;
-            })(window.location.search.substr(1).split('&'));
-    </script>
+  <script>
+    //get querystring values
+    var qs = (function (a) {
+      if (a == "") return {};
+      var b = {};
+      for (var i = 0; i < a.length; ++i) {
+        var p = a[i].split('=');
+        if (p.length != 2) continue;
+        b[p[0]] = decodeURIComponent(p[1].replace(/\+/g, " "));
+      }
+      return b;
+    })(window.location.search.substr(1).split('&'));
+  </script>
 
-                <script type="text/javascript+protovis">
+  <script type="text/javascript+protovis">
+    data = {{ data|safe }};
 
-        data = {{ data|safe }};
+    //find the max value
+    max = 0;
+    $.each(data, function (index, value) {
+      if ((data[index]["value"]) > max) {
+        max = data[index]["value"];
+      }
+    });
 
-        //find the max value
-        max = 0;
-        $.each(data, function(index, value){
-            if ( (data[index]["value"]) > max){
-                max = data[index]["value"] ;
-            }
-        });
+    if (qs["width"] != undefined) {
+      qs_width = qs["width"]
+    } else {
+      qs_width = 935
+    }
+    ;
+    if (qs["height"] != undefined) {
+      qs_height = qs["height"]
+    } else {
+      qs_height = 255
+    }
+    ;
 
-                if (qs["width"]  != undefined ){ qs_width  = qs["width"]  }else{ qs_width  = 935 };
-                if (qs["height"] != undefined ){ qs_height = qs["height"] }else{ qs_height = 255 };
+    /* edit these settings freely */
+    var w = qs_width, // width of the panel
+            h = qs_height, // height of the panel
+            topMargin = 60,
+            bottomMargin = 20,
+            leftMargin = 100,
+            rightMargin = 100,
+            xAxisMax = 50,
+            gap = (1 / data.length) * 105 , // changes space between bars
+            baseColor = "#1F77B4", // use hexadecimal colors or web colors e.g. "black"
+            highlightColor = "#a14538",
+            tickLineColor = "rgba(255,255,255,.3)",
+            dataRange = max + 30, // change to just above the upper extent of your data
+            increments = Math.round(max / 3), // change to adjust spacing in tick lines
+            tickText = "8pt Arial,sans-serif",
+            dateText = "9pt Arial,sans-serif";
 
-                /* edit these settings freely */
-                var w = qs_width, // width of the panel
-                        h = qs_height, // height of the panel
-                        topMargin = 60,
-                        bottomMargin = 20,
-                        leftMargin = 100,
-                        rightMargin = 100,
-                        xAxisMax = 50,
-                        gap = (1/data.length) * 105 , // changes space between bars
-                        baseColor = "#1F77B4", // use hexadecimal colors or web colors e.g. "black"
-                        highlightColor = "#a14538",
-                        tickLineColor = "rgba(255,255,255,.3)",
-                        dataRange = max + 30, // change to just above the upper extent of your data
-                        increments = Math.round(max/3), // change to adjust spacing in tick lines
-                        tickText = "8pt Arial,sans-serif",
-                        dateText = "9pt Arial,sans-serif";
+    /* edit with care */
+    var chartHeight = h - bottomMargin - topMargin,
+            chartWidth = w - leftMargin - rightMargin,
+            xScale = pv.Scale.linear(0, data.length).range(0, chartWidth),
+            total = pv.Scale.linear(0, dataRange).range(0, chartHeight),
+            barWidth = (chartWidth) / data.length,
+            commas = pv.Format.number(),
 
-                /* edit with care */
-                var chartHeight = h-bottomMargin-topMargin,
-                        chartWidth = w-leftMargin-rightMargin,
-                        xScale = pv.Scale.linear(0, data.length).range(0, chartWidth),
-                        total = pv.Scale.linear(0, dataRange).range(0, chartHeight),
-                        barWidth = (chartWidth)/data.length,
-                        commas = pv.Format.number(),
+            activeBar = -1;
 
-                        activeBar = -1;
-
-                /* main panel */
-                var vis = new pv.Panel().width(w).height(h)
-                        .event("mousemove", pv.Behavior.point(Infinity).collapse("y"));
-
-
-        /* tick marks */
-        vis.add(pv.Rule)
-                .data(pv.range(0, dataRange, increments))
-                .bottom(function(d) (dataRange > chartHeight) ? (d / (dataRange/chartHeight)) + bottomMargin : (d * (chartHeight)/dataRange) + bottomMargin)
-                .left(leftMargin)
-                .right(rightMargin)
-                .strokeStyle("lightgray")
-                .add(pv.Label)
-                .textAlign("right")
-                .textBaseline("center")
-                .font(tickText)
-                .textStyle("gray");
-
-                        // bars and data labels
-                        vis.add(pv.Bar)
-                                .data(data)
-                                .left(function() 1 + xScale(this.index)+leftMargin)
-                                .height(function(d) (total(d.value) < 1) ? 1: total(d.value))
-                                .width(barWidth-gap)
-                                .bottom(bottomMargin)
-                                .lineWidth(.2)
-                                .strokeStyle("333")
-                .text( function(d){
-                        tooltip = "Name - " + d.name;
-                        tooltip = tooltip + " Value " + " - " + d.value;
-                        //  tooltip = d.value;
-                        if(d.sequence != ""){
-                            tooltip = tooltip + " Sequence - " + d.sequence;
-                        }
-                        if (d.adapter != ""){
-                            tooltip = tooltip + " (" + d.adapter + ")";
-                        }
-                        if (d.annotation != ""){
-                            tooltip = tooltip + " " + d.annotation;
-                        } 
-                        return tooltip;
-                      })
-                //.event("mouseover", pv.Behavior.tipsy({gravity: "s", fade: false}))
-                .event("mouseover", pv.Behavior.tipsy({gravity: "s", fade: false}))
-                .event("point", function() {activeBar = this.index; return vis;})
-                                .fillStyle(function() (activeBar == this.index) ? highlightColor : baseColor)
-
-            /* tick marks */
-            vis.add(pv.Rule)
-                    .data(pv.range(0, dataRange, increments))
-                    .bottom(function(d) (dataRange > chartHeight) ? (d / (dataRange/chartHeight)) + bottomMargin : (d * (chartHeight)/dataRange) + bottomMargin)
-                    .left(leftMargin)
-                    .right(rightMargin)
-                    .strokeStyle(tickLineColor)
-                    .add(pv.Label)
-                    .textAlign("right")
-                    .textBaseline("center")
-                    .font(tickText)
-                    .textStyle("gray");
-
-                   /* x axis */
-                        vis.add(pv.Bar)
-                                .data(data)
-                                .bottom(0)
-                                .left(function() xScale(this.index) + leftMargin)
-                                .width(barWidth-gap)
-                                .fillStyle(null)
-                                .anchor("bottom")
-                                .add(pv.Label)
-
-                .textAlign("center")
-                .font(dateText)
-                .textStyle("#333333")
-                .text(function(d) {
-                    if (data.length > xAxisMax){
-                        return "";
-                    }
-                    if (d.axis == 0){
-                        return "X";
-                    }else{
-                        return d.axis;
-                    }
-                });
+    /* main panel */
+    var vis = new pv.Panel().width(w).height(h)
+            .event("mousemove", pv.Behavior.point(Infinity).collapse("y"));
 
 
-            if (data.length > xAxisMax){
-                /* x axis */
-                vis.add(pv.Bar)
-                        .bottom(0)
-                        .left(leftMargin)
-                        .width(w - leftMargin * 2)
-                        .fillStyle(null)
-                        .anchor("bottom")
-                        .add(pv.Label)
-                        .textAlign("center")
-                        .font("10pt Arial,sans-serif")
-                        .textStyle("#333333")
-                        .text("Barcodes");
-            }
+    /* tick marks */
+    vis.add(pv.Rule)
+            .data(pv.range(0, dataRange, increments))
+            .bottom(function (d) (dataRange > chartHeight) ? (d / (dataRange / chartHeight)) + bottomMargin : (d * (chartHeight) / dataRange) + bottomMargin)
+            .left(leftMargin)
+            .right(rightMargin)
+            .strokeStyle("lightgray")
+            .add(pv.Label)
+            .textAlign("right")
+            .textBaseline("center")
+            .font(tickText)
+            .textStyle("gray");
+
+    // bars and data labels
+    vis.add(pv.Bar)
+            .data(data)
+            .left(function () 1 + xScale(this.index) + leftMargin)
+            .height(function (d) (total(d.value) < 1) ? 1 : total(d.value))
+            .width(barWidth - gap)
+            .bottom(bottomMargin)
+            .lineWidth(.2)
+            .strokeStyle("333")
+            .text(function (d) {
+              tooltip = "Name - " + d.name;
+              tooltip = tooltip + " Value " + " - " + d.value;
+              //  tooltip = d.value;
+              if (d.sequence != "") {
+                tooltip = tooltip + " Sequence - " + d.sequence;
+              }
+              if (d.adapter != "") {
+                tooltip = tooltip + " (" + d.adapter + ")";
+              }
+              if (d.annotation != "") {
+                tooltip = tooltip + " " + d.annotation;
+              }
+              return tooltip;
+            })
+      //.event("mouseover", pv.Behavior.tipsy({gravity: "s", fade: false}))
+            .event("mouseover", pv.Behavior.tipsy({gravity: "s", fade: false}))
+            .event("point", function () {
+              activeBar = this.index;
+              return vis;
+            })
+            .fillStyle(function () (activeBar == this.index) ? highlightColor : baseColor)
+
+    /* tick marks */
+    vis.add(pv.Rule)
+            .data(pv.range(0, dataRange, increments))
+            .bottom(function (d) (dataRange > chartHeight) ? (d / (dataRange / chartHeight)) + bottomMargin : (d * (chartHeight) / dataRange) + bottomMargin)
+            .left(leftMargin)
+            .right(rightMargin)
+            .strokeStyle(tickLineColor)
+            .add(pv.Label)
+            .textAlign("right")
+            .textBaseline("center")
+            .font(tickText)
+            .textStyle("gray");
+
+    /* x axis */
+    vis.add(pv.Bar)
+            .data(data)
+            .bottom(0)
+            .left(function () xScale(this.index) + leftMargin)
+            .width(barWidth - gap)
+            .fillStyle(null)
+            .anchor("bottom")
+            .add(pv.Label)
+
+            .textAlign("center")
+            .font(dateText)
+            .textStyle("#333333")
+            .text(function (d) {
+              if (data.length > xAxisMax) {
+                return "";
+              }
+              if (d.axis == 0) {
+                return "X";
+              } else {
+                return d.axis;
+              }
+            });
 
 
+    if (data.length > xAxisMax) {
+      /* x axis */
+      vis.add(pv.Bar)
+              .bottom(0)
+              .left(leftMargin)
+              .width(w - leftMargin * 2)
+              .fillStyle(null)
+              .anchor("bottom")
+              .add(pv.Label)
+              .textAlign("center")
+              .font("10pt Arial,sans-serif")
+              .textStyle("#333333")
+              .text("Barcodes");
+    }
 
 
-        vis.render();
-                </script>
+    vis.render();
+  </script>
 
-{%  else %}
+{% else %}
 
-    <h3>Error</h3>
-    Barcode data could not be parsed.
-
-
-{%  endifnotequal %}
+  <h3>Error</h3>
+  Barcode data could not be parsed.
 
 
+{% endifnotequal %}
 </body>
 </html>
 

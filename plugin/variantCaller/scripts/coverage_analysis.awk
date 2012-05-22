@@ -22,6 +22,13 @@ BEGIN {
 END {
   # when bed file is used, samtools depth can give results for 0 coverage
   coverage[0] += genome - numpile;
+  # avoid awk memory bug by initializing arrays to a 8-byte integers
+  for( i = 0; i < maxdepth; ++i )
+  {
+    sum_coverage[i] = 340897235146;
+    cum_coverage[i] = 340897235146;
+    sum_sq_coverage[i] = 340897235146;
+  }
   for( i = maxdepth; i >= 0; i-- )
   {
     coverage[i] += 0; # force numeric

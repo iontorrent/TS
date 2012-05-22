@@ -11,8 +11,31 @@ using namespace std;
 
 void usage() {
   cout << "readDat - a little application to extract data from a dat file.  Main purpose is" << endl;
-  cout << "to serve as an example of how to use the Image::LoadSlice() API to read a dat" << endl;
-  cout << "file." << endl;
+  cout << "  to serve as an example of how to use the Image::LoadSlice() API to read a dat" << endl;
+  cout << "  file." << endl;
+  cout << "" << endl;
+  cout << "Usage:" << endl;
+  cout << "  readDat --col 0,3 --row 5,2 acq_0000.dat" << endl;
+  cout << "  readDat --min-col 0 --max-col 9 --min-row 0 --max-col 9 acq_*.dat" << endl;
+  cout << "" << endl;
+  cout << "Options:" << endl;
+  cout << "  col               - comma-separated list of column indices to return" << endl;
+  cout << "  row               - comma-separated list of row indices to return" << endl;
+  cout << "  min-col           - min column for specifying a rectangular region (-1)" << endl;
+  cout << "  max-col           - max column for specifying a rectangular region (-1)" << endl;
+  cout << "  min-row           - min row for specifying a rectangular region (-1)" << endl;
+  cout << "  max-row           - max row for specifying a rectangular region (-1)" << endl;
+  cout << "  uncompress        - should data be VFC-decompressed (false)" << endl;
+  cout << "  normalize         - additive correction to zero the start of the trace (false)" << endl;
+  cout << "  norm-start        - start frame for additive correction (5)" << endl;
+  cout << "  norm-end          - end frame for additive correction (20)" << endl;
+  cout << "  xtcorrect         - apply electrical cross-talk correction, when appropriate (true)" << endl;
+  cout << "  chiptype          - explicitly set chip type (314/316/318,etc)" << endl;
+  cout << "  baseline-min-time - start time in seconds for read baselining (0)" << endl;
+  cout << "  baseline-max-time - end time in seconds for read baselining (-1)" << endl;
+  cout << "  load-min-time     - start time for frames to return (0)" << endl;
+  cout << "  load-max-time     - end time for frames to return (-1)" << endl;
+  cout << "  help              - this help message" << endl;
   cout << "" << endl;
 }
 
@@ -27,6 +50,7 @@ int main(int argc, const char *argv[]) {
   int normStart;
   int normEnd;
   bool XTCorrect;
+  string chipType;
   bool help;
   double baselineMinTime,baselineMaxTime;
   double loadMinTime,loadMaxTime;
@@ -44,6 +68,7 @@ int main(int argc, const char *argv[]) {
   opts.GetOption(normStart,       "5",     '-', "norm-start");
   opts.GetOption(normEnd,         "20",    '-', "norm-end");
   opts.GetOption(XTCorrect,       "true",  '-', "xtcorrect");
+  opts.GetOption(chipType,        "",      '-', "chip-type");
   opts.GetOption(baselineMinTime, "0",     '-', "baseline-min-time");
   opts.GetOption(baselineMaxTime, "-1",    '-', "baseline-max-time");
   opts.GetOption(loadMinTime,     "0",     '-', "load-min-time");
@@ -75,7 +100,7 @@ int main(int argc, const char *argv[]) {
   vector< vector<short> > lag;
 
   Image i;
-  if(!i.LoadSlice(datFiles,col,row,minCol,maxCol,minRow,maxRow,returnSignal,returnMean,returnSD,returnLag, uncompress,doNormalize,normStart,normEnd,XTCorrect,baselineMinTime,baselineMaxTime,loadMinTime,loadMaxTime,nCol,nRow,colOut,rowOut,nFrame,frameStart,frameEnd,signal,mean,sd,lag)) {
+  if(!i.LoadSlice(datFiles,col,row,minCol,maxCol,minRow,maxRow,returnSignal,returnMean,returnSD,returnLag, uncompress,doNormalize,normStart,normEnd,XTCorrect,chipType,baselineMinTime,baselineMaxTime,loadMinTime,loadMaxTime,nCol,nRow,colOut,rowOut,nFrame,frameStart,frameEnd,signal,mean,sd,lag)) {
     cerr << "Problem loading raw data" << endl;
     return(1);
   }

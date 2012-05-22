@@ -23,6 +23,7 @@ import os
 import os.path
 
 from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 
 import iondb.settings
 
@@ -33,10 +34,7 @@ from django.contrib import admin
 from django.db import models
 from django.db.models.query import QuerySet
 from iondb.backup import devices
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 
 from iondb.rundb import json_field
 
@@ -45,6 +43,7 @@ import uuid
 import random
 import string
 import logging
+import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,9 @@ from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
-from distutils.version import StrictVersion
+from distutils.version import LooseVersion
+
+import copy
 
 # Create your models here.
 
@@ -108,6 +109,8 @@ class Experiment(models.Model):
     flowsInOrder = models.CharField(max_length=512)
     star = models.BooleanField()
     ftpStatus = models.CharField(max_length=512, blank=True)
+
+    #library key for forward run
     libraryKey = models.CharField(max_length=64, blank=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
     barcodeId = models.CharField(max_length=128, blank=True, null=True)
@@ -118,7 +121,16 @@ class Experiment(models.Model):
     sequencekitbarcode = models.CharField(max_length=512, blank=True, null=True)
     librarykitname = models.CharField(max_length=512, blank=True, null=True)
     librarykitbarcode = models.CharField(max_length=512, blank=True, null=True)
+    
+    #for paired-end reverse run, separate library key and 3' adapter needed
+    reverselibrarykey = models.CharField("library key for reverse run", max_length=64, blank=True, null=True)
+    reverse3primeadapter = models.CharField("3' adapter for reverse run", max_length=512, blank=True, null=True)
 
+    #for forward run, 3' adapter specific to this plan
+    forward3primeadapter = models.CharField("3' adapter for forward run", max_length=512, blank=True, null=True)
+
+    isReverseRun = models.BooleanField(default=False)
+    
     #add metadata
     metaData = json_field.JSONField(blank=True)
 
@@ -133,6 +145,15 @@ class Experiment(models.Model):
         if not ret:
             return nodate
         return ret
+
+    def pretty_print_no_space(self):
+        nodate = self.PRETTY_PRINT_RE.sub("", self.expName)
+        ret = " ".join(nodate.split('_')[1:]).strip()
+        ret = ret.replace(" ","_")
+        if not ret:
+            return nodate
+        return ret
+
     def sorted_results(self):
         try:
             ret = self.results_set.all().order_by('-timeStamp')
@@ -189,7 +210,55 @@ class Experiment(models.Model):
     def save(self):
         """on save we need to sync up the log JSON and the other values that might have been set
         this was put in place primarily for the runtype field"""
+
+        #we now save the library kit name instead of the kit's part number to Experiment
+        #when updating a pre-existing run from TS, we want to populate the new field with the info
+        if (self.librarykitbarcode and not self.librarykitname):
+            try:
+                selectedLibKitPart = KitPart.objects.get(barcode=self.librarykitbarcode)
+                if (selectedLibKitPart):
+                    selectedLibKit = selectedLibKitPart.kit
+                    if (selectedLibKit):
+                        self.librarykitname = selectedLibKit.name
+            except KitPart.DoesNotExist:
+                #If we can't determine the library kit name, leave it as is
+                #do not fail the save()
+                logger.info("NO kit part found at Experiment for libraryKitBarcode=%s" % self.librarykitbarcode)
+                
+        #we now save the sequencing kit name instead of the kit's part number to Experiment
+        #when updating a pre-existing run from TS, we want to populate the new field with the info
+        if ((self.sequencekitbarcode or self.seqKitBarcode) and not self.sequencekitname):
+            try:
+                kitBarcode = self.sequencekitbarcode
+                if (not kitBarcode):
+                    kitBarcode = self.seqKitBarcode
+
+                selectedSeqKitPart = KitPart.objects.get(barcode=kitBarcode)
+                if (selectedSeqKitPart):
+                    selectedSeqKit = selectedSeqKitPart.kit
+                    if (selectedSeqKit):
+                        self.sequencekitname = selectedSeqKit.name
+            except KitPart.DoesNotExist:
+                #if we can't determine the seq kit name, leave it as is
+                #do not fail the save()               
+                logger.info("NO kit part found at Experiment for sequencingKitBarcode=%s" % kitBarcode)
+
+        if self.isReverseRun:
+            self.libraryKey = ""
+            self.forward3primeadapter = ""
+        else:
+            self.reverselibrarykey = ""
+            self.reverse3primeadapter = ""
+        
         super(Experiment, self).save()
+
+
+@receiver(post_delete, sender=Experiment, dispatch_uid="delete_experiment")
+def on_experiment_delete(sender, instance, **kwargs):
+    """Log the deletion of the Experiment.
+    """
+    logger.info("Deleting Experiment %d" % (instance.id))
+
 
 class Lookup(object):
     _ALIASES = {}
@@ -224,6 +293,7 @@ class Lookup(object):
             rows.append([ele or empty for ele in res.tabulate()])
         return rows
 
+
 class Results(models.Model, Lookup):
     _CSV_METRICS = (("Report", "resultsName"),
                     ("Status", 'status'),
@@ -245,7 +315,7 @@ class Results(models.Model, Lookup):
         }
     TABLE_FIELDS = ("Report", "Status", "Flows",
                     "Lib Key Signal",
-                     "Q17 Bases", "100 bp AQ17 Reads", "AQ17 Bases")
+                     "Q20 Bases", "100 bp AQ20 Reads", "AQ20 Bases")
     PRETTY_FIELDS = TABLE_FIELDS
     experiment = models.ForeignKey(Experiment)
     resultsName = models.CharField(max_length=512)
@@ -259,9 +329,11 @@ class Results(models.Model, Lookup):
     log = models.TextField(blank=True)
     analysisVersion = models.CharField(max_length=64)
     processedCycles = models.IntegerField()
+    processedflows = models.IntegerField()
     framesProcessed = models.IntegerField()
     timeToComplete = models.CharField(max_length=64)
     reportstorage = models.ForeignKey("ReportStorage", related_name="storage", blank=True, null=True)
+    runid = models.CharField(max_length=10,blank=True)
 
     #metaData
     metaData = json_field.JSONField(blank=True)
@@ -288,16 +360,29 @@ class Results(models.Model, Lookup):
 
     def planShortID(self):
         expLog = self.experiment.log
-        plan = expLog.get("pending_run_short_id","")
+        try:
+            plan = expLog["planned_run_short_id"]
+        except KeyError:
+            plan = expLog.get("pending_run_short_id","")
         return plan
+
+    def experimentReference(self):
+        return self.experiment.library
 
     def bamLink(self):
         """a method to used by the API to provide a link to the bam file"""
         reportStorage = self._findReportStorage()
         location = self.server_and_location()
 
-        if reportStorage:
-            return os.path.join(self.web_path(location) , self.experiment.expName + "_" + self.resultsName + ".bam")
+        if reportStorage is not None and location is not False:
+            logging.info(reportStorage)
+            logging.info(location)
+            bamFile = self.experiment.expName + "_" + self.resultsName + ".bam"
+            webPath = self.web_path(location)
+            if not webPath:
+                logging.error("webpath missing for " + bamFile)
+                return False
+            return os.path.join(webPath , bamFile)
         else:
             return False
 
@@ -319,8 +404,12 @@ class Results(models.Model, Lookup):
 
     def _basename(self):
         return "%s_%03d" % (self.resultsName, self.pk)
+
     def server_and_location(self):
-        loc = Rig.objects.get(name=self.experiment.pgmName).location
+        try:
+            loc = Rig.objects.get(name=self.experiment.pgmName).location
+        except Rig.DoesNotExist:
+            return False
         #server = FileServer.objects.get(location=loc)
         return loc
 
@@ -347,11 +436,14 @@ class Results(models.Model, Lookup):
         """Returns filesystem path to Results directory"""
         basename = self._basename()
         if self.reportstorage == None:
-            storage = self._findReportStorage ()
+            storage = self._findReportStorage()
             if storage is not None:
                 self.reportstorage = storage
                 self.save()
-        return path.join(self.reportstorage.dirPath, location.name, basename)
+        if self.reportstorage is not None:
+            return path.join(self.reportstorage.dirPath, location.name, basename)
+        else:
+            return None
 
     def report_exist(self):
         """check to see if a report exists inside of the report path"""
@@ -378,8 +470,10 @@ class Results(models.Model, Lookup):
         tmpPath = self.reportLink.split('/')
         index = len(tmpPath) - 4
         linkstub = self.reportLink.split('/' + tmpPath[index])
-        fs_path = self.reportstorage.dirPath + linkstub[1]
-        return fs_path
+        if self.reportstorage is not None:
+            return self.reportstorage.dirPath + linkstub[1]
+        else:
+            return None
 
     def get_report_dir(self):
         """Returns filesystem path to results directory"""
@@ -394,19 +488,24 @@ class Results(models.Model, Lookup):
             if storage is not None:
                 self.reportstorage = storage
                 self.save()
-        webServerPath = self.reportstorage.webServerPath
-        return path.join(webServerPath, location.name, basename)
+        webServerPath = path.join(self.reportstorage.webServerPath, location.name, basename)
+
+        #TODO: the webpath is not the same as the path of the filesystem. Check the webpath somehow.
+        return webServerPath
 
     def __unicode__(self):
         return self.resultsName
 
     # TODO: Cycles -> flows hack, very temporary.
     @property
-    def processedFlows(self):
+    def processedFlowsorCycles(self):
         """This is an extremely intermediate hack, holding down the fort until
         cycles are removed from the model.
         """
-        return self.processedCycles * 4
+        if self.processedflows:
+            return self.processedflows
+        else:
+            return self.processedCycles * 4
 
     @property
     def best_metrics(self):
@@ -552,6 +651,22 @@ class Results(models.Model, Lookup):
         verbose_name_plural = "Results"
 
 
+@receiver(post_delete, sender=Results, dispatch_uid="delete_result")
+def on_result_delete(sender, instance, **kwargs):
+    """Delete all of the files represented by a Experiment object which was
+    deleted and all of files derived from that Experiment which are in it's
+    folder.
+    """
+    # Note, this completely sucks: is there a better way of determining this?
+    root = instance.reportstorage.dirPath
+    prefix = len(instance.reportstorage.webServerPath)
+    postfix = os.path.dirname(instance.reportLink[prefix+1:])
+    directory = os.path.join(root, postfix)
+    logger.info("Deleting Result %d in %s" % (instance.id, directory))
+    tasks.delete_that_folder.delay(directory,
+                       "Triggered by Results %d deletion" % instance.id)
+
+
 class TFMetrics(models.Model, Lookup):
     _CSV_METRICS = (
         ("TF Name", "name"),
@@ -626,7 +741,6 @@ class TFMetrics(models.Model, Lookup):
         ret = []
         for metric in self._CSV_METRICS:
             ret.append((metric[0], getattr(self, metric[1], ' ')))
-        print ret
 
     class Meta:
         verbose_name_plural = "TF metrics"
@@ -1145,6 +1259,10 @@ class GlobalConfig(models.Model):
     selected = models.BooleanField()
     plugin_folder = models.CharField(max_length=512, blank=True)
     default_command_line = models.CharField(max_length=512, blank=True)
+
+    #baseacller args
+    basecallerargs = models.CharField("BaseCaller args", max_length=512, blank=True)
+
     fasta_path = models.CharField(max_length=512, blank=True)
     reference_path = models.CharField(max_length=1000, blank=True)
     records_to_display = models.IntegerField(default=20, blank=True)
@@ -1159,15 +1277,33 @@ class GlobalConfig(models.Model):
                                        choices=Experiment.STORAGE_CHOICES,
                                        default='D', blank=True)
     auto_archive_ack = models.BooleanField("Auto-Acknowledge Archive?", default=False)
-    #sff triming options
-    sfftrim = models.BooleanField("Disable SFF Trim?")
-    sfftrim_args_help = "Note: The report input (--in-sff) and output (--out-sff) will be added automatically for all cases."
-    sfftrim_args = models.CharField("Args to use for SFFTrim", max_length=500, blank=True, help_text=sfftrim_args_help)
-
-
+    
+    barcode_args = json_field.JSONField(blank=True)
+    enable_auto_pkg_dl = models.BooleanField("Enable Package Auto Download", default=True)
+    ts_update_status = models.CharField(max_length=256,blank=True)
 
     def get_default_command(self):
         return str(self.default_command_line)
+        
+    def set_TS_update_status(self,inputstr):
+        self.ts_update_status = inputstr
+        
+    def set_enableAutoPkgDL(self,flag):
+        if type(flag) is bool:
+            self.enableAutoPkgDL = flag
+        
+    def get_enableAutoPkgDL(self):
+        return self.enableAutoPkgDL
+
+    @classmethod
+    def get(cls):
+        """This represents pretty much the only query on this entire
+        table, find the 'canonical' GlobalConfig record.  The primary
+        key order is used in all cases as the tie breaker.
+        Since there is *always* supposed to be one of these in the DB,
+        this call to get will properly raises a DoesNotExist error.
+        """
+        return cls.objects.order_by('pk')[:1].get()
 
 
 @receiver(post_save, sender=GlobalConfig, dispatch_uid="save_globalconfig")
@@ -1261,9 +1397,12 @@ class Plugin(models.Model):
     def __unicode__(self):
         return self.name
 
+    def versionedName(self):
+        return "%s--v%s" % (self.name, self.version)
+
     # Help for comparing plugins by version number
     def versionGreater(self, other):
-        return(StrictVersion(self.version) > StrictVersion(other.version))
+        return(LooseVersion(self.version) > LooseVersion(other.version))
 
     def installStatus(self):
         """this method helps us know if a plugin was installed sucessfully"""
@@ -1336,6 +1475,9 @@ class ReferenceGenome(models.Model):
     index_version = models.CharField(max_length=512, blank=True)
     verbose_error = models.CharField(max_length=3000, blank=True)
 
+    class Meta:
+        ordering = ['short_name']
+
     def delete(self):
         #delete the genome from the filesystem as well as the database
 
@@ -1382,25 +1524,74 @@ class ReferenceGenome(models.Model):
         if there was a file named .orig then the fasta was autofixed.
         """
         orig = os.path.join(self.reference_path , self.short_name + ".orig")
-        print orig
         return os.path.exists(orig)
 
     def __unicode__(self):
         return u'%s' % self.name
 
 class ThreePrimeadapter(models.Model):
-    name = models.CharField(max_length=256, blank=True)
-    sequence = models.CharField(max_length=512, blank=True)
+    ALLOWED_DIRECTIONS = (
+        ('Forward', 'Forward'),
+        ('Reverse', 'Reverse')
+    )
+    
+    direction = models.CharField(max_length=20, choices=ALLOWED_DIRECTIONS, default='Forward')
+
+    name = models.CharField(max_length=256, blank=False, unique=True)
+    sequence = models.CharField(max_length=512, blank=False)
     description = models.CharField(max_length=1024, blank=True)
+    #20120307: actually, qual_cutoff and qual_window have nothing to do with 3' adapter.
+    #it is just a convenient place to keep these values
     qual_cutoff = models.IntegerField()
     qual_window = models.IntegerField()
     adapter_cutoff = models.IntegerField()
+
+    isDefault = models.BooleanField("use this by default", default=False)
 
     class Meta:
         verbose_name_plural = "3' Adapters"
 
     def __unicode__(self):
         return u'%s' % self.name
+
+
+    def save(self):
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):          
+                    raise ValidationError("Error: Please set another adapter for %s direction to be the default before changing this adapter not to be the default." % self.direction)
+                    
+        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id <> currentDefault.id):
+                    currentDefault.isDefault = False
+                    super(ThreePrimeadapter, currentDefault).save()
+
+        super(ThreePrimeadapter, self).save()
+
+        
+   
+    def delete(self):
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):          
+                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction to be the default before deleting this adapter." % self.direction)
+                    
+        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):
+                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction to be the default before deleting this adapter." % self.direction)
+
+        super(ThreePrimeadapter, self).delete()
+
 
 class PlannedExperiment(models.Model):
     """
@@ -1439,6 +1630,8 @@ class PlannedExperiment(models.Model):
 
     chipType = models.CharField(max_length=32,blank=True,null=True)
     chipBarcode = models.CharField(max_length=64, blank=True,null=True)
+    
+    #we now persist the sequencing kit name instead of its part number. to be phased out
     seqKitBarcode = models.CharField(max_length=64, blank=True,null=True)
 
     #name of the experiment
@@ -1471,7 +1664,7 @@ class PlannedExperiment(models.Model):
     #barcode
     barcodeId = models.CharField(max_length=256, blank=True, null=True)
 
-    #adapter
+    #adapter (20120313: this was probably for forward 3' adapter but was never used.  Consider this column obsolete)
     adapter = models.CharField(max_length=256, blank=True, null=True)
 
     #Project
@@ -1488,6 +1681,7 @@ class PlannedExperiment(models.Model):
     notes = models.CharField(max_length=255, blank=True, null=True)
 
     flowsInOrder = models.CharField(max_length=512, blank=True, null=True)
+    #library key for forward run
     libraryKey = models.CharField(max_length=64, blank=True,null=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
     reverse_primer = models.CharField(max_length=128, blank=True, null=True)
@@ -1496,7 +1690,10 @@ class PlannedExperiment(models.Model):
     bedfile = models.CharField(max_length=1024,blank=True)
     regionfile = models.CharField(max_length=1024,blank=True)
 
+    #add field for ion reporter upload plugin workflow
+    irworkflow = models.CharField(max_length=1024,blank=True)
 
+    #we now persist the sequencing kit name instead of its part number. to be phased out
     libkit = models.CharField(max_length=512, blank=True, null=True)
 
     variantfrequency = models.CharField(max_length=512, blank=True, null=True)
@@ -1511,6 +1708,20 @@ class PlannedExperiment(models.Model):
     storage_options = models.CharField(max_length=200, choices=STORAGE_CHOICES,
                                        default='A')
 
+    #for paired-end reverse run, separate library key and 3' adapter needed
+    reverselibrarykey = models.CharField("library key for reverse run", max_length=64, blank=True, null=True)
+    reverse3primeadapter = models.CharField("3' adapter for reverse run", max_length=512, blank=True, null=True)
+
+
+    #for forward run, 3' adapter specific to this plan
+    forward3primeadapter = models.CharField("3' adapter for forward run", max_length=512, blank=True, null=True)
+    
+    isReverseRun = models.BooleanField(default=False)
+    
+    #we now persist the kit names instead of their part number
+    librarykitname = models.CharField(max_length=512, blank=True, null=True)
+    sequencekitname = models.CharField(max_length=512, blank=True, null=True)
+    
     #TODO: What is to be done about barcode experiments, where each barcode has different libs etc?
 
     def __unicode__(self):
@@ -1534,7 +1745,145 @@ class PlannedExperiment(models.Model):
         if not self.planGUID:
             self.planGUID = str(uuid.uuid4())
 
-        super(PlannedExperiment, self).save()
+        #we now save the sequencing kit name in addition to the kit's part number in a plan but
+        #csv upload, for backward compatibility, will continue to ask user to include seqKitBarcode only.
+        #when saving (or updating a pre-existing plan, we want to populate the new field 
+        #with the info if not provided
+        if (self.seqKitBarcode and not self.sequencekitname):
+            try:
+                selectedSeqKitPart = KitPart.objects.get(barcode=self.seqKitBarcode)
+                if (selectedSeqKitPart):
+                    selectedSeqKit = selectedSeqKitPart.kit
+                    if (selectedSeqKit):
+                        self.sequencekitname = selectedSeqKit.name
+
+            except KitPart.DoesNotExist:
+                #if we can't determine the seq kit name, leave it as is
+                #do not fail the save()               
+                logger.info("NO kit part found at plan for sequencingKitBarcode=%s" % self.seqKitBarcode)
+        
+        #If user is CREATING a new plan or CHANGING a forward to a plan that is marked for paired-end run,
+        #behind the scene, we'll create 2 plans; one for forward and one reverse with
+        #_rev appended to the user input plan name for the "reverse" plan.
+        #
+        isToCreate2Plans = False
+        
+        if (self.id):
+            dbPlan = PlannedExperiment.objects.get(pk=self.id)
+
+            #we now save the library kit name instead of the kit's part number to PlannedExperiment
+            #when updating a pre-existing plan, we want to populate the new field with the info
+            if (self.libkit and not self.librarykitname):
+                try:
+                    selectedLibKitPart = KitPart.objects.get(barcode=self.libkit)
+                    if (selectedLibKitPart):
+                        selectedLibKit = selectedLibKitPart.kit
+                        if (selectedLibKit):
+                            self.librarykitname = selectedLibKit.name
+                except KitPart.DoesNotExist:
+                    #if we can't determine the library kit name, leave it as is
+                    #do not fail the save()               
+                    logger.info("NO kit part found at PlannedExperiment for libraryKitBarcode=%s" % self.libkit)                    
+                                                
+            #if user has not clicked on the isPairedEnd checkbox
+            if (dbPlan.isReverseRun == self.isReverseRun):
+                #logger.info('Going to call super.save() to UPDATE PlannedExperiment id=%s' % self.id)
+                if (self.isReverseRun):
+                    self.libraryKey = None
+                    self.forward3primeadapter = None                
+                else:
+                    self.reverselibrarykey = None
+                    self.reverse3primeadapter = None
+                             
+                super(PlannedExperiment, self).save()
+            else:
+                if (self.isReverseRun == False):
+                    self.reverselibrarykey = None
+                    self.reverse3primeadapter = None
+                    
+                    super(PlannedExperiment, self).save()
+                else:                  
+                    isToCreate2Plans = True
+                
+        else:
+            #if user creates a new forward plan
+            if (self.isReverseRun == False):
+                self.reverselibrarykey = None
+                self.reverse3primeadapter = None
+                             
+                #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName) 
+                super(PlannedExperiment, self).save()                
+            else:
+                isToCreate2Plans = True
+        
+        if isToCreate2Plans:
+            if (self.isReverseRun):
+                origPlanName = copy.copy(self.planName)
+
+                #planName's db max length is 512. User is not likely to create such a long name, but just in case...
+                name = self.planName
+                if len(self.planName) > 504:
+                    name = self.planName[:503]
+                
+                #if either one of the constructed plan names already exists, insert a 3-char random code to the plan name                                 
+                pairedEndForwardPlanName = ''.join([name, '_fwd'])
+                pairedEndReversePlanName = ''.join([name, '_rev'])
+            
+                if (PlannedExperiment.objects.filter(planName = pairedEndForwardPlanName).count() > 0) or (PlannedExperiment.objects.filter(planName = pairedEndReversePlanName).count() > 0):                    
+                    uniqueCode = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(3))      
+                    pairedEndForwardPlanName = ''.join([name, '_', uniqueCode, '_fwd'])
+                    pairedEndReversePlanName = ''.join([name, '_', uniqueCode,'_rev'])
+                                                
+                self.isReverseRun = False
+
+                #For paired-end forward run, if 3' adapter is missing, programmatically set it here 
+                #since the preferred 3' adapter is not the default.                                                 
+                if not self.forward3primeadapter:
+                    try:
+                        forwardPEAdapter = ThreePrimeadapter.objects.get(direction="Forward", name="Ion Paired End Fwd")
+                        self.forward3primeadapter = forwardPEAdapter.sequence
+                    except ThreePrimeadapter.DoesNotExist:
+                        logger.info("No preferred paired-end forward 3 prime adapter found at PlannedExperiment")  
+                    except ThreePrimeadapter.MultipleObjectsReturned:
+                        logger.info("Mulitple preferred paired-end forward 3 prime adapters found at PlannedExperiment")             
+                
+                #copy string by value
+                newReverseLibraryKey = ''.join(self.reverselibrarykey)
+                newReverse3PrimeAdapter = ''.join(self.reverse3primeadapter)
+                
+                self.reverselibrarykey = None
+                self.reverse3primeadapter = None
+                
+                self.planName = pairedEndForwardPlanName
+                
+                #logger.info('Going to CREATE the FORWARD plan with name=%s' % self.planName)                
+                super(PlannedExperiment, self).save()
+                
+                #prepare for the REVERSE plan
+                selfReverse = copy.copy(self)
+                selfReverse.pk = None
+                selfReverse.planGUID = None
+                selfReverse.planShortID = None
+                
+                selfReverse.libraryKey = None
+                selfReverse.forward3primeadapter = None
+                selfReverse.reverselibrarykey = newReverseLibraryKey
+                selfReverse.reverse3primeadapter = newReverse3PrimeAdapter
+
+                #logger.info('CREATING the REVERSE plan with reverse adapter=%s' % selfReverse.reverse3primeadapter)   
+                
+                selfReverse.planName = pairedEndReversePlanName                         
+                selfReverse.isReverseRun = True
+                
+                selfReverse.date = datetime.datetime.now()
+                if not selfReverse.planShortID:
+                    selfReverse.planShortID = selfReverse.findShortID()
+                if not selfReverse.planGUID:
+                    selfReverse.planGUID = str(uuid.uuid4()) 
+                    
+                #logger.info('Going to CREATE the REVERSE plan with name=%s' % selfReverse.planName)                 
+                super(PlannedExperiment, selfReverse).save()                    
+
 
 
 class Publisher(models.Model):
@@ -1668,7 +2017,7 @@ def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.create(user=instance)
 
-
+#201203 - SequencingKit is now obsolete
 class SequencingKit(models.Model):
     name = models.CharField(max_length=512, blank=True)
     description = models.CharField(max_length=3024, blank=True)
@@ -1677,6 +2026,7 @@ class SequencingKit(models.Model):
     def __unicode__(self):
         return u'%s' % self.name
 
+#201203 - LibraryKit is now obsolete
 class LibraryKit(models.Model):
     name = models.CharField(max_length=512, blank=True)
     description = models.CharField(max_length=3024, blank=True)
@@ -1695,3 +2045,158 @@ class VariantFrequencies(models.Model):
     class Meta:
         verbose_name_plural = "Variant Frequencies"
 
+
+class KitInfo(models.Model):
+    
+    ALLOWED_KIT_TYPES = (
+        ('SequencingKit', 'SequencingKit'),
+        ('LibraryKit', 'LibraryKit')
+    )
+    
+    kitType = models.CharField(max_length=20, choices=ALLOWED_KIT_TYPES)
+    name = models.CharField(max_length=512, blank=False, unique=True)
+    description = models.CharField(max_length=3024, blank=True)
+    flowCount = models.PositiveIntegerField()
+    
+    def __unicode__(self):
+        return u'%s' % self.name     
+
+
+class KitPart(models.Model):
+    kit = models.ForeignKey(KitInfo, null=False)
+    barcode = models.CharField(max_length=7, unique=True, blank=False)
+
+    def __unicode__(self):
+        return u'%s' % self.barcode
+
+
+class LibraryKey(models.Model):
+    ALLOWED_DIRECTIONS = (
+        ('Forward', 'Forward'),
+        ('Reverse', 'Reverse')
+    )
+    
+    direction = models.CharField(max_length=20, choices=ALLOWED_DIRECTIONS, default='Forward')
+    name = models.CharField(max_length=256, blank=False, unique=True)
+    sequence = models.CharField(max_length=64, blank=False)
+    description = models.CharField(max_length=1024, blank=True)
+    isDefault = models.BooleanField("use this by default", default=False)
+
+    class Meta:
+        verbose_name_plural = "Library keys"
+
+    def __unicode__(self):
+        return u'%s' % self.name
+
+
+    def save(self):
+        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+            currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):          
+                    raise ValidationError("Error: Please set another library key for %s direction to be the default before changing this key not to be the default." % self.direction)
+                    
+        if (self.isDefault == True and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() > 0):
+            currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id <> currentDefault.id):                    
+                    currentDefault.isDefault = False
+                    super(LibraryKey, currentDefault).save()
+
+        ###print 'Going to call super.save() for LibraryKey'
+        super(LibraryKey, self).save()
+
+        
+      
+    def delete(self):
+        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+            currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):          
+                    raise ValidationError("Error: Deleting the default library key is not allowed. Please set another library key for %s direction to be the default before deleting this key." % self.direction)
+                    
+        if (self.isDefault == True and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() > 0):
+            currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
+            #there should only be 1 default for a given direction at any time
+            for currentDefault in currentDefaults:
+                if (self.id == currentDefault.id):
+                    raise ValidationError("Error: Deleting the default library key is not allowed. Please set another library key for %s direction to be the default before deleting this key." % self.direction)
+
+        super(LibraryKey, self).delete()
+
+
+class MessageManager(models.Manager):
+
+    def bound(self, *bindings):
+        query = models.Q()
+        for route_binding in bindings:
+            query |= models.Q(route__startswith=route_binding)
+        return self.get_query_set().filter(query)
+
+
+class Message(models.Model):
+    """This is a semi persistent, user oriented message intended to be
+    displayed in the UI.
+    """
+
+    objects = MessageManager()
+
+    body = models.TextField(blank=True, default="")
+    level = models.IntegerField(default=20)
+    route = models.TextField(blank=True, default="")
+    expires = models.TextField(blank=True, default="read")
+    tags = models.TextField(blank=True, default="")
+    status = models.TextField(blank=True, default="unread")
+    time = models.DateTimeField(auto_now_add=True)
+
+    # Message alert levels
+    DEBUG    = 10
+    INFO     = 20
+    SUCCESS  = 25
+    WARNING  = 30
+    ERROR    = 40
+    CRITICAL = 50
+
+    def __unicode__(self):
+        if len(self.body) > 80:
+            return u'%s...' % self.body[:77]
+        else:
+            return u'%s' % self.body[:80]
+
+    @classmethod
+    def log_new_message(cls, level, body, route, **kwargs):
+        """A Message factory method which logs and creates a message with the
+         given log level
+         """
+        logger.log(level, 'User Message route:\t"%s" body:\t"%s"' %
+                          (route, body))
+        msg = cls(body=body, route=route, level=level, **kwargs)
+        msg.save()
+        return msg
+
+    @classmethod
+    def debug(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.DEBUG, body, route, **kwargs)
+
+    @classmethod
+    def info(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.INFO, body, route, **kwargs)
+
+    @classmethod
+    def success(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.SUCCESS, body, route, **kwargs)
+
+    @classmethod
+    def warn(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.WARNING, body, route, **kwargs)
+
+    @classmethod
+    def error(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.ERROR, body, route, **kwargs)
+
+    @classmethod
+    def critical(cls, body, route="", **kwargs):
+        return cls.log_new_message(cls.CRITICAL, body, route, **kwargs)

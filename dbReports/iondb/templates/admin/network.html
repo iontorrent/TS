@@ -4,6 +4,9 @@
 {% block extrahead %}
   <script type="text/javascript"
           src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <script src="/site_media/js/underscore.js"></script>
+  <script src="/site_media/js/backbone.js"></script>
+  <script src="/site_media/js/messagebox.js"></script>
   <script>
     $(function () {
 
@@ -61,7 +64,7 @@
         "security.ubuntu.com:80"
       ];
       function hey(address, friend) {
-        var where = "/rundb/how_is/" + friend + "/feeling";
+        var where = "/admin/network/how_is/" + friend + "/feeling";
         $.getJSON(where, function (replies) {
           if (replies.feeling == ":)")
             $('#neighborhood').append("<tr><td>" + friend + " </td><td class=\"happy\">Detected ✔</td></tr>");
@@ -72,15 +75,42 @@
 
       $.each(friends, hey);
 
-      $.ajax({
-        url: "/rundb/external_ip/",
-        dataType: "text",
-        success: function(address){
-         $("#externalIP").text(address);
-        },
-        error: function() {
-         $("#externalIP").text("Unable to determine")
+      $.getJSON("/admin/network/check", function(data) {
+        var detected = '<span class="happy">Detected ✔</span>';
+        var missing = '<span class="sad">Missing x</span>';
+        if (data.eth0 === null || data.route === null || data.ip_addr === null) {
+          $("#net_info").prepend("<p class='sad'>There was a system error during the network status check.  Refresh the page or contact support.</p>")
         }
+        if (data.eth0) {
+          $("#eth0").append(detected);
+        } else {
+          $("#eth0").append(missing + '<p>The "eth0" network port is not up.</p>');
+        }
+        if (data.ip_addr) {
+          $("#ip_addr").append(detected);
+        } else {
+          $("#ip_addr").append(missing + '<p>Make sure the network cable is connected. If the green light on the ethernet port is on, then perhaps this network does not supply an IP address with DHCP?  If that is the case then the IT department may need to configure the server with a static address.</p>');
+        }
+        if (data.route) {
+          $("#route").append(detected);
+        } else {
+          $("#route").append(missing + "<p>Double check connectivity.  Possibly something didn't work in the IP configuration.  Maybe try rebooting the server to force it to pick up it's IP address again, then retry this test.</p>");
+        }
+      });
+
+      $.ajax({
+        url: "/admin/network/external_ip/",
+        dataType: "text",
+        success: function (address) {
+          $("#externalIP").text(address);
+        },
+        error: function () {
+          $("#externalIP").text("Unable to determine")
+        }
+      });
+
+      $("#resetBtn").click(function () {
+        $("#network")[0].reset();
       });
 
     });
@@ -149,11 +179,11 @@
       text-align: left;
     }
 
-    #neighborhood .happy {
+    .happy {
       color: green;
     }
 
-    #neighborhood .sad {
+    .sad {
       color: red;
     }
 
@@ -161,6 +191,17 @@
       padding: 0;
       margin: 0;
       border: none;
+    }
+    #net_info div {
+      margin-bottom: 6px;
+    }
+    #net_info div p {
+      padding-left: 6px;
+    }
+    #explanations {
+      clear: both;
+      max-width: 960px;
+      padding-top: 20px;
     }
   </style>
 {% endblock %}
@@ -181,33 +222,29 @@
           <form id="network" class="resetable" method="post"
                 action="{% url iondb.rundb.admin.network %}">
             <p style="display: inline-block; width: 100px;">Mac Address:</p>
-
             <p style="display: inline-block;">{{ network.mac }}</p>
             <br style="clear: both;"/>
             <p style="display: inline-block; width: 100px;">Public IP:</p>
-            <p id="externalIP" style="display: inline-block;">Attempting to detect</p>
+            <p id="externalIP" style="display: inline-block;">Attempting to
+              detect
+            </p>
             <br style="clear: both;"/>
-
             <fieldset class="host_settings">
               <div id="mode">
                 {{ network.form.mode }}
               </div>
               <div>
-                {{ network.form.address.label_tag }}
-                {{ network.form.address }}
+                {{ network.form.address.label_tag }} {{ network.form.address }}
               </div>
               <div>
-                {{ network.form.subnet.label_tag }}
-                {{ network.form.subnet }}
-                </div>
-                <div>
-                  {{ network.form.gateway.label_tag }}
-                  {{ network.form.gateway }}
-                </div>
-                <div>
-                  {{ network.form.nameservers.label_tag }}
-                  {{ network.form.nameservers }}
-                </div>
+                {{ network.form.subnet.label_tag }} {{ network.form.subnet }}
+              </div>
+              <div>
+                {{ network.form.gateway.label_tag }} {{ network.form.gateway }}
+              </div>
+              <div>
+                {{ network.form.nameservers.label_tag }} {{ network.form.nameservers }}
+              </div>
             </fieldset>
             <div id="proxy_server" class="inline-fields">
               <label>Proxy server</label>
@@ -219,20 +256,51 @@
               <abbr title="Username">{{ network.form.proxy_username }}</abbr>
               <abbr title="Password">{{ network.form.proxy_password }}</abbr>
             </div>
-            {{ network.form.collab_ip.label_tag }}
-            {{ network.form.collab_ip }}
+            {{ network.form.collab_ip.label_tag }} {{ network.form.collab_ip }}
             <div>
               <input type="submit" value="Update"
                      style="margin: 10px 38px 0 100px; display: inline-block"/>
-              <input type="reset" value="Reset" style="display: inline-block;"/>
+              <input id="resetBtn" type="button" value="Reset"
+                     style="margin: 10px 38px 0 60px; display: inline-block"/>
             </div>
           </form>
         </div>
-        <table id="neighborhood"
-               style="width: 400px; text-align: right; float: left;">
+        <div style="float: left; width: 400px;">
+          <div id="net_info">
+            <div>Ethernet 0
+              <span id="eth0"></span>
+            </div>
+            <div>IP Address
+              <span id="ip_addr"</span>
+            </div>
+            <div>Default route
+              <span id="route"></span>
+            </div>
+          </div>
+          <table id="neighborhood"
+                 style="text-align: right;"></table>
+        </div>
 
-        </table>
       </div>
+    </div>
+    <div id="explanations">
+      <h3>Remote System Summary</h3>
+      <dl>
+        <dt>rssh.iontorrent.net:22</dt>
+        <dd>Outgoing access to rssh.iontorrent.net over port 22 is required for the Remote System Monitoring (RSM) agent on the Torrent Server to initiate a remote access. When remote support or troubleshooting is required, remote access through the agent can reduce resolution time to hours instead of days and require minimal on-site resources. Without the remote access capabilities, diagnosing and implementing a solution can take much longer and will require significant back and forth over telephone and email with your on-site personnel.</dd>
+
+        <dt>updates.iontorrent.com:80</dt>
+        <dd>Access to "updates.iontorrent.com" is required to download updates for Torrent Suite software when they are made available.</dd>
+
+        <dt>security.ubuntu.com:80</dt>
+        <dd>Access to "security.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
+
+        <dt>us.archive.ubuntu.com:80</dt>
+        <dd>Access to "us.archive.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
+
+        <dt>drm.appliedbiosystems.com:443</dt>
+        <dd>The Remote System Monitoring (RSM) agent on the Torrent Server sends system metrics & health information to this URL over port 80 to facilitate Life Technologies ability to help our customers maintain their systems in running order. If a problem with the PGM or Torrent Server is detected, the RSM agent provides real time warnings to help proactively diagnose issues before they cause any failures and downtime. Without access to the RSM agent, issues may not be detected until a failure occurs on the Torrent Server. Also please keep in mind that remote troubleshooting cannot be provided if this functionality is disabled.</dd>
+      </dl>
     </div>
   </div>
 {% endblock %}

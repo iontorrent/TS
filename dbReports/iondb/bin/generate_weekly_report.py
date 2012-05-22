@@ -98,8 +98,12 @@ def generateReport():
     # Always use the last, latest ReportStorage location
     reportStorages = models.ReportStorage.objects.all().order_by('id')
     reportStorage = reportStorages[len(reportStorages)-1]
-    path = '/var/www%s/%s/reports/%s' % (reportStorage.webServerPath, location.name, reportName)
-    htmlFile = open(path, 'w')
+    path = '/var/www%s/%s/reports' % (reportStorage.webServerPath, location.name)
+    if not os.path.isdir(path):
+        os.mkdir(path,0775)
+        os.chmod(path, 0775)
+    report_path = os.path.join(path,reportName)
+    htmlFile = open(report_path, 'w')
     htmlFile.write('<html><body>\n')
     htmlFile.write(heading)
     htmlFile.write('<br>\n')

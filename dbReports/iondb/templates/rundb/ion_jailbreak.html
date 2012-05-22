@@ -4,13 +4,12 @@
   Go here from within an <iframe> in order to redirect the parent window.
 {% endcomment %}
 <html>
-  <head>
-    <script>
-      if (!parent.jailbreak_callback || parent.jailbreak_callback({{ contentupload_id }})) {
-        parent.location = "{{ go }}";
-      }
-    </script>
-  </head>
-  <body>
-  </body>
+<head>
+  <script>
+    if (!parent.jailbreak_callback || parent.jailbreak_callback({{ contentupload_id }})) {
+      parent.location = "{{ go }}";
+    }
+  </script>
+</head>
+<body></body>
 </html>

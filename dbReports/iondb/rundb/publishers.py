@@ -22,16 +22,15 @@ import os.path
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render_to_response
+from django.http import HttpResponse
+from django.http import HttpResponseRedirect
 from django import forms
-
 
 from iondb.rundb import models
 from celery.task import task
 
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
+from ajax import render_to_json
 
 
 logger = logging.getLogger(__name__)
@@ -88,22 +87,6 @@ def search_for_publishers(config, pub_dir="/results/publishers/"):
                     logger.info("Publisher %s version %s added" % (pname, version))
 
 
-# ============================================================================
-# Content Upload Publication
-# ============================================================================
-
-
-class ContentUploadFileForm(forms.Form):
-    publisher = forms.ModelChoiceField(queryset=models.Publisher.objects.all())
-    file  = forms.FileField()
-    meta = forms.CharField(widget=forms.HiddenInput)
-
-
-class PublisherContentUploadValidator(forms.Form):
-    file  = forms.FileField()
-    meta = forms.CharField(widget=forms.HiddenInput)
-
-
 def purge_publishers():
     """Removes records from publisher table which no longer have corresponding
     folder on the file system.  If the folder does not exist, we assume that
@@ -120,6 +103,22 @@ def purge_publishers():
             logger.info("Deleting publisher %s which no longer exists at %s" % (pub.name, pub.path))
 
 
+# ============================================================================
+# Content Upload Publication
+# ============================================================================
+
+
+class ContentUploadFileForm(forms.Form):
+    publisher = forms.ModelChoiceField(queryset=models.Publisher.objects.all())
+    file  = forms.FileField()
+    meta = forms.CharField(widget=forms.HiddenInput)
+
+
+class PublisherContentUploadValidator(forms.Form):
+    file  = forms.FileField()
+    meta = forms.CharField(widget=forms.HiddenInput)
+
+
 def write_file(file_data, destination):
     """Write Django uploaded file object to disk incrementally in order to
     avoid sucking up all of the system's RAM by reading the whole thing in to
@@ -131,10 +130,62 @@ def write_file(file_data, destination):
     out.close()
 
 
-def store_upload(pub, file_data, file_name, meta_data=None):
-    """Create a unique folder for an uploaded file and begin editing it for
-    publication.
-    """
+def write_plupload(request, pub_name):
+    """file upload for plupload"""
+    logger.info("Starting write plupload")
+
+    pub = models.Publisher.objects.get(name=pub_name)
+    logger.debug("%s %s" % (str(type(request.REQUEST['meta'])), request.REQUEST['meta']))
+
+    logger.debug("Publisher Plupload started")
+    if request.method == 'POST':
+        name = request.REQUEST.get('name','')
+        uploaded_file = request.FILES['file']
+        if not name:
+            name = uploaded_file.name
+        logger.debug("plupload name = '%s'" % name)
+
+        #check to see if a user has uploaded a file before, and if they have
+        #not, make them a upload directory
+
+        upload_dir = "/results/referenceLibrary/temp"
+
+        if not os.path.exists(upload_dir):
+            return render_to_json({"error":"upload path does not exist"})
+
+        dest_path = os.path.join(upload_dir, name)
+
+        logger.debug("plupload destination = '%s'" % dest_path)
+
+        chunk = request.REQUEST.get('chunk','0')
+        chunks = request.REQUEST.get('chunks','0')
+
+        logger.debug("plupload chunk %s %s of %s" % (str(type(chunk)), str(chunk), str(chunks)))
+
+        debug = [chunk, chunks]
+
+        with open(dest_path,('wb' if chunk=='0' else 'ab')) as f:
+            for content in uploaded_file.chunks():
+                logger.debug("content chunk = '%d'" % len(content))
+                f.write(content)
+
+        if int(chunk) + 1 >= int(chunks):
+            try:
+                upload = move_upload(pub, dest_path, name, request.REQUEST['meta'])
+                async_upload = run_pub_scripts.delay(pub, upload)
+            except Exception as err:
+                logger.error(str(err))
+            else:
+                logger.info("Successfully pluploaded %s" % name)
+
+        logger.debug("plupload done")
+        return render_to_json({"chunk posted": debug})
+
+    else:
+        return render_to_json({"method":"only post here"})
+
+
+def new_upload(pub, file_name, meta_data=None):
     upload = models.ContentUpload()
     upload.status = "Saving"
     upload.publisher = pub
@@ -144,10 +195,27 @@ def store_upload(pub, file_data, file_name, meta_data=None):
     upload_dir = os.path.join(pub_uploads, str(upload.pk))
     os.makedirs(upload_dir)
     upload.file_path = os.path.join(upload_dir, file_name)
-    write_file(file_data, upload.file_path)
     # TODO: Any path's defined here should really be persisted with the Content Upload
     meta_path = os.path.join(upload_dir, "meta.json")
     open(meta_path, 'w').write(meta_data)
+    upload.save()
+    return upload
+
+
+def move_upload(pub, file_path, file_name, meta_data=None):
+    upload = new_upload(pub, file_name, meta_data)
+    os.rename(file_path, upload.file_path)
+    upload.status = "Queued for processing"
+    upload.save()
+    return upload
+
+
+def store_upload(pub, file_data, file_name, meta_data=None):
+    """Create a unique folder for an uploaded file and begin editing it for
+    publication.
+    """
+    upload = new_upload(pub, file_name, meta_data)
+    write_file(file_data, upload.file_path)
     upload.status = "Queued for processing"
     upload.save()
     return upload
@@ -161,14 +229,14 @@ def run_script(working_dir, script_path, upload_id, upload_dir, upload_path, met
     cmd = [script_path, upload_id, upload_dir, upload_path, meta_path]
     # Spawn the test subprocess and wait for it to complete.
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
-    result = proc.wait()
     stdout, stderr = proc.communicate()
+    result = proc.returncode
     stdout_log = os.path.join(upload_dir, "%s_standard_output.log" % script)
     stderr_log = os.path.join(upload_dir, "%s_standard_error.log" % script)
     open(stdout_log, 'w').write(stdout)
     if stderr:
         open(stderr_log, 'w').write(stderr)
-    return result, stdout, stderr
+    return result == 0
 
 
 @task
@@ -193,11 +261,11 @@ def run_pub_scripts(pub, upload):
                 previous_status = stage_name
                 upload.status = stage_name
                 upload.save()
-            result, stdout, stderr = run_script(pub_dir, script_path, str(upload.id),
+            success = run_script(pub_dir, script_path, str(upload.id),
                                                 upload_dir, upload_path, meta_path)
             # The script may have updated the upload during execution, so we reload
             upload = models.ContentUpload.objects.get(pk=upload.pk)
-            if result is 0:
+            if success:
                 logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
             else:
                 logger.error("Editing for %s died during %s." % (pub.name, script_path))
@@ -246,9 +314,7 @@ def publisher_upload(request, pub_name, frame=False):
         if form.is_valid():
             upload, async = edit_upload(pub, form.cleaned_data['file'],
                                  form.cleaned_data['meta'])
-            # This is a gigantic placeholder.
-            from django.http import HttpResponseRedirect
-            return HttpResponseRedirect("/rundb/uploadstatus/frame/%d/" % upload.pk)
+
         else:
             logger.warning(form.errors)
     else:
@@ -257,6 +323,29 @@ def publisher_upload(request, pub_name, frame=False):
             uploader = os.path.join(pub.path, "upload.html")
             return render_to_response(uploader, {"genome": genome})
     return render_to_response("rundb/ion_publisher_frame.html", {"pub":pub})
+
+
+def publisher_api_upload(request, pub_name):
+    """TastyPie does not support file uploads, so for now, this is handled
+    outside of the normal API space.
+    """
+    if request.method == 'POST':
+        pub = models.Publisher.objects.get(name=pub_name)
+        form = PublisherContentUploadValidator(request.POST, request.FILES)
+        if form.is_valid():
+            upload, async = edit_upload(pub, form.cleaned_data['file'],
+                                        form.cleaned_data['meta'])
+            from iondb.rundb.api import ContentUploadResource
+            resource = ContentUploadResource()
+            serialized_upload = resource.serialize(None,
+                                            resource.full_dehydrate(upload),
+                                           "application/json")
+            return HttpResponse(serialized_upload,
+                                mimetype="application/json")
+        else:
+            logger.warning(form.errors)
+    else:
+        return HttpResponseRedirect("/rundb/publish/%s/" % pub_name)
 
 
 def upload_status(request, contentupload_id, frame=False):

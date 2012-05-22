@@ -7,6 +7,7 @@
 #include "FlowDiffStats.h"
 #include "ReservoirSample.h"
 #include "file-io/ion_util.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -249,8 +250,8 @@ void FlowDiffStats::RecordFlowHPStats(int row, int col, std::vector<int> &refere
     }
   }
 
-  unsigned int rowBin = (unsigned int)(ceil(row/(float) mRowBinSize));
-  unsigned int colBin = (unsigned int)(ceil(col/(float) mColBinSize));
+  unsigned int rowBin = (unsigned int)(floor(row/(float) mRowBinSize));
+  unsigned int colBin = (unsigned int)(floor(col/(float) mColBinSize));
   for (size_t flowIx = 0; flowIx < numFlows; flowIx++) {
     if (reference[flowIx] < mMaxHomo) {
       //      float value = mWellVals[row][col][flowIx];
@@ -431,7 +432,7 @@ void FlowDiffStats::FillInSubset(const std::string &samFile, int minVal,
   bool checkCol = (minCol > -1) && (maxCol > -1);
   ReservoirSample<std::pair<int,int> > sample(100000);
   while(getline(mAlignments, line)) {
-    ChopLine(words, line, '\t');
+    split(line,'\t',words);
     int qLen = atoi(words[mThresholdIdx].c_str());
     int slop = atoi(words[mSlopIdx].c_str());
     if (qLen >= minVal && slop != 0) {
@@ -517,26 +518,12 @@ bool FlowDiffStats::GetRowColFromName(const std::string &name, int &row, int &co
   }
 }
 
-void FlowDiffStats::ChopLine(std::vector<std::string> &words, const std::string &line, char delim) {
-  size_t current = 0;
-  size_t next = 0;
-  words.clear();
-  while(current < line.length()) {
-    next = line.find(delim, current);
-    if (next == string::npos) {
-      next = line.length();
-    }
-    words.push_back(line.substr(current, next-current));
-    current = next + 1;
-  }
-}
-
 bool FlowDiffStats::GetNextAlignment(std::string &name, std::string &genomic, std::string &read, int &row, int &col, int minVal) {
   string line;
   bool found = false;
   vector<string> words;
   while(getline(mAlignments, line)) {
-    ChopLine(words, line, '\t');
+    split(line,'\t',words);
     int qLen = atoi(words[mThresholdIdx].c_str());
     int slop = atoi(words[mSlopIdx].c_str());
     if (qLen >= minVal && slop != 0) {
@@ -609,7 +596,7 @@ void FlowDiffStats::FilterAndCompare(int numFlows,
     if (!mWellsToUse.empty() && mWellsToUse[(row * mCol) + col] == false) {
       continue;
     }
-    if (!mWells->HaveWell(row,col)) {
+    if (mWells != NULL && !mWells->HaveWell(row,col)) {
       continue;
     }
     count++;

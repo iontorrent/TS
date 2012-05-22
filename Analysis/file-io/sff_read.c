@@ -11,7 +11,7 @@
 #include "sff_header.h"
 #include "sff_read_header.h"
 #include "sff_read.h"
-  
+
 sff_read_t*
 sff_read_init()
 {
@@ -150,4 +150,53 @@ sff_read_destroy(sff_read_t *r)
   ion_string_destroy(r->quality);
   free(r);
 
+}
+
+ion_string_t*
+sff_read_get_read_bases(sff_read_t* rd, int left_clip, int right_clip) {
+	ion_string_t *bases;
+
+    // account for NULL termination
+    int bases_length = (right_clip - left_clip) + 1;
+
+	bases = ion_string_init(bases_length);//MJ?+1
+    
+    // copy the relative substring
+    int start = left_clip;
+    int stop  = right_clip;
+    int i, j = 0;
+
+    for (i = start; i < stop; i++) {
+        *(bases->s + j) = *(rd->bases->s + i);
+        j++;
+    }
+
+    return bases;
+}
+
+ion_string_t*
+sff_read_get_read_quality_values(sff_read_t* rd, int left_clip, int right_clip) {
+	ion_string_t *quality;
+
+    // account for NULL termination
+    int quality_length = (right_clip - left_clip) + 1;
+
+    // inititalize the quality array
+    quality = ion_string_init(quality_length+1);
+    if (!quality) {
+        fprintf(stderr, "Out of memory! For read quality array!\n");
+        exit(1);
+    }
+ 
+    // copy the relative substring
+    int start = left_clip;
+    int stop  = right_clip;
+    int i, j = 0;
+
+    for (i = start; i < stop; i++) {
+        quality->s[j] = rd->quality->s[i];
+        j++;
+    }
+
+    return quality;
 }

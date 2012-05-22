@@ -319,11 +319,12 @@ sff_view_main(int argc, char *argv[])
       // open the input SFF
       if(-1 != min_row || -1 != max_row || -1 != min_col || -1 != max_col) {
           sff_file_in = sff_fopen(argv[optind], "rbi", NULL, NULL);
-          sff_iter = sff_iter_query(sff_file_in, min_row, max_row, min_col, max_col);
       }
       else {
           sff_file_in = sff_fopen(argv[optind], "rb", NULL, NULL);
       }
+
+      header = sff_header_clone(sff_file_in->header); /* copy header, but update n_reads if using index or names */
 
       // read in the names
       if(NULL != fn_names) {
@@ -349,11 +350,21 @@ sff_view_main(int argc, char *argv[])
           }
           names = ion_realloc(names, sizeof(char*) * names_num, __func__, "names");
           fclose(fp);
-          header = sff_header_clone(sff_file_in->header);
           header->n_reads = names_num;
       }
       else {
-          header = sff_file_in->header;
+	// if using index, then iterate once through the index to count the entries
+	// so we can set the count correctly in the header
+	if (-1 != min_row || -1 != max_row || -1 != min_col || -1 != max_col) {
+	  int entries = 0;
+          sff_iter = sff_iter_query(sff_file_in, min_row, max_row, min_col, max_col);
+	  while (NULL != (sff = sff_iter_read(sff_file_in, sff_iter)))
+	    entries++;
+	  header->n_reads = entries;
+	  /* reset sff_iter */
+	  sff_iter_destroy(sff_iter);
+	  sff_iter = sff_iter_query(sff_file_in, min_row, max_row, min_col, max_col);
+	}
       }
 
       // print the header
@@ -368,6 +379,7 @@ sff_view_main(int argc, char *argv[])
           sff_file_out = sff_fdopen(fileno(stdout), "wb", header, NULL);
           break;
       }
+
 
       while(1) {
           int32_t to_print = 1;
@@ -440,9 +452,9 @@ sff_view_main(int argc, char *argv[])
           fprintf(stderr, "** Did not find all the reads with (-R). **\n");
           ion_error(__func__, fn_names, Exit, OutOfRange);
       }
-      if(NULL != fn_names) {
-          sff_header_destroy(header);
-      }
+
+      sff_header_destroy(header);
+
   }
   if(NULL != names && 0 < names_num) {
       free(names);

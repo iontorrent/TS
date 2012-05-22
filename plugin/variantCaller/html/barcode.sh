@@ -5,7 +5,7 @@ barcode_load_list ()
 {
     local ROWSUM_NODATA=""
     local NTAB
-    for((NTAB=0;NTAB<${BC_SUM_ROWS};NTAB++)); do
+    for((NTAB=1;NTAB<${BC_SUM_ROWS};NTAB++)); do
         ROWSUM_NODATA="${ROWSUM_NODATA}<td>N/A</td> "
     done
     
@@ -14,6 +14,7 @@ barcode_load_list ()
     local BARCODE_ID
     local BARCODE_BAM
     local BARCODE_LINE
+    local BFSIZE
 
     for BARCODE_LINE in `cat ${BARCODES_LIST} | grep "^barcode"`
     do
@@ -22,12 +23,20 @@ barcode_load_list ()
 
         BARCODES[$BCN]=${BARCODE}
         BARCODE_IDS[$BCN]=${BARCODE_ID}
-        BARCODE_ROWSUM[$BCN]=$ROWSUM_NODATA
+        BARCODE_ROWSUM[$BCN]="<td>N/A</td> $ROWSUM_NODATA"
 
         # for now assume all barcodes are ok if te folder exists
         BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE}_${PLUGIN_BAM_FILE}"
         if [ -f "$BARCODE_BAM" ]; then
-            BARCODES_OK[${BCN}]=1
+            # test file size
+            BFSIZE=`stat -Lc%s "$BARCODE_BAM"`
+            if [ $BFSIZE -ge ${BCFILE_MIN_SIZE} ]; then
+                BARCODES_OK[${BCN}]=1
+            else
+                BFSIZE=`samtools view -c -F 4 "$BARCODE_BAM"`
+                BARCODE_ROWSUM[$BCN]="<td>${BFSIZE}</td> $ROWSUM_NODATA"
+                BARCODES_OK[${BCN}]=3
+            fi
         else
             BARCODES_OK[${BCN}]=0
         fi
@@ -96,8 +105,12 @@ barcode_links ()
         echo "      <tr>" >> "$HTML"
         if [ ${BARCODES_OK[$BCN]} -eq 1 ]; then
             echo "       <td style=\"text-align:left\"><a style=\"cursor:help\" href=\"${BARCODE}/${HTML_RESULTS}\"><span title=\"Click to view the detailed coverage report for barcode ${BARCODE}\">${BARCODE}</span></a></td>" >> "$HTML"
+        elif [ ${BARCODES_OK[$BCN]} -eq 2 ]; then
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"Barcode ${BARCODE} was not processed. Check Log File.\" style=\"color:red\">${BARCODE}</span></td>" >> "$HTML"
+        elif [ ${BARCODES_OK[$BCN]} -eq 3 ]; then
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"Barcode ${BARCODE} was not processed. Number of mapped reads was assumed to be too few for variant calling based on file size.\" style=\"color:grey\">${BARCODE}</span></td>" >> "$HTML"
         else
-            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"No Data for barcode ${BARCODE}\" style=\"color:darkred\">${BARCODE}</span></td>" >> "$HTML"
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"No Data for barcode ${BARCODE}\" style=\"color:grey\">${BARCODE}</span></td>" >> "$HTML"
         fi
         echo "           ${BARCODE_ROWSUM[$BCN]}" >> "$HTML"
         echo "      </tr>" >> "$HTML"
@@ -155,6 +168,7 @@ barcode ()
     local NLINE
     local BCN
     local BC_DONE
+    local NJSON=0
     for((BCN=0;BCN<${NBARCODES};BCN++))
     do
         BARCODE=${BARCODES[$BCN]}
@@ -163,18 +177,31 @@ barcode ()
         BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE}_${PLUGIN_BAM_FILE}"
         NLINE=`expr ${BCN} + 1`
 
-        if [ ${BARCODES_OK[$BCN]} -eq 0 ]; then
+        if [ ${BARCODES_OK[$BCN]} -ne 1 ]; then
             echo -e "\nSkipping ${BARCODE}" >&2
         else
             # perform coverage anaysis and write content
             echo -e "\nProcessing barcode ${BARCODE}" >&2
             run "mkdir -p ${BARCODE_DIR}"
-            call_variants "${BARCODE}_${PLUGIN_RUN_NAME}" "$BARCODE_DIR" "$BARCODE_URL" "$BARCODE_BAM"
-            # collect table summary results
-            if [ -f "${BARCODE_DIR}/${HTML_ROWSUMS}" ]; then
-                BARCODE_ROWSUM[$BCN]=`cat "${BARCODE_DIR}/$HTML_ROWSUMS"`
+            local RT=0
+            eval "${SCRIPTSDIR}/call_variants.sh \"${BARCODE}_${PLUGIN_RUN_NAME}\" \"$BARCODE_DIR\" \"$BARCODE_URL\" \"$BARCODE_BAM\"" >&2 || RT=$?
+            if [ $RT -ne 0 ]; then
+                BC_ERROR=1
+                if [ "$CONTINUE_AFTER_BARCODE_ERROR" -eq 0 ]; then
+                    exit 1
+                else
+                    BARCODES_OK[${BCN}]=2
+                fi
+            else
+                # process all result files to detailed html page and clean up
+                write_html_results "${BARCODE}_${PLUGIN_RUN_NAME}" "$BARCODE_DIR" "$BARCODE_URL" "$BARCODE_BAM"
+                # collect table summary results
+                if [ -f "${BARCODE_DIR}/${HTML_ROWSUMS}" ]; then
+                    BARCODE_ROWSUM[$BCN]=`cat "${BARCODE_DIR}/$HTML_ROWSUMS"`
+                fi
+                NJSON=`expr ${NJSON} + 1`
+	        barcode_append_to_json_results $BARCODE $NJSON;
             fi
-	    barcode_append_to_json_results $BARCODE $NLINE;
             if [ "$PLUGIN_DEV_KEEP_INTERMEDIATE_FILES" -eq 0 ]; then
                 rm -f ${BARCODE_DIR}/*.txt "${BARCODE_DIR}/$HTML_ROWSUMS"
             fi
@@ -183,4 +210,7 @@ barcode ()
     done
     # finish up with json
     write_json_footer 1;
+    if [ "$BC_ERROR" -ne 0 ]; then
+        exit 1
+    fi
 }

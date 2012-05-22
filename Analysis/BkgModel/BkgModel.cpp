@@ -9,6 +9,9 @@
 #include "BkgModel.h"
 #include "RawWells.h"
 #include "MathOptim.h"
+#include "mixed.h"
+#include "BkgDataPointers.h"
+
 
 #ifdef ION_COMPILE_CUDA
 #include "BkgModelCuda.h"
@@ -16,9 +19,11 @@
 
 #include "DNTPRiseModel.h"
 #include "DiffEqModel.h"
-#include "Vectorization.h"
+#include "DiffEqModelVec.h"
 #include "MultiLevMar.h"
 #include "DarkMatter.h"
+#include "RefineFit.h"
+#include "TraceCorrector.h"
 
 #include "SampleQuantiles.h"
 
@@ -27,12 +32,10 @@
 
 
 
-#ifndef n_to_uM_conv
-#define n_to_uM_conv (0.000062f)
-#endif
-
 // #define LIVE_WELL_WEIGHT_BG
 
+
+/*--------------------------------Top level decisons start ----------------------------------*/
 
 //
 // Reads image file data and stores it in circular buffer
@@ -44,19 +47,18 @@ bool BkgModel::ProcessImage (Image *img, int flow, bool last, bool learning, boo
 {
   if (my_beads.numLBeads == 0)
     return false; // no error happened,nothing to do
-  
-  if (LoadOneFlow(img,flow))
-    return(true);  // error happened when loading image
-  
-  if (TriggerBlock(last))
-    ExecuteBlock(flow, last,learning,use_gpu);
+
+  if (LoadOneFlow (img,flow))
+    return (true); // error happened when loading image
+
+  if (TriggerBlock (last))
+    ExecuteBlock (flow, last,learning,use_gpu);
 
   return false;  // no error happened
 }
 
 
-
-bool BkgModel::LoadOneFlow(Image *img, int flow)
+bool BkgModel::LoadOneFlow (Image *img, int flow)
 {
   const RawImage *raw = img->GetImage();
   if (!raw)
@@ -64,51 +66,73 @@ bool BkgModel::LoadOneFlow(Image *img, int flow)
     fprintf (stderr, "ERROR: no image data\n");
     return true;
   }
-  // keep track of which flow # is in which buffer
-  // also keep track of which nucleotide is associated with each flow
-  my_flow.buff_flow[my_flow.flowBufferWritePos] = flow;
-  my_flow.flow_ndx_map[my_flow.flowBufferWritePos] = global_defaults.glob_flow_ndx_map[flow%global_defaults.flow_order_len];
-  my_flow.dbl_tap_map[my_flow.flowBufferWritePos] = global_defaults.IsDoubleTap (flow);
-  // calculate average trace across all empty wells in a region for a flow
-  my_trace.GenerateAverageEmptyTrace (region,emptyInFlow,bfmask,img, my_flow.flowBufferWritePos, flow);
-  // time-shift traces for uniform start times; compress traces to flows buffer
-  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos);
-  // subtract mean signal in time before flow starts from traces in flows buffer
-  my_trace.RezeroTraces (time_c.time_start,my_regions.rp.nuc_shape.t_mid_nuc,my_regions.rp.nuc_shape.sigma,MAGIC_OFFSET_FOR_EMPTY_TRACE, my_flow.flowBufferWritePos);
 
-  // fill the bucket of buffers
-  // Stores the last bits of the flow and iterates to the next buffer
-  my_trace.PrecomputeBackgroundSlopeForDeriv (my_flow.flowBufferWritePos);
+  AddOneFlowToBuffer (flow);
 
-  // some parameters are not remembered from one flow to the next, set those back to
-  // the appropriate default values
-  my_beads.ResetFlowParams (my_flow.flowBufferWritePos,flow);
+  UpdateTracesFromImage (img, flow);
 
   my_flow.Increment();
-  return(false);
+
+  return (false);
 }
 
-bool BkgModel::TriggerBlock(bool last){
+bool BkgModel::TriggerBlock (bool last)
+{
   // When there are enough buffers filled,
   // do the computation and
   // pull out the results
   if ( (my_flow.flowBufferCount < my_flow.numfb) && !last)
     return false;
   else
-    return(true);
+    return (true);
 }
 
-
-
-void BkgModel::ExecuteBlock(int flow, bool last, bool learning, bool use_gpu)
+void BkgModel::ExecuteBlock (int flow, bool last, bool learning, bool use_gpu)
 {
   // do the fit
   FitModelForBlockOfFlows (flow,last,learning, use_gpu);
-
-  FlushDataToWells();
+  
+  FlushDataToWells (last);
 }
 
-void BkgModel::FlushDataToWells() // flush the traces, write data to wells
+
+
+
+void BkgModel::AddOneFlowToBuffer (int flow)
+{
+  // keep track of which flow # is in which buffer
+  // also keep track of which nucleotide is associated with each flow
+  my_flow.buff_flow[my_flow.flowBufferWritePos] = flow;
+  my_flow.flow_ndx_map[my_flow.flowBufferWritePos] = global_defaults.glob_flow_ndx_map[flow%global_defaults.flow_order_len];
+  my_flow.dbl_tap_map[my_flow.flowBufferWritePos] = global_defaults.IsDoubleTap (flow);
+
+  // reset parameters for beads when we actually start fitting the beads
+}
+
+void BkgModel::UpdateTracesFromImage (Image *img, int flow)
+{
+  my_trace.SetRawTrace(); // buffers treated as raw traces
+  
+  // populate bead traces from image file and
+  // time-shift traces for uniform start times; compress traces to flows buffer
+  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos);
+  // subtract mean signal in time before flow starts from traces in flows buffer
+
+  float t_mid_nuc =  GetTypicalMidNucTime (&my_regions->rp.nuc_shape);
+  float t_offset_beads = my_regions->rp.nuc_shape.sigma;
+  my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
+                        my_flow.flowBufferWritePos);
+
+  // calculate average trace across all empty wells in a region for a flow
+  // to FileLoadWorker at Image load time, should be able to go here
+  // emptyTraceTracker->SetEmptyTracesFromImageForRegion(*img, global_state.pinnedInFlow, flow, global_state.bfmask, *region, t_mid_nuc);
+  emptytrace = emptyTraceTracker->GetEmptyTrace (*region);
+
+  // sanity check images are what we think
+  assert (emptytrace->imgFrames == my_trace.imgFrames);
+}
+
+void BkgModel::FlushDataToWells (bool last) // flush the traces, write data to wells
 {
   if (my_flow.flowBufferCount > 0)
   {
@@ -116,121 +140,227 @@ void BkgModel::FlushDataToWells() // flush the traces, write data to wells
     while (my_flow.flowBufferCount > 0)
     {
       WriteAnswersToWells (my_flow.flowBufferReadPos);
-      WriteBeadParameterstoDataCubes(my_flow.flowBufferReadPos);
-      WriteDebugWells(my_flow.flowBufferReadPos); // detects if they're present, writes to them
+      WriteBeadParameterstoDataCubes (my_flow.flowBufferReadPos, last);   // for bg_param.h5 output
+      WriteDebugWells (my_flow.flowBufferReadPos); // detects if they're present, writes to them
       my_flow.Decrement();
     }
   }
 }
 
+
+// only call this when the buffers are full up and we're going to output something
+// This is the big routine that fires off the optimizations we're doing
+void BkgModel::FitModelForBlockOfFlows (int flow, bool last, bool learning, bool use_gpu)
+{
+  (void) learning;
+  if (use_gpu) {}; // compiler happiness
+
+
+#ifdef ION_COMPILE_CUDA
+  if (use_gpu)
+    GPUFitModelForBlockOfFlows (flow,last,learning);
+  else
+#endif
+    CPUFitModelForBlockOfFlows (flow,last,learning);
+
+  UpdateBeadStatusAfterFit (flow);
+
+  my_beads.LimitBeadEvolution ( (flow+1) <=NUMFB,MAXRCHANGE,MAXCOPYCHANGE);
+
+}
+
+/*--------------------------------Top level decisons end ----------------------------------*/
+
+
+/*--------------------------------- Allocation section start ------------------------------------------------------*/
+
+void BkgModel::NothingInit()
+{
+  // I cannot believe I have to do this to make cppcheck happy
+  region = NULL;
+  emptyTraceTracker = NULL;
+  emptytrace = NULL;
+  lev_mar_fit = NULL;
+  refine_fit = NULL;
+  axion_fit = NULL;
+  sigma_start = 0.0f;
+  t_mid_nuc_start = 0.0f;
+  do_clonal_filter = false;
+  use_vectorization = false;
+  AmplLowerLimit = 0.001f;
+  mPtrs = NULL;
+  math_poiss = NULL;
+  my_regions = NULL;
+  replay = NULL;
+  trace_bkg_adj = NULL;
+
+}
+
 // constructor used by Analysis pipeline
-BkgModel::BkgModel (char *_experimentName, Mask *_mask, Mask *_pinnedMask, short *_emptyInFlow, RawWells *_rawWells, Region *_region, set<int>& sample,
+BkgModel::BkgModel (char *_experimentName, Mask *_mask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, Region *_region, set<int>& sample,
                     vector<float> *sep_t0_est, bool debug_trace_enable,
                     int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps, PoissonCDFApproxMemo *_math_poiss,
+                    EmptyTraceTracker *_emptyTraceTracker,
+                    BkgModelReplay *_replay,
                     float sigma_guess,float t_mid_nuc_guess,float dntp_uM,
                     bool enable_xtalk_correction,bool enable_clonal_filter,SequenceItem* _seqList,int _numSeqListItems)
 {
-  mKMult = NULL;
-  mResError = NULL;
-  mBeadOnceParam = NULL;
-  rawWells = _rawWells;
+  NothingInit();
+
   region = _region;
-  bfmask = _mask;
-  pinnedmask = _pinnedMask;
-  emptyInFlow = _emptyInFlow;
-  my_trace.imgRows=_rows;
-  my_trace.imgCols=_cols;
-  my_trace.imgFrames=_uncompFrames;
-  my_trace.compFrames=_frames;
-  my_trace.timestamps=_timestamps;
-  use_vectorization = false;
+
+  global_state.rawWells = _rawWells;
+  global_state.bfmask = _mask;
+  global_state.pinnedInFlow = _pinnedInFlow;
+
+  my_trace.SetImageParams (_rows,_cols,_frames,_uncompFrames,_timestamps);
+  emptyTraceTracker = _emptyTraceTracker;
+  replay = _replay;
+
   math_poiss = _math_poiss;
   xtalk_spec.do_xtalk_correction = enable_xtalk_correction;
   do_clonal_filter = enable_clonal_filter;
-  seqList = _seqList;
-  numSeqListItems = _numSeqListItems;
-  BkgModelInit (_experimentName,debug_trace_enable,sigma_guess,t_mid_nuc_guess,dntp_uM,sep_t0_est,sample);
+
+
+
+  BkgModelInit (_experimentName,debug_trace_enable,sigma_guess,t_mid_nuc_guess,dntp_uM,sep_t0_est,sample,_seqList,_numSeqListItems);
+}
+
+// constructor used by Analysis pipeline with tauB and tauE passed from Separator.
+BkgModel::BkgModel (char *_experimentName, Mask *_mask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, Region *_region, set<int>& sample,
+                    vector<float> *sep_t0_est,vector<float> *tauB, vector<float> *tauE, bool debug_trace_enable,
+                    int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps, PoissonCDFApproxMemo *_math_poiss,
+                    EmptyTraceTracker *_emptyTraceTracker,
+                    float sigma_guess,float t_mid_nuc_guess,float dntp_uM,
+                    bool enable_xtalk_correction,bool enable_clonal_filter,SequenceItem* _seqList,int _numSeqListItems)
+{
+  NothingInit();
+  region = _region;
+
+  global_state.rawWells = _rawWells;
+  global_state.bfmask = _mask;
+  global_state.pinnedInFlow = _pinnedInFlow;
+
+  my_trace.SetImageParams (_rows,_cols,_frames,_uncompFrames,_timestamps);
+  emptyTraceTracker = _emptyTraceTracker;
+
+
+  math_poiss = _math_poiss;
+  xtalk_spec.do_xtalk_correction = enable_xtalk_correction;
+  do_clonal_filter = enable_clonal_filter;
+
+
+  BkgModelInit (_experimentName,debug_trace_enable,sigma_guess,t_mid_nuc_guess,dntp_uM,sep_t0_est,sample,_seqList,_numSeqListItems,tauB,tauE);
 }
 
 // constructor used for testing outside of Analysis pipeline (doesn't require mask, region, or RawWells obects)
-BkgModel::BkgModel (int _numLBeads, int numFrames, float sigma_guess,float t_mid_nuc_guess,float dntp_uM,
+BkgModel::BkgModel (int _numLBeads, int numFrames,
+                    float sigma_guess,float t_mid_nuc_guess,float dntp_uM,
                     bool enable_xtalk_correction, bool enable_clonal_filter)
 {
-  mKMult = NULL;
-  mResError = NULL;
-  mBeadOnceParam = NULL;
-  rawWells = NULL;
-  region = NULL;
-  bfmask = NULL;
-  pinnedmask = NULL;
+  NothingInit();
+
+  global_state.rawWells = NULL;
+  global_state.bfmask = NULL;
+  global_state.pinnedInFlow = NULL;
 
   my_beads.numLBeads = _numLBeads;
+  my_trace.SetImageParams (0,0,numFrames,numFrames,NULL);
 
-  my_trace.imgRows=0;
-  my_trace.imgCols=0;
-  my_trace.imgFrames=numFrames;
-  my_trace.compFrames=numFrames;
-  my_trace.timestamps=NULL;
-  use_vectorization = false;
   // make me a local cache for math
   math_poiss = new PoissonCDFApproxMemo;
   math_poiss->Allocate (MAX_HPLEN,512,0.05);
   math_poiss->GenerateValues();
+
   xtalk_spec.do_xtalk_correction = enable_xtalk_correction;
   do_clonal_filter = enable_clonal_filter;
-  seqList = NULL;
-  numSeqListItems = 0; // old style key detection here, I guess on this testing branch for now?
 
   set<int> emptySample;
-  BkgModelInit ("",false,sigma_guess,t_mid_nuc_guess,dntp_uM,NULL,emptySample);
+  BkgModelInit ("",false,sigma_guess,t_mid_nuc_guess,dntp_uM,NULL,emptySample,NULL, 0);
+}
+
+//@TODO: bad duplicated code between the two inits: fix!!!
+
+//BkgModelInit with tauB and tauE
+void BkgModel::BkgModelInit (char *_experimentName, bool debug_trace_enable,float sigma_guess,
+                             float t_mid_nuc_guess,float dntp_uM,vector<float> *sep_t0_est, set<int>& sample, SequenceItem* _seqList,int _numSeqListItems, vector<float> *tauB, vector<float> *tauE)
+{
+  // initialize the rest of the parameters, including updating the beads
+  BkgModelInit (_experimentName, debug_trace_enable, sigma_guess, t_mid_nuc_guess,dntp_uM, sep_t0_est,sample,_seqList,_numSeqListItems);
+  // now add the tauB and tauE parameters as starting points for the bead parameters
+  my_beads.InitBeadParamR (global_state.bfmask, region, tauB, tauE);
 }
 
 
-
+//@TODO: bad duplicated code between the two inits: fix!!!
 void BkgModel::BkgModelInit (char *_experimentName, bool debug_trace_enable,float sigma_guess,
-                             float t_mid_nuc_guess,float dntp_uM,vector<float> *sep_t0_est, set<int>& sample)
+                             float t_mid_nuc_guess,float dntp_uM,vector<float> *sep_t0_est, set<int>& sample, SequenceItem* _seqList,int _numSeqListItems)
 {
+  global_state.dirName = (char *) malloc (strlen (_experimentName) +1);
+  strncpy (global_state.dirName, _experimentName, strlen (_experimentName) +1); //@TODO: really?  why is this a local copy??
 
-
-  dirName = (char *) malloc (strlen (_experimentName) +1);
-  strncpy (dirName, _experimentName, strlen (_experimentName) +1);
+  sigma_start = sigma_guess;
 
   // ASSUMPTIONS:   15fps..  if that changes, this is hosed!!
   // use separator estimate
-  
-  sigma_start = sigma_guess;
-  dntp_concentration_in_uM = dntp_uM;
   t_mid_nuc_start = t_mid_nuc_guess;
-  
-  my_trace.t0_mean = t_mid_nuc_start - 1.5*sigma_guess; // in case we have no other good ideas, this should be no nucleotide
-  my_trace.T0EstimateToMap (sep_t0_est,region,bfmask);
-
+  my_trace.T0EstimateToMap (sep_t0_est,region,global_state.bfmask);
 
   //Image parameters
   my_flow.numfb = NUMFB;
 
-  my_beads.InitBeadList (bfmask,region,seqList,numSeqListItems, sample);
-  xtalk_spec.BootUpXtalkSpec ( (region!=NULL),global_defaults.chipType,global_defaults.xtalk_name);
+  my_beads.InitBeadList (global_state.bfmask,region,_seqList,_numSeqListItems, sample);
 
+  if (replay == NULL)
+  {
+    replay = new BkgModelReplay (true);
+  }
+  replay->bkg = this;
+  my_regions = replay->GetRegionTracker();
 
   if ( (my_beads.numLBeads > 0) && debug_trace_enable)
     DebugFileOpen();
 
-
-  my_regions.InitRegionParams (t_mid_nuc_start,sigma_start,dntp_concentration_in_uM, global_defaults);
+  my_regions->InitRegionParams (t_mid_nuc_start,sigma_start,dntp_uM, global_defaults);
 
   SetTimeAndEmphasis();
 
+  AllocTraceBuffers();
+
   AllocFitBuffers();
+
   // fix up multiflow lev_mar for operation
   InitLevMar();
-  // Axion
-  axion_fit = new Axion (*this);
 
+
+  // Axion - dark matter fitter
+  axion_fit = new Axion (*this);
+  // Lightweight friend object like the CUDA object holding a fitter
+  // >must< be after the time, region, beads are allocated
+  refine_fit = new RefineFit (*this);
+
+  trace_bkg_adj = new TraceCorrector(*this);
+
+  // set up my_search with the things it needs
+  // set up for cross-talk
+  InitXtalk();
 }
+
+void BkgModel::InitXtalk()
+{
+  xtalk_spec.BootUpXtalkSpec ( (region!=NULL),global_defaults.chipType,global_defaults.xtalk_name);
+  xtalk_execute.CloseOverPointers (region, &xtalk_spec,&my_beads, my_regions, &time_c, math_poiss, &my_scratch, &my_flow, &my_trace, use_vectorization);
+}
+
 
 void BkgModel::InitLevMar()
 {
+  // create matrix packing object(s)
+  //Note:  scratch-space is used directly by the matrix packer objects to get the derivatives
+  // so this object >must< persist in order to be used by the fit control object in the Lev_Mar fit.
+  // Allocate directly the annoying pointers that the lev-mar object uses for control
+  fit_control.AllocPackers (my_scratch.scratchSpace, global_defaults.no_RatioDrift_fit_first_20_flows, my_scratch.bead_flow_t, time_c.npts);
+  // allocate a multiflow levmar fitter
   lev_mar_fit = new MultiFlowLevMar (*this);
   lev_mar_fit->lm_state.SetNonIntegerPenalty (global_defaults.clonal_call_scale,global_defaults.clonal_call_penalty,MAGIC_MAX_CLONAL_HP_LEVEL);
   lev_mar_fit->lm_state.AllocateBeadFitState (my_beads.numLBeads);
@@ -243,11 +373,15 @@ BkgModel::~BkgModel()
   DebugFileClose();
   if (lev_mar_fit!=NULL) delete lev_mar_fit;
   if (axion_fit !=NULL) delete axion_fit;
-  free (dirName);
+  if (refine_fit !=NULL) delete refine_fit;
+  if (trace_bkg_adj !=NULL) delete trace_bkg_adj;
+  free (global_state.dirName); //@TODO: why is this a local copy?
+  if (replay != NULL) delete replay;
 }
 
 void BkgModel::SetTimeAndEmphasis()
 {
+  time_c.choose_time = global_defaults.choose_time;
   time_c.SetUpTime (my_trace.imgFrames,t_mid_nuc_start,global_defaults.time_start_detail, global_defaults.time_stop_detail, global_defaults.time_left_avg);
 
   // check the points that we need
@@ -261,10 +395,11 @@ void BkgModel::SetTimeAndEmphasis()
     trial_emphasis.SetDefaultValues (global_defaults.emp,global_defaults.emphasis_ampl_default, global_defaults.emphasis_width_default);
     trial_emphasis.SetupEmphasisTiming (time_c.npts, time_c.frames_per_point,time_c.frameNumber);
     trial_emphasis.CurrentEmphasis (t_mid_nuc_start, FINEXEMPHASIS);
-    int old_pts = time_c.npts;
+//    int old_pts = time_c.npts;
     time_c.npts = trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR); // threshold the points for the number actually needed by emphasis
 
-    printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
+    // don't bother monitoring this now
+    //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
     // now give the emphasis data structure (and everything else) using the "used" number of points
   }
   emphasis_data.SetDefaultValues (global_defaults.emp,global_defaults.emphasis_ampl_default, global_defaults.emphasis_width_default);
@@ -272,28 +407,40 @@ void BkgModel::SetTimeAndEmphasis()
   emphasis_data.CurrentEmphasis (t_mid_nuc_start, FINEXEMPHASIS);
 }
 
+// t_offset_beads = nuc_shape.sigma
+// t_offset_empty = 4.0
+void BkgModel::RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int fnum)
+{
+  // do these values make sense for offsets in RezeroBeads???
+  my_trace.RezeroBeads (t_start, t_mid_nuc-t_offset_beads, fnum);
+  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_empty, fnum);
+}
+
+void BkgModel::RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty)
+{
+  my_trace.RezeroBeadsAllFlows (t_start, t_mid_nuc-t_offset_beads);
+  emptytrace->RezeroReferenceAllFlows (t_start, t_mid_nuc-t_offset_empty);
+}
 
 void BkgModel::AllocFitBuffers()
 {
-
   // scratch space will be used directly by fit-control derivatives
   // so we need to make sure these structures match
   my_scratch.Allocate (time_c.npts,fit_control.fitParams.NumSteps);
-
-  // now do the traces set up for time compression
-  my_trace.Allocate (my_flow.numfb,my_scratch.bead_flow_t,my_beads.numLBeads);
-  my_trace.time_cp = &time_c; // point to the global time compression
-
-  my_regions.AllocScratch (time_c.npts);
-
-  // create matrix packing object(s)
-  //Note:  scratch-space is used directly by the matrix packer objects to get the derivatives
-  // so this object >must< persist in order to be used by the fit control object in the Lev_Mar fit.
-  fit_control.AllocPackers (my_scratch.scratchSpace, global_defaults.no_RatioDrift_fit_first_20_flows, my_scratch.bead_flow_t, time_c.npts);
-  my_single_fit.AllocLevMar (time_c,math_poiss,global_defaults.dampen_kmult,global_defaults.var_kmult_only);
+  my_regions->AllocScratch (time_c.npts);
 }
 
+void BkgModel::AllocTraceBuffers()
+{
+  // now do the traces set up for time compression
+  my_trace.Allocate (my_flow.numfb,NUMFB*time_c.npts,my_beads.numLBeads);
+  my_trace.time_cp = &time_c; // point to the global time compression
 
+}
+
+/*--------------------------------- Allocation section done ------------------------------------------------------*/
+
+/*--------------------------------Control analysis flow start ----------------------------------------------------*/
 
 void BkgModel::BootUpModel (double &elapsed_time,Timer &fit_timer)
 {
@@ -305,33 +452,41 @@ void BkgModel::BootUpModel (double &elapsed_time,Timer &fit_timer)
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (2, 5, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  float mean_copy_count = my_beads.KeyNormalizeReads();
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (true);
 
   fit_timer.restart();
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (1, 2, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  mean_copy_count = my_beads.KeyNormalizeReads();
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (true);
 
   fit_timer.restart();
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (1, 2, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  mean_copy_count = my_beads.KeyNormalizeReads();
+}
 
-  my_trace.RezeroTracesAllFlows (time_c.time_start, my_regions.rp.nuc_shape.t_mid_nuc, my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
-  lev_mar_fit->lm_state.RestrictRegionFitToHighCopyBeads (my_beads, mean_copy_count);
-  //lev_mar_fit->lm_state.ReAssignBeadsToRegionGroups(NUMBEADSPERGROUP);
+void BkgModel::PickRepresentativeHighQualityWells()
+{
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (false); // retain fitted key values for snr purposes
+  // use only high quality beads from now on when regional fitting
+  if (global_defaults.ssq_filter>0.0f)
+    my_beads.LowSSQRatioBeadsAreLowQuality (global_defaults.ssq_filter);
+  my_beads.LowCopyBeadsAreLowQuality (my_beads.my_mean_copy_count);
+  my_beads.KeyNormalizeReads (true); // force all beads to read the "true key" in the key flows
 }
 
 void BkgModel::PostKeyFit (double &elapsed_time, Timer &fit_timer)
 {
   my_beads.AssignEmphasisForAllBeads (0);
+
   fit_timer.restart();
+  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), my_regions->rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
+
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (1, 15, fit_control.FitPostKey, fit_control.FitRegionInit2, 1.0);
   elapsed_time += fit_timer.elapsed();
 
-  my_trace.RezeroTracesAllFlows (time_c.time_start, my_regions.rp.nuc_shape.t_mid_nuc, my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
+  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), my_regions->rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
   // try to use the first non-key cycle to help normalize everything and
   // identify incorporation model parameters
   //if(do_clonal_filter)
@@ -343,17 +498,41 @@ void BkgModel::PostKeyFit (double &elapsed_time, Timer &fit_timer)
 
 }
 
-void BkgModel::FitAmplitudeAndDarkMatter (double &elapsed_time, Timer &fit_timer)
+void BkgModel::ApproximateDarkMatter()
 {
   my_beads.AssignEmphasisForAllBeads (0);
   // now figure out whatever remaining error there is in the fit, on average
-  axion_fit->CalculateDarkMatter (FIRSTNFLOWSFORERRORCALC,lev_mar_fit->lm_state.well_region_fit, lev_mar_fit->lm_state.residual, lev_mar_fit->lm_state.avg_resid*2.0);
+  axion_fit->CalculateDarkMatter (FIRSTNFLOWSFORERRORCALC,my_beads.high_quality, lev_mar_fit->lm_state.residual, lev_mar_fit->lm_state.avg_resid*2.0);
+}
 
+
+
+void BkgModel::FitAmplitudeAndDarkMatter (double &elapsed_time, Timer &fit_timer)
+{
   my_beads.AssignEmphasisForAllBeads (emphasis_data.numEv-1);
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, CRUDEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), CRUDEXEMPHASIS); // why is this not per nuc?
 
+  //@TODO: should I be skipping low-quality bead refits here because we'll be getting their amplitudes in the refinement phase?
   fit_timer.restart();
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (1, 15, fit_control.FitAmpl, fit_control.FitRegionSlimErr, 10.0);
+  elapsed_time += fit_timer.elapsed();
+}
+
+void BkgModel::FitWellParametersConditionalOnRegion (double &elapsed_time, Timer &fit_timer)
+{
+  fit_timer.restart();
+  lev_mar_fit->lm_state.skip_beads = false;  // make sure we fit every bead here
+
+  // catch up on wells we skipped while fitting regions
+  // i.e. fit wells conditional on regional parameters now
+
+// something wrong here(!)
+//@TODO:  why does fitting the wells here wreck the fit?  Region parameters should be just fine...
+  //lev_mar_fit->MultiFlowSpecializedLevMarFitParameters(3,0,fit_control.FitPostKey, fit_control.DontFitRegion, 1.0);
+
+  // don't need to compensate for wells that didn't get dark matter adjusted, because we refit amplitude downstream anyway
+  //lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (5, 0, fit_control.FitAmpl, fit_control.DontFitRegion, 10.0); // refitting amplitude anyway
+
   elapsed_time += fit_timer.elapsed();
 }
 
@@ -361,28 +540,45 @@ void BkgModel::FitInitialFlowBlockModel (double &elapsed_time, Timer &fit_timer)
 {
   BootUpModel (elapsed_time,fit_timer);
 
+  // now that we know something about the wells, select a good subset
+  // by any filtration we think is good
+  PickRepresentativeHighQualityWells();
+
+  lev_mar_fit->lm_state.skip_beads=false;
+  // these two should be do-able only on representative wells
   PostKeyFit (elapsed_time, fit_timer);
 
+
+  ApproximateDarkMatter();
+
+  lev_mar_fit->lm_state.skip_beads=true;
+
   FitAmplitudeAndDarkMatter (elapsed_time, fit_timer);
+
+  // catch up well parameters on wells we didn't use in the regional estimates
+  if (lev_mar_fit->lm_state.skip_beads)
+    FitWellParametersConditionalOnRegion (elapsed_time, fit_timer);
+
 
 #ifdef TUNE_INCORP_PARAMS_DEBUG
   DumpRegionParameters();
 #endif
 
-  my_regions.RestrictRatioDrift();
+  my_regions->RestrictRatioDrift();
 }
 
 void BkgModel::GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer)
 {
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, CRUDEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), CRUDEXEMPHASIS);
 
+  //@TODO: should I skip low-quality beads because I'm going to refit them later and I only need this for regional parameters?
   fit_timer.restart();
   //@TODO: badly organized data still requiring too much stuff passed around
   // I blame MultiFlowModel wrapper functions that don't exist
   my_beads.AssignEmphasisForAllBeads (0);
-  my_search.ParasitePointers (math_poiss, &my_trace,&my_scratch,&my_regions,&time_c,&my_flow,&emphasis_data);
+  my_search.ParasitePointers (math_poiss, &my_trace,emptytrace,&my_scratch,my_regions,&time_c,&my_flow,&emphasis_data);
   if (global_defaults.generic_test_flag)
-    my_search.BinarySearchAmplitude (my_beads, 0.5,true); // apply search method to current bead list - wrong OO?  Method on bead list?
+    my_search.BinarySearchAmplitude (my_beads, 0.5f,true); // apply search method to current bead list - wrong OO?  Method on bead list?
   else
     my_search.ProjectionSearchAmplitude (my_beads, false); // need all our speed
   //my_search.GoldenSectionAmplitude(my_beads);
@@ -395,23 +591,27 @@ void BkgModel::FitTimeVaryingRegion (double &elapsed_time, Timer &fit_timer)
   fit_timer.restart();
   // >NOW< we allow any emphasis level given our crude estimates for emphasis
   my_beads.AssignEmphasisForAllBeads (emphasis_data.numEv-1);
+  lev_mar_fit->lm_state.skip_beads = true;  // we're not updating well parameters anyway, but make it look good
   lev_mar_fit->MultiFlowSpecializedLevMarFitParameters (0, 4, fit_control.DontFitWells, fit_control.FitRegionSlim, 1.0);
+  lev_mar_fit->lm_state.skip_beads = false;
   elapsed_time += fit_timer.elapsed();
 }
 
-void BkgModel::FitLaterBlockOfFlows (double &elapsed_time, Timer &fit_timer)
+
+void BkgModel::FitLaterBlockOfFlows (int flow, double &elapsed_time, Timer &fit_timer)
 {
   GuessCrudeAmplitude (elapsed_time,fit_timer);
-  FitTimeVaryingRegion (elapsed_time,fit_timer);
+  replay->FitTimeVaryingRegion (flow, elapsed_time,fit_timer);
+  // FitTimeVaryingRegion (elapsed_time,fit_timer);
 }
 
 
 void BkgModel::RefineAmplitudeEstimates (double &elapsed_time, Timer &fit_timer)
 {
   // in either case, finish by fitting amplitude to finalized regional parameters
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, FINEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), FINEXEMPHASIS);
   fit_timer.restart();
-  FitAmplitudePerFlow();
+  refine_fit->FitAmplitudePerFlow (); // just like GPU code now
   double fit_ampl_time = fit_timer.elapsed();
   elapsed_time += fit_ampl_time;
 }
@@ -422,6 +622,8 @@ void BkgModel::CPUFitModelForBlockOfFlows (int flow, bool last, bool learning)
   Timer total_timer;
   double elapsed_time = 0;
 
+  my_beads.ResetLocalBeadParams(); // start off with no data for amplitude/kmult
+  my_regions->ResetLocalRegionParams(); // start off with no per flow time shifts
 
   if ( (flow+1) <=my_flow.numfb) // fit regions for this set of flows
   {
@@ -429,9 +631,13 @@ void BkgModel::CPUFitModelForBlockOfFlows (int flow, bool last, bool learning)
   }
   else
   {
-    FitLaterBlockOfFlows (elapsed_time, fit_timer);
+    FitLaterBlockOfFlows (flow, elapsed_time, fit_timer);
   }
 
+  // background correct all the beads right in the fg_buffer...sorry
+  //trace_bkg_adj->BackgroundCorrectAllBeadsInPlace();
+  
+  // now do a final amplitude estimation on each bead
   RefineAmplitudeEstimates (elapsed_time,fit_timer);
 
   printf (".");
@@ -439,6 +645,24 @@ void BkgModel::CPUFitModelForBlockOfFlows (int flow, bool last, bool learning)
 
   DumpRegionTrace (my_debug.region_trace_file);
 }
+
+void BkgModel::UpdateBeadStatusAfterFit (int flow)
+{
+  if (do_clonal_filter)
+  {
+    vector<float> copy_mult (NUMFB);
+    for (int f=0; f<NUMFB; ++f)
+      copy_mult[f] = CalculateCopyDrift (my_regions->rp, my_flow.buff_flow[f]);
+
+    my_beads.UpdateClonalFilter (flow, copy_mult);
+  }
+
+  my_beads.WriteCorruptedToMask (region, global_state.bfmask);
+
+  // turn off while debugging blackbird chip
+  // my_beads.ZeroOutPins(region, bfmask, &pinnedInFlow, flow);
+}
+
 
 #ifdef ION_COMPILE_CUDA
 
@@ -450,32 +674,31 @@ void BkgModel::GPUBootUpModel (BkgModelCuda* bkg_model_cuda, double &elapsed_tim
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (2, 5, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  float mean_copy_count = my_beads.KeyNormalizeReads();
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (true);
 
   fit_timer.restart();
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (1, 2, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  mean_copy_count = my_beads.KeyNormalizeReads();
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (true);
 
   fit_timer.restart();
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (1, 2, fit_control.FitInitial, fit_control.FitRegionInit1, 0.1);
   elapsed_time += fit_timer.elapsed();
 
-  mean_copy_count = my_beads.KeyNormalizeReads();
-
-  my_trace.RezeroTracesAllFlows (time_c.time_start, my_regions.rp.nuc_shape.t_mid_nuc,  my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
-  lev_mar_fit->lm_state.RestrictRegionFitToHighCopyBeads (my_beads,mean_copy_count);
 }
 
 void BkgModel::GPUPostKeyFit (BkgModelCuda* bkg_model_cuda,double &elapsed_time, Timer &fit_timer)
 {
   fit_timer.restart();
   my_beads.AssignEmphasisForAllBeads (0);
+
+  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)),  my_regions->rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
+
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (1, 15, fit_control.FitPostKey, fit_control.FitRegionInit2, 1.0);
   elapsed_time += fit_timer.elapsed();
 
-  my_trace.RezeroTracesAllFlows (time_c.time_start, my_regions.rp.nuc_shape.t_mid_nuc,  my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
+  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)),  my_regions->rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
   // try to use the first non-key cycle to help normalize everything and
   // identify incorporation model parameters
   //if(do_clonal_filter)
@@ -488,11 +711,8 @@ void BkgModel::GPUPostKeyFit (BkgModelCuda* bkg_model_cuda,double &elapsed_time,
 
 void BkgModel::GPUFitAmplitudeAndDarkMatter (BkgModelCuda* bkg_model_cuda,double &elapsed_time, Timer &fit_timer)
 {
-  // now figure out whatever remaining error there is in the fit, on average
-  axion_fit->CalculateDarkMatter (FIRSTNFLOWSFORERRORCALC,lev_mar_fit->lm_state.well_region_fit, lev_mar_fit->lm_state.residual, lev_mar_fit->lm_state.avg_resid*2.0);
-
   my_beads.AssignEmphasisForAllBeads (emphasis_data.numEv-1);
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, CRUDEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), CRUDEXEMPHASIS);
 
   fit_timer.restart();
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (1, 15, fit_control.FitAmpl, fit_control.FitRegionSlimErr, 10.0);
@@ -503,20 +723,32 @@ void BkgModel::GPUFitInitialFlowBlockModel (BkgModelCuda* bkg_model_cuda, double
 {
   GPUBootUpModel (bkg_model_cuda, elapsed_time,fit_timer);
 
+  PickRepresentativeHighQualityWells(); // same as CPU logic
+
+  lev_mar_fit->lm_state.skip_beads=false;
+
   GPUPostKeyFit (bkg_model_cuda,elapsed_time, fit_timer);
 
+  ApproximateDarkMatter();
+
+  lev_mar_fit->lm_state.skip_beads=true;
+
   GPUFitAmplitudeAndDarkMatter (bkg_model_cuda,elapsed_time, fit_timer);
+
+  lev_mar_fit->lm_state.skip_beads=false;
+  // need catchup individual well parameters here
+  // GPUFitWellParametersConditionalOnRegion (elapsed_time, fit_timer);
 
 #ifdef TUNE_INCORP_PARAMS_DEBUG
   DumpRegionParameters();
 #endif
 
-  my_regions.RestrictRatioDrift();
+  my_regions->RestrictRatioDrift();
 }
 
 void BkgModel::GPUGuessCrudeAmplitude (BkgModelCuda* bkg_model_cuda,double &elapsed_time, Timer &fit_timer)
 {
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, CRUDEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), CRUDEXEMPHASIS);
   my_beads.AssignEmphasisForAllBeads (0);
   fit_timer.restart();
   bkg_model_cuda->BinarySearchAmplitude (0.5,true);
@@ -528,7 +760,9 @@ void BkgModel::GPUFitTimeVaryingRegion (BkgModelCuda* bkg_model_cuda,double &ela
 {
   fit_timer.restart();
   my_beads.AssignEmphasisForAllBeads (emphasis_data.numEv-1);
+  lev_mar_fit->lm_state.skip_beads = true;
   bkg_model_cuda->MultiFlowSpecializedLevMarFitParameters (0, 4, fit_control.DontFitWells, fit_control.FitRegionSlim, 1.0);
+  lev_mar_fit->lm_state.skip_beads = false;
   elapsed_time += fit_timer.elapsed();
 }
 
@@ -543,7 +777,7 @@ void BkgModel::GPURefineAmplitudeEstimates (BkgModelCuda* bkg_model_cuda,double 
 {
   fit_timer.restart();
   // in either case, finish by fitting amplitude to finalized regional parameters
-  emphasis_data.CurrentEmphasis (my_regions.rp.nuc_shape.t_mid_nuc, FINEXEMPHASIS);
+  emphasis_data.CurrentEmphasis (GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)), FINEXEMPHASIS);
   bkg_model_cuda->FitAmplitudePerFlow();
   elapsed_time += fit_timer.elapsed();
 
@@ -554,6 +788,8 @@ void BkgModel::GPUFitModelForBlockOfFlows (int flow, bool last, bool learning)
   Timer total_timer;
   double elapsed_time = 0;
 
+  my_beads.ResetLocalBeadParams(); // start off with no data for amplitude/kmult
+  my_regions->ResetLocalRegionParams(); // start off with no per flow time shifts
   //
   // Create the GPU object
   //
@@ -591,224 +827,115 @@ void BkgModel::GPUFitModelForBlockOfFlows (int flow, bool last, bool learning)
 
 }
 
-#endif
+#endif  // CUDA code isolation
 
 
 
-// only call this when the buffers are full up and we're going to output something
-// This is the big routine that fires off the optimizations we're doing
-void BkgModel::FitModelForBlockOfFlows (int flow, bool last, bool learning, bool use_gpu)
-{
-  (void) learning;
-  if (use_gpu) {}; // compiler happiness
 
-
-#ifdef ION_COMPILE_CUDA
-  if (use_gpu)
-    GPUFitModelForBlockOfFlows (flow,last,learning);
-  else
-#endif
-    CPUFitModelForBlockOfFlows (flow,last,learning);
-
-  UpdateBeadStatusAfterFit (flow);
-
-  my_beads.LimitBeadEvolution ( (flow+1) <=NUMFB,MAXRCHANGE,MAXCOPYCHANGE);
-
-}
+/*--------------------------------Control analysis flow end ----------------------------------------------------*/
 
 // this puts our answers into the data structures where they belong
 // should be the only point of contact with the external world, but isn't
 void BkgModel::WriteAnswersToWells (int iFlowBuffer)
 {
   // make absolutely sure we're upt to date
-  my_regions.rp.copy_multiplier[iFlowBuffer] = pow (my_regions.rp.CopyDrift,my_flow.buff_flow[iFlowBuffer]);
+  my_regions->rp.copy_multiplier[iFlowBuffer] = CalculateCopyDrift (my_regions->rp, my_flow.buff_flow[iFlowBuffer]);
   //Write one flow's data to 1.wells
   for (int ibd=0;ibd < my_beads.numLBeads;ibd++)
   {
-    float val = my_beads.params_nn[ibd].Ampl[iFlowBuffer] * my_beads.params_nn[ibd].Copies * my_regions.rp.copy_multiplier[iFlowBuffer];
+    float val = my_beads.params_nn[ibd].Ampl[iFlowBuffer] * my_beads.params_nn[ibd].Copies * my_regions->rp.copy_multiplier[iFlowBuffer];
     int x = my_beads.params_nn[ibd].x+region->col;
     int y = my_beads.params_nn[ibd].y+region->row;
 
-    rawWells->WriteFlowgram (my_flow.buff_flow[iFlowBuffer], x, y, val);
+    global_state.rawWells->WriteFlowgram (my_flow.buff_flow[iFlowBuffer], x, y, val);
 
   }
 }
 
 //@TODO: this is not actually a bkgmodel function but a function of my_beads?
-void BkgModel::WriteBeadParameterstoDataCubes(int iFlowBuffer)
+void BkgModel::WriteBeadParameterstoDataCubes (int iFlowBuffer, bool last)
 {
+  if (mPtrs == NULL)
+    return;
+
+  int flow = my_flow.buff_flow[iFlowBuffer];
   for (int ibd=0;ibd < my_beads.numLBeads;ibd++)
   {
     int x = my_beads.params_nn[ibd].x+region->col;
     int y = my_beads.params_nn[ibd].y+region->row;
+    struct bead_params &p = my_beads.params_nn[ibd];
 
-    if (mKMult != NULL) {
-      mKMult->At(x,y,my_flow.buff_flow[iFlowBuffer]) = my_beads.params_nn[ibd].kmult[iFlowBuffer]; // kmultiplier to go with amplitude in main
-    }
+    // use copyCube_element to copy DataCube element in BkgModel::WriteBeadParameterstoDataCubes
+    mPtrs->copyCube_element (mPtrs->mAmpl,x,y,flow,p.Ampl[iFlowBuffer]);
+    mPtrs->copyCube_element (mPtrs->mBeadDC,x,y,flow,my_trace.fg_dc_offset[ibd*NUMFB+iFlowBuffer]);
+    mPtrs->copyCube_element (mPtrs->mKMult,x,y,flow,p.kmult[iFlowBuffer]);
 
-    if (mBeadOnceParam != NULL) {
-      struct bead_params &p = my_beads.params_nn[ibd];
-      size_t idx = 0;
-      mBeadOnceParam->At(x,y,idx++) = p.Copies;
-      mBeadOnceParam->At(x,y,idx++) = p.R;
-      mBeadOnceParam->At(x,y,idx++) = p.dmult;
-      mBeadOnceParam->At(x,y,idx++) = p.gain;
+    mPtrs->copyCube_element (mPtrs->mBeadInitParam,x,y,0,p.Copies);
+    mPtrs->copyCube_element (mPtrs->mBeadInitParam,x,y,1,p.R);
+    mPtrs->copyCube_element (mPtrs->mBeadInitParam,x,y,2,p.dmult);
+    mPtrs->copyCube_element (mPtrs->mBeadInitParam,x,y,3,p.gain);
+
+    if ( (iFlowBuffer+1) ==NUMFB || last)
+    {
+      mPtrs->copyMatrix_element (mPtrs->mBeadFblk_avgErr,x,y,p.my_state.avg_err);
+      mPtrs->copyMatrix_element (mPtrs->mBeadFblk_clonal,x,y,p.my_state.clonal_read?1:0);
+      mPtrs->copyMatrix_element (mPtrs->mBeadFblk_corrupt,x,y,p.my_state.corrupt?1:0);
     }
   }
 }
 
-void BkgModel::WriteDebugWells(int iFlowBuffer)
+
+void BkgModel::WriteDebugWells (int iFlowBuffer)
 {
-    if (my_debug.BkgDbg1 != NULL || my_debug.BkgDbg2 !=NULL || my_debug.BkgDebugKmult!=NULL)
-    {
-
-  for (int ibd=0;ibd < my_beads.numLBeads;ibd++)
+  if (my_debug.BkgDbg1 != NULL || my_debug.BkgDbg2 !=NULL || my_debug.BkgDebugKmult!=NULL)
   {
-    int x = my_beads.params_nn[ibd].x+region->col;
-    int y = my_beads.params_nn[ibd].y+region->row;
+
+    for (int ibd=0;ibd < my_beads.numLBeads;ibd++)
+    {
+      int x = my_beads.params_nn[ibd].x+region->col;
+      int y = my_beads.params_nn[ibd].y+region->row;
 
 
-    // debug parameter output, if necessary
+      // debug parameter output, if necessary
       float etbR,tauB;
       int NucID = my_flow.flow_ndx_map[iFlowBuffer];
       //Everything uses the same functions to compute this so we're compatible
-      etbR = AdjustEmptyToBeadRatioForFlow (my_beads.params_nn[ibd].R,&my_regions.rp,NucID,my_flow.buff_flow[iFlowBuffer]);
-      tauB = ComputeTauBfromEmptyUsingRegionLinearModel (&my_regions.rp,etbR);
+      etbR = AdjustEmptyToBeadRatioForFlow (my_beads.params_nn[ibd].R,& (my_regions->rp),NucID,my_flow.buff_flow[iFlowBuffer]);
+      tauB = ComputeTauBfromEmptyUsingRegionLinearModel (& (my_regions->rp),etbR);
       if (my_debug.BkgDbg1!=NULL)
         my_debug.BkgDbg1->WriteFlowgram (my_flow.buff_flow[iFlowBuffer],x,y,tauB);
       if (my_debug.BkgDbg2!=NULL)
         my_debug.BkgDbg2->WriteFlowgram (my_flow.buff_flow[iFlowBuffer],x,y,etbR);
       if (my_debug.BkgDebugKmult!=NULL)
         my_debug.BkgDebugKmult->WriteFlowgram (my_flow.buff_flow[iFlowBuffer],x,y,my_beads.params_nn[ibd].kmult[iFlowBuffer]); // kmultiplier to go with amplitude in main
+    }
   }
-   }
 
 }
 
 
-void BkgModel::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step)
+void BkgModel::SendErrorVectorToHDF5 (bead_params *p, error_track &err_t)
 {
-  error_track err_t; // temporary store errors for this bead this flow
-  bead_params *p = &my_beads.params_nn[ibd];
-  reg_params *reg_p = &my_regions.rp;
-
-  float block_signal_corrected[my_scratch.bead_flow_t];
-
-  my_trace.FillSignalForBead (block_signal_corrected, ibd);
-  // calculate proton flux from neighbors
-  my_scratch.ResetXtalkToZero();
-  NewXtalkFlux (ibd,my_scratch.cur_xtflux_block);
-
-  // set up current bead parameters by flow
-  FillBufferParamsBlockFlows (&my_scratch.cur_buffer_block,p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow);
-  FillIncorporationParamsBlockFlows (&my_scratch.cur_bead_block, p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow);
-  // make my corrected signal
-  // subtract computed zeromer signal
-  // uses parameters above
-  MultiCorrectBeadBkg (block_signal_corrected,p,
-                       my_scratch,my_flow,time_c,my_regions,my_scratch.shifted_bkg,use_vectorization);
-
-  for (int fnum=0;fnum < NUMFB;fnum++)
+  if (mPtrs !=NULL)
   {
-    float evect[time_c.npts];
-    emphasis_data.CustomEmphasis (evect, p->Ampl[fnum]);
-    float *signal_corrected = &block_signal_corrected[fnum*time_c.npts];
-    int NucID = my_flow.flow_ndx_map[fnum];
-
-    my_single_fit.FitOneFlow (fnum,evect,p,&err_t, signal_corrected,NucID, cache_step.NucFineStep(NucID), cache_step.i_start_fine_step[NucID],my_flow,time_c,emphasis_data,my_regions);
     int x = p->x+region->col;
     int y = p->y+region->row;
-    if (mResError != NULL) {
-      mResError->At(x,y,my_flow.buff_flow[fnum]) = err_t.rerr[fnum];
-    }
-  }
-
-  // now detect corruption & store average error
-  DetectCorruption (p,err_t, WASHOUT_THRESHOLD, WASHOUT_FLOW_DETECTION);
-  // update error here to be passed to later block of flows
-  // don't keep individual flow errors because we're surprisingly tight on memory
-  UpdateCumulativeAvgError (p,err_t,my_flow.buff_flow[NUMFB-1]+1); // current flow reached, 1-based
-
-}
-
-
-// fits all wells one flow at a time, using a LevMarFitter derived class
-// only the amplitude term is fit
-void BkgModel::FitAmplitudePerFlow (void)
-{
-
-  my_regions.cache_step.CalculateNucRiseFineStep (&my_regions.rp,time_c); // the same for the whole region because time-shift happens per well
-  my_regions.cache_step.CalculateNucRiseCoarseStep(&my_regions.rp,time_c); // use for xtalk
-
-  my_scratch.FillShiftedBkg (my_trace,my_regions.rp.tshift,true);
-  my_single_fit.FillDecisionThreshold (global_defaults.krate_adj_limit,my_flow.flow_ndx_map);
-
-  for (int ibd = 0;ibd < my_beads.numLBeads;ibd++)
-  {
-    if (my_beads.params_nn[ibd].my_state.clonal_read or my_beads.params_nn[ibd].my_state.random_samp)
-      FitAmplitudePerBeadPerFlow (ibd,my_regions.cache_step);
-  }
-
-//    printf("krate fit reduction cnt:%d amt:%f\n",krate_cnt,krate_red);
-}
-
-
-// refactor to simplify
-void BkgModel::NewXtalkFlux (int ibd,float *my_xtflux)
-{
-
-  if ( (my_beads.ndx_map != NULL) & xtalk_spec.do_xtalk_correction)
-  {
-    int nn_ndx,cx,cy,ncx,ncy;
-
-    cx = my_beads.params_nn[ibd].x;
-    cy = my_beads.params_nn[ibd].y;
-
-    // Iterate over the number of neighbors, accumulating hydrogen ions
-    int nei_total = 0;
-    for (int nei_idx=0; nei_idx<xtalk_spec.nei_affected; nei_idx++)
+    for (int fnum=0; fnum<NUMFB; fnum++)
     {
-      // phase for hex-packed
-      if (!xtalk_spec.hex_packed)
-        CrossTalkSpecification::NeighborByGridPhase (ncx,ncy,cx,cy,xtalk_spec.cx[nei_idx],xtalk_spec.cy[nei_idx], 0);
-      else
-        CrossTalkSpecification::NeighborByGridPhase (ncx,ncy,cx,cy,xtalk_spec.cx[nei_idx],xtalk_spec.cy[nei_idx], (region->row+cy+1) % 2); // maybe????
-
-      if ( (ncx>-1) && (ncx <region->w) && (ncy>-1) && (ncy<region->h)) // neighbor within region
-      {
-        if ( (nn_ndx=my_beads.ndx_map[ncy*region->w+ncx]) !=-1) // bead present
-        {
-          // tau_top = how fast ions leave well
-          // tau_bulk = how slowly ions leave bulk over well - 'simulates' neighbors having different upstream profiles
-          // multiplier = how many ions get to this location as opposed to others
-          if (xtalk_spec.multiplier[nei_idx] > 0)
-            AccumulateSingleNeighborXtalkTrace (my_xtflux,&my_beads.params_nn[nn_ndx], &my_regions.rp,
-                                                my_scratch, time_c, my_regions, my_flow, math_poiss, use_vectorization,
-                                                xtalk_spec.tau_top[nei_idx],xtalk_spec.tau_fluid[nei_idx],xtalk_spec.multiplier[nei_idx]);
-          nei_total++;
-        }
-      }
+      // use copyCube_element to copy DataCube element to mResError
+      mPtrs->copyCube_element (mPtrs->mResError,x,y,my_flow.buff_flow[fnum],err_t.mean_residual_error[fnum]);
     }
   }
 }
 
-void BkgModel::UpdateBeadStatusAfterFit (int flow)
-{
-  if (do_clonal_filter and flow==NUMFB-1)
-    my_beads.CheckKey();
-
-  // should match NUMFB rather than use explicit flows
-  if (do_clonal_filter and (flow+1) %NUMFB==0 and flow<80)
-    my_beads.UpdateClonalFilter();
-
-  if (do_clonal_filter and flow==79)
-    my_beads.FinishClonalFilter();
 
 
-  my_beads.WriteCorruptedToMask (region,bfmask);
 
-}
 
+
+
+
+/*--------------------------------debugging routines start ----------------------------------------------------*/
 
 // debugging functions down here in the darkness
 // so I don't have to read them every time I wander through the code
@@ -819,12 +946,12 @@ void BkgModel::MultiFlowComputeTotalSignalTrace (float *fval,struct bead_params 
   // allow the background to be passed in to save processing
   if (sbg == NULL)
   {
-    my_trace.GetShiftedBkg (reg_p->tshift,sbg_local);
+    emptytrace->GetShiftedBkg (reg_p->tshift, time_c, sbg_local);
     sbg = sbg_local;
   }
   //@TODO possibly same for nuc_rise step
-  MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,my_scratch.ival,my_regions,my_scratch.cur_bead_block,time_c,my_flow,math_poiss);
-  MultiFlowComputeIncorporationPlusBackground (fval,p,reg_p,my_scratch.ival,sbg,my_regions,my_scratch.cur_buffer_block,time_c,my_flow,use_vectorization, my_scratch.bead_flow_t);
+  MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,my_scratch.ival,*my_regions,my_scratch.cur_bead_block,time_c,my_flow,math_poiss);
+  MultiFlowComputeIncorporationPlusBackground (fval,p,reg_p,my_scratch.ival,sbg,*my_regions,my_scratch.cur_buffer_block,time_c,my_flow,use_vectorization, my_scratch.bead_flow_t);
 }
 
 void BkgModel::DebugFileOpen (void)
@@ -833,13 +960,13 @@ void BkgModel::DebugFileOpen (void)
     return;
 
   char *fname;
-  int name_len = strlen (dirName) + strlen (BKG_MODEL_DEBUG_DIR) + 64;
+  int name_len = strlen (global_state.dirName) + strlen (BKG_MODEL_DEBUG_DIR) + 64;
   struct stat fstatus;
   int         status;
 
   fname = new char[name_len];
 
-  snprintf (fname,name_len,"%s%s",dirName,BKG_MODEL_DEBUG_DIR);
+  snprintf (fname,name_len,"%s%s",global_state.dirName,BKG_MODEL_DEBUG_DIR);
   status = stat (fname,&fstatus);
 
   if (status != 0)
@@ -848,21 +975,27 @@ void BkgModel::DebugFileOpen (void)
     mkdir (fname,S_IRWXU | S_IRWXG | S_IRWXO);
   }
 
-  snprintf (fname,name_len,"%s%sdatax%dy%d.txt",dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
+  snprintf (fname,name_len,"%s%sdatax%dy%d.txt",global_state.dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
   fopen_s (&my_debug.data_dbg_file,fname, "wt");
 
-  snprintf (fname,name_len,"%s%stracex%dy%d.txt",dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
+  snprintf (fname,name_len,"%s%stracex%dy%d.txt",global_state.dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
   fopen_s (&my_debug.trace_dbg_file,fname, "wt");
   fprintf (my_debug.trace_dbg_file,"Background Fit Object Created x = %d, y = %d\n",region->col,region->row);
   fflush (my_debug.trace_dbg_file);
 
 #ifdef FIT_ITERATION_DEBUG_TRACE
-  snprintf (fname,name_len,"%s%siterx%dy%d.txt",dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
+  snprintf (fname,name_len,"%s%siterx%dy%d.txt",global_state.dirName,BKG_MODEL_DEBUG_DIR,region->col,region->row);
   fopen_s (&my_debug.iter_dbg_file,fname,"wt");
 #endif
 
-  snprintf (fname,name_len,"%s/reg_tracex%dy%d.txt",dirName,region->col,region->row);
+  snprintf (fname,name_len,"%s/reg_tracex%dy%d.txt",global_state.dirName,region->col,region->row);
   fopen_s (&my_debug.region_trace_file,fname, "wt");
+
+  snprintf (fname,name_len,"%s/reg_0mer_tracex%dy%d.txt",global_state.dirName,region->col,region->row);
+  fopen_s (&my_debug.region_0mer_trace_file,fname, "wt");
+
+  snprintf (fname,name_len,"%s/reg_1mer_tracex%dy%d.txt",global_state.dirName,region->col,region->row);
+  fopen_s (&my_debug.region_1mer_trace_file,fname, "wt");
 
   delete [] fname;
 }
@@ -882,24 +1015,30 @@ void BkgModel::DebugFileClose (void)
 
   if (my_debug.region_trace_file != NULL)
     fclose (my_debug.region_trace_file);
+
+  if (my_debug.region_0mer_trace_file != NULL)
+    fclose (my_debug.region_0mer_trace_file);
+
+  if (my_debug.region_1mer_trace_file != NULL)
+    fclose (my_debug.region_1mer_trace_file);
 }
 
 void BkgModel::DebugIterations()
 {
-  DumpRegionParamsCSV (my_debug.iter_dbg_file,&my_regions.rp);
+  DumpRegionParamsCSV (my_debug.iter_dbg_file,& (my_regions->rp));
   my_beads.DumpAllBeadsCSV (my_debug.iter_dbg_file);
 }
 
 void BkgModel::DebugBeadIteration (bead_params &eval_params, reg_params &eval_rp, int iter, int ibd)
 {
   fprintf (my_debug.trace_dbg_file,"iter:% 3d,(% 5.3f, % 5.3f,% 6.2f, % 2.1f, % 5.3f, % 5.3f, % 5.3f) ",
-           iter,eval_params.gain,eval_params.Copies,lev_mar_fit->lm_state.residual[ibd],eval_rp.nuc_shape.sigma,eval_params.R,my_regions.rp.RatioDrift,my_regions.rp.CopyDrift);
+           iter,eval_params.gain,eval_params.Copies,lev_mar_fit->lm_state.residual[ibd],eval_rp.nuc_shape.sigma,eval_params.R,my_regions->rp.RatioDrift,my_regions->rp.CopyDrift);
   fprintf (my_debug.trace_dbg_file,"% 3.2f,% 3.2f,% 3.2f,% 3.2f,",
            eval_params.Ampl[0],eval_params.Ampl[1],eval_params.Ampl[2],eval_params.Ampl[3]);
   fprintf (my_debug.trace_dbg_file,"% 3.2f,% 3.2f,% 3.2f,% 3.2f,",
            eval_params.Ampl[4],eval_params.Ampl[5],eval_params.Ampl[6],eval_params.Ampl[7]);
   fprintf (my_debug.trace_dbg_file,"% 2.1f,% 2.1f,% 2.1f,% 2.1f,",
-           eval_rp.nuc_shape.t_mid_nuc,eval_rp.nuc_shape.t_mid_nuc,eval_rp.nuc_shape.t_mid_nuc,eval_rp.nuc_shape.t_mid_nuc); // wrong! should be delayed
+           GetTypicalMidNucTime (&eval_rp.nuc_shape),GetTypicalMidNucTime (&eval_rp.nuc_shape),GetTypicalMidNucTime (&eval_rp.nuc_shape),GetTypicalMidNucTime (&eval_rp.nuc_shape)); // wrong! should be delayed
 
   fprintf (my_debug.trace_dbg_file,"(% 5.3f, % 5.3f, % 5.3f, % 5.3f) ",
            eval_rp.d[0],eval_rp.d[1],eval_rp.d[2],eval_rp.d[3]);
@@ -914,15 +1053,15 @@ void BkgModel::DumpRegionParameters()
   if (region != NULL)
     printf ("r(x,y) d(T,A,C,G) k(T,A,C,G)=(%d,%d) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f) %5.3f %5.3f %5.3f %5.3f %5.3f %5.3f\n",
             region->col,region->row,
-            my_regions.rp.d[0],my_regions.rp.d[1],my_regions.rp.d[2],my_regions.rp.d[3],
-            my_regions.rp.krate[0],my_regions.rp.krate[1],my_regions.rp.krate[2],my_regions.rp.krate[3],
-            my_regions.rp.kmax[0],my_regions.rp.kmax[1],my_regions.rp.kmax[2],my_regions.rp.kmax[3],
-            lev_mar_fit->lm_state.avg_resid,my_regions.rp.tshift,my_regions.rp.tau_R_m,my_regions.rp.tau_R_o,my_regions.rp.nuc_shape.sigma,my_regions.rp.nuc_shape.t_mid_nuc);
+            my_regions->rp.d[0],my_regions->rp.d[1],my_regions->rp.d[2],my_regions->rp.d[3],
+            my_regions->rp.krate[0],my_regions->rp.krate[1],my_regions->rp.krate[2],my_regions->rp.krate[3],
+            my_regions->rp.kmax[0],my_regions->rp.kmax[1],my_regions->rp.kmax[2],my_regions->rp.kmax[3],
+            lev_mar_fit->lm_state.avg_resid,my_regions->rp.tshift,my_regions->rp.tau_R_m,my_regions->rp.tau_R_o,my_regions->rp.nuc_shape.sigma,GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)));
   if (region != NULL)
     printf ("---(%d,%d) (%5.3f, %5.3f, %5.3f, %5.3f) (%5.3f, %5.3f, %5.3f, %5.3f)\n",
             region->col,region->row,
-            my_regions.rp.nuc_shape.t_mid_nuc_delay[0],my_regions.rp.nuc_shape.t_mid_nuc_delay[1],my_regions.rp.nuc_shape.t_mid_nuc_delay[2],my_regions.rp.nuc_shape.t_mid_nuc_delay[3],
-            my_regions.rp.nuc_shape.sigma_mult[0],my_regions.rp.nuc_shape.sigma_mult[1],my_regions.rp.nuc_shape.sigma_mult[2],my_regions.rp.nuc_shape.sigma_mult[3]);
+            my_regions->rp.nuc_shape.t_mid_nuc_delay[0],my_regions->rp.nuc_shape.t_mid_nuc_delay[1],my_regions->rp.nuc_shape.t_mid_nuc_delay[2],my_regions->rp.nuc_shape.t_mid_nuc_delay[3],
+            my_regions->rp.nuc_shape.sigma_mult[0],my_regions->rp.nuc_shape.sigma_mult[1],my_regions->rp.nuc_shape.sigma_mult[2],my_regions->rp.nuc_shape.sigma_mult[3]);
 }
 
 #define DUMP_N_VALUES(key,format,var,n) \
@@ -952,19 +1091,19 @@ void BkgModel::DumpRegionTrace (FILE *my_fp)
       fprintf (my_fp,"reg_row:\t%d\n",region->row);
       fprintf (my_fp,"reg_col:\t%d\n",region->col);
       fprintf (my_fp,"npts:\t%d\n",time_c.npts);
-      fprintf (my_fp,"tshift:\t%f\n",my_regions.rp.tshift);
-      fprintf (my_fp,"tau_R_m:\t%f\n",my_regions.rp.tau_R_m);
-      fprintf (my_fp,"tau_R_o:\t%f\n",my_regions.rp.tau_R_o);
-      fprintf (my_fp,"sigma:\t%f\n",my_regions.rp.nuc_shape.sigma);
-      DUMP_N_VALUES ("krate:","\t%f",my_regions.rp.krate,NUMNUC);
+      fprintf (my_fp,"tshift:\t%f\n",my_regions->rp.tshift);
+      fprintf (my_fp,"tau_R_m:\t%f\n",my_regions->rp.tau_R_m);
+      fprintf (my_fp,"tau_R_o:\t%f\n",my_regions->rp.tau_R_o);
+      fprintf (my_fp,"sigma:\t%f\n",my_regions->rp.nuc_shape.sigma);
+      DUMP_N_VALUES ("krate:","\t%f",my_regions->rp.krate,NUMNUC);
       float tmp[NUMNUC];
-      for (int i=0;i<NUMNUC;i++) tmp[i]=my_regions.rp.d[i];
+      for (int i=0;i<NUMNUC;i++) tmp[i]=my_regions->rp.d[i];
       DUMP_N_VALUES ("d:","\t%f",tmp,NUMNUC);
-      DUMP_N_VALUES ("kmax:","\t%f",my_regions.rp.kmax,NUMNUC);
-      fprintf (my_fp,"sens:\t%f\n",my_regions.rp.sens);
-      DUMP_N_VALUES ("NucModifyRatio:","\t%f",my_regions.rp.NucModifyRatio,NUMNUC);
+      DUMP_N_VALUES ("kmax:","\t%f",my_regions->rp.kmax,NUMNUC);
+      fprintf (my_fp,"sens:\t%f\n",my_regions->rp.sens);
+      DUMP_N_VALUES ("NucModifyRatio:","\t%f",my_regions->rp.NucModifyRatio,NUMNUC);
       DUMP_N_VALUES ("ftimes:","\t%f",time_c.frameNumber,time_c.npts);
-      DUMP_N_VALUES ("error_term:","\t%f",my_regions.missing_mass.dark_matter_compensator,my_regions.missing_mass.nuc_flow_t);  // one time_c.npts-long term per nuc
+      DUMP_N_VALUES ("error_term:","\t%f",my_regions->missing_mass.dark_matter_compensator,my_regions->missing_mass.nuc_flow_t);  // one time_c.npts-long term per nuc
       fprintf (my_fp,"end_section:\n");
       // we don't output t_mid_nuc, CopyDrift, or RatioDrift here, because those can change every block of 20 flows
     }
@@ -972,18 +1111,18 @@ void BkgModel::DumpRegionTrace (FILE *my_fp)
 // because the routines to compute them are "hidden" in the code
     // now dump parameters and data that can be unique for every block of 20 flows
     DUMP_N_VALUES ("flows:","\t%d",my_flow.buff_flow,NUMFB);
-    fprintf (my_fp,"CopyDrift:\t%f\n",my_regions.rp.CopyDrift);
-    fprintf (my_fp,"RatioDrift:\t%f\n",my_regions.rp.RatioDrift);
-    fprintf (my_fp,"t_mid_nuc:\t%f\n",my_regions.rp.nuc_shape.t_mid_nuc);
+    fprintf (my_fp,"CopyDrift:\t%f\n",my_regions->rp.CopyDrift);
+    fprintf (my_fp,"RatioDrift:\t%f\n",my_regions->rp.RatioDrift);
+    fprintf (my_fp,"t_mid_nuc:\t%f\n",GetTypicalMidNucTime (& (my_regions->rp.nuc_shape)));
     DUMP_N_VALUES ("nnum:","\t%d",my_flow.flow_ndx_map,NUMFB);
     fprintf (my_fp,"end_section:\n");
 
     float tmp[my_scratch.bead_flow_t];
-    struct reg_params eval_rp = my_regions.rp;
+    struct reg_params eval_rp = my_regions->rp;
 //    float my_xtflux[my_scratch.bead_flow_t];
     float sbg[my_scratch.bead_flow_t];
 
-    my_trace.GetShiftedBkg (my_regions.rp.tshift,sbg);
+    emptytrace->GetShiftedBkg (my_regions->rp.tshift, time_c, sbg);
     float skip_num = 1.0;
     if (my_beads.numLBeads > MAX_REGION_TRACE_WELLS)
     {
@@ -1003,10 +1142,10 @@ void BkgModel::DumpRegionTrace (FILE *my_fp)
       fprintf (my_fp,"bead_col:%d\n",my_beads.params_nn[ibd].x);
       float R_tmp[NUMFB],tau_tmp[NUMFB];
       for (int i=0;i < NUMFB;i++)
-        R_tmp[i] = AdjustEmptyToBeadRatioForFlow (p->R,&my_regions.rp,my_flow.flow_ndx_map[i],my_flow.buff_flow[i]);
+        R_tmp[i] = AdjustEmptyToBeadRatioForFlow (p->R,& (my_regions->rp),my_flow.flow_ndx_map[i],my_flow.buff_flow[i]);
       DUMP_N_VALUES ("R:","\t%f",R_tmp,NUMFB);
       for (int i=0;i < NUMFB;i++)
-        tau_tmp[i] = ComputeTauBfromEmptyUsingRegionLinearModel (&my_regions.rp,R_tmp[i]);
+        tau_tmp[i] = ComputeTauBfromEmptyUsingRegionLinearModel (& (my_regions->rp),R_tmp[i]);
       DUMP_N_VALUES ("tau:","\t%f",tau_tmp,NUMFB);
       fprintf (my_fp,"P:%f\n",p->Copies);
       fprintf (my_fp,"gain:%f\n",p->gain);
@@ -1017,7 +1156,7 @@ void BkgModel::DumpRegionTrace (FILE *my_fp)
       DUMP_N_VALUES ("kmult:","\t%f",p->kmult,NUMFB);
 
       // run the model
-      MultiFlowComputeTotalSignalTrace (my_scratch.fval,&my_beads.params_nn[ibd],&my_regions.rp,sbg);
+      MultiFlowComputeTotalSignalTrace (my_scratch.fval,&my_beads.params_nn[ibd],& (my_regions->rp),sbg);
 
       struct bead_params eval_params = my_beads.params_nn[ibd];
       memset (eval_params.Ampl,0,sizeof (eval_params.Ampl));
@@ -1031,7 +1170,7 @@ void BkgModel::DumpRegionTrace (FILE *my_fp)
 
       // output values
       float tmp_signal[my_scratch.bead_flow_t];
-      my_trace.FillSignalForBead (tmp_signal,ibd);
+      my_trace.MultiFlowFillSignalForBead (tmp_signal,ibd);
       DUMP_N_VALUES ("raw_data:","\t%0.1f", tmp_signal,my_scratch.bead_flow_t);
       DUMP_N_VALUES ("fit_data:","\t%.1f",my_scratch.fval,my_scratch.bead_flow_t);
       DUMP_N_VALUES ("avg_empty:","\t%.1f",sbg,my_scratch.bead_flow_t);
@@ -1089,13 +1228,9 @@ bool BkgModel::ProcessImage (short *img, short *bkg, int flow, bool last, bool l
   // also keep track of which nucleotide is associated with each flow
   my_flow.flow_ndx_map[my_flow.flowBufferWritePos] = global_defaults.glob_flow_ndx_map[flow%global_defaults.flow_order_len];
 
-  my_trace.FillEmptyTraceFromBuffer (bkg,my_flow.flowBufferWritePos);
+  // emptytrace.FillEmptyTraceFromBuffer (bkg,my_flow.flowBufferWritePos);
   my_trace.FillBeadTraceFromBuffer (img,my_flow.flowBufferWritePos);
-  my_trace.PrecomputeBackgroundSlopeForDeriv (my_flow.flowBufferWritePos);
-
-  // some parameters are not remembered from one flow to the next, set those back to
-  // the appropriate default values
-  my_beads.ResetFlowParams (my_flow.flowBufferWritePos,flow);
+  // emptytrace.PrecomputeBackgroundSlopeForDeriv (my_flow.flowBufferWritePos);
 
   my_flow.Increment();
 
@@ -1131,12 +1266,12 @@ int BkgModel::GetModelEvaluation (int iWell,struct bead_params *p,struct reg_par
   *isig = SA.isig;
   *pf = SA.pf;
 
-  my_trace.GetShiftedBkg (rp->tshift,SA.bg);
+  emptytrace->GetShiftedBkg (rp->tshift, time_c, SA.bg);
   // iterate over all data points doing the right thing
 
   //@TODO put nuc rise here
-  MultiFlowComputeCumulativeIncorporationSignal (p,rp,SA.pf,my_regions,my_scratch.cur_bead_block,time_c,my_flow,math_poiss);
-  MultiFlowComputeIncorporationPlusBackground (SA.feval,p,rp,SA.pf,SA.bg,my_regions,my_scratch.cur_buffer_block,time_c,my_flow, use_vectorization, my_scratch.bead_flow_t);
+  MultiFlowComputeCumulativeIncorporationSignal (p,rp,SA.pf,*my_regions,my_scratch.cur_bead_block,time_c,my_flow,math_poiss);
+  MultiFlowComputeIncorporationPlusBackground (SA.feval,p,rp,SA.pf,SA.bg,*my_regions,my_scratch.cur_buffer_block,time_c,my_flow, use_vectorization, my_scratch.bead_flow_t);
 
   // easiest way to get the incorporation signal w/ background subtracted off is to calculate
   // the function with Ampl=0 and subtract that from feval
@@ -1170,21 +1305,20 @@ void BkgModel::DumpTimeAndEmphasisByRegion (FILE *my_fp)
   // this will be a dumb file format
   // each line has x,y, type, hash, data per time point
   // dump timing
-  int max_pts = 40; // should be large enough
   int i = 0;
   fprintf (my_fp,"%d\t%d\t", region->col, region->row);
   fprintf (my_fp,"time\t%d\t",time_c.npts);
 
   for (i=0; i<time_c.npts; i++)
     fprintf (my_fp,"%f\t",time_c.frameNumber[i]);
-  for (; i<max_pts; i++)
+  for (; i<MAX_COMPRESSED_FRAMES; i++)
     fprintf (my_fp,"0.0\t");
   fprintf (my_fp,"\n");
   fprintf (my_fp,"%d\t%d\t", region->col, region->row);
   fprintf (my_fp,"frames_per_point\t%d\t",time_c.npts);
   for (i=0; i<time_c.npts; i++)
     fprintf (my_fp,"%d\t", time_c.frames_per_point[i]);
-  for (; i<max_pts; i++)
+  for (; i<MAX_COMPRESSED_FRAMES; i++)
     fprintf (my_fp,"0\t");
   fprintf (my_fp,"\n");
   // dump emphasis
@@ -1194,65 +1328,66 @@ void BkgModel::DumpTimeAndEmphasisByRegion (FILE *my_fp)
     fprintf (my_fp,"em\t%d\t",el);
     for (i=0; i<time_c.npts; i++)
       fprintf (my_fp,"%f\t",emphasis_data.EmphasisVectorByHomopolymer[el][i]);
-    for (; i<max_pts; i++)
+    for (; i<MAX_COMPRESSED_FRAMES; i++)
       fprintf (my_fp,"0.0\t");
     fprintf (my_fp,"\n");
   }
 }
 
-
-
-void BkgModel::JGVFitModelForBlockOfFlows(int flow)
+// accessors for hdf5 dump of emptytrace object
+int BkgModel::get_emptytrace_imgFrames()
 {
-  // called once per thread within a region and block of flows
-  // lock down the following used in WriteAnswersToWells (==> 1.wells file)
-  // my_regions.rp.CopyDrift
-  // my_beads.params_nn[ibd].Ampl[ ... flow buffers ...]
-  // my_beads.params_nn[ibd].Copies
-  float trace[time_c.npts];
-  my_regions.rp.CopyDrift = 1;
-  for (int ibd=0; ibd<my_beads.numLBeads; ibd++) {
-    for (int iFlowBuffer=0; iFlowBuffer < my_flow.numfb; iFlowBuffer++){
-      my_trace.CopySignalForTrace(trace, time_c.npts, ibd, iFlowBuffer);
-      my_beads.params_nn[ibd].Ampl[iFlowBuffer] = 0;
-      for (int j=0; j<time_c.npts; j++){
-	// sum of signal trace as kind of unique mapping from trace
-	my_beads.params_nn[ibd].Ampl[iFlowBuffer] += trace[j];
-      }
-    }
-    my_beads.params_nn[ibd].Copies = 1;
+  return ( (emptyTraceTracker->GetEmptyTrace (*region))->imgFrames);
+}
+
+float *BkgModel::get_emptytrace_bg_buffers()
+{
+  return ( (emptyTraceTracker->GetEmptyTrace (*region))->bg_buffers);
+}
+
+float *BkgModel::get_emptytrace_bg_dc_offset()
+{
+  return ( (emptyTraceTracker->GetEmptyTrace (*region))->bg_dc_offset);
+}
+
+void BkgModel::DumpEmptyTrace (FILE *my_fp)
+{
+  assert (emptyTraceTracker != NULL);   //sanity
+  if (region!=NULL)
+  {
+    (emptyTraceTracker->GetEmptyTrace (*region))->DumpEmptyTrace (my_fp,region->col,region->row);
+    // @TODO: investigate why doesn't this work???
+    //emptytrace->DumpEmptyTrace (my_fp,region->col,region->row);
   }
 }
 
-void BkgModel::JGVAmplitudeLogger(int flow)
+void BkgModel::DumpTimeAndEmphasisByRegionH5 (int reg)
 {
-  // called once per thread within a region and block of flows
-  my_regions.rp.CopyDrift = 1;
-  for (int ibd=0; ibd<my_beads.numLBeads; ibd++) {
-    my_beads.params_nn[ibd].Copies = 1;
+  if (mPtrs==NULL)
+    return;
+
+  ION_ASSERT (emphasis_data.numEv <= MAX_HPLEN+1, "emphasis_data.numEv > MAX_HPLEN+1");
+  //ION_ASSERT(time_c.npts <= MAX_COMPRESSED_FRAMES, "time_c.npts > MAX_COMPRESSED_FRAMES");
+  int npts = min (time_c.npts, MAX_COMPRESSED_FRAMES);
+
+  // use copyCube_element to copy DataCube element to mEmphasisParam in BkgModel::DumpTimeAndEmphasisByRegionH5
+  for (int hp=0; hp<emphasis_data.numEv; hp++)
+  {
+    for (int t=0; t< npts; t++)
+      mPtrs->copyCube_element (mPtrs->mEmphasisParam,reg,hp,t,emphasis_data.EmphasisVectorByHomopolymer[hp][t]);
+    for (int t=npts; t< MAX_COMPRESSED_FRAMES; t++)
+      mPtrs->copyCube_element (mPtrs->mEmphasisParam,reg,hp,t,0); // pad 0's, memset faster here?
   }
-}
 
-void BkgModel::JGVTraceLogger(int flow)
-{
-  // called once per thread within a region and block of flows
-
-  float trace[time_c.npts];
-  my_regions.rp.CopyDrift = 1;
-  for (int ibd=0; ibd<my_beads.numLBeads; ibd++) {
-    for (int iFlowBuffer=0; iFlowBuffer < my_flow.numfb; iFlowBuffer++){
-      my_trace.CopySignalForTrace(trace, time_c.npts, ibd, iFlowBuffer);
-      char s[1024];
-      int n = 0;
-      n += sprintf(&s[n], "\n");
-      n += sprintf(&s[n], "Flow %d %d, Region corner = (%d, %d), bead=%d:: ", flow, iFlowBuffer, region->row, region->col, ibd);
-      for (int j=0; j<time_c.npts; j++){
-	n += sprintf(&s[n],  "%.1f ", trace[j]);
-      }
-      n += sprintf(&s[n], "\n");
-      assert (n < 1024);
-      fprintf(stdout, "%s", s);
+  for (int hp=emphasis_data.numEv; hp<MAX_HPLEN+1; hp++)
+  {
+    for (int t=0; t< MAX_COMPRESSED_FRAMES; t++)
+    {
+      mPtrs->copyCube_element (mPtrs->mEmphasisParam,reg,hp,t,0); // pad 0's, memset faster here?
     }
   }
+
 }
+
+
 

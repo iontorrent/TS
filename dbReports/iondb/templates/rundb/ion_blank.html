@@ -1,14 +1,13 @@
 {% extends "rundb/ion_base_template.html" %}
-
 {% block pagination_holder %}{% endblock %}
-{% block current_tab%}{{tab}}{% endblock %}
+{% block current_tab %}{{ tab }}{% endblock %}
 {% block controls_holder %}{% endblock %}
 
 {% block full_page_content %}
 
-{% if tab %}
-{# create a place to be overwritten by PHP #}
- [PHP]
-{% endif %}
- 
+  {% if tab %}
+    {# create a place to be overwritten by PHP #}
+    [PHP]
+  {% endif %}
+
 {% endblock full_page_content %}

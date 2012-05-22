@@ -1,0 +1,246 @@
+﻿.MainBox {
+	width: 1024px;
+	height: 100%;
+	top: 0px;
+	left: 0px;
+	position: relative;
+	/*border-style: solid;
+	border-width: 2px;*/
+	overflow: hidden;
+	font-family: Tahoma;
+
+}
+.StatsBox {
+    position:relative;
+    width: 100%;
+    float:left;
+    overflow:visible;
+    
+}
+.Separator {
+    position:relative;
+    clear: both;
+}
+.StatsLeftCol {
+    position: relative;
+    width: 50%;
+    float:left;
+}
+.StatsRightCol {
+    position: relative;
+    width:50%;
+    float:right;
+}
+
+.ImageHeader {
+	position:relative;
+	top: 0px;
+	margin-top:8px;
+	width: 100%;
+	text-align: center;
+	margin-left: auto;
+	margin-right: auto;
+	left: 0px;
+}
+.ReportTitle {
+	font-family: Tahoma;
+	font-size: xx-large;
+	font-weight: bolder;
+	font-style: normal;
+	font-variant: small-caps;
+	text-transform: none;
+	text-decoration: none;
+	text-align: center;
+	position: relative;
+	width: 100%;
+}
+.Col {
+	position: relative;
+	border-width: 0px;
+	border-style: solid;
+	float: left;
+	clear: none;
+	width: 100%;
+}
+
+.VertDatum {
+	border: 1px black solid;
+	height: 1.25em;
+	width: 100%;
+	position: relative;
+	font-family: Tahoma;
+	font-size: small;
+	font-style: normal;
+	font-variant: normal;
+	text-transform: none;
+	color: #000000;
+	text-align: left;
+	overflow:auto;
+}
+.VertLabel {
+	border: 1px black solid;
+	width: 100%;
+	position: relative;
+	width: 100%;
+	height: 1.25em;
+	float: left;
+	font-family: Tahoma;
+	font-size: small;
+	font-weight: normal;
+	font-style: normal;
+	color: black;
+	background-color: #CCCCFF;
+	text-align: left;
+	text-transform: uppercase;
+	overflow:auto;
+}
+.MarginMaker {
+	position: relative;
+	float: left;
+	height: 100%;
+	width: 4px;
+}
+.SectionTitle {
+	font-family: Tahoma;
+	font-size: large;
+	font-weight: normal;
+	font-style: normal;
+	font-variant: small-caps;
+	text-transform: capitalize;
+	color: #000000;
+	text-decoration: none;
+	text-align: left;
+	padding: 2px;
+	left: 0px;
+	position: relative;
+	width: 100%;
+	clear: both;
+}
+
+.Spacer {
+	height: 12px;
+	top: 0px;
+	position: relative;
+	width: 100%;
+	clear: both;
+	float: none;
+}
+.LBounder {
+	width: 50%;
+	position: relative;
+	float: left;
+}
+.RBounder {
+	position: relative;
+	width: 50%;
+	float: right;
+}
+.HorizLabelBox {
+	width: 100%;
+	border: 1px black solid;
+}
+.HorizLabel {
+	float: left;
+	overflow: hidden;
+	width: 110px;
+	height: 3.75em;
+	position: relative;
+	font-family: Tahoma;
+	font-size: small;
+	font-weight: normal;
+	font-style: normal;
+	font-variant: small-caps;
+	text-transform: capitalize;
+	background-color: #CCCCFF;
+	border: 1px solid black;
+
+}
+.HorizDatumBox {
+	width: 100%;
+	position: relative;
+}
+.HorizDatum {
+	float: left;
+	overflow: hidden;
+	width: 110px;
+	height: 4.75em;
+	position: relative;
+	font-family: Tahoma;
+	font-size: small;
+	font-weight: normal;
+	font-style: normal;
+	text-transform: none;
+	background-color: #FFFFFF;
+	border: 1px solid black;
+	text-align: center;
+}
+
+.HorizDatum2 {
+	background-color: #E0FFB8;
+	height: 4.75em;
+	text-align: left;
+}
+
+.HorizDatum3 {
+	background-color: #a0dd96;
+	height: 4.75em;
+	text-align: left;
+}
+
+.ChipMapHolder {
+	text-align: center;
+}
+
+.PageTitle {
+	font-family: Tahoma;
+	font-size:large;
+	text-align: center;
+	width: 100%;
+	height: auto;
+	clear: both;
+	text-transform: uppercase;
+}
+
+.SmallImageHolder {
+	text-align: center;
+}
+.SmallImg {
+	font-family: Tahoma;
+	height: auto;
+	float: left;
+	width: 320px;
+	padding: 3px;
+}
+.row-category {
+	border:1px black solid;
+	background-color: #CCCCFF;
+	font-family: Tahoma;
+	font-variant: small-caps;
+}
+
+tr {
+	font-family: Tahoma;
+}
+td {
+	font-family: Tahoma;
+	padding-left: 12px;	
+}
+table {
+	font-family: Tahoma;
+}
+
+A:link {
+    text-decoration: none;
+    color: #000000;
+}
+
+A:visited {
+    text-decoration: none;
+    color: #000000;
+}
+A:hover {
+    text-decoration: underline;
+}
+img {
+    border: 0px;
+}

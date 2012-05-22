@@ -30,7 +30,7 @@ enum {
 };
 
 enum {
-  imageLoadAllE, imageLoadKeyE, imageLoadE, bkgWorkE, SeparatorWorkE, imageInitBkgModel
+  imageLoadAllE, bkgWorkE, SeparatorWorkE, imageInitBkgModel
 };
 
 

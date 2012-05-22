@@ -3,7 +3,9 @@
 from iondb.rundb.models import *
 from iondb.rundb import tasks
 from iondb.rundb import forms
+from iondb.rundb import views
 from django.contrib import admin
+from django.forms import TextInput, Textarea
 
 from django.template import RequestContext
 from django.shortcuts import render_to_response
@@ -17,6 +19,14 @@ import os
 import socket
 import fcntl
 import struct
+import json
+import re
+import logging
+import urllib
+
+
+logger = logging.getLogger(__name__)
+
 
 def script(script_text, shell_bool = True):
     """run system commands"""
@@ -29,6 +39,58 @@ def mac_address():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', 'eth0'))
     return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
+
+
+def how_are_you(request, host, port):
+    """Open a socket to the given host and port, if we can :), if not :(
+    """
+    try:
+        s = socket.create_connection((host, int(port)), 10)
+        s.close()
+        status = ":)"
+    except Exception as complaint:
+        logger.warn(complaint)
+        status  = ":("
+    return http.HttpResponse('{"feeling":"%s"}' % status,
+                             mimetype='application/javascript')
+
+
+def how_am_i(request):
+    """Perform a series of network status checks on the torrent server itself
+    """
+    result = {
+        "eth0": None,
+        "route": None,
+        "ip_addr": None,
+    }
+    try:
+        stdout, stderr = script("/sbin/ifconfig eth0")
+        for line in stdout.splitlines():
+            m = re.search(r"inet addr:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", line)
+            if m:
+                result["ip_addr"] = m.group(1)
+            elif "UP" in line and "MTU" in line:
+                result["eth0"] = True
+        stdout, stderr = script("/bin/netstat -r")
+        result["route"] = "default" in stdout
+    except Exception as err:
+        logger.error("Exception raised during network self exam, '%s'" % err)
+    return http.HttpResponse(json.dumps(result), content_type="application/json")
+
+
+def fetch_remote_content(request, url):
+    """Perform an HTTP GET request on the given url and forward it's result.
+    This is specifically for remote requests which need to originate from this
+    server rather than from the client connecting to the torrent server.
+    """
+    try:
+        remote = urllib.urlopen(url)
+        data = remote.read()
+        remote.close()
+    except Exception as complaint:
+        logger.warn(complaint)
+        data = ""
+    return http.HttpResponse(data)
 
 
 @staff_member_required
@@ -46,14 +108,11 @@ def network(request):
     else:
         form = forms.NetworkConfigForm(prefix="network")
 
-    return render_to_response("admin/network.html", {"network": {
-        "mac": mac_address(),
-        "form": form,
-        }
-    })
+    return render_to_response("admin/network.html", RequestContext(request,
+        {"network": {"mac": mac_address(), "form": form} }))
 
 
-
+@staff_member_required
 def manage(request):
     """provide a simple interface to allow a few management actions of the Torrent Server"""
     
@@ -73,9 +132,9 @@ def manage(request):
             {},
             RequestContext(request, {}),
         )
-    
-manage = staff_member_required(manage)
 
+
+@staff_member_required
 def install_log(request):
     """provide a way to output the log to the admin page"""
     log = open("/tmp/django-update").readlines()
@@ -84,24 +143,24 @@ def install_log(request):
     response = http.HttpResponse(log, content_type=mime)
     return response
 
+
 def install_log_text():
     try:
         return open("/tmp/django-update").readlines()
     except:
         return False
 
+
 def update_locked():
     """Check to see if the update process locked"""
 
     lockFile = "/tmp/django-update-status"
-
+    lockStatus = None
     if os.path.exists(lockFile):
         lockStatus = open(lockFile).readlines()
         lockStatus = lockStatus[0].strip()
-        if lockStatus == "locked":
-            return True
+    return lockStatus == "locked"
 
-    return False
 
 def install_lock(request):
     """provide a way to output the log to the admin page"""
@@ -117,7 +176,11 @@ def install_lock(request):
 
     return response
 
-install_log = staff_member_required(install_log)
+
+def run_update_check(request):
+    tasks.check_updates.delay()
+    return http.HttpResponse()
+
 
 def run_update():
     """Run the update.sh script, that will run update.sh
@@ -125,33 +188,41 @@ def run_update():
     Also check to make sure that the update process is not locked
     """
     if not update_locked():
-        output, errors = script('sudo at now < /opt/ion/iondb/bin/update.sh > /dev/null ',True)
+        update_message = """Please do not start any data analysis or chip runs. The system is updating.  This may take a while, and you will see a message when it is complete."""
+        Message.warn(update_message, expires="startup")
+        try:
+            tasks.download_updates.delay(auto_install=True)
+        except Exception as err:
+            logger.error("Attempting to run update but got error '%s'" % err)
+            raise
         return True
     else:
         return False
 
+
+@staff_member_required
 def update(request):
     """provide a simple interface to allow Torrent Suite to be updated"""
-    
+
     if request.method=="POST":
-    
         updateLocked = run_update()
-        
+        data = json.dumps({"lockBlocked" : updateLocked })
+        return http.HttpResponse(data, content_type="application/json")
+    elif request.method=="GET":
+        about, meta_version = views.findVersions()
+        config = GlobalConfig.get()
+        from iondb.rundb.api import GlobalConfigResource
+        resource = GlobalConfigResource()
+        serialized_config = resource.serialize(None,
+                                               resource.full_dehydrate(config),
+                                               "application/json")
         return render_to_response(
             "admin/update.html",
-            {"post": True, "lockBlocked" : updateLocked },
+            {"about": about, "meta": meta_version,
+             "global_config": serialized_config},
             RequestContext(request, {}),
         )
-    
-    if request.method=="GET":
-    
-        return render_to_response(
-            "admin/update.html",
-            {},
-            RequestContext(request, {}),
-        )
-    
-update = staff_member_required(update)
+
 
 def ot_log(request):
     """provide a way to output the log to the admin page"""
@@ -173,6 +244,8 @@ def ot_log(request):
     response = http.HttpResponse(log, content_type=mime)
     return response
 
+
+@staff_member_required
 def updateOneTouch(request):
     """provide a simple interface to allow one touch updates"""
 
@@ -208,38 +281,48 @@ def updateOneTouch(request):
             RequestContext(request, {}),
             )
 
-updateOneTouch = staff_member_required(updateOneTouch)
 
 class ExperimentAdmin(admin.ModelAdmin):
     list_display = ('expName', 'date')
+    search_fields = ['expName' ]
+
 
 class ResultsAdmin(admin.ModelAdmin):
     list_display = ('resultsName', 'experiment','timeStamp')
-    search_fields = ['resultsName' ]
+    search_fields = ['resultsName']
+
 
 class TFMetricsAdmin(admin.ModelAdmin):
     list_display = ('name', 'report')
 
+
 class TemplateAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
+
 class LocationAdmin(admin.ModelAdmin):
     list_display = ('name',)
-    
+
+
 class BackupAdmin(admin.ModelAdmin):
     list_display = ('experiment',)
+
 
 class BackupConfigAdmin(admin.ModelAdmin):
     list_display = ('backupDirectory',)
 
+
 class PluginAdmin(admin.ModelAdmin):
     list_display = ('name','selected','version','date','active','path')
+
 
 class PluginResultAdmin(admin.ModelAdmin):
     list_display = ('result', 'plugin', 'state', 'store')
 
+
 class EmailAddressAdmin(admin.ModelAdmin):
     list_display = ('email','selected')
+
 
 class GlobalConfigAdmin(admin.ModelAdmin):
     list_display = ('name','web_root',
@@ -254,25 +337,39 @@ class GlobalConfigAdmin(admin.ModelAdmin):
                     'default_plugin_script',
                     'default_storage_options',
                     )
+    formfield_overrides = {
+        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+    }
+
+
 class ChipAdmin(admin.ModelAdmin):
     list_display = ('name','slots','args')
+
 
 class dnaBarcodeAdmin(admin.ModelAdmin):
     list_display = ('name','id_str','sequence','adapter','annotation','score_mode','score_cutoff','type','length','floworder','index')
     list_filter  = ('name',)
 
+
 class RunTypeAdmin(admin.ModelAdmin):
     list_display = ('runType','description')
 
+
 class ReferenceGenomeAdmin(admin.ModelAdmin):
     list_display = ('short_name','name')
-    
+
+
 class ThreePrimeadapterAdmin(admin.ModelAdmin):
-    list_display = ('name','sequence','description')
+    list_display = ('direction', 'name','sequence','description', 'isDefault')
+
+
+class LibraryKeyAdmin(admin.ModelAdmin):
+    list_display = ('direction', 'name','sequence','description', 'isDefault')
 
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
+admin.site.register(Message)
 admin.site.register(Location,LocationAdmin)
 admin.site.register(Rig)
 admin.site.register(FileServer)
@@ -300,8 +397,10 @@ admin.site.register(ContentUpload)
 admin.site.register(Content)
 admin.site.register(UserEventLog)
 admin.site.register(UserProfile)
-admin.site.register(SequencingKit)
-admin.site.register(LibraryKit)
 admin.site.register(VariantFrequencies)
 #ref genome
 admin.site.register(ReferenceGenome,ReferenceGenomeAdmin)
+
+admin.site.register(KitInfo)
+admin.site.register(KitPart)
+admin.site.register(LibraryKey, LibraryKeyAdmin)

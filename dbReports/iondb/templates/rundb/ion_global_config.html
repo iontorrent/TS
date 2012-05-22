@@ -1,107 +1,358 @@
 {% extends "rundb/ion_base_template.html" %}
 {% block extra_head %}
-  <script type="text/javascript" language="javascript" src="/site_media/jquery/js/jgcharts.pack.js"></script>
-  <link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
-  <script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+<script type="text/javascript" language="javascript"
+          src="/site_media/jquery/js/jgcharts.pack.js"></script>
 
-  <script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
-  <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
+<link rel="stylesheet" type="text/css"
+        href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
 
-  <script>
+<script type="text/javascript"
+          src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+
+<script type="text/javascript"
+          src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+
+<link type="text/css" rel="stylesheet"
+      href="/site_media/jquery/js/apprise/apprise.css"/>
+
+<script type="text/javascript"
+        src="/site_media/jquery/dropdown/jquery.dropdown.js"></script>
+
+<link type="text/css" rel="stylesheet"
+      href="/site_media/jquery/dropdown/jquery.dropdown.css" />
+
+<script type="text/javascript"
+        src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+
+<link type="text/css" href="/site_media/jquery/css/jquery.ui.plupload.css"
+      rel="Stylesheet"/>
+
+<script type="text/javascript"
+        src="/site_media/jquery/js/plupload/plupload.js"></script>
+<script type="text/javascript"
+        src="/site_media/jquery/js/plupload/plupload.silverlight.js"></script>
+<script type="text/javascript"
+        src="/site_media/jquery/js/plupload/plupload.flash.js"></script>
+
+<script>
 
     //helper
-    if(!String.prototype.startsWith){
+    if (!String.prototype.startsWith) {
         String.prototype.startsWith = function (str) {
             return !this.indexOf(str);
         }
     }
 
-    $(function () {
+$(function () {
 
-      $("#downloadPluginButton").button();
-      $("#addPluginNone").button();
+    //create the plugin manage dropdown menus
+    $(".ddLink").each(function(){
+        var pluginName = $(this).data("plugin");
+        var pluginPK = $(this).data("pk");
+        var config = $(this).data("config");
 
-      $("#addPlugin, #addPluginNone").click(function () {
-        $.colorbox({inline:true, width:"90%", href:"#downloadPlugin"});
-      });
+        var dropDown = '<div id="dropdown-'+ pluginName +'" class="dropdown-menu has-tip anchor-right"><ul>';
 
-      $("#downloadPluginButton").click(function () {
+        if (config != "None"){
+            dropDown += '<li><span class="configureLink" data-config="'+ config +'">Configure '+ pluginName +'</span></li>';
+            dropDown += '<li class="divider"></li>';
+        }
+
+        dropDown += '<li><span class="uninstallLink" data-pk="'+ pluginPK +'">Uninstall '+ pluginName +'</span></li>';
+        dropDown += '</ul></div>';
+
+        $('body').append(dropDown);
+    });
+
+    //bind to the uninstall link
+    $(".uninstallLink").click(function(){
+        $(".uninstallLink").dropdown('hide');
+
+        var pk = $(this).data('pk');
+        url = "/rundb/api/v1/plugin/uninstall/" + pk + "/";
+
+        apprise('Are you sure you would like to remove this plugin?', {'verify': true}, function (r) {
+            if (r) {
+              //delete using the API
+              $.ajax({
+                  type: "DELETE",
+                  url: url,
+                  async: false,
+                  success: function (msg) {
+                    window.location = "{% url rundb.views.global_config %}";
+                  },
+                  error: function (msg){
+                      apprise('Error, plugin could not be removed', {}, function()
+                          {
+                              window.location = "{% url rundb.views.global_config %}";
+                          }
+                      );
+                  }
+              });
+            }
+        });
+    });
+
+    //bind to the configure and open an iframe to the config page
+    $(".configureLink").click(function(){
+
+        $(".configureLink").dropdown('hide');
+        var config = $(this).data('config');
+        config += "?config=true";
+
+        $.colorbox({iframe: true,  width: "80%", height: "80%", href: config });
+
+    });
+
+    $("#downloadPluginButton").button();
+    $("#addPluginNone").button();
+
+
+    $("#downloadPluginButton").click(function () {
         urlVAL = $("#downloadPluginURL").val();
-        downloadPluginJSON = { "url":urlVAL };
+        downloadPluginJSON = { "url": urlVAL };
         downloadPluginJSON = JSON.stringify(downloadPluginJSON);
         $.ajax({
-            type:'POST',
-            url:"/rundb/api/v1/plugin/install/",
-            contentType:"application/json; charset=utf-8",
-            data:downloadPluginJSON,
-            dataType:"json",
-            async:false,
-            beforeSend:function () {
+            type: 'POST',
+            url: "/rundb/api/v1/plugin/install/",
+            contentType: "application/json; charset=utf-8",
+            data: downloadPluginJSON,
+            dataType: "json",
+            async: false,
+            beforeSend: function () {
 
-                if ($("#downloadPluginURL").val() === ""){
-                    $("#downloadPluginError").html("Error: The Plugin URL must be provided.");
-                    return false;
+                if ($("#downloadPluginURL").val() === "") {
+                  $("#downloadPluginError").html("Error: The Plugin URL must be provided.");
+                  return false;
                 }
 
                 linkValid = false;
 
-                if ($("#downloadPluginURL").val().startsWith("http://") || $("#downloadPluginURL").val().startsWith("https://")  ){
-                    linkValid = true;
+                if (urlVAL.toLowerCase().startsWith("http://") || urlVAL.toLowerCase().startsWith("https://")) {
+                  linkValid = true;
                 }
 
-                if (linkValid){
-                    $("#downloadPlugin").html("");
-                    $("#downloadPlugin").html("<span>Initializing plugin download <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
-                }else{
-                    $("#downloadPluginError").html("Error: The Plugin URL must start with http:// or https:// ");
-                    return false;
+                if (linkValid) {
+                  $("#downloadPlugin").html("");
+                  $("#downloadPlugin").html("<span>Initializing plugin download <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+                } else {
+                  $("#downloadPluginError").html("Error: The Plugin URL must start with http:// or https:// ");
+                  return false;
                 }
             },
-            success:function () {
+            success: function () {
                 $("#downloadPlugin").html("");
                 $("#downloadPlugin").html("<span>Starting plugin download page will reload</span>");
-                setTimeout(function () {window.location.reload();}, 1000);
+                setTimeout(function () { window.location.reload(); }, 1000);
+            },
+            error: function (){
+                $("#downloadPlugin").html("<span>Failed To Install</span>");
             }
         });
-      });
+    });
 
-      $("form.readonlyish input").attr("readonly", true)
-              .filter(":submit, :reset").attr("disabled", true);
-      $("#enable_editing").click(function(){
-        $("form.readonlyish input").removeAttr("readonly")
-                .filter(":submit, :reset").removeAttr("disabled");
-        $("form.readonlyish input[type=text]").stop()
-                .animate({"background-color":"#90EE90"}, 600)
-                .animate({"background-color":"#FFFFFF"}, 300);
-      });
+    $(".deleteLink").button({icons: {primary: 'ui-icon-closethick'}});
 
-    $(".deleteLink").button({
-        icons: {
-            primary: 'ui-icon-closethick'
-        }} );
-
-    $(".deleteLink").click(function(){
+    $(".deleteLink").click(function () {
         var deletePK = $(this).data("pk");
-        apprise('Are you sure you would like to remove this failed plugin install?', {'verify':true}, function(r)
-        {
-            if(r)
-            {
-                //delete using the API
-                $.ajax({
-                    type: "DELETE",
-                    url: "/rundb/api/v1/plugin/" + deletePK + "/",
-                    async:  false,
-                    success: function(msg){
-                        window.location.reload();
-                    }
-                });
-            }
+        apprise('Are you sure you would like to remove this failed plugin install?', {'verify': true}, function (r) {
+          if (r) {
+            //delete using the API
+            $.ajax({
+              type: "DELETE",
+              url: "/rundb/api/v1/plugin/" + deletePK + "/",
+              async: false,
+              success: function (msg) {
+                window.location.reload();
+              }
+            });
+          }
         });
     });
 
+    $(".colorinput").colorbox({width: "80%", height: "80%", iframe: true})
+
+    $(".autorunPlugin").change(function () {
+
+        var checkBox = $($(this));
+        var key = $(this).data("pk");
+        var autorunUrl = "/rundb/autorunplugin/" + key;
+
+        $.ajax({
+            type: "POST",
+            beforeSend: function () {
+                //checkBox.parent().activity({segments: 10, width:3, space:2, length: 3, color: '#252525', speed: 1.5, padding: '3', align: 'left'});
+            },
+            success: function () {
+                //checkBox.parent().activity(false);
+            },
+            data: "checked=" + checkBox.is(':checked'),
+            url: autorunUrl
+        });
+
     });
-  </script>
-  <style type="text/css">
+
+
+    //UPLOAD//
+
+    //init plupload
+    uploader = new plupload.Uploader({
+        runtimes: 'flash',
+        browse_button: 'pickfile',
+        url: '/rundb/upload_plugin_zip/',
+        chunk_size: '5mb',
+        unique_names: true,
+        multi_selection: false,
+        multiple_queues: false,
+        silverlight_xap_url: '/site_media/jquery/js/plupload/plupload.silverlight.xap',
+        flash_swf_url: '/site_media/jquery/js/plupload/plupload.flash.swf'
+    });
+
+    uploader.bind('Init', function (up, params) {
+        $("#upload-chrome, #pickfile").show();
+        $('#filelist').html("Please select a plugin file to upload. ");
+    });
+
+    uploader.bind('FilesAdded', function (up, files) {
+        //disable the other tab
+        $('#tabs').tabs("disable",0);
+
+        this.removeFile(this.files[0]);
+        $("#file_info").html("");
+        $(".file_item").remove();
+        $.each(files, function (i, file) {
+            $('#filelist').append(
+                    '<div class="file_item" id="' + file.id + '">' +
+                            file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>' +
+                            '</div>');
+            //if they are using flash and select a file greater than 2 gigs give them a warning.
+            //TODO: remove this message if the user selects a 2 gig file, and then changes it.
+            if (up.runtime == "flash" && file.size > 2147483648) {
+                $('#filelist').append(" <span id='flash_warn' class='file_item'>  <p> <em> The files must not be larger than 2 Gigabytes </em>  </p> </span>");
+                $('#flash_warn').append("<p><em>You can also ZIP the FASTA file, and uploaded the compressed file.</em></p>");
+                $('#flash_warn').effect('pulsate');
+                flashFail = true;
+            }
+            //set the reported file size
+            $("#reported_file_size").val(file.size);
+
+        });
+    });
+
+    uploader.bind('UploadProgress', function (up, file) {
+        $('#' + file.id + " b").html(file.percent + "%");
+        $('#upload-progress').progressbar({value: file.percent});
+        //status 5 means transfer was a success
+        if (file.status == 5) {
+            uploaddone = true;
+            $('#' + file.id + " b").html("100%");
+            $('#upload-progress').progressbar({value: 100 });
+            $("#file_info").html("");
+            finish();
+        }
+    });
+
+    $('#uploadfile').click(function (e) {
+
+
+        //don't allow them to upload a big file if they are using Flash, it will fail.
+        if (flashFail) {
+            $('#flash_warn').effect('pulsate');
+            return false;
+        }
+        if (uploader.files.length == 1) {
+            uploader.start();
+            e.preventDefault();
+            $('#pickfile').hide();
+            $("#uploadfile").hide();
+
+            $('#upload-progress').fadeIn('normal');
+
+        } else {
+            $("#fastaUpload").effect("highlight", {"color": "#F20C18"}, 2000);
+            $("#file_info").html("You must select at a plugin file to upload.");
+        }
+
+    });
+
+    flashFail = false;
+
+    $("#addPlugin, #addPluginNone").click(function () {
+        $.colorbox({inline: true,
+                    width: "80%",
+                    height: "80%",
+                    href: "#downloadPlugin",
+                    onComplete:function(){
+                        uploader.refresh();
+                    },
+                    onClosed:function(){
+                        uploader.destroy();
+                        $("#tabs").tabs("option", "selected", 0 );
+                    }
+        });
+    });
+
+    firstFinish = false;
+
+    function finish() {
+        // Post to a this Django view
+
+        //plupload calls this twice, we don't want that.
+        if (firstFinish) return false;
+
+        firstFinish = true;
+
+        var file_name = uploader.files[0].target_name
+        $("#target_file").val(file_name.split(' ').join(''));
+
+        $("#update").html("Attempting to install plugin");
+
+        target_file = $("#target_file").val();
+
+        dataFile = {"file": target_file};
+        dataFile = JSON.stringify(dataFile);
+        $.ajax({
+            type: 'POST',
+            url: "/rundb/api/v1/plugin/install/",
+            contentType: "application/json; charset=utf-8",
+            data: dataFile,
+            dataType: "json",
+            async: false,
+            success: function () {
+                window.location.reload();
+            },
+            error:function(){
+                $("#update").html("Plugin failure installing");
+            }
+        });
+
+    }
+
+    $("#uploadfile").button();
+    $("#pickfile").button();
+    $('#upload-progress').progressbar().hide();
+
+    $('#tabs').tabs({
+             select: function(event, ui) {
+                 selected = ui.index;
+
+                 if (selected === 1){
+                     uploader.init();
+                     uploader.refresh();
+                 }else{
+                     uploader.destroy();
+                     uploader.refresh();
+                     setTimeout( function(){ $('#tabs').tabs("disable",1); } , 100);
+                 }
+             }
+    });
+
+});
+
+</script>
+
+<style type="text/css">
+
     #sitename {
       z-index: 10;
       position: absolute;
@@ -159,57 +410,68 @@
       font-size: large;
     }
 
-    form.readonlyish input {
-      color: black;
+    #addPluginNoneBox {
+      padding: 15px;
     }
 
-    #enable_editing {
-      margin: 12px 0 0 12px;
+    #downloadPluginError {
+      color: red;
     }
 
-    #addPluginNoneBox{
-        padding:  15px;
-    }
-    #downloadPluginError{
-        color: red;
+    .deleteLink {
+      margin-right: 20px;
+      float: right;
     }
 
-    .deleteLink{
-        margin-right: 20px;
-        float: right;
-    }
   </style>
 
 {% endblock extra_head %}
 
 {% block site-title %}
-<form id="sitename" class="readonlyish" method="post" action="{% url iondb.rundb.views.global_config %}">
-  <input type="text" value="{{ base_site_name }}" name="site_name" class="readonly"/>
-  <input type="submit" value="Save changes" />
-</form>
+  <form id="sitename" method="post"
+        action="{% url iondb.rundb.views.global_config %}">
+    <input type="text" value="{{ base_site_name }}" name="site_name"/>
+    <input type="submit" value="Save changes"/>
+  </form>
 {% endblock %}
 
 {% block pagination_holder %}{% endblock %}
 {% block current_tab %}config{% endblock %}
-{% block controls_holder %}    <button id="enable_editing">Edit Fields</button>{% endblock %}
+{% block controls_holder %}
+  <div id="bound_messages">
+  {% for message in bound_messages %}
+    <div class="alert">
+      <a class="close" data-dismiss="alert">×</a>
+      {{ message.body|safe }}
+    </div>
+  {% endfor %}
+  </div>
+{% endblock %}
 
 {% block pre_content %}
 
-    <div class="clear">
+  <div class="clear">
     <div class="left_heading left">Customer Support Contacts</div>
   </div>
   <div class="bounded_container clear">
     <div style="padding: 10px;">
-      <form class="resetable readonlyish" method="post" action="{% url iondb.rundb.views.global_config %}">
+      <form class="resetable" method="post"
+            action="{% url iondb.rundb.views.global_config %}">
         <fieldset class="contact">
           <legend>Lab Contact</legend>
-          <p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
+          <p>This is the person in your organization who should be notified
+            during a support request of problems related to the nature of an
+            experiment/run.
+          </p>
           <ul>{{ contacts.lab_contact.as_ul }}</ul>
         </fieldset>
         <br style="clear: both;"/>
         <fieldset class="contact">
           <legend>IT Contact</legend>
-          <p>This is the person in your organization who should be notified during a support request of problems related to the Torrent Server's hardware or the network environment.</p>
+          <p>This is the person in your organization who should be notified
+            during a support request of problems related to the Torrent Server's
+            hardware or the network environment.
+          </p>
           <ul>{{ contacts.it_contact.as_ul }}</ul>
         </fieldset>
         <div>
@@ -237,10 +499,10 @@
     </div>
     <div class="roundedcornr_content_526903">
     <div class="clear">
-        <div class="left_heading left">Plugins</div>
-        <div class="right_heading">
-            <input type="submit" value="Add" id="addPlugin" />
-        </div>
+      <div class="left_heading left">Plugins</div>
+      <div class="right_heading">
+        <input type="submit" value="Add" id="addPlugin"/>
+      </div>
     </div>
     <div class="bounded_container clear">
       <table>
@@ -251,55 +513,60 @@
           <th>Name</th>
           <th>Version</th>
           <th>Date</th>
-          <th>Config</th>
+          <th>Manage</th>
         </tr>
         </thead>
         <tbody>
         {% for pg in plugin %}{% spaceless %}
           <tr class="{% cycle 'row1' 'row2' %} graphable" id="{{pg.pk}}_row">
-             {% ifequal pg.installStatus "installed" %}
-                    <td class='enable_plugin_td'>
-                      <input {% if pg.selected %}checked{% endif %}
-                             type='checkbox' id='enableplugin_{{pg.pk}}'/>
-                    </td>
-                    <td class='enable_plugin_autorun_td'>
-                      {% if pg.autorunMutable %}
-                        <input {% if pg.autorun %}checked{% endif %} type='checkbox'
-                               class='autorunPlugin' data-pk='{{pg.pk}}'/>
-                      {% endif %}
-                    </td>
-
-                      {# if there is an about.html make that a link to the about.html as an iframe #}
-                      {% if pg.hasAbout %}
-                      <td>
-                          <a class="colorinput" href="{{ pg.hasAbout}}?about=true">{{pg.name}}</a>
-                      </td>
-                      {% else %}
-                        <td>{{ pg.name }}</td>
-                      {% endif %}
-
-                    <td>{{ pg.version }}</td>
-                    <td>{{ pg.date|date:"M d Y" }}</td>
-                    {#  plugin config #}
-                    {% if pg.isConfig %}
-                      <td><a class="colorinput" href="{{ pg.isConfig }}?config=true">config</a>
-                      </td>
-                    {% else %}
-                      <td></td>
-                    {% endif %}
-             {% endifequal %}
-
-              {% ifequal pg.installStatus "failed" %}
-                <td colspan="6"> {{pg.name }} failed to install!
-                    <span class="deleteLink" data-pk="{{pg.pk}}">Remove This Message </span>
-                </td>
-              {% endifequal %}
-
-              {% ifequal pg.installStatus "queued" %}
-              <td colspan="6">{{pg.name }} is still downloading, reload the page to update the status
+            {% ifequal pg.installStatus "installed" %}
+              <td class='enable_plugin_td'>
+                <input {% if pg.selected %}checked{% endif %} type='checkbox'
+                       id='enableplugin_{{pg.pk}}'/>
               </td>
-              {% endifequal %}
+              <td class='enable_plugin_autorun_td'>
+                {% if pg.autorunMutable %}
+                  <input {% if pg.autorun %}checked{% endif %} type='checkbox'
+                         class='autorunPlugin' data-pk='{{pg.pk}}'/>
+                {% endif %}
+              </td>
 
+              {# if there is an about.html make that a link to the about.html as an iframe #}
+              {% if pg.hasAbout %}
+                <td>
+                  <a class="colorinput"
+                     href="{{ pg.hasAbout}}?about=true">{{ pg.name }}</a>
+                </td>
+              {% else %}
+                <td>{{ pg.name }}</td>
+              {% endif %}
+
+              <td>{{ pg.version }}</td>
+              <td>{{ pg.date|date:"M d Y" }}</td>
+
+              {#manage#}
+              <td>
+                <span class="ddLink" data-config="{{pg.isConfig}}" data-dropdown="#dropdown-{{pg.name}}" data-plugin="{{pg.name}}" data-pk="{{pg.pk}}">
+                  Manage
+                </span>
+              </td>
+
+            {% endifequal %}
+
+
+            {% ifequal pg.installStatus "failed" %}
+              <td colspan="6"> {{ pg.name }} failed to install!
+                <span class="deleteLink" data-pk="{{pg.pk}}">Remove This
+                  Message
+                </span>
+              </td>
+            {% endifequal %}
+
+            {% ifequal pg.installStatus "queued" %}
+              <td colspan="6">{{ pg.name }} is still downloading, reload the
+                page to update the status
+              </td>
+            {% endifequal %}
           </tr>
 
         {% endspaceless %}
@@ -315,11 +582,9 @@
     </div>
     <div class="roundedcornr_content_526903">
     <div class="centered_message">No Plugins are installed.
-
-        <div id="addPluginNoneBox">
-            <a id="addPluginNone">Install a plugin using a URL</a>
-        </div>
-
+      <div id="addPluginNoneBox">
+        <a id="addPluginNone">Install a plugin</a>
+      </div>
     </div>
 
   {% endif %}
@@ -392,8 +657,8 @@
               </div>
             </td>
             <td class='enable_email_td'>
-              <input {% if e.selected %}checked{% endif %}
-                     type='checkbox' id='emailselected_{{e.pk}}'/>
+              <input {% if e.selected %}checked{% endif %} type='checkbox'
+                     id='emailselected_{{e.pk}}'/>
             </td>
             <td>{{ e.email }}</td>
           </tr>
@@ -414,54 +679,82 @@
     <p>
     <table>
       <tr>
-        <td>The Django <a href="/admin" target="_blank">Admin Interface</a>
-          provides
-          direct access to the database entries for system administrators.
+        <td>The Django
+          <a href="/admin" target="_blank">Admin Interface</a>
+          provides direct access to the database entries for system
+          administrators.
         </td>
       </tr>
     </table>
   </div>
 
 
-   <!-- This contains the hidden div for the pluginDownloader-->
-<div style="display:none">
-	<div id="downloadPlugin" style="padding:10px; background:#fff;">
-        <p>Please enter the Torrent Circuit URL for the plugin you wish to install</p>
-        <input type="text" size="100" id="downloadPluginURL" />
-        </br>
-        </br>
-        <div id="downloadPluginButton">Download</div>
-        <span id="downloadPluginError"></span>
-	</div>
-</div>
-
-  <!--
-   <script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
-   -->
-
-  <script>
-    $(".colorinput").colorbox({width:"80%", height:"80%", iframe:true})
-
-    $(".autorunPlugin").change(function() {
-
-      var checkBox = $($(this));
-      var key = $(this).data("pk");
-      var autorunUrl = "/rundb/autorunplugin/" + key;
-
-      $.ajax({
-        type: "POST",
-        beforeSend:function() {
-          //checkBox.parent().activity({segments: 10, width:3, space:2, length: 3, color: '#252525', speed: 1.5, padding: '3', align: 'left'});
-        },
-        success:function() {
-          //checkBox.parent().activity(false);
-        },
-        data: "checked=" + checkBox.is(':checked'),
-        url: autorunUrl
-      });
-
-    });
+  <!-- This contains the hidden div for the pluginDownloader-->
+  <div style="display:none">
 
 
-  </script>
+
+
+    <div id="downloadPlugin" style="padding:10px; background:#fff;">
+
+        <!-- Tabs -->
+        <div id="tabs">
+            <ul>
+                <li><a href="#tabs-1">Install via URL</a></li>
+                <li><a href="#tabs-2">Install via Zip upload</a></li>
+            </ul>
+            <div id="tabs-1">
+                <p>Please enter the URL for the plugin you wish to install.
+                    Plugins can be found at the
+                    <a href="http://lifetech-it.hosted.jivesoftware.com/community/torrent_browser_plugin_store">Torrent Browser Plugin Store</a>
+                </p>
+                <input type="text" size="100" id="downloadPluginURL"/>
+                </br></br>
+                <div id="downloadPluginButton">Download</div>
+                <span id="downloadPluginError"></span>
+            </div>
+            <div id="tabs-2">
+                {#uploader section#}
+                <div id="fastaUpload" class="ctrlHolder">
+                    <div id="uploadStyle">
+                        <div id="fasta">
+                            <label for="upload-chrome">Upload a plugin</label>
+                            <div id="upload-chrome">
+                                <div id="filelist">
+                                    <p>
+                                        In order to provide a better uploading experience <a href="http://get.adobe.com/flashplayer/"> Adobe Flash</a> is required
+                                    </p>
+
+                                </div>
+
+                                <div id="pickfile">Select file</div>
+                                <div id="uploadfile">Upload file</div>
+
+                            </div>
+                            <div id="upload-progress"></div>
+                            <div id="file_info"></div>
+                            <div id="after_upload"></div>
+                            <input name="target_file" id="target_file" type="hidden"/>
+                            <input name="reported_file_size" id="reported_file_size" type="hidden"/>
+                        </div>
+
+                        <div id="update"></div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
+
+
+
+
+
+    </div>
+  </div>
+
+
+
 {% endblock content3 %}

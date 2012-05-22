@@ -37,50 +37,60 @@ def send_html(sender,recips,subject,html,text):
     msg.content_subtype = "html"
     msg.send()
 
+ampl_plugin = 'ampliconGeneralAnalysis'
+    
+def get_result_type(result,pstore):
+  rtype = None
+  if result.experiment.library.startswith('ampl_') or (ampl_plugin in pstore.keys() and pstore[ampl_plugin]):
+    rtype = 'ampl'
+#  elif 'merged' in result.experiment.project.lower(): #temporary by project name
+#    rtype = 'paired'  
+  elif result.resultsName[-3:] == '_tn':
+    rtype = 'thumb'  
+  else:
+    rtype = 'full' #default type  
+  return rtype      
+
+def find_first_result(exp,pstore):
+  rset = exp.results_set.all().order_by('timeStamp')
+  firstPk = []
+  firstType = []
+  for i in range(0, len(rset), 1):
+    testResult = rset[i]
+    rtype = get_result_type(testResult,pstore)
+    if (not firstType) or (rtype not in firstType):
+        firstPk.append(testResult.pk)
+        firstType.append(rtype)        
+  return firstPk, firstType    
+
 def send_nightly():
     # get the list of all results generated in the last 24 hours
     timerange = datetime.datetime.now() - datetime.timedelta(days=1)
     resultsList = models.Results.objects.filter(timeStamp__gt=timerange)
-
-    # for each result, its either the first result generated, or not.  If first, it goes into the new results list, else into the old
-    # so first result is either the first thumbnail, or if no thumbnails, the first full report
-    resultsNew = []
-    resultsOld = []
-    resultsThumbsNew = []
-
+        
+    resultsAll=[]
+    rType=[]
+    rNew=[]
+    covAmpl=[]  
+  
     for result in resultsList:
         if (result.status == 'Completed'):
             exp = result.experiment
-            rset = exp.results_set.all().order_by('timeStamp')
-            # now find the first thumbnail, if its the result we are looking at, its new
-            # else find the first non-thumbnail, and if its the result we are looking at, then add to new,
-            # else add to old
-            firstThumb = None
-            firstFull = None
-            for i in range(0, len(rset), 1):
-               testResult = rset[i]
-               if (firstThumb is None) and (testResult.resultsName[-3:] == '_tn'):
-                   firstThumb = testResult
-               if (firstFull is None) and (testResult.resultsName[-3:] != '_tn'):
-                   firstFull = testResult
+            pstore = result.getPluginStore()            
+            [firstPk, firstType] = find_first_result(exp,pstore)
 
-            added = False
-            if firstThumb is not None:
-                if firstThumb.pk == result.pk:
-                    resultsThumbsNew.append(result)
-                    added = True
-            # we could exclude adding the full report if we already added the thumb, but tricky since we would need a field to modify in each result indicating we just added it
-
-            if not added and firstFull is not None:
-                if firstFull.pk == result.pk:
-                    resultsNew.append(result)
-                    added = True
-
-            if not added:
-                resultsOld.append(result)
-
-    #resultsOld = resultsOld.order_by('timeStamp')
-    #resultsNew = resultsNew.order_by('timeStamp')
+            resultsAll.append(result)            
+            rNew.append(result.pk in firstPk)
+            rType.append(get_result_type(result,pstore))
+            
+            if (ampl_plugin in pstore.keys() ) and pstore[ampl_plugin]:
+              covAmpl.append(pstore[ampl_plugin]['target_coverage_at_20x_-_norm_100'])
+            else:
+              covAmpl.append(0)
+        
+    #sort by chipType
+    resultsAll, rType, rNew, covAmpl = zip(*sorted(zip(resultsAll,rType,rNew,covAmpl), key=lambda r:r[0].experiment.chipType))
+    
     
     gc = models.GlobalConfig.objects.all()[0]
     web_root = gc.web_root
@@ -92,50 +102,46 @@ def send_nightly():
         site_name = "<set site name in Global Configs on Admin Tab>"
     else:
         site_name = gc.site_name
-
-    lbmsOld = [res.best_lib_metrics for res in resultsOld]
-    tfmsOld = [res.best_metrics for res in resultsOld]
-    linksOld = [web_root+res.reportLink for res in resultsOld]
-    
-    lbmsNew = [res.best_lib_metrics for res in resultsNew]
-    tfmsNew = [res.best_metrics for res in resultsNew]
-    linksNew = [web_root+res.reportLink for res in resultsNew]
-
-    lbmsThumbsNew = [res.best_lib_metrics for res in resultsThumbsNew]
-    tfmsThumbsNew = [res.best_metrics for res in resultsThumbsNew]
-    linksThumbsNew = [web_root+res.reportLink for res in resultsThumbsNew]
+     
+    lbms = [res.best_lib_metrics for res in resultsAll]
+    tfms = [res.best_metrics for res in resultsAll]
+    links = [web_root+res.reportLink for res in resultsAll]
  
     #find the sum of the q17 bases
     hqBaseSum = 0
-    for res in resultsNew:
-        if res.best_lib_metrics:
+    for res,n,tp in zip(resultsAll,rNew,rType):
+        if n and (not tp=='thumb') and (not tp=='paired') and res.best_lib_metrics:
             if not res.best_lib_metrics.align_sample == 0:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.q17_mapped_bases
             if res.best_lib_metrics.align_sample == 1:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.extrapolated_mapped_bases_in_q17_alignments
             if not res.best_lib_metrics.align_sample == 2:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.q17_mapped_bases
-
+    
     tmpl = loader.get_template(TEMPLATE_NAME)
     ctx = template.Context({"reportsOld":
-                                [(r,t,lb,l) for r,t,lb,l in zip(resultsOld,tfmsOld,lbmsOld,linksOld) if t or l],
+                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if not n],
                             "reportsNew":
-                                [(r,t,lb,l) for r,t,lb,l in zip(resultsNew,tfmsNew,lbmsNew,linksNew) if t or l],
+                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='full' and n],
                             "reportsThumbsNew":
-                                [(r,t,lb,l) for r,t,lb,l in zip(resultsThumbsNew,tfmsThumbsNew,lbmsThumbsNew,linksThumbsNew) if t or l],
+                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='thumb' and n],
+                            "reportsAmplNew":
+                                [(r,t,lb,l,c) for r,t,lb,l,tp,n,c in zip(resultsAll,tfms,lbms,links,rType,rNew,covAmpl) if tp=='ampl' and n],
+                            "reportsPairNew":                              
+                               [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='paired' and n],    
                             "webroot":web_root,
                             "sitename":site_name,
                             "hq_base_num_new":hqBaseSum,
                             "use_precontent":True,
                             "use_content2":True})
     html = tmpl.render(ctx)
-    text = reports_to_text(resultsOld)
+    text = reports_to_text(resultsAll)
     subTitle = "[Report Summary] for %s %s, %s-%s-%s" % (site_name,"%a","%m","%d","%y")
     #subTitle = "[Report Summary] %a, %m-%d-%y"
     subject = datetime.datetime.now().strftime(subTitle)
     outfile = open('/tmp/out.html', 'w')
     outfile.write(html)
-    outfile.close()
+    outfile.close() 
     return send_html(SENDER,RECIPS,subject,html,text)
     
 def main(args):

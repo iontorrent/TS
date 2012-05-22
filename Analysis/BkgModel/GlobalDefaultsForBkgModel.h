@@ -32,13 +32,13 @@ class GlobalDefaultsForBkgModel
   // not plausible at all
   // various parameters used to initialize the model
   static float sens_default;
+  static float molecules_to_micromolar_conv;
   static float tau_R_m_default;
   static float tau_R_o_default;
   
    static  float  krate_default[NUMNUC];
   static  float  d_default[NUMNUC];
   static  float  kmax_default[NUMNUC];
-  static  float  krate_adj_limit[NUMNUC];
   static float sigma_mult_default[NUMNUC];
   static float t_mid_nuc_delay_default[NUMNUC];
   
@@ -47,7 +47,10 @@ class GlobalDefaultsForBkgModel
   static int time_start_detail;
   static int time_stop_detail;
   
+  static  float  krate_adj_limit;
   static float dampen_kmult;
+  static float kmult_low_limit;
+  static float kmult_hi_limit;
   
   static float emphasis_ampl_default;
   static float emphasis_width_default;
@@ -63,7 +66,12 @@ class GlobalDefaultsForBkgModel
   static char *xtalk_name; // really bad, but I can't pass anything through analysis at all!!!
   static bool var_kmult_only; // always do variable kmult override
   static bool generic_test_flag; // control any features that I'm just testing
+  static int choose_time;
 
+  static bool projection_search_enable;
+
+  static float ssq_filter;
+  
 // Here's a bunch of functions to make us happy
   static void   SetGoptDefaults(char *gopt);
   static void   ReadEmphasisVectorFromFile(char *experimentName);

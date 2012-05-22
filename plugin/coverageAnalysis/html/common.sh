@@ -1,6 +1,46 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
+#*! @function
+#  @param  $*  the command to be executed
+run ()
+{
+  if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
+    echo "\$ $*" >&2
+  fi
+  local EXIT_CODE=0
+  eval $* >&2 || EXIT_CODE="$?"
+  if [ ${EXIT_CODE} != 0 ]; then
+    echo -e "ERROR: Status code '${EXIT_CODE}' while running\n\$$*" >&2
+    if [ "$CONTINUE_AFTER_BARCODE_ERROR" -eq 0 ]; then
+      # partially produced barcode html might be useful but is left in an auto-update mode
+      rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
+    fi
+    # still have to produce error here to prevent calling code from continuing
+    exit 1
+  fi
+}
+
+# produces a title with fly-over help showing users parameters
+write_page_title ()
+{
+    local ALIGNEDREADS=""
+    if [ "$PLUGINCONFIG__MERGEDBAM_ID" != "Current Report" ]; then
+        ALIGNEDREADS="Aligned Reads='${PLUGINCONFIG__MERGEDBAM_ID}'   "
+    fi
+    local OPTIONS=""
+    if [ "$INPUT_TRIM_READS" = "Yes" ]; then
+        OPTIONS="   Trim Reads"
+    fi
+    if [ "$PLUGIN_PADSIZE" -gt 0 ]; then
+        OPTIONS="$OPTIONS   Target Padding: $PLUGIN_PADSIZE"
+    fi
+    if [ "$PLUGIN_USTARTS" = "Yes" ]; then
+        OPTIONS="$OPTIONS   Unique Starts"
+    fi
+    echo "<h1><center><span style=\"cursor:help\" title=\"${ALIGNEDREADS}Library Type='${PLUGINCONFIG__LIBRARYTYPE_ID}'   Target Regions='${PLUGINCONFIG__TARGETREGIONS_ID}'${OPTIONS}\">Coverage Analysis Report</span></center></h1>" >> "$1"
+}
+
 write_html_header ()
 {
     local HTML="${TSP_FILEPATH_PLUGIN_DIR}/header"
@@ -15,15 +55,16 @@ write_html_header ()
     fi
     echo '<html>' > "$HTML"
     print_html_head $REFRESHRATE >> "$HTML"
-    echo ' <body>' >> "$HTML"
+    echo '<title>Torrent Coverage Analysis Report</title>' >> "$HTML"
+    echo '<body>' >> "$HTML"
     print_html_logo >> "$HTML";
 
     if [ -z "$COV_PAGE_WIDTH" ];then
-	echo '  <div id="inner">' >> "$HTML"
+	echo '<div id="inner">' >> "$HTML"
     else
-	echo "  <div style=\"width:${COV_PAGE_WIDTH}px;margin-left:auto;margin-right:auto;height:100%\">" >> "$HTML"
+	echo "<div style=\"width:${COV_PAGE_WIDTH}px;margin-left:auto;margin-right:auto;height:100%\">" >> "$HTML"
     fi
-    echo "   <h1><center><span style=\"cursor:help\" title=\"Library Type='${PLUGINCONFIG__LIBRARYTYPE_ID}'   Targetted regions='${PLUGINCONFIG__TARGETREGIONS_ID}'   Target padding=${PLUGIN_PADSIZE}\">Coverage Analysis Report</span></center></h1>" >> "$HTML"
+    write_page_title "$HTML";
 }
 
 write_html_footer ()
@@ -34,8 +75,8 @@ write_html_footer ()
     fi
     print_html_end_javascript >> "$HTML"
     print_html_footer >> "$HTML"
-    echo '  <br/><br/></div>' >> "$HTML"
-    echo ' </body></html>' >> "$HTML"
+    echo '<br/><br/></div>' >> "$HTML"
+    echo '</body></html>' >> "$HTML"
 }
 
 display_static_progress ()
@@ -44,9 +85,9 @@ display_static_progress ()
     if [ -n "$1" ]; then
         HTML="$1"
     fi
-    echo "    <br/><h3 style=\"text-align:center;color:red\">*** Analysis is not complete ***</h3>" >> "$HTML"
-    echo "    <a href=\"javascript:document.location.reload();\" ONMOUSEOVER=\"window.status='Refresh'; return true\">" >> "$HTML"
-    echo "    <div style=\"text-align:center\">Click here to refresh</div></a>" >> "$HTML"
+    echo "<br/><h3 style=\"text-align:center;color:red\">*** Analysis is not complete ***</h3>" >> "$HTML"
+    echo "<a href=\"javascript:document.location.reload();\" ONMOUSEOVER=\"window.status='Refresh'; return true\">" >> "$HTML"
+    echo "<div style=\"text-align:center\">Click here to refresh</div></a>" >> "$HTML"
 }
 
 write_json_header ()
@@ -88,5 +129,23 @@ write_json_inner ()
     if [ -f "${DATADIR}/${DATASET}" ];then
         append_to_json_results "$JSON_RESULTS" "${DATADIR}/${DATASET}" "$BLOCKID" $INDENTLEV;
     fi
+}
+
+#*! @function
+#  @param $1 Name of JSON file to append to
+#  @param $2 Path to file composed of <name>:<value> lines
+#  @param $3 dataset (e.g. "filtered_reads")
+#  @param $4 printing indent level. Default: 2
+append_to_json_results ()
+{
+  local JSONFILE="$1"
+  local DATAFILE="$2"
+  local DATASET="$3"
+  local INDENTLEV="$4"
+  if [ -z $INDENTLEV ]; then
+    INDENTLEV=2
+  fi
+  local JSONCMD="perl ${SCRIPTSDIR}/coverage_analysis_json.pl -a -I $INDENTLEV -B \"$DATASET\" \"$DATAFILE\" \"$JSONFILE\""
+  eval "$JSONCMD || echo \"WARNING: Failed to write to JSON from $DATAFILE\"" >&2
 }
 

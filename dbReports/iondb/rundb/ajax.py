@@ -14,10 +14,7 @@ remote procedure call framework.
 """
 
 # python standard lib
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 from os import path
 import re
 import socket
@@ -91,13 +88,21 @@ def analysis_liveness(request, pk):
         rl = path.join(path.dirname(result.reportLink), "ion_params_00.json")
     else:
         rl = result.reportLink
+        
     url = urlparse.urlparse(rl)
     loc = result.server_and_location()
+
     web_path = result.web_path(loc)
     report = result.reportLink
-    log = path.join(web_path,"log.html")
     save_path = result.web_root_path(loc)
-    report_exists = result.report_exist()
+
+    if web_path:
+        log = path.join(web_path,"log.html")
+        report_exists = result.report_exist()
+    else:
+        log = False
+        report_exists = False
+
     ip = "127.0.0.1"
     if ip is None:
         return http.HttpResponseNotFound("no job server found for %s"
@@ -210,7 +215,6 @@ def delete_barcode_set(request, name):
 
         barcode = shortcuts.get_list_or_404(models.dnaBarcode, name=name)
         for code in barcode:
-            print code
             code.delete()
 
         return http.HttpResponse()
@@ -238,6 +242,7 @@ def progressbox(request,pk):
     except (TypeError,ValueError):
         return http.HttpResponseNotFound
     res = shortcuts.get_object_or_404(models.Results, pk=pk)
+
     prefix = res.get_report_path()
     prefix = path.split(prefix)[0]
     prefix = path.join(prefix,'progress.txt')
@@ -247,14 +252,17 @@ def progressbox(request,pk):
         f.close()
     except IOError:
         # Empty response, leaves progress grey
-        return render_to_json({"value":{}})
+        return render_to_json({"value":{}, "status": res.status })
     ret = {}
+
+
     for line in data:
         line = line.strip().split('=')
         key = line[0].strip()
         value = line[-1].strip()
         ret[key]=value
-    return render_to_json({"value":ret})
+
+    return render_to_json({"value":ret, "status": res.status})
 
 def control_job(request, pk, signal):
     """Send ``signal`` to the job denoted by ``pk``, where ``signal``

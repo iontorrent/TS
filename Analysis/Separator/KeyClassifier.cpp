@@ -14,9 +14,6 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
                              Mat<double> &predicted) {
   param.set_size(2);
   param << 0 << 0;
-  if (fit.wellIdx == 756940) {
-    cout << "here we go..." << endl;
-  }
   for (size_t keyIx = 0; keyIx < keys.size(); keyIx++) {
     int ok = bg.FitZeromer(wellFlows, refFlows,
                            keys[keyIx].zeroFlows, time,
@@ -109,9 +106,6 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
   signal.set_size(wellFlows.n_cols);
   projSignal.set_size(wellFlows.n_cols); 
   Col<double> weights = ones<vec>(store.GetNumFrames());
-  if (fit.wellIdx == 756940) {
-    cout << "here we go..." << endl;
-  }
   if (fit.bestKey >= 0) {
     fit.bestKey = -1;
   }
@@ -137,7 +131,7 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       SampleStats<double> mad;
       //      double zeroSum = 0;
       diff = wellFlows.unsafe_col(flowIx) - p;
-      for (size_t frameIx = 4; frameIx < FRAME_SIGNAL; frameIx++) {
+      for (size_t frameIx = 3; frameIx < FRAME_SIGNAL; frameIx++) {
         sig += diff.at(frameIx);
       }
 
@@ -149,13 +143,10 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       }
       projSignal.at(flowIx) = pSig;
       Col<double> projIncorporation = pSig * incorp;
-      // for (size_t frameIx = 3; frameIx < FRAME_SIGNAL; frameIx++) {
-      //   sig += projIncorporation.at(frameIx);
-      // }
       sigVar.AddValue(sig);
 
       if (keys[keyIx].flows[flowIx] == 0) {
-        for (size_t frameIx = FRAME_SIGNAL; frameIx < wellFlows.n_rows; frameIx++) {
+        for (size_t frameIx = 0; frameIx < FRAME_SIGNAL; frameIx++) {
           mad.AddValue(fabs(diff.at(frameIx)));
         }
         zeroStats.AddValue(mad.GetMean());
@@ -175,7 +166,6 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
         }
       }
     }
-    //    double snr = (onemerSig.GetTrimmedMean(0,1) - zeromerSig.GetTrimmedMean(0,1)) / ((onemerSig.GetIqrSd() + zeromerSig.GetIqrSd() + SDFUDGE)/2);
     double snr = (onemerSig.GetMedian() - zeromerSig.GetMedian()) / ((onemerSig.GetIqrSd() + zeromerSig.GetIqrSd() + SDFUDGE)/2);
     float sd = sigVar.GetSD();
     if (!isfinite(sd) || isnan(sd)) {

@@ -2,9 +2,12 @@
 
 {% block extra_head %}
 
-<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/fileinput/jquery.fileinput.min.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery.form.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/fileinput/jquery.fileinput.min.js"></script>
 
 {% endblock extra_head %}
 
@@ -12,134 +15,150 @@
 {% endblock pagination_holder %}
 {% block controls_holder %}
 {% endblock controls_holder %}
-{% block full_page_content%}
+{% block full_page_content %}
 
 
-    <style type="text/css" media="screen">
-      
-      @import "/site_media/jquery/css/uni-form.css";
-      
-          .uniForm h2{ margin: 1em 0 1em 1.15em; }
-          fieldset h3{ margin: 1.5em -28px; padding: 14px 28px; line-height: 1; background: #efefef; color: #343434; }
-          
-          .uniForm{ background: #fff; margin: 28px auto; padding: 28px;
-                    /* CSS3 */
-                    border-radius:         12px;
-                    -webkit-border-radius: 12px;
-                    -moz-border-radius:    12px;
-                    -o-border-radius:      12px;
-                    -khtml-border-radius:  12px;
-                  }
-            
-          /* IE6 fixes for the page */
-          * html form.uniForm{ overflow: hidden; }
-          	* html .header{ zoom: 1; overflow: hidden;}
-					* html .browse{ position: absolute; }
+  <style type="text/css" media="screen">
+    @import "/site_media/jquery/css/uni-form.css";
 
-          /* Additions for validation */
-          div.valid{
-            background: url(/site_media/images/ok.png) 100% 2.75em no-repeat;
+    .uniForm h2 {
+      margin: 1em 0 1em 1.15em;
+    }
 
-          }
+    fieldset h3 {
+      margin: 1.5em -28px;
+      padding: 14px 28px;
+      line-height: 1;
+      background: #efefef;
+      color: #343434;
+    }
 
-    </style>
-    
-<link type="text/css" href="/site_media/jquery/css/default.uni-form.css" rel="Stylesheet" />
-<link type="text/css" href="/site_media/jquery/js/fileinput/fileinput.css" rel="Stylesheet" />
+    .uniForm {
+      background: #fff;
+      margin: 28px auto;
+      padding: 28px;
+      /* CSS3 */
+      border-radius: 12px;
+      -webkit-border-radius: 12px;
+      -moz-border-radius: 12px;
+      -o-border-radius: 12px;
+      -khtml-border-radius: 12px;
+    }
 
-    <script type="text/javascript">
+      /* IE6 fixes for the page */
+    * html form.uniForm {
+      overflow: hidden;
+    }
 
-        $(document).ready(function(){
+    * html .header {
+      zoom: 1;
+      overflow: hidden;
+    }
 
-            $.ajaxSetup({async:false});
-            $("#postedfile").fileinput();
-            $("#upfile").button();
+    * html .browse {
+      position: absolute;
+    }
 
-        });
+      /* Additions for validation */
+    div.valid {
+      background: url(/site_media/images/ok.png) 100% 2.75em no-repeat;
 
-        $(function() {
-            $('#fileUpload').ajaxForm({
-                        beforeSubmit: verify,
-                        success: SubmitSuccesful,
-                        error: AjaxError,
-                        dataType: 'json'
-                    });
-        });
+    }
+  </style>
 
-        //Check if there is a file
-        function verify(){
-            $("#postedfile").blur();
-            if ($("#postedfile").hasClass("error") ){
-                return false;
-            }
+  <link type="text/css" href="/site_media/jquery/css/default.uni-form.css"
+        rel="Stylesheet"/>
+  <link type="text/css" href="/site_media/jquery/js/fileinput/fileinput.css"
+        rel="Stylesheet"/>
 
-            $("#upholder").hide();
-            $("#submitholder").hide();
+  <script type="text/javascript">
+    $(document).ready(function () {
 
-            $("#loadingstatus").html("<p>Uploading Plans <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
+      $.ajaxSetup({async: false});
+      $("#postedfile").fileinput();
+      $("#upfile").button();
+
+    });
+
+    $(function () {
+      $('#fileUpload').ajaxForm({
+        beforeSubmit: verify,
+        success: SubmitSuccesful,
+        error: AjaxError,
+        dataType: 'json'
+      });
+    });
+
+    //Check if there is a file
+    function verify() {
+      $("#postedfile").blur();
+      if ($("#postedfile").hasClass("error")) {
+        return false;
+      }
+
+      $("#upholder").hide();
+      $("#submitholder").hide();
+
+      $("#loadingstatus").html("<p>Uploading Plans <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
+    }
+
+    function AjaxError() {
+      $("#loadingstatus").html("<p>Failure uploading file</p>");
+    }
+
+    function SubmitSuccesful(responseText, statusText) {
+
+      upReturn = eval(responseText);
+
+      $("#loadingstatus").html("");
+
+      $("#return").html(upReturn["status"]);
+
+      for (var key in upReturn["failed"]) {
+        $("#error").append("<p> Row " + key + " contained error(s) </p> ");
+        for (var i = 0; i < upReturn["failed"][key].length; i++) {
+          $("#error").append("<strong>" + upReturn["failed"][key][i][0] + "</strong> column ");
+          $("#error").append(": " + upReturn["failed"][key][i][1]);
+          $("#error").append("</br>");
         }
 
-        function AjaxError() {
-            $("#loadingstatus").html("<p>Failure uploading file</p>");
-        }
+      }
 
-        function SubmitSuccesful(responseText, statusText) {
+    }
+  </script>
 
-            upReturn = eval(responseText);
-
-            $("#loadingstatus").html("");
-
-            $("#return").html(upReturn["status"]);
-
-            for (var key in upReturn["failed"]){
-                $("#error").append("<p> Row " + key + " contained error(s) </p> ");
-                for (var i = 0; i < upReturn["failed"][key].length; i++) {
-                    $("#error").append("<strong>" + upReturn["failed"][key][i][0] + "</strong> column ");
-                    $("#error").append(": " + upReturn["failed"][key][i][1]);
-                    $("#error").append("</br>");
-                }
-
-            }
-
-        }
-
-    </script>
-
- <form id="fileUpload" method="post" class="uniForm" enctype="multipart/form-data">
-
-  <p>Add new plans</p>
-      <fieldset>
-
-        <div class="ctrlHolder" id="upholder">
-            <label for="">Plans CSV file<i>(required)</i></label>
-		    <input type="file" id="postedfile" name="postedfile" class="required">
-            <p class="formHint">CSV file of plans. <a href="/site_media/examples/planExample.csv">Download the example</a> </br> Add new rows for each plan. Plan name is required.</p>
-        </div>
-
+  <form id="fileUpload" method="post" class="uniForm"
+        enctype="multipart/form-data">
+    <p>Add new plans</p>
+    <fieldset>
+      <div class="ctrlHolder" id="upholder">
+        <label for="">Plans CSV file<i>(required)</i></label>
+        <input type="file" id="postedfile" name="postedfile" class="required">
+        <p class="formHint">CSV file of plans.
+          <a href="/site_media/examples/planExample.csv">Download the example
+          </a>
+          </br> Add new rows for each plan. Plan name is required.
+        </p>
+      </div>
       <div class="buttonHolder" id="submitholder">
         <input id="upfile" type="submit" value="Upload & Save">
       </div>
+    </fieldset>
+  </form>
 
-      </fieldset>
-
-</form>
-
-<style>
-
-    .bump{
-        padding: 10px;
-        margin-left: 40px;
-        margin-bottom: 50px;
+  <style>
+    .bump {
+      padding: 10px;
+      margin-left: 40px;
+      margin-bottom: 50px;
     }
+  </style>
 
-</style>
 
-
-<div class="bump">
+  <div class="bump">
     <div id="loadingstatus"></div>
     <div id="return"></div>
     <div id="error"></div>
-
-</div>
+  </div>
 
 {% endblock %}

@@ -7,6 +7,7 @@
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
 TSCONFIG_LOG_DIR='/var/log/ion'
 TSCONFIG_INSTALL_LOG='tsconfig_install.log'
+TSCONFIG_DEBUG_LOG='tsconfig_debug.log'
 TSCONFIG_LOG_BASENAME='tsconf.log'
 TSCONFIG_DIR='/etc/torrentserver'
 TSCONFIG_CONF='tsconf.conf'

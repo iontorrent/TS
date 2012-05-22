@@ -18,6 +18,8 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 #from django.db import models
 from iondb.rundb import models
 from datetime import datetime
+from iondb.rundb import json_field
+
 
 def q(s):
     cursor = db.connection.cursor()
@@ -543,7 +545,7 @@ def add_globalconfig_char(log):
             if col.lower() == tablename.lower():
                 return False
         return True
-    colname = ['web_root','default_storage_options','site_name','sfftrim_args']
+    colname = ['web_root','default_storage_options','site_name']
     for field in colname:
         if check(field):
             q("""ALTER TABLE rundb_globalconfig """
@@ -616,22 +618,6 @@ def add_plugin_config(log):
         q("""ALTER TABLE rundb_plugin """
           """ADD COLUMN "config" text;""")
 
-def add_globalconfig_bool(log):
-    def check():
-        cursor = db.connection.cursor()
-        cursor.execute("SELECT * FROM rundb_globalconfig limit 1")
-        columnNames = [d[0] for d in cursor.description]
-        cursor.close()
-        for col in columnNames:
-            if 'sfftrim' == col:
-                return False
-        return True
-
-    if check():
-        q("""ALTER TABLE rundb_globalconfig """
-          """ADD COLUMN "sfftrim" boolean DEFAULT False;""")
-        log.write("Added 'sfftrim' to database\n")
-        
 def add_report_pluginStore(log):
     def check(tablename):
         cursor = db.connection.cursor()
@@ -842,7 +828,10 @@ def add_results_indexes(log):
             q(idx)
             log.write("Created index: '%s'\n" % idx)
         except (IntegrityError, DatabaseError):
-            transaction.rollback()
+            try:
+                transaction.rollback()
+            except transaction.TransactionManagementError:
+                pass
             log.write("Index: '%s' already exists\n" % idx)
             # Already exists
         except:
@@ -879,18 +868,21 @@ def add_upload_to_content(log, tableName, colName, referenceName, fieldType):
           """ALTER TABLE %s ADD FOREIGN KEY ("%s_id") REFERENCES %s (id);""" % (tableName, colName, fieldType, tableName, colName, referenceName))
         log.write("Added '%s_id' to %s table\n" % (colName, tableName))
         q("""UPDATE rundb_content SET contentupload_id = CAST (substring(file from '/results/uploads/BED/([0-9]+)/.*') as integer);""")
-        log.write("Set initial Content-ContentUpload foregin keys.")
+        log.write("Set initial Content-ContentUpload foreign keys.")
 
 
 def new_default_site_name(log):
     def check():
         cursor = db.connection.cursor()
         cursor.execute("SELECT site_name FROM rundb_globalconfig WHERE id=1 limit 1")
-        site_name = cursor.fetchone()[0]
-        log.write("Site name is '%s'\n" % site_name)
-        cursor.close()
-        return site_name == '<Set site_name in Global Configs on Admin Tab>'
-
+        try:
+            site_name = cursor.fetchone()[0]
+            log.write("Site name is '%s'\n" % site_name)
+            cursor.close()
+            return site_name == '<Set site_name in Global Configs on Admin Tab>'
+        except:
+            return False
+        
     if check():
         q("""UPDATE rundb_globalconfig SET site_name='Torrent Server' WHERE id=1""")
         log.write("Changed the Site name from '<Set site_name in Global Configs on Admin Tab>' to 'Torrent Server'\n")
@@ -916,6 +908,13 @@ def update_userprofile_names(log, tablename, columnname, col_size, default=""):
         q("""UPDATE rundb_userprofile SET name = first_name
         FROM auth_user WHERE user_id = auth_user.id;""")
 
+def add_json_object(tablename,columnname):
+    cursor = db.connection.cursor()
+    cursor.execute("""SELECT * FROM %s limit 1""" % tablename)
+    columnNames = [d[0].lower() for d in cursor.description]
+    cursor.close()
+    if not (columnname in columnNames):
+        q("""ALTER TABLE %s ADD COLUMN %s text;""" % (tablename,columnname))
 
 def move_plugin_reports(log):
     # Plugin table added by syncdb
@@ -1038,6 +1037,105 @@ def move_plugin_reports(log):
         log.write('ERROR: Found %d invalid records. Preserving existing pluginState/pluginStore.' % count_errors)
         raise Exception('Invalid Plugin Records found. Migration failed')
 
+
+def add_field_constraint_unique(log,tableName,columnName,constraintKey):
+    def check(tableName,field): 
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT * FROM %s limit 1" % tableName)
+        columnNames = [d[0] for d in cursor.description]
+        cursor.close()
+
+        for col in columnNames:
+            if col == field:
+                return True
+        return False
+
+    if check(tableName,columnName):
+        try:
+            q("""ALTER TABLE %s """
+              """ADD CONSTRAINT %s UNIQUE(\"%s\");""" % (tableName,constraintKey,columnName))
+            log.write("Added unique constraint to %s in table %s\n" % (columnName, tableName))
+            print '>>> Added unique constraint to', columnName, ' in table', tableName 
+        except (IntegrityError, DatabaseError):
+            print '>>> Constraint might already exist. Unique constraint to', columnName, 'in table', tableName, "is not added. "
+            try:
+                transaction.rollback()
+            except transaction.TransactionManagementError:
+                pass
+            log.write("Constraint might already exist. Unique constraint to table %s is not added.\n" % tableName)
+        except:
+            print 'Adding unique constraint to', columnName, 'in table', tableName, "failed. "
+            log.write("Adding unique constraint to table %s failed.\n" % tableName)
+            log.write(traceback.format_exc())
+    else: 
+        print '>>> Table or column does not exist. Skipped adding constraint to column:', columnName  
+
+
+
+def remove_field(log,tableName,columnName):
+    def check(tableName,field): 
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT * FROM %s limit 1" % tableName)
+        columnNames = [d[0] for d in cursor.description]
+        cursor.close()
+
+        for col in columnNames:
+            if col == field:
+                return True
+        return False
+                
+    if check(tableName,columnName):
+        try:
+            q("""ALTER TABLE %s """
+              """DROP COLUMN \"%s\";""" % (tableName, columnName))
+            log.write("Column %s in table %s removed \n" % (columnName, tableName))
+            print '>>> Column ', columnName, ' in table removed', tableName 
+        except:
+            print 'Removal of column', columnName, 'in table', tableName, "failed. "
+            log.write("Removal of column in table %s failed.\n" % tableName)
+            log.write(traceback.format_exc())
+    else: 
+        print '>>> Table or column does not exist. Skipped removing column:', columnName  
+
+
+def remove_dbEntries_byPredicates(log, tableName, column1, value1, column2, value2):
+    def check(tableName, col1, value1, col2, value2):
+        try:
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT * FROM %s WHERE LOWER(%s) = LOWER('%s') AND LOWER(%s) = LOWER('%s') limit 1 " % (tableName, col1, value1, col2, value2))
+            columnNames = [d[0] for d in cursor.description]
+            cursor.close()
+    
+            col1Found = False
+            col2Found = False
+            for col in columnNames:
+                ##print "col: ", col,"; col1: ", col1, "; col2: ", col2
+                
+                if col == col1:
+                    col1Found = True
+    
+                if col == col2:
+                    col2Found = True
+                
+                if col1Found and col2Found:
+                    return True
+            return False
+        except:
+            cursor.close()
+            return False
+        
+    
+    if check(tableName, column1, value1, column2, value2):
+        try:
+            q("""DELETE FROM %s WHERE """
+              """LOWER(%s) = LOWER('%s') AND LOWER(%s) = LOWER('%s');""" % (tableName, column1, value1, column2, value2))
+
+            log.write("Remove entry with %s = %s at table %s\n" % (column1, value1, tableName))
+            print "remove_dbEntries_byPredicates done. tableName=", tableName, "; value1=", value1
+        except:
+            print 'Removal of entry from table', tableName, "failed. Entry could have been removed previously. ", ";value1=", value1, ";value2=", value2
+        
+
 if __name__ == '__main__':
     hasdb = False
     try:
@@ -1065,7 +1163,6 @@ if __name__ == '__main__':
         add_backup_name(f)
         add_analysis_metrics_int(f)
         add_globalconfig_char(f)
-        add_globalconfig_bool(f)
         convert_int_to_float(f)
         add_exp_char(f)
         #add_report_pluginStore(f) ## Note removed below
@@ -1122,8 +1219,11 @@ if __name__ == '__main__':
         add_int_field(f, "rundb_threeprimeadapter", ["qual_cutoff","qual_window","adapter_cutoff"], 0)
 
         add_char_field (f, "rundb_experiment", "rawdatastyle", 24, 'single')
-        
+
+        #modify results
         add_foreign_key(f, 'rundb_results', 'reportstorage', 'rundb_reportstorage', 'INTEGER')
+        add_int_field(f, "rundb_results", ["processedflows"], 0)
+
         add_bool_field(f,"rundb_globalconfig", ["auto_archive_ack"], False)
 
         add_bool_field(f,"rundb_plannedexperiment", ["preAnalysis"], False)
@@ -1134,6 +1234,9 @@ if __name__ == '__main__':
         add_char_field(f,"rundb_plannedexperiment", "regionfile", 1024 )
         add_char_field(f,"rundb_plannedexperiment", "libkit", 512 )
         add_char_field(f,"rundb_plannedexperiment", "variantfrequency", 512 )
+
+        #add field for ion reporter upload plugin workflow
+        add_char_field(f,"rundb_plannedexperiment", "irworkflow", 1024 )
 
         #expand charvar lengths
         resize_varchar("rundb_plannedexperiment", "project", "127")
@@ -1167,10 +1270,6 @@ if __name__ == '__main__':
         add_upload_to_content(f, 'rundb_content', 'contentupload', 'rundb_contentupload', 'INTEGER')
         add_text_field(f,"rundb_contentupload", "meta")
 
-        # Call ./manage.py syncdb
-        from django.core import management
-        management.call_command('syncdb')
-
         #change int to bigint
         columnlist = ["genomesize",
                       'q7_mapped_bases','q7_qscore_bases',
@@ -1193,13 +1292,50 @@ if __name__ == '__main__':
         columnlist = ["q0_bases",'q17_bases','q20_bases']
         convert_int_to_bigint(f,'rundb_qualitymetrics',columnlist)
 
+        # Add new column for json object
+        add_json_object("rundb_globalconfig","barcode_args")
+        
+        add_char_field(f,"rundb_results", "runid", 10)
+        add_char_field(f,"rundb_globalconfig","ts_update_status",256)
+        add_bool_field(f, "rundb_globalconfig", ["enable_auto_pkg_dl"], True)
+        add_char_field(f,"rundb_globalconfig","basecallerargs",512)
+
+        add_field_constraint_unique(f,"rundb_threeprimeadapter","name", "rundb_threeprimeadapter_name_key")
+        add_char_field(f, "rundb_threeprimeadapter", "direction", 20)
+        add_bool_field(f, "rundb_threeprimeadapter", ["isDefault"], False)
+                        
+        add_char_field(f, 'rundb_plannedexperiment', 'forward3primeadapter', 512)
+        add_char_field(f, 'rundb_plannedexperiment', 'reverselibrarykey', 64)
+        add_char_field(f, 'rundb_plannedexperiment', 'reverse3primeadapter', 512)
+                        
+        add_char_field(f, 'rundb_experiment', 'forward3primeadapter', 512)
+        add_char_field(f, 'rundb_experiment', 'reverselibrarykey', 64)
+        add_char_field(f, 'rundb_experiment', 'reverse3primeadapter', 512)
+        
+        add_bool_field(f, "rundb_experiment", ["isReverseRun"], False)
+        remove_field(f, "rundb_threeprimeadapter", "isSystem")
+        
+        add_bool_field(f, "rundb_plannedexperiment", ["isReverseRun"], False)
+        
+        add_char_field(f, "rundb_plannedexperiment", "librarykitname", 512)
+        add_char_field(f, "rundb_plannedexperiment", "sequencekitname", 512)
+
+        remove_dbEntries_byPredicates(f, 'rundb_librarykey', 'name', 'Forward Library Key','sequence', 'TCAG')
+        remove_dbEntries_byPredicates(f, 'rundb_librarykey', 'name', 'Reverse Library Key','sequence', 'TCAGC')
+        remove_dbEntries_byPredicates(f, 'rundb_threeprimeadapter', 'name', 'Ion Kit','sequence', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC')
+        remove_dbEntries_byPredicates(f, 'rundb_threeprimeadapter', 'name', 'Reverse Ion Kit','sequence', 'CTGAGTCGGAGACACGCAGGGATGAGATGG')
+
+        remove_dbEntries_byPredicates(f, 'rundb_librarykey', 'name', 'Finnzyme','sequence', 'TCAGTTCA')
+        remove_dbEntries_byPredicates(f, 'rundb_threeprimeadapter', 'name', 'Finnzyme','sequence', 'TGAACTGACGCACGAAATCACCGACTGCCC')
+
+        ## These commands MUST be LAST.
+        # Call ./manage.py syncdb
+        # temporarily undoing r29959 that broke dbreports build - RB
+        from django.core import management
+        management.call_command('syncdb')
+
         move_plugin_reports(f)
-
         add_results_indexes(f)
-
-        # Should run VACUUM ANALYZE to use indexes after this...
-        # But it cannot be run in a transaction,
-        # and django connections are # automatically wrapped in transactions...
 
     f.close()
     sys.exit(0)

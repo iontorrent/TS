@@ -9,7 +9,8 @@ using namespace std;
 #include <errno.h>
 #include "FileEquivalent.h"
 #include "OptArgs.h"
-#include "FlowDiffStats.h"
+//#include "FlowDiffStats.h"
+#include "Utils.h"
 #include "NumericalComparison.h"
 
 string mConfigFile;
@@ -69,7 +70,7 @@ TEST(AnalysisIntegrationTest, AnalysisCropTest) {
   while(getline(config, line)) {
     if (line.size() > 1 && line[0] == '#') 
       continue;
-    FlowDiffStats::ChopLine(words, line);
+    split(line,'\t',words);
     NumericalComparison<double> wells;
     vector<SffComparison> sff;
     bool ranOk = RunAnalysis(words[0], words[1], words[2], words[3], words[4], wells, sff);

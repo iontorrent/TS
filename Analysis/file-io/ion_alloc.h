@@ -13,7 +13,7 @@ extern "C" {
       @param  variable_name  the variable name to be assigned this memory in the calling function
       @return                upon success, a pointer to the memory block allocated by the function; a null pointer otherwise.
       */
-    inline void *
+  void *
       ion_malloc(size_t size, const char *fn_name, const char *variable_name);
 
     /*! 
@@ -25,7 +25,7 @@ extern "C" {
       @return 		 upon success, a pointer to the memory block allocated by the function; a null pointer otherwise.
       @details      	 the ptr must be a memory block previously allocated with malloc, calloc, or realloc to be reallocated; if the ptr is NULL, a new block of memory will be allocated. 
       */
-    inline void *
+    void *
       ion_realloc(void *ptr, size_t size, const char *fn_name, const char *variable_name);
 
     /*! 
@@ -36,7 +36,7 @@ extern "C" {
       @param  variable_name  the variable name to be assigned this memory in the calling function
       @return                upon success, a pointer to the memory block allocated by the function; a null pointer otherwise.
       */
-    inline void *
+    void *
       ion_calloc(size_t num, size_t size, const char *fn_name, const char *variable_name);
 
 #ifdef __cplusplus

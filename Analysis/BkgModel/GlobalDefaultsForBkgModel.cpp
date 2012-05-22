@@ -6,18 +6,64 @@
 float GlobalDefaultsForBkgModel::kmax_default[NUMNUC]  = { 18.0,   20.0,   17.0,   18.0 };
 float GlobalDefaultsForBkgModel::krate_default[NUMNUC] = { 18.78,   20.032,   25.04,   31.3 };
 float GlobalDefaultsForBkgModel::d_default[NUMNUC]     = {159.923,189.618,227.021,188.48};
- float GlobalDefaultsForBkgModel::krate_adj_limit[NUMNUC] = {2.0,2.0,2.0,2.0};
- float GlobalDefaultsForBkgModel::sigma_mult_default[NUMNUC] = {1.162,1.124,1.0,0.8533};
- float GlobalDefaultsForBkgModel::t_mid_nuc_delay_default[NUMNUC] = {0.69,1.78,0.0,0.17}; 
+float GlobalDefaultsForBkgModel::sigma_mult_default[NUMNUC] = {1.162,1.124,1.0,0.8533};
+float GlobalDefaultsForBkgModel::t_mid_nuc_delay_default[NUMNUC] = {0.69,1.78,0.01,0.17};
+
+ // a set of relevant parameters for allowing the krate to vary
+float GlobalDefaultsForBkgModel::krate_adj_limit = 2.0f; // you must be at least this tall to ride the ride
+float GlobalDefaultsForBkgModel::dampen_kmult = 0.0f;
+float GlobalDefaultsForBkgModel::kmult_low_limit = 0.65f;
+float GlobalDefaultsForBkgModel::kmult_hi_limit = 1.75f;
+
+float GlobalDefaultsForBkgModel::ssq_filter = 0.0f;
+
 float GlobalDefaultsForBkgModel::nuc_flow_frame_width = 22.5;  // 1.5 seconds * 15 frames/second
 int GlobalDefaultsForBkgModel::time_left_avg = 5;
 int GlobalDefaultsForBkgModel::time_start_detail = -5;
 int GlobalDefaultsForBkgModel::time_stop_detail = 16;
+int GlobalDefaultsForBkgModel::choose_time = 0; // normal time compression
 
-float GlobalDefaultsForBkgModel::dampen_kmult = 0;
+float GlobalDefaultsForBkgModel::clonal_call_scale[] = {0.902,0.356,0.078,0.172,0.436,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+float GlobalDefaultsForBkgModel::clonal_call_penalty = 1600.0;
+
+float GlobalDefaultsForBkgModel::sens_default = 1.256;
+float GlobalDefaultsForBkgModel::molecules_to_micromolar_conv = 0.000062f;
+float GlobalDefaultsForBkgModel::tau_R_m_default = -24.36;
+float GlobalDefaultsForBkgModel::tau_R_o_default = 25.16;
+
+
+bool  GlobalDefaultsForBkgModel::no_RatioDrift_fit_first_20_flows = false;
+
+float GlobalDefaultsForBkgModel::emp[]  = {6.86, 1.1575, 2.081, 1.230, 7.2625, 1.91, 0.0425, 19.995};
+float GlobalDefaultsForBkgModel::emphasis_ampl_default = 7.25;
+float GlobalDefaultsForBkgModel::emphasis_width_default = 2.89;
+
+
 bool GlobalDefaultsForBkgModel::var_kmult_only = false;
 bool GlobalDefaultsForBkgModel::generic_test_flag = false;
- 
+bool GlobalDefaultsForBkgModel::projection_search_enable = false;
+
+
+char *GlobalDefaultsForBkgModel::xtalk_name = NULL;
+
+void GlobalDefaultsForBkgModel::ReadXtalk(char *name)
+{
+      xtalk_name=strdup(name);
+}
+
+char *GlobalDefaultsForBkgModel::chipType = NULL;
+
+void GlobalDefaultsForBkgModel::SetChipType(char *name)
+{
+      chipType=strdup(name);
+}
+
+int  *GlobalDefaultsForBkgModel::glob_flow_ndx_map = NULL;
+int   GlobalDefaultsForBkgModel::flow_order_len = 4;
+char *GlobalDefaultsForBkgModel::flowOrder = NULL;
+
+
+
 void GlobalDefaultsForBkgModel::SetFlowOrder(char *_flowOrder)
 {
   if (flowOrder)
@@ -59,21 +105,6 @@ void GlobalDefaultsForBkgModel::GetFlowOrderBlock(int *my_flow, int i_start, int
 }
 
 
-float GlobalDefaultsForBkgModel::clonal_call_scale[] = {0.902,0.356,0.078,0.172,0.436,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-float GlobalDefaultsForBkgModel::clonal_call_penalty = 1600.0;
-
-float GlobalDefaultsForBkgModel::sens_default = 1.256;
-float GlobalDefaultsForBkgModel::tau_R_m_default = -24.36;
-float GlobalDefaultsForBkgModel::tau_R_o_default = 25.16;
-
-float GlobalDefaultsForBkgModel::emp[]  = {6.86, 1.1575, 2.081, 1.230, 7.2625, 1.91, 0.0425, 19.995};
-
-int  *GlobalDefaultsForBkgModel::glob_flow_ndx_map = NULL;
-int   GlobalDefaultsForBkgModel::flow_order_len = 4;
-char *GlobalDefaultsForBkgModel::flowOrder = NULL;
-bool  GlobalDefaultsForBkgModel::no_RatioDrift_fit_first_20_flows = false;
-float GlobalDefaultsForBkgModel::emphasis_ampl_default = 7.25;
-float GlobalDefaultsForBkgModel::emphasis_width_default = 2.89;
 
 
 #define MAX_LINE_LEN    2048
@@ -132,6 +163,8 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults(char *fname)
                 if (num > 0)             
                     for (int i=0;i<NUMNUC;i++) d_default[i] = d[i];
             }
+            if (strncmp("n_to_uM_conv",line,12) == 0)
+                num = sscanf(line,"n_to_uM_conv: %f",&molecules_to_micromolar_conv);
             if (strncmp("sens",line,4) == 0)
                 num = sscanf(line,"sens: %f",&sens_default);
             if (strncmp("tau_R_m",line,7) == 0)
@@ -191,6 +224,7 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults(char *fname)
     printf("sigma_mult: %f\t%f\t%f\t%f\n",sigma_mult_default[0],sigma_mult_default[1],sigma_mult_default[2],sigma_mult_default[3]);
     printf("t_mid_nuc_delay: %f\t%f\t%f\t%f\n",t_mid_nuc_delay_default[0],t_mid_nuc_delay_default[1],t_mid_nuc_delay_default[2],t_mid_nuc_delay_default[3]);
     printf("sens: %f\n",sens_default);
+    printf("molecules_to_micromolar_conv: %f\n",molecules_to_micromolar_conv);
     printf("tau_R_m: %f\n",tau_R_m_default);
     printf("tau_R_o: %f\n",tau_R_o_default);
     printf("emp: %f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",emp[0],emp[1],emp[2],emp[3],emp[4],emp[5],emp[6],emp[7]);
@@ -367,18 +401,5 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile(char *experimentName)
     printf("\n");
 }
 
-char *GlobalDefaultsForBkgModel::xtalk_name = NULL;
-
-void GlobalDefaultsForBkgModel::ReadXtalk(char *name)
-{
-      xtalk_name=strdup(name);
-}
-
-char *GlobalDefaultsForBkgModel::chipType = NULL;
-
-void GlobalDefaultsForBkgModel::SetChipType(char *name)
-{
-      chipType=strdup(name);
-}
 
 

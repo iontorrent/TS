@@ -1,11 +1,6 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-try:
-    import json
-    if not hasattr(json, 'dumps'):
-        raise ImportError
-except ImportError:
-    import simplejson as json
+import json
 import struct
 
 import cnumtypes

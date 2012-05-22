@@ -39,12 +39,11 @@ import logging
 import traceback
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.models import User
+from django.db.models import Q
+from ion.utils.TSversion import findVersions
 
-try:
-    import json
-except:
-    import simplejson as json
-
+import json
+import decimal
 #for sorting a list of lists by a key
 from operator import itemgetter
 
@@ -59,8 +58,6 @@ from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.core import urlresolvers
 from django import http
 from django.core import serializers
-
-from django.utils.datastructures import SortedDict
 
 os.environ['MPLCONFIGDIR'] = '/tmp'
 import matplotlib
@@ -77,21 +74,28 @@ from twisted.web import xmlrpc, server
 from iondb.rundb import publishers
 from iondb.rundb import tasks
 
+from iondb.plugins.manager import PluginManager
+
 FILTERED = None # contains the last filter for the reports page for csv export
 
 logger = logging.getLogger(__name__)
 
-def toBoolean(val):
+def toBoolean(val, default=True):
     """convert strings from CSV to Python bool
-    if they have an empty string - default to true
+    if they have an empty string - default to true unless specified otherwise
     """
-    trueItems = ["true", "t", "yes", "y", "1", "" ]
+    if default:
+        trueItems = ["true", "t", "yes", "y", "1", "" ]
+        falseItems = ["false", "f", "no", "n", "none", "0" ]
+    else:
+        trueItems = ["true", "t", "yes", "y", "1" ]
+        falseItems = ["false", "f", "no", "n", "none", "0", "" ]
+
     if str(val).strip().lower() in trueItems:
         return True
-    falseItems = ["false", "f", "no", "n", "none", "0" ]
     if str(val).strip().lower() in falseItems:
         return False
-
+    
 def seconds2htime(s):
     """Convert a number of seconds to a dictionary of days, hours, minutes,
     and seconds.
@@ -115,8 +119,49 @@ def base_context_processor(request):
     added to the base_template in every view.
     Namespace any items added here with 'base_' in order to avoid conflict.
     """
-    site_name = models.GlobalConfig.objects.get(pk=1).site_name
-    return {"base_site_name": site_name}
+    site_name = models.GlobalConfig.objects.all().order_by('id')[0].site_name
+    messages = models.Message.objects.filter(route="").filter(
+        Q(status="unread", expires="read") | ~Q(expires="read"))
+    from iondb.rundb.api import MessageResource
+    resource = MessageResource()
+    msg_list = [resource.full_dehydrate(message) for message in messages]
+    serialized_messages = resource.serialize(None, msg_list, "application/json")
+    if msg_list: logger.debug("Found %d global messages" % len(msg_list))
+    logger.debug("Global messages are %s" % serialized_messages)
+    return {"base_site_name": site_name, "global_messages": serialized_messages}
+
+
+def message_binding_processor(request):
+    """This is called for every request but only performs work for
+    those which have bindings for specific message routes.
+    """
+    if hasattr(request, "message_bindings"):
+        messages = models.Message.objects.bound(*request.message_bindings) \
+            .filter(Q(status="unread", expires="read") | ~Q(expires="read"))
+        bound_messages = list(messages)
+        messages.update(status="read")
+        if bound_messages: logger.debug("Found %d bound messages" % len(bound_messages))
+        return {"bound_messages": bound_messages}
+    else:
+        logger.debug("No messages found")
+        return {}
+
+
+def bind_messages(*bindings):
+    """This returns a function which takes a view and decorates it with
+    a wrapper function which adds the binding information passed to
+    this function to the request object for that view so that the
+    message_binding_processor can access the specific bindings for the
+    view that goes through it.  This feels like a serious hack...
+    """
+    def bind_view(view_func):
+        logger.debug("Binding %s to %s" % (str(bindings),
+                                           str(view_func.__name__)))
+        def bound_view(request, *args, **kwargs):
+            request.message_bindings = bindings
+            return view_func(request, *args, **kwargs)
+        return bound_view
+    return bind_view
 
 
 def tf_csv(request):
@@ -421,7 +466,7 @@ def reports(request, page=None):
         ctx = paginator.page(paginator.num_pages)
 
     ctxd = {"rep":ctx, "paginator":ctx, "filterform":filter, "getURL":getURL,
-            "searchform":search, "sortform":sort, }
+            "searchform":search, "sortform":sort, "use_content2" : True }
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_report.html",
                                         context_instance=context)
@@ -434,6 +479,28 @@ def loadScript(fileIn):
     f.close()
     return ret
 
+def create_runid(name):
+    '''Returns 5 char string hashed from input string'''
+    #Copied from TS/Analysis/file-io/ion_util.c
+    def DEKHash(key):
+        hash = len(key)
+        for i in key:
+            hash = ((hash << 5) ^ (hash >> 27)) ^ ord(i)
+        return (hash & 0x7FFFFFFF)
+
+    def base10to36(num):
+        str = ''
+        for i in range(5):
+            digit=num % 36
+            if digit < 26:
+                str = chr(ord('A') + digit) + str
+            else:
+                str = chr(ord('0') + digit - 26) + str
+            num /= 36
+        return str
+        
+    return base10to36(DEKHash(name))
+    
 def build_result(experiment, name, server, location):
     """Initialize a new `Results` object named ``name``
     representing an analysis of ``experiment``. ``server`` specifies
@@ -441,11 +508,10 @@ def build_result(experiment, name, server, location):
     will be stored, and ``location`` is the
     ``models.Location`` object for that file server's location.
     """
-    link = path.join(server.webServerPath, location.name, "%s_%%03d" % name)
+    # Final "" element forces trailing '/'
+    # reportLink is used in calls to dirname, which would otherwise resolve to parent dir
+    link = path.join(server.webServerPath, location.name, "%s_%%03d" % name, "")
     j = lambda l: path.join(link, l)
-    report_name = "Default_Report.php"
-    if get_alternative():
-        report_name = 'Detailed_Report.php'
     storages = models.ReportStorage.objects.all().order_by('id')
     storage = storages[len(storages) - 1]
     kwargs = {
@@ -453,13 +519,14 @@ def build_result(experiment, name, server, location):
         "resultsName":name,
         "sffLink":j("%s_%s.sff" % (experiment, name)),
         "fastqLink":j("%s_%s.fastq" % (experiment, name)),
-        "reportLink":j(report_name),
-        "status":"Started",
+        "reportLink": link, # Default_Report.php is implicit via Apache DirectoryIndex
+        "status":"Pending", # Used to be "Started"
         "tfSffLink":j("%s_%s.tf.sff" % (experiment, name)),
         "tfFastq":"_",
         "log":j("log.html"),
         "analysisVersion":"_",
         "processedCycles":"0",
+        "processedflows":"0",
         "framesProcessed":"0",
         "timeToComplete":0,
         "reportstorage":storage,
@@ -473,7 +540,7 @@ def build_result(experiment, name, server, location):
     ret.save()
     return ret
 
-def create_meta(experiment, resultsName):
+def create_meta(experiment, resultsName, unique_id):
     """Build the contents of a report metadata file (``expMeta.dat``)."""
     lines = ("Run Name = %s" % experiment.expName,
              "Run Date = %s" % experiment.date,
@@ -490,6 +557,7 @@ def create_meta(experiment, resultsName):
              "Chip Data = %s" % experiment.rawdatastyle,
              "Notes = %s" % experiment.notes,
              "Barcode Set = %s" % experiment.barcodeId,
+             "runID = %s" % unique_id,
              )
     return ('expMeta.dat', '\n'.join(lines))
     
@@ -609,6 +677,7 @@ def createReport(request, pk, reportpk):
     def bail(result, err):
         result.status = err
         raise BailException(err)
+
     exp = shortcuts.get_object_or_404(models.Experiment, pk=pk)
     try:
         rig = models.Rig.objects.get(name=exp.pgmName)
@@ -616,61 +685,125 @@ def createReport(request, pk, reportpk):
     except ObjectDoesNotExist:
         #If there is a rig try to use the location set by it
         loc = models.Location.objects.filter(defaultlocation=True)
-        loc = loc[0]
-
-        #if there is not a default, just take the first one
         if not loc:
+            #if there is not a default, just take the first one
             loc = models.Location.objects.all()
+        if loc:
             loc = loc[0]
-
+        else:
+            logger.critical("There are no Location objects, at all")
+            raise ObjectDoesNotExist("There are no Location objects, at all.")
 
     # Always use the last, latest ReportStorage object
     storages = models.ReportStorage.objects.all().order_by('id')
     storage = storages[len(storages) - 1]
     start_error = None
+    
+    # Get list of Reports associated with the ChipBarCode of this experiment
+    # This is the link between Reports of Paired-End experiments
+    pe_experiments = models.Experiment.objects.filter(chipBarcode=exp.chipBarcode)
+    logger.debug("chipBarcode: %s" % exp.chipBarcode)
+    javascript = ""
+    rev_report_list = [("None","None")]
+    fwd_report_list = [("None","None")]
+    for pe_exp in pe_experiments:
+        results = pe_exp.sorted_results_with_reports()
+        for result in results:
+            # skip Paired-End Reports
+            if result.metaData.get('paired','') == '':
+                if result.experiment.isReverseRun:
+                    rev_report_list.append((result.get_report_dir(),result.resultsName))
+                else:
+                    fwd_report_list.append((result.get_report_dir(),result.resultsName))
+            
+
+    #get the list of report addresses
+    resultList = models.Results.objects.filter(experiment=exp).order_by("timeStamp")
+    previousReports = []
+    for result in resultList:
+        previousReports.append( (result.get_report_dir(), result.resultsName + " [" + str(result.get_report_dir()) + "]") )
+
     if request.method == 'POST':
         rpf = forms.RunParamsForm(request.POST, request.FILES)
+        
+        rpf.fields['previousReport'].widget.choices = previousReports
+        rpf.fields['forward_list'].widget.choices = fwd_report_list
+        rpf.fields['reverse_list'].widget.choices = rev_report_list
+
+        #send some js to the page
+        previousReportDir = get_initial_arg(reportpk)
+        if previousReportDir:
+            rpf.fields['blockArgs'].initial = "fromWells"
+            #should thi s be outise the post?
+            javascript = """
+            $("#fromWells").click();
+            """
+            javascript += '$("#id_previousReport").val("'+previousReportDir +'");'
+
         # validate the form
         if rpf.is_valid():
-            # This handles the takeovernode button
-            tn = rpf.cleaned_data['takeover_node']
-            if tn:
-                chiptype_arg = 'takeover'
-            else:
-                chiptype_arg = exp.chipType
+            chiptype_arg = exp.chipType
             ufResultsName = rpf.cleaned_data['report_name']
             resultsName = ufResultsName.strip().replace(' ', '_')
 
             result = build_result(exp, resultsName, storage, loc)
-            # load script and determine the location/url of the results
-            # analysis
-            script = models.RunScript.objects.all()[0].script
+
             webRootPath = result.web_root_path(loc)
-            #BPP - variable not used anywhere.  delete?
-            #linkPath = result.web_path(loc)
             tfConfig = rpf.cleaned_data['tf_config']
+            tfKey = rpf.cleaned_data['tfKey']
             blockArgs = rpf.cleaned_data['blockArgs']
-            doThumbnail = rpf.cleaned_data['do_thumbnail']
+            doThumbnail = False
             ts_job_type = ""
-            if doThumbnail:
-                ts_job_type = 'thumbnail'
+
             args = rpf.cleaned_data['args']
-            #do a full alignment?
-            align_full = rpf.cleaned_data['align_full']
-            #Check to see if SFFTrim should be used
-            sfftrim = models.GlobalConfig.objects.all()[0].sfftrim
-            #get sff args
-            sfftrim_args = models.GlobalConfig.objects.all()[0].sfftrim_args
+            basecallerArgs= rpf.cleaned_data['basecallerArgs']
+
+            #replace newlines with spaces
+            args = args.replace("\n"," ")
+            args = args.replace("\r"," ")
+            basecallerArgs = basecallerArgs.replace("\n"," ")
+            basecallerArgs = basecallerArgs.replace("\r"," ")
+
+            #do a full alignment? hardcode to false for now
+
+            align_full = False
+
             #If libraryKey was set, then override the value taken from the explog.txt on the PGM
             libraryKey = rpf.cleaned_data['libraryKey']
             #ionCrawler may modify the path to raw data in the path variable passed thru URL
             exp.expDir = rpf.cleaned_data['path']
-
             aligner_opts_extra = rpf.cleaned_data['aligner_opts_extra']
+            result.runid = create_runid(resultsName + "_" + str(result.pk))
+            previousReport = rpf.cleaned_data['previousReport']
 
             result.save()
             try:
-                # create a results object
+                # Set the select fields here for the case when Bail exception is caught and form is reloaded.
+                rpf.fields['forward_list'].widget.choices = fwd_report_list
+                rpf.fields['reverse_list'].widget.choices = rev_report_list
+                
+                # Default control script definition
+                scriptname='TLScript.py'
+                
+                # Check the reverse_list and forward_list elements
+                select_forward = rpf.cleaned_data['forward_list'] or "None"
+                select_reverse = rpf.cleaned_data['reverse_list'] or "None"
+                if select_forward != "None" and select_reverse != "None":
+                    # Paired end processing request
+                    scriptname='PEScript.py'
+                    ts_job_type='PairedEnd'
+                    logger.debug("Forward %s" % request.POST.get('forward_list'))
+                    logger.debug("Reverse %s" % request.POST.get('reverse_list'))
+                    result.metaData["paired"] = 1
+                    result.save()
+                    
+                scriptpath=os.path.join('/usr/lib/python2.6/dist-packages/ion/reports',scriptname)
+                try:
+                    with open(scriptpath,"r") as f:
+                        script=f.read()
+                except Exception as error:
+                    bail(result,"Error reading %s\n%s" % (scriptpath,error.args))
+                
                 # check if path to raw data is there
                 files = []
                 try:
@@ -682,16 +815,21 @@ def createReport(request, pk, reportpk):
                 # Tests to determine if raw data still available:
                 #------------------------------------------------
                 # Data directory is located on this server
-                if bk and 'from-wells' not in args:
+                logger.debug("Start Analysis on %s" % exp.expDir)
+                if bk and (rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF"):
                     if str(bk.backupPath) == 'DELETED':
                         bail(result, "The analysis cannot start because the raw data has been deleted.")
+                        logger.warn("The analysis cannot start because the raw data has been deleted.")
                     else:
-                        if not path.exists(exp.expDir):
-                            bail(result, "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available."
-                                 % (str(bk.backupPath),))
-                if 'from-wells' not in args and not path.exists(exp.expDir):
+                        try:
+                            datfiles = os.listdir(exp.expDir)
+                            logger.debug("Got a list of files")
+                        except:
+                            logger.debug(traceback.format_exc())
+                            bail(result,
+                                 "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available." % (str(bk.backupPath),))
+                if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not path.exists(exp.expDir):
                     bail(result, "No path to raw data")
-
                 try:
                     host = "127.0.0.1"
                     conn = client.connect(host, settings.JOBSERVER_PORT)
@@ -706,14 +844,17 @@ def createReport(request, pk, reportpk):
                 except ValueError as ve:
                     bail(result, str(ve))
                 # write meta data to folder for report
-                files.append(create_meta(exp, resultsName))
+                files.append(create_meta(exp, resultsName,result.runid))
                 files.append(create_pk_conf(result.pk))
                 # write barcodes file to folder
                 if exp.barcodeId and exp.barcodeId is not '':
                     files.append(create_bc_conf(exp.barcodeId,"barcodeList.txt"))
                 # tell the analysis server to start the job
-                params = makeParams(exp, args, blockArgs, doThumbnail, resultsName, result, align_full, sfftrim, sfftrim_args, libraryKey,
-                                                        os.path.join(storage.webServerPath, loc.name),aligner_opts_extra)
+                params = makeParams(exp, args, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
+                                                        os.path.join(storage.webServerPath, loc.name),aligner_opts_extra,
+                                                        select_forward, select_reverse,
+                                                        basecallerArgs, result.runid,
+                                                        previousReport, tfKey)
                 chip_dict = {}
                 try:
                     chips = models.Chip.objects.all()
@@ -732,20 +873,43 @@ def createReport(request, pk, reportpk):
                 start_error = be.msg
                 result.delete()
     # fall through if not valid...
-    elif request.method == 'GET':
+
+    if request.method == 'GET':
+
         rpf = forms.RunParamsForm()
         rpf.fields['path'].initial = path.join(exp.expDir)
-        rpf.fields['align_full'].initial = False
 
-        extra = get_initial_arg(reportpk)
+        #if there is a library Key for the exp use that instead of the default
+        if exp.isReverseRun:
+            if exp.reverselibrarykey:
+                rpf.fields['libraryKey'].initial = exp.reverselibrarykey
+        else:
+            if exp.libraryKey:
+                rpf.fields['libraryKey'].initial = exp.libraryKey
+
         args = models.GlobalConfig.objects.all()[0].get_default_command()
         chipargs = get_chip_args(exp.chipType)
-        alist = [args, extra, chipargs]
+        alist = [args, chipargs]
         alist = [a for a in alist if a is not None]
         rpf.fields['args'].initial = " ".join(alist)
-    ctx = {"rpf": rpf, "expName":exp.expName, "start_error":start_error}
+
+        rpf.fields['forward_list'].widget.choices = fwd_report_list
+        rpf.fields['reverse_list'].widget.choices = rev_report_list
+        rpf.fields['previousReport'].widget.choices = previousReports
+
+        #send some js to the page
+        previousReportDir = get_initial_arg(reportpk)
+        if previousReportDir:
+            rpf.fields['blockArgs'].initial = "fromWells"
+            javascript = """
+            $("#fromWells").click();
+            """
+            javascript += '$("#id_previousReport").val("'+previousReportDir +'");'
+
+
+    ctx = {"rpf": rpf, "expName":exp.pretty_print_no_space, "start_error":start_error, "javascript" : javascript}
     ctx = template.RequestContext(request, ctx)
-    return shortcuts.render_to_response("rundb/ion_run_start_template_cp.html",
+    return shortcuts.render_to_response("rundb/ion_run.html",
                                         context_instance=ctx)
 def get_chip_args(chipType):
     """Get the chip specific arguments to use when launching a run"""
@@ -760,17 +924,14 @@ def get_initial_arg(pk):
     Builds the initial arg string for rerunning from wells
     """
     if int(pk) != 0:
-        report = models.Results.objects.get(pk=pk)
-        #ret = report.reportLink.strip().split('/')
-        #ret.pop(-1)
-        #ret.pop(1)
-        #ret = '/'.join(ret).strip()[1:]
-        #storage = storage.dirPath
-        ret = path.join(report.get_report_dir(), '1.wells')
-        cmd = '--from-wells=%s' % ret
-        return cmd
+        try:
+            report = models.Results.objects.get(pk=pk)
+            ret = report.get_report_dir()
+            return ret
+        except models.Results.DoesNotExist:
+            return ""
     else:
-        return None
+        return ""
 
 def report_started(request, pk):
     """
@@ -798,7 +959,7 @@ def get_selected_plugins():
     interface
     """
     try:
-        pg = models.Plugin.objects.filter(selected=True).exclude(path='')
+        pg = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
     except:
         return ""
     ret = []
@@ -815,29 +976,30 @@ def get_selected_plugins():
     else:
         return ""
 
-def get_alternative():
-    """
-    Secret sauce
-    """
-    try:
-        ret = settings.ALTERNATIVE
-    except:
-        ret = False
-    return ret
 
-def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_full , sfftrim, sfftrim_args, libraryKey,
-                                url_path, aligner_opts_extra):
+class DecimalEncoder(json.JSONEncoder):
+    """This extension of JSONEncoder correctly serializes Decimal objects"""
+    def _iterencode(self, o, markers=None):
+        if isinstance(o, decimal.Decimal):
+           return (str(o) for o in [o])
+        return super(DecimalEncoder, self)._iterencode(o, markers)
+
+
+def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
+                                url_path, aligner_opts_extra,
+                                select_forward, select_reverse, basecallerArgs, runid,
+                                previousReport,tfKey):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
     will need to be run must be constructed here and included inside the return.  
     This includes any special instructions for flow control in the top level script."""
-    gc = models.GlobalConfig.objects.all()[0]
+    gc = models.GlobalConfig.objects.all().order_by('id')[0]
     plugins = get_selected_plugins()
     exp = expOb
     pathToData = path.join(exp.expDir)
-    if doThumbnail and exp.chipType == "900":
-        pathToData = path.join(pathToData,'thumbnail')
     defaultLibKey = gc.default_library_key
+
+    ##logger.debug("...views.makeParams() gc.default_library_key=%s;" % defaultLibKey)
     expName = exp.expName
 
     #get the exp data for sam metadata
@@ -846,7 +1008,24 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
     exp_json = json.loads(exp_json)
     exp_json = exp_json[0]["fields"]
 
-    site_name = models.GlobalConfig.objects.get(pk=1).site_name
+    #now get the plan and return that
+    plan = exp.log.get("pending_run_short_id",{})
+
+    #fix [PGM-3190] - starting from v2.2, key for the plan has been renamed to planned_run_short_id 
+    if not plan:
+        plan = exp.log.get("planned_run_short_id", {})
+            
+    if plan:
+        plan_filter = models.PlannedExperiment.objects.filter(planShortID=plan)
+        plan_json = serializers.serialize("json", plan_filter)
+        plan_json = json.loads(plan_json)
+        try:
+            plan = plan_json[0]["fields"]
+        except IndexError:
+            plan = {}
+
+    site_name = gc.site_name
+    barcode_args = gc.barcode_args
 
     try:
         libraryName = models.ReferenceGenomes.objects.get(short_name=exp.library).name
@@ -854,16 +1033,27 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
         libraryName = exp.library
 
     skipchecksum = False
+    fastqpath = result.fastqLink.strip().split('/')[-1]
 
+    #logger.debug("... views.makeParams() exp.name=%s;" % exp.expName)
+    #logger.debug("... views.makeParams() exp.libraryKey=%s; " % exp.libraryKey)
+    #logger.debug("... views.makeParams() exp.forward 3' adapter=%s; " % exp.forward3primeadapter)
+    #logger.debug("... views.makeParams() exp.reverseLibraryKey=%s; " % exp.reverselibrarykey)
+    #logger.debug("... views.makeParams() exp.reverse3primeadapter=%s; " % exp.reverse3primeadapter)
+    
     #TODO: remove the libKey from the analysis args, assign this in the TLScript. To make this more fluid
 
     #if the librayKey was set by createReport use that value. If not use the value from the PGM
     if not libraryKey:
-        libraryKey = exp.libraryKey
+        if exp.isReverseRun:
+            libraryKey = exp.reverselibrarykey
+        else:
+            libraryKey = exp.libraryKey
 
     if libraryKey == None or len(libraryKey) < 1:
         libraryKey = defaultLibKey
 
+        
     #TODO: SEE IF WE CAN TAKE OFF -C off
     if len(args.strip()) != 0:
         analysisArgs = args.strip() + " %s" % (pathToData)
@@ -893,36 +1083,67 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
         net_location = "http://" + str(socket.getfqdn())
     
     # Get the 3' adapter sequence
-    if exp.reverse_primer:
-        primer_name = exp.reverse_primer
-    else:
-        primer_name = 'Ion Kit'
+    adapterSequence = exp.forward3primeadapter
+    if exp.isReverseRun:
+        adapterSequence = exp.reverse3primeadapter
+        
     try:
-        reverse_primer_dict = models.ThreePrimeadapter.objects.get(name=primer_name)
+        adapter_primer_dicts = models.ThreePrimeadapter.objects.filter(sequence=adapterSequence)
     except:
-        reverse_primer_dict = None
-    if not reverse_primer_dict:
-        reverse_primer_dict = {'name':'Ion Kit',
-                               'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC',
-                               'qual_cutoff':9,
-                               'qual_window':30,
-                               'adapter_cutoff':16
-                               }
+        adapter_primer_dicts = None
+        
+    #the adapter_primer_dicts should not be empty or none
+    if not adapter_primer_dicts or adapter_primer_dicts.count() == 0:
+        if exp.isReverseRun:
+            try:
+                adapter_primer_dict = models.ThreePrimeadapter.objects.get(direction="Reverse", isDefault=True)
+            except (models.ThreePrimeadapter.DoesNotExist,
+                    models.ThreePrimeadapter.MultipleObjectsReturned):
+                    
+                #ok, there should be a default in db, but just in case... I'm keeping the previous logic for fail-safe
+                adapter_primer_dict = {'name':'Reverse Ion Kit',
+                                       'sequence':'CTGAGTCGGAGACACGCAGGGATGAGATGG',
+                                       'direction': 'Reverse',
+                                       'qual_cutoff':9,
+                                       'qual_window':30,
+                                       'adapter_cutoff':16
+                                        }                
+        else:     
+            try:         
+                adapter_primer_dict = models.ThreePrimeadapter.objects.get(direction="Forward", isDefault=True)
+            except (models.ThreePrimeadapter.DoesNotExist,
+                    models.ThreePrimeadapter.MultipleObjectsReturned):
+                
+                #ok, there should be a default in db, but just in case... I'm keeping the previous logic for fail-safe
+                adapter_primer_dict = {'name':'Ion Kit',
+                                       'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC',
+                                       'direction': 'Forward',
+                                       'qual_cutoff':9,
+                                       'qual_window':30,
+                                       'adapter_cutoff':16
+                                        }
+    else:
+        adapter_primer_dict = adapter_primer_dicts[0]
+
+    logger.debug("... views.makeParams() exp.name=%s;" % exp.expName)
+    logger.debug("...about to exit views.makeParams() libraryKey=%s;" % libraryKey)
+    logger.debug("...about to exit views.makeParams() adapter_primer=%s;" % adapter_primer_dict.sequence)    
+    
     rawdatastyle = exp.rawdatastyle
     
     ret = {'pathToData':pathToData,
            'analysisArgs':analysisArgs,
+           'basecallerArgs' : basecallerArgs,
            'blockArgs':blockArgs,
            'libraryName':libraryName,
            'resultsName':resultsName,
            'expName':expName,
            'libraryKey':libraryKey,
            'plugins':plugins,
+           'fastqpath':fastqpath,
            'skipchecksum':skipchecksum,
            'flowOrder':flowOrder,
            'align_full' : align_full,
-           'sfftrim' : sfftrim,
-           'sfftrim_args' : sfftrim_args,
            'project':project,
            'sample':sample,
            'chiptype':chipType,
@@ -931,11 +1152,22 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
            'exp_json': json.dumps(exp_json),
            'site_name': site_name,
            'url_path':url_path,
-           'reverse_primer_dict':reverse_primer_dict,
+           'reverse_primer_dict':adapter_primer_dict,
            'rawdatastyle':rawdatastyle,
-           'aligner_opts_extra':aligner_opts_extra 
-           }
-
+           'aligner_opts_extra':aligner_opts_extra,
+           'plan': plan,
+           'flows':exp.flows,
+           'pgmName':exp.pgmName,
+           'pe_forward':select_forward,
+           'pe_reverse':select_reverse,
+           'isReverseRun':exp.isReverseRun,
+           'barcode_args':json.dumps(barcode_args,cls=DecimalEncoder),
+           'tmap_version':settings.TMAP_VERSION,
+           'runid':runid,
+           'previousReport':previousReport,
+           'tfKey': tfKey
+    }
+    
     return ret
 
 def current_jobs(request):
@@ -1190,48 +1422,6 @@ def get_loc_choices():
         basicChoice.append((loc, loc))
     return tuple(basicChoice)
 
-def findVersions():
-    """
-    find the version of the packages
-    """
-    packages =  ["ion-alignment",
-                 "ion-analysis",
-                 "ion-dbreports",
-                 "ion-docs",
-                 "ion-gpu",
-                 "ion-pgmupdates",
-                 "ion-plugins",
-                 "ion-referencelibrary",
-                 "ion-rsmts",
-                 "ion-sampledata",
-                 "ion-tsconfig",
-                 "ion-tsups",
-                 "ion-publishers",
-                 "ion-onetouchupdater",
-                 "ion-pipeline",
-                 "ion-usbmount",
-                 "tmap",
-                 "ion-torrentR"]
-
-    packages = sorted(packages)
-
-    ret = SortedDict()
-    for package in packages:
-        #command for version checking
-        com = "dpkg -s %s | grep Version | head -1" % package
-        try:
-            a = subprocess.Popen(com, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            #just get the version number
-            tolist = a.stdout.readlines()[0].strip().split("Version: ")[1]
-            ret[package] = tolist
-        except:
-            pass
-
-    from ion import version
-    meta_version = version
-
-    return ret, meta_version
-
 def about(request):
     """
     Generates the information on the `About` tab
@@ -1241,114 +1431,6 @@ def about(request):
     ctx = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_about.html",
                                         context_instance=ctx, mimetype="text/html")
-
-def search_for_plugins(config, basepath):
-    """
-    Searches for new plugins
-    """
-    def create_new(name, version, path):
-        p = models.Plugin()
-        p.name = name
-        p.version = version
-        p.date = datetime.datetime.now()
-        p.selected = False
-        p.path = path
-        p.autorun = False
-        p.save()
-
-    def get_version(pdir, name, defaultpluginscript):
-        command = "grep VERSION %s/%s | head -1 | awk '{print $1}' " % (pdir, defaultpluginscript)
-        try:
-            a = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-            version = a.stdout.readlines()[0].strip()
-            version = version.split("=")[1]
-            version = version.replace('"', '')
-        except:
-            version = "0"
-        return version
-
-    def update_version(plugin, version):
-        plugin.version = version
-        plugin.save()
-
-    def set_pluginconfig (plugin, pdir, configfile):
-        """if there is data in pluginconfig json
-        set the plugin.config value in the database
-        """
-        pluginconfigfile = os.path.join(pdir, configfile)
-        if not os.path.exists(pluginconfigfile):
-            return
-        logger.info("Setting pluginconfig: '%s'", pluginconfigfile)
-        try:
-            with open(pluginconfigfile) as f:
-                config = f.read()
-            config = json.loads(config)
-            plugin.config = config
-            plugin.save()
-            return
-        except:
-            logger.exception("Failed to load pluginconfig from '%s'", pluginconfigfile)
-            return
-
-    default_script = config.default_plugin_script
-    basedir = "/results/plugins" # FIXME - get from globalconfig
-    if path.exists(basedir):
-        # only list files in the 'plugin' directory if they are actually folders
-        folder_list = [i for i in os.listdir(basedir) if (path.isdir(path.join(basedir, i)) and i != "scratch")]
-        for pname in folder_list:
-            full_path = path.join(basedir, pname)
-            try:
-                p = models.Plugin.objects.get(name=pname.strip())
-            except:
-                create_new(pname,
-                           get_version(full_path, pname, default_script),
-                           full_path)
-                p = models.Plugin.objects.get(name=pname.strip())
-                if not p.config:
-                    set_pluginconfig (p,
-                                      path.join(basedir, pname),
-                                      "pluginconfig.json")
-                continue
-            current_version = get_version(path.join(basedir, pname),
-                                          pname,
-                                          default_script)
-
-            if p.version != current_version:
-                update_version(p, current_version)
-
-            # update paths in place
-            if p.path != full_path:
-                p.path = path
-                p.save()
-
-            if not p.config:
-                set_pluginconfig (p,
-                             path.join(basedir, pname),
-                             "pluginconfig.json")
-    return None
-
-def purge_plugins(plugin_path):
-    """
-    Removes records from plugin table which no longer have corresponding folder
-    on the file system.  If the folder does not exist, we assume that the plugin
-    has been deleted.  In any case, one cannot execute the plugin if the plugin
-    folder has been removed.
-    """
-    # get all plugin records from table
-    plugins = models.Plugin.objects.all().exclude(path='')
-    # for each record, test for corresponding folder
-    for plugin in plugins:    
-        # if folder does not exist
-        if not os.path.isdir(plugin.path):
-            ## FIXME - mark as inactive / missing / disabled
-            #plugin.autorun = False
-            #plugin.selected = False
-            #plugin.path = ''
-            #plugin.save()
-            # Remove plugin record
-            plugin.delete()
-    return
-
 
 # ============================================================================
 # Global configuration processing and helpers
@@ -1382,30 +1464,35 @@ def config_site_name(request, context, config):
     to do here is check whether we should update it, and if so, do so.
     """
     if request.method == "POST" and "site_name" in request.POST:
-        config = config.get(pk=1)
         config.site_name = request.POST["site_name"]
         config.save()
         context.update({"base_site_name": request.POST["site_name"]})
 
 
+@bind_messages("config")
 def global_config(request):
     """
     Renders the Config tab.
     """
-    globalconfig = models.GlobalConfig.objects.all().order_by('pk')
+    globalconfig = models.GlobalConfig.objects.all().order_by('pk')[0]
     ctx = template.RequestContext(request, {})
     # As the config page takes on more responsibility, things that need updating
     # can be updated from here:
     config_contacts(request, ctx)
     config_site_name(request, ctx, globalconfig)
-    
+
     emails = models.EmailAddress.objects.all().order_by('pk')
-    purge_plugins('/results/plugins')
+
+    # Rescan Publishers
     publishers.purge_publishers()
-    for c in globalconfig:
-        search_for_plugins(c, c.plugin_folder)
-        publishers.search_for_publishers(c)
-    plugs = models.Plugin.objects.all().order_by('pk')
+    publishers.search_for_publishers(globalconfig)
+
+    # Rescan Plugins
+    pluginmanager = PluginManager(globalconfig)
+    pluginmanager.rescan() ## Find new, remove missing
+
+    # Refresh pubs and plugs, as some may have been added or removed
+    plugs = models.Plugin.objects.filter(active=True).order_by('-date').exclude(path='')
     pubs = models.Publisher.objects.all().order_by('name')
     ctx.update({"config":globalconfig,
                 "email":emails,
@@ -1417,35 +1504,6 @@ def global_config(request):
 
     return shortcuts.render_to_response("rundb/ion_global_config.html",
                                         context_instance=ctx)
-
-
-def how_are_you(request, host, port):
-    """Open a socket to the given host and port, if we can :), if not :(
-    """
-    try:
-        s = socket.create_connection((host, int(port)), 10)
-        s.close()
-        status = ":)"
-    except Exception as complaint:
-        logger.warn(complaint)
-        status  = ":("
-    return http.HttpResponse('{"feeling":"%s"}' % status,
-                        mimetype='application/javascript')
-
-
-def fetch_remote_content(request, url):
-    """Perform an HTTP GET request on the given url and forward it's result.
-    This is specifically for remote requests which need to originate from this
-    server rather than from the client connecting to the torrent server.
-    """
-    try:
-        remote = urllib.urlopen(url)
-        data = remote.read()
-        remote.close()
-    except Exception as complaint:
-        logger.warn(complaint)
-        data = ""
-    return http.HttpResponse(data)
 
 
 def edit_email(request, pk):
@@ -1544,15 +1602,15 @@ def stats_sys(request):
     """
 
     # Run a script on the server to generate text
-    networkCMD = [os.path.join("/opt/ion/iondb/bin", "networkchecker")]
+    networkCMD = [os.path.join("/usr/bin", "ion_netinfo")]
     p = subprocess.Popen(networkCMD, shell=True, stdout=subprocess.PIPE)
-    p.wait()
-    stats_network = p.stdout.readlines()
+    stdout, stderr = p.communicate()
+    stats_network = stdout.splitlines(True)
 
-    statsCMD = [os.path.join("/opt/ion/iondb/bin", "collectInfo.sh")]
+    statsCMD = [os.path.join("/usr/bin", "ion_sysinfo")]
     q = subprocess.Popen(statsCMD, shell=True, stdout=subprocess.PIPE)
-    q.wait()
-    stats = q.stdout.readlines()
+    stdout, stderr = q.communicate()
+    stats = stdout.splitlines(True)
     
     stats_dm = rawDataStorageReport.storage_report()
 
@@ -1574,7 +1632,7 @@ def stats_sys(request):
     try:
         os.unlink(reportFileName)
     except:
-        print "Error! Could not delete ", reportFileName
+        logger.exception("Error! Could not delete '%s'", reportFileName)
 
     outfile = open(reportFileName, 'w')
     for line in stats_network:
@@ -1589,7 +1647,7 @@ def stats_sys(request):
         os.chmod(reportFileName,
             stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
     except:
-        print "FOOBAR! could not chmod ", reportFileName
+        logger.exception("Could not chmod '%s'", reportFileName)
 
     return shortcuts.render_to_response("rundb/ion_stats_sys.html",
                                         context_instance=ctx)
@@ -1612,12 +1670,47 @@ def servers(request):
     """
     Renders the `Servers` tab by calling the view for each section
     """
+    def process_status(process):
+        return subprocess.Popen("service %s status" % process,
+                  shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    processes = [
+         "ionJobServer",
+         "ionCrawler",
+         "ionPlugin",
+         "ionArchive",
+         "celeryd",
+         "RSM_Launch",
+         "dhcp3-server",
+         "ntp"
+    ]
+    proc_set = dict((p, process_status(p)) for p in processes)
+    for name, proc in proc_set.items():
+        stdout, stderr = proc.communicate()
+        proc_set[name] = proc.returncode == 0
+        logger.debug("%s out = '%s' err = %s''" % (name, stdout.strip(), stderr.strip()))
+    # tomcat specific status code so that we don't need root privilege
+    def complicated_status(filename, parse):
+        try:
+            if os.path.exists(filename):
+                data = open(filename).read()
+                pid = parse(data)
+                proc = subprocess.Popen("ps %d" % pid, shell=True)
+                proc.communicate()
+                return proc.returncode == 0
+        except Exception as err:
+            return False
+    proc_set["tomcat6"] = complicated_status("/var/run/tomcat6.pid", int)
+    # pids should contain something like '[{rabbit@TSVMware,18442}].'
+    proc_set["RabbitMQ"] = complicated_status("/var/lib/rabbitmq/pids",
+                              lambda x: int(x[x.rindex(',')+1:x.rindex('}')]))
+
     cs = crawler_status(request)
     job = current_jobs(request)
     #archive = backup(request)
     archive = db_backup(request)
 
     ctxd = {"crawler":cs,
+            "processes": sorted(proc_set.items()),
             "jobs":job,
             "archive":archive,
             "use_precontent":True,
@@ -1667,6 +1760,11 @@ def validate_barcode(barCodeDict):
     if 'id_str' in barCodeDict:
         if not set(barCodeDict["id_str"]).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"):
             failed.append(("id_str", "str_id must only have letters, numbers, or the characters _ . - "))
+
+    #do not let the index be set to zero. Zero is reserved.
+    if 'index' in barCodeDict:
+        if barCodeDict["index"] == "0":
+            failed.append(("index", "index must not contain a 0. Indices should start at 1."))
 
     return failed
 
@@ -1802,7 +1900,9 @@ def add_barcode(request):
         return http.HttpResponse(json.dumps(r) , mimetype="text/html")
 
     elif request.method == 'GET':
-        return shortcuts.render_to_response("rundb/ion_barcode.html")
+        ctx = template.RequestContext(request, {})
+        return shortcuts.render_to_response("rundb/ion_barcode.html",
+                                            context_instance=ctx)
 
 
 def save_barcode(request):
@@ -1856,7 +1956,7 @@ def barcodeData(filename,metric=None):
 
     #FIX, we got bugs
     if not os.path.exists(filename):
-        #print >> sys.stderr, "File does not exist: ", filename
+        logger.error("Barcode data file does not exist: '%s'", filename)
         return False
 
     try:
@@ -1882,25 +1982,23 @@ def barcodeData(filename,metric=None):
                             d["adapter"] = row["Annotation"]
                         dictList.append(d)
                     except (KeyError, ValueError) as e:
-                        #print >> sys.stderr, "ERROR: ", e
                         ## Could have truncated data!
-                        pass
+                        logger.exception(row)
                 else:
-                    print sys.stderr, "Metric missing: ", metric
+                    logger.error("Metric missing: '%s'", metric)
             else:
                 del row[""] ## Delete empty string (from trailing comma)
                 #return a list of dicts where each dict is one row
                 dictList.append(row)
     except (IOError, csv.Error) as e:
-        print >> sys.stderr, "ERROR: ", e
         ## Could have truncated data!
-        pass
+        logger.exception(e)
     except:
-        print >> sys.stderr, "ERROR: ", sys.exc_info()
+        logger.exception()
         return False
 
     if not dictList:
-        print >> sys.stderr, "WARNING: Empty Metric List"
+        logger.warn("Empty Metric List")
         return False
 
     #now sort by the "axis" label
@@ -1929,23 +2027,23 @@ def graph_iframe(request,pk):
 
 def plugin_iframe(request,pk):
     """
-    if a plugin has instance.html or instance.json provide this from a django template
-    one weakness of this method is that there is not an easy way to provide static content with
-    the plugin
+    load files into iframes
      """
 
-    def openfile(file):
+    def openfile(fname):
         """strip lines """
         try:
-            file = open(file)
+            f = open(fname, 'r')
         except:
+            logger.exception("Failed to open '%s'", fname)
             return False
-        file = file.read()
-        return file
+        content = f.read()
+        f.close()
+        return content
 
     plugin = shortcuts.get_object_or_404(models.Plugin, pk=pk)
     #make json to send to the template
-    plugin_json = models.Plugin.objects.filter(pk=pk)
+    plugin_json = models.Plugin.objects.filter(pk=pk) ## needs to return queryset, use filter instead of get
     plugin_json = serializers.serialize("json", plugin_json)
     plugin_json = json.loads(plugin_json)[0]
     plugin_json = json.dumps(plugin_json)
@@ -1954,14 +2052,16 @@ def plugin_iframe(request,pk):
     config = request.GET.get('config', False)
     about  = request.GET.get('about', False)
 
-    file = openfile(os.path.join(plugin.path, "instance.html"))
-
+    if report:
+        file = openfile(os.path.join(plugin.path, "instance.html"))
     if config:
         file = openfile(os.path.join(plugin.path, "config.html"))
     if about:
         file = openfile(os.path.join(plugin.path, "about.html"))
 
-    ctxd = {"plugin":plugin_json , "file" : file, "report" : report }
+    index_version = settings.TMAP_VERSION
+
+    ctxd = {"plugin":plugin_json , "file" : file, "report" : report ,"tmap" : str(index_version) }
     context = template.RequestContext(request, ctxd)
 
     return shortcuts.render_to_response("rundb/ion_plugin_iframe.html",
@@ -2007,18 +2107,25 @@ def validate_plan(plan):
             except ValueError:
                 failed.append( ("cycles","flows must be a whole number") )
 
-    alphaNumList = ["chipBarcode","seqKitBarcode"]
+    alphaNumList = ["chipBarcode","seqKitBarcode", "forwardLibraryKey", "forward3PrimeAdapter", "reverseLibraryKey", "reverse3PrimeAdapter"]
     for alphaNum in alphaNumList:
         if alphaNum in plan:
             if not set(plan[alphaNum]).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"):
                 failed.append((alphaNum, "Must only have letters or numbers"))
 
     checkList = ["autoAnalyze","preAnalysis"]
-    checkWord = ["false", "f", "no", "n", "none", "0" , "true", "t", "yes", "y", "1", "" ]
+    checkWord = ["false", "False", "FALSE","f", "no", "n", "none", "0" , "true", "True", "TRUE","t", "yes", "y", "1", "" ]
     for check in checkList:
         if check in plan:
             if not plan[check] in checkWord:
-                failed.append((check, 'Must contain only one of the values for false ("false", "f", "no", "n", "none", "0" ) or for true ("true", "t", "yes", "y", "1", "") '))
+                failed.append((check, 'Must contain only one of the values for false ("false", "False", "FALSE","f", "no", "n", "none", "0" ) or for true ("true", "True", "TRUE","t", "yes", "y", "1", "") '))
+
+    checkList = ["isPairedEnd"]
+    checkWord = ["false", "False", "FALSE", "f", "no", "No", "NO", "n", "none", "0", "true", "True", "TRUE", "t", "yes", "Yes", "YES", "y", "1", "" ]
+    for check in checkList:
+        if check in plan:
+            if not plan[check] in checkWord:
+                failed.append((check, 'Must contain only one of the values for false ("false", "False", "FALSE", "f", "no", "No", "NO", "n", "none", "0", "") or for true ("true", "True", "TRUE", "t", "yes", "Yes", "YES", "y", "1") '))
 
     if 'notes' in plan:
         if not set(plan["notes"]).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
@@ -2041,14 +2148,10 @@ def validate_plan(plan):
             if not plan["barcodeID"] in barcodes:
                 failed.append(("barcodeID", "Must be a valid barcode id of an existing barcode set"))
 
-    #library: items in the list
-    libraries = models.ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION).order_by('pk')
-    libraries = [l.short_name for l in libraries]
-    if 'library' in plan:
-        if plan["library"]:
-            if not plan["library"] in libraries:
-                failed.append(("library", "Must be a valid genome reference library short form name. (also known as reference sequence)"))
-
+    if plan.get("library", False):
+        if not models.ReferenceGenome.objects.all().filter(
+            short_name=plan["library"], index_version=settings.TMAP_VERSION):
+            failed.append(("library", "Must be a valid genome reference library short form name. (also known as reference sequence)"))
 
     return failed
 
@@ -2083,7 +2186,10 @@ def add_plans(request):
         expectedHeader = [ "planName", "sample", "project", "flows",
                           "runType", "library", "barcodeId",
                           "seqKitBarcode", "autoAnalyze", "preAnalysis",
-                          "bedfile", "regionfile", "notes"
+                          "bedfile", "regionfile", "notes",
+                          "forwardLibraryKey", "forward3PrimeAdapter",
+                          "isPairedEnd", "reverseLibraryKey",
+                          "reverse3PrimeAdapter"
                          ]
 
         if sorted(firstCSV[0]) != sorted(expectedHeader):
@@ -2113,13 +2219,26 @@ def add_plans(request):
                 #convert to bool
                 if key == 'autoAnalyze' or key == 'preAnalysis':
                     value = toBoolean(value)
+                if key == 'isPairedEnd':
+                    value = toBoolean(value, False)                    
+            
 
                 #don't save if the cycles is blank
                 if key == 'flows' and value == '':
                     pass
+                elif key =='forwardLibraryKey':
+                    setattr(newPlan, 'libraryKey', value)
+                elif key == 'forward3PrimeAdapter':
+                    setattr(newPlan, 'forward3primeadapter', value)
+                elif key == 'isPairedEnd':
+                    setattr(newPlan, 'isReverseRun', value)
+                elif key == 'reverseLibraryKey':
+                    setattr(newPlan, 'reverselibrarykey', value)
+                elif key == 'reverse3PrimeAdapter':
+                    setattr(newPlan, 'reverse3primeadapter', value)
                 else:
-                    setattr(newPlan, key, value)
-
+                    setattr(newPlan, key, value)                    
+                
             #default runtype is GENS
             if not newPlan.runType:
                 newPlan.runType = "GENS"
@@ -2150,13 +2269,15 @@ def add_plans(request):
         return http.HttpResponse(json.dumps(r) , mimetype="text/html")
 
 
-    return shortcuts.render_to_response("rundb/ion_addplans.html")
+    ctx = template.RequestContext(request, {} )
+    return shortcuts.render_to_response("rundb/ion_addplans.html",context_instance=ctx, mimetype="text/html")
 
 def get_plan_data():
 
-    runTypes = models.RunType.objects.all().order_by("id")
-    barcodes = models.dnaBarcode.objects.values('name').distinct().order_by('name')
-    references = models.ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION).order_by('pk')
+    data = {}
+    data["runTypes"] = models.RunType.objects.all().order_by("id")
+    data["barcodes"] = models.dnaBarcode.objects.values('name').distinct().order_by('name')
+    data["references"] = models.ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION)
 
     allFiles = models.Content.objects.filter(publisher__name="BED",path__contains="/unmerged/detail/")
     bedFiles, hotspotFiles = [], []
@@ -2166,22 +2287,43 @@ def get_plan_data():
         else:
             bedFiles.append(file)
 
-    seqKits = models.SequencingKit.objects.all()
-    libKits = models.LibraryKit.objects.all()
+    data["bedFiles"] = bedFiles
+    data["hotspotFiles"] = hotspotFiles
 
-    variantfrequencies = models.VariantFrequencies.objects.all().order_by("name")
+    data["seqKits"] = models.KitInfo.objects.filter(kitType='SequencingKit')
+    data["libKits"] = models.KitInfo.objects.filter(kitType='LibraryKit')
+    
+    data["variantfrequencies"] = models.VariantFrequencies.objects.all().order_by("name")
 
-    return runTypes, barcodes, references, bedFiles, hotspotFiles, seqKits, libKits, variantfrequencies
+    #is the ion reporter upload plugin installed?
+    try:
+        IRupload = models.Plugin.objects.get(name="IonReporterUploader",selected=True,active=True,autorun=True)
+        status, IRworkflows = tasks.IonReporterWorkflows()
+    except models.Plugin.DoesNotExist:
+        IRupload = False
+        status = False
+        IRworkflows = "Plugin Does Not Exist"
+    except models.Plugin.MultipleObjectsReturned:
+        IRupload = False
+        status = False
+        IRworkflows = "Multiple active versions of IonReporterUploader installed. Please uninstall all but one."
+
+    data["IRupload"] = IRupload
+    data["status"] = status
+    data["IRworkflows"] = IRworkflows
+
+    #the entry marked as the default will be on top of the list
+    data["forwardLibKeys"] = models.LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    data["forward3Adapters"] = models.ThreePrimeadapter.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    data["reverseLibKeys"] = models.LibraryKey.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+    data["reverse3Adapters"] = models.ThreePrimeadapter.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+
+    return data
 
 def add_plan(request):
     """add one plan"""
 
-    runTypes, barcodes, references, bedFiles, hotspotFiles, seqKits, libKits, variantfrequencies = get_plan_data()
-
-    ctxd = {"bedFiles":bedFiles, "hotspotFiles" : hotspotFiles,
-            "libKits": libKits, "seqKits" : seqKits,
-            "variantfrequencies": variantfrequencies,
-            "runTypes":runTypes, "barcodes" : barcodes, "references" : references}
+    ctxd = get_plan_data()
 
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_addeditplan.html",
@@ -2191,16 +2333,10 @@ def edit_plan(request, id):
     """
     Simple view to display the edit barcode page
     """
-    runTypes, barcodes, references, bedFiles, hotspotFiles, seqKits, libKits, variantfrequencies = get_plan_data()
+    ctxd = get_plan_data()
 
     #get the existing plan
-    plan = shortcuts.get_object_or_404(models.PlannedExperiment,pk=id)
-
-    ctxd = {"plan":plan,
-            "bedFiles":bedFiles, "hotspotFiles" : hotspotFiles,
-            "libKits": libKits, "seqKits" : seqKits,
-            "variantfrequencies": variantfrequencies,
-            "runTypes":runTypes, "barcodes" : barcodes, "references" : references}
+    ctxd["plan"] = shortcuts.get_object_or_404(models.PlannedExperiment,pk=id)
 
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_addeditplan.html",
@@ -2211,21 +2347,48 @@ def edit_experiment(request, id):
     """
 
     #get the info to populate the page
-    runTypes, barcodes, references, bedFiles, hotspotFiles, seqKits, libKits, variantfrequencies = get_plan_data()
+    data = get_plan_data()
 
     #get the existing plan
     exp = shortcuts.get_object_or_404(models.Experiment,pk=id)
 
-
     selectedReference = exp.library
 
-    ctxd = {"exp":exp,
-            "bedFiles":bedFiles, "hotspotFiles" : hotspotFiles,
-            "libKits": libKits, "seqKits" : seqKits,
-            "variantfrequencies": variantfrequencies,
-            "runTypes":runTypes, "barcodes" : barcodes,
-            "references" : references,
-            "selectedReference" : selectedReference }
+    #for paired-end reverse run, separate library key and 3' adapter needed
+    selectedForwardLibKey = exp.libraryKey
+    selectedForward3PrimeAdapter = exp.forward3primeadapter
+    
+    selectedReverseLibKey = exp.reverselibrarykey
+    selectedReverse3PrimerAdapter = exp.reverse3primeadapter
+
+    #the entry marked as the default will be on top of the list
+    forwardLibKeys = models.LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    forward3Adapters = models.ThreePrimeadapter.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    reverseLibKeys = models.LibraryKey.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+    reverse3Adapters = models.ThreePrimeadapter.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+
+
+    ctxd = {
+            "bedFiles":data["bedFiles"],
+            "hotspotFiles" : data["hotspotFiles"],
+            "libKits": data["libKits"],
+            "seqKits" : data["seqKits"],
+            "variantfrequencies": data["variantfrequencies"],
+            "runTypes": data["runTypes"],
+            "barcodes" : data["barcodes"],
+            "references" : data["references"],
+
+            "exp":exp,
+            "selectedReference" : selectedReference,
+            "selectedForwardLibKey" : selectedForwardLibKey,
+            "selectedForward3PrimeAdapter" : selectedForward3PrimeAdapter,
+            "selectedReverseLibKey" : selectedReverseLibKey,
+            "selectedReverse3PrimerAdapter" : selectedReverse3PrimerAdapter,
+            "forwardLibKeys" : forwardLibKeys,
+            "forward3Adapters" : forward3Adapters, 
+            "reverseLibKeys" : reverseLibKeys, 
+            "reverse3Adapters" : reverse3Adapters
+             }
 
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_editexp.html",
@@ -2301,18 +2464,41 @@ def add_edit_barcode(request, barCodeSet):
     return shortcuts.render_to_response("rundb/ion_barcode_addedit.html",
                                         context_instance=context)
 
+def pluginZipUpload(request):
+    """file upload for plupload"""
+    if request.method == 'POST':
+        name = request.REQUEST.get('name','')
+        uploaded_file = request.FILES['file']
+        if not name:
+            name = uploaded_file.name
+        name,ext = os.path.splitext(name)
 
-def test_task(request, argument):
-    from django.http import HttpResponse
-    #async = tasks.test_task.delay(argument)
-    async = tasks.downloadGenome.delay(argument, "genome")
-    #result = async.get()
-    result = "waiting"
-    task_id = async.task_id
-    state = async.state
-    html = """<html><body>Your argument was %s.<br />
-    Your Celery task ID is %s<br />
-    Your Celery task state is %s
-    </body></html>
-    """ % (result, task_id, state)
-    return HttpResponse(html)
+        #check to see if a user has uploaded a file before, and if they have
+        #not, make them a upload directory
+
+        upload_dir = "/results/plugins/scratch/"
+
+        if not os.path.exists(upload_dir):
+            return render_to_json({"error":"upload path does not exist"})
+
+        dest_path = '%s%s%s%s' % (upload_dir,os.sep,name,ext)
+
+        chunk = request.REQUEST.get('chunk','0')
+        chunks = request.REQUEST.get('chunks','0')
+
+        debug = [chunk, chunks]
+
+        with open(dest_path,('wb' if chunk==0 else 'ab')) as f:
+            for content in uploaded_file.chunks():
+                f.write(content)
+
+        if int(chunk) + 1 >= int(chunks):
+            #the upload has finished
+            pass
+
+        return render_to_json({"chuck posted":debug})
+
+    else:
+        return render_to_json({"method":"only post here"})
+
+

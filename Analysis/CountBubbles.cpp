@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include "BubbleFilter.h"
 #include "OptArgs.h"
+#include "Utils.h"
 
 int main(int argc, const char *argv[]) {
   OptArgs opts;  

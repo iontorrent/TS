@@ -2,7 +2,9 @@
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 import sys
+sys.path.append("/opt/ion")
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
 from django.contrib.auth.models import User
 import psycopg2
 import traceback
@@ -48,14 +50,10 @@ def superUserExists():
             for user in users:
                 if user.is_superuser:
                     return True
-    except psycopg2.DatabaseError:
-        # Typically get here if iondb database does not exist
-        #print traceback.format_exc()
-        return False
     except:
-        print traceback.format_exc()
+        # Typically get here if iondb database or User object does not exist
         return False
-
+    
     return False
 
 def createSuperUser():

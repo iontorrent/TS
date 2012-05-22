@@ -11,7 +11,20 @@ readTfStats <- function(analysisDir,filename="TFTracking.txt") {
       return(NULL)
     }
   } else {
-    warning(sprintf("TF tracking file %s does not exist\n",tfStatFile))
-    return(NULL)
+    # Check for TF.sam.parsed - the new TFTracking.txt
+    tfSamParsedFile <- paste(analysisDir,.Platform$file.sep,"TF.sam.parsed",sep="")
+    if(file.exists(tfSamParsedFile)) {
+      if(0==file.access(tfSamParsedFile,4)) {
+        result <- readSamParsed(tfSamParsedFile,fields=c("name","tName","q7Len","q10Len","q17Len"))
+        names(result)[3] <- "tfSeq"
+        return(data.frame(result,stringsAsFactors=FALSE))
+      } else {
+        warning(sprintf("TF tracking file %s exists but is not readable\n",tfSamParsedFile))
+        return(NULL)
+      }
+    } else {
+      warning(sprintf("Did not find either of the possible TF tracking files:\n%s\n%s\n",tfStatFile,tfSamParsedFile))
+      return(NULL)
+    }
   }
 }

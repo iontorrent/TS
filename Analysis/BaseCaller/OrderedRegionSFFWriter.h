@@ -6,7 +6,7 @@
 #include <vector>
 #include <deque>
 
-#include "SpecialDataTypes.h"
+//#include "SpecialDataTypes.h"
 #include "file-io/sff_definitions.h"
 
 using namespace std;
@@ -20,7 +20,7 @@ public:
   void  copyTo(SFFWriterWell &w);
 
   string            name;
-  weight_vec_t      flowIonogram;
+  vector<uint16_t>  flowIonogram;
   vector<uint8_t>   baseFlowIndex;
   vector<char>      baseCalls;
   vector<uint8_t>   baseQVs;
@@ -38,8 +38,8 @@ public:
   OrderedRegionSFFWriter();
   ~OrderedRegionSFFWriter();
 
-  void OpenForWrite(const char *experimentName, const char *sffFileName, int numRegions, int numFlows,
-      const char *flowChars, const char *keySequence);
+  void OpenForWrite(const string& sffFileName, int numRegions, int numFlows,
+      const string& flowChars, const string& keySequence);
 
   void WriteRegion(int iRegion, deque<SFFWriterWell> &regionWells);
 

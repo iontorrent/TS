@@ -2,8 +2,8 @@
 # Django settings for iondb project.
 
 from os import path
-import sys
 import socket
+from bin import dj_config
 import djcelery
 djcelery.setup_loader()
 
@@ -29,9 +29,12 @@ QMASTERHOST = 'localhost'
 SGEQUEUENAME = 'all.q'
 
 # Django Celery config
-BROKER_TRANSPORT = 'djkombu.transport.DatabaseTransport'
 CELERYD_LOG_FILE = "/var/log/ion/celery.log"
-
+BROKER_HOST = "localhost"
+BROKER_PORT = 5672
+BROKER_USER = "ion"
+BROKER_PASSWORD = "ionadmin"
+BROKER_VHOST = "ion"
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -78,6 +81,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'iondb.bin.startup_housekeeping.StartupHousekeeping'
 )
 
 ROOT_URLCONF = 'iondb.urls'
@@ -88,9 +92,11 @@ TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")) or
                  "/results/publishers/",
 )
 
-TEMPLATE_CONTEXT_PROCESSORS = ('django.contrib.auth.context_processors.auth',
-                               'iondb.rundb.views.base_context_processor',
-                                )
+TEMPLATE_CONTEXT_PROCESSORS = (
+    'django.contrib.auth.context_processors.auth',
+    'iondb.rundb.views.base_context_processor',
+    'iondb.rundb.views.message_binding_processor',
+)
 
 INSTALLED_APPS = (
     'django.contrib.auth',
@@ -114,8 +120,8 @@ CELERY_IMPORTS = (
     "iondb.rundb.publishers",
 )
 
-# Allow tasks the generous run-time of one hour before they're killed.
-CELERYD_TASK_TIME_LIMIT=3600
+# Allow tasks the generous run-time of six hours before they're killed.
+CELERYD_TASK_TIME_LIMIT=21600
 
 if path.exists("/opt/ion/.computenode"):
     # This is the standard way to disable logging in Django.
@@ -191,25 +197,15 @@ SGE_EXECD_PORT = 6445
 SGE_ENABLED = True
 DRMAA_LIBRARY_PATH = "/usr/lib/libdrmaa.so.1.0"
 
-ALTERNATIVE = False
-
-TMAP_DIR = '/results/referenceLibrary/tmap-f2/'
-TMAP_VERSION = 'tmap-f2'
+TMAP_VERSION = dj_config.get_tmap_version()
+TMAP_DIR = '/results/referenceLibrary/%s/' % TMAP_VERSION
 TEMP_PATH = "/results/referenceLibrary/temp/"
 PLUGIN_PATH = "/results/plugins/"
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 114857600
 
-sys.path.append('/etc')
-
 # import from the local settings file
 try:
     from local_settings import *
-except ImportError:
-    pass
-    
-# import from the cluster settings file
-try:
-    from torrentserver.cluster_settings import *
 except ImportError:
     pass

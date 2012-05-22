@@ -1,4 +1,4 @@
-qname                 all.q
+qname                 QUEUENAME
 hostlist              NONE
 seq_no                0
 load_thresholds       np_load_avg=1.75

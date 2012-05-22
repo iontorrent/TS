@@ -57,6 +57,49 @@ DerivativeGenerateRedHydrogensFromNucRise<-function(
 }
 
 
+DualRedTrace<-function(
+    nucRise, sub_steps,
+    deltaFrame, my_start, 
+    maxConc, 
+    amplitude, copies,
+    krate, kmax, diffusion, sens, tauB
+){
+
+	val <- .Call("DualRedTraceR",
+	      nucRise,sub_steps,
+        deltaFrame, my_start,
+        maxConc, 
+        amplitude,copies, 
+        krate,kmax,diffusion, sens, tauB,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}
+
+
+DualEKFTrace<-function(
+    observed,
+    nucRise, sub_steps,
+    deltaFrame, my_start, 
+    maxConc, 
+    amplitude, copies,
+    krate, kmax, diffusion, sens, tauB,
+    pkkA, pkkr, qssA, qsskr
+){
+
+	val <- .Call("DualEKFTraceR",
+        observed,
+	      nucRise,sub_steps,
+        deltaFrame, my_start,
+        maxConc, 
+        amplitude,copies, 
+        krate,kmax,diffusion, sens, tauB,
+        pkkA, pkkr, qssA, qsskr,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}
+
 
 ComplexGenerateRedHydrogensFromNucRise<-function(
     nucRise, sub_steps,

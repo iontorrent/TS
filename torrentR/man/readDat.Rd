@@ -25,6 +25,7 @@
     normStart=5,
     normEnd=20,
     XTCorrect=TRUE,
+    chipType="",
     baselineMinTime=0,
     baselineMaxTime=0.7,
     loadMinTime=0,
@@ -65,6 +66,13 @@
     Apply electrical cross-talk correct to undo an electrical cross-talk that occurs on the 316 and 318
     chips.  Signal between pixels in columns that are multiples of 4 apart is convolved and needs to be
     deconvolved.  Not used for 314.  If XTCorrect is true (the default) then doNormalize will be forced.
+  }
+  \item{chipType}{
+    Explicitly set chip type, to control application of XTCorrect.  Electronic
+    cross talk correction only happens if XTCorrect is TRUE and if the chip type
+    is either "316" or "318".  If chipType is left as an empty string the chip
+    type will be guessed from the array dimensions, but if the chip is a crop
+    then the guess may be incorrect, hence the need for this option.
   }
   \item{baselineMinTime, baselineMaxTime}{
     Controls whether or not reads should be baselined.  If baselineMaxTime is greater than baselineMinTime

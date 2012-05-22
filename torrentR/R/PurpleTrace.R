@@ -44,3 +44,18 @@ BlueTrace<-function(
         )
   return(val)
 }
+
+#retrieve red contribution 
+IntegrateRedFromTotalTrace<-function(
+              PurpleObs,
+              BlueHydrogen,
+              DeltaFrame,
+              tauB, etbR
+){
+
+	val <- .Call("IntegrateRedFromTotalTraceR",
+	      PurpleObs, BlueHydrogen,DeltaFrame,tauB,etbR,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}

@@ -1,0 +1,301 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Germ-line Variant Caller Plugin</title>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.16/jquery-ui.min.js" type="text/javascript"></script>
+	<script src="js/jquery.prettyPhoto.js" type="text/javascript"></script>
+	<script src="js/main.js" type="text/javascript"></script>
+	<!-- Stylesheets -->
+	<link href="css/prettyPhoto.css" rel="stylesheet" media="screen" />
+	<link href="css/basics.css" rel="stylesheet" />
+	<link href="css/style.css" rel="stylesheet" />
+	<link href="css/print.css" rel="stylesheet" media="print"/>
+</head>
+<body>
+	<div id="wrapper">
+		<div id="top">
+			<div id="header">
+				<div id="tech"><a href="#"><img src="images/ionsupported2.png" alt="ion supported"/></a><a href="#"><img src="images/print.png" alt="print"/></a><a href="#"><img src="images/download.png" alt="download"/></a><a href="#"><img src="images/torrentBrowser.png" alt="torrent browser"/></a></div>
+				<div id="title">
+					<!-- Report Name -->
+					<h2>Full report name appears here</h2>
+					<h5><strong>Germ-line Variant Caller Plugin /</strong> Version 1.0 / Installed 11.11</h5>
+				</div>
+			</div>
+			<div id="nav">
+				<div class="links">
+				<ul>
+					<!-- Leave this empty if you want the navigation to be built automatically using the <a name..> tags below -->
+					<!-- If you build your own nav, you MUST include the line below (uncomment it) as the LAST item to ensure correct formatting -->
+					<!--
+					<li class="clearing"></li>
+					-->
+				</ul>
+				</div>
+				<!-- Status indicator: 
+					 Available classes: "ok", "warning", "error".  "messageicon" must always be used 
+					-->
+				<div class="messageicon ok">&nbsp;</div>
+				<br class="clear"/>
+			</div>
+		</div>
+		
+		<!-- Main Content Container -->
+		<div id="contentwrap">
+			<div id="content">
+				
+				<!-- Error message box -->
+				<div class="section error collapsed">
+					<a href="#" class="sectiontitle"><h2>You have 18 error messages</h2></a>
+					<div class="sectioncontent">
+						<ol>
+							<li>Alert text goes here</li>
+							<li>...and here</li>
+						</ol>
+						<div class="actions">
+							<a href="#">Take this action</a>&nbsp;
+							<a href="#" class="hide">Hide Error</a>
+						</div>
+					</div>
+				</div>
+				
+				<!-- Warning message box -->
+				<div class="section warning collapsed">
+					<a href="#" class="sectiontitle"><h2>Any warning messages would appear here</h2></a>
+					<div class="sectioncontent">
+						<ul>
+							<li>Text goes here</li>
+							<li>...and here</li>
+						</ul>
+						<div class="actions">
+							<a href="#">Take this action</a>&nbsp;
+							<a href="#" class="hide">Hide Error</a>
+						</div>
+					</div>
+				</div>
+				
+				<!-- Success message box -->
+				<div class="section success collapsed">
+					<a href="#" class="sectiontitle"><h2>Any success messages would appear here</h2></a>
+					<div class="sectioncontent">
+						<ol>
+							<li>Text goes here</li>
+							<li>...and here</li>
+						</ol>
+						<div class="actions">
+							<a href="#">Take this action</a>&nbsp;
+							<a href="#" class="hide">Hide Error</a>
+						</div>
+					</div>
+				</div>
+				
+				<!-- Section -->
+				<div class="section">
+					<!-- Half section, left aligned -->
+					<div class="halfleft">
+						<!-- Must use name anchor for nav links to be build automatically. -->
+						<a name="biasstats" title="Bias Stats"/>
+						<a href="#" class="sectiontitle"><h2>Bias Stats</h2></a>
+						<div class="sectioncontent">
+							<h4>Read Summary:</h4>
+							<table class="right">
+								<tr><td class="left">Lib Reads</td><td>283580</td></tr>
+								<tr><td class="left">Library (Fwd)</td><td>138149</td></tr>
+								<tr><td class="left">Library (Rev)</td><td>141498</td></tr>
+								<tr><td class="left">Un-Mapped</td><td>3936</td></tr>
+								<tr><td class="left">TF</td><td>7299</td></tr>
+							</table>
+						</div>
+					</div>
+					<!-- Half section, right aligned -->
+					<div class="halfright">
+						<!-- Must use name anchor for nav links to be build automatically. -->
+						<a name="readdistribution" title="Read Distribution"/>
+						<a href="#" class="sectiontitle"><h2>Read Distribution</h2></a>
+						<!-- adding the "magnify" class will add the magnifying glass icon to the lower right of the section -->
+						<div class="sectioncontent magnify">
+							<!-- Add "showlarge" class to link to display image in popup -->
+							<a href="images/redDotGraphLarge.png" class="showlarge"><img src="images/circleGraph.png" alt="graph"/></a>
+						</div>
+					</div>
+					<br class="clear"/>
+				</div>
+				
+				<!-- Section -->
+				<div class="section">
+					<!-- Must use name anchor for nav links to be build automatically. -->
+					<a name="biastoforwardreads" title="Bias to Forward Reads"/>
+					<a href="#" class="sectiontitle"><h2>Bias to Forward Reads</h2></a>
+					<div class="sectioncontent">
+						<h4>HSM Loci Read Depth Definition:</h4>
+						<p>The read depth for an HSM is defined to be the average number of reads across the area of interest.</p>
+						<h4>HCM Loci Coverage Definition:</h4>
+						<p>An HSM Loci is covered if it has at least one read.</p>
+						
+						<!-- Each "flowitem" in the "flowcontainer" will tile to fit the width of the browser window -->
+						<div class="flowcontainer">
+							<div class="flowitem">
+								<h5>Forward Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Forward Strand</h5><!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Reverse Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Reverse Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Forward Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Forward Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Reverse Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<div class="flowitem">
+								<h5>Reverse Strand</h5>
+								<!-- Add "zoomable" class to link to display image in popup AND to have a small magnifying glass appear in the lower right hand of the image when it is rolled over -->
+								<a href="images/redDotGraphLarge.png" class="zoomable"><img src="images/redDotGraph.png" alt="dot graph"/></a>
+								<!-- When using "zoomable" above, the following line must be placed at the end of the "flowitem" -->
+								<br class="clear">
+							</div>
+							<br class="clear"/>
+						</div>
+					</div>
+				</div>
+				
+				<!-- Section -->
+				<div class="section">
+					<!-- Must use name anchor for nav links to be build automatically. -->
+					<a name="variantsummary" title="Variant Summary"/>
+					<a href="#" class="sectiontitle"><h2>Variant Summary</h2></a>
+					<div class="sectioncontent">
+						<h4>Number of Variants:</h4>
+						<table class="right">
+							<tr><th class="left">Variant Type</th><th>Total calls</th><th>99.0% (Q20+)</th><th>99.9% (Q30+)</th><th>99.9% (Q40+)</th><th>99.9% (Q50+)</th></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td class="left">Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+						</table>
+					</div>
+				</div>
+				
+				<!-- Section, add "collapsed" to have the content hidden on initial page load -->
+				<div class="section collapsed">
+					<!-- Must use name anchor for nav links to be build automatically. -->
+					<a name="variantsample" title="Variant Sample"/>
+					<a href="#" class="sectiontitle"><h2>Variant Sample</h2></a>
+					<div class="sectioncontent">
+						<p>Displaying the top 18 variants out of the 18 total called variants, sorted by quality</p>
+						<p>Click on a column heading to sort the table, enter a search term to filter the variants, or click on another page to see more information</p>
+						<form action="#" method="post" class="pagingFilter">
+							<div class="showCount">Show: <select name="showRows"><option value="8">8</option><option value="16">16</option></select> entries</div>
+							<div class="search">Search: <input type="text" size="20" name="search"/></div>
+						</form>
+						<br class="clear"/>
+						<table class="left">
+							<tr><th>Variant Type</th><th>Total calls</th><th>99.0% (Q20+)</th><th>99.9% (Q30+)</th><th>99.9% (Q40+)</th><th>99.9% (Q50+)</th></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+							<tr><td>Insertions (Het)</td><td>0</td><td>1</td><td>0</td><td>1</td><td>0</td></tr>
+						</table>
+						<div class="paging">
+							<div class="summary">Showing 1 to 8 of 38 entries</div>
+							<div class="pager">
+								<div class="pages">
+									<span><a href="#">&lt;</a></span>
+									<span class="current">1</span>
+									<span><a href="#">2</a></span>
+									<span><a href="#">3</a></span>
+									<span class="noclick">...</span>
+									<span class="noclick">7</span>
+									<span><a href="#">&gt;</a></span>
+								</div>
+							</div>
+							<br class="clear"/>
+						</div>
+					</div>
+				</div>
+				
+				<!-- Section -->
+				<div class="section">	
+					<!-- Must use name anchor for nav links to be build automatically. -->
+					<a name="appendix" title="Appendix"/>
+					<a href="#" class="sectiontitle"><h2>Appendix</h2></a>
+					<div class="sectioncontent">
+						<p>Here we provide a collection of graphs to help explore the quality of the observed variant cells.</p>
+						<p>Note that these plots are most useful when a large number (&gt;1000) of variants are present.</p>
+						
+						<!-- Expandable item list -->
+						<ul class="expandable">
+							<!-- Add "closed" class to only display the item title link -->
+							<li class="closed">
+								<a href="#"><h5>Position of reads with a variant at a variant position</h5></a>
+								<div class="subcontent">
+									content here
+								</div>
+							</li>
+							<!-- Add "closed" class to only display the item title link -->
+							<li class="closed">
+								<a href="#"><h5>Heterozygous deletion length distribution</h5></a>
+								<div class="subcontent">
+									content here...
+								</div>
+							</li>
+							<!-- Add "expanded" class to display the item title link -->
+							<li class="expanded">
+								<a href="#"><h5>Strand frequencies at variant positions</h5></a>
+								<div class="subcontent">
+									<img src="images/graph.gif" alt="graph"/>
+								</div>
+							</li>
+						</ul>
+						<div>&nbsp;</div>
+					</div>
+				</div>
+				
+			</div>
+		</div>
+	</div>
+</body>
+</html>

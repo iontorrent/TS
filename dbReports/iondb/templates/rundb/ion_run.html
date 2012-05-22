@@ -1,0 +1,230 @@
+{% extends "rundb/ion_base_template.html" %}
+
+{% block pagination_holder %}
+{% endblock pagination_holder %}
+{% block controls_holder %}
+{% endblock controls_holder %}
+
+{% block full_page_content %}
+
+  <style type="text/css" media="screen">
+    @import "/site_media/jquery/css/uni-form.css";
+
+    .uniForm h2 {
+      margin: 1em 0 1em 1.15em;
+    }
+
+    fieldset h3 {
+      margin: 1.5em -28px;
+      padding: 14px 28px;
+      line-height: 1;
+      background: #efefef;
+      color: #343434;
+    }
+
+    .uniForm {
+      background: #fff;
+      margin: 28px auto;
+      padding: 28px;
+      /* CSS3 */
+      border-radius: 12px;
+      -webkit-border-radius: 12px;
+      -moz-border-radius: 12px;
+      -o-border-radius: 12px;
+      -khtml-border-radius: 12px;
+    }
+
+      /* Additions for validation */
+    div.valid {
+      background: url(/site_media/images/ok.png) 100% 2.75em no-repeat;
+    }
+    
+    #uploadMethod {
+        padding: 10px;
+        padding-left: 0px;
+    }
+
+    #uploadMethod label {
+        display: inline;
+    }
+
+    #uploadMethod .ui-button .ui-button-text {
+        display: inline;
+    }
+
+    table{
+        border-collapse: separate;
+    }
+
+  </style>
+
+  <link type="text/css" href="/site_media/jquery/css/default.uni-form.css" rel="Stylesheet"/>
+
+  <script type="text/javascript">
+
+    function deleteBlankSelection(){
+        if ($("#id_previousReport option:first").val() === ""){
+            $("#id_previousReport option:first").remove();
+        }
+    }
+
+    $(document).ready(function () {
+
+        $("#advanced").button({icons: {secondary: 'ui-icon-triangle-1-s'}}).click(function(){
+              $("#advancedSec").slideToggle();
+        });
+
+        $("#submitButton").button();
+
+        //mark errors where they happen
+        $(".parentError").parent().addClass("error");
+
+        $("#uploadMethod").buttonset();
+
+        $("#fromRaw").click(function(){
+          $("#id_blockArgs").val("fromRaw");
+            $("#id_args").attr("disabled", false);
+            $("#id_args").css("opacity", "1");
+            $("#id_basecallerArgs").attr("disabled", false);
+            $("#id_basecallerArgs").css("opacity", "1");
+            $("#id_previousReport").attr('disabled', true);
+
+            $("#id_previousReport").prepend("<option value=''>Not applicable to reanalysis from Signal Processing</option>");
+            $("#id_previousReport").val("");
+
+        });
+
+        $("#fromWells").click(function(){
+            $("#id_blockArgs").val("fromWells");
+            $("#id_args").attr("disabled", true);
+            $("#id_args").css("opacity", "0.2");
+            $("#id_basecallerArgs").css("opacity", "1");
+            $("#id_basecallerArgs").attr("disabled", false);
+            $("#id_previousReport").attr('disabled', false);
+            deleteBlankSelection();
+        });
+
+        $("#fromSFF").click(function(){
+            $("#id_blockArgs").val("fromSFF");
+            $("#id_args").attr("disabled", true);
+            $("#id_args").css("opacity", "0.2");
+            $("#id_basecallerArgs").attr("disabled", true);
+            $("#id_basecallerArgs").css("opacity", "0.2");
+            $("#id_previousReport").attr('disabled', false);
+            deleteBlankSelection();
+        });
+
+        $("#fromRaw").click();
+        $("#id_blockArgs").val("fromRaw");
+
+        {{javascript|safe}}
+
+    });
+  </script>
+
+
+<form action="" method='post' enctype="multipart/form-data" class="uniForm">
+    <h3>Run Name : {{ expName }}</h3>
+    {% if start_error %}
+        <p><b>Error: {{ start_error }}</b></p>
+    {% endif %}
+
+  <fieldset class="inlineLabels">
+    <div class="ctrlHolder">
+      <label for="">Report Name</label>
+        {{ rpf.report_name }}
+        {% if  rpf.report_name.errors %}
+            {% for error in rpf.report_name.errors %}
+                <p class="formHint parentError">{{error|escape}}</p>
+            {% endfor %}
+        {% endif %}
+
+    </div>
+
+    <div class="ctrlHolder">
+      <label for="">Paired-End Forward</label>
+          {{ rpf.forward_list }}
+        <p class="formHint">Only select a forward run if this is a paired end run</p>
+    </div>
+
+    <div class="ctrlHolder">
+      <label for="">Paired-End Reverse</label>
+        {{ rpf.reverse_list }}
+        <p class="formHint">Only select a reverse run if this is a paired end run</p>
+    </div>
+
+  </fieldset>
+
+      <div id="advancedSec" class="hidden">
+        <table>
+          <tbody>
+
+          <tr>
+              <th>Start reanalysis from</th>
+
+              <td>{{ rpf.blockArgs }}
+
+                  <div id="uploadMethod">
+                      <input type="radio" id="fromRaw" name="pipetype" /><label for="fromRaw">Signal Processing</label>
+                      <input type="radio" id="fromWells" name="pipetype" /><label for="fromWells">Base Calling</label>
+                      <input type="radio" id="fromSFF" name="pipetype" /><label for="fromSFF">Alignment</label>
+                  </div>
+
+              </td>
+              <td class="error">{{ rpf.blockArgs.errors }}</td>
+          </tr>
+
+          <tr>
+              <th>Use data from previous report</th>
+              <td>{{ rpf.previousReport }}</td>
+              <td class="error">{{ rpf.previousReport.errors }}</td>
+          </tr>
+
+          <tr>
+            <th>Analysis args</th>
+            <td>{{ rpf.args }}</td>
+            <td class="error">{{ rpf.args.errors }}</td>
+          </tr>
+
+          <tr>
+              <th>Basecaller args</th>
+              <td>{{ rpf.basecallerArgs }}</td>
+              <td class="error">{{ rpf.basecallerArgs.errors }}</td>
+          </tr>
+
+          <tr>
+              <th>Library key</th>
+              <td>{{ rpf.libraryKey }}</td>
+              <td class="error">{{ rpf.libraryKey.errors }}</td>
+          </tr>
+
+          <tr>
+              <th>TF key</th>
+              <td>{{ rpf.tfKey}}</td>
+              <td class="error">{{ rpf.tfKey.errors }}</td>
+          </tr>
+
+          <tr>
+            <th>TF config</th>
+            <td>{{ rpf.tf_config }}</td>
+            <td class="error">{{ rpf.tf_config.errors }}</td>
+          </tr>
+          <tr>
+            <th>TMAP args</th>
+            <td>{{ rpf.aligner_opts_extra }}</td>
+            <td class="error">{{ rpf.aligner_opts_extra.errors }}</td>
+          </tr>
+          </tbody>
+        </table>
+      </div>
+     {{ rpf.path }}
+
+        <div class="buttonHolder" id="submitholder">
+            <div id="advanced" style="float: left;">Advanced</div>
+
+            <input id="submitButton" type="submit" value="Start Analysis">
+        </div>
+
+    </form>
+
+{% endblock %}

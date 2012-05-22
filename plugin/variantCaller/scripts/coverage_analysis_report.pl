@@ -85,19 +85,6 @@ if( $haverowsum )
 }
 open( OUTFILE, ">>$outfile" ) || die "Cannot open output file $outfile.\n";
 
-# create local styles for inner table display - existing fly-over style maybe used later
-# - this is used here for display to appear almost identical on Firefox vs. IE8
-print OUTFILE "<style type=\"text/css\">\n";
-print OUTFILE "  table {width:100% !important;border-collapse:collapse;margin:0;table-layout:fixed}\n";
-print OUTFILE "  th,td {font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.2em;font-weight:normal}\n";
-print OUTFILE "  th,td {width:50% !important;border:1px solid #bbbbbb;padding:5px;text-align:center}\n";
-print OUTFILE "  td {padding-top:20px;padding-bottom:20px}\n";
-print OUTFILE "  td.inleft  {width:75% !important;border-width:0;text-align:left;padding:2px;padding-left:40px}\n";
-print OUTFILE "  td.inright {width:25% !important;border-width:0;text-align:right;padding:2px;padding-right:40px}\n";
-print OUTFILE "  img.frm {display:block;margin-left:auto;margin-right:auto;margin-top:10px;margin-bottom:10px;width:400;height:400;border-width:0;cursor:help}\n";
-print OUTFILE "  .thelp {cursor:help}\n";
-print OUTFILE "</style>\n";
-
 if( $title ne "" )
 {
     # add simple formatting if no html tag indicated
@@ -106,44 +93,39 @@ if( $title ne "" )
 }
 
 # Output read summary
+my $optionalKeyField = "#";
 if( $readsfile ne "" )
 {
     my $readstable = readTextAsTableFormat( $readsfile );
     if( $readstable ne "" )
     {
         print OUTFILE "<br/>\n";
-        print OUTFILE "<div style=\"width:400px;margin-left:auto;margin-right:auto\">\n";
+        print OUTFILE "<div class=\"statsdata center\" style=\"width:340px\">\n";
         print OUTFILE "$readstable\n";
         if( $haverowsum )
         {
-            my @keylist = ( "Number of mapped reads", "Percent reads on target", "Percent bases on target" );
+            my @keylist = ( "Number of mapped reads", "Number of filtered reads", "Percent reads on target", "Percent bases on target" );
+            $optionalKeyField = "Number of filtered reads";
             writeRowSum( $rowsumfile, $readsfile, \@keylist );
         }
         print OUTFILE "</div><br/>\n";
     }
 }
 
-# split table headers
-if( $have2stats )
-{
-    print OUTFILE "<div style=\"width:1000px;margin-left:auto;margin-right:auto\">\n";
-}
-else
-{
-    print OUTFILE "<div style=\"width:500px;margin-left:auto;margin-right:auto\">\n";
-}
+# table headers
+printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? 730 : 370);
 my $hotLable = getHelp("Target Regions",1);
-print OUTFILE "<center><table>\n<tr><th>$hotLable</th>";
+print OUTFILE "<table>\n<tr><th>$hotLable</th>";
 $hotLable = getHelp("Hotspot Regions",1);
 print OUTFILE "<th>$hotLable</th>" if( $have2stats );
 print OUTFILE "</tr>\n";
 
 my $txt = readTextAsTableFormat("$statsfile1");
-print OUTFILE "<tr><td>$txt</td>";
+print OUTFILE "<tr><td><div class=\"statsdata\">$txt</div></td>";
 if( $have2stats )
 {
     $txt = readTextAsTableFormat("$statsfile2");
-    print OUTFILE "\n<td>$txt</td>";
+    print OUTFILE "\n<td><div class=\"statsdata\">$txt</div></td>";
 }
 print OUTFILE "</tr>\n";
 if( $haverowsum )
@@ -153,7 +135,7 @@ if( $haverowsum )
     # last statistic is the sum of 4
     if( open( ROWSUM, ">>$rowsumfile" ) )
     {
-        my @varstats = ( "Heterozygous SNPs", "Homozygous SNPs", "Heterozygous INDELs", "Homozygous INDELs" );
+        my @varstats = ( "Heterozygous SNPs", "Homozygous SNPs", "Heterozygous INDELs", "Homozygous INDELs", "No Call Variants" );
         my $sumVars = sumRowSum( $statsfile1, \@varstats );
         $sumVars = sumRowSum( $statsfile2, \@varstats ) if( $sumVars == 0 );
         print ROWSUM "<td>$sumVars</td>";
@@ -161,12 +143,8 @@ if( $haverowsum )
     }
 }
 
-# write table foot - undo some of the style set for table
-print OUTFILE "<style type=\"text/css\">\n";
-print OUTFILE "  th {width:auto !important;padding:4px;text-align:center !important}\n";
-print OUTFILE "  td {width:auto !important;padding:4px;text-align:left}\n";
-print OUTFILE "</style>\n";
-print OUTFILE "</table></center></div><br/><br/>\n";
+# write table foot
+print OUTFILE "</table></div>\n<br/><br/>\n";
 
 #print STDERR "> $outfile\n";
 #print STDERR "> $rowsumfile\n" if( $haverowsum );
@@ -240,7 +218,7 @@ sub readRowSum
                 last;
 	    }
         }
-        if( $foundKey == 0 )
+        if( $foundKey == 0 && $keystr != $optionalKeyField )
         {
             $htmlText .= "<td>N/A</td>";
             print STDERR "No value found for statistic '$keystr'\n";
@@ -276,7 +254,7 @@ sub sumRowSum
                 last;
             }
         }
-        print STDERR "No value found for statistic $keystr\n" if( $foundKey == 0 );
+        #print STDERR "No value found for statistic $keystr\n" if( $foundKey == 0 );
     }
     return $sumval;
 }
@@ -316,6 +294,6 @@ sub getHelp
     my $help = $helptext{$_[0]};
     my $htmlWrap = $_[1];
     $help = $_[0] if( $help eq "" );
-    $help = "<span class=\"thelp\" title=\"$help\">$_[0]</span>" if( $htmlWrap == 1 );
+    $help = "<span title=\"$help\">$_[0]</span>" if( $htmlWrap == 1 );
     return $help;
 }

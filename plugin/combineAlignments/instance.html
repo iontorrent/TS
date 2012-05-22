@@ -1,0 +1,798 @@
+<html>
+<head>
+<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+<style type="text/css">
+body {
+	font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;
+}
+.help {
+	cursor:help;
+	border-bottom: 1px dotted #A9A9A9;
+}
+table,th,tr,td {
+	padding:5px;
+	border-collapse:collapse;
+}
+th {
+	border-bottom: 1px solid black;
+}
+#filtertable,#querytable,#selectedtable,#querytableheaders,#querytablefoot {
+	table-layout:fixed;
+	width:950px;
+	max-width:950px;
+	word-wrap:break-word;
+}
+#querytable td,#selectedtable td {
+	text-align:center;
+}
+.tablehead {
+	background:#e4e5e4 url("/site_media/images/table-heading-background.gif");
+}
+button {
+	width:auto;
+}
+caption {
+	caption-side:bottom;
+	font-size:75%;
+}
+input[type=text] {
+	width:100%
+}
+fieldset {
+	margin-left:10px;
+	margin-right:10px;
+}
+</style>
+
+<script type="text/javascript">
+//=========GLOBAL VARIABLES==========
+var _reference = "";
+var _selectedRuns = {};
+var _queryRuns = {};
+var _invalidRuns = {};
+var _numQuery = 0;
+var _nextUrl = "";
+var _offset = 0;
+var getProjs = 0;
+var _project = "";
+
+//==========FUNCTIONS==========
+function devPrint(str) {
+	$("div#dev").html($("div#dev").html()+str);
+}
+
+function populateProject() {
+	var html = "<select id='proj' style='width:100%'><option value=''>-</option></select>";
+	$("div#projdiv").html(html);
+	$.get("/rundb/api/v1/experiment/projects/?format=json",function(data) { 
+		// Sort projects
+		data.sort(function(a,b) {
+			a = a.toLowerCase();
+			b = b.toLowerCase();
+			if( a < b ) return -1;
+			if( a > b ) return 1;
+			return 0;
+		});
+		for( var project in data ) {
+			html = "<option value='"+data[project]+"'>"+data[project]+"</option>";
+			$("select#proj").append(html);
+		}
+	});
+}
+
+function changeDays(calendar) {
+	$("#"+calendar+"day option").removeAttr("disabled");
+	var monthdays = {	"Jan":31,"Feb":28,"Mar":31,"Apr":30,
+						"May":31,"Jun":30,"Jul":31,"Aug":31,
+						"Sep":30,"Oct":31,"Nov":30,"Dec":31
+	};
+	var months = [	"Jan","Feb","Mar","Apr",
+					"May","Jun","Jul","Aug",
+					"Sep","Oct","Nov","Dec"
+	];
+	var month = months[$("#"+calendar+"month").val()];
+	var day = $("#"+calendar+"day").val();
+	if( month == "Feb" ) {
+		var year = $("#"+calendar+"year").val();
+		if( year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) ) {
+			monthdays["Feb"] = 29;
+		}
+	}
+	var numdays = monthdays[month] - 1;
+	$("#"+calendar+"day option:gt("+numdays+")").attr("disabled","disabled");
+	if( day > numdays+1 ) {
+		$("#"+calendar+"day option[value='"+(numdays+1)+"']").attr("selected","selected");
+	}
+}
+
+function sfKeyPress(ev) {
+	var key = ev.keyCode || ev.which;
+	if( key == 13 ) { //Check if enter key is pressed 
+		_nextUrl = "";
+		findRuns();
+	}
+}
+
+function queryTS(url) {
+	var results = null;
+	$.get(url,function(data) {
+		results = data;
+	});
+	return results;
+}
+
+function findRuns() {
+	var projFilt = $("select#proj").val();
+	if( _nextUrl == "" ) {
+		// Clear table and reset query variables
+		$("table#querytable tbody").find("tr").remove();
+		_queryRuns = {};
+		_offset = 0;
+		_numQuery = 0;
+		$("td#numfound").html("");
+		$("div#outer").animate({scrollTop: $("div#inner").outerHeight});
+		$("td#nodata").html("");
+		// Acquire all filter information
+		var startDay = $("select#startday").val();
+		var startMonth = parseInt($("select#startmonth").val())+1;
+		startMonth = (startMonth < 10) ? "0"+startMonth : startMonth;
+		//startDay = (startDay < 10) ? "0"+startDay : startDay;
+		var startDate = $("select#startyear").val()+"-"+
+						startMonth+"-"+
+						startDay;
+		var endDay = $("select#endday").val();
+		var endMonth = parseInt($("select#endmonth").val())+1;
+		endMonth = (endMonth < 10) ? "0"+endMonth : endMonth;
+		var endDate = $("select#endyear").val()+"-"+
+						endMonth+"-"+
+						endDay;
+		// Add 1 day to end date because range is non-inclusive
+		var newEndDate = getDateObject(endDate);
+		newEndDate.setUTCDate(newEndDate.getUTCDate()+1);
+		endDay = newEndDate.getUTCDate();
+		endDay = (endDay < 10) ? "0"+endDay : endDay;
+		endMonth = parseInt(newEndDate.getUTCMonth())+1;
+		endMonth = (endMonth < 10) ? "0"+endMonth : endMonth;
+		endDate = newEndDate.getUTCFullYear()+"-"+
+					endMonth+"-"+
+					endDay;
+		
+		var sample = $("select#sample").val();
+		var searchfield = $("input#searchfield").val();
+
+		// Perform a search on given inputs
+		_nextUrl = "/rundb/api/v1/results/?format=json";
+		if( startDate == endDate ) {
+			_nextUrl += "&timeStamp__startswith="+startDate;
+		}
+		else {
+			_nextUrl += "&timeStamp__range="+startDate+","+endDate;
+		}
+		_nextUrl += "&resultsName__icontains="+searchfield;
+		_nextUrl += "&status=Completed";
+		_nextUrl += "&order_by=-id";
+		_nextUrl += "&noplugin=1";
+		_nextUrl += "&experiment__barcodeId=";
+		_nextUrl += "&experiment__library="+_reference;
+		if( projFilt != "-" ) {
+			_nextUrl += "&experiment__project="+projFilt;
+		}
+	}
+	else if( _nextUrl == null ) {
+		$("td#nodata").html("");
+		return;
+	}
+	// Change cursor to wait
+	$("body").css("cursor","wait");
+	$("button#searchbutton").attr("disabled","disabled");
+	$("img#loadimg").show();
+	$("td#numfound").html($("td#numfound").html()+" <i>searching</i>");
+	$("td#nodata").html("<button id='morebutton' onclick='findRuns();' type='button'>More</button>");
+	var unsorted = [];
+	do {
+		var limit = 20 - unsorted.length;
+		var currUrl = _nextUrl;
+		currUrl += "&limit="+limit+"&offset="+_offset;
+		var resData = queryTS(currUrl);
+		if( resData == null ) {
+			return noData();
+		}
+		// Parse out runs
+		for( var i = 0; i < resData.objects.length; i++ ) {
+			var runArr = resData.objects[i];
+			//if( grabReference(runArr.log) == _reference ) {
+				var runInfo = {}
+				if( projFilt != "-" ) {
+					runInfo = grabData(runArr,null);
+					runInfo["project"] = projFilt;
+				}
+				else {
+					expData = queryTS(runArr.experiment);
+					runInfo = grabData(runArr,expData);
+				}
+				unsorted.push(runInfo);
+				_queryRuns[runInfo["id"]] = runInfo;
+				_numQuery++;
+			//}
+		}
+		// Check if any results left in query
+		if( resData.meta.next == null ) {
+			_nextUrl = null;
+			break;
+		}
+		// Set the next offset
+		_offset += limit;
+	} while( unsorted.length < 20 );
+	if( unsorted.length == 0 ) {
+		return noData();
+	}
+	// Sort out reads by analysis date
+	var sorted = unsorted.sort(function(x,y) {
+		xDate = Date.parse(x["aDate"]);
+		yDate = Date.parse(y["aDate"]);
+		return yDate - xDate;
+	});
+	for( var i = 0; i < sorted.length; i++ ) {
+		if( !addRow(sorted[i],"querytable") ) {
+			alert("Error adding '"+runInfo+"' to 'querytable'.");
+		}
+	}
+	$("table#querytable tbody tr:odd").css("background-color", "#E1EFFA");
+	
+	var html = "Found "+_numQuery;
+	if( _nextUrl != null ) {
+		html += " out of...";
+	}
+	else {
+		$("button#morebutton").hide();
+	}
+	$("td#numfound").html(html);
+	$("body").css("cursor","auto");
+	$("button#searchbutton").removeAttr("disabled");
+	$("img#loadimg").hide();
+}
+
+function noData() {
+	$("body").css("cursor","default");
+	$("button#searchbutton").removeAttr("disabled");
+	$("td#numfound").html("");
+	$("button#morebutton").hide();
+	$("td#nodata").html("No data found");
+	$("img#loadimg").hide();
+	return;
+}
+
+function getAddObject(id,disabled) {
+	return "<button type='button' id='qb"+id+"' onclick='selectRun("+id+");' "+disabled+">Add</button>";
+}
+
+function getRemoveObject(id) {
+	return "<button type='button' id='sb"+id+"' onclick='removeRun("+id+");'>Remove</button>";
+}
+
+function selectRun(id) {
+	// First check if run has proper reference
+	if( grabReference(_queryRuns[id]["logfile"]) != _reference ) {
+		var ref = grabReference(_queryRuns[id]["logfile"]);
+		alert("The report chosen does not have a compatible reference: '"+ref+"'.\n"+
+				"Please choose a report aligned with the selected reference: '"+_reference+"'.");
+		_invalidRuns[id] = 1;
+		$("button#qb"+id).attr("disabled","disabled");
+		return;
+	}
+	// Add to selected list
+	_selectedRuns[id] = _queryRuns[id];
+	addRow(_queryRuns[id],"selectedtable");
+	$("button#qb"+id).attr("disabled","disabled");
+	$("table#selectedtable tbody tr:odd").css("background-color", "#E1EFFA");
+	$("table#selectedtable tbody tr:even").css("background-color", "");
+}
+
+function removeRun(id) {
+	// Remove from selected table
+	$("table#selectedtable tr#sr"+id).remove();
+	// Remove 'disabled' button if present in query table
+	$("table#querytable button#qb"+id).removeAttr("disabled");
+
+	// Update count and aq17
+	update("remove",id);
+	
+	// Remove from list of selected runs
+	delete _selectedRuns[id];
+	$("table#selectedtable tbody tr:odd").css("background-color", "#E1EFFA");
+	$("table#selectedtable tbody tr:even").css("background-color", "");
+}
+
+function parseDate(dStr) {
+	var months = [	"Jan","Feb","Mar","Apr",
+					"May","Jun","Jul","Aug",
+					"Sep","Oct","Nov","Dec"
+	];
+	var d = getDateObject(dStr);
+	var day = d.getUTCDate();
+	if( day < 10 ) day = "0"+day;
+	return months[d.getUTCMonth()]+" "+day+" "+d.getUTCFullYear();
+}
+
+function getDateObject(dStr) {
+	var d = dStr.match(/\d{4}-\d{1,2}-\d{1,2}/);
+	var dateparts = d[0].split("-");
+	return new Date(dateparts[0],dateparts[1]-1,dateparts[2]);
+}
+
+function parseTmap(str) {
+	var patt = /tm.*?,/;
+	str = (str.match(patt));
+	if( str != undefined ) {
+		str = str[0];
+		str = str.substring(3,str.length-1);
+	}
+	else {
+		str = "";
+	}
+	return str;
+}
+
+function addCommas(num) {
+	num += "";
+	var regex = /(\d+)(\d{3})/;
+	while( regex.test(num) ) {
+		num = num.replace(regex,"$1,$2");
+	}
+	return num;
+}
+
+function addRow(info,tableID) {
+	var toAdd = "";
+	if( tableID == "selectedtable" ) {
+		toAdd += "<tr id='sr"+info["id"]+"'>";
+		toAdd += "<td style='text-align:left;width:10%;'>"+getRemoveObject(info["id"])+"</td>";
+	}
+	else {
+		toAdd += "<tr id='qr"+info["id"]+"'>";
+		// Button for query table
+		// If already in selected table disable button
+		// If an invalid run, disable button
+		if( _selectedRuns[info["id"]] != undefined || _invalidRuns[info["id"]] != undefined ) {
+		//if( _selectedRuns[info["id"]] != undefined ) {
+			toAdd += "<td style='text-align:left;width:10%'>"+getAddObject(info["id"],"disabled='disabled'")+"</td>";
+		}
+		else {
+			toAdd += "<td style='text-align:left;width:10%'>"+getAddObject(info["id"],"")+"</td>";
+		}
+	}
+	toAdd += "<td style='text-align:left;width:35%;'>"+info["name"]+"</td>";
+	toAdd += "<td style='text-align:left;width:17%;'>"+info["project"]+"</td>";
+	toAdd += "<td style='width:10%;'>"+addCommas(info["aq17reads"])+"</td>";
+	toAdd += "<td style='width:10%;'>"+info["tmap"]+"</td>";
+	toAdd += "<td style='width:18%;'>"+info["aDate"]+"</td>";
+	toAdd += "</tr>";
+	// Add to end of table
+	$("table#"+tableID+" tbody:last").append(toAdd);
+	
+	if( tableID == "selectedtable" ) {
+		update("add",info["id"]);
+	}
+	return 1;
+}
+
+function update(type,id) {
+	var info = _selectedRuns[id];
+	var count = parseInt($("span#numselected").html());
+	var totalaq17 = parseInt($("span#totalaq17").html());
+	if( type == "add" ) {
+		count++;
+		totalaq17 += info["aq17reads"];
+	}
+	else {
+		count--;
+		totalaq17 -= info["aq17reads"];
+	}
+	$("span#numselected").html(count);
+	$("input#num_runs").val(count);
+	$("span#totalaq17").html(totalaq17);
+	// Change filename
+	var filename = "combineAlignments_"+count+"_"+totalaq17+"aq17";
+	$("input#bam_name").val(filename);
+}
+
+function isSelected(id) {
+	//return $.inArray(id,_selectedRuns);
+	for( var i = 0; i < _selectedRuns.length; i++ ) {
+		if( _selectedRuns[i] == id ) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+function grabData(resData,expData) {
+	var toRet = [];
+	toRet["id"] = resData.id;
+	toRet["name"] = resData.resultsName;
+	if( expData != null ) {
+		toRet["project"] = expData.project;
+	}
+	if( resData.libmetrics.length != 0 ) {
+		var libData = queryTS(resData.libmetrics);
+		toRet["aq17reads"] = (libData != null) ? libData.q17_alignments : 0;
+	}
+	else {
+		toRet["aq17reads"] = 0;
+	}
+	toRet["tmap"] = parseTmap(resData.analysisVersion);
+	toRet["aDate"] = parseDate(resData.timeStamp);
+	toRet["logfile"] = resData.log;
+	return toRet;
+}
+
+function grabReference(logFile) {
+	var ionparams = (logFile).replace("log.html","ion_params_00.json");
+	var referenceID;
+	$.getJSON(ionparams,function(contents) {
+		referenceID = contents.libraryName;
+	});
+	return referenceID;
+}
+
+function submitPlugin() {
+	// Validate
+	// Build list of report ids into hidden input field
+	var idsVal = "";
+	var cnt = 0;
+	for( id in _selectedRuns ) {
+		idsVal += id+",";
+		cnt++;
+	}
+	// Check number of reports selected
+	if( cnt <= 1 ) {
+		alert("Too few reports were selected.\n"+
+				"Please search and select at least 2 reports.");
+		return;
+	}
+	// Check input alignment file name
+	var fn = $("input#bam_name").val();
+	if( fn == "" ) {
+		alert("No file name was specified.\n"+
+				"Please enter in a file name.");
+		return;
+	}
+	// Check for illegal characters in alignment file name
+	var pattern = /[^0-9A-z\_\-\.]/g;
+	var regexArr = fn.match(pattern);
+	if( regexArr != null ) {
+		alert("Improper characters found in the file name.\n"+
+				"Only permitted characters are these:\n"+
+				"\tAlphanumeric: A-Z,a-z,0-9\n"+
+				"\tUnderscore: _\n"+
+				"\tHyphen: -\n"+
+				"\tPeriod: .");
+		return;
+	}
+
+	// Set hidden variables
+	idsVal = idsVal.substring(0,idsVal.length-1);
+	$("input#run_list").val(idsVal);
+	$("input#total_aq17").val($("span#totalaq17").html());
+	$("input#host_url").val(window.location.host);
+
+	// Make serialize function
+	$.fn.serializeObject = function() {
+		var o = {};
+		var a = this.serializeArray();
+		$.each(a, function() {
+			if (o[this.name] != null) {
+				if (!o[this.name].push) {
+					o[this.name] = [o[this.name]];
+				}
+				o[this.name].push(this.value || '');
+			}
+			else {
+				o[this.name] = this.value || '';
+			}
+		});
+		return o;
+	};
+	// Serialize form info
+	obj = $('#selected').serializeObject();
+	pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+	pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+	pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+	$.ajax({
+		type: 'POST',
+		url: pluginURL,
+		async: false,
+		contentType: "application/json; charset=utf-8",
+		success: function(data) {
+			var html = "<div style='text-align: center;'><img src='/site_media/jquery/colorbox/images/loading.gif' ";
+			html += "alt='Running Plugin' style='float:center'></img><p>Running the Plugin... ";
+			html += "Check combineAlignments.html in the Plugin Summary</p></div>";
+			$("#json_result").html(html);
+			setTimeout("parent.$.fn.colorbox.close()",2000);
+		},
+		data: pluginAPIJSON,
+		dataType: "json"
+	});
+}
+
+
+//==========BEGIN==========
+$(function() {
+// Turn off async JavaScript so we can easily get/set var names
+$.ajaxSetup({async: false});
+// Get the current report - TB_result is defined in run verison of this script
+var resultsUrl = '/rundb/api/v1/results/' + TB_result + '/?format=json';
+var resData = queryTS(resultsUrl);
+var expData = queryTS(resData.experiment);
+
+// Set global reference for later filter
+_reference = grabReference(resData.log);;
+$("span#referenceid").html("<b>"+_reference+"</b>");
+
+// Set the correct current date
+var today = new Date();
+$("select#endmonth").val(today.getUTCMonth());
+var d = today.getUTCDate();
+d = (d < 10) ? "0"+d : d;
+$("select#endday").val(d);
+$("select#endyear").val(today.getUTCFullYear());
+// Change day dropdowns according to month and year
+changeDays("start");
+changeDays("end");
+
+// Check that this run isn't barcoded
+if( expData.barcodeId != "" ) {
+	alert("Warning: The alignments of the current report were created for a barcoded library and so are not viable for the combineAlignments plugin.");
+}
+else {
+	// Grab current run's information
+	var runInfo = grabData(resData,expData);
+
+	// Add to table
+	_selectedRuns[runInfo["id"]] = runInfo;;
+	if( !addRow(runInfo,"selectedtable") ) {
+		alert("Error while adding '"+runInfo["name"]+"' to 'selectedtable'.");
+	}
+}
+$("button#searchbutton").click(function() {
+	_nextUrl = "";
+	findRuns();
+});
+populateProject();
+
+$("button#reset").click(function() {
+	// Reset all options
+	$("select#startmonth").val("10");
+	$("select#startday").val("5");
+	$("select#startyear").val("2008");
+	var today = new Date();
+	$("select#endmonth").val(today.getUTCMonth());
+	var d = today.getUTCDate();
+	d = (d < 10) ? "0"+d : d;
+	$("select#endday").val(d);
+	$("select#endyear").val(today.getUTCFullYear());
+	changeDays("start");
+	changeDays("end");
+	$("select#proj").val($("select#proj option:eq(0)"));
+	$("input#searchfield").val("");
+});
+/***************************************************************
+This code executes findRuns() when the bottom of the query table
+is reached. Save for any future use.
+****************************************************************
+$("div#outer").scroll(function(){
+	var $box = $("div#outer");
+	var $inner = $("div#outer > div#inner");
+	innerOuterHeight = $inner.outerHeight();
+	boxHeight = $box.height();
+	boxOffsetTop = $box.offset().top;
+	if ( Math.ceil(boxHeight - $inner.offset().top + boxOffsetTop) >= innerOuterHeight ) {
+		findRuns();
+	}
+});
+*/
+});
+</script>
+</head>
+
+<body>
+<div align="center">
+	<h1>Torrent Combine Alignments Plugin</h1>
+	<br/><br/><br/>
+	<table id="master"><tr><td align="left">
+	<table align="left"><tr><td width="175px" style="padding:0px">
+		<span style="border-bottom:1px dotted darkGray;"
+			class="help" title="The short name of the reference genome (or DNA sequences) "+
+			"that the current report was generated against and to be used for variant calling.">
+			Reference Genome:</span></td><td><span id="referenceid"></span>
+	</td></tr></table>
+	<br/><br/><br/>
+	<h3>Report Locator</h3>
+	<table align="center" style="border:1px dashed black;" id="filtertable">
+		<tr><td width="25%"><b>Date Start</b></td><td width="25%"><b>Date End</b></td><td width="17%"><b>Project</b></td>
+			<td width="19%"><b>Search By Report</b></td><td width="7%">
+			<img id="loadimg" src="/site_media/jquery/colorbox/images/loading.gif" style="display:none"/></td><td width="7%"></td></tr>
+		<tr><td><select id="startmonth" onchange="changeDays('start');">
+			<option value="0">January</option>
+			<option value="1">February</option>
+			<option value="2">March</option>
+			<option value="3">April</option>
+			<option value="4">May</option>
+			<option value="5">June</option>
+			<option value="6">July</option>
+			<option value="7">August</option>
+			<option value="8">September</option>
+			<option value="9">October</option>
+			<option value="10" selected="selected">November</option>
+			<option value="11">December</option>
+		</select><select id="startday">
+			<option value="01">01</option>
+			<option value="02">02</option>
+			<option value="03">03</option>
+			<option value="04">04</option>
+			<option value="05" selected="selected">05</option>
+			<option value="06">06</option>
+			<option value="07">07</option>
+			<option value="08">08</option>
+			<option value="09">09</option>
+			<option value="10">10</option>
+			<option value="11">11</option>
+			<option value="12">12</option>
+			<option value="13">13</option>
+			<option value="14">14</option>
+			<option value="15">15</option>
+			<option value="16">16</option>
+			<option value="17">17</option>
+			<option value="18">18</option>
+			<option value="19">19</option>
+			<option value="20">20</option>
+			<option value="21">21</option>
+			<option value="22">22</option>
+			<option value="23">23</option>
+			<option value="24">24</option>
+			<option value="25">25</option>
+			<option value="26">26</option>
+			<option value="27">27</option>
+			<option value="28">28</option>
+			<option value="29">29</option>
+			<option value="30">30</option>
+			<option value="31">31</option>
+		</select><select id="startyear" onchange="changeDays('start');">
+			<option value="2008" selected="selected">2008</option>
+			<option value="2009">2009</option>
+			<option value="2010">2010</option>
+			<option value="2011">2011</option>
+			<option value="2012">2012</option>
+			<option value="2013">2013</option>
+		</select></td>
+		<td><select id="endmonth" onchange="changeDays('end');">
+			<option value="0">January</option>
+			<option value="1">February</option>
+			<option value="2">March</option>
+			<option value="3">April</option>
+			<option value="4">May</option>
+			<option value="5">June</option>
+			<option value="6">July</option>
+			<option value="7">August</option>
+			<option value="8">September</option>
+			<option value="9">October</option>
+			<option value="10">November</option>
+			<option value="11">December</option>
+		</select><select id="endday">
+			<option value="01">01</option>
+			<option value="02">02</option>
+			<option value="03">03</option>
+			<option value="04">04</option>
+			<option value="05">05</option>
+			<option value="06">06</option>
+			<option value="07">07</option>
+			<option value="08">08</option>
+			<option value="09">09</option>
+			<option value="10">10</option>
+			<option value="11">11</option>
+			<option value="12">12</option>
+			<option value="13">13</option>
+			<option value="14">14</option>
+			<option value="15">15</option>
+			<option value="16">16</option>
+			<option value="17">17</option>
+			<option value="18">18</option>
+			<option value="19">19</option>
+			<option value="20">20</option>
+			<option value="21">21</option>
+			<option value="22">22</option>
+			<option value="23">23</option>
+			<option value="24">24</option>
+			<option value="25">25</option>
+			<option value="26">26</option>
+			<option value="27">27</option>
+			<option value="28">28</option>
+			<option value="29">29</option>
+			<option value="30">30</option>
+			<option value="31">31</option>
+		</select><select id="endyear" onchange="changeDays('end');">
+			<option value="2009">2009</option>
+			<option value="2010">2010</option>
+			<option value="2011">2011</option>
+			<option value="2012">2012</option>
+			<option value="2013">2013</option>
+		</select></td>
+		<td><select id="proj" style="width:100%">
+			<option value="-">-</option>
+		</select></td>
+		<td><input type="text" id="searchfield" placeholder="Enter Here" onkeypress="sfKeyPress(event);"/></td>
+		<td id="searchbuttontd"><button id="searchbutton" type="button">Search</button></td>
+		<td><button type="reset" id="reset">Reset</button></td></tr>
+	</table><br/>
+	<table id="querytableheaders" align="center" style="border:1px solid black;">
+		<thead class="tablehead"><tr><th style="width:10%;text-align:left;">Add</th><th style="width:35%">Report</th>
+			<th style="width:17%">Project</th><th style="width:10%">AQ17 Reads</th>
+			<th style="width:10%">TMAP #</th><th style="width:18%">Analysis Date</th></tr></thead>
+		<tbody></tbody>
+	</table>
+	<div id="outer" style="max-height:400px;min-width:950px;overflow:auto;">
+	<div id="inner">
+	<table id="querytable" align="center" style="border:1px solid black;">
+		<tbody></tbody>
+	</table></div></div>
+	<table id="querytablefoot" align="center" style="border:1px solid black;">
+		<body><tr><td id="numfound" colspan="3" style="text-align:left;"></td>
+		<td colspan="2" style="text-align:left;">
+			<button id="morebutton" onclick="findRuns();" type="button" style="display:none;">More</button>
+		</td>
+		<td id="nodata" style="text-align:right;font-style:italic"></td></tr></tbody>
+	</table><br/><br/><br/>
+	<h4><div id="numselecteddiv">Selected <span id="numselected">0</span> Reports<span style="margin-left:25%;">Total AQ17 Reads: <span id="totalaq17">0</span></div></h4>
+	<form id="selected" align="center">
+	<table id="selectedtable" align="center"  style="border:1px solid black;">
+		<thead class="tablehead"><tr><th style="width:10%;text-align:left;">Remove</th><th style="width:35%">Report</th>
+			<th style="width:17%">Project</th><th style="width:10%">AQ17 Reads</th>
+			<th style="width:10%">TMAP #</th><th style="width:18%">Analysis Date</th></tr></thead>
+		<tbody></tbody>
+	</table><br/><br/><br/>
+	<table align="left"><tr><td width="250px" style="padding:0px">
+		<span style="border-bottom:1px dotted darkGray;">Combined Alignments Name:</span></td>
+		<td><input type="text" id="bam_name" name="bam_name" size="45"/></td>
+	</tr></table>
+	<br/><br/>
+	<div id="json_result" style="text-align:center;">
+		<button id="postbutton" type="button" onclick="submitPlugin();">Submit</button>
+	</div>
+	<input type="hidden" id="run_list" name="run_list"/>
+	<input type="hidden" id="total_aq17" name="total_aq17"/>
+	<input type="hidden" id="num_runs" name="num_runs"/>
+	<input type="hidden" id="host_url" name="host_url"/>
+	</form>
+</td></tr></table>
+</div>
+<br/>
+<div align="left">
+	<h3>Description and Usage Notes</h3>
+	<p>
+	This plugin combines reads aligned to the specified reference from multiple run reports.
+	The resulting combined alignment files may be downloaded from the plugin report page or used as input for other
+	Torrent Browser plugins that support the use of these files, such as the Torrent Variant Caller.</p>
+	<p>
+	Use the filters in the Report Locater to find reports then click the Add button to add them to the Selected Reports table.
+	Initially the list of selected reports will contain the current report name. This report, or any selected report,
+	may be removed from the list by clicking the Remove button. The alignment file from selected reports will be combined
+	by this plugin after clicking the Submit button. You may also modify the default name that will be used for the
+	combined alignment files generated.</p>
+	<p>
+	Note that the Report Locator will only include reports that are completed and for reports not using barcoded libraries.
+	Also, the Report Locator will only list reports for runs associated with the selected reference. In case a run has been reanalyzed 
+	using multiple references, the reference of an individual report is checked against the selected reference when the 
+	'Add' button is clicked.</p>
+	<!-- Also, the Report Locator automatically filters for reports aligned to specified reference. If you do not see your report but expect to, 
+	be sure to check that your filters are correctly selected and that the reference is chosen correctly in the Torrent Browser.</p> -->
+	<p>
+	An error may occur or warnings issued if the selected alignment files are not compatible. In this case more details may
+	be given in the plugin Log File.</p>
+</div>
+
+<br/><br/><br/>
+<div id="dev"></div>
+</body>
+</html>

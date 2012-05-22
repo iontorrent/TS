@@ -3,7 +3,7 @@
 #define BAMUTILS_H
 
 
-/*
+/*pad_so
  *  BAMUtils.h
  *  SamUtils
  *
@@ -115,6 +115,7 @@ public:
          @param         int three_prime_clip                    amount of 3 prime bases to ignore
          @param         bool rounding_phred_scores              bool on wehther to follow colloqiual phred scores
          @param         bool Five_Prime_Justify                 bool to follow mapper's indel justification (false) or force 5prime(true)
+         @param         std::string Flow_Order                  Sequencing flow order
 	 @return	BAMUtils						constructed BAMUtils object
 	 
 	 */	
@@ -122,7 +123,7 @@ public:
                 bool IUPAC_Flag, bool Keep_IUPAC, bool Truncate_Soft_Clipped, 
                 int error_table_min_len, int error_table_max_len, 
                 int error_table_step_size, int three_prime_clip, 
-                bool rounding_phred_scores, bool Five_Prime_Justify);
+                bool rounding_phred_scores, bool Five_Prime_Justify, std::string &Flow_Order);
 	
 	~BAMUtils();
 	
@@ -158,6 +159,10 @@ public:
 
 	 */
 	coord_t						get_q_length();
+	/**
+	 get_full_q_length() returns the full query length, inclusive of any alignment soft clipping
+	 */
+	coord_t						get_full_q_length();
 	/**
 	 get_match() returns number of bases that match the reference
 	 */
@@ -237,6 +242,7 @@ public:
 	coord_t			get_genome_length();
 	void			set_genome_length(coord_t len);
 	void			set_slop_bases(coord_t slop);
+	void			set_flow_order(const std::string &fo);
 	
 	/**
 	 get_soft_clipped_bases() returns the length of the read that
@@ -440,6 +446,30 @@ public:
 	}
 	
 	/**
+	 Returns the index of the maximum aligned flow
+	 
+	 @return	int	max_aligned_flow
+	 */
+	int get_max_aligned_flow() { return max_aligned_flow; }
+	
+	/**
+	 Returns a reference to the internal flow_err vector which contains
+	 flow indices for erroneous flows
+	 
+	 @return	std::vector<coord_t>&	flow_err
+	 */
+	std::vector<uint16_t>&	 get_flow_err() { return flow_err; }
+	
+	/**
+	 Returns a reference to the internal flow_err_bases vector
+	 which is a companion vector for flow_err and specifies the
+	 the number of base errors in each erroneous flow
+	 
+	 @return	std::vector<uint16_t>&	flow_err_bases
+	 */
+	std::vector<uint16_t>&	 get_flow_err_bases() { return flow_err_bases; }
+	
+	/**
 	 Returns a reference to the internal BAMRead object
 	 
 	 @return	BAMRead&	BAMRead used for this utility 
@@ -472,7 +502,16 @@ public:
 	error_table_iterator error_table_end() {
 		return error_table.end();
 	}
-		
+
+	void get_region_errors(int *region_homo_err, int *region_mm_err, int *region_indel_err, int *region_ins_err, int *region_del_err, bool *region_clipped){		
+		*region_homo_err = _region_homo_err;
+		*region_mm_err = _region_mm_err; 		
+		*region_indel_err = _region_indel_err;
+		*region_ins_err = _region_ins_err;
+		*region_del_err = _region_del_err; 
+		*region_clipped = _region_clipped; 
+		return;	
+	}
 
 
 private:
@@ -486,10 +525,10 @@ private:
 	void		padded_alignment();
 	void		reverse_comp(std::string& c_dna);
 	void		score_alignments();
-	void		score_alignments(const std::string& qscores);
+	void		score_alignments(const std::string& qscores, bool calc_region_error, int start_base, int stop_base);
 	void		reverse();
 	coord_t		equivalent_length(coord_t q_len);
-        int left_justify();
+    int left_justify();
 	
 	std::string	reverse_comp(Sequence c_dna);
 	
@@ -535,9 +574,12 @@ private:
 	bool	round_phred_scores;
 	coord_t	genome_len;
 	q_lens  phreds;
-	
-	
-	
+
+	// Things relating to evaluation of errors in flow space
+	std::string flow_order;
+	int max_aligned_flow;
+	std::vector<uint16_t> flow_err;
+	std::vector<uint16_t> flow_err_bases;
 	
 	bool	iupac_flag;
 	bool	keep_iupac;
@@ -563,6 +605,17 @@ private:
 		return( calculate_phred(phred + 0.5) );
 
 	}
+	
+
+	int		_region_mm_err;
+	int		_region_homo_err;
+	int		_region_indel_err;
+	int		_region_ins_err;
+	int		_region_del_err;	
+	bool		_region_clipped;
+	
+	void adjust_region_base_positions(int* startBase, int* stopBase, std::string padTarget, bool *region_clipped);
+	//void calc_region_errors(int startBase, int stopBase);
 
 };
 
@@ -610,6 +663,13 @@ inline
 coord_t			BAMUtils::get_q_length() {
 	
 	return n_qlen; //make it 1 based
+}
+
+// full query length (inclusive of any alignment soft clipping that may be present)
+inline
+coord_t			BAMUtils::get_full_q_length() {
+	
+	return get_q_length() + get_soft_clipped_bases();
 }
 
 //match position
@@ -734,6 +794,11 @@ void			BAMUtils::set_slop_bases(coord_t slop) {
 	num_slop = slop;
 }
 
+inline
+void			BAMUtils::set_flow_order(const std::string &fo) {
+	flow_order = fo;
+}
+
 
 inline
 coord_t		BAMUtils::equivalent_length(coord_t q_len) {
@@ -746,7 +811,7 @@ coord_t		BAMUtils::equivalent_length(coord_t q_len) {
 	} else {
 		return 0;
 	}
-	
+
 }
 
 

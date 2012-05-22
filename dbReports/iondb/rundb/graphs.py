@@ -18,11 +18,7 @@ import urllib
 import xmlrpclib
 import math
 import numpy
-
-try:
-    import json
-except:
-    import simplejson as json
+import json
 
 from django import http, shortcuts, template
 from django.conf import settings

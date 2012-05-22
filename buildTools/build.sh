@@ -10,8 +10,10 @@ MODULES=${MODULES-"
 	Analysis
 	alignTools
 	dbReports
+    pipeline
 	torrentR
 	publishers
+    tsconfig
 "}
 
 for M in $MODULES; do
@@ -41,7 +43,11 @@ for MODULE in $MODULES; do
 		cd build/$MODULE
 		cmake $@ -G 'Unix Makefiles' ../../$MODULE
         if [ "$?" != 0 ]; then LOCALERR=1; fi
-		make -j3
+    		if [ "$MODULE" = "rndplugins" ]; then
+			make 
+    		else
+			make -j3
+    		fi
         if [ "$?" != 0 ]; then LOCALERR=1; fi
 		make test
         if [ "$?" != 0 ]; then LOCALERR=1; fi

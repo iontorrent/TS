@@ -462,7 +462,7 @@ def runBlock(env):
             if r:
                 printtime("couldn't create symbolic link")
 
-            # Fix SFFMerge
+            # Fix SFFProtonMerge
             r = subprocess.call(["ln", "-s", os.path.join('..', SIGPROC_RESULTS, 'processParameters.txt'), os.path.join(BASECALLER_RESULTS, 'processParameters.txt')])
             if r:
                 printtime("couldn't create symbolic link")

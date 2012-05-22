@@ -1,7 +1,7 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 cmake_minimum_required (VERSION 2.6)
 project (ion-pipeline)
-set(PROJECT_DESCRIPTION "Ion Torrent Browser")
+set(PROJECT_DESCRIPTION "Ion Torrent Pipeline")
 enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
@@ -27,20 +27,38 @@ execute_process (
 
 
 # Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
+set(ION_INSTALL_PREFIX "/usr" CACHE PATH "Ion Install Prefix")
 set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
-install(FILES "${PROJECT_SOURCE_DIR}/python/ion/web/db/writers/systemStatsZip.php" DESTINATION /var/www)
+install(FILES "${PROJECT_SOURCE_DIR}/web/db/writers/systemStatsZip.php" DESTINATION /var/www)
+
+
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion-plugin-status" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_netinfo" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/remote_host.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_sysinfo" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_gpuinfo" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_timeout.sh" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_versionCheck.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/BlockTLScript.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/MergeTLScript.py" DESTINATION bin)
+
+install(DIRECTORY web DESTINATION share/ion
+    USE_SOURCE_PERMISSIONS
+    PATTERN ".svn" EXCLUDE
+)
 
 install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
     USE_SOURCE_PERMISSIONS
     PATTERN ".svn" EXCLUDE
 )
-# Add ION_INSTALL_PREFIX to system python path so iondb modules can be found
-file(WRITE ${PROJECT_BINARY_DIR}/iondb.pth "${ION_INSTALL_PREFIX}\n")
-install(FILES ${PROJECT_BINARY_DIR}/iondb.pth DESTINATION ${PYTHON_SITE_PACKAGES})
+
+install(FILES "${PROJECT_SOURCE_DIR}/cluster_settings.py" DESTINATION /etc/torrentserver )
+# We are copying an existing __init__.py, they are all the same.
+install(FILES "${PROJECT_SOURCE_DIR}/python/ion/__init__.py" DESTINATION /etc/torrentserver )
+
 
 
 
@@ -52,8 +70,14 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     samtools (>= 0.1.18),
+    tmap,
+    python-matplotlib,
+    python-scipy,
+    python-django,
     python-dev")
-set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-dbreports (<= 2.1.6)")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-dbreports (<= 2.1.6)")
+set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Suite pipeline.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

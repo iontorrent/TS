@@ -10,13 +10,15 @@ extern "C" {
 
     /*!
       @param  fp_in     the file poitner from which to read
-      @param  fp_out    the file pointer to which to write
+      @param  fp_out_header  the header to be written (already dup'd from fp_in)
       @param  num_rows  the number of rows
       @param  num_cols  the number of columns
       @param  type      the type of SFF index
+      *
+      *@return the index to be inserted in the output file. Side effect: fp_out_header is also appropriately modified.
       */
-    void
-      sff_index_create(sff_file_t *fp_in, sff_file_t *fp_out, int32_t num_rows, int32_t num_cols, int32_t type);
+    sff_index_t*
+      sff_index_create(sff_file_t *fp_in, sff_header_t *fp_out_header, int32_t num_rows, int32_t num_cols, int32_t type);
 
     /*!
       @param  fp  the file pointer 

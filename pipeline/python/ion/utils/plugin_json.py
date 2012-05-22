@@ -7,6 +7,12 @@ import json
 DEBUG = False
 
 def get_runinfo(env,plugin,primary_key,basefolder,plugin_out,url_root):
+    # Compat shim for new 2.2 values
+    if 'report_root_dir' not in env:
+        env['report_root_dir']=env['analysis_dir']
+    for k in ['sigproc_dir','basecaller_dir', 'alignment_dir']:
+        if k not in env:
+            env[k]=env['report_root_dir']
     dict={
             "raw_data_dir":env['pathToRaw'],
             "report_root_dir":env['report_root_dir'],
@@ -19,22 +25,21 @@ def get_runinfo(env,plugin,primary_key,basefolder,plugin_out,url_root):
             "results_dir":os.path.join(env['report_root_dir'],basefolder,plugin_out),
             "net_location":env['net_location'],
             "url_root":url_root,
+            "api_url": 'http://%s/rundb/api' % env['master_node'],
             "plugin_dir":plugin['path'], # compat
             "plugin_name":plugin['name'], # compat
             "plugin": plugin, # name,version,id,pluginresult_id,path
-            "pk":primary_key
+            "pk":primary_key,
+            "tmap_version":env['tmap_version']
         }
     return dict
 
 def get_pluginconfig(plugin):
     pluginjson = os.path.join(plugin['path'],'pluginconfig.json')
-    d={}
-    if os.path.exists( pluginjson ):
-       f = open(pluginjson, 'r')
-       try:
-           d = json.load(f)
-       finally:
-           f.close()
+    if not os.path.exists( pluginjson ):
+        return {}
+    with open(pluginjson, 'r') as f:
+       d = json.load(f)
     return d
 
 def get_globalconfig():
@@ -74,10 +79,12 @@ if __name__ == '__main__':
     env['testfrag_key']='ATCG'
 
     #todo
-    env['net_location']='???'
+    env['net_location']='http://localhost/' # Constructing internal URLS for plugin communication. Absolute hostname, resolvable by compute
+    url_root = "/" # Externally Resolvable URL. Preferably without hardcoded hostnames
 
-    plugin={}
-    plugin['name']='test_plugin'
-    plugin['path']='/results/plugins/test_plugin'
+    plugin={'name': 'test_plugin',
+            'path': '/results/plugins/test_plugin',
+            'version': '0.1-pre',
+           }
     pk=7
-    jsonobj=make_plugin_json(env,plugin,pk,'plugin_out',"http://localhost")
+    jsonobj=make_plugin_json(env,plugin,pk,'plugin_out',url_root)

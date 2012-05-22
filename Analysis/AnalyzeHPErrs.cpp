@@ -7,11 +7,12 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <algorithm>
-#include "FlowDiffStats.h"
+//#include "FlowDiffStats.h"
 #include "GenomeDiffStats.h"
 #include "SffDiffStats.h"
 #include "OptArgs.h"
 #include "ReservoirSample.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -57,7 +58,7 @@ void ReadSetFromFile(const std::string &file, int colIdx, std::vector<int> &well
 	std::vector<int> candidates;
 	wells.clear();
 	while(getline(in, line)) {
-		FlowDiffStats::ChopLine(words, line);
+		split(line,'\t',words);
 		assert(static_cast<int>(words.size()) > colIdx);
 		wells.push_back(atoi(words[colIdx].c_str()));
 	}

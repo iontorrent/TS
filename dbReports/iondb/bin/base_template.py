@@ -19,11 +19,15 @@ from iondb.rundb import models
 def make_base():
     try:
         name = models.GlobalConfig.objects.get(pk=1).site_name
+        # django does not execute query until variable is accessed
+        if name == "":
+            pass
     except models.GlobalConfig.DoesNotExist:
         name = ""
     TEMPLATE_NAME = "rundb/ion_blank.html"
     tmpl = loader.get_template(TEMPLATE_NAME)
-    c = template.Context({'tab':"reports", "base_site_name": name})
+    c = template.Context({'tab':"reports", "base_site_name": name,
+                          "global_messages": "[]"})
     html = tmpl.render(c)
     outfile = open('/opt/ion/iondb/templates/rundb/php_base.html', 'w')
     outfile.write(html)

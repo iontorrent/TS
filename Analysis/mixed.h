@@ -57,9 +57,9 @@ inline double sum_fractional_part(Ran first, Ran last)
 }
 
 bool fit_normals(
-	arma::vec2 mean[2],
-	arma::mat22 sgma[2],
-	arma::vec2& alpha,
+	arma::vec mean[2],
+	arma::mat sgma[2],
+	arma::vec& alpha,
 	const std::deque<float>& ppf,
 	const std::deque<float>& ssq
 );
@@ -74,7 +74,8 @@ public:
 	inline bool filter_is_valid() const {return _valid;}
 	inline bool is_clonal(float ppf, float ssq) const
 	{
-		arma::vec2 x;
+		arma::vec x;
+		x.set_size(2);
 		x << ppf << ssq;
 		return ppf<_ppf_cutoff and _clonal.pdf(x) > _mixed.pdf(x);
 	}

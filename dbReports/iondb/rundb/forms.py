@@ -12,33 +12,63 @@ from iondb.rundb import tasks
 
 logger = logging.getLogger(__name__)
 
-
 class RunParamsForm(forms.Form):
-    report_name = forms.CharField(max_length=128)
-    path = forms.CharField(max_length=512)
-    args = forms.CharField(max_length=1024, 
-                           initial=models.GlobalConfig.objects.all()[0].get_default_command(), 
+    report_name = forms.CharField(max_length=128,
+                                widget=forms.TextInput(attrs={'size':'60','class':'textInput'}) )
+    path = forms.CharField(max_length=512,widget=forms.HiddenInput)
+
+    try:
+        defaultcommand = models.GlobalConfig.objects.all()[0].get_default_command()
+        basecallerArgs = models.GlobalConfig.objects.all()[0].basecallerargs
+        if defaultcommand == "":
+            pass
+    except:
+        defaultcommand = ""
+        basecallerArgs = ""
+
+
+    args = forms.CharField(max_length=1024,
+                           initial=defaultcommand, 
                            required=False,
-                           widget=forms.TextInput(attrs={'size':'60'}))
+                           widget=forms.Textarea(attrs={'size':'512','class':'textInput','rows':4,'cols':50}))
+
+    basecallerArgs = forms.CharField(max_length=1024,
+                           initial=basecallerArgs,
+                           required=False,
+                           widget=forms.Textarea(attrs={'size':'512','class':'textInput','rows':4,'cols':50}))
+
     blockArgs = forms.CharField(max_length=128,
                            required=False,
-                           widget=forms.TextInput(attrs={'size':'60'}))
+                           widget=forms.HiddenInput)
+
     libraryKey = forms.CharField(max_length=128,
                            required=False,
+                           initial="TCAG",
                            widget=forms.TextInput(attrs={'size':'60'}))
+
+    tfKey= forms.CharField(max_length=128,
+                                 required=False,
+                                 initial="ATCG",
+                                 widget=forms.TextInput(attrs={'size':'60'}))
+
     tf_config = forms.FileField(required=False,
                                 widget=forms.FileInput(attrs={'size':'60'}))
-    takeover_node = forms.BooleanField(required=False, initial=False)
-    align_full = forms.BooleanField(required=False, initial=False)
-    do_thumbnail = forms.BooleanField(required=False, initial=True)
     aligner_opts_extra = forms.CharField(max_length=100000,required=False,widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
+    forward_list = forms.CharField(required=False,widget=forms.Select())
+    reverse_list = forms.CharField(required=False,widget=forms.Select())
+
+    previousReport = forms.CharField(required=False,widget=forms.Select())
 
     def clean_report_name(self):
         """
         Verify that the user input doesn't have chars that we don't want
         """
         reportName = self.cleaned_data.get("report_name")
+        if reportName[0] == "-":
+            logger.error("That Report name can not begin with '-'")
+            raise forms.ValidationError(("That Report name can not begin with '-'"))
         if not set(reportName).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
+            logger.error("That Report name has invalid characters. The valid values are letters, numbers, underscore and period.")
             raise forms.ValidationError(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
         else:
             return reportName
@@ -47,6 +77,15 @@ class RunParamsForm(forms.Form):
         #TODO: note that because this is a hidden advanced field it will not be clear if it fails
         key = self.cleaned_data.get('libraryKey')
         if not set(key).issubset("ATCG"):
+            logger.error("This key has invalid characters. The valid values are TACG.")
+            raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
+        else:
+            return key
+
+    def clean_tfKey(self):
+        key = self.cleaned_data.get('tfKey')
+        if not set(key).issubset("ATCG"):
+            logger.error("This key has invalid characters. The valid values are TACG.")
             raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
         else:
             return key
@@ -373,7 +412,7 @@ class NetworkConfigForm(forms.Form):
                 "proxy_password": "",
                 "collab_ip": "",
                 }
-        cmd = ["TSquery", "--all"]
+        cmd = ["/usr/sbin/TSquery"]
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE)

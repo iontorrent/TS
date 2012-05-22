@@ -43,7 +43,6 @@ cp -rp ./external/cudatoolkit-4.0.0RC ${DST_PATH}/external/
 cp -rp ./external/fmap-0.0.1 ${DST_PATH}/external/
 cp -rp ./external/fstrcmp ${DST_PATH}/external/
 cp -rp ./external/kmeans-1.7 ${DST_PATH}/external/
-cp -rp ./external/lapackpp-2.5.3 ${DST_PATH}/external/
 cp -rp ./external/samtools-0.1.18.tar.gz ${DST_PATH}/external/
 cp -rp ./external/samtools-0.1.18.patch ${DST_PATH}/external/
 cp -rp ./external/tabix-0.2.5 ${DST_PATH}/external/

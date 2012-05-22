@@ -1,6 +1,6 @@
-<!DOCTYPE html> 
-<html> 
-<head> 
+<!DOCTYPE html>
+<html>
+<head>
 
   <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
 
@@ -21,15 +21,14 @@
 		font-size: 14px;
 	}
 
-  </style> 
-  
+  </style>
   <script type='text/javascript'> 
 
 
 	$(function() {
 	    //Using drop down menu option
 	    $.ajax({
-		url: "/rundb/api/v1/referencegenome/?limit=0&enabled=true&index_version=tmap-f2&format=jsonp",
+		url: "/rundb/api/v1/referencegenome/?limit=0&enabled=true&index_version=" + TB_TMAP + "&format=jsonp",
 		success: function(data) {
 
 		    $("#genome").html("");
@@ -120,28 +119,24 @@
 
 
 	});
-  </script> 
-  
-</head> 
-	<body> 
+  </script>
+</head>
+	<body>
 	<div id="formwrap">
-		 <form id="genomeform" name="genomeform" align="center" onsubmit="return validateForm()"> 
-			    Libraries: 
-				<select name="genome" id="genome" > </select>   <br> 
+		 <form id="genomeform" name="genomeform" align="center" onsubmit="return validateForm()">
+			    Libraries:
+				<select name="genome" id="genome" > </select>   <br>
 			    Sampling: <input type="radio" name="choice" value="true" Checked/> Yes
-				<input type="radio" name="choice" value="false" /> No <br> 
+				<input type="radio" name="choice" value="false" /> No <br>
 			    Output: 
 				<input type="checkbox" name="file" value="sam" Checked>.sam
 				<input type="checkbox" name="file" value="bam" Checked>.bam
-				<input type="checkbox" name="file" value="fastq">.fastq  <br> 
+				<input type="checkbox" name="file" value="fastq">.fastq  <br>
 		</form> 
-			<input id="postbutton" type="submit" value="Submit"> 
+			<input id="postbutton" type="submit" value="Submit">
 	</div>
 
-         
-        <div id="json_result"> </div> 
-        
-    </body> 
-    
-</html> 
- 
+        <div id="json_result"> </div>
+    </body>
+</html>
+

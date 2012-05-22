@@ -26,10 +26,12 @@
     // get the reference for the current report - TS_result is defined in run verison of this script
     var reportUrl = '/rundb/api/v1/results/' + TB_result  + '/?format=json';
     var referenceID;
+    var pluginOutDir;
     $.get( reportUrl, function(data)
     {
      var rl = data.log;
      var reportParams = rl.replace("log.html","ion_params_00.json");
+     pluginOutDir = data.filesystempath + '/plugin_out/';
      $.getJSON( reportParams, function(data)
      {
       // from report data get the short reference name
@@ -37,7 +39,27 @@
      });
     });
     document.getElementById('referenceid').innerHTML = referenceID;
-    var refBedURL = '/rundb/api/v1/content/?format=json&publisher__name=BED&path__startswith=/' + referenceID + '/merged/plain/';
+
+    function addBamSelection(dir) {
+      var getBamListCmd = '/pluginMedia/coverageAnalysis/getTargets.php?ext=bam&dir=';
+      $.getJSON( getBamListCmd+dir, function(data) {
+        $.each( data, function( intIndex, objValue ) {
+          var j = objValue.lastIndexOf('.bam')
+          if( j > 0 )
+          {
+            var targfile = dir+'/'+objValue
+            var targ = objValue.substring(0,j)
+            $("#mergedbam").append("<option value='" + targfile + "'>" +  targ + "</option>")
+          }
+        });
+      });
+    }
+
+    addBamSelection(pluginOutDir+'combineBarcodes_out');
+    addBamSelection(pluginOutDir+'combineAlignments_out');
+    addBamSelection('/results/imported/alignment/'+referenceID);
+
+    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + referenceID + '/merged/plain/';
     $.get( refBedURL, function(data)
     {
       $.each( data.objects, function(intIndex,result)
@@ -121,7 +143,8 @@
        msg += ".\n\nDo you wish to continue?";
        if( !confirm(msg) ) return false;
       }
-      // replace spaces with underscores to avoid bug in TB
+      // pass user selection with spaces translated to underscores
+      document.coverage.mergedbam_id.value = document.getElementById('mergedbam')[document.coverage.mergedbam.selectedIndex].text;
       var usrSel = document.getElementById('librarytype')[libn].text;
       document.coverage.librarytype_id.value = usrSel.replace(/\s/g,'_');
       usrSel = document.getElementById('unptargets')[tarn].text;
@@ -161,6 +184,12 @@
      <td><div id="referenceid"></div></td>
     </tr>
     <tr>
+     <td><span class="help"
+       title="Select the reads alignments you wish to analyze. If the combineAlignments plugin has been run in this report then the resulting combined aligmnents will be listed and available for selection. Otherwise the only option is 'Current Report'.">
+       Aligned Reads:</span></td>
+     <td><select id="mergedbam" name="mergedbam"><option value="">Current Report</option></select></td> </tr>
+    <tr>
+    <tr>
      <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
      <td><select id="librarytype" name="librarytype">
       <option value="fullgenome">Full Genome</option>
@@ -190,6 +219,7 @@
     <input id="postbutton" type="submit" value="Submit">
    </div>
    <input type="hidden" id="librarytype_id" name="librarytype_id"/>
+   <input type="hidden" id="mergedbam_id" name="mergedbam_id"/>
    <input type="hidden" id="targetregions_id" name="targetregions_id"/>
    <br/>
    <div align="left">

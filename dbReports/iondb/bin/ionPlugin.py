@@ -14,7 +14,7 @@ from iondb.plugins import PluginRunner
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 22640 $")
+__version__ = filter(str.isdigit, "$Revision: 25350 $")
 
 # Setup log file logging
 try:
@@ -185,15 +185,19 @@ class Plugin(xmlrpc.XMLRPC):
 
         logger.debug("SGE job start request")
 
-        #TEST CODE
-        if not os.path.exists(start_json['runinfo']['results_dir']):
-            os.makedirs(start_json['runinfo']['results_dir'])
-        fname=os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
-        fp=open(fname,"wb")
-        json.dump(start_json,fp,indent=2)
-        fp.close()
+        try:
+            #TEST CODE
+            if not os.path.exists(start_json['runinfo']['results_dir']):
+                os.makedirs(start_json['runinfo']['results_dir'])
+            fname=os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
+            fp=open(fname,"wb")
+            json.dump(start_json,fp,indent=2)
+            fp.close()
 
-        SGEPluginJob(start_json)
+            SGEPluginJob(start_json)
+        except:
+            logger.error(traceback.format_exc())
+            
         return "started job"
 
     def xmlrpc_sgeStop(self, x):
@@ -243,7 +247,6 @@ class Plugin(xmlrpc.XMLRPC):
         #Upload the JSON results to the db
         try:
             JSONresults = json.loads(msg)
-            logger.debug(JSONresults)
         except:
             logger.error("Unable to open or parse results.json")
             return False

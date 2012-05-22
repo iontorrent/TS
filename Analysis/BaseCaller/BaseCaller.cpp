@@ -1,385 +1,418 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+
+#include <stdio.h>
 #include <time.h>
+#include <math.h>
+#include <assert.h>
+#include <iomanip>
+#include <algorithm>
+#include <string>
+#include "json/json.h"
+
 #include "BaseCaller.h"
-#include "WellFileManipulation.h"
 #include "MaskSample.h"
-#include "mixed.h"
+#include "LinuxCompat.h"
+#include "Stats.h"
+#include "IonErr.h"
+#include "DPTreephaser.h"
+#include "PhaseEstimator.h"
+#include "OptArgs.h"
+
+#include "dbgmem.h"
 
 using namespace std;
 
 
-
-struct SFFscratch {
-  char *destinationDir;
-  char *fn_sfflib;
-  char *fn_sfftf;
-  char *experimentName;
-  char *sffLIBFileName;
-  char *sffTFFileName;
-};
-
-void ConstructSFFscratch(SFFscratch &sff_scratch_files, CommandLineOpts &clo, char *experimentName)
+void BaseCaller_salute()
 {
-  static char *sffLIBFileName = "rawlib.sff";
-  static char *sffTFFileName = "rawtf.sff";
-  sff_scratch_files.experimentName = strdup(experimentName);
-  sff_scratch_files.sffLIBFileName = strdup(sffLIBFileName);
-  sff_scratch_files.sffTFFileName = strdup(sffTFFileName);
+  char banner[256];
+  sprintf (banner, "/usr/bin/figlet -m0 BaseCaller %s 2>/dev/null", IonVersion::GetVersion().c_str());
+  if (system (banner))
+    fprintf (stdout, "BaseCaller %s\n", IonVersion::GetVersion().c_str()); // figlet did not execute
+}
 
-  ClearStaleSFFFiles();
-  if (clo.sys_context.LOCAL_WELLS_FILE) {
-    // override current experimentName with /tmp
-    sff_scratch_files.destinationDir = strdup("/tmp");
-    char fTemplate[256] = { 0 };
-    int tmpFH = 0;
-
-    sprintf(fTemplate, "/tmp/%d_%sXXXXXX", getpid(), sffLIBFileName);
-    tmpFH = mkstemp(fTemplate);
-    if (tmpFH > 0)
-      close(tmpFH);
-    else
-      exit(EXIT_FAILURE);
-    sff_scratch_files.fn_sfflib = strdup(basename(fTemplate));
-
-    sprintf(fTemplate, "/tmp/%d_%sXXXXXX", getpid(), sffTFFileName);
-    tmpFH = mkstemp(fTemplate);
-    if (tmpFH > 0)
-      close(tmpFH);
-    else
-      exit(EXIT_FAILURE);
-    sff_scratch_files.fn_sfftf = strdup(basename(fTemplate));
-
-  } else {
-    sff_scratch_files.destinationDir = strdup(clo.sys_context.basecaller_output_directory);
-    sff_scratch_files.fn_sfflib = strdup(sffLIBFileName);
-    sff_scratch_files.fn_sfftf = strdup(sffTFFileName);
+void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_start_time, Json::Value &json)
+{
+  char my_host_name[128] = { 0 };
+  gethostname (my_host_name, 128);
+  string command_line;
+  printf ("\n");
+  printf ("Hostname = %s\n", my_host_name);
+  printf ("Start Time = %s", ctime (&analysis_start_time));
+  printf ("Version = %s-%s (%s) (%s)\n",
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
+      IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+  printf ("Command line = ");
+  for (int i = 0; i < argc; i++) {
+    if (i)
+      command_line += " ";
+    command_line += argv[i];
+    printf ("%s ", argv[i]);
   }
+  printf ("\n");
+  fflush (NULL);
+
+  json["host_name"] = my_host_name;
+  json["start_time"] = ctime (&analysis_start_time);
+  json["version"] = IonVersion::GetVersion() + "-" + IonVersion::GetRelease().c_str();
+  json["svn_revision"] = IonVersion::GetSvnRev();
+  json["build_number"] = IonVersion::GetBuildNum();
+  json["command_line"] = command_line;
 }
 
-void CopyScratchSFFToFinalDestination(SFFscratch &sff_scratch_files, CommandLineOpts &clo)
+
+
+void PrintHelp()
 {
-  if (clo.sys_context.LOCAL_WELLS_FILE) {
-    //Move SFF files from temp location
-    char src[MAX_PATH_LENGTH];
-    char dst[MAX_PATH_LENGTH];
+  fprintf (stdout, "\n");
+  fprintf (stdout, "Usage: BaseCaller [options] --input-dir=DIR\n");
+  fprintf (stdout, "\n");
+  fprintf (stdout, "General options:\n");
+  fprintf (stdout, "  -h,--help                             print this help message and exit\n");
+  fprintf (stdout, "  -v,--version                          print version and exit\n");
+  fprintf (stdout, "  -i,--input-dir             DIRECTORY  input files directory [required option]\n");
+  fprintf (stdout, "     --wells                 FILE       input wells file [input-dir/1.wells]\n");
+  fprintf (stdout, "     --mask                  FILE       input mask file [input-dir/analysis.bfmask.bin]\n");
+  fprintf (stdout, "  -o,--output-dir            DIRECTORY  results directory [current dir]\n");
+  fprintf (stdout, "     --lib-key               STRING     library key sequence [TCAG]\n");
+  fprintf (stdout, "     --tf-key                STRING     test fragment key sequence [ATCG]\n");
+  fprintf (stdout, "     --flow-order            STRING     flow order [retrieved from wells file]\n");
+  fprintf (stdout, "     --run-id                STRING     read name prefix [hashed input dir name]\n");
+  fprintf (stdout, "  -n,--num-threads           INT        number of worker threads [2*numcores]\n");
+  fprintf (stdout, "  -f,--flowlimit             INT        basecall only first n flows [all flows]\n");
+  fprintf (stdout, "  -r,--rows                  INT-INT    basecall only a range of rows [all rows]\n");
+  fprintf (stdout, "  -c,--cols                  INT-INT    basecall only a range of columns [all columns]\n");
+  fprintf (stdout, "     --region-size           INTxINT    wells processing chunk size [50x50]\n");
+  fprintf (stdout, "     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
+  fprintf (stdout, "     --dephaser              STRING     dephasing algorithm [treephaser-swan]\n");
+  fprintf (stdout, "     --phred-table-file      FILE       predictor / quality value file [system default]\n");
+  fprintf (stdout, "     --cafie-residuals       on/off     generate cafie residuals file [off]\n");
+  fprintf (stdout, "     --well-stat-file        on/off     generate wells stats file [off]\n");
+  fprintf (stdout, "\n");
 
-    sprintf(src, "/tmp/%s", sff_scratch_files.fn_sfflib);
-    sprintf(dst, "%s/%s", clo.sys_context.basecaller_output_directory, sff_scratch_files.sffLIBFileName);
-    CopyFile(src, dst);
-    unlink(src);
+  BaseCallerFilters::PrintHelp();
 
-    sprintf(src, "/tmp/%s", sff_scratch_files.fn_sfftf);
-    sprintf(dst, "%s/%s", clo.sys_context.basecaller_output_directory, sff_scratch_files.sffTFFileName);
-    CopyFile(src, dst);
-    unlink(src);
+  fprintf (stdout, "Phasing estimation options:\n");
+  fprintf (stdout, "     --phasing-estimator     STRING     phasing estimation algorithm [spatial-refiner]\n");
+  fprintf (stdout, "     --libcf-ie-dr           cf,ie,dr   don't estimate phasing and use specified values [not using]\n");
+  fprintf (stdout, "  -R,--phasing-regions       INTxINT    number of phasing regions (ignored by spatial-refiner) [12x13]\n");
+  fprintf (stdout, "\n");
+
+  exit (EXIT_SUCCESS);
+}
+
+void * BasecallerWorkerWrapper(void *input)
+{
+  static_cast<BaseCaller*>(input)->BasecallerWorker();
+  return NULL;
+}
+
+void ValidateAndCanonicalizePath(string &path)
+{
+  char *real_path = realpath (path.c_str(), NULL);
+  if (real_path == NULL) {
+    perror(path.c_str());
+    exit(EXIT_FAILURE);
   }
-}
-void DestroySFFScratch(SFFscratch &sff_scratch_files)
-{
-  if (sff_scratch_files.destinationDir)
-    free(sff_scratch_files.destinationDir);
-  if (sff_scratch_files.fn_sfflib)
-    free(sff_scratch_files.fn_sfflib);
-  if (sff_scratch_files.fn_sfftf)
-    free(sff_scratch_files.fn_sfftf);
-  if (sff_scratch_files.experimentName)
-    free(sff_scratch_files.experimentName);
-  if (sff_scratch_files.sffLIBFileName)
-    free(sff_scratch_files.sffLIBFileName);
-  if (sff_scratch_files.sffTFFileName)
-    free(sff_scratch_files.sffTFFileName);
+  path = real_path;
+  free(real_path);
 }
 
-//
-// Main tasks performed in base calling section of the analysis:
-//  - Polyclonal filter training
-//  - Phasing parameter estimation for library reads & TFs
-//  - Actual base calling: dephasing, filtering, QV calculation, TF classification
-//
-void GenerateBasesFromWells(CommandLineOpts &clo, RawWells &rawWells, Mask *maskPtr, SequenceItem *seqList, int rows, int cols,
-    char *experimentName, TrackProgress &my_progress)
+void ValidateAndCanonicalizePath(string &path, const string& backup_path)
 {
+  char *real_path = realpath (path.c_str(), NULL);
+  if (real_path != NULL) {
+    path = real_path;
+    free(real_path);
+    return;
+  }
+  perror(path.c_str());
+  printf("%s: inaccessible, trying alternative location\n", path.c_str());
+  real_path = realpath (backup_path.c_str(), NULL);
+  if (real_path != NULL) {
+    path = real_path;
+    free(real_path);
+    return;
+  }
+  perror(backup_path.c_str());
+  exit(EXIT_FAILURE);
+}
 
-  BaseCaller basecaller(&clo, &rawWells, clo.flow_context.flowOrder, maskPtr, rows, cols, my_progress.fpLog); // 7th duplicated code instance for flow
+void ReportState(time_t analysis_start_time, char *my_state)
+{
+  time_t analysis_current_time;
+  time(&analysis_current_time);
+  fprintf(stdout, "\n%s: Elapsed: %.1lf minutes\n\n", my_state, difftime(analysis_current_time, analysis_start_time) / 60);
+}
 
-  rawWells.Close();
-  SetWellsToLiveBeadsOnly(rawWells,maskPtr);
-  rawWells.OpenForIncrementalRead();
-  rawWells.ResetCurrentRegionWell();
+void SaveJson(const Json::Value & json, const string& filename_json)
+{
+  ofstream out(filename_json.c_str(), ios::out);
+  if (out.good())
+    out << json.toStyledString();
+  else
+    ION_WARN("Unable to write JSON file " + filename_json);
+}
+
+#ifdef _DEBUG
+void memstatus (void)
+{
+  memdump();
+  dbgmemClose();
+}
+#endif /* _DEBUG */
+
+/*************************************************************************************************
+ *  Start of Main Function
+ ************************************************************************************************/
+
+int main (int argc, const char *argv[])
+{
+  BaseCaller_salute();
+
+#ifdef _DEBUG
+  atexit (memstatus);
+  dbgmemInit();
+#endif /* _DEBUG */
+
+  time_t analysis_start_time;
+  time(&analysis_start_time);
+
+  Json::Value basecaller_json(Json::objectValue);
+  DumpStartingStateOfProgram (argc,argv,analysis_start_time, basecaller_json["BaseCaller"]);
+
+  updateProgress (WELL_TO_IMAGE); // TODO: Make pipeline do it
+  updateProgress (IMAGE_TO_SIGNAL);
+
+
+  /*---   Parse command line options  ---*/
+
+  OptArgs opts;
+  opts.ParseCmdLine(argc, argv);
+
+  if (opts.GetFirstBoolean('h', "help", false) or argc == 1)
+    PrintHelp();
+
+  if (opts.GetFirstBoolean('v', "version", false)) {
+    fprintf (stdout, "%s", IonVersion::GetFullVersion ("BaseCaller").c_str());
+    exit (EXIT_SUCCESS);
+  }
+
+
+  // Command line processing *** Directories and file locations
+
+  string input_directory        = opts.GetFirstString ('i', "input-dir", ".");
+  string output_directory       = opts.GetFirstString ('o', "output-dir", ".");
+  string unfiltered_directory   = output_directory + "/unfiltered";
+
+  CreateResultsFolder ((char*)output_directory.c_str());
+  CreateResultsFolder ((char*)unfiltered_directory.c_str());
+
+  ValidateAndCanonicalizePath(output_directory);
+  ValidateAndCanonicalizePath(unfiltered_directory);
+  ValidateAndCanonicalizePath(input_directory);
+
+  string filename_wells         = opts.GetFirstString ('-', "wells", input_directory + "/1.wells");
+  string filename_mask          = opts.GetFirstString ('-', "mask", input_directory + "/analysis.bfmask.bin");
+
+  ValidateAndCanonicalizePath(filename_wells);
+  ValidateAndCanonicalizePath(filename_mask, input_directory + "/bfmask.bin");
+
+  string filename_lib_sff       = output_directory + "/rawlib.sff";
+  string filename_tf_sff        = output_directory + "/rawtf.sff";
+  string filename_filter_mask   = output_directory + "/bfmask.bin";
+  string filename_json          = output_directory + "/BaseCaller.json";
+
+  printf("\n");
+  printf("Input files summary:\n");
+  printf("     --input-dir %s\n", input_directory.c_str());
+  printf("         --wells %s\n", filename_wells.c_str());
+  printf("          --mask %s\n", filename_mask.c_str());
+  printf("\n");
+  printf("Output files summary:\n");
+  printf("    --output-dir %s\n", output_directory.c_str());
+  printf("       --lib-sff %s\n", filename_lib_sff.c_str());
+  printf("        --tf-sff %s\n", filename_tf_sff.c_str());
+  printf("   --filter-mask %s\n", filename_filter_mask.c_str());
+  printf("          json : %s\n", filename_json.c_str());
+  printf("unfiltered-dir : %s\n", unfiltered_directory.c_str());
+  printf("\n");
+
+
+  // Command line processing *** Various options that need cleanup
+
+  BaseCaller basecaller;
+
+  char default_run_id[6]; // Create a run identifier from full output directory string
+  ion_run_to_readname (default_run_id, (char*)output_directory.c_str(), output_directory.length());
+
+  basecaller.run_id             = opts.GetFirstString ('-', "run-id", default_run_id);
+  basecaller.dephaser           = opts.GetFirstString ('-', "dephaser", "treephaser-swan");
+  basecaller.phred_table_file   = opts.GetFirstString ('-', "phred-table-file", "");
+  int num_threads               = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
+  bool generate_well_stat_file  = opts.GetFirstBoolean('-', "well-stat-file", false);
+  bool generate_cafie_residual  = opts.GetFirstBoolean('-', "cafie-residuals", false);
+  int num_unfiltered            = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
+
+  printf("Run ID: %s\n", basecaller.run_id.c_str());
+
+
+  // Command line processing *** Options that have default values retrieved from wells or mask files
+
+  RawWells rawWells ("", filename_wells.c_str());
+  if (!rawWells.OpenMetaData()) {
+    fprintf (stderr, "Failed to retrieve metadata from %s\n", filename_wells.c_str());
+    exit (EXIT_FAILURE);
+  }
+  Mask mask (1, 1);
+  if (mask.SetMask (filename_mask.c_str()))
+    exit (EXIT_FAILURE);
+
+  if (rawWells.KeyExists("ChipType")) {
+    string chipType;
+    rawWells.GetValue("ChipType", chipType);
+    ChipIdDecoder::SetGlobalChipId(chipType.c_str());
+  }
+
+  basecaller.region_size_x = 50; // TODO: Get from wells reader
+  basecaller.region_size_y = 50; // TODO: Get from wells reader
+  string argRegionSize          = opts.GetFirstString ('-', "region-size", "");
+  if (!argRegionSize.empty()) {
+    if (2 != sscanf (argRegionSize.c_str(), "%dx%d", &basecaller.region_size_x, &basecaller.region_size_y)) {
+      fprintf (stderr, "Option Error: region-size %s\n", argRegionSize.c_str());
+      exit (EXIT_FAILURE);
+    }
+  }
+
+  string flowOrder              = opts.GetFirstString ('-', "flow-order", rawWells.FlowOrder());
+  basecaller.num_flows          = opts.GetFirstInt    ('f', "flowlimit", rawWells.NumFlows());
+  basecaller.num_flows = min(basecaller.num_flows, (int)rawWells.NumFlows());
+  assert (!flowOrder.empty());
+  assert (basecaller.num_flows > 0);
+
+  string lib_key                = opts.GetFirstString ('-', "lib-key", "TCAG"); // TODO: default from wells?
+  string tf_key                 = opts.GetFirstString ('-', "tf-key", "ATCG");
+  lib_key                       = opts.GetFirstString ('-', "librarykey", lib_key);   // Backward compatible opts
+  tf_key                        = opts.GetFirstString ('-', "tfkey", tf_key);
+  basecaller.keys.resize(2);
+  basecaller.keys[0].Set(flowOrder, lib_key, "lib");
+  basecaller.keys[1].Set(flowOrder, tf_key, "tf");
+
+  basecaller.chip_size_y = mask.H();
+  basecaller.chip_size_x = mask.W();
+  unsigned int subset_begin_x = 0;
+  unsigned int subset_begin_y = 0;
+  unsigned int subset_end_x = basecaller.chip_size_x;
+  unsigned int subset_end_y = basecaller.chip_size_y;
+  string argSubsetRows          = opts.GetFirstString ('r', "rows", "");
+  string argSubsetCols          = opts.GetFirstString ('c', "cols", "");
+  if (!argSubsetRows.empty()) {
+    if (2 != sscanf (argSubsetRows.c_str(), "%u-%u", &subset_begin_y, &subset_end_y)) {
+      fprintf (stderr, "Option Error: rows %s\n", argSubsetRows.c_str());
+      exit (EXIT_FAILURE);
+    }
+  }
+  if (!argSubsetCols.empty()) {
+    if (2 != sscanf (argSubsetCols.c_str(), "%u-%u", &subset_begin_x, &subset_end_x)) {
+      fprintf (stderr, "Option Error: rows %s\n", argSubsetCols.c_str());
+      exit (EXIT_FAILURE);
+    }
+  }
+  subset_end_x = min(subset_end_x, (unsigned int)basecaller.chip_size_x);
+  subset_end_y = min(subset_end_y, (unsigned int)basecaller.chip_size_y);
+  if (!argSubsetRows.empty() or !argSubsetCols.empty())
+    printf("Processing chip subregion %u-%u x %u-%u\n", subset_begin_x, subset_end_x, subset_begin_y, subset_end_y);
+
+  basecaller.class_map.assign(basecaller.chip_size_x*basecaller.chip_size_y, -1);
+  for (unsigned int y = subset_begin_y; y < subset_end_y; ++y) {
+    for (unsigned int x = subset_begin_x; x < subset_end_x; ++x) {
+      if (mask.Match(x, y, MaskLib))
+        basecaller.class_map[x + y * basecaller.chip_size_x] = 0;
+      if (mask.Match(x, y, MaskTF))
+        basecaller.class_map[x + y * basecaller.chip_size_x] = 1;
+    }
+  }
+
+
+  basecaller.mask = &mask;
+  basecaller.flow_order = flowOrder;
+  basecaller.chip_id = ChipIdDecoder::GetGlobalChipId();
+  basecaller.output_directory = output_directory;
+  basecaller.filename_wells = filename_wells;
+
+  BaseCallerFilters filters(opts, flowOrder, basecaller.num_flows, basecaller.keys, &mask);
+  basecaller.filters = &filters;
+  basecaller.estimator.InitializeFromOptArgs(opts, flowOrder, basecaller.num_flows, basecaller.keys);
+
+  // Command line parsing officially over. Detect unknown options.
+  opts.CheckNoLeftovers();
+
+
+  // Save some run info into our handy json file
+
+  basecaller_json["BaseCaller"]["run_id"] = basecaller.run_id;
+  basecaller_json["BaseCaller"]["flow_order"] = flowOrder;
+  basecaller_json["BaseCaller"]["lib_key"] =  basecaller.keys[0].bases();
+  basecaller_json["BaseCaller"]["tf_key"] =  basecaller.keys[1].bases();
+  basecaller_json["BaseCaller"]["num_flows"] = basecaller.num_flows;
+  basecaller_json["BaseCaller"]["chip_id"] = basecaller.chip_id;
+  basecaller_json["BaseCaller"]["input_dir"] = input_directory;
+  basecaller_json["BaseCaller"]["output_dir"] = output_directory;
+  basecaller_json["BaseCaller"]["filename_wells"] = filename_wells;
+  basecaller_json["BaseCaller"]["filename_mask"] = filename_mask;
+  basecaller_json["BaseCaller"]["flow_order"] = flowOrder;
+  basecaller_json["BaseCaller"]["num_threads"] = num_threads;
+  basecaller_json["BaseCaller"]["dephaser"] = basecaller.dephaser;
+  SaveJson(basecaller_json, filename_json);
+
+
+
   MemUsage("RawWellsBasecalling");
+
   // Find distribution of clonal reads for use in read filtering:
-  vector<int> keyIonogram(seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows);
-  basecaller.FindClonalPopulation(experimentName, keyIonogram);
+  filters.FindClonalPopulation(output_directory, &rawWells, num_unfiltered);
+
   MemUsage("ClonalPopulation");
-  my_progress.ReportState("Polyclonal Filter Training Complete");
+  ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
 
   // Library CF/IE/DR parameter estimation
   MemUsage("BeforePhaseEstimation");
-  basecaller.DoPhaseEstimation(seqList);
+  rawWells.OpenForIncrementalRead();
+  basecaller.estimator.DoPhaseEstimation(&rawWells, &mask, basecaller.region_size_x, basecaller.region_size_y, num_threads == 1);
+  rawWells.Close();
+
+  basecaller.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
+  SaveJson(basecaller_json, filename_json);
+
   MemUsage("AfterPhaseEstimation");
-  my_progress.ReportState("Phase Parameter Estimation Complete");
 
-  // Write SFF files to local directory, rather than directly to Report directory
-  SFFscratch sff_scratch_files;
-  ConstructSFFscratch(sff_scratch_files, clo, experimentName);
+  ReportState(analysis_start_time,"Phase Parameter Estimation Complete");
+
   MemUsage("BeforeBasecalling");
-  // Perform base calling and save results to appropriate sff files
-  basecaller.DoThreadedBasecalling(sff_scratch_files.destinationDir, sff_scratch_files.fn_sfflib, sff_scratch_files.fn_sfftf);
-  MemUsage("AfterBasecalling");
-  CopyScratchSFFToFinalDestination(sff_scratch_files, clo);
-  DestroySFFScratch(sff_scratch_files);
 
-  // Generate TF-related and phase estimation-related files:
-  // TFTracking.txt, cafieMetrics.txt, cafieRegions.txt
-  basecaller.generateCafieRegionsFile(clo.sys_context.basecaller_output_directory);
-
-  my_progress.ReportState("Basecalling Complete");
-
-  basecaller.saveBaseCallerJson(clo.sys_context.basecaller_output_directory);
-
-}
-
-
-
-BaseCaller::BaseCaller(CommandLineOpts *_clo, RawWells *_rawWells, const char *_flowOrder, Mask *_maskPtr, int _rows, int _cols, FILE *fpLog)
-{
-  clo = _clo;
-  rawWells = _rawWells;
-  maskPtr = _maskPtr;
-  rows = _rows;
-  cols = _cols;
-
-  flowOrder = _flowOrder;
-  chipID = ChipIdDecoder::GetGlobalChipId();
-  numRegions = clo->cfe_control.cfiedrRegionsX * clo->cfe_control.cfiedrRegionsY;
-
-  numFlows = clo->GetNumFlows();
-  if (clo->cfe_control.numCafieSolveFlows)
-    numFlows = std::min(numFlows, clo->cfe_control.numCafieSolveFlows);
-
-  cf.assign(numRegions,0.0);
-  ie.assign(numRegions,0.0);
-  droop.assign(numRegions,0.0);
-
-  numWorkers = 1;
-  commonOutputMutex = NULL;
-  wellStatFileFP = NULL;
-  phaseResid = NULL;
-  numWellsCalled = 0;
-
-  className[0] = "lib";
-  classKeyBases[0] = clo->key_context.libKey;  //should draw from seqList
-  className[1] = "tf";
-  classKeyBases[1] = clo->key_context.tfKey; //should draw from seqList
-  for (int iClass = 0; iClass < numClasses; iClass++) {
-    classKeyBasesLength[iClass] = classKeyBases[iClass].length();
-    classKeyFlowsLength[iClass] = seqToFlow(classKeyBases[iClass].c_str(), classKeyBasesLength[iClass], classKeyFlows[iClass], MAX_KEY_FLOWS,
-        (char *) flowOrder.c_str(), flowOrder.size()); // already executed in seqList?
-  }
-
-  classFilterPolyclonal[0] = clo->flt_control.clonalFilterSolving;
-  classFilterHighResidual[0] = clo->flt_control.cafieResFilterCalling;
-
-  classFilterPolyclonal[1] = clo->flt_control.clonalFilterSolving && clo->flt_control.percentPositiveFlowsFilterTFs;
-  classFilterHighResidual[1] = clo->flt_control.cafieResFilterCalling && clo->flt_control.cafieResFilterTFs;
-
-  nextRegionX = 0;
-  nextRegionY = 0;
-}
-
-BaseCaller::~BaseCaller()
-{
-}
-
-
-
-void BaseCaller::FindClonalPopulation(char *experimentName, const vector<int>& keyIonogram)
-{
-  if (clo->flt_control.clonalFilterSolving or clo->flt_control.clonalFilterTraining) {
-    filter_counts counts;
-    int nlib = maskPtr->GetCount(static_cast<MaskType> (MaskLib));
-    counts._nsamp = min(nlib, clo->flt_control.nUnfilteredLib);
-    make_filter(clonalPopulation, counts, *maskPtr, *rawWells, keyIonogram);
-    cout << counts << endl;
-  }
-}
-
-
-
-void BaseCaller::DoPhaseEstimation(SequenceItem *seqList)
-{
-
-  printf("Phase estimation mode = %s\n", clo->cfe_control.libPhaseEstimator.c_str());
-
-  if (clo->cfe_control.libPhaseEstimator == "override") {
-
-    // user sets the library values
-    for (int r = 0; r < numRegions; r++) {
-      cf[r] = clo->cfe_control.LibcfOverride;
-      ie[r] = clo->cfe_control.LibieOverride;
-      droop[r] = clo->cfe_control.LibdrOverride;
-    }
-
-  } else if ((clo->cfe_control.libPhaseEstimator == "nel-mead-treephaser") || (clo->cfe_control.libPhaseEstimator == "nel-mead-adaptive-treephaser")){
-
-    int numWorkers = std::max(numCores(), 2);
-    if (clo->cfe_control.singleCoreCafie)
-      numWorkers = 1;
-
-    RegionAnalysis regionAnalysis;
-    regionAnalysis.analyze(&cf, &ie, &droop, rawWells, maskPtr, seqList, clo, flowOrder, numFlows, numWorkers);
-
-  } else {
-    ION_ABORT("Requested phase estimator is not recognized");
-  }
-
-  // Save phase estimates to BaseCaller.json
-
-  float CFmean = 0;
-  float IEmean = 0;
-  float DRmean = 0;
-  int count = 0;
-
-  for (int r = 0; r < numRegions; r++) {
-    basecallerJson["Phasing"]["CFbyRegion"][r] = cf[r];
-    basecallerJson["Phasing"]["IEbyRegion"][r] = ie[r];
-    basecallerJson["Phasing"]["DRbyRegion"][r] = droop[r];
-    if (cf[r] || ie[r] || droop[r]) {
-      CFmean += cf[r];
-      IEmean += ie[r];
-      DRmean += droop[r];
-      count++;
-    }
-  }
-  basecallerJson["Phasing"]["RegionRows"] = clo->cfe_control.cfiedrRegionsY;
-  basecallerJson["Phasing"]["RegionCols"] = clo->cfe_control.cfiedrRegionsX;
-
-  basecallerJson["Phasing"]["CF"] = count ? (CFmean/count) : 0;
-  basecallerJson["Phasing"]["IE"] = count ? (IEmean/count) : 0;
-  basecallerJson["Phasing"]["DR"] = count ? (DRmean/count) : 0;
-}
-
-bool BaseCaller::LoadRegion(std::deque<int> &wellX, std::deque<int> &wellY, std::deque<std::vector<float> > &wellMeasurements, int &currentRegion, std::string &msg)
-{
-	if (nextRegionY >= wellsReader.numRegionsY) {
-		return false;
-	}
-
-	int currentRegionX = nextRegionX;
-	int currentRegionY = nextRegionY;
-
-	wellsReader.loadRegion(wellX, wellY, wellMeasurements, currentRegionX, currentRegionY, maskPtr);
-
-	msg = std::string();
-	if (currentRegionX == 0) {
-		char buff[32];
-		sprintf(buff, "% 5d/% 5d: ", currentRegionY*clo->loc_context.regionYSize, rows);
-		msg += buff;
-	}
-
-	if (wellX.size() == 0)
-		msg += "  ";
-	else if (wellX.size() < 750)
-		msg += ". ";
-	else if (wellX.size() < 1500)
-		msg += "o ";
-	else if (wellX.size() < 2250)
-		msg += "# ";
-	else
-		msg += "$ ";
-
-	currentRegion = currentRegionX + wellsReader.numRegionsX * currentRegionY;
-	nextRegionX++;
-	if (nextRegionX == wellsReader.numRegionsX) {
-		nextRegionX = 0;
-		nextRegionY++;
-		msg += "\n";
-	}
-
-	return true;
-}
-  
-typedef struct {
-	BaseCaller *baseCaller;
-	std::deque<int> wellX;
-	std::deque<int> wellY;
-	std::deque<std::vector<float> > wellMeasurements;
-	PerBaseQual pbq;
-	unsigned int iWorker;
-	int currentRegion;
-	std::string msg;
-	bool started;
-	bool completed;
-} BaseCallerThreadData;
-
-void BaseCaller::DoThreadedBasecalling(char *resultsDir, char *sffLIBFileName, char *sffTFFileName)
-{
-
-  numWorkers = 1;
-  if (clo->cfe_control.singleCoreCafie == false) {
-    numWorkers = 2*numCores();
-//    numWorkers = 24*2;
-    // Limit threads to half the number of cores with minimum of 4 threads
-    numWorkers = (numWorkers > 4 ? numWorkers : 4);
-  }
 
   //
   // Step 1. Open wells and sff files
   //
 
-  // Open the wells file
-  rawWells->ResetCurrentWell();
-  assert(numFlows <= (int)rawWells->NumFlows());
-  assert (wellsReader.OpenForRead2(rawWells, cols, rows, clo->loc_context.regionXSize, clo->loc_context.regionYSize));
-  int numWellRegions = wellsReader.numRegionsX * wellsReader.numRegionsY;
+  int num_regions_x = (basecaller.chip_size_x +  basecaller.region_size_x - 1) / basecaller.region_size_x;
+  int num_regions_y = (basecaller.chip_size_y +  basecaller.region_size_y - 1) / basecaller.region_size_y;
 
+  basecaller.lib_sff.OpenForWrite(filename_lib_sff, num_regions_x*num_regions_y,
+                                  basecaller.num_flows, flowOrder, basecaller.keys[0].bases());
+  basecaller.tf_sff.OpenForWrite(filename_tf_sff, num_regions_x*num_regions_y,
+                                  basecaller.num_flows, flowOrder, basecaller.keys[1].bases());
 
-  if (!clo->cfe_control.basecallSubset.empty()) {
-    printf("Basecalling limited to user-specified set of %d wells. No random library sff will be generated\n",
-        (int)clo->cfe_control.basecallSubset.size());
-
-  } else { // Generate random library subset
-    MaskSample<well_index_t> randomLib(*maskPtr, MaskLib, clo->flt_control.nUnfilteredLib);
-    randomLibSet.insert(randomLib.Sample().begin(), randomLib.Sample().end());
-  }
-
-  // If we have randomly-sampled unfiltered reads, write them out
-  if (!randomLibSet.empty()) {
-    string unfilteredLibDir = string(clo->sys_context.basecaller_output_directory) + "/" + string(clo->flt_control.unfilteredLibDir);
-    if (mkdir(unfilteredLibDir.c_str(), 0777) && (errno != EEXIST)) {
-      randomLibSet.clear(); // This will ensure no writes for now
-      ION_WARN("*Warning* - problem making directory " + unfilteredLibDir + " for unfiltered lib results")
-    } else {
-
-      string unfilteredSffName = string(clo->sys_context.runId) + ".lib.unfiltered.untrimmed.sff";
-      randomLibSFF.OpenForWrite(unfilteredLibDir.c_str(),unfilteredSffName.c_str(),
-          numWellRegions, numFlows, flowOrder.c_str(), clo->key_context.libKey);
-
-      string filterStatusFileName = unfilteredLibDir + string("/") + string(clo->sys_context.runId) + string(".filterStatus.txt");
-      filterStatus.open(filterStatusFileName.c_str());
-      filterStatus << "col";
-      filterStatus << "\t" << "row";
-      filterStatus << "\t" << "highRes";
-      filterStatus << "\t" << "valid";
-      filterStatus << endl;
-    }
-  }
-
-  libSFF.OpenForWrite(resultsDir, sffLIBFileName, numWellRegions, numFlows, flowOrder.c_str(), clo->key_context.libKey);  // should be iterating over keys?
-  tfSFF.OpenForWrite(resultsDir, sffTFFileName, numWellRegions, numFlows, flowOrder.c_str(), clo->key_context.tfKey);
-
-
-  for (well_index_t bfmaskIndex = 0; bfmaskIndex < (well_index_t)rows*cols; bfmaskIndex++) {
-    (*maskPtr)[bfmaskIndex] &= MaskAll
-        - MaskFilteredBadPPF - MaskFilteredShort - MaskFilteredBadKey - MaskFilteredBadResidual - MaskKeypass;
-  }
-  //
-  // Step 2. Initialize read filtering
-  //
-
-  for (int iClass = 0; iClass < numClasses; iClass++) {
-    classCountPolyclonal[iClass] = classCountHighPPF[iClass] = classCountZeroBases[iClass] = classCountTooShort[iClass] = 0;
-    classCountFailKeypass[iClass] = classCountHighResidual[iClass] = classCountValid[iClass] = classCountTotal[iClass] = 0;
+  // TODO: Random subset should also respect options -r and -c
+  MaskSample<well_index_t> randomLib(mask, MaskLib, num_unfiltered);
+  basecaller.unfiltered_set.insert(randomLib.Sample().begin(), randomLib.Sample().end());
+  if (!basecaller.unfiltered_set.empty()) {
+    string full_path_to_unfiltered_sff = unfiltered_directory + "/" + basecaller.run_id + ".lib.unfiltered.untrimmed.sff";
+    string full_path_to_unfiltered_trimmed_sff = unfiltered_directory + "/" + basecaller.run_id + ".lib.unfiltered.trimmed.sff";
+    basecaller.unfiltered_sff.OpenForWrite(full_path_to_unfiltered_sff, num_regions_x*num_regions_y,
+                                  basecaller.num_flows, flowOrder, basecaller.keys[0].bases());
+    basecaller.unfiltered_trimmed_sff.OpenForWrite(full_path_to_unfiltered_trimmed_sff, num_regions_x*num_regions_y,
+                                  basecaller.num_flows, flowOrder, basecaller.keys[0].bases());
   }
 
   //
@@ -387,134 +420,43 @@ void BaseCaller::DoThreadedBasecalling(char *resultsDir, char *sffLIBFileName, c
   //
 
   // Set up phase residual file
-  phaseResid = NULL;
-  if (clo->cfe_control.doCafieResidual) {
-    string wellsExtension = ".wells";
-    string phaseResidualExtension = ".cafie-residuals";
-    string phaseResidualPath = clo->sys_context.wellsFileName;
-    int matchPos = phaseResidualPath.size() - wellsExtension.size();
-    if ((matchPos >= 0) && (wellsExtension == phaseResidualPath.substr(matchPos, wellsExtension.size()))) {
-      phaseResidualPath.replace(matchPos, wellsExtension.size(), phaseResidualExtension);
-    } else {
-      phaseResidualPath = string("1") + phaseResidualExtension;
-    }
-    string phaseResidualDir;
-    string phaseResidualFile;
-    FillInDirName(phaseResidualPath,phaseResidualDir,phaseResidualFile);
-
-    phaseResid = new RawWells(phaseResidualDir.c_str(), phaseResidualFile.c_str());
-    phaseResid->CreateEmpty(numFlows, flowOrder.c_str(), rows, cols);
-    phaseResid->OpenForWrite();
-    phaseResid->SetChunk(0, rows, 0, cols, 0, numFlows);
+  basecaller.residual_file = NULL;
+  if (generate_cafie_residual) {
+    basecaller.residual_file = new RawWells(output_directory.c_str(), "1.cafie-residuals");
+    basecaller.residual_file->CreateEmpty(basecaller.num_flows, flowOrder.c_str(), basecaller.chip_size_y, basecaller.chip_size_x);
+    basecaller.residual_file->OpenForWrite();
+    basecaller.residual_file->SetChunk(0, basecaller.chip_size_y, 0, basecaller.chip_size_x, 0, basecaller.num_flows);
   }
 
   // Set up wellStats file (if necessary)
-  OpenWellStatFile();
+  basecaller.well_stat_file = NULL;
+  if (generate_well_stat_file)
+    basecaller.well_stat_file = OpenWellStatFile(output_directory + "/wellStats.txt");
 
   //
   // Step 4. Execute threaded basecalling
   //
 
-  // Prepare threads
-  pthread_mutex_t _commonOutputMutex = PTHREAD_MUTEX_INITIALIZER;
-  commonOutputMutex   = &_commonOutputMutex;
-  numWellsCalled = 0;
-  nextRegionX = 0;
-  nextRegionY = 0;
+  basecaller.next_region = 0;
+  basecaller.next_begin_x = 0;
+  basecaller.next_begin_y = 0;
 
   time_t startBasecall;
   time(&startBasecall);
 
-  // NB: this takes twice as much memory as before
-  BaseCallerThreadData baseCallerThreadData[2*numWorkers]; // NB: one more for to load in data...
-  pthread_t workerID[numWorkers];
-  int loadDataI = numWorkers;
-  int loadDataN = numWorkers;
-  
-  // reserve
-  for (unsigned int iWorker = 0; iWorker < numWorkers; iWorker++) { 
-	  baseCallerThreadData[iWorker].started = false;
-	  baseCallerThreadData[iWorker].completed = false;
-  }
-  
-  // Launch threads
-  int numRunning = 0;
-  while (true) { // NB: this makes threading lock free
+  pthread_mutex_init(&basecaller.mutex, NULL);
 
-	  /*
-	  printf("numRunning=%d numWorkers=%d\n", numRunning, numWorkers); // HERE
-	  fflush(stdout);
-	  */
-	  // Join threads
-	  for (unsigned int iWorker = 0; iWorker < numWorkers; iWorker++) {
-		  if (baseCallerThreadData[iWorker].completed || !baseCallerThreadData[iWorker].started) {
-			  bool wasStarted = baseCallerThreadData[iWorker].started;
-			  // join
-			  if (baseCallerThreadData[iWorker].started) {
-				  pthread_join(workerID[iWorker], NULL);
-	        numRunning--;
-			  }
-			  baseCallerThreadData[iWorker].completed = false; // always set to false so that we do not consider ever again...
+  pthread_t worker_id[num_threads];
+  for (int iWorker = 0; iWorker < num_threads; iWorker++)
+    if (pthread_create(&worker_id[iWorker], NULL, BasecallerWorkerWrapper, &basecaller)) {
+      printf("*Error* - problem starting thread\n");
+      exit (EXIT_FAILURE);
+    }
 
-			  // NB: it would be great to have a thread that its only job is to read in data
-			  if (0 < loadDataN && loadDataN == loadDataI) { // load more data
-				  for (loadDataI = 0; loadDataI < loadDataN; loadDataI++) {
-					  if (!LoadRegion(baseCallerThreadData[numWorkers+loadDataI].wellX,
-							  baseCallerThreadData[numWorkers+loadDataI].wellY,
-							  baseCallerThreadData[numWorkers+loadDataI].wellMeasurements,
-							  baseCallerThreadData[numWorkers+loadDataI].currentRegion,
-							  baseCallerThreadData[numWorkers+loadDataI].msg)) {
-						  loadDataN = loadDataI;
-						  break;
-					  }
-				  }
-				  loadDataI = 0;
-			  }
+  for (int iWorker = 0; iWorker < num_threads; iWorker++)
+    pthread_join(worker_id[iWorker], NULL);
 
-			  // is there more data?
-			  if (loadDataI < loadDataN) {
-				  // print status
-				  printf("%s", baseCallerThreadData[numWorkers+loadDataI].msg.c_str());
-				  fflush(stdout);
-				  // copy region
-				  baseCallerThreadData[iWorker].wellX.swap(baseCallerThreadData[numWorkers+loadDataI].wellX);
-				  baseCallerThreadData[iWorker].wellY.swap(baseCallerThreadData[numWorkers+loadDataI].wellY);
-				  baseCallerThreadData[iWorker].wellMeasurements.swap(baseCallerThreadData[numWorkers+loadDataI].wellMeasurements);
-				  baseCallerThreadData[iWorker].currentRegion = baseCallerThreadData[numWorkers+loadDataI].currentRegion;
-				  if (!baseCallerThreadData[iWorker].pbq.Init(chipID, flowOrder, clo->cfe_control.phredTableFile)) {
-					  ION_ABORT("*Error* - perBaseQualInit failed");
-				  }
-				  // copy thread data
-				  baseCallerThreadData[iWorker].baseCaller = this;
-				  baseCallerThreadData[iWorker].iWorker = iWorker;
-				  
-				  // launch the thread
-				  if (pthread_create(&workerID[iWorker], NULL, doBasecall, &baseCallerThreadData[iWorker]))
-					  ION_ABORT("*Error* - problem starting thread");
-				  numRunning++;
-				  baseCallerThreadData[iWorker].started = true;
-				  
-				  loadDataI++;
-			  }
-
-			  if (wasStarted) {
-				  iWorker = -1; // start a the beginning, searching for joining threads
-			  }
-		  }
-	  }
-	  
-	  // sleep
-	  struct timespec req;
-	  req.tv_sec = 0;
-	  //req.tv_nsec = 100000000; // 100 milliseconds
-	  //req.tv_nsec = 10000000; // 10 milliseconds
-	  req.tv_nsec = 1000000; // 1 milliseconds
-	  nanosleep(&req, NULL);
-	  //sleep(1); // TODO: how long?
-
-	  if (numRunning <= 0)
-	    break;
-  }
+  pthread_mutex_destroy(&basecaller.mutex);
 
   time_t endBasecall;
   time(&endBasecall);
@@ -523,342 +465,407 @@ void BaseCaller::DoThreadedBasecalling(char *resultsDir, char *sffLIBFileName, c
   // Step 5. Close files and print out some statistics
   //
 
-  if (!clo->cfe_control.basecallSubset.empty()) {
-    cout << endl << "BASECALLING: called " << numWellsCalled << " of " << clo->cfe_control.basecallSubset.size() << " wells in "
-        << difftime(endBasecall,startBasecall) << " seconds with " << numWorkers << " threads" << endl;
-  } else {
-    cout << endl << "BASECALLING: called " << numWellsCalled << " of " << (rows*cols) << " wells in "
-        << difftime(endBasecall,startBasecall) << " seconds with " << numWorkers << " threads" << endl;
-  }
+  printf("\n\nBASECALLING: called %d of %u wells in %1.0lf seconds with %d threads\n",
+      filters.getNumWellsCalled(), (subset_end_y-subset_begin_y)*(subset_end_x-subset_begin_x),
+      difftime(endBasecall,startBasecall), num_threads);
 
-  writePrettyText(cout);
-//  writeTSV(clo->beadSummaryFile);
-
-  libSFF.Close();
-  printf("Generated library SFF with %d reads\n", libSFF.NumReads());
-  tfSFF.Close();
-  printf("Generated TF SFF with %d reads\n", tfSFF.NumReads());
+  basecaller.lib_sff.Close();
+  printf("Generated library SFF with %d reads\n", basecaller.lib_sff.NumReads());
+  basecaller.tf_sff.Close();
+  printf("Generated TF SFF with %d reads\n", basecaller.tf_sff.NumReads());
 
   // Close files
-  if (wellStatFileFP)
-    fclose(wellStatFileFP);
-  if(phaseResid) {
-    phaseResid->WriteWells();
-    phaseResid->WriteRanks();
-    phaseResid->WriteInfo();
-    phaseResid->Close();
-    delete phaseResid;
+  if (basecaller.well_stat_file)
+    fclose(basecaller.well_stat_file);
+
+  if(basecaller.residual_file) {
+    basecaller.residual_file->WriteWells();
+    basecaller.residual_file->WriteRanks();
+    basecaller.residual_file->WriteInfo();
+    basecaller.residual_file->Close();
+    delete basecaller.residual_file;
   }
 
-  if (!randomLibSet.empty()) {
-    filterStatus.close();
-    randomLibSFF.Close();
-    printf("Generated random unfiltered library SFF with %d reads\n", randomLibSFF.NumReads());
-  }
+  filters.TransferFilteringResultsToMask(&mask);
 
-  for (int iClass = 0; iClass < numClasses; iClass++) {
-    basecallerJson["BeadSummary"][className[iClass]]["key"] = classKeyBases[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["polyclonal"] = classCountPolyclonal[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["highPPF"] = classCountHighPPF[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["zero"] = classCountZeroBases[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["short"] = classCountTooShort[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["badKey"] = classCountFailKeypass[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["highRes"] = classCountHighResidual[iClass];
-    basecallerJson["BeadSummary"][className[iClass]]["valid"] = classCountValid[iClass];
-  }
+  if (!basecaller.unfiltered_set.empty()) {
 
-}
+    string filterStatusFileName = unfiltered_directory + string("/") + basecaller.run_id + string(".filterStatus.txt");
+    ofstream filterStatus;
+    filterStatus.open(filterStatusFileName.c_str());
+    filterStatus << "col" << "\t" << "row" << "\t" << "highRes" << "\t" << "valid" << endl;
 
-void *doBasecall(void *input)
-{
-  BaseCallerThreadData *data = static_cast<BaseCallerThreadData*>(input); 
-  data->baseCaller->BasecallerWorker(data->wellX, data->wellY, data->wellMeasurements, data->pbq, data->currentRegion);
-  data->completed = true;
-  return NULL;
-}
-
-void BaseCaller::BasecallerWorker(std::deque<int> &wellX, std::deque<int> &wellY, std::deque<std::vector<float> > &wellMeasurements, PerBaseQual &pbq, int currentRegion)
-{
-
-  // initialize the per base quality score generator
-
-  // Things we must produce for each read
-  hpLen_vec_t calledHpLen(numFlows, 0);
-  weight_vec_t keyNormSig(numFlows, 0);
-  weight_vec_t residual(numFlows, 0);
-  double multiplier = 1.0;
-
-  // Process the data
-  deque<SFFWriterWell> randomLibReads;
-  deque<SFFWriterWell> libReads;
-  deque<SFFWriterWell> tfReads;
-
-  deque<int>::iterator x = wellX.begin();
-  deque<int>::iterator y = wellY.begin();
-  deque<std::vector<float> >::iterator measurements = wellMeasurements.begin();
-
-  for (; x != wellX.end() ; x++, y++, measurements++) {
-
-	  //
-	  // Step 2. Retrieve additional information needed to process this read
-	  //
-
-	  if (!clo->cfe_control.basecallSubset.empty())
-		  if (clo->cfe_control.basecallSubset.count(pair<unsigned short, unsigned short>(*x,*y)) == 0)
-			  continue;
-
-	  well_index_t readIndex = (*x) + (*y) * cols;
-	  bool isTF = maskPtr->Match(readIndex, MaskTF);
-	  bool isLib = maskPtr->Match(readIndex, MaskLib);
-	  if (!isTF && !isLib)
-		  continue;
-	  bool isRandomLib = randomLibSet.count(readIndex) > 0;
-
-    int  iClass = isLib ? 0 : 1;
-
-	  // TODO: Improved, more general (x,y) -> cafie lookup
-	  unsigned short cafieYinc = ceil(rows / (double) clo->cfe_control.cfiedrRegionsY);
-	  unsigned short cafieXinc = ceil(cols / (double) clo->cfe_control.cfiedrRegionsX);
-	  read_region_t iRegion = (*y / cafieYinc) + (*x / cafieXinc) * clo->cfe_control.cfiedrRegionsY;
-	  double        currentCF = cf[iRegion];
-	  double        currentIE = ie[iRegion];
-	  double        currentDR = droop[iRegion];
-
-	  //
-	  // Step 3. Perform base calling and quality value calculation
-	  //
-
-	  SFFWriterWell readResults;
-	  stringstream wellNameStream;
-	  wellNameStream << clo->sys_context.runId << ":" << (*y) << ":" << (*x);
-	  readResults.name = wellNameStream.str();
-	  readResults.clipQualLeft = classKeyBasesLength[iClass] + 1;
-	  readResults.clipQualRight = 0;
-	  readResults.clipAdapterLeft = 0;
-	  readResults.clipAdapterRight = 0;
-	  readResults.flowIonogram.resize(numFlows);
-
-	  bool isReadPolyclonal = false;
-	  bool isReadHighPPF    = false;
-
-	  //      if ((clo->basecaller == "dp-treephaser") ||
-	  //          (clo->basecaller == "treephaser-adaptive") ||
-	  //          (clo->basecaller == "treephaser-swan")) {
-
-	  BasecallerRead read;
-	  read.SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, classKeyFlows[iClass], classKeyFlowsLength[iClass] - 1);
-
-	  if (clo->flt_control.clonalFilterSolving) {
-          vector<float>::const_iterator first = read.measurements.begin() + mixed_first_flow();
-          vector<float>::const_iterator last  = read.measurements.begin() + mixed_last_flow();
-		  float ppf = percent_positive(first, last);
-		  float ssq = sum_fractional_part(first, last);
-		  if(ppf > mixed_ppf_cutoff())
-			  isReadHighPPF = true;
-		  else if(!clonalPopulation.is_clonal(ppf, ssq))
-			  isReadPolyclonal = true;
-	  }
-
-	  if (classFilterPolyclonal[0] && isLib && isReadPolyclonal && !isRandomLib) {
-		  pthread_mutex_lock(commonOutputMutex);
-          if(isReadHighPPF)
-			  classCountHighPPF[0]++;
-          if(isReadPolyclonal)
-			  classCountPolyclonal[0]++;
-		  (*maskPtr)[readIndex] |= MaskFilteredBadPPF;
-		  classCountTotal[0]++;
-		  numWellsCalled++;
-		  pthread_mutex_unlock(commonOutputMutex);
-		  continue;
-	  }
-
-	  DPTreephaser dpTreephaser(flowOrder.c_str(), numFlows, 8);
-
-	  if (clo->cfe_control.basecaller == "dp-treephaser")
-		  dpTreephaser.SetModelParameters(currentCF, currentIE, currentDR);
-	  else
-		  dpTreephaser.SetModelParameters(currentCF, currentIE, 0); // Adaptive normalization
-
-	  // Execute the iterative solving-normalization routine
-	  if (clo->cfe_control.basecaller == "dp-treephaser")
-		  dpTreephaser.NormalizeAndSolve4(read, numFlows);
-	  else if (clo->cfe_control.basecaller == "treephaser-adaptive")
-		  dpTreephaser.NormalizeAndSolve3(read, numFlows); // Adaptive normalization
-	  else
-		  dpTreephaser.NormalizeAndSolve5(read, numFlows); // sliding window adaptive normalization
-
-	  // one more pass to get quality metrics
-	  dpTreephaser.ComputeQVmetrics(read);
-
-	  for (int iFlow = 0; iFlow < numFlows; iFlow++) {
-		  keyNormSig[iFlow] = read.normalizedMeasurements[iFlow];
-		  calledHpLen[iFlow] = read.solution[iFlow];
-		  residual[iFlow] = read.normalizedMeasurements[iFlow] - read.prediction[iFlow];
-		  float perFlowAdjustment = residual[iFlow] / dpTreephaser.oneMerHeight[iFlow];
-		  if (perFlowAdjustment > 0.49)
-			  perFlowAdjustment = 0.49;
-		  else if (perFlowAdjustment < -0.49)
-			  perFlowAdjustment = -0.49;
-		  if ((perFlowAdjustment < 0) && (calledHpLen[iFlow] == 0))
-			  perFlowAdjustment = 0;
-		  readResults.flowIonogram[iFlow] = perFlowAdjustment + calledHpLen[iFlow];
-	  }
-
-	  multiplier = read.keyNormalizer;
-
-	  readResults.numBases = 0;
-	  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-		  readResults.numBases += calledHpLen[iFlow];
-
-	  readResults.baseFlowIndex.reserve(readResults.numBases);
-	  readResults.baseCalls.reserve(readResults.numBases);
-	  readResults.baseQVs.reserve(readResults.numBases);
-
-	  unsigned int prev_used_flow = 0;
-	  for (int iFlow = 0; iFlow < numFlows; iFlow++) {
-		  for (hpLen_t hp = 0; hp < calledHpLen[iFlow]; hp++) {
-			  readResults.baseFlowIndex.push_back(1 + iFlow - prev_used_flow);
-			  readResults.baseCalls.push_back(flowOrder[iFlow % flowOrder.length()]);
-			  prev_used_flow = iFlow + 1;
-		  }
-	  }
-	  // Calculation of quality values
-	  pbq.setWellName(readResults.name);
-	  pbq.GenerateQualityPerBaseTreephaser(dpTreephaser.penaltyResidual, dpTreephaser.penaltyMismatch,
-			  readResults.flowIonogram, residual, readResults.baseFlowIndex);
-	  pbq.GetQualities(readResults.baseQVs);
-
-	  //      } else { // Unrecognized
-	  //        ION_ABORT("Requested basecaller is not recognized");
-	  //      }
-
-	  //
-	  // Step 4. Calculate/save read metrics and apply filters
-	  //
-
-	  double ppf = getPPF(calledHpLen, PERCENT_POSITIVE_FLOWS_N);
-	  double medAbsResidual = getMedianAbsoluteCafieResidual(residual, CAFIE_RESIDUAL_FLOWS_N);
-
-	  bool isFailKeypass = false;
-	  for (int iFlow = 0; iFlow < (classKeyFlowsLength[iClass]-1); iFlow++)
-		  if (classKeyFlows[iClass][iFlow] != calledHpLen[iFlow])
-			  isFailKeypass = true;
-
-	  pthread_mutex_lock(commonOutputMutex);
-
-	  bool isReadValid = false;
-	  bool isReadHighResidual = false;
-
-	  if(readResults.numBases == 0) {
-		  classCountZeroBases[iClass]++;
-		  (*maskPtr)[readIndex] |= MaskFilteredShort;
-
-	  } else if(readResults.numBases < clo->flt_control.minReadLength) {
-		  classCountTooShort[iClass]++;
-		  (*maskPtr)[readIndex] |= MaskFilteredShort;
-
-	  } else if(clo->flt_control.KEYPASSFILTER && isFailKeypass) {
-		  classCountFailKeypass[iClass]++;
-		  (*maskPtr)[readIndex] |= MaskFilteredBadKey;
-
-	  } else if (classFilterPolyclonal[iClass] && (isReadHighPPF || isReadPolyclonal)) {
-		  if(isReadHighPPF)
-			  classCountHighPPF[iClass]++;
-		  else if(isReadPolyclonal)
-			  classCountPolyclonal[iClass]++;
-		  (*maskPtr)[readIndex] |= MaskFilteredBadPPF;
-
-	  } else if(classFilterHighResidual[iClass] && (medAbsResidual > clo->flt_control.cafieResMaxValue)) {
-		  classCountHighResidual[iClass]++;
-		  isReadHighResidual = true;
-		  (*maskPtr)[readIndex] |= MaskFilteredBadResidual;
-
-	  } else {
-		  classCountValid[iClass]++;
-		  isReadValid = true;
-		  (*maskPtr)[readIndex] |= (MaskType) MaskKeypass;
-	  }
-
-	  classCountTotal[iClass]++;
-	  numWellsCalled++;
-
-	  WriteWellStatFileEntry(isLib?MaskLib:MaskTF, classKeyFlows[iClass], classKeyFlowsLength[iClass], *x, *y, keyNormSig, readResults.numBases,
-			  currentCF, currentIE, currentDR, multiplier, ppf, !isReadPolyclonal, medAbsResidual);
-
-	  if (clo->cfe_control.doCafieResidual && (phaseResid != NULL))
-		  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-			  phaseResid->WriteFlowgram(iFlow, *x, *y, residual[iFlow]);
-
-	  pthread_mutex_unlock(commonOutputMutex);
-
-	  //
-	  // Step 5. Save the basecalling results to appropriate sff files
-	  //
-
-	  if (isRandomLib) {
-		  pthread_mutex_lock(commonOutputMutex);
-		  filterStatus << (*x);
-		  filterStatus << "\t" << (*y);
-		  filterStatus << "\t" << (int) isReadHighResidual;
-		  filterStatus << "\t" << (int) isReadValid;
-		  filterStatus << endl;
-		  pthread_mutex_unlock(commonOutputMutex);
-
-		  randomLibReads.push_back(SFFWriterWell());
-
-		  if (isReadValid)
-			  readResults.copyTo(randomLibReads.back());
-		  else
-			  readResults.moveTo(randomLibReads.back());
-	  }
-
-	  if (isReadValid) {
-		  if (isLib) {
-			  libReads.push_back(SFFWriterWell());
-			  readResults.moveTo(libReads.back());
-		  } else {
-			  tfReads.push_back(SFFWriterWell());
-			  readResults.moveTo(tfReads.back());
-		  }
-	  }
-  }
-
-  libSFF.WriteRegion(currentRegion,libReads);
-  tfSFF.WriteRegion(currentRegion,tfReads);
-
-  if (!randomLibSet.empty())
-	  randomLibSFF.WriteRegion(currentRegion,randomLibReads);
-			
-}
-
-// Return percentage of positive flows
-double getPPF(hpLen_vec_t &predictedExtension, unsigned int nFlowsToAssess) {
-  double ppf = 0;
-
-  unsigned int nFlow = min(predictedExtension.size(), (size_t) nFlowsToAssess);
-  for (unsigned int iFlow = 0; iFlow < nFlow; iFlow++)
-    if (predictedExtension[iFlow] > 0)
-      ppf++;
-  if(nFlow > 0)
-    ppf /= (double) nFlow;
-
-  return ppf;
-}
-
-double getMedianAbsoluteCafieResidual(vector<weight_t> &residual, unsigned int nFlowsToAssess) {
-  double medAbsCafieRes = 0;
-
-  unsigned int nFlow = min(residual.size(), (size_t) nFlowsToAssess);
-  if (nFlow > 0) {
-    vector<double> absoluteResid(nFlow);
-    for (unsigned int iFlow = 0; iFlow < nFlow; iFlow++) {
-      absoluteResid[iFlow] = abs(residual[iFlow]);
+    for (set<well_index_t>::iterator I = basecaller.unfiltered_set.begin(); I != basecaller.unfiltered_set.end(); I++) {
+      int x = (*I) % basecaller.chip_size_x;
+      int y = (*I) / basecaller.chip_size_x;
+      filterStatus << x << "\t" << y;
+      filterStatus << "\t" << (int) mask.Match(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
+      filterStatus << "\t" << (int) mask.Match(x, y, MaskKeypass);
+      filterStatus << endl;
     }
-    medAbsCafieRes = ionStats::median(absoluteResid);
+
+    filterStatus.close();
+
+    basecaller.unfiltered_sff.Close();
+    basecaller.unfiltered_trimmed_sff.Close();
+    printf("Generated random unfiltered library SFF with %d reads\n", basecaller.unfiltered_sff.NumReads());
+    printf("Generated random unfiltered trimmed library SFF with %d reads\n", basecaller.unfiltered_trimmed_sff.NumReads());
   }
 
-  return medAbsCafieRes;
+
+  // Generate BaseCaller.json
+
+  filters.GenerateFilteringStatistics(basecaller_json["BeadSummary"]);
+  time_t analysis_end_time;
+  time(&analysis_end_time);
+  basecaller_json["BaseCaller"]["end_time"] = ctime (&analysis_end_time);
+  basecaller_json["BaseCaller"]["total_duration"] = (int)difftime(analysis_end_time,analysis_start_time);
+  basecaller_json["BaseCaller"]["basecalling_duration"] = (int)difftime(endBasecall,startBasecall);
+  SaveJson(basecaller_json, filename_json);
+
+  MemUsage("AfterBasecalling");
+
+  ReportState(analysis_start_time,"Basecalling Complete");
+
+  mask.WriteRaw (filename_filter_mask.c_str());
+  mask.validateMask();
+
+  ReportState (analysis_start_time,"Analysis (from wells file) Complete");
+
+  return EXIT_SUCCESS;
 }
+
+
+
+
+void BaseCaller::BasecallerWorker()
+{
+  PerBaseQual pbq;    // initialize the per base quality score generator
+  if (!pbq.Init(chip_id, output_directory, flow_order, phred_table_file))
+    ION_ABORT("*Error* - perBaseQualInit failed");
+
+  RawWells wells ("", filename_wells.c_str());
+  pthread_mutex_lock(&mutex);
+  wells.OpenForIncrementalRead();
+  pthread_mutex_unlock(&mutex);
+
+  weight_vec_t residual(num_flows, 0);
+  weight_vec_t corrected_ionogram(num_flows, 0);
+  vector<float> flow_values(num_flows, 0);
+
+  while (true) {
+
+    //
+    // Step 1. Retrieve next unprocessed region
+    //
+
+    pthread_mutex_lock(&mutex);
+
+    if (next_begin_y >= chip_size_y) {
+      wells.Close();
+      pthread_mutex_unlock(&mutex);
+      return;
+    }
+    int current_region = next_region++;
+    int begin_x = next_begin_x;
+    int begin_y = next_begin_y;
+    int end_x = min(begin_x + region_size_x, chip_size_x);
+    int end_y = min(begin_y + region_size_y, chip_size_y);
+    next_begin_x += region_size_x;
+    if (next_begin_x >= chip_size_x) {
+      next_begin_x = 0;
+      next_begin_y += region_size_y;
+    }
+
+    int num_usable_wells = 0;
+    for (int y = begin_y; y < end_y; ++y)
+      for (int x = begin_x; x < end_x; ++x)
+        if (class_map[x + y * chip_size_x] >= 0)
+          num_usable_wells++;
+
+    if      (begin_x == 0)            printf("\n% 5d/% 5d: ", begin_y, chip_size_y);
+    if      (num_usable_wells ==   0) printf("  ");
+    else if (num_usable_wells <  750) printf(". ");
+    else if (num_usable_wells < 1500) printf("o ");
+    else if (num_usable_wells < 2250) printf("# ");
+    else                              printf("##");
+    fflush(NULL);
+
+    pthread_mutex_unlock(&mutex);
+
+    // Process the data
+    deque<SFFWriterWell> unfiltered_reads;
+    deque<SFFWriterWell> unfiltered_trimmed_reads;
+    deque<SFFWriterWell> lib_reads;
+    deque<SFFWriterWell> tf_reads;
+
+    if (num_usable_wells == 0) { // There is nothing in this region. Don't even bother reading it
+      lib_sff.WriteRegion(current_region,lib_reads);
+      tf_sff.WriteRegion(current_region,tf_reads);
+      if (!unfiltered_set.empty()) {
+        unfiltered_sff.WriteRegion(current_region,unfiltered_reads);
+        unfiltered_trimmed_sff.WriteRegion(current_region,unfiltered_trimmed_reads);
+      }
+      continue;
+    }
+
+    wells.SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
+    wells.ReadWells();
+
+    for (int y = begin_y; y < end_y; ++y)
+    for (int x = begin_x; x < end_x; ++x) {   // Loop over wells within current region
+
+      //
+      // Step 2. Retrieve additional information needed to process this read
+      //
+
+      well_index_t read_index = x + y * chip_size_x;
+      int read_class = class_map[read_index];
+      if (read_class < 0)
+        continue;
+      bool is_random_unfiltered = unfiltered_set.count(read_index) > 0;
+
+      filters->markReadAsValid(read_index); // Presume valid until some filter proves otherwise
+
+      // Respect filter decisions from Background Model
+      if (mask->Match(read_index, MaskFilteredBadResidual))
+        filters->forceBkgmodelHighPPF(read_index);
+
+      if (mask->Match(read_index, MaskFilteredBadPPF))
+        filters->forceBkgmodelPolyclonal(read_index);
+
+      if (mask->Match(read_index, MaskFilteredBadKey))
+        filters->forceBkgmodelFailedKeypass(read_index);
+
+      if (!is_random_unfiltered and !filters->isValid(read_index)) // No reason to waste more time
+          continue;
+
+      float cf = estimator.getCF(x,y);
+      float ie = estimator.getIE(x,y);
+      float dr = estimator.getDR(x,y);
+
+      for (int flow = 0; flow < num_flows; ++flow)
+        flow_values[flow] = wells.At(y,x,flow);
+
+      // Sanity check. If there are NaNs in this read, print warning
+      vector<int> nanflow;
+      for (int flow = 0; flow < num_flows; ++flow) {
+        if (!isnan(flow_values[flow]))
+          continue;
+        flow_values[flow] = 0;
+        nanflow.push_back(flow);
+      }
+      if(nanflow.size() > 0) {
+        fprintf(stderr, "ERROR: BaseCaller read NaNs from wells file, x=%d y=%d flow=%d", x, y, nanflow[0]);
+        for(unsigned int iFlow=1; iFlow < nanflow.size(); iFlow++) {
+          fprintf(stderr, ",%d", nanflow[iFlow]);
+        }
+        fprintf(stderr, "\n");
+        fflush(stderr);
+      }
+
+      //
+      // Step 3. Perform base calling and quality value calculation
+      //
+
+      BasecallerRead read;
+      read.SetDataAndKeyNormalize(&flow_values[0], num_flows, keys[read_class].flows(), keys[read_class].flows_length() - 1);
+
+      filters->tryFilteringHighPPFAndPolyclonal (read_index, read_class, read.measurements);
+      if (!is_random_unfiltered and !filters->isValid(read_index)) // No reason to waste more time
+          continue;
+
+      // TODO: Reuse treephaser & cafie parameters for an entire region
+      DPTreephaser treephaser(flow_order.c_str(), num_flows, 8);
+
+      if (dephaser == "dp-treephaser")
+        treephaser.SetModelParameters(cf, ie, dr);
+      else
+        treephaser.SetModelParameters(cf, ie, 0); // Adaptive normalization
+
+      // Execute the iterative solving-normalization routine
+      if (dephaser == "dp-treephaser")
+        treephaser.NormalizeAndSolve4(read, num_flows);
+      else if (dephaser == "treephaser-adaptive")
+        treephaser.NormalizeAndSolve3(read, num_flows); // Adaptive normalization
+      else
+        treephaser.NormalizeAndSolve5(read, num_flows); // sliding window adaptive normalization
+
+      // one more pass to get quality metrics
+      treephaser.ComputeQVmetrics(read);
+
+      SFFWriterWell sff_entry;
+      stringstream read_name;
+      read_name << run_id << ":" << y << ":" << x;
+      sff_entry.name = read_name.str();
+      sff_entry.clipQualLeft = keys[read_class].bases_length() + 1;
+      sff_entry.clipQualRight = 0;
+      sff_entry.clipAdapterLeft = 0;
+      sff_entry.clipAdapterRight = 0;
+      sff_entry.flowIonogram.resize(num_flows);
+      sff_entry.numBases = 0;
+
+      for (int flow = 0; flow < num_flows; ++flow) {
+        residual[flow] = read.normalizedMeasurements[flow] - read.prediction[flow];
+        float adjustment = residual[flow] / treephaser.oneMerHeight[flow];
+        adjustment = min(0.49f, max(-0.49f, adjustment));
+        corrected_ionogram[flow] = max(0.0f, read.solution[flow] + adjustment);
+        sff_entry.flowIonogram[flow] = (int)(corrected_ionogram[flow]*100.0+0.5);
+        sff_entry.numBases += read.solution[flow];
+      }
+
+      // Fix left clip if have fewer bases than are supposed to be in the key
+      if(sff_entry.clipQualLeft > (sff_entry.numBases+1))
+        sff_entry.clipQualLeft = sff_entry.numBases+1;
+
+      sff_entry.baseFlowIndex.reserve(sff_entry.numBases);
+      sff_entry.baseCalls.reserve(sff_entry.numBases);
+      sff_entry.baseQVs.reserve(sff_entry.numBases);
+
+      unsigned int prev_used_flow = 0;
+      for (int flow = 0; flow < num_flows; flow++) {
+        for (int hp = 0; hp < read.solution[flow]; hp++) {
+          sff_entry.baseFlowIndex.push_back(1 + flow - prev_used_flow);
+          sff_entry.baseCalls.push_back(flow_order[flow % flow_order.length()]);
+          prev_used_flow = flow + 1;
+        }
+      }
+
+      // Calculation of quality values
+      // TODO: refactor me and make me thread safe so that the same pbq object can be used across threads
+      pbq.setWellName(sff_entry.name);
+      pbq.GenerateQualityPerBaseTreephaser(treephaser.penaltyResidual, treephaser.penaltyMismatch,
+          corrected_ionogram, residual, sff_entry.baseFlowIndex);
+      pbq.GetQualities(sff_entry.baseQVs);
+
+      //
+      // Step 4. Calculate/save read metrics and apply filters
+      //
+
+      filters->tryFilteringZeroBases     (read_index, read_class, sff_entry);
+      filters->tryFilteringShortRead     (read_index, read_class, sff_entry);
+      filters->tryFilteringFailedKeypass (read_index, read_class, read.solution);
+      filters->tryFilteringHighResidual  (read_index, read_class, residual);
+      filters->tryFilteringBeverly       (read_index, read_class, read, sff_entry); // Also trims clipQualRight
+      filters->tryTrimmingAdapter        (read_index, read_class, sff_entry);
+      filters->tryTrimmingQuality        (read_index, read_class, sff_entry);
+
+      if (well_stat_file or residual_file) {
+        // TODO: This extra information dump needs justification/modernization
+        //       Might be useful for filter/trimmer development. Should it be part of BaseCallerFilters?
+        //       Perhaps hdf5-based WellStats? WellStats+cafieResidual in one file?
+
+        pthread_mutex_lock(&mutex);
+        if (well_stat_file) {
+          WriteWellStatFileEntry(well_stat_file, keys[read_class], sff_entry, read, residual,
+            x, y, cf, ie, dr, !filters->isPolyclonal(read_index));
+        }
+        if (residual_file) {
+          for (int iFlow = 0; iFlow < num_flows; iFlow++)
+            residual_file->WriteFlowgram(iFlow, x, y, residual[iFlow]);
+        }
+        pthread_mutex_unlock(&mutex);
+      }
+
+      //
+      // Step 5. Save the basecalling results to appropriate sff files
+      //
+
+      if (read_class == 0) { // Lib
+        if (is_random_unfiltered) { // Lib, random
+          if (filters->isValid(read_index)) { // Lib, random, valid
+            lib_reads.push_back(SFFWriterWell());
+            sff_entry.copyTo(lib_reads.back());
+          }
+          unfiltered_trimmed_reads.push_back(SFFWriterWell());
+          sff_entry.copyTo(unfiltered_trimmed_reads.back());
+
+          unfiltered_reads.push_back(SFFWriterWell());
+          sff_entry.clipAdapterRight = 0;     // Strip trimming info before writing to random sff
+          sff_entry.clipQualRight = 0;
+          sff_entry.moveTo(unfiltered_reads.back());
+
+        } else { // Lib, not random
+          if (filters->isValid(read_index)) { // Lib, not random, valid
+            lib_reads.push_back(SFFWriterWell());
+            sff_entry.moveTo(lib_reads.back());
+          }
+        }
+      } else {  // TF
+        if (filters->isValid(read_index)) { // TF, valid
+          tf_reads.push_back(SFFWriterWell());
+          sff_entry.moveTo(tf_reads.back());
+        }
+      }
+    }
+
+    lib_sff.WriteRegion(current_region,lib_reads);
+    tf_sff.WriteRegion(current_region,tf_reads);
+    if (!unfiltered_set.empty()) {
+      unfiltered_sff.WriteRegion(current_region,unfiltered_reads);
+      unfiltered_trimmed_sff.WriteRegion(current_region,unfiltered_trimmed_reads);
+    }
+  }
+}
+
+
+
+FILE * OpenWellStatFile(const string &wellStatFile)
+{
+  FILE *wellStatFileFP = NULL;
+  fopen_s(&wellStatFileFP, wellStatFile.c_str(), "wb");
+  if (!wellStatFileFP) {
+    perror(wellStatFile.c_str());
+    return NULL;
+  }
+  fprintf(wellStatFileFP,
+      "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+      "col", "row", "isTF", "isLib", "isDud", "isAmbg", "nCall",
+      "cf", "ie", "dr", "keySNR", "keySD", "keySig", "oneSig",
+      "zeroSig", "ppf", "isClonal", "medAbsRes", "multiplier");
+
+  return wellStatFileFP;
+}
+
+
+void WriteWellStatFileEntry(FILE *wellStatFileFP, const KeySequence& key,
+    SFFWriterWell & readResults, BasecallerRead & read, weight_vec_t & residual,
+    int x, int y, double cf, double ie, double dr, bool clonal)
+{
+  double medAbsResidual = BaseCallerFilters::getMedianAbsoluteCafieResidual(residual, CAFIE_RESIDUAL_FLOWS_N);
+  vector<float>::const_iterator first = read.measurements.begin() + mixed_first_flow();
+  vector<float>::const_iterator last  = read.measurements.begin() + mixed_last_flow();
+  float ppf = percent_positive(first, last);
+
+  double zeroMer[key.flows_length()-1];
+  double oneMer[key.flows_length()-1];
+  int nZeroMer = 0;
+  int nOneMer = 0;
+
+  for(int i=0; i<(key.flows_length()-1); i++) {
+    if(key[i] == 0)
+      zeroMer[nZeroMer++] = read.normalizedMeasurements[i];
+    else if(key[i] == 1)
+      oneMer[nOneMer++] = read.normalizedMeasurements[i];
+  }
+
+  double minSD=0.01;
+  double zeroMerSig = ionStats::median(zeroMer,nZeroMer);
+  double zeroMerSD  = std::max(minSD,ionStats::sd(zeroMer,nZeroMer));
+  double oneMerSig  = ionStats::median(oneMer,nOneMer);
+  double oneMerSD   = std::max(minSD,ionStats::sd(oneMer,nOneMer));
+  double keySig     = oneMerSig - zeroMerSig;
+  double keySD      = sqrt(pow(zeroMerSD,2) + pow(oneMerSD,2));
+  double keySNR =  keySig / keySD;
+
+  // Write a line of results - make sure this stays in sync with the header line written by OpenWellStatFile()
+  fprintf(wellStatFileFP,
+      "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%1.4f\t%1.4f\t%1.5f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%d\t%1.3f\t%1.3f\n",
+      x, y, key.name()=="tf", key.name()=="lib", 0, 0, readResults.numBases,
+      cf, ie, dr, keySNR, keySD, keySig, oneMerSig,
+      zeroMerSig, ppf, (int)clonal, medAbsResidual, read.keyNormalizer);
+}
+
 
 
 

@@ -40,10 +40,7 @@ This module requires Twisted's XMLRPC server. On Ubuntu, this can be installed
 with ``sudo apt-get install python-twisted``.
 """
 import datetime
-try:
-    import json
-except ImportError:
-    import simplejson as json
+import json
 import os
 from os import path 
 import re
@@ -51,7 +48,7 @@ import signal
 import subprocess
 import sys
 import threading
-import time
+import tempfile
 import traceback
 import logging
 
@@ -71,15 +68,6 @@ import string
 
 #import libs to zip with
 import zipfile
-try:
-    import zlib
-    compression = zipfile.ZIP_DEFLATED
-except:
-    compression = zipfile.ZIP_STORED
-
-modes = { zipfile.ZIP_DEFLATED: 'deflated',
-          zipfile.ZIP_STORED:   'stored',
-          }
 
 LOG_FILENAME = '/var/log/ion/jobserver.log'
 logging.basicConfig(filename=LOG_FILENAME,
@@ -87,25 +75,7 @@ logging.basicConfig(filename=LOG_FILENAME,
                     format="%(asctime)s - %(levelname)s - %(message)s",
                     )
 
-__version__ = filter(str.isdigit, "$Revision: 23611 $")
-
-def make_zip(zip_file, to_zip):
-    """Try to make a zip of a file if it exists"""
-    if os.path.exists(to_zip):
-        zf = zipfile.ZipFile(zip_file, mode='w', allowZip64=True)
-        try:
-            #adding file with compression
-            zf.write(to_zip, compress_type=compression)
-            print "Created ", zip_file, " of", to_zip
-        except OSError:
-            print 'OSError with - :', to_zip
-        except LargeZipFile:
-            print "The zip file was too large, ZIP64 extensions could not be enabled"
-        except:
-            print "Unexpected error creating zip"
-            print traceback.format_exc()
-        finally:
-            zf.close()
+__version__ = filter(str.isdigit, "$Revision: 29400 $")
 
 class ProcessExecutionService(service.Service):
     """a queue to do one thing at a time"""
@@ -152,7 +122,6 @@ except ImportError:
         import settings
     except ImportError:
         sys.path.pop()
-        import asettings as settings
 
 
 # distributed resource management
@@ -372,6 +341,7 @@ class DRMAnalysis(Analysis):
         self.terminated = False
     def get_sge_params(self, chip_to_slots,chipType):
         ret = '-pe ion_pe 1'
+#       ret = '-pe ion_pe 1 -l h_vmem=10000M'
         for chip,args in chip_to_slots.iteritems():
             if chip in chipType:
                 ret = args.strip()
@@ -387,9 +357,9 @@ class DRMAnalysis(Analysis):
         adir = path.join(self.savePath)
         script_fname,params_fname = self._write_out(adir)
         jt = _session.createJobTemplate()
-        qname = 'all.q'
-        if self.job_type == 'thumbnail':
-            qname = 'thumbnail.q'
+        qname = 'tl.q'
+        if self.job_type == 'PairedEnd':
+            qname = 'all.q'
         #SGE
         jt.nativeSpecification = "%s -w w -q %s" % (self.get_sge_params(self.chips,self.chipType),qname)
         #TORQUE
@@ -596,6 +566,7 @@ class AnalysisQueue(object):
                 self.cv.release()
             if waiter is not None:
                 # analysis was successfully initiated
+                logging.info("%s successfully started" % str(a.name))
                 assert a.pk not in self.running
                 self.running[a.pk] = a
                 # wait for analysis to conclude
@@ -608,8 +579,10 @@ class AnalysisQueue(object):
                     if a.pk in self.running:
                         del self.running[a.pk]
                     self.cv.release()
+                logging.info("%s completed" % str(a.name))
             else:
                 # bail, initiation failed
+                logging.error("%s failed to start" % str(a.name))
                 return
         tr = threading.Thread(target=go)
         tr.setDaemon(True)
@@ -626,6 +599,7 @@ class AnalysisQueue(object):
                 while len(self.q) == 0:
                     self.cv.wait()
                     if self.exit_event.is_set():
+                        logging.info ("Main loop exiting")
                         return # leave loop if we're done
                 a = self.q.pop(0)
                 self.cv.release()
@@ -641,7 +615,7 @@ class AnalysisQueue(object):
         self.cv.notify()
         self.cv.release()
         logging.info("Added analysis %s" % a.name)
-    def stop():
+    def stop(self):
         """Terminate the main loop."""
         self.exit_event.set()
         self.cv.notify()
@@ -719,26 +693,39 @@ class AnalysisServer(xmlrpc.XMLRPC):
         self.q = analysis_queue
         self.execService = execService
 
+    def xmlrpc_updatestatus(self,
+            primarykeyPath,
+            status,
+            reportLink):
+        
+        from ion.reports import uploadMetrics
+        try:
+            uploadMetrics.updateStatus(primarykeyPath,status,reportLink)
+        except:
+            logging.error(traceback.format_exc())
+            return traceback.format_exc()
+        return 0
+    
     def xmlrpc_uploadmetrics(self,
             tfmapperstats_outputfile,
-            procParams,
+            procPath,
             beadPath,      
             filterPath, 
             alignmentSummaryPath,
-            STATUS,
             peakOut,
             QualityPath,
             BaseCallerJsonPath,
             primarykeyPath,
             uploadStatusPath,
-            message, boolean):
+            STATUS,
+            reportLink):
         """Upload Metrics to the database"""
 
         from ion.reports import uploadMetrics
         try:
             uploadMetrics.writeDbFromFiles(
                 tfmapperstats_outputfile,
-                procParams,
+                procPath,
                 beadPath,
                 filterPath,
                 alignmentSummaryPath,
@@ -750,10 +737,10 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 uploadStatusPath)
 
             # this will replace the five progress squares with a re-analysis button
-            uploadMetrics.updateStatus(primarykeyPath, message, boolean)
+            uploadMetrics.updateStatus(primarykeyPath, STATUS, reportLink)
         except:
-            traceback.print_exc()
-            return 1
+            logging.error(traceback.format_exc())
+            return traceback.format_exc()
 
         return 0
 
@@ -773,7 +760,13 @@ class AnalysisServer(xmlrpc.XMLRPC):
         return jobid
     def xmlrpc_jobstatus(self, jobid):
         """Get the status of the job"""
-        return _session.jobStatus(jobid)
+        try:
+            logging.debug("jobstatus for %s" % jobid)
+            status = _session.jobStatus(jobid)
+        except:
+            logging.error(traceback.format_exc())
+            status = "DRMAA BUG"
+        return status
     def xmlrpc_startanalysis(self,name,script,parameters,files,savePath,pk,chipType,chips,job_type):
         """Add an analysis to the ``AnalysisQueue``'s queue of waiting
         analyses."""
@@ -792,15 +785,15 @@ class AnalysisServer(xmlrpc.XMLRPC):
         return self.q.n_jobs()
     def xmlrpc_uptime(self):
         """Return the ``AnalysisQueue``'s uptime."""
-        logging.debug("update checked")
+        logging.debug("uptime checked")
         return self.q.uptime()
     def xmlrpc_running(self):
         """Return status information about all jobs currently running."""
         items = self.q.all_jobs()
         ret = []
         for pk,a in items:
-            ret.append((a.name, a.get_id(), a.pk, a.ANALYSIS_TYPE,
-                        a.status_string()))
+            ret.append((a.name, a.get_id(), a.pk, a.ANALYSIS_TYPE,a.status_string()))
+            logging.debug("Name:%s JobId:%s PK:%s State:'%s'" % (a.name,a.get_id(),a.pk,a.status_string()))
         return ret       
     def xmlrpc_control_job(self,pk,signal):
         """Send the given signal to the job specified by ``pk``."""
@@ -823,38 +816,29 @@ class AnalysisServer(xmlrpc.XMLRPC):
         """
         
         build_genome_index = '/usr/local/bin/build_genome_index.pl'
-        
         logging.debug("tmap xml-rpc established")
 
-        #find the version of tmap used and set the index_version to be that value.
-        tmap_command= subprocess.Popen("tmap index --version", shell=True, stdout=subprocess.PIPE, env=os.environ )
-        tmap_version = tmap_command.stdout.readline().strip()
-
+        tmap_version = settings.TMAP_VERSION
         logging.debug("tmap version:" + tmap_version)
         
-        args = list()
-
-        args.append("--auto-fix")
-        args.append("--fasta")
-        args.append(fasta)
-        args.append("--genome-name-short")
-        args.append(short)
-        args.append("--genome-name-long")
-        args.append(long)
-        args.append("--genome-version") 
-        args.append(version)
-        args.append("--read-sample-size")
-        args.append(read_sample_size)
+        args = [
+            "--auto-fix",
+            "--fasta", fasta,
+            "--genome-name-short", short,
+            "--genome-name-long", long,
+            "--genome-version", version
+        ]
+        if read_sample_size:
+            args.append("--read-sample-size")
+            args.append(read_sample_size)
 
         uuid_path = ''.join([choice(string.letters + string.digits) for i in range(10)])
 
-        #move the fasta to a more uniq path
-        os.umask(0002)
+        #move the fasta to a guaranteed uniq path
         temp_path = "/results/referenceLibrary/temp/"
-        temp_path_uniq = os.path.join(temp_path,uuid_path)
-        os.mkdir(temp_path_uniq)
-        
-        logging.debug("Temp path created" + temp_path_uniq)
+        temp_path_uniq = tempfile.mkdtemp(suffix=short,dir=temp_path)
+        os.chmod(temp_path_uniq, 0777)
+        logging.debug("Temp path created " + temp_path_uniq)
 
         try:
             os.rename(os.path.join(temp_path, fasta) , os.path.join(temp_path_uniq,fasta))

@@ -662,7 +662,7 @@ void GenerateVersionInfo()
 
 	// first, generate our versions file:
 	char cmd[1024];
-	sprintf(cmd, "/opt/ion/iondb/bin/lversionChk.sh | sed {s/=/:/} > %s", TS_VERSIONS);
+	sprintf(cmd, "ion_versionCheck.py | sed {s/=/:/} > %s", TS_VERSIONS);
 	system(cmd);
 	sprintf(cmd, "cat /etc/torrentserver/tsconf.conf >> %s", TS_VERSIONS);
 	system(cmd);

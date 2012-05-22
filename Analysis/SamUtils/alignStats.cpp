@@ -24,23 +24,41 @@ AlignStats::AlignStats(options& settings) : opt(settings) {
 	
    
 	init();
-	
-	
+		
 	
 	init_data_structs();
 	set_genome_info();
+	
+	//for region-specific errors: start
+	_total_region_homo_err = 0;	
+	_total_region_mm_err = 0;
+	_total_region_indel_err = 0;
+	_total_region_ins_err = 0;
+	_total_region_del_err = 0;
+	
+	_region_positions_defined = false; 
+	if(opt.merged_region_file!=""){
+		_region_positions_defined = build_read_regionmap(opt.merged_region_file.c_str(), &_read_regionmap);
+		if(_region_positions_defined){
+			  //output errors within the region to file hard-coded file "regionErrors.txt" 
+			  string region_error_file_name("region_errors.txt");
+			  _region_error_outputfile.open(region_error_file_name.c_str());
+	    	 	  _region_error_outputfile << "#read_id" << "\t"<< "HomoErr" << "\t" << "MmErr" << "\t" << "IndelErr" << "\t" << "InsErr" << "\t" << "DelErr" << "\t" << "RegionClipped" << endl;
+	
+		}
+		else{
+			cerr << "exit due to wrong region file" << endl;
+			exit(1);	
+		}			
+	}
+	//for region-specific errors: end
+		
     if(opt.sam_parsed_flag) {
 	  string sam_parsed_name(opt.out_file + ".sam.parsed");
-	  if (!isFile((char *)sam_parsed_name.c_str())) {
-		  sam_parsed.open(sam_parsed_name.c_str());
-		  write_sam_parsed_header(); //this will write the header
-	  } else {
-		  std::cerr << "[alignStats] sam.parsed already exists: " << sam_parsed_name << " !!!" << endl;
-		  opt.sam_parsed_flag = 0;
-	  }
-	  
-	  
-	  
+	  if (isFile((char *)sam_parsed_name.c_str()))
+		std::cerr << "[alignStats] WARNING: sam.parsed file already exists, overwriting: " << sam_parsed_name << endl;
+	  sam_parsed.open(sam_parsed_name.c_str());
+	  write_sam_parsed_header(); //this will write the header
     }
 	
 	
@@ -109,6 +127,11 @@ void AlignStats::init_data_structs() {
 		
 	}
 	
+	// init flow-error accounting data structures
+	n_flow_aligned.clear();
+	flow_err.clear();
+	flow_err_bases.clear();
+
 	//init error table
 	error_to_length_map initialized_map(opt.align_summary_max_errors);
 	for (int z = 0; z <= opt.align_summary_max_errors; z++) {
@@ -147,7 +170,7 @@ void AlignStats::set_genome_info( ) {
 	
 	ifstream genome_info(opt.genome_info.c_str());
 	if (genome_info.fail()) {
-		cerr << "[alignStats] genome info file: " << opt.genome_info << " couldn't be opened" << endl
+		cerr << "[alignStats] genome info file: " << opt.genome_info << " couldn't be opened.  "
 		<< "making no assumptions about genome and analyzing all data" << endl;
 	} else {
 		string line;
@@ -184,8 +207,10 @@ void AlignStats::set_genome_info( ) {
 
 
 
-void AlignStats::go() {
+void AlignStats::go() {	
+		
 	total_reads_cached = 0; //1 based
+	total_reads_processed = 0; //1 based
 	BAMReader::iterator bam_itr = reader.get_iterator();
 
 	if (opt.debug_flag) std::cerr << "[go] going.." << std::endl;	
@@ -217,8 +242,15 @@ void AlignStats::go() {
 	}
 	if (opt.debug_flag) std::cerr << "[go] worker threads joined" << std::endl;
 	if (opt.debug_flag ) { //opt.debug_flag output is cleaner without this, and this information is already there anyway
-		std::cerr << "[alignStats] " << total_reads_cached << " reads processed" << '\n';
+		std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
 	}
+
+	//for region-specific errors: start
+	if(_region_positions_defined){		
+		_region_error_outputfile << "#total_errors" << "\t"<< _total_region_homo_err << "\t" << _total_region_mm_err << "\t" << _total_region_indel_err << "\t" << _total_region_ins_err << "\t" << _total_region_del_err << endl;
+		_region_error_outputfile.close();
+	}
+	//for region-specific errors: end	
 
 	if (opt.debug_flag) cerr << "[go] bam_itr.good(): " << bam_itr.good() << std::endl;
 	sam_parsed.close();
@@ -230,6 +262,10 @@ void AlignStats::go() {
 	
 	if (opt.align_summary_file.size() > 0) {
 		write_error_table();
+	}
+	
+	if (opt.score_flows) {
+		write_flow_error_table();
 	}
 	
 }
@@ -253,7 +289,7 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
         pthread_attr_setstacksize(&attr, stacksize);
-	while (bam_itr.good()) {
+	while (bam_itr.good() && total_reads_cached < opt.read_limit) {
 		reads_in_queue = 0;
 		int longest_calend = -1;
 
@@ -291,9 +327,22 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 		one = cur_tid == read_tid;
 		two = (reads_in_queue < opt.buffer_size);
 		if (opt.debug_flag) std::cerr << "cur_tid == read_tid: " << one << " reads_in_queue < opt.buffer_size: " << two << std::endl;*/
-		while (cur_tid == read_tid && bam_itr.good() && reads_in_queue < opt.buffer_size) {
+		std::tr1::unordered_map<std::string,read_region>::const_iterator found_read_region;
+		
+		while (cur_tid == read_tid && bam_itr.good() && reads_in_queue < opt.buffer_size && total_reads_cached < opt.read_limit) {
 			
-			BAMRead tmp = bam_itr.get();
+			BAMRead tmp = bam_itr.get();			
+			//for region-specific errors: start
+			if(_region_positions_defined){
+				found_read_region = _read_regionmap.find (tmp.get_qname());							
+	
+				if ( found_read_region != _read_regionmap.end() ){
+					tmp.set_region_base_positions(found_read_region->second.region_start_base, found_read_region->second.region_stop_base);
+				}		
+			}//for region-specific errors: end
+			
+			
+			 			
 			if(opt.debug_flag) cerr << tmp.get_qname() << " " << tmp.get_tlen() << " " << tmp.get_seq().to_string() << endl;
 			
 			if (!opt.skip_cov_flag && is_sorted) {
@@ -380,13 +429,7 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 			total_reads_cached++;
 			if (!opt.debug_flag ) { //opt.debug_flag output is cleaner without this, and this information is already there anyway
 				if (total_reads_cached % 10000 == 0) {
-					if (is_sorted) {
-						std::cerr << "[alignStats] " << total_reads_cached << " reads processed\tcurrent ref id: " << bam_itr.get_tid() << '\r';
-					} else {
-						std::cerr << "[alignStats] " << total_reads_cached << " reads processed" << '\r';
-
-					}
-
+					std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
 				}
 			}
 						
@@ -398,14 +441,10 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 			if (opt.debug_flag) {
 				std::cerr << "[io] cur_tid: " << cur_tid << " == read_tid: " << read_tid << "  && bam_itr.good(): " << bam_itr.good() << "  && reads_in_queue: " << reads_in_queue << " < opt.buffer_size: " << opt.buffer_size << std::endl;
 			}
-		} //end while (cur_tid == bam_itr.get_tid() && bam_itr.good() && reads_in_queue < opt.buffer_size) {
-		
-		
-		
-			
+		} //end while (cur_tid == bam_itr.get_tid() && bam_itr.good() && reads_in_queue < opt.buffer_size) {				
 	
 		
-		if (lst.size() > 0) {
+		if (lst.size() > 0 && total_reads_cached < opt.read_limit) {
 			if (opt.debug_flag) std::cerr << "[io - read_bam()] adding to list of size:  "<< lst.size() << std::endl;
 			/*if (vector_queue_index >= (unsigned int)opt.num_threads) {
 				vector_queue_index = 0;
@@ -422,8 +461,8 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 				while ((read_tid == cur_tid) && bam_itr.good() && (cov_counter < opt.max_coverage)) {
 					
 					
-					BAMRead tmp = bam_itr.get();
-					
+					BAMRead tmp = bam_itr.get();				
+
 					cur_pos = tmp.get_pos();
 					if (cur_pos > window_end) {
 						break;
@@ -433,6 +472,13 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 						break;
 					}
 					if (tmp.is_mapped()) {
+						//for region-specific errors: start
+						if(_region_positions_defined){
+							if ( found_read_region != _read_regionmap.end() ){
+								tmp.set_region_base_positions(found_read_region->second.region_start_base, found_read_region->second.region_stop_base);
+							}		
+						}
+						//for region-specific errors: end
 						overlap_reads.push_back(tmp);
 						cov_counter++;
 
@@ -470,7 +516,7 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 			} 
 				
 			
-			if (!bam_itr.good()) { //save overlap reads
+			if (!bam_itr.good()) { //save overlap reads 
 				lst.insert(lst.end(), overlap_reads.begin(), overlap_reads.end());
 			}
 			
@@ -602,6 +648,10 @@ void  AlignStats::consume_read_queue() {
 	length_to_total_map_t				my_filtered_reads(clipped_read_totals);
 	length_to_total_map_t				my_total_error_to_length(total_error_to_length);
 
+	std::vector<int> my_max_aligned_flow;
+	std::vector<uint32_t> my_flow_err;
+	std::vector<uint32_t> my_flow_err_bases;
+	long my_total_reads_processed=0;
 		
 	worker_data my_data;
 	//bool pop_success = true; //pop_succes
@@ -631,16 +681,19 @@ void  AlignStats::consume_read_queue() {
 
 		
 		//unsigned int util_cache_index = 0;
+		my_total_reads_processed = 0;
 		for(read_list::iterator itr = my_reads.begin(); itr != my_reads.end(); ++itr){
-
+		
 			util_cache.push_back(BAMUtils(*itr, opt.q_scores, 
                                 opt.start_slop, opt.iupac_flag, opt.keep_iupac, 
                                 opt.truncate_soft_clipped, opt.align_summary_min_len, 
                                 opt.align_summary_max_len, opt.align_summary_len_step, 
                                 opt.three_prime_clip, opt.round_phred_scores,
-                                opt.five_prime_justify));
+                                opt.five_prime_justify,opt.flow_order));			
+
 			
 			BAMUtils& util = util_cache.back();
+			
 			if (!opt.skip_cov_flag && is_sorted) {
 				p_fact.insert_util(util);
 			}
@@ -678,6 +731,24 @@ void  AlignStats::consume_read_queue() {
 			}
 			if ((util.pass_filtering(opt.align_summary_filter_len, opt.align_summary_filter_accuracy) || 
 					opt.align_summary_filter_len == 0 || opt.align_summary_filter_accuracy == 0.0)  ) {
+				// The read meets our minimal criteria to be used for error assessment
+
+				if(opt.score_flows) {
+					my_max_aligned_flow.push_back(util.get_max_aligned_flow());
+					std::vector<uint16_t>& read_flow_err = util.get_flow_err();
+					std::vector<uint16_t>& read_flow_err_bases = util.get_flow_err_bases();
+					for(unsigned int iErr=0; iErr < read_flow_err.size(); iErr++) {
+						unsigned int f = read_flow_err[iErr];
+						if(f >= my_flow_err.size()) {
+							// need to expand summary result vectors
+							my_flow_err.resize(f+1,0);
+							my_flow_err_bases.resize(f+1,0);
+						}
+						my_flow_err[f] += 1;
+						my_flow_err_bases[f] += read_flow_err_bases[iErr];
+					}
+				}
+					
 				//cerr << util.get_name() << "\tin pass_filtering conditional" << endl;
 				//for(BAMUtils::error_table_iterator tbl_itr = util.error_table_begin(); 
 				//	tbl_itr != util.error_table_end(); ++tbl_itr) {
@@ -747,12 +818,11 @@ void  AlignStats::consume_read_queue() {
 					}
 					
 				}
-			} 
-			
-				
-			
+			} 			
+						
 			
 			
+			my_total_reads_processed++;
 		}
 		my_reads.clear();
 		if (opt.debug_flag) std::cerr <<"[worker thread] thread["<< me << "] all utils made " << std::endl;
@@ -769,6 +839,30 @@ void  AlignStats::consume_read_queue() {
 		if (!opt.skip_cov_flag && is_sorted) {
 			sum_coverage(p_fact, my_coverage, util_cache);
 		}
+		//for region-specific errors: start
+		
+		int region_mm_err = 0;
+		int	region_homo_err = 0;
+		int	region_indel_err = 0;
+		int	region_ins_err = 0;
+		int	region_del_err = 0;
+		bool 	region_clipped = false; 
+		
+		if(_region_positions_defined){
+			ScopedLock lck(&_region_error_outputfile_mutex);
+			for (util_list::iterator w_itr = util_cache.begin(); w_itr != util_cache.end(); ++w_itr) {			
+				if((*w_itr).get_bamread().region_error_flag()){
+					(*w_itr).get_region_errors(&region_homo_err, &region_mm_err, &region_indel_err,&region_ins_err, &region_del_err, &region_clipped);
+					_region_error_outputfile << (*w_itr).get_bamread().get_qname() << "\t"<< region_homo_err << "\t" << region_mm_err << "\t" << region_indel_err << "\t" << region_ins_err << "\t" << region_del_err << "\t" << region_clipped<< endl;
+					_total_region_homo_err = _total_region_homo_err + region_homo_err;	
+					_total_region_mm_err = _total_region_mm_err + region_mm_err;
+					_total_region_indel_err = _total_region_indel_err + region_indel_err;
+					_total_region_ins_err = _total_region_ins_err + region_ins_err;
+					_total_region_del_err = _total_region_del_err + region_del_err;					
+				}			
+			}		
+		}		
+		//for region-specific errors: end	
 		
 		if (opt.sam_parsed_flag){
 			ScopedLock lck(&sam_parsed_mutex);
@@ -782,7 +876,22 @@ void  AlignStats::consume_read_queue() {
 		
 		if (opt.debug_flag) std::cerr <<"[worker thread] thread["<< me << "] done with chunk" << std::endl; 
 
+		{
+			ScopedLock lck(&worker_mutex);
+			total_reads_processed += my_total_reads_processed;
+			std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
+		}
 		//first_pass = false;
+	}
+
+	std::vector<uint32_t> my_n_flow_aligned;
+	if(opt.score_flows) {
+		// Sort the max flow values so we can know how many times we reached each flow position
+		sort(my_max_aligned_flow.begin(),my_max_aligned_flow.end());
+		countAlignedFlows(my_max_aligned_flow,my_n_flow_aligned);
+		unsigned int max_flow = my_n_flow_aligned.size();
+		my_flow_err.resize(max_flow,0);
+		my_flow_err_bases.resize(max_flow,0);
 	}
 	{ //scope
 	ScopedLock lck(&worker_mutex);
@@ -834,7 +943,20 @@ void  AlignStats::consume_read_queue() {
 			
 		}
 		
-		
+		if(opt.score_flows) {
+			unsigned int max_flow = std::max(my_n_flow_aligned.size(),n_flow_aligned.size());
+			n_flow_aligned.resize(max_flow,0);
+			flow_err.resize(max_flow,0);
+			flow_err_bases.resize(max_flow,0);
+			my_n_flow_aligned.resize(max_flow,0);
+			my_flow_err.resize(max_flow,0);
+			my_flow_err_bases.resize(max_flow,0);
+			for(unsigned int i_flow=0; i_flow < max_flow; i_flow++) {
+				n_flow_aligned[i_flow] += my_n_flow_aligned[i_flow];
+				flow_err[i_flow] += my_flow_err[i_flow];
+				flow_err_bases[i_flow] += my_flow_err_bases[i_flow];
+			}
+		}
 	}//end scope
 	if (opt.debug_flag) std::cerr <<"[worker thread] thread["<< me << "] exiting.. " << std::endl;
 	pthread_exit(NULL);
@@ -1106,6 +1228,26 @@ void AlignStats::write_alignment_summary() {
 }
 	
 
+void AlignStats::write_flow_error_table() {
+	ofstream flow_err_out(opt.flow_err_file.c_str());
+	char delim = '\t';
+	if (flow_err_out.fail()) {
+		cerr << "[alignStats] problem writing to flow error file " << opt.flow_err_file << endl;
+		return;
+	}
+	flow_err_out << "flow" << delim << "base" << delim << "n_aligned" << delim << "n_hp_err" << delim << "n_base_err" << endl;
+	for(unsigned int i_flow=0; i_flow < n_flow_aligned.size(); i_flow++) {
+		flow_err_out << i_flow;
+		flow_err_out << delim << opt.flow_order[i_flow % opt.flow_order.size()];
+		flow_err_out << delim << n_flow_aligned[i_flow];
+		flow_err_out << delim << flow_err[i_flow];
+		flow_err_out << delim << flow_err_bases[i_flow];
+		flow_err_out << endl;
+	}
+	flow_err_out.close();
+}
+	
+
 /* 
  readlen	num_reads	unaligned	err0	err1	err2	err3+
  x		
@@ -1195,6 +1337,7 @@ void AlignStats::write_sam_parsed_header() {
 			for (string::size_type i = 0; i < q_scores.size(); i++) {
 				sam_parsed <<"\t"<< "q" << q_scores[i] << "Len";
 			}
+			sam_parsed <<"\t"<<"qLenFull";
 			sam_parsed <<  endl;
 	}
 		
@@ -1241,5 +1384,59 @@ bool AlignStats::readNextNameFromStream(std::string &readName, ifstream &inStrea
 		}
 	} else {
 		return(false);
+	}
+}
+
+bool AlignStats::build_read_regionmap(string region_postion_file, std::tr1::unordered_map<string, read_region> *read_regionmap){
+
+	string read_name;
+	int start_pos, stop_pos;
+	read_region this_read_region;	
+	
+	ifstream file_merged_region;
+	file_merged_region.open(region_postion_file.c_str());
+	
+	if (file_merged_region.fail()) {
+		cerr << "merged region file couldn't be opened" << endl;
+		//exit(1);
+		file_merged_region.close();
+		return false;
+	} else {				
+		while (file_merged_region.good()) {
+			file_merged_region >> read_name >> start_pos >> stop_pos;			
+			this_read_region.region_start_base = start_pos;
+			this_read_region.region_stop_base = stop_pos;
+			std::pair<std::string, read_region> read_region_pair(read_name, this_read_region);
+			(*read_regionmap).insert(read_region_pair);							
+		}
+		file_merged_region.close();
+	} 
+	
+	return true;		
+	
+}
+
+void AlignStats::countAlignedFlows(std::vector<int> &max_flow, std::vector<uint32_t> &flow_by_position) {
+	// max_flow must be in increasing sorted order, or this will not work
+	uint16_t prev_max_flow=USHRT_MAX;
+	if(max_flow.size() > 0) {
+		flow_by_position.resize(max_flow.back()+1,0);
+		prev_max_flow=max_flow.back();
+	}
+	for(int i_read=max_flow.size()-1; i_read >=0; i_read--) {
+		uint16_t this_flow = max_flow[i_read];
+		assert(this_flow <= prev_max_flow);
+		if(this_flow < prev_max_flow) {
+			// just transitioned to a new max flow length, so copy previous values
+			for(int i_flow=prev_max_flow-1; i_flow >= this_flow; i_flow--)
+				flow_by_position[i_flow] = flow_by_position[prev_max_flow];
+			prev_max_flow = this_flow;
+		}
+		flow_by_position[this_flow] += 1;
+	}
+	if(prev_max_flow > 0 && prev_max_flow < USHRT_MAX) {
+		// copy previous values down to first flow
+		for(int i_flow=prev_max_flow-1; i_flow >= 0; i_flow--)
+			flow_by_position[i_flow] = flow_by_position[prev_max_flow];
 	}
 }

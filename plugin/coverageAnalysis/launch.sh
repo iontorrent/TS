@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
-VERSION="2.0.1.1"
+VERSION="2.2.3-31037"
 
 # Disable excess debug output for test machine
 #set +o xtrace
@@ -9,6 +9,8 @@ VERSION="2.0.1.1"
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should be set to 0 in production mode
 PLUGIN_DEV_FULL_LOG=0;          # 1 for coverage analysis log, 2 for additional xtrace (not recommended)
+
+CONTINUE_AFTER_BARCODE_ERROR=1;
 
 # Check for by-pass PUI
 if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
@@ -26,7 +28,7 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
       source "${DIRNAME}/html/logo.sh"
       print_html_logo >> "$HTML";
     fi
-    echo "<h3><center>${PLUGIN_RUNNAME}</center></h3>" >> "$HTML"
+    echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
     echo "<br/><h2 style=\"text-align:center;color:red\">*** Automatic analysis was not performed for PGM run. ***</h2>" >> "$HTML"
     echo "<br/><h3 style=\"text-align:center\">(Requires an associated Plan that is not a GENS Runtype.)</h3></br>" >> "$HTML"
     echo '</body></html>' >> "$HTML"
@@ -72,7 +74,17 @@ elif [ "$PLUGINCONFIG__LIBRARYTYPE" == "fullgenome" ]; then
   PLUGIN_PADSIZE=0
 fi
 
+# Check for merged BAM file override
+PLUGIN_CHECKBC=1
+if [ -n "$PLUGINCONFIG__MERGEDBAM" ]; then
+    TSP_FILEPATH_BAM=$PLUGINCONFIG__MERGEDBAM
+    PLUGIN_CHECKBC=0
+else
+    PLUGINCONFIG__MERGEDBAM_ID='Current Report'
+fi
+
 echo "Selected run options:" >&2
+echo "  Aligned Reads:  $PLUGINCONFIG__MERGEDBAM_ID" >&2
 echo "  Library Type:   $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
 echo "  Target regions: $PLUGINCONFIG__TARGETREGIONS_ID" >&2
 echo "  Target padding: $PLUGINCONFIG__PADTARGETS" >&2
@@ -80,6 +92,7 @@ echo "  Unique starts:  $PLUGINCONFIG__UNIQUESTARTS" >&2
 
 echo "Employed run options:" >&2
 echo "  Reference Genome:  $TSP_FILEPATH_GENOME_FASTA" >&2
+echo "  Aligned Reads:     $TSP_FILEPATH_BAM" >&2
 echo "  Library Type:   $PLUGINCONFIG__LIBRARYTYPE" >&2
 echo "  Target Regions: $PLUGIN_TARGETS" >&2
 echo "  Target padding: $PLUGIN_PADSIZE" >&2
@@ -97,10 +110,12 @@ if ! [ -d "$TSP_FILEPATH_PLUGIN_DIR" ]; then
   exit 1
 fi
 
-# Definition of file names, locations, etc., used by plugin
+# Definition of file names, etc.
+PLUGIN_BAM_FILE=`echo "$TSP_FILEPATH_BAM" | sed -e 's/^.*\///'`
+PLUGIN_BAM_NAME=`echo $PLUGIN_BAM_FILE | sed -e 's/\.[^.]*$//'`
+PLUGIN_RUN_NAME="$TSP_RUN_NAME"
 BARCODES_LIST="${TSP_FILEPATH_PLUGIN_DIR}/barcodeList.txt"
 SCRIPTSDIR="${DIRNAME}/scripts"
-PLUGIN_OUT_BAM_NAME=`echo ${TSP_FILEPATH_BAM} | sed -e 's_.*/__g'`
 JSON_RESULTS="${TSP_FILEPATH_PLUGIN_DIR}/results.json"
 HTML_RESULTS="${PLUGINNAME}.html"
 HTML_ROWSUMS="${PLUGINNAME}_rowsum"
@@ -153,66 +168,19 @@ do
   source ${HTML_FILE};
 done
 
-#*! @function
-#  @param  $*  the command to be executed
-run ()
-{
-  if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
-    echo "\$ $*" >&2
-  fi
-  eval $* >&2
-  EXIT_CODE="$?"
-  if [ ${EXIT_CODE} != 0 ]; then
-    echo "status code '${EXIT_CODE}' while running '$*'" >&2
-    rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
-    exit 1
-  fi
-}
-
-#*! @function
-#  @param $1 Directory path to create output
-#  @param $2 Filepath to BAM file
-run_coverage_analysis ()
-{
-  local RESDIR="$1"
-  local BAMFILE="$2"
-  local RUNCOV="${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$RESDIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"$BAMFILE\""
-  if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
-    echo "\$ $RUNCOV" >&2
-  fi
-  eval "$RUNCOV" >&2
-}
-
-#*! @function
-#  @param $1 Name of JSON file to append to
-#  @param $2 Path to file composed of <name>:<value> lines
-#  @param $3 dataset (e.g. "filtered_reads")
-#  @param $4 printing indent level. Default: 2
-append_to_json_results ()
-{
-  local JSONFILE="$1"
-  local DATAFILE="$2"
-  local DATASET="$3"
-  local INDENTLEV="$4"
-  if [ -z $INDENTLEV ]; then
-    INDENTLEV=2
-  fi
-  local JSONCMD="perl ${SCRIPTSDIR}/coverage_analysis_json.pl -a -I $INDENTLEV -B \"$DATASET\" \"$DATAFILE\" \"$JSONFILE\""
-  eval "$JSONCMD || echo \"WARNING: Failed to write to JSON from $DATAFILE\"" >&2
-}
-
 # --------- Start processing the data ----------
 
 # Local copy of sorted barcode list file
-if [ -f $TSP_FILEPATH_BARCODE_TXT ]; then
+if [ ! -f $TSP_FILEPATH_BARCODE_TXT ]; then
+   PLUGIN_CHECKBC=0
+fi
+if [ $PLUGIN_CHECKBC -eq 1 ]; then
    run "sort -t ' ' -k 2n,2 \"$TSP_FILEPATH_BARCODE_TXT\" > \"$BARCODES_LIST\"";
 fi
 
-# Get local copy of js and css
-run "mkdir -p ${TSP_FILEPATH_PLUGIN_DIR}/js";
-run "cp ${DIRNAME}/js/*.js ${TSP_FILEPATH_PLUGIN_DIR}/js/.";
-run "mkdir -p ${TSP_FILEPATH_PLUGIN_DIR}/css";
-run "cp ${DIRNAME}/css/*.css ${TSP_FILEPATH_PLUGIN_DIR}/css/.";
+# Link local copy of js and css
+run "ln -sf ${DIRNAME}/js ${TSP_FILEPATH_PLUGIN_DIR}/.";
+run "ln -sf ${DIRNAME}/css ${TSP_FILEPATH_PLUGIN_DIR}/.";
 
 echo -e "\nResults folder initialized." >&2
 
@@ -253,20 +221,33 @@ COV_PAGE_WIDTH=$BC_COV_PAGE_WIDTH
 rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
 
 # Check for barcodes
-if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then
+if [ $PLUGIN_CHECKBC -eq 1 ]; then
   barcode;
 else
-  # Link BAM to here for download links
-  ln -sf "$TSP_FILEPATH_BAM" .
-  ln -sf "${TSP_FILEPATH_BAM}.bai" .
+  # Link BAM to here for download links - hard link if using a report merged bam
+  if [ -n "$PLUGINCONFIG__MERGEDBAM" ]; then
+    ln -f "$TSP_FILEPATH_BAM" .
+    ln -f "${TSP_FILEPATH_BAM}.bai" .
+  else
+    ln -sf "$TSP_FILEPATH_BAM" .
+    ln -sf "${TSP_FILEPATH_BAM}.bai" .
+  fi
   # Write a front page for non-barcode run
   HTML="${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}"
   write_html_header "$HTML" 15;
-  echo "<h3><center>${PLUGIN_OUT_BAM_NAME}</center></h3>" >> "$HTML"
+  echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
   display_static_progress "$HTML";
   write_html_footer "$HTML";
   # Run on single bam
-  run_coverage_analysis "$TSP_FILEPATH_PLUGIN_DIR" "$TSP_FILEPATH_BAM"
+  RT=0
+  eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$TSP_FILEPATH_PLUGIN_DIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"${TSP_FILEPATH_BAM}\"" || RT=$?
+  if [ $RT -ne 0 ]; then
+    write_html_header "$HTML";
+    echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
+    echo "<br/><h3 style=\"text-align:center;color:red\">*** An error occurred - check Log File for details ***</h3><br/>" >> "$HTML"
+    write_html_footer "$HTML";
+    exit 1
+  fi
   # Write json output
   write_json_header;
   write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;

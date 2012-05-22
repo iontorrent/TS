@@ -340,7 +340,9 @@ int main(int argc, char *argv[])
 
 		//	debug print - keypass reads written to the fastq file
 		if (fpq) {
-			fprintf (stdout, "Keypass Reads(%s) = %d\n", hackkey, numKeypassedReads);
+		  static char *printkey = "All";
+		  if (keyPass) printkey = hackkey;		  
+			fprintf (stdout, "Keypass Reads(%s) = %d\n", printkey, numKeypassedReads);
 			fprintf (stdout, "Total Reads = %d\n", numReads);
 			fprintf (stdout, "Percentage = %.2f%%\n", ((float) numKeypassedReads/ (float) numReads) * 100.0);
 		}

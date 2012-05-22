@@ -7,11 +7,11 @@ import socket
 import xmlrpclib
 import glob
 import fileinput
+import logging
 
-try:
-    import json
-except:
-    import simplejson as json
+logger = logging.getLogger(__name__)
+
+import json
 
 from ajax import render_to_json
 
@@ -23,6 +23,7 @@ from django import http
 from iondb.anaserve import client
 from iondb.rundb import forms
 from iondb.rundb import models
+from iondb.rundb import tasks
 
 
 from django.conf import settings
@@ -73,8 +74,12 @@ def references(request):
      """
     #look for new genomes
     search_for_genomes()
-    rg = models.ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION).order_by('pk')
-    not_current_rg = models.ReferenceGenome.objects.all().exclude(index_version=settings.TMAP_VERSION).order_by('pk')
+    rg, not_current_rg = [], []
+    for reference in  models.ReferenceGenome.objects.all().order_by('short_name'):
+        if reference.index_version == settings.TMAP_VERSION or reference.status == "Rebuilding index":
+            rg.append(reference)
+        else:
+            not_current_rg.append(reference)
     tf = models.Template.objects.all().order_by('pk')
     barcodes = models.dnaBarcode.objects.values('name').distinct().order_by('name')
     
@@ -339,11 +344,14 @@ def edit_genome(request, pk):
         verbose_error = verbose_error_trim(rg.verbose_error)
         fastaOrig = rg.fastaOrig()
 
+        stale_index = rg.index_version != settings.TMAP_VERSION and rg.status != "Rebuilding index"
+
         ctxd = {"temp":temp, "name":rg.short_name, "key" : rg.pk, "enabled" : rg.enabled,
                 "genome_dict" : genome_dict, "status": rg.status , "verbose_error" : verbose_error,
                 "genome_fasta" : genome_fasta, "genome_size" : genome_size,
                 "index_version" : rg.index_version, "fastaOrig" : fastaOrig,
                 "bedFiles": bedFiles, "processingBedFiles": processingBedFiles,
+                "stale_index": stale_index
         }
         ctx = template.RequestContext(request, ctxd)
         return shortcuts.render_to_response("rundb/ion_edit_genome.html",
@@ -387,48 +395,39 @@ def search_for_genomes():
     for folder in os.listdir(ref_dir):
         if os.path.isdir(os.path.join(ref_dir,folder)) and folder.lower().startswith("tmap"):
             lib_versions.append(folder)
-
-    #keep a reference list to know what references should be pruned
-    ref_list = []
-    short_name_list = []
-
+    logger.debug("Reference genome scanner found %s" % ",".join(lib_versions))
     for lib_version in lib_versions:
         if os.path.exists(os.path.join(ref_dir,lib_version)):
             libs = os.listdir(os.path.join(ref_dir,lib_version))
             for lib in libs:
-                #this should use the parsed genome.info.txt name and not the path name as the ref version
                 genome_info_text = os.path.join(ref_dir, lib_version, lib , lib +".info.txt")
+                logger.debug("Parsing reference genome info %s" % genome_info_text)
                 genome_dict= read_genome_info(genome_info_text)
                 #TODO: we have to take into account the genomes that are queue for creation of in creation
-                #ref_list.append((lib,genome_dict))
 
                 if genome_dict:
                     #here we trust that the path the genome is in, is also the short name
-                    if models.ReferenceGenome.objects.filter(short_name=lib,index_version=genome_dict["index_version"]):
-
-                        #check to see if the genome already exists in the database with the same version
-                        #update the path
-
-                        rg = models.ReferenceGenome.objects.get(short_name=lib,index_version=genome_dict["index_version"])
-                        rg.short_name = lib
-                        rg.status = "found"
-
-                        rg.name = ""
-                        rg.version = ""
-                        rg.index_version = ""
-
-                        try:
-                            rg.name = genome_dict["genome_name"]
-                            rg.version = genome_dict["genome_version"]
-                            rg.index_version = genome_dict["index_version"]
-                            rg.reference_path = os.path.join(ref_dir, rg.index_version, rg.short_name )
-                        except:
-                            rg.name = lib
-                            rg.status = "missing info.txt"
-
-                        rg.save()
-
+                    existing_reference = models.ReferenceGenome.objects.filter(
+                        short_name=lib).order_by("-index_version")[:1]
+                    if existing_reference:
+                        rg = existing_reference[0]
+                        logger.debug("Found existing genome %s id=%d index=%s" % (
+                            str(rg), rg.id, rg.index_version))
+                        if rg.index_version != genome_dict["index_version"]:
+                            logger.debug("Updating genome status to 'found'")
+                            rg.status = "found"
+                            try:
+                                rg.name = genome_dict["genome_name"]
+                                rg.version = genome_dict["genome_version"]
+                                rg.index_version = genome_dict["index_version"]
+                                rg.reference_path = os.path.join(ref_dir, rg.index_version, rg.short_name )
+                            except:
+                                rg.name = lib
+                                rg.status = "missing info.txt"
+                            rg.save()
                     else:
+                        logger.debug("Found new genome %s index=%s" % (
+                            lib, genome_dict["genome_version"]))
                         #the reference was not found, add it to the db
                         rg = models.ReferenceGenome()
                         rg.short_name = lib
@@ -450,12 +449,8 @@ def search_for_genomes():
                             rg.status = "missing info.txt"
 
                         rg.save()
-
-    #now refresh the genome list
-    #first get all the genomes
-    #genomes = models.ReferenceGenome.objects.all()
-    #now if those genomes didn't get found and added to ref_list delete them
-    #for genome in genomes:
+                        logger.info("Created new reference genome %s id=%d" % (
+                            str(rg), rg.id))
 
 
 def new_genome(request):
@@ -480,7 +475,7 @@ def new_genome(request):
         url = request.POST.get('url',False)
 
         #if any of those were false send back a failed message
-        if (not name) or (not short_name) or (not fasta) or (not version):
+        if not all((name, short_name, fasta, version)):
             return render_to_json({"status":"Form validation failed","error":True})
 
         if not set(short_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"):
@@ -562,3 +557,30 @@ def new_genome(request):
 
         #when we get a POST that data should be validated and go to the xmlrpc process
         return shortcuts.render_to_response("rundb/ion_new_genome.html", context_instance=ctx)
+
+
+def rebuild_index(reference):
+    """Add a job to rebuild the reference index for reference to the SGE queue
+    """
+    logger.info("Queuing TMAP reference index rebuild of %s" % reference.short_name)
+    reference.status = "Rebuilding index"
+    reference.save()
+    tasks.build_tmap_index.delay(reference)
+
+
+def start_index_rebuild(request, reference_id):
+    data = {"references":[]}
+    if reference_id == "all":
+        references = models.ReferenceGenome.objects.exclude(index_version=settings.TMAP_VERSION)
+        logger.info("Rebuilding TMAP reference indices for %s" %
+                    ", ".join(r.short_name for r in references))
+        for reference in references:
+            rebuild_index(reference)
+            data["references"].append({"id":reference.pk,
+                                       "short_name": reference.short_name})
+    else:
+        reference = models.ReferenceGenome.objects.get(pk=reference_id)
+        rebuild_index(reference)
+        data["references"].append({"id":reference.pk,
+                                   "short_name": reference.short_name})
+    return http.HttpResponse(json.dumps(data) , mimetype="application/json")

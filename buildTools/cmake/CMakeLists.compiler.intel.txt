@@ -1,0 +1,17 @@
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Set a default build type for single-configuration
+# CMake generators if no build type is set.
+IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+   SET(CMAKE_BUILD_TYPE Release)
+ENDIF()
+
+# Compiler flags
+# flags for ICC -w will disable warnings
+# -W3 for a reasonable level of warnings?
+
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fPIC -w -inline-debug-info -mkl=sequential -fp-model strict -fp-model source -fp-model except -fp-speculation=off -DION_DEBUG")
+# O2 or higher hangs Analysis
+set(CMAKE_CXX_FLAGS_RELEASE "-w -shared-intel -shared-libgcc -debug inline-debug-info -O3 -g -fPIC -mkl=sequential -fp-model fast")
+set(CMAKE_CXX_FLAGS_PROFILE "-Wall -Wextra -Werror -O6 -g -fPIC -Wno-write-strings -Wno-unused-parameter -lunwind -lprofiler")
+
+

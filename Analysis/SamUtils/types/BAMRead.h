@@ -48,7 +48,7 @@ class BAMRead {
 	 Default constructor.  all fields will be null.  attempts to call functions will throw null assertions
 	 This constructor is required in order to use BAMRead's in STL containers.  
 	 */
-	BAMRead(): bam_record(), bam_header(NULL) {}
+	BAMRead(): bam_record(), bam_header(NULL), _region_start_base(0), _region_stop_base(0), _calc_region_error(false){}
 	/**
 	 A call to this constructor makes a copy of the bam1_t*, and assumes the BAM_header 
 	 reference will be valid for the life time of this object
@@ -59,7 +59,7 @@ class BAMRead {
 	 @param	const bam_header_t*	BAM_header	this is a pointer to a c-structure internal to samtools.  detailed
 											in samtools* /bam.h  They contain the header portion of the sam/bam file
 	 */
-	BAMRead(bam1_t* BAM_read, const bam_header_t* BAM_header): bam_record(bam_dup1(BAM_read), bam_cleanup() ), bam_header(BAM_header){}
+	BAMRead(bam1_t* BAM_read, const bam_header_t* BAM_header): bam_record(bam_dup1(BAM_read), bam_cleanup() ), bam_header(BAM_header), _region_start_base(0), _region_stop_base(0), _calc_region_error(false)  {}
 	/**
 	 This constructor can be used to reduce memory if you're copying BAMRead's.  However, the operator= is overloaded
 	 and it's recommended you use that.  
@@ -67,7 +67,7 @@ class BAMRead {
 	 @param	const bam_header_t*		BAM_header			this is a pointer to a c-structure internal to samtools.  detailed
 														in samtools* /bam.h  They contain the header portion of the sam/bam file		
 	 */
-	BAMRead(bam_ptr shared_bam_ptr, const bam_header_t* BAM_header): bam_record(shared_bam_ptr), bam_header(BAM_header) {}
+	BAMRead(bam_ptr shared_bam_ptr, const bam_header_t* BAM_header): bam_record(shared_bam_ptr), bam_header(BAM_header), _region_start_base(0), _region_stop_base(0), _calc_region_error(false) {}
 	/**
 	 clears internal memory allocated in constructor.  
 	 */
@@ -77,7 +77,7 @@ class BAMRead {
 	 Copy constructor
 	 @param BAMRead	const&		a reference to an existing BAMRead
 	 */
-	BAMRead(BAMRead const& other) : bam_record(other.bam_record), bam_header(other.bam_header) {}
+	BAMRead(BAMRead const& other) : bam_record(other.bam_record), bam_header(other.bam_header), _region_start_base(other._region_start_base), _region_stop_base(other._region_stop_base), _calc_region_error(other._calc_region_error) {}
 
 	
 	
@@ -418,43 +418,76 @@ class BAMRead {
 		 */
 		std::string						to_string();
 		
-	
+        /**
+         Returns the FZ tag, the flow signals
+         @param   int                 number of flows to return (assumes user knows what the max is.  can be found from the read group in BAMReader::BAMHeader::ReadGroup::get_number_of_flows() function
+         @return  std::vector<int>    vector of flow signals
+         */
+        std::vector<int>  get_fz(int num_flows);
+  
+  
+		//for region-specific errors: start
 		
-	
+		void set_region_base_positions(int start_base, int stop_base){ 
+			_region_start_base = start_base;
+			_region_stop_base = stop_base;
+			_calc_region_error = true;			
+		}
+		
+		bool get_region_base_positions(int *start_base, int *stop_base){
+			*start_base = _region_start_base;
+			*stop_base = _region_stop_base;
+			return _calc_region_error;
+		}
+		bool region_error_flag( ){	return _calc_region_error; };
+		
+		//for region-specific errors: end
+
+		bool get_optional_field(std::string& tag, int& opt_int) {
+			
+			uint8_t *opt_ptr = bam_aux_get(bam_record.get(), tag.c_str());
+			if (opt_ptr) {
+				opt_int = bam_aux2i(opt_ptr);
+				return(true);
+			}  else {
+				return(false);
+			}
+
+			
+		}
+		
+		str_ptr 	get_optional_field(std::string& tag){
+			
+			
+			uint8_t *opt_ptr = bam_aux_get(bam_record.get(), tag.c_str());
+			str_ptr opt_str = NULL;
+			if (opt_ptr) {
+				opt_str = bam_aux2Z(opt_ptr);
+			} 
+			return opt_str;
+			
+		}
+
 	private:
 		void swap(BAMRead& first, BAMRead& second) {
 			using std::swap; //enables ADL
 			swap(first.bam_record, second.bam_record);
 			swap(first.bam_header, second.bam_header);
+			swap(first._region_start_base, second._region_start_base);
+			swap(first._region_stop_base, second._region_stop_base);
+			swap(first._calc_region_error, second._calc_region_error);		
 		}
 		bam_ptr				bam_record;
 		const bam_header_t*			bam_header;
 		
+		//for region-specific errors: start
+		int _region_start_base; 
+		int _region_stop_base;
+		bool _calc_region_error; 
+		//for region-specific errors: end
 	
-	void get_optional_field(std::string& tag, int& opt_int) {
-		
-		uint8_t *opt_ptr = bam_aux_get(bam_record.get(), tag.c_str());
-		if (opt_ptr) {
-			opt_int = bam_aux2i(opt_ptr);
-		}  else {
-			opt_int = -1;
-		}
 
 		
-	}
-	
-	str_ptr 	get_optional_field(std::string& tag){
-		
-		
-		uint8_t *opt_ptr = bam_aux_get(bam_record.get(), tag.c_str());
-		str_ptr opt_str = NULL;
-		if (opt_ptr) {
-			opt_str = bam_aux2Z(opt_ptr);
-		} 
-		return opt_str;
-		
-	}
-
 	
 
 		//utility functions

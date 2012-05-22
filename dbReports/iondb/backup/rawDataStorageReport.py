@@ -373,8 +373,6 @@ def storage_report():
     report_text = raw_data_storage_report(exps)
     report_text.extend(file_server_storage_report(exps))
     report_text.extend(pgm_ftpserver_report(exps))
-    for line in report_text:
-        sys.stdout.write(line)
     return report_text
     
 def print_storage_report():
@@ -418,4 +416,6 @@ if __name__ == '__main__':
     fileservers - locations where raw data are stored
     reportstorages - locations where Reports are stored
     '''
-    storage_report()
+    for line in storage_report():
+        sys.stdout.write(line)
+

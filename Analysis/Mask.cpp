@@ -11,7 +11,7 @@
 #include "dbgmem.h"
 
 //Initialize static variable chipSubRegion in Mask class
-Region Mask::chipSubRegion = {0,0,0,0};
+Region Mask::chipSubRegion = {0,0,0,0,0};
 
 Mask::Mask(int _w, int _h)
 {
@@ -120,7 +120,7 @@ void Mask::Copy(Mask *origmask)
   Init(origmask);
 }
 
-uint16_t Mask::GetBarcodeId(int x, int y) {
+uint16_t Mask::GetBarcodeId(int x, int y) const {
 	//The "mask" values can actually be barcodeIds, so use this method
 	//to get it directly.
 	assert(x >= 0 && x < w);
@@ -133,7 +133,7 @@ uint16_t Mask::GetBarcodeId(int x, int y) {
 // return true.  MATCH_ALL requires that all bits must be set in the pattern in
 // order to return true.  MATCH_ONLY requires that ONLY the specified bits are set.
 //
-bool Mask::Match(int x, int y, MaskType t, int method)
+bool Mask::Match(int x, int y, MaskType t, int method) const
 {
 	
 	if (x < 0 || x >= w)
@@ -144,7 +144,7 @@ bool Mask::Match(int x, int y, MaskType t, int method)
 	return (Match (x+y*w, t, method));
 }
 
-bool Mask::Match(int n, MaskType t, int method)
+bool Mask::Match(int n, MaskType t, int method) const
 {
 	if (n < 0 || n >= (w*h))
 		return false;
@@ -203,7 +203,7 @@ void Mask::SetThese(Mask *fromMask, MaskType these)
 
 //
 // Returns number of matching beads in the entire mask
-int Mask::GetCount(MaskType these)
+int Mask::GetCount(MaskType these) const
 {
 	int count = 0;
 	int i;
@@ -216,7 +216,7 @@ int Mask::GetCount(MaskType these)
 
 //
 //	Returns number of matching beads in the specified region
-int Mask::GetCount(MaskType these, Region r)
+int Mask::GetCount(MaskType these, Region r) const
 {
 	int count = 0;
 	int x;
@@ -232,7 +232,8 @@ int Mask::GetCount(MaskType these, Region r)
 
 //
 //	Returns exactly number of beads with given mask bits set
-int Mask::GetCountExact(MaskType val) {
+int Mask::GetCountExact(MaskType val) const
+{
 	int num = this->w * this->h;
 	int count = 0;
 	for (int i = 0; i < num; i++) {
@@ -246,7 +247,7 @@ int Mask::GetCountExact(MaskType val) {
 //
 //	Writes the entire mask to a text file
 //
-int Mask::Export(char *fileName, MaskType these)
+int Mask::Export(char *fileName, MaskType these) const
 {
 	// Write a mask to comma-delimited text file
 	//	Format (J. Branciforte):
@@ -298,7 +299,7 @@ int Mask::Export(char *fileName, MaskType these)
 //
 //	Writes the mask for the given region to a text file
 //
-int Mask::Export(char *fileName, MaskType these, Region region)
+int Mask::Export(char *fileName, MaskType these, Region region) const
 {
 	// Write a mask to comma-delimited text file
 	//	Format (J. Branciforte):
@@ -353,7 +354,7 @@ int Mask::Export(char *fileName, MaskType these, Region region)
 //
 // Dump a list of mask positions
 //
-int Mask::MaskList (char *fileName, MaskType these)
+int Mask::MaskList (char *fileName, MaskType these) const
 {
 	int i;
 	int maxI = this->w * this->h;
@@ -388,7 +389,7 @@ int Mask::MaskList (char *fileName, MaskType these)
 //
 // Dump a list of mask positions for the given region
 //
-int Mask::MaskList (char *fileName, MaskType these, Region region)
+int Mask::MaskList (char *fileName, MaskType these, Region region) const
 {
 	int x;
 	int y;
@@ -434,7 +435,7 @@ int Mask::MaskList (char *fileName, MaskType these, Region region)
 // Values are unsigned 2 byte integers
 // First 8 bytes are 2 unsigned integers containing number of rows, number of columns
 //
-int Mask::WriteRaw (const char *fileName)
+int Mask::WriteRaw (const char *fileName) const
 {
 	FILE *fp = NULL;
 	fopen_s (&fp, fileName, "wb");
@@ -509,7 +510,7 @@ int Mask::SetMask(const char *fileName)
 	return (0);
 }
 
-int Mask::DumpStats (Region region, char *fileName, bool showWashouts)
+int Mask::DumpStats (Region region, char *fileName, bool showWashouts) const
 {
 	int x;
 	int y;
@@ -657,7 +658,7 @@ int Mask::Crop(int32_t width, int32_t height, int32_t top, int32_t left) {
   return SIZE;
 }
 
-void Mask::validateMask ()
+void Mask::validateMask () const
 {
 	// Should be exclusive: MaskBead and MaskEmpty and MaskExclude
 	// Should be exclusive: MaskLive and MaskDud and MaskAmbiguous
@@ -761,7 +762,8 @@ void Mask::OnlySomeWells(std::vector<int> mWellIdx)
     }
 }*/
 
-void Mask::GetNeighbors (int row, int col, std::vector<int> &wells) {
+void Mask::GetNeighbors (int row, int col, std::vector<int> &wells) const
+{
   bool hex = isHexPack();
   if (hex) {
     GetHexNeighbors(row, col, wells);
@@ -771,7 +773,8 @@ void Mask::GetNeighbors (int row, int col, std::vector<int> &wells) {
   }
 }
 
-void Mask::AddNeighbor(int row, int col, int rOff, int cOff, std::vector<int> &wells) {
+void Mask::AddNeighbor(int row, int col, int rOff, int cOff, std::vector<int> &wells) const
+{
   int r = row + rOff;
   int c = col + cOff;
   if (r >= 0 && r < h && c >= 0 && c < w) {
@@ -782,7 +785,8 @@ void Mask::AddNeighbor(int row, int col, int rOff, int cOff, std::vector<int> &w
   }
 }
 
-void Mask::GetHexNeighbors(int row, int col, std::vector<int> &wells) {
+void Mask::GetHexNeighbors(int row, int col, std::vector<int> &wells) const
+{
   wells.resize(0);
   wells.reserve(6);
   if (row % 2 == 0) {
@@ -803,7 +807,8 @@ void Mask::GetHexNeighbors(int row, int col, std::vector<int> &wells) {
   }
 }
 		  
-void Mask::GetSquareNeigbors(int row, int col, std::vector<int> &wells) {
+void Mask::GetSquareNeigbors(int row, int col, std::vector<int> &wells) const
+{
   wells.resize(0);
   wells.reserve(8);
   AddNeighbor(row, col, -1, -1, wells);
@@ -817,7 +822,8 @@ void Mask::GetSquareNeigbors(int row, int col, std::vector<int> &wells) {
 }
 
 
-void Mask::CalculateLiveNeighbors() {
+void Mask::CalculateLiveNeighbors()
+{
   std::vector<int> wells;
   if (numLiveNeighbors.size() != (size_t)w*h) {
     numLiveNeighbors.resize(w*h, 0);
@@ -836,7 +842,8 @@ void Mask::CalculateLiveNeighbors() {
   }
 }
 
-int Mask::GetNumLiveNeighbors(int row, int col) {
+int Mask::GetNumLiveNeighbors(int row, int col)
+{
   assert(!numLiveNeighbors.empty());
   return (int)numLiveNeighbors[ToIndex(row,col)];
 }

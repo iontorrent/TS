@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
+#set -x
 #echo "preinst $@"
 SETTINGS=@ION_INSTALL_PREFIX@/iondb/settings.py
 
@@ -10,204 +11,131 @@ case "$1" in
     chmod ugo+x @ION_INSTALL_PREFIX@/iondb/bin/*
     chmod ugo+x @ION_INSTALL_PREFIX@/iondb/manage.py
 
+    #remove OneTouch update temp files
+	if [ -e /tmp/OTstatus ]; then
+        rm /tmp/OTstatus
+    fi
+	if [ -e /tmp/OTlock ]; then
+        rm /tmp/OTlock
+    fi
+
     # Install Settings file
     if [ -e "$SETTINGS" ]; then
         echo "Making back-up of existing Ion Django settings file '$SETTINGS' as '$SETTINGS.backup'."
         mv $SETTINGS $SETTINGS.backup
     fi
     cp $SETTINGS.dist $SETTINGS
-
-	#	----------------------------------------------------------------------
-	#	Looks for hidden file in /opt/ion/
-	#	----------------------------------------------------------------------
-	if [ ! -e /opt/ion/.computenode ]; then
-		#echo "compute node flag not found"
-        if [ ! -e /opt/ion/.masternode ]; then
-        	#echo "master node flag not found"
-            touch /opt/ion/.masternode
-			ENABLE_DAEMONS=1
-			echo "Assuming this is a master node"
-			echo "If this is supposed to be a compute node, make file /opt/ion/.computenode"
-			echo "and delete file /opt/ion/.masternode.  Then reinstall ion-dbreports."
-        else
-        	#echo "master node flag found"
-            ENABLE_DAEMONS=1
-        fi
-    else
-    	#echo "compute node flag found"
-        ENABLE_DAEMONS=0
-    fi
 	
     #---											---#
     #---	Genome Directories Permissions, etc.	---#
     #---	head node only; /results shared out		---#
     #---											---#
-	if [ $ENABLE_DAEMONS -eq 1 ]
-	then
-        #will this always be results?
-        mkdir -p /results/referenceLibrary/temp
-        mkdir -p /results/referenceLibrary/tmap-f1
-        mkdir -p /results/referenceLibrary/tmap-f2
-        mkdir -p /results/referenceLibrary/disabled/tmap-f1
-        mkdir -p /results/referenceLibrary/disabled/tmap-f2
-        chmod -R 777 /results/referenceLibrary/temp
-        chmod -R 777 /results/referenceLibrary/tmap-f1
-        chmod -R 777 /results/referenceLibrary/tmap-f2
-        chmod -R 777 /results/referenceLibrary/disabled
+    #will this always be results?
+    mkdir -p /results/referenceLibrary/temp
+    mkdir -p /results/referenceLibrary/tmap-f1
+    mkdir -p /results/referenceLibrary/tmap-f2
+    mkdir -p /results/referenceLibrary/tmap-f3
+    mkdir -p /results/referenceLibrary/disabled/tmap-f1
+    mkdir -p /results/referenceLibrary/disabled/tmap-f2
+    mkdir -p /results/referenceLibrary/disabled/tmap-f3
+    chmod -R 777 /results/referenceLibrary/temp
+    chmod -R 777 /results/referenceLibrary/tmap-f1
+    chmod -R 777 /results/referenceLibrary/tmap-f2
+    chmod -R 777 /results/referenceLibrary/tmap-f3
+    chmod -R 777 /results/referenceLibrary/disabled
+    #make pluginMedia dir
+    mkdir -p /results/pluginMedia
+    chmod -R 777 /results/pluginMedia
+
+    #	------------------------------------------
+    #	Replace existing httpd.conf
+    #	------------------------------------------
+    # If exists and non-empty, use numbered backups - old.1, old.2, ...
+    if [ -s /etc/apache2/httpd.conf ]; then
+        mv -v --backup=numbered /etc/apache2/httpd.conf /etc/apache2/httpd.conf.old
+    fi
+    # Default Ubuntu file is empty. Config now in /etc/apache2/conf.d/
+    touch /etc/apache2/httpd.conf
+
+    # Enable mod_wsgi
+    /usr/sbin/a2enmod wsgi
+
+    # Switch to the torrent-server apache vhost
+    /usr/sbin/a2dissite default
+    /usr/sbin/a2ensite torrent-server
+    # apache2 restarted by invoke-rc.d command below
+
+    #	------------------------------------------
+    #	Additional apache2 related configurations
+    #	------------------------------------------
+    mkdir -p /results/analysis/output
+    mkdir -p /results/analysis/output/disabled
+    chown www-data.www-data /results/analysis/output
+    chown www-data.www-data /results/analysis/output/disabled
+
+    # some systems export a different /results for reports
+    # don't want to squash that link.
+    if [ ! -h /var/www/output ]; then
+        # link does not exist...but it might be a file or dir.
+        ln -s -f /results/analysis/output /var/www/output
     fi
     
+    rm -f /var/www/media
+    ln -s /var/lib/python-support/python2.6/django/contrib/admin/media /var/www/media
     
-	if [ $ENABLE_DAEMONS -eq 1 ]
-	then
+    rm -f /var/www/site_media
+    ln -s -f /opt/ion/iondb/media /var/www/site_media
+
+    #symLink for plugin media
+    rm -f /var/www/pluginMedia
+    ln -s /results/pluginMedia /var/www/pluginMedia
+
+    rm -f /results/analysis/output/tmap-*
+    ln -s -f /results/referenceLibrary/tmap-* /results/analysis/output/
     
-        #	------------------------------------------
-        #	Replace existing httpd.conf
-        #	------------------------------------------
-	    if [ -e /etc/apache2/httpd.conf ]; then
-    	    mv /etc/apache2/httpd.conf /etc/apache2/httpd.conf.old
+    rm -f /results/analysis/output/disabled/tmap-*
+    ln -s -f /results/referenceLibrary/disabled/tmap-* /results/analysis/output/disabled
+
+    #---														---#
+    #---	Configure runlevels to start the daemons at boot	---#
+    #---														---#
+    DAEMONS=(
+        ionCrawler
+        ionJobServer
+        ionArchive
+        ionPlugin
+        rabbitmq-server
+        celeryd
+        )
+    for DAEMON in ${DAEMONS[@]}; do
+        CMD="update-rc.d ${DAEMON} defaults 97"
+        FOUND=`find /etc/rc?.d -type l | grep ${DAEMON} | wc -l`
+        if [ "$FOUND" -ne 0 ]; then
+            echo "using existing $DAEMON daemon configuration"
+            echo "to reset to default use '$CMD'"
+        else
+            $CMD
         fi
+    done
     
-    
-    	cat >> /etc/apache2/httpd.conf <<EOFws
-# This file was generated by the Torrent Browser package, please do not alter it
-<Directory "/var/www/output">
-    PythonPath "['/opt/ion/'] + sys.path"
 
-    AuthType Basic
-    AuthName "Torrent Browser"
-    Require valid-user
-    AuthUserFile /dev/null
-    Order allow,deny
-    Allow from localhost
-    Satisfy any
-
-    AuthBasicAuthoritative Off
-    PythonAuthenHandler django.contrib.auth.handlers.modpython
-    SetEnv DJANGO_SETTINGS_MODULE iondb.settings
-    PythonOption DJANGO_SETTINGS_MODULE iondb.settings
-    SetHandler python-program
-    PythonDebug On
-
-    Options FollowSymLinks MultiViews
-    Order allow,deny
-    Allow from localhost
-    Satisfy Any
-    DirectoryIndex Default_Report.php index.html index.php
-</Directory>
-
-<Location "/rundb">
-    PythonPath "['/opt/ion/'] + sys.path"
-
-    AuthType Basic
-    AuthName "Torrent Browser"
-    Require valid-user
-    AuthUserFile /dev/null
-    Order allow,deny
-    Allow from localhost
-    Satisfy any
-
-    AuthBasicAuthoritative Off
-    PythonAuthenHandler django.contrib.auth.handlers.modpython
-    PythonHandler django.core.handlers.modpython
-    SetEnv DJANGO_SETTINGS_MODULE iondb.settings
-    PythonOption DJANGO_SETTINGS_MODULE iondb.settings
-    SetHandler python-program
-    PythonDebug On
-</Location>
-
-<Location "/admin">
-	SetHandler python-program
-	PythonHandler django.core.handlers.modpython
-	SetEnv DJANGO_SETTINGS_MODULE iondb.settings
-	PythonDebug On
-	PythonPath "['/opt/ion/'] + sys.path"
-</Location>
-<Location "/ion-docs">
-	ErrorDocument 404 /docsnotfound.html
-</Location>
-EOFws
-
-		#	------------------------------------------
-        #	Recover any custom permission settings
-		#	------------------------------------------
-        newstr="Allow from "
-        oldstr=$(grep "${newstr}" /etc/apache2/httpd.conf.old|head -1)
-        if [ "$oldstr" != "$newstr" ] && [ "$oldstr" != "" ]; then
-	        sed -i "s/^.*${newstr}.*/${oldstr}/g" /etc/apache2/httpd.conf
-        fi
-
-		#	------------------------------------------
-        #	Additional apache2 related configurations
-        #	------------------------------------------
-		mkdir -p /results/analysis/output
-		mkdir -p /results/analysis/output/disabled
-		chown www-data.www-data /results/analysis/output
-		chown www-data.www-data /results/analysis/output/disabled
-
-		# some systems export a different /results for reports
-        # don't want to squash that link.
-		if [ ! -h /var/www/output ]; then
-        	# link does not exist...but it might be a file or dir.
-            ln -s -f /results/analysis/output /var/www/output
-        fi
-        
-        rm -f /var/www/media
-        ln -s /var/lib/python-support/python2.6/django/contrib/admin/media /var/www/media
-        
-        rm -f /var/www/site_media
-        ln -s -f /opt/ion/iondb/media /var/www/site_media
-        
-        rm -f /results/analysis/output/tmap-*
-        ln -s -f /results/referenceLibrary/tmap-* /results/analysis/output/
-        
-        rm -f /results/analysis/output/disabled/tmap-*
-        ln -s -f /results/referenceLibrary/disabled/tmap-* /results/analysis/output/disabled
-        
-
-		#---														---#
-		#---	Configure runlevels to start the daemons at boot	---#
-		#---														---#
-        DAEMONS=(
-        	ionCrawler
-            ionJobServer
-            ionArchive
-            ionPlugin
-            celeryd
-            )
-        for DAEMON in ${DAEMONS[@]}; do
-        	CMD="update-rc.d ${DAEMON} defaults 97"
-    	    FOUND=`find /etc/rc?.d -type l | grep ${DAEMON} | wc -l`
-    	    if [ "$FOUND" -ne 0 ]; then
-        	    echo "using existing $DAEMON daemon configuration"
-        	    echo "to reset to default use '$CMD'"
-    	    else
-        	    $CMD
-    	    fi
-        done
-
+    # ------------------------------------------
+    # Create directory for logging
+    # ------------------------------------------
+    mkdir -p /var/log/ion
+    chown www-data.www-data /var/log/ion
+    chmod a+w /var/log/ion
+    #special for ionPlugin who used to run as www-data
+    if [ -e /var/log/ion/ionPlugin.log ]; then
+        chmod a+w /var/log/ion/ionPlugin.log || true
     fi
-    
-    # This only executes if we are not a compute node.
-    if [ $ENABLE_DAEMONS -eq 1 ]
-    then
-        # ------------------------------------------
-        # Create directory for logging
-        # ------------------------------------------
-        mkdir -p /var/log/ion
-        chown www-data.www-data /var/log/ion
-        chmod a+w /var/log/ion
-        #special for ionPlugin who used to run as www-data
-        if [ -e /var/log/ion/ionPlugin.log ]; then
-            chmod a+w /var/log/ion/ionPlugin.log || true
-        fi
-        # touchy code
-        for log_file in django.log iarchive.log crawl.log ionPlugin.log
-        do
-            touch /var/log/ion/$log_file
-            chown :www-data /var/log/ion/$log_file
-            chmod g+rw /var/log/ion/$log_file
-        done
-    fi
+    # touchy code
+    for log_file in django.log iarchive.log crawl.log ionPlugin.log
+    do
+        touch /var/log/ion/$log_file
+        chown :www-data /var/log/ion/$log_file
+        chmod g+rw /var/log/ion/$log_file
+    done
 
     chown -R www-data:www-data @ION_INSTALL_PREFIX@/iondb
 
@@ -216,26 +144,7 @@ EOFws
     # ------------------------------------------
     SUDOFILE=/etc/sudoers
     sed -i '/www-data/ d' ${SUDOFILE}
-    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig" >> ${SUDOFILE}
-    
-#    if ! grep -q ^www-data ${SUDOFILE}; then
-#    	# if no entry exists for www-data, then add it here
-#    	echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig" >> ${SUDOFILE}
-#    else
-#    	# if entry for www-data exists, then ensure our files are listed
-#        files=(
-#        	/sbin/shutdown
-#            /usr/bin/at
-#            /usr/bin/aptitude
-#            /usr/bin/apt-get
-#            /usr/sbin/TSconfig
-#            )
-#        for file in ${files[@]}; do
-#            if ! grep ^www-data ${SUDOFILE}| grep $file; then
-#		        sed -i "s:\(^www-data ALL=.*\):\1,$file:" ${SUDOFILE}
-#            fi
-#        done
-#    fi
+    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, /opt/ion/onetouch/findHosts.py" >> ${SUDOFILE}
     
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
@@ -243,136 +152,87 @@ EOFws
     if [ -d @PYTHON_LOCAL_SITE_PACKAGES@/ion ]; then
         rm -rf @PYTHON_LOCAL_SITE_PACKAGES@/ion
     fi
-
-    #--------------------------------------------------#
-    #---	Install additional python libraries		---#
-    #--------------------------------------------------#
-    PY_LIST=(
-        )
-    WRK_DIR="@PYTHON_LOCAL_SITE_PACKAGES@"  #/usr/local/lib/python2.6/dist-packages/
+   
     
-    # Pare down the list to those packages which are not installed
-    i=0
-    for pkg in  ${PY_LIST[@]}; do
-        pkgname=${pkg%-*}
-        installver=${pkg##*-}
-        if [ -f ${WRK_DIR}/$pkg/PKG-INFO ]; then
-            foundver=$(grep ^Version: ${WRK_DIR}/$pkg/PKG-INFO|cut -d":" -f2|sed 's/ //g')
-        fi
-        if [ "$foundver" == "$installver" ]; then
-        	echo "$pkg already installed"
-            unset PY_LIST[$i]
-        fi
-        ((i+=1))
-    done
 
-    for pkg in ${PY_LIST[@]}; do
-        if [ -s ${WRK_DIR}/${pkg}.tar.gz ]; 
-        then
-            echo "Setting up ${pkg}"
-            rm -rf ${WRK_DIR}/${pkg}
-            if ! tar zxf ${WRK_DIR}/${pkg}.tar.gz -C ${WRK_DIR}; then
-                echo "ERROR unpacking ${WRK_DIR}/${pkg}.tar.gz"
-                exit 1
-            fi
-            
-            rm -f /tmp/${pkg}_install.log
-            cd ${WRK_DIR}/${pkg}
-            if ! python setup.py install >/tmp/${pkg}_install.log 2>&1; then
-                echo "ERROR setting up ${pkg}.  See /tmp/${pkg}_install.log"
-                exit 1
-            fi
-        elif [ -s ${WRK_DIR}/${pkg}.zip ];
-            then
-                echo "Setting up ${pkg}"
-                if ! unzip -o ${WRK_DIR}/${pkg}.zip -d ${WRK_DIR} >/dev/null 2>&1; then
-                    echo "ERROR unpacking ${WRK_DIR}/${pkg}.zip"
-                    exit 1
-                fi
-                
-            rm -f /tmp/${pkg}_install.log
-            cd ${WRK_DIR}/${pkg}
-            if ! python setup.py install >/tmp/${pkg}_install.log 2>&1; then
-                echo "ERROR setting up ${pkg}.  See /tmp/${pkg}_install.log"
-                exit 1
-            fi
 
-        
-        
-        else
-            echo "ERROR finding ${pkg}.tar.gz"
-            exit 1
-        fi
-    done
-    
-    
-    if [ $ENABLE_DAEMONS -eq 1 ]
-	then
+    #-------------------------------------------------------# 
+    #   Initial config requires creating a django superuser #
+    #   this step requires django-tastypie be installed     #
+    #-------------------------------------------------------#
+    cd @ION_INSTALL_PREFIX@/iondb/bin && python initsprusr.py ; cd -
 
-        #-------------------------------------------------------# 
-        #   Initial config requires creating a django superuser #
-        #   this step requires django-tastypie be installed     #
-        #-------------------------------------------------------#
-        cd @ION_INSTALL_PREFIX@/iondb/bin && python initsprusr.py >/dev/null ; cd -
-        
-    	# This is failing with an odd error when run from the install CD.
-    	# So we simply trap the exit code to prevent a non-zero exit.
-        # BPP - failure from install CD prob. due to dbase not yet configured.
-        #In development:            
-    	(cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py syncdb ; cd -) || \
-        	echo "database syncdb failed."
-    	(cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py loaddata template_init.json ; cd -) || \
-        	echo "load TF templates failed."
-    	(cd @ION_INSTALL_PREFIX@/iondb/bin/ && python migrate.py ; cd -) || \
-        	echo "database migration failed."
-        #generate the Django base template to use for PHP
-        (cd @ION_INSTALL_PREFIX@/iondb/bin/ && python base_template.py > /dev/null && \
-        chown www-data:www-data /opt/ion/iondb/templates/rundb/php_base.html) || \
-	    	echo "Failed to create the Django template for PHP."
-    	(cd @ION_INSTALL_PREFIX@/iondb/bin/ && python install_script.py /usr/lib/python2.6/dist-packages/ion/reports/TLScript.py) || \
-        	echo "insert of analysis script into database failed."
+    # Initializes django (???)
+    cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py syncdb ; cd -
+    # Loads Test Fragment entries into database
+    cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py loaddata template_init.json ; cd -
+    # Updates an existing database schema
+    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python migrate.py ; cd -
+    # Creates default report templates with site-specific content
+    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python base_template.py ; cd -
+    /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
+    # Updates existing database entries
+    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python install_script.py ; cd -
 
-		invoke-rc.d apache2 restart
-    	invoke-rc.d ionCrawler start
-    	invoke-rc.d ionJobServer start
-    	invoke-rc.d ionArchive start
-        invoke-rc.d ionPlugin start
-        invoke-rc.d celeryd start
+    echo "NODENAME=rabbit@localhost" > /etc/rabbitmq/rabbitmq.conf
+    service rabbitmq-server restart
+    invoke-rc.d apache2 restart
+    invoke-rc.d ionCrawler start
+    invoke-rc.d ionJobServer start
+    invoke-rc.d ionArchive start
+    invoke-rc.d ionPlugin start
+    invoke-rc.d celeryd start
 
-        #load the references for a first time
-        (wget -q -O /dev/null http://localhost/rundb/references > /dev/null) || \
-        	echo "Loading references failed."
+    # -------------------------------------------------------------------------
+    # Configure Celery's RabbitMQ user, vhost, and permission state
+    # -------------------------------------------------------------------------
+    if [[ ! `rabbitmqctl list_users|grep ion` ]]; then
+        echo "Adding RabbitMQ user 'ion'"
+        rabbitmqctl add_user ion ionadmin
+    fi
+    if [[ ! `rabbitmqctl list_vhosts|grep ion` ]]; then
+        echo "Adding RabbitMQ vhost 'ion' and setting permissions for user 'ion'"
+        rabbitmqctl add_vhost ion
+        rabbitmqctl set_permissions -p ion ion "" ".*" ".*"
+    fi
 
-		# command to execute
-		COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"
+    #load the references for a first time
+    (wget -q -O /dev/null http://localhost/rundb/references > /dev/null) || \
+        echo "Loading references failed."
 
-		# generate two random names for temporary files.
-		FILE="/tmp/$(basename $0).$RANDOM.txt"
-		FILE2="/tmp/$(basename $0).$RANDOM.txt"
+    #load the config page to update plugins
+    (wget -q -O /dev/null http://localhost/rundb/config> /dev/null) || \
+        echo "Loading config page failed."
 
-		# Entry we are adding to the crontab.
-		ENTRY="0 6 * * * $COMMAND"
+    # command to execute
+    COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"
 
-		# read in the users crontab entry into our random file
-		(crontab -u ionadmin -l > $FILE 2> /dev/null) || true
+    # generate two random names for temporary files.
+    FILE="/tmp/$(basename $0).$RANDOM.txt"
+    FILE2="/tmp/$(basename $0).$RANDOM.txt"
 
-		# Filter out our commands, & put the remaining lines in
-		# our second file
-		(cat $FILE | grep -v "$COMMAND" > $FILE2) || true
+    # Entry we are adding to the crontab.
+    ENTRY="0 6 * * * $COMMAND"
 
-		# add our commands to the second file
-		echo "$ENTRY" >> $FILE2
+    # read in the users crontab entry into our random file
+    (crontab -u ionadmin -l > $FILE 2> /dev/null) || true
 
-		# reload our file into crontab
-		comm="crontab $FILE2"
+    # Filter out our commands, & put the remaining lines in
+    # our second file
+    (cat $FILE | grep -v "$COMMAND" > $FILE2) || true
 
-		#
-		# use su - username if we are adding to another users crontab.
-		su - ionadmin -c "$comm"
+    # add our commands to the second file
+    echo "$ENTRY" >> $FILE2
 
-		# remove our tmp files
-		rm $FILE $FILE2
-	fi
+    # reload our file into crontab
+    comm="crontab $FILE2"
+
+    #
+    # use su - username if we are adding to another users crontab.
+    su - ionadmin -c "$comm"
+
+    # remove our tmp files
+    rm $FILE $FILE2
 
     ;;
 esac

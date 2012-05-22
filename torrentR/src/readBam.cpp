@@ -45,6 +45,7 @@ RcppExport SEXP readBam( SEXP RbamFile )
     vector<int>    out_qLen( nReadOut );
     vector<int>    out_match( nReadOut );
     vector<double>  out_percent_id( nReadOut );
+    std::vector< std::string > out_rname (nReadOut);
     std::vector< std::string > out_qDNA_a( nReadOut );
     std::vector< std::string > out_match_a( nReadOut );
     std::vector< std::string > out_tDNA_a( nReadOut );
@@ -75,6 +76,7 @@ RcppExport SEXP readBam( SEXP RbamFile )
       out_indelErrs.at( i ) = bamRead.get_indel_errors();
       out_mmErrs.at( i ) = bamRead.get_mismatch_errors();
       out_homErrs.at( i ) = bamRead.get_homo_errors();
+      out_rname.at (i) = bamRead.get_rname();
     }
 
     RcppResultSet rs;
@@ -87,6 +89,7 @@ RcppExport SEXP readBam( SEXP RbamFile )
     rs.add( "name",             out_name );
     rs.add( "strand",            out_strand );
     rs.add( "tStart",            out_tStart );
+    rs.add( "rName",            out_rname );
     rs.add( "tLen",            out_tLen );
     rs.add( "qLen",            out_qLen );
     rs.add( "matchLen",            out_match );

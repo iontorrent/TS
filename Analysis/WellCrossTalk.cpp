@@ -8,6 +8,7 @@
 #include "Traces.h"
 #include "IonErr.h"
 #include "DifferentialSeparator.h"
+#include "Utils.h"
 
 int centerSeen = 0;
 int haystackNeg = 0;
@@ -36,7 +37,7 @@ void LoadRegions(const string &regionFile, vector<struct Region> &regions) {
   string line;
   std::vector<std::string> words;
   while(getline(in, line)) {
-    FlowDiffStats::ChopLine(words, line);
+    split(line,'\t',words);
     struct Region r;
     r.row = atoi(words[0].c_str());
     r.col = atoi(words[1].c_str());

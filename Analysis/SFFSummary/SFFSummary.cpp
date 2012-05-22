@@ -27,10 +27,11 @@ SFFSummary::SFFSummary() {
   for (int idx = 0; idx < 8; idx++) {
     zeromerFirstMoment[idx] = 0;
     zeromerSecondMoment[idx] = 0;
+    zeromerCount[idx] = 0;
     onemerFirstMoment[idx] = 0;
     onemerSecondMoment[idx] = 0;
+    onemerCount[idx] = 0;
   }
-  count = 0;
 }
 
 void SFFSummary::summaryStatInit(void) {
@@ -143,8 +144,8 @@ void SFFSummary::summarizeFromSffFile(string sffFile, vector <uint16_t> &_qual, 
     // Update the summary statistics
     summaryStatUpdate(qScore,rName);
 
-    // TODO: Insert keySNR generation here.
-    AddElementSNR(sff_flowgram(sff), flowOrder);
+    // SNR generation
+    AddElementSNR(sff, flowOrder);
 
     sff_destroy(sff);
   }
@@ -202,19 +203,21 @@ void SFFSummary::phredToErr(uint16_t qScore, double &errorRate) {
 
 
 
-void SFFSummary::AddElementSNR (uint16_t *corValues, const string& flowOrder)
+void SFFSummary::AddElementSNR (sff_t *sff, const string& flowOrder)
 {
+  uint16_t *corValues = sff_flowgram(sff);
   int numFlowsPerCycle = flowOrder.length();
-  count++;
 
   for (int iFlow = 0; iFlow < 8; iFlow++) {
     char nuc = flowOrder[iFlow%numFlowsPerCycle];
     if (corValues[iFlow] < 50) {        // Zeromer
       zeromerFirstMoment[nuc&7] += corValues[iFlow];
       zeromerSecondMoment[nuc&7] += corValues[iFlow] * corValues[iFlow];
+      zeromerCount[nuc&7]++;
     } else if (corValues[iFlow] < 150) { // Onemer
       onemerFirstMoment[nuc&7] += corValues[iFlow];
       onemerSecondMoment[nuc&7] += corValues[iFlow]* corValues[iFlow];
+      onemerCount[nuc&7]++;
     }
   }
 }
@@ -237,21 +240,21 @@ void SFFSummary::writeTSV(std::ostream &out) {
     out << "Number of " << readLength[iLength] << "BP Reads = " << nReadsByLength[readLength[iLength]] << endl;
 
 
-  // TODO: output keySNR here
-  double SNR = 0;
-  if (count > 0) {
-    double SNRx[8];
-    for(int idx = 0; idx < 8; idx++) { // only care about the first 3, G maybe 2-mer etc
-      double mean0 = zeromerFirstMoment[idx] / count;
-      double mean1 = onemerFirstMoment[idx] / count;
-      double var0 = zeromerSecondMoment[idx] / count - mean0*mean0;
-      double var1 = onemerSecondMoment[idx] / count - mean1*mean1;
-      double avgStdev = (sqrt(var0) + sqrt(var1)) / 2.0;
-      if (avgStdev > 0.0)
-        SNRx[idx] = (mean1-mean0) / avgStdev;
-    }
-    SNR = (SNRx['A'&7] + SNRx['C'&7] + SNRx['T'&7]) / 3.0;
+  double SNRx[8];
+  for(int idx = 0; idx < 8; idx++) { // only care about the first 3, G maybe 2-mer etc
+    double mean0 = zeromerFirstMoment[idx] / zeromerCount[idx];
+    double mean1 = onemerFirstMoment[idx] / onemerCount[idx];
+    double var0 = zeromerSecondMoment[idx] / zeromerCount[idx] - mean0*mean0;
+    double var1 = onemerSecondMoment[idx] / onemerCount[idx] - mean1*mean1;
+    double avgStdev = (sqrt(var0) + sqrt(var1)) / 2.0;
+    SNRx[idx] = 0;
+    if (avgStdev > 0.0)
+      SNRx[idx] = (mean1-mean0) / avgStdev;
   }
+  double SNR = 0;
+  if (onemerCount['A'&7] && onemerCount['C'&7] && onemerCount['T'&7])
+    SNR = (SNRx['A'&7] + SNRx['C'&7] + SNRx['T'&7]) / 3.0;
+
   out << "System SNR = " << setprecision(2) << SNR << endl;
 }
 

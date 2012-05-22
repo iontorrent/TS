@@ -4,7 +4,7 @@
 #include "../Analysis/file-io/sff_definitions.h"
 #include "../Analysis/file-io/sff.h"
 #include "../Analysis/file-io/ion_util.h"
-#include "../Analysis/ReservoirSample.h"
+#include "ReservoirSample.h"
 #include <sstream>
 
 RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEXP RnSample, SEXP RrandomSeed) {

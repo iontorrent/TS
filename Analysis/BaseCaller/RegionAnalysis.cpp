@@ -16,9 +16,7 @@
 
 RegionAnalysis::RegionAnalysis()
 {
-  clo = NULL;
   mask = NULL;
-  libraryInfo = NULL;
   cf = NULL;
   ie = NULL;
   dr = NULL;
@@ -26,8 +24,10 @@ RegionAnalysis::RegionAnalysis()
   numFlows = 0;
 }
 
-void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<float> *_dr, RawWells *_wells, Mask *_mask, SequenceItem *_libraryInfo, CommandLineOpts *_clo,
-    const string& _flowOrder, int _numFlows, int numWorkers)
+void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<float> *_dr,
+    RawWells *_wells, Mask *_mask, const vector<KeySequence>& _keys,
+    const string& _flowOrder, int _numFlows, int numWorkers,
+    int cfiedrRegionsX, int cfiedrRegionsY, const string& _phaseEstimator)
 {
   printf("RegionAnalysis::analyze start (with %d threads)\n", numWorkers);
 
@@ -36,15 +36,16 @@ void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<floa
   ie = _ie;
   dr = _dr;
   mask = _mask;
-  libraryInfo = _libraryInfo;
-  clo = _clo;
+  keys = _keys;
+
+  phaseEstimator = _phaseEstimator;
 
   flowOrder = _flowOrder;
   numFlows = _numFlows;
 
   // Initialize region wells reader
 
-  assert (wellsReader.OpenForRead(_wells, mask->W(), mask->H(), clo->cfe_control.cfiedrRegionsX, clo->cfe_control.cfiedrRegionsY));
+  assert (wellsReader.OpenForRead(_wells, mask->W(), mask->H(), cfiedrRegionsX, cfiedrRegionsY));
 
   // Launch worker threads and await their completion
 
@@ -69,9 +70,9 @@ void *RegionAnalysisWorker(void *arg)
 {
   RegionAnalysis *analysis = static_cast<RegionAnalysis*> (arg);
 
-  if (analysis->clo->cfe_control.libPhaseEstimator == "nel-mead-treephaser")
+  if (analysis->phaseEstimator == "nel-mead-treephaser")
     analysis->worker_Treephaser();
-  else if (analysis->clo->cfe_control.libPhaseEstimator == "nel-mead-adaptive-treephaser")
+  else if (analysis->phaseEstimator == "nel-mead-adaptive-treephaser")
     analysis->worker_AdaptiveTreephaser();
 
 
@@ -124,21 +125,21 @@ void RegionAnalysis::worker_Treephaser()
         if (!mask->Match(*x, *y, MaskBead))
           continue;
 
-        int beadClass = 1; // 1 - library, 0 - TF
+        int beadClass = 0; // 0 - library, 1 - TF
 
         if (!mask->Match(*x, *y, MaskLib)) {  // Is it a library bead?
           if (!mask->Match(*x, *y, MaskTF))   // OK, is it at least a TF?
             continue;
-          beadClass = 0;
+          beadClass = 1;
         }
 
         data.push_back(BasecallerRead());
 
-        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, libraryInfo[beadClass].Ionogram, libraryInfo[beadClass].numKeyFlows - 1);
+        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, keys[beadClass].flows(), keys[beadClass].flows_length()-1);
 
         bool keypass = true;
-        for (int iFlow = 0; iFlow < (libraryInfo[beadClass].numKeyFlows - 1); iFlow++) {
-          if ((int) (data.back().measurements[iFlow] + 0.5) != libraryInfo[beadClass].Ionogram[iFlow])
+        for (int iFlow = 0; iFlow < (keys[beadClass].flows_length() - 1); iFlow++) {
+          if ((int) (data.back().measurements[iFlow] + 0.5) != keys[beadClass][iFlow])
             keypass = false;
           if (isnan(data.back().measurements[iFlow]))
             keypass = false;
@@ -248,21 +249,21 @@ void RegionAnalysis::worker_AdaptiveTreephaser()
         if (!mask->Match(*x, *y, MaskBead))
           continue;
 
-        int beadClass = 1; // 1 - library, 0 - TF
+        int beadClass = 0; // 0 - library, 1 - TF
 
         if (!mask->Match(*x, *y, MaskLib)) {  // Is it a library bead?
           if (!mask->Match(*x, *y, MaskTF))   // OK, is it at least a TF?
             continue;
-          beadClass = 0;
+          beadClass = 1;
         }
 
         data.push_back(BasecallerRead());
 
-        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, libraryInfo[beadClass].Ionogram, libraryInfo[beadClass].numKeyFlows - 1);
+        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, keys[beadClass].flows(), keys[beadClass].flows_length()-1);
 
         bool keypass = true;
-        for (int iFlow = 0; iFlow < (libraryInfo[beadClass].numKeyFlows - 1); iFlow++) {
-          if ((int) (data.back().measurements[iFlow] + 0.5) != libraryInfo[beadClass].Ionogram[iFlow])
+        for (int iFlow = 0; iFlow < (keys[beadClass].flows_length() - 1); iFlow++) {
+          if ((int) (data.back().measurements[iFlow] + 0.5) != keys[beadClass][iFlow])
             keypass = false;
           if (isnan(data.back().measurements[iFlow]))
             keypass = false;
@@ -338,7 +339,7 @@ void RegionAnalysis::worker_AdaptiveTreephaser()
 float RegionAnalysis::evaluateParameters(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters)
 {
   float metric = 0;
-  if (clo->cfe_control.libPhaseEstimator == "nel-mead-treephaser") {
+  if (phaseEstimator == "nel-mead-treephaser") {
 
     if (parameters[0] < 0) // cf
       metric = 1e10;
@@ -372,7 +373,7 @@ float RegionAnalysis::evaluateParameters(std::vector<BasecallerRead> &dataAll, D
 
     }
 
-  } else if (clo->cfe_control.libPhaseEstimator == "nel-mead-adaptive-treephaser") {
+  } else if (phaseEstimator == "nel-mead-adaptive-treephaser") {
 
     if (parameters[0] < 0) // cf
       metric = 1e10;

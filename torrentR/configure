@@ -4,9 +4,19 @@ then
   BUILD_ROOT=$PWD
 fi
 
+if [$BUILDTOOLS_INC == ""]
+then
+  BUILDTOOLS_INC=$BUILD_ROOT/../buildTools
+fi
+
 if [$ANALYSIS_INC == ""]
 then
   ANALYSIS_INC=$BUILD_ROOT/../Analysis
+fi
+
+if [$ANALYSIS_ORG_INC == ""]
+then
+  ANALYSIS_ORG_INC=$BUILD_ROOT/../Analysis/AnalysisOrg
 fi
 
 if [$BKGMODEL_INC == ""]
@@ -14,30 +24,60 @@ then
   BKGMODEL_INC=$BUILD_ROOT/../Analysis/BkgModel
 fi
 
+if [$BKGMODEL_MATH_INC == ""]
+then
+  BKGMODEL_MATH_INC=$BUILD_ROOT/../Analysis/BkgModel/MathModel
+fi
+
+if [$BKGMODEL_FITTERS_INC == ""]
+then
+  BKGMODEL_FITTERS_INC=$BUILD_ROOT/../Analysis/BkgModel/Fitters
+fi
+
+if [$BKGMODEL_BOOK_INC == ""]
+then
+  BKGMODEL_BOOK_INC=$BUILD_ROOT/../Analysis/BkgModel/Bookkeeping
+fi
+
 if [$PHASE_INC == ""]
 then
   PHASE_INC=$BUILD_ROOT/../Analysis/BaseCaller
 fi
 
+if [$ANALYSIS_IMAGE == ""]
+then
+  ANALYSIS_IMAGE=$BUILD_ROOT/../Analysis/Image
+fi
 
 if [$ANALYSIS_LIB == ""]
 then
   ANALYSIS_LIB=$BUILD_ROOT/../build/Analysis
 fi
 
-if [$LAPACKCPP_INC == ""]
+if [${UTIL_INC} == ""]
 then
-  LAPACKCPP_INC=$BUILD_ROOT/../external/lapackpp-2.5.4/include/lapackpp
+  UTIL_INC=$BUILD_ROOT/../Analysis/Util
 fi
 
-if [$LAPACKCPP_LIB == ""]
+if [$ANALYSIS_REPLAY_INC == ""]
 then
-  LAPACKCPP_LIB=$BUILD_ROOT/../external/lapackpp-2.5.4/lib/liblapackpp.a
+  ANALYSIS_REPLAY_INC=$BUILD_ROOT/../Analysis/Replay
 fi
+
+if [$ANALYSIS_SEPARATOR_INC == ""]
+then
+  ANALYSIS_SEPARATOR_INC=$BUILD_ROOT/../Analysis/Separator
+fi
+
+if [$BUILD_INC == ""]
+then
+  BUILD_INC=$BUILD_ROOT/../build/torrentR
+fi
+
 
 if [$ARMADILLO_INC == ""]
 then
-    ARMADILLO_INC=$BUILD_ROOT/../external/armadillo-1.1.0.ion0/include
+    ARMADILLO_INC=$BUILD_ROOT/../external/armadillo-2.4.0/include
 fi
 
 
@@ -46,9 +86,9 @@ then
     SAMTOOLS_INC=$BUILD_ROOT/../external/samtools-0.1.18
 fi
     
-PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$ANALYSIS_INC -I$SAMTOOLS_INC -I$BKGMODEL_INC -I$PHASE_INC -I$BUILD_ROOT/../external/hdf5-1.8.8/include -I$LAPACKCPP_INC -I$ARMADILLO_INC -Wall -g"
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$SAMTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$BUILD_ROOT/../external/hdf5-1.8.8/include -I$ARMADILLO_INC -Wall -g"
 
-PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.8/lib/libhdf5.a  $LAPACKCPP_LIB -llapack -lblas -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -L/usr/lib -L$BUILD_ROOT/../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib64 -L$BUILD_ROOT/../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib -L$BUILD_ROOT/../external/samtools-0.1.18 -lbam -lcudart -lcuda"
+PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.8/lib/libhdf5.a -llapack -lblas -L/usr/local/cuda/lib64 -L/usr/local/cuda/lib -L/usr/lib -L$BUILD_ROOT/../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib64 -L$BUILD_ROOT/../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib -L$BUILD_ROOT/../external/samtools-0.1.18 -lbam -lcudart -lcuda"
 
 sed -e "s|@PKG_LIBS@|${PKG_LIBS}|" \
     -e "s|@PKG_CPPFLAGS@|${PKG_CPPFLAGS}|" \

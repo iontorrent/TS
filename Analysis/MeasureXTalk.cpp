@@ -253,7 +253,8 @@ int main(int argc, const char *argv[]) {
     img1.FilterForPinned(&mask, MaskEmpty);
     img1.Normalize(normStart, normEnd);
     // correct in-channel electrical cross-talk
-    img1.XTChannelCorrect(&mask);
+    // img1.XTChannelCorrect(&mask);
+    img1.XTChannelCorrect();
     numFrames  = img1.GetUnCompFrames();
     //mean += img->GetInterpolatedValue(frameIx,colIx,rowIx);
 
@@ -263,7 +264,8 @@ int main(int argc, const char *argv[]) {
     img2.FilterForPinned(&mask, MaskEmpty);
     img2.Normalize(normStart, normEnd);
     // correct in-channel electrical cross-talk
-    img2.XTChannelCorrect(&mask);
+    // img2.XTChannelCorrect(&mask);
+    img2.XTChannelCorrect();
     //    int numFrames = img1.GetUnCompFrames();
     //    numFrames = 80;
     int row, col;

@@ -2,7 +2,8 @@
 
 import xmlrpclib
 
-import asettings
+
+PORT = 10000
 
 def connect(host,port):
     return xmlrpclib.ServerProxy("http://%s:%d" % (host,port), allow_none=True)
@@ -15,7 +16,7 @@ def load(fname):
 
 if __name__ == '__main__':
     # do some testing
-    server = connect(asettings.PORT)
+    server = connect(PORT)
     tscript = load("testscript.py")
     name = server.startanalysis("test1",
                                 tscript,

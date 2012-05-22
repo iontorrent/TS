@@ -42,9 +42,9 @@ void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float
 {
     // Make a clonality filter from ppf and ssq for a sample of reads.
     // Record number of putative clonal and mixed reads in the sample.
-    vec2  mean[2];
-    mat22 sigma[2];
-    vec2  alpha;
+    vec  mean[2];
+    mat sigma[2];
+    vec alpha;
     bool  converged = fit_normals(mean, sigma, alpha, ppf, ssq);
 
     if(converged){
@@ -76,6 +76,11 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, M
     int flow0 = mixed_first_flow();
     int flow1 = mixed_last_flow();
     wells.ResetCurrentRegionWell();
+    
+    // Some temporary code for comparing clonal filter in background model:
+    ofstream out("basecaller_ppf_ssq.txt");
+    assert(out);
+
     while(!wells.ReadNextRegionData(&data)){
         // Skip if this is not in the sample:
         well_coord wc(data.y, data.x);
@@ -111,6 +116,14 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, M
         float sum_frac = sum_fractional_part(nrm.begin()+flow0, nrm.begin()+flow1);
         ppf.push_back(perc_pos);
         ssq.push_back(sum_frac);
+
+        // Some temporary code for comparing clonal filter in background model:
+        out << setw(6) << data.y
+            << setw(6) << data.x
+            << setw(8) << setprecision(2) << fixed << perc_pos
+            << setw(8) << setprecision(2) << fixed << sum_frac
+            << setw(8) << setprecision(2) << fixed << normalizer
+            << endl;
     }
     assert(ppf.size() == ssq.size());
 }
@@ -137,7 +150,7 @@ inline double square(double x)
     return x * x;
 }
 
-static bool test_convergence(const vec2 mean[2], const mat22& sgma, const vec2& alpha, const vec2 new_mean[2], const mat22& new_sgma, const vec2& new_alpha)
+static bool test_convergence(const vec mean[2], const mat& sgma, const vec& alpha, const vec new_mean[2], const mat& new_sgma, const vec& new_alpha)
 {
     double eps        = 1e-4;
     double mean_diff0 = max(max(new_mean[0] - mean[0]));
@@ -149,8 +162,13 @@ static bool test_convergence(const vec2 mean[2], const mat22& sgma, const vec2& 
     return max_diff < eps;
 }
 
-static void init(vec2 mean[2], mat22 sgma[2], vec2& alpha)
+static void init(vec mean[2], mat sgma[2], vec& alpha)
 {
+  for (int i = 0; i < 2; i++) {
+    mean[i].set_size(2);
+    sgma[i].set_size(2,2);
+  }
+    alpha.set_size(2);
     // Following intializations are based on average over largne number of runs.
     // Average parameters for clonal population:
     mean[0] << 0.48811  << 1.61692;
@@ -165,7 +183,7 @@ static void init(vec2 mean[2], mat22 sgma[2], vec2& alpha)
     alpha.fill(0.5);
 }
 
-bool fit_normals(vec2 mean[2], mat22 sgma[2], vec2& alpha, const deque<float>& ppf, const deque<float>& ssq)
+bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq)
 {
     bool converged = false;
     
@@ -177,13 +195,15 @@ bool fit_normals(vec2 mean[2], mat22 sgma[2], vec2& alpha, const deque<float>& p
         for(int i=0; i<max_iters and not converged; ++i){
             // Re-estimate parameters for each distribution:
             int nsamp = ppf.size();
-            vec2 sumw;
+            vec sumw(2);
             sumw.fill(0.0);
 
-            mat22 sum2;
+            mat sum2(2,2);
             sum2.fill(0.0);
 
-            vec2   sum1[2];
+            vec   sum1[2];
+            sum1[0].set_size(2);
+            sum1[1].set_size(2);
             sum1[0].fill(0.0);
             sum1[1].fill(0.0);
 
@@ -201,12 +221,16 @@ bool fit_normals(vec2 mean[2], mat22 sgma[2], vec2& alpha, const deque<float>& p
 
                 // Each read gets two weights, reflecting the likelyhoods of that
                 // read being clonal or mixed.
-                vec2 x;
+                vec x(2);
                 x << ppf[j] << ssq[j];
-                vec2 q;
+                vec q(2);
                 q[0] = alpha[0] * clone_dist.pdf(x);
                 q[1] = alpha[1] * mixed_dist.pdf(x);
-                vec2 w = q / sum(q);
+                vec w = q / sum(q);
+
+                // Skip outliers:
+                if(not w.is_finite())
+                    continue;
 
                 // Running sums for moments are weighted:
                 sumw         += w;
@@ -218,22 +242,25 @@ bool fit_normals(vec2 mean[2], mat22 sgma[2], vec2& alpha, const deque<float>& p
             }
 
             // New means:
-            vec2 new_mean[2];
-            for(int j=0; j<2; ++j)
+            vec new_mean[2];
+            for(int j=0; j<2; ++j) {
+                new_mean[j].set_size(2);
                 new_mean[j] = sum1[j] / sumw[j];
+            }
 
             // New covariance:
-            mat22 new_sgma;
+            mat new_sgma(2,2);
             new_sgma.at(0,0) = sum2.at(0,0) / sumw[0];
             new_sgma.at(0,1) = sum2.at(0,1) / sumw[0];
             new_sgma.at(1,0) = new_sgma.at(0,1);
             new_sgma.at(1,1) = sum2.at(1,1) / sumw[0];
 
             // New prior:
-            vec2 new_alpha;
-            new_alpha = sumw / nsamp;
+            vec new_alpha = sumw / nsamp;
 
             // Test for convergence:
+            if(not new_mean[0].is_finite() or not new_mean[1].is_finite() or not new_sgma.is_finite() or not new_alpha.is_finite())
+                break;
             converged = test_convergence(mean, sgma[0], alpha, new_mean, new_sgma, new_alpha);
 
             // Update parameters, forcing covariances to be the same for both distributions:

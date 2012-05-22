@@ -15,6 +15,8 @@ from iondb.rundb import models
 from socket import gethostname
 from django.contrib.auth.models import User
 
+from django.core.exceptions import ValidationError
+
 int_test_file = "/opt/ion/.ion-internal-server"
 
 def add_user(username,password):
@@ -28,37 +30,7 @@ def add_user(username,password):
         user = User.objects.create_user(username,"ionuser@iontorrent.com",password)
         user.is_staff = True
         user.save()
-        return user
-
-def addScript(filePath):
-    '''Adds a new top level script `TLScript.py` to the database.
-    This function does not care if one exists.  The reason is that 
-    we continually update the `TLScript.py` and want to over write 
-    the existing one at every update'''
-    f = open(filePath)
-    data = f.read()
-    f.close()
-    script = models.RunScript.objects.all()
-    if len(script) > 0:
-        script = script[0]
-        script.script = data
-        script.save()
-    else:
-        script = models.RunScript(name="TopLevelScript", script=data)
-        script.save()
-    print "Saved New Top Level Script"
-
-def mungeScript(filePath):
-    '''We hack up the script here for R&D purposes'''
-    # We are including the -p 1 option to alignmentQC.sh
-    #com = "sed -i 's/alignmentQC.pl --input/alignmentQC.pl -p 1 --input/g' %s" % filePath
-    com = "sed -i 's/sam_parsed = False/sam_parsed = True/' %s" % filePath
-    try:
-        os.system(com)
-        print "R&D mod to TLScript carried out"
-    except:
-        print "Could not hack up %s.  Sorry Rob." % filePath
-                
+        return user              
     
 def add_location():
     '''Checks if a location exists and creates a default location
@@ -145,9 +117,7 @@ def add_backupconfig():
 
 def add_chips():
     '''Sets the per chip default analysis args into the 
-    `chips` table in the database.  Also creates a chip 
-    called `takeover` that will force 2 slots to be used
-    and therefore using an entire server.  '''
+    `chips` table in the database.  '''
     try:
         # Determine slots by number of cpu sockets installed
         p1 = subprocess.Popen("/usr/bin/lscpu",stdout=subprocess.PIPE)
@@ -158,10 +128,9 @@ def add_chips():
         sockets = 2
         print traceback.format_exc()
         
-    chip_to_slots = (('318',sockets,''),
+    chip_to_slots = (('318',1,''),
                      ('316',1,''),
                      ('314',1,''),
-                     ('takeover',sockets,''),
                      )
     chips = [c.name for c in models.Chip.objects.all()]
     # Add any chips that might not be in the database
@@ -184,16 +153,26 @@ def add_chips():
             c.save()
         except:
             print "Could not find a chip named %s.  This is rubbish.  Should never get here." % name
+    
+    # Remove the special chip labelled 'takeover'; no longer used.
+    try:
+        c = models.Chip.objects.get(name='takeover')
+        c.delete()
+        print "Deleted Chip object named 'takeover'"
+    except:
+        pass
     return
 
 def add_global_config():
     gc = models.GlobalConfig.objects.all()
+    #defaultArg = 'Analysis --wellsfileonly'
     defaultArg = 'Analysis'
+    defaultBaseCallerArg = 'BaseCaller'
     defaultStore = 'A'
     if len(gc)>0:
         gc = gc[0]
         print 'GlobalConfig exists: %s' % gc.name
-        if os.path.isfile (int_test_file):
+        if not os.path.isfile (int_test_file):
             if gc.default_command_line != defaultArg:
                 gc.default_command_line = defaultArg
                 gc.save()
@@ -201,19 +180,18 @@ def add_global_config():
             else:
                 pass
 
-        else:
-            print "Skipping Command Line default update"
-
-        if gc.sfftrim_args == None:
-            gc.sfftrim_args = '' 
+        if gc.basecallerargs != defaultBaseCallerArg:
+            gc.basecallerargs = defaultBaseCallerArg
             gc.save()
-            print "Updated sfftrim_args to blank default" 
+            print "Updated default basecallerargs to %s" % defaultBaseCallerArg
+
 
     else:
         kwargs = {'name':'Config', 
                   'selected':False,
                   'plugin_folder':'plugins',
                   'default_command_line':defaultArg,
+                  'basecallerargs':'BaseCaller',
                   'fasta_path':'',
                   'reference_path':'',
                   'records_to_display':20,
@@ -225,8 +203,6 @@ def add_global_config():
                   'web_root':'',
                   'site_name':'Torrent Server',
                   'default_storage_options':defaultStore,
-                  'sfftrim': False,
-                  'sfftrim_args': '',
                   'auto_archive_ack':False,
                   }
         gc = models.GlobalConfig(**kwargs)
@@ -291,48 +267,8 @@ def create_default_pgm(pgmname,comment=''):
         print "Error: No Location object exists in database!"
         return 1
 
-def add_ion_xpress_dnabarcode_set():
-    '''List from jira wiki page:
-    https://iontorrent.jira.com/wiki/display/MOLBIO/Ion+Xpress+Barcode+Adapters+1-16+Kit+-+Lot+XXX
-    '''
-    blist=['CTAAGGTAAC',    #1
-           'TAAGGAGAAC',    #2
-           'AAGAGGATTC',    #3
-           'TACCAAGATC',    #4
-           'CAGAAGGAAC',    #5
-           'CTGCAAGTTC',    #6
-           'TTCGTGATTC',    #7
-           'TTCCGATAAC',    #8
-           'TGAGCGGAAC',    #9
-           'CTGACCGAAC',    #10
-           'TCCTCGAATC',    #11
-           'TAGGTGGTTC',    #12
-           'TCTAACGGAC',    #13
-           'TTGGAGTGTC',    #14
-           'TCTAGAGGTC',    #15
-           'TCTGGATGAC',    #16
-           'TCTATTCGTC',    #17
-           'AGGCAATTGC',    #18
-           'TTAGTCGGAC',    #19
-           'CAGATCCATC',    #20
-           'TCGCAATTAC',    #21
-           'TTCGAGACGC',    #22
-           'TGCCACGAAC',    #23
-           'AACCTCATTC',    #24
-           'CCTGAGATAC',    #25
-           'TTACAACCTC',    #26
-           'AACCATCCGC',    #27
-           'ATCCGGAATC',    #28
-           'TCGACCACTC',    #29
-           'CGAGGTTATC',    #30
-           'TCCAAGCTGC',    #31
-           'TCTTACACAC',    #32
-           ]
-    btype='none'
-    name='IonXpress'
-    adapter = 'GAT'
-    
-    # Attempt to read dnabarcode set named 'IonXpress' from dbase
+def add_or_update_barcode_set(blist,btype,name,adapter):
+# Attempt to read dnabarcode set named 'IonXpress' from dbase
     dnabcs = models.dnaBarcode.objects.filter(name=name)
     if len(dnabcs) > 0:
         print '%s dnaBarcode Set exists in database' % name
@@ -392,7 +328,150 @@ def add_ion_xpress_dnabarcode_set():
             ret = models.dnaBarcode(**kwargs)
             ret.save()
         print '%s dnaBarcode Set added to database' % name
+
+def add_ion_xpress_dnabarcode_set():
+    '''List from jira wiki page:
+    https://iontorrent.jira.com/wiki/display/MOLBIO/Ion+Xpress+Barcode+Adapters+1-16+Kit+-+Lot+XXX
+    '''
+    blist=['CTAAGGTAAC',    #1
+           'TAAGGAGAAC',    #2
+           'AAGAGGATTC',    #3
+           'TACCAAGATC',    #4
+           'CAGAAGGAAC',    #5
+           'CTGCAAGTTC',    #6
+           'TTCGTGATTC',    #7
+           'TTCCGATAAC',    #8
+           'TGAGCGGAAC',    #9
+           'CTGACCGAAC',    #10
+           'TCCTCGAATC',    #11
+           'TAGGTGGTTC',    #12
+           'TCTAACGGAC',    #13
+           'TTGGAGTGTC',    #14
+           'TCTAGAGGTC',    #15
+           'TCTGGATGAC',    #16
+           'TCTATTCGTC',    #17
+           'AGGCAATTGC',    #18
+           'TTAGTCGGAC',    #19
+           'CAGATCCATC',    #20
+           'TCGCAATTAC',    #21
+           'TTCGAGACGC',    #22
+           'TGCCACGAAC',    #23
+           'AACCTCATTC',    #24
+           'CCTGAGATAC',    #25
+           'TTACAACCTC',    #26
+           'AACCATCCGC',    #27
+           'ATCCGGAATC',    #28
+           'TCGACCACTC',    #29
+           'CGAGGTTATC',    #30
+           'TCCAAGCTGC',    #31
+           'TCTTACACAC',    #32           
+           'TTCTCATTGAAC',    #33
+           'TCGCATCGTTC',    #34
+           'TAAGCCATTGTC',    #35
+           'AAGGAATCGTC',    #36
+           'CTTGAGAATGTC',    #37
+           'TGGAGGACGGAC',    #38
+           'TAACAATCGGC',    #39
+           'CTGACATAATC',    #40
+           'TTCCACTTCGC',    #41
+           'AGCACGAATC',    #42
+           'CTTGACACCGC',    #43
+           'TTGGAGGCCAGC',    #44           
+           'TGGAGCTTCCTC',    #45
+           'TCAGTCCGAAC',    #46
+           'TAAGGCAACCAC',    #47
+           'TTCTAAGAGAC',    #48
+           'TCCTAACATAAC',    #49
+           'CGGACAATGGC',    #50
+           'TTGAGCCTATTC',    #51
+           'CCGCATGGAAC',    #52
+           'CTGGCAATCCTC',    #53
+           'CCGGAGAATCGC',    #54
+           'TCCACCTCCTC',    #55
+           'CAGCATTAATTC',    #56
+           'TCTGGCAACGGC',    #57
+           'TCCTAGAACAC',    #58
+           'TCCTTGATGTTC',    #59
+           'TCTAGCTCTTC',    #60           
+           'TCACTCGGATC',    #61
+           'TTCCTGCTTCAC',    #62
+           'CCTTAGAGTTC',    #63
+           'CTGAGTTCCGAC',    #64
+           'TCCTGGCACATC',    #65
+           'CCGCAATCATC',    #66
+           'TTCCTACCAGTC',    #67
+           'TCAAGAAGTTC',    #68
+           'TTCAATTGGC',    #69
+           'CCTACTGGTC',    #70           
+           'TGAGGCTCCGAC',    #71
+           'CGAAGGCCACAC',    #72
+           'TCTGCCTGTC',    #73
+           'CGATCGGTTC',    #74
+           'TCAGGAATAC',    #75
+           'CGGAAGAACCTC',    #76
+           'CGAAGCGATTC',    #77
+           'CAGCCAATTCTC',    #78
+           'CCTGGTTGTC',    #79
+           'TCGAAGGCAGGC',    #80           
+           'CCTGCCATTCGC',    #81
+           'TTGGCATCTC',    #82
+           'CTAGGACATTC',    #83
+           'CTTCCATAAC',    #84
+           'CCAGCCTCAAC',    #85
+           'CTTGGTTATTC',    #86
+           'TTGGCTGGAC',    #87
+           'CCGAACACTTC',    #88
+           'TCCTGAATCTC',    #89
+           'CTAACCACGGC',    #90           
+           'CGGAAGGATGC',    #91
+           'CTAGGAACCGC',    #92
+           'CTTGTCCAATC',    #93
+           'TCCGACAAGC',    #94
+           'CGGACAGATC',    #95
+           'TTAAGCGGTC',    #96
+           
+           ]
+    btype='none'
+    name='IonXpress'
+    adapter = 'GAT'
+    
+    add_or_update_barcode_set(blist,btype,name,adapter)    
     return
+
+def add_ion_xpress_rna_dnabarcode_set():
+    blist=['CTAAGGTAAC',    #1
+           'TAAGGAGAAC',    #2
+           'AAGAGGATTC',    #3
+           'TACCAAGATC',    #4
+           'CAGAAGGAAC',    #5
+           'CTGCAAGTTC',    #6
+           'TTCGTGATTC',    #7
+           'TTCCGATAAC',    #8
+           'TGAGCGGAAC',    #9
+           'CTGACCGAAC',    #10
+           'TCCTCGAATC',    #11
+           'TAGGTGGTTC',    #12
+           'TCTAACGGAC',    #13
+           'TTGGAGTGTC',    #14
+           'TCTAGAGGTC',    #15
+           'TCTGGATGAC',    #16                    
+           ]
+    btype='none'
+    name='IonXpressRNA'
+    adapter = 'GGCCAAGGCG'
+    
+    add_or_update_barcode_set(blist,btype,name,adapter)  
+    return
+    
+def add_ion_xpress_rna_adapter_dnabarcode_set():
+    blist=['GGCCAAGGCG',    #adapter only                
+           ]
+    btype='none'
+    name='RNA_Barcode_None'
+    adapter = ''
+    
+    add_or_update_barcode_set(blist,btype,name,adapter)  
+    return    
     
 def add_ion_dnabarcode_set():
     '''List from TS-1517 or, file Barcodes_052611.xlsx
@@ -460,77 +539,233 @@ def ensure_dnabarcodes_have_id_str():
             bc.save()
     return
     
-def add_ThreePrimeadapter ():
+
+def add_library_kit_info(name, description, flowCount):
+    print "Adding library kit info"
+    try:
+        kit = models.KitInfo.objects.get(kitType='LibraryKit', name=name)
+    except:
+        kit = None
+    if not kit:
+        kwargs = {
+            'kitType' : 'LibraryKit',
+            'name' : name,
+            'description' : description,
+            'flowCount' : flowCount
+        }
+        obj = models.KitInfo(**kwargs)
+        obj.save()
+    else:
+        kit.description = description
+        kit.flowCount = flowCount
+        kit.save()
+        
+def add_ThreePrimeadapter (direction, name, sequence, description, isDefault):
+    print "Adding 3' adapter"
+        
     '''Ion default 3' adapter'''
-    name = 'Ion Kit'
-    sequence = 'ATCACCGACTGCCCATAGAGAGGCTGAGAC'
-    description = 'Default adapter'
     qual_cutoff = 9
     qual_window = 30
     adapter_cutoff = 16
     
-    # There should only be one query result object
+    # name is unique. There should only be one query result object
     try:
         adapter = models.ThreePrimeadapter.objects.get(name=name)
     except:
         adapter = None
     if not adapter:
-        print "Adding %s adapter" % name
+        print "Going to add %s adapter" % name
+        print "Adding 3' adapter: name=", name, "; sequence=", sequence
+        
         kwargs = {
+            'direction':direction,
             'name':name,
             'sequence':sequence,
             'description':description,
             'qual_cutoff':qual_cutoff,
             'qual_window':qual_window,
-            'adapter_cutoff':adapter_cutoff
+            'adapter_cutoff':adapter_cutoff,
+            'isDefault':isDefault
+            
         }
         ret = models.ThreePrimeadapter(**kwargs)
         ret.save()
     else:
-        #print "We have %s sequence %s" % (adapter.name,adapter.sequence)
+        ##print "Going to update 3' adapter %s for direction %s \n" % (adapter.name, adapter.direction)
+        adapter.direction = direction
         adapter.sequence = sequence
         adapter.description = description
         adapter.qual_cutoff = qual_cutoff
         adapter.qual_window = qual_window
         adapter.adapter_cutoff = adapter_cutoff
+
+        #do not blindly update the isDefault flag since user might have chosen his own
+        #adapter as the default
+        if isDefault:
+            defaultAdapterCount = models.ThreePrimeadapter.objects.filter(direction=direction, isDefault = True).count()            
+            if defaultAdapterCount == 0:
+                adapter.isDefault = isDefault
+        else:
+            adapter.isDefault = isDefault
+            
         adapter.save()
+
+
+def add_libraryKey (direction, name, sequence, description, isDefault):
+    print "Adding library key"
     
-def add_library_kit(name,description,sap):
+    # There should only be one query result object
     try:
-        kit = models.LibraryKit.objects.get(name=name)
+        libKey = models.LibraryKey.objects.get(name=name)
+    except:
+        libKey = None
+    if not libKey:
+        print "Going to add %s library key" % name
+        print "Adding library key: name=", name, "; sequence=", sequence
+
+        kwargs = {
+            'direction':direction,
+            'name':name,
+            'sequence':sequence,
+            'description':description,
+            'isDefault':isDefault
+            
+        }
+        ret = models.LibraryKey(**kwargs)
+        ret.save()
+    else:
+        ##print "Going to update library key %s sequence %s for direction %s \n" % (libKey.name, libKey.sequence, libKey.direction)
+
+        libKey.sequence = sequence
+        libKey.description = description
+
+        #do not blindly update the isDefault flag since user might have chosen his own
+        #adapter as the default
+        if isDefault:
+            defaultKeyCount = models.LibraryKey.objects.filter(direction=direction, isDefault = True).count()            
+            if defaultKeyCount == 0:
+                libKey.isDefault = isDefault
+        else:
+            libKey.isDefault = isDefault        
+
+        libKey.save()
+
+    
+def add_barcode_args():
+    print "Adding barcode_args"
+    try:
+        gc = models.GlobalConfig.objects.all()[0]
+        try:
+            barcode_args = gc.barcode_args
+        except AttributeError:
+            print "barcode_args field does not exist"
+            return 1
+        # Only add the argument if it does not exist
+        if "doesnotexist" in str(gc.barcode_args.get('filter',"doesnotexist")):
+            gc.barcode_args['filter'] = 0.01
+            gc.save()
+            print "added barcodesplit:filter"
+    except:
+        print "There is no GlobalConfig object in database"
+        print traceback.format_exc()
+    
+
+def add_sequencing_kit_info(name, description, flowCount):
+    print "Adding sequencing kit info"
+    try:
+        kit = models.KitInfo.objects.get(kitType='SequencingKit', name=name)
     except:
         kit = None
     if not kit:
         kwargs = {
+            'kitType':'SequencingKit',
             'name':name,
             'description':description,
-            'sap':sap
+            'flowCount':flowCount
         }
-        obj = models.LibraryKit(**kwargs)
+        obj = models.KitInfo(**kwargs)
         obj.save()
     else:
         kit.description = description
-        kit.sap = sap
+        kit.flowCount = flowCount
         kit.save()
+    
+
+def add_sequencing_kit_part_info(kitName, barcode):
+    print "Adding parts for sequencing kit"
+    try:
+        kit = models.KitInfo.objects.get(kitType='SequencingKit', name=kitName)
+    except:
+        kit = None
+    if kit:
+        ##print "sequencing kit found. Id:", kit.id, " kit name:", kit.name
         
-def add_sequencing_kit(name,description,sap):
+        try:
+            entry = models.KitPart.objects.get(barcode=barcode)
+        except:
+            entry = None
+          
+        if not entry:      
+            kwargs = {
+                'kit':kit,
+                'barcode':barcode
+            }
+            obj = models.KitPart(**kwargs)
+            obj.save()
+        ##else:
+          ##  print "Barcode ", barcode, " already exists"
+    else:
+        print "Kit:", kitName, " not found. Barcode:", barcode, " is not added"
+
+    
+       
+def add_library_kit_info(name, description, flowCount):
+    print "Adding library kit info"
     try:
-        kit = models.SequencingKit.objects.get(name=name)
+        kit = models.KitInfo.objects.get(kitType='LibraryKit', name=name)
     except:
         kit = None
     if not kit:
         kwargs = {
+            'kitType':'LibraryKit',
             'name':name,
             'description':description,
-            'sap':sap
+            'flowCount':flowCount
         }
-        obj = models.SequencingKit(**kwargs)
+        obj = models.KitInfo(**kwargs)
         obj.save()
     else:
         kit.description = description
-        kit.sap = sap
+        kit.flowCount = flowCount
         kit.save()
     
+
+def add_library_kit_part_info(kitName, barcode):
+    print "Adding parts for library kit"
+    try:
+        kit = models.KitInfo.objects.get(kitType='LibraryKit', name=kitName)
+    except:
+        kit = None
+    if kit:
+        ##print "library kit found. Id:", kit.id, " kit name:", kit.name
+                
+        try:
+            entry = models.KitPart.objects.get(barcode=barcode)
+        except:
+            entry = None
+          
+        if not entry:      
+            kwargs = {
+                'kit':kit,
+                'barcode':barcode
+            }
+            obj = models.KitPart(**kwargs)
+            obj.save()
+        ##else:
+          ##  print "Barcode:", barcode, " already exists"
+    else:
+        print "Kit:", kitName, " not found. Barcode:", barcode, " is not added"
+
     
 if __name__=="__main__":
     import sys
@@ -546,17 +781,6 @@ if __name__=="__main__":
         cursor.close()
     except:
         print 'No database found'
-        print traceback.format_exc()
-        sys.exit(1)
-
-    try:
-        if os.path.isfile (int_test_file):
-            # Modify the TLScript.py for R&D internal use
-            mungeScript('/usr/lib/python2.6/dist-packages/ion/reports/BlockTLScript.py')
-            
-        addScript(sys.argv[1])
-    except:
-        print 'Top Level script Failed'
         print traceback.format_exc()
         sys.exit(1)
 
@@ -653,7 +877,25 @@ if __name__=="__main__":
         sys.exit(1)
         
     try:
-    	add_ThreePrimeadapter()
+    	add_ion_xpress_rna_dnabarcode_set()        
+    except:
+        print 'Adding dnaBarcodeset: IonXpress_RNA failed'
+        print traceback.format_exc()
+        sys.exit(1)
+        
+    try:
+    	add_ion_xpress_rna_adapter_dnabarcode_set()        
+    except:
+        print 'Adding dnaBarcodeset: IonXpress_RNA failed'
+        print traceback.format_exc()
+        sys.exit(1)            
+        
+    try:
+        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)
+        add_ThreePrimeadapter('Reverse', 'Ion Paired End Rev', 'CTGAGTCGGAGACACGCAGGGATGAGATGG', 'Default reverse adapter', True)
+        add_ThreePrimeadapter('Forward', 'Ion B', 'CTGAGACTGCCAAGGCACACAGGGGATAGG', 'Ion B', False)
+        add_ThreePrimeadapter('Forward', 'Ion Truncated Fusion', 'ATCACCGACTGCCCATCTGAGACTGCCAAG', 'Ion Truncated Fusion', False)
+        add_ThreePrimeadapter('Forward', 'Ion Paired End Fwd', 'GCTGAGGATCACCGACTGCCCATAGAGAGG', 'Ion Paired End Fwd', False)        
     except:
         print "Adding 3' adapter failed"
         print traceback.format_exc()
@@ -665,20 +907,87 @@ if __name__=="__main__":
         print "Adding backup configuration failed"
         print traceback.format_exc()
         sys.exit(1)
-    
+        
     try:
-        add_library_kit('IonLibKit','Ion Plus Fragment Library Kit','4471252')
+        add_barcode_args()
     except:
-        print "Adding library_kit failed"
-        print traceback.format_exc()
-        sys.exit(1)
-    
-    try:
-        add_sequencing_kit('IonSeqKit','Ion Sequencing Kit','4468997')
-        add_sequencing_kit('IonSeq200Kit','Ion Sequencing 200 Kit','4471258')
-        add_sequencing_kit('IonPGM200Kit','Ion PGM(tm) 200 Sequencing Kit','4474004')
-    except:
-        print "Adding sequencing_kit failed"
+        print "Modifying barcode-args list failed"
         print traceback.format_exc()
         sys.exit(1)
         
+    try:
+        add_sequencing_kit_info('IonSeqKit','(100bp) Ion Sequencing Kit','260')
+        add_sequencing_kit_info('IonSeq200Kit','(200bp) Ion Sequencing 200 Kit','520')
+        add_sequencing_kit_info('IonPGM200Kit','(200bp) Ion PGM(tm) 200 Sequencing Kit','520')
+        add_sequencing_kit_info('IonPGM200Kit-v2','(200bp) Ion PGM(tm) 200 Sequencing Kit v2','520')
+
+    except:
+        print "Adding sequencing_kit info failed"
+        print traceback.format_exc()
+        sys.exit(1)
+
+    try:
+        add_sequencing_kit_part_info('IonSeqKit','4468997')
+        add_sequencing_kit_part_info('IonSeqKit','4468996')
+        add_sequencing_kit_part_info('IonSeqKit','4468995')
+        add_sequencing_kit_part_info('IonSeqKit','4468994')
+        add_sequencing_kit_part_info('IonSeq200Kit','4471258')
+        add_sequencing_kit_part_info('IonSeq200Kit','4471257')
+        add_sequencing_kit_part_info('IonSeq200Kit','4471259')
+        add_sequencing_kit_part_info('IonSeq200Kit','4471260')
+        add_sequencing_kit_part_info('IonPGM200Kit','4474004')
+        add_sequencing_kit_part_info('IonPGM200Kit','4474005')
+        add_sequencing_kit_part_info('IonPGM200Kit','4474006')
+        add_sequencing_kit_part_info('IonPGM200Kit','4474007')
+        add_sequencing_kit_part_info('IonPGM200Kit-v2','4478321')
+        add_sequencing_kit_part_info('IonPGM200Kit-v2','4478322')
+        add_sequencing_kit_part_info('IonPGM200Kit-v2','4478323')
+        add_sequencing_kit_part_info('IonPGM200Kit-v2','4478324') 
+               
+    except:
+        print "Adding sequencing_kit part info failed"
+        print traceback.format_exc()
+        sys.exit(1)    
+   
+    try:
+        add_library_kit_info('IonFragmentLibKit','Ion Fragment Library Kit','0')
+        add_library_kit_info('IonFragmentLibKit2','Ion Fragment Library Kit','0')
+        add_library_kit_info('IonPlusFragmentLibKit','Ion Plus Fragment Library Kit','0')
+        add_library_kit_info('Ion Xpress Plus Fragment Library Kit','Ion Xpress Plus Fragment Library Kit','0')
+        add_library_kit_info('Ion Xpress Plus Paired-End Library Kit','Ion Xpress Plus Paired-End Library Kit','0')
+        add_library_kit_info('Ion Plus Paired-End Library Kit','Ion Plus Paired-End Library Kit','0')
+        add_library_kit_info('Ion AmpliSeq 2.0 Beta Kit','Ion AmpliSeq 2.0 Beta Kit','0')
+        add_library_kit_info('Ion AmpliSeq 2.0 Library Kit','Ion AmpliSeq 2.0 Library Kit','0')
+        add_library_kit_info('Ion Total RNA Seq Kit','Ion Total RNA Seq Kit','0')
+        add_library_kit_info('Ion Total RNA Seq Kit v2','Ion Total RNA Seq Kit v2','0')
+    except:
+        print "Adding library_kit info failed"
+        print traceback.format_exc()
+        sys.exit(1)
+        
+    try:
+        add_library_kit_part_info('IonFragmentLibKit','4462907')
+        add_library_kit_part_info('IonFragmentLibKit2','4466464')
+        add_library_kit_part_info('IonPlusFragmentLibKit','4471252')
+        add_library_kit_part_info('Ion Xpress Plus Fragment Library Kit','4471269')
+        add_library_kit_part_info('Ion Xpress Plus Paired-End Library Kit','4477109')  
+        add_library_kit_part_info('Ion Plus Paired-End Library Kit','4477110')
+        add_library_kit_part_info('Ion AmpliSeq 2.0 Beta Kit','4467226')  
+        add_library_kit_part_info('Ion AmpliSeq 2.0 Library Kit','4475345')
+        add_library_kit_part_info('Ion Total RNA Seq Kit','4466666')  
+        add_library_kit_part_info('Ion Total RNA Seq Kit v2','4475936')              
+    except:
+        print "Adding library_kit part info failed"
+        print traceback.format_exc()
+        sys.exit(1)       
+       
+    try:
+        add_libraryKey('Forward', 'Ion TCAG', 'TCAG', 'Default forward library key', True)
+        add_libraryKey('Reverse', 'Ion Paired End', 'TCAGC', 'Default reverse library key', True)
+        add_libraryKey('Forward', 'Ion TCAGT', 'TCAGT', 'Ion TCAGT', False)
+    except ValidationError:
+        print "Info: Validation error due to the pre-existence of library key"
+    except:
+        print "Adding library key failed"
+        print traceback.format_exc()
+        sys.exit(1)

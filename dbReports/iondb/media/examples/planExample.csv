@@ -1,1 +1,1 @@
-planName,sample,project,flows,runType,library,barcodeId,seqKitBarcode,autoAnalyze,preAnalysis,bedfile,regionfile,notes
+planName,sample,project,flows,runType,library,barcodeId,seqKitBarcode,autoAnalyze,preAnalysis,bedfile,regionfile,notes,forwardLibraryKey,forward3PrimeAdapter,isPairedEnd,reverseLibraryKey,reverse3PrimeAdapter

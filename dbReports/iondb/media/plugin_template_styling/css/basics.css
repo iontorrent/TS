@@ -1,0 +1,73 @@
+/* LINKS */
+
+/* HEADINGS */
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 10px 0;
+    font-family: 'PT Sans';
+    color: #3f3f3f;
+}
+
+#column h6 {
+    font-family: "Lucida Sans Unicode", "Lucida Grande", Garuda, sans-serif, Arial, Helvetica, Garuda, sans-serif;
+}
+
+h1 {
+    font-size: 28px;
+}
+
+h2 {
+    font-size: 24px;
+}
+
+h3 {
+    font-size: 22px;
+}
+
+h4 {
+    font-size: 20px;
+}
+
+h5 {
+    font-size: 18px;
+}
+
+h6 {
+    font-size: 14px;
+}
+
+/* DEFAULT CONTENT CSS */
+
+p {
+    line-height: 18px;
+    font-size: 12px;
+    color: #545454;
+    margin-bottom: 10px;
+}
+
+#footer p {
+    color: #ffffff;
+}
+
+img.border {
+    padding: 4px;
+    border: 1px solid #ccc;
+}
+
+img.left {
+    margin: 10px 15px 3px 0;
+}
+
+img.right {
+    margin: 10px 0 3px 15px;
+}
+
+.hr.noline {
+    height: 50px;
+    background: none;
+    margin: 0 30px;
+}
+
+#column .hr {
+    background: none;
+}

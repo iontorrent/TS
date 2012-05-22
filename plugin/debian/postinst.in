@@ -18,16 +18,15 @@ case "$1" in
         chmod a+rw /results/plugins/scratch
     fi
     
-    # Remove after 2.0 release.    
-    # Ensure that renamed variantCalling plugin has not left any traces
-    if [ -d /results/plugins/variantCalling ]; then
-        rm -rf /results/plugins/variantCalling
-    fi
-    
     # Special link for a plugin
     rm -f /var/www/site_media/RunRecognitION
     if [ -e /results/plugins/RunRecognitION/static ]; then
         ln -s /results/plugins/RunRecognitION/static /var/www/site_media/RunRecognitION
+    fi
+    
+    # Set common owner, if ionadmin user exists
+    if getent passwd | grep -q "^ionadmin:"; then
+    	chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins
     fi
     ;;
 esac

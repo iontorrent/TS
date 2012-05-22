@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+          <!--[if IE]>
+              <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
+                <![endif]-->
+
+        <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+        <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet"/>
+        <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+
+        <script type="text/javascript" src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+        <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+
+        <script type="text/javascript" src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
+        <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+        <script type="text/javascript" src="/site_media/scripts.js"></script>
+        <script type="text/javascript" src="/site_media/detectmobilebrowser.js"></script>
+
+
+
+        <link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
+        <script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+        <script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
+        <script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+        <script type="text/javascript" src="/site-media/scripts.js"></script>
+
+        <!-- style for the reports -->
+        <link rel="stylesheet" type="text/css" href="/site_media/plugin_report.css" media="screen" />
+        
+        <style type="text/css">
+
+        #header h1{display: inline; clear: none}
+        #header {vertical-align: middle;}
+
+        </style>
+
+    <script>
+        $(document).ready(function() {
+
+          $(".box").colorbox({transition:"none", speed:0, fixed:"false"});
+	  $(".noheading tr:odd").addClass("zebra");
+	  $(".heading tr:odd").addClass("zebra");
+          $(".heading tbody tr").live("mouseover", function(){
+                $(this).addClass("table_hover");
+           });
+          $(".heading tbody tr").live("mouseout", function(){
+                $(this).removeClass("table_hover");
+           });
+          $(".noheading tbody tr").live("mouseover", function(){
+                $(this).addClass("table_hover");
+           });
+          $(".noheading tbody tr").live("mouseout", function(){
+                $(this).removeClass("table_hover");
+           });
+          
+	  var e = document.getElementById('detailedReport1');
+          e.style.display = 'none';
+	  
+          var e = document.getElementById('detailedReport2');
+	  e.style.display = 'none';
+          
+	  var e = document.getElementById('detailedReport3');
+          e.style.display = 'none';	 
+	
+	  var e = document.getElementById('detailedReport4');
+          e.style.display = 'none';
+      });
+</script>
+</head>
+<body>
+    <div class="all all_width">
+          <div class="topbar">
+           <div class="logoholder">
+           <a href="http://www.iontorrent.com/">
+           <img src="/site_media/images/logo_top_right_banner.png" alt="IonTorrent Systems, Inc." style="border:none;"/>   </a>                                         </div>
+           </div>
+
+
+
+{% block full_page_content %}
+<h1>One Torrent Accuracy Output</h1><br><br>
+<div id = "inner">
+
+    <div class="report_block">
+   <div><a name="consensus"></a></div>
+    <h2> Consensus Accuracy </h2>
+
+   	<div>
+        <table  class="heading">
+	<col width="15%"/>
+	<col width="15%"/>
+	<col width="15%"/>
+	<col width="15%"/>
+	<col width="15%"/>
+	<col width="15%"/>
+	<col width="15%"/>
+	<thead>
+	<tr><th colspan="7"><h2 class="table_heading_heading"><b>Filtered Variant Calling Accuracy</b></h2></th></tr>
+	<tr><th>Partition</th>
+	<th>Number of Deletions</th>
+	<th>Number of Insertions</th>
+	<th>Number of Mismatches</th>
+	<th>Total Errors</th>
+	<th>% Consesus Accuracy</th>
+	<th>QScore</th></tr>
+	</thead>
+    {% for i in data %}	
+    	{% for key, value in i.items %}
+	   {% if key == "xbenchmark" or key == "benchmark" %}
+	   <tr><th align="center">benchmark</th>
+	   <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Deletions }} </th>
+	   <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Insertions }} </th>
+	   <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Mismatches }} </th>
+           <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.Total_Errors }} </th>
+	   <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.Perc_Consensus_Accuracy }} </th>
+	   <th> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.QScore_Consensus_Accuracy }} </th></tr>
+	   {% else %}
+           <tr><td> {{ key }} </td>
+		{% if value.accuracyStats.Cons_Acc_St_Ind_ind_len.Perc_Consensus_Accuracy > 0 %}
+	   	<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Deletions }}</td> 
+		<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Insertions }}</td> 	
+	   	<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.No_Mismatches }}</td> 
+	   	<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.Total_Errors }}</td> 
+	   	<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.Perc_Consensus_Accuracy }}</td>
+	   	<td> {{ value.accuracyStats.Cons_Acc_St_Ind_ind_len.QScore_Consensus_Accuracy }}</td>
+		{% else  %}
+		<td colspan=6 align=center>Skipped by default</td>
+		{% endif %}
+           </tr>
+
+	   {% endif %}
+        {% endfor %}	
+    {% endfor %}
+    </table>
+	</div>
+
+	<div>
+	<table class="noheading" align="center">
+        <col width="15%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <thead>
+        <tr><th align="center" colspan="10"><h2 class="table_heading_heading"> <b>Unfiltered Consensus Accuracy</b> </h2></th></tr>
+        <th>Partition</th>
+        <th>Deletions</th>
+        <th>Insertions</th>
+        <th>Transitions</th>
+        <th>Transversion</th>
+        <th>Uncovered</th>
+        <th>Match</th>
+        <th>MeanCov</th>
+        <th>SDCov</th>
+        <th>QScore</th>
+        </thead>
+        <tbody>
+
+	{% for i in data %}
+		{% for key, value in i.items %}
+			{% if key == "xbenchmark" or key == "benchmark"%}
+
+			<tr><th> <a href={{ value.url_root }}/plugin_out/1_Torrent_Accuracy_out/Error_vs_Coverage/Error_vs_Coverage.html target=_blank>benchmark</a></th>
+		<th> {{ value.Error_vs_Coverage.Default.deletion}} </th>
+		<th> {{ value.Error_vs_Coverage.Default.insertion }} </th>
+		<th> {{ value.Error_vs_Coverage.Default.transition }} </th>
+		<th> {{ value.Error_vs_Coverage.Default.transversion}} </th>
+	        <th> {{ value.Error_vs_Coverage.Default.uncovered}} </th>
+		<th> {{ value.Error_vs_Coverage.Default.match}} </th>
+		<th> {{ value.Error_vs_Coverage.Default.mean_coverage}} </th>
+		<th> {{ value.Error_vs_Coverage.Default.sd_coverage}} </th>
+                <th> {{ value.Error_vs_Coverage.Default.accuracy_q_score }} </th></tr>
+
+	{% else %}
+        
+                <tr><td>
+		{% if key == "pooled" %}
+        	<a href=Error_vs_Coverage/Error_vs_Coverage.html target=_blank>{{ key }}</a>
+		{% else %}
+        	<a href={{ key }}/Error_vs_Coverage/Error_vs_Coverage.html target=_blank>{{ key }}</a>
+		{% endif %}
+
+		</td>
+                <td>{{ value.Error_vs_Coverage.Default.deletion}}</td>
+	        <td>{{ value.Error_vs_Coverage.Default.insertion }}</td>
+                <td>{{ value.Error_vs_Coverage.Default.transition }}</td>
+                <td>{{ value.Error_vs_Coverage.Default.transversion}}</td>
+                <td>{{ value.Error_vs_Coverage.Default.uncovered}}</td>
+                <td>{{ value.Error_vs_Coverage.Default.match }}</td>
+                <td>{{ value.Error_vs_Coverage.Default.mean_coverage}}</td>
+                <td>{{ value.Error_vs_Coverage.Default.sd_coverage}}</td>
+                <td>{{ value.Error_vs_Coverage.Default.accuracy_q_score }}</td>
+        </tr>
+	{% endif %}
+{% endfor %}
+{% endfor %}
+        </tbody>
+        </table>
+	</div>
+
+ <a id="more1" href="#consensus" align="left" onclick="toggle('detailedReport1', 'less1', 'more1')">View More... </a>
+	
+ <div id="detailedReport1">
+ <center>
+ {% for i in data %}
+    {% for key, value in i.items %}
+        <h3>
+	{% if key == "xbenchmark" or key == "benchmark" %}
+        <a href={{ value.url_root }}/plugin_out/1_Torrent_Accuracy_out/Error_vs_Coverage/Error_vs_Coverage.html target=_blank>benchmark</a>
+	{% else %}
+		{% if key == "pooled" %}
+        	<a href=Error_vs_Coverage/Error_vs_Coverage.html target=_blank>{{ key }}</a>
+		{% else %}
+        	<a href={{ key }}/Error_vs_Coverage/Error_vs_Coverage.html target=_blank>{{ key }}</a>
+		{% endif %}
+	{% endif %}
+        </h3>
+        <a class=box href="{{value.Error_vs_Coverage.Default.plots}}"><img class="thumbnail" src="{{value.Error_vs_Coverage.Default.plots}}" border="0" alt="Image available with consensus accuracy calculation" title="{{key}}"/></a>
+    {% endfor %}
+    {% endfor %}
+ </center>
+    <br/>		
+    <a id="less1" href="#consensus" align="left" onclick="toggle('detailedReport1', 'more1', 'less1')">View Less... </a>
+ </div>
+  	
+    </div>	
+
+	<div class="report_block">
+	<div><a name="accuracyStats"></a></div>
+ 	<h2> Raw Accuracy </h2>
+        <div>
+	<table class="noheading" align="center">
+        <col width="15%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+	<col width="10%" />
+	<col width="10%" />
+	<col width="10%" />
+	<col width="10%" />
+	<col width="10%" />
+	<col width="10%" />
+        <thead>
+	<tr><th>Partition</th>
+	<th>Deletions</th>
+	<th>Insertions</th>
+	<th>Mismatches</th>
+	<th>Total Errors</th>
+	<th>Bases Mapped</th>
+        <th>Reads Mapped</th>
+        <th>Total Reads</th>
+        <th>% Reads Mapped</th>
+	<th>Raw Read Accuracy</th></tr>
+        </thead>
+        {% for i in data %}
+        {% for key, value in i.items %}
+	{% if key == "xbenchmark" or key == "benchmark" %}
+		<tr><th>benchmark</th>
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Deletions}}</th>		   
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Insertions}}</th>
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Mismatches}}</th>
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Total_Errors}}</th>
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Total_bases_called}}</th>
+		<th>{{ value.accuracyStats.Mapping_Stats.Reads_Mapped }}</th>
+	        <th>{{ value.accuracyStats.Mapping_Stats.Total_Reads }}</th>
+        	<th>{{ value.accuracyStats.Mapping_Stats.Perc_Mapped }}</th>
+		<th>{{ value.accuracyStats.Raw_Accuracy_Stats.Average_Read_Accuracy}}</th></tr>
+	{% else %}
+		<tr> <td> {{ key }} </td>
+                <td>{{ value.accuracyStats.Raw_Accuracy_Stats.Deletions}}</td>                       
+                <td>{{ value.accuracyStats.Raw_Accuracy_Stats.Insertions}}</td>
+                <td>{{ value.accuracyStats.Raw_Accuracy_Stats.Mismatches}}</td>
+		<td>{{ value.accuracyStats.Raw_Accuracy_Stats.Total_Errors}}</td>       
+                <td>{{ value.accuracyStats.Raw_Accuracy_Stats.Total_bases_called}}</td>
+                <td>{{ value.accuracyStats.Mapping_Stats.Reads_Mapped }}</td>
+                <td>{{ value.accuracyStats.Mapping_Stats.Total_Reads }}</td>
+                <td>{{ value.accuracyStats.Mapping_Stats.Perc_Mapped }}</td>
+                <td>{{ value.accuracyStats.Raw_Accuracy_Stats.Average_Read_Accuracy}}</td></tr>
+	{% endif %}
+        {% endfor %}
+        {% endfor %}
+        </table>
+	</div>
+
+        <div>
+        <table class="heading">
+        <col width="15%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <col width="10%" />
+        <thead>
+        <tr><th align="center" colspan="10"><h2 class="table_heading_heading"> <b>Position Specific Error Rates</b></h2></th>
+        <tr><th>Partition</th>
+        <th>@1bp</th>
+        <th>@5bp</th>
+        <th>@10bp</th>
+        <th>@50bp</th>
+        <th>@100bp</th>
+        <th>@150bp</th>
+        <th>@200bp</th>
+        <th>@300bp</th>
+        <th>@400bp</th></tr>
+        </thead>
+ {% for i in data %}
+    {% for key, value in i.items %}
+	{% if key == "xbenchmark" or key == "benchmark"%}
+		<tr><th>benchmark</th>
+		<th> {{ value.accuracyStats.Raw_Accuracy_per_base.1}}</th>
+		<th> {{ value.accuracyStats.Raw_Accuracy_per_base.5}}</th>
+		<th> {{ value.accuracyStats.Raw_Accuracy_per_base.10}}</th>
+		<th> {{ value.accuracyStats.Raw_Accuracy_per_base.50}}</th>
+	        <th> {{ value.accuracyStats.Raw_Accuracy_per_base.100}}</th>
+	        <th> {{ value.accuracyStats.Raw_Accuracy_per_base.150}}</th>
+        	<th> {{ value.accuracyStats.Raw_Accuracy_per_base.200}}</th>
+        	<th> {{ value.accuracyStats.Raw_Accuracy_per_base.300}}</th>
+	        <th> {{ value.accuracyStats.Raw_Accuracy_per_base.400}}</th></tr>
+	{% else %}
+	
+        <tr>
+        <td> {{ key }} </td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.1}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.5}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.10}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.50}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.100}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.150}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.200}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.300}}</td>
+        <td> {{ value.accuracyStats.Raw_Accuracy_per_base.400}}</td>
+        </tr>
+	{% endif %}
+        {% endfor %}
+        {% endfor %}
+        </table>
+	<br/>
+
+ <a id="more2" href="#accuracyStats" align="left" onclick="toggle('detailedReport2', 'less2', 'more2')">View More... </a>
+	
+ <div id="detailedReport2">
+ <center>
+ {% for i in data %}
+    {% for key, value in i.items %}
+
+{% if value.accuracyStats.chip_error_plots.deletion != '' %}
+
+       	<h3>
+	{% if key == "xbenchmark" or key == "benchmark" %}
+                benchmark
+	{% else %}
+	 	{{key}}
+        {% endif %}
+        </h3>
+        <a class="box" href="{{value.accuracyStats.chip_error_plots.deletion}}"><img class="thumbnail" src="{{value.accuracyStats.chip_error_plots.deletion}}" width="500" height="300" border="0" alt="Image available only when partitioning by chip regions" title="{{key}}"/></a>
+        <a class="box" href="{{value.accuracyStats.chip_error_plots.insertion}}"><img class="thumbnail" src="{{value.accuracyStats.chip_error_plots.insertion}}" width="500" height="300" border="0" alt="Image available only when partitioning by chip regions" title="{{key}}"/></a>
+        <a class="box" href="{{value.accuracyStats.chip_error_plots.mismatch}}"><img class="thumbnail" src="{{value.accuracyStats.chip_error_plots.mismatch}}" width="500" height="300" border="0" alt="Image available only when partitioning by chip regions" title="{{key}}"/></a>
+        <a class="box" href="{{value.accuracyStats.chip_error_plots.total}}"><img class="thumbnail" src="{{value.accuracyStats.chip_error_plots.total}}" width="500" height="300" border="0" alt="Image available only when partitioning by chip regions" title="{{key}}"/></a>
+
+{% endif %}
+    
+    {% endfor %}
+    {% endfor %}
+</center>
+    <br/>		
+    <a id="less2" href="#accuracyStats" align="left" onclick="toggle('detailedReport2', 'more2', 'less2')">View Less... </a>
+ </div>
+    	
+    </div>	
+
+	</div>
+
+
+	<div class="report_block">
+	<div><a name="alignFlowSignal"></a></div>
+	<h2>Homopolymer Accuracy</h2>
+	<div>
+        <table class="heading">
+        <col width="15%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+        <col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+        <thead>
+        <tr><th>Partition</th>
+        <th>0-mer</th>
+        <th>1-mer</th>
+        <th>2-mer</th>
+        <th>3-mer</th>
+        <th>4-mer</th>
+        <th>5-mer</th>
+        <th>6-mer</th>
+	<th>7-mer</th>
+	<th>8-mer</th>
+	<th>9-mer</th>
+	<th>10-mer</th>
+        </thead>
+        <tbody>
+	 {% for i in data %}
+
+        {% for key,value in i.items %}
+
+	{% if key == "xbenchmark" or key == "benchmark" %}
+	<tr><th><a href={{ value.url_root }}/plugin_out/1_Torrent_Accuracy_out/alignFlowSignals/alignFlowSignals.html target=_blank>benchmark</a></th>
+        <th> {{ value.alignFlowSignals.Accuracy.0.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.1.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.2.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.3.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.4.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.5.All }} </th>
+        <th> {{ value.alignFlowSignals.Accuracy.6.All }} </th> 
+	<th> {{ value.alignFlowSignals.Accuracy.7.All }} </th> 
+	<th> {{ value.alignFlowSignals.Accuracy.8.All }} </th> 
+	<th> {{ value.alignFlowSignals.Accuracy.9.All }} </th> 
+	<th> {{ value.alignFlowSignals.Accuracy.10.All }} </th>
+        </tr>
+	
+	{% else %}
+	<tr><td>
+	{% if key == "pooled" %}
+       	<a href=alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+	{% else %}
+       	<a href={{ key }}/alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+	{% endif %}
+        </td>
+
+        <td> {{ value.alignFlowSignals.Accuracy.0.All }} </td>
+        <td> {{ value.alignFlowSignals.Accuracy.1.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.2.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.3.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.4.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.5.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.6.All }} </td>
+        <td> {{ value.alignFlowSignals.Accuracy.7.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.8.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.9.All }} </td> 
+        <td> {{ value.alignFlowSignals.Accuracy.10.All }} </td> 
+        </tr>   
+	{% endif %}
+        {% endfor %}
+	{% endfor %}
+        </tbody>
+        </table>
+	</div>
+
+	 <br>
+
+	<div>
+	<table class="heading">
+	<col width="15%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>	
+	<col width="10%"/>
+	<thead>
+	<tr><th colspan="11"><h2 class="table_heading_heading"> <b>Percent Undercall Ratio</b></h2></th></tr>
+	<tr><th>Partition</th>
+	<th>1-mer</th>
+	<th>2-mer</th>
+	<th>3-mer</th>
+	<th>4-mer</th>
+	<th>5-mer</th>
+	<th>6-mer</th>
+        <th>7-mer</th>
+        <th>8-mer</th>
+        <th>9-mer</th>
+        <th>10-mer</th>
+
+	</thead>
+	<tbody>
+	{% for i in data %}
+		{% for key,value in i.items %}
+			{% if key == "benchmark" or key == "xbenchmark" %}
+	<tr><th><a href={{ value.url_root }}/plugin_out/1_Torrent_Accuracy_out/alignFlowSignals/alignFlowSignals.html target=_blank>benchmark</a></th>
+        <th> {{ value.alignFlowSignals.Ratio.1.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.2.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.3.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.4.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.5.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.6.All }} </th>
+	<th> {{ value.alignFlowSignals.Ratio.7.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.8.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.9.All }} </th>
+        <th> {{ value.alignFlowSignals.Ratio.10.All }} </th>
+        </tr>
+
+	{% else %}
+
+	<tr><td>
+	{% if key == "pooled" %}
+       	<a href=alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+	{% else %}
+       	<a href={{ key }}/alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+	{% endif %}
+        </td>
+	<td> {{ value.alignFlowSignals.Ratio.1.All }} </td>
+        <td> {{ value.alignFlowSignals.Ratio.2.All }} </td> 
+        <td> {{ value.alignFlowSignals.Ratio.3.All }} </td> 
+        <td> {{ value.alignFlowSignals.Ratio.4.All }} </td> 
+        <td> {{ value.alignFlowSignals.Ratio.5.All }} </td> 
+        <td> {{ value.alignFlowSignals.Ratio.6.All }} </td>
+        <td> {{ value.alignFlowSignals.Ratio.7.All }} </td>
+        <td> {{ value.alignFlowSignals.Ratio.8.All }} </td>
+        <td> {{ value.alignFlowSignals.Ratio.9.All }} </td>
+        <td> {{ value.alignFlowSignals.Ratio.10.All }} </td>
+ 
+	</tr>	
+	{% endif %}
+	{% endfor %}
+	{% endfor %}
+        </tbody>
+	</table>
+	</div>
+
+        <a id="more3" href="#alignFlowSignal" align="left" onclick="toggle('detailedReport3', 'less3','more3')">View More... </a>
+   		<div id="detailedReport3">
+                <center>
+		 {% for i in data %}
+		    {% for key, value in i.items %}
+	{% if key == "xbenchmark" or key == "benchmark" %}
+		<table class="noheading">
+	     		<tr><th>Posterior - hp accuracy from reads' perspective</th>
+	    		<th>Likelihood - hp accuracy from reference's perspective</th></tr>
+                </table>
+        <h3><a href={{ value.url_root }}/plugin_out/1_Torrent_Accuracy_out/alignFlowSignals/alignFlowSignals.html target=_blank>benchmark</a></h3>
+
+	{% else %}
+        <h3>
+		{% if key == "pooled" %}
+        	<a href=alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+		{% else %}
+        	<a href={{ key }}/alignFlowSignals/alignFlowSignals.html target=_blank>{{ key }}</a>
+		{% endif %}
+        </h3>
+	{% endif %}
+               	<a class="box" href="{{value.alignFlowSignals.plots.posterior}}"><img class="thumbnail" src="{{value.alignFlowSignals.plots.posterior}}" border="0" alt="Image available with HP accuracy calculation" title="{{key}}" width=500/></a>
+		<a class="box" href="{{value.alignFlowSignals.plots.likelihood}}"><img class="thumbnail" src="{{value.alignFlowSignals.plots.likelihood}}" border="0" alt="Image available with HP accuracy calculation" title="{{key}}" width=500/></a>
+    
+		    {% endfor %}
+	    	{% endfor %}
+	    	<br/>		
+                </center>
+
+	        <a id="less3" href="#alignFlowSignal" align="left" onclick="toggle('detailedReport3', 'more3', 'less3')">View Less... </a>
+
+        	</div>
+
+	</div>
+
+	<div class="report_block">
+	<div><a name="kmerIndelRates"></a></div>
+	<h2> Worst 2-mer deletion motifs </h2>
+
+        <div>
+	<table class="heading">
+	<col width="15%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<col width="10%"/>
+	<thead>
+	<tr><th>Partition</th>
+	<th>Motif-1</th>
+	<th>Rate-1, Slope-1</th>
+	<th>Motif-2</th>
+	<th>Rate-2, Slope-2</th>
+	<th>Motif-3</th>
+	<th>Rate-3, Slope-3</th>
+	<th>Motif-4</th>
+	<th>Rate-4, Slope-4</th>
+	<th>Motif-5</th>
+	<th>Rate-5, Slope-5</th>
+
+	</thead>
+	<tbody>
+
+	{% for i in data %}
+		{% for key,value in i.items %}
+			{% if key == "benchmark" or key == "xbenchmark" %}
+
+	<tr><th><a href={{value.url_root}}/plugin_out/1_Torrent_Accuracy_out/kmer_indel_rates/kmer_indel_rates.html target=_blank>benchmark</a></th>
+	
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer.1 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer_rate.1 }}, 
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.1 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer.2 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer_rate.2 }} /
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.2 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer.3 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer_rate.3 }} /
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.3 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer.4 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer_rate.4 }} /
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.4 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer.5 }} </th>
+        <th> {{ value.kmer_indel_rates.formatted.worst2mer_rate.5 }} /
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.5 }} </th>
+        </tr>
+
+	{% else %}
+        <tr><td>
+		{% if key == "pooled" %}
+        	<a href=kmer_indel_rates/kmer_indel_rates.html target=_blank>{{ key }}</a>
+       		{% else %}
+	        <a href={{ key }}/kmer_indel_rates/kmer_indel_rates.html target=_blank>{{ key }}</a>
+ 		{% endif %}
+	</td>
+
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer.1 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer_rate.1 }},
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.1 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer.2 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer_rate.2 }},
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.2 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer.3 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer_rate.3 }},
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.3 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer.4 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer_rate.4 }},
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.4 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer.5 }} </td>
+        <td> {{ value.kmer_indel_rates.formatted.worst2mer_rate.5 }},
+{{ value.kmer_indel_rates.formatted.worst2mer_slope.5 }} </td>
+ 	</tr>	
+
+	{% endif %}
+	{% endfor %}
+	{% endfor %}
+        </tbody>
+        </table>
+
+	<a id="more4" href="#kmer_indel_rates" align="left" onclick="toggle('detailedReport4', 'less4', 'more4')">View More... </a>
+	<div id="detailedReport4">
+        <center>
+
+	{% for i in data %}
+	   {% for key,value in i.items %}
+		{% if key == "xbenchmark" or key == "benchmark" %}
+		<table class="noheading">
+	     		<tr><th>{{ value.kmer_indel_rates.plots.title_1 }}</th>
+	 		<th>{{ value.kmer_indel_rates.plots.title_2 }}</th>
+	    		<th>{{ value.kmer_indel_rates.plots.title_3 }}</th></tr>
+                </table>
+	       	<h3><a href={{value.url_root}}/plugin_out/1_Torrent_Accuracy_out/kmer_indel_rates/kmer_indel_rates.html target=_blank>benchmark</a></h3>
+                {% else %}
+		 	{% if key == "pooled" %}
+        		<h3><a href=kmer_indel_rates/kmer_indel_rates.html target=_blank>{{ key }}</a></h3>
+        		{% else %}
+	        	<h3><a href={{ key }}/kmer_indel_rates/kmer_indel_rates.html target=_blank>{{ key }}</a></h3>
+	 		{% endif %}
+ 		{% endif %}
+        	<a class="box" href="{{value.kmer_indel_rates.plots.fig_1}}"><img class="thumbnail" src= "{{value.kmer_indel_rates.plots.fig_1}}" width="300" height="200" border="0" alt="Image available with kmer_indel_rates calculation"/>
+        	<a class="box" href="{{value.kmer_indel_rates.plots.fig_2}}"><img class="thumbnail" src= "{{value.kmer_indel_rates.plots.fig_2}}" width="300" height="200" border="0" alt="Image available with kmer_indel_rates calculation"/></a>
+        	<a class="box" href="{{value.kmer_indel_rates.plots.fig_3}}"><img class="thumbnail" src= "{{value.kmer_indel_rates.plots.fig_3}}" width="300" height="200" border="0" alt="Image available with kmer_indel_rates calculation"/></a>
+       	    {% endfor %}
+       	{% endfor %}
+        </center>
+
+	<a id="less4" href="#kmerIndelRates" align="left" onclick="toggle('detailedReport4', 'more4', 'less4')">View Less... </a>
+	</div>
+    </div>
+</div>
+</div>
+
+
+<br><font color=red>&copy; 2011 Life Technologies Corporation. All rights reserved.<br>NOTICE: Life Technologies Corporation Confidential & Proprietary Plugin and output designated exclusively for internal use by  Ion Torrent and approved collaborators only. Associated code, applications, and results may not be redistributed to any third party without written approval by Ion Torrent / Life Technologies Corporation. For research use only. Not intended for any animal or human therapeutic or diagnostic use.</font></html>
+
+{% endblock full_page_content %}
+<div class="clear"></div>
+  <div class="footer">
+          <!--<a href="/admin/">Administer</a><br/>-->
+        <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a  href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;<a href=/licenses/terms-of-use.txt>Terms of Use</a><br/> Copyright&nbsp;&copy; 2011 <a href="http://www.iontorrent.com/">Life Technologies Corporation</a>  <br/> This product should be used for research use only
+     </div>
+</div> <!-- end div-all -->
+</body>
+</html>
+
+
+

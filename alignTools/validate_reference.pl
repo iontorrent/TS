@@ -70,11 +70,9 @@ EOF
 
 our %error;
 sub error
- {if ($opt->{"autoFix"})
-  {my ($errmsg, $errtype) = @_;
-  warn $errmsg if $error{$errtype}++==0;
-  }
- else {die "FATAL ERROR: ".shift()}
+ {my ($errmsg, $errtype) = @_;
+ if ($opt->{"autoFix"}) {warn $errmsg if $error{$errtype}++==0;}
+ else {die "FATAL ERROR: $errmsg" if $errtype!=13}
  }
 
 sub myprint {if ($opt->{"autoFix"}) {print @_}}
@@ -102,7 +100,10 @@ for(split/[\r\n]+/, $temp)
   if($name && $total==$lasttotal) {error("Sequence '$name' is empty !",4);}
   $lasttotal = $total;
   ($name,$seq,$diff,$perline) = ($1,'','',$opt->{"perLine"});
-  if ($name=~/^\s/) {error("Sequence name '$name' starts with a white space at line $line !\n",4)}
+  my $origname = $name;
+  if ($name=~s/^[\s\*\=]+//g) {error("Sequence name '$origname' starts with a white space, or an asterisk or equal sign at line $line !\n",4);}
+#  if ($name=~s/\:/_/g) {error("Sequence name '$origname' contains a colon at line $line, which should be replaced by an underscore to avoid breaking samtools mpileup!\n",14)}
+  if ($name=~/\W/) {error("Sequence name '$name' contains a non-alphanumeric character at line $line !\n",13)}
   $emptyline = '';
   }
  else

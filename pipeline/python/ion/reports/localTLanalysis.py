@@ -507,7 +507,7 @@ def spawn_cluster_job(rpath):
     out_path = "%s/drmaa_stdout_block.html" % rpath
     err_path = "%s/drmaa_stderr_block.txt" % rpath
     logout = open(os.path.join(out_path), "w")
-    logout.write("<html><head><meta http-equiv=refresh content='5'; URL=''></head><pre> \n")
+    logout.write("<html><pre> \n")
     logout.close()
     cwd = os.getcwd()
 
@@ -948,7 +948,7 @@ def runFullChip(env):
             ########################################
             printtime("Merging Library SFF files")
             try:
-                cmd = 'SFFMerge'
+                cmd = 'SFFProtonMerge'
                 cmd = cmd + ' -i rawlib.sff'
                 cmd = cmd + ' -o %s ' % libsff
                 for subdir in dirs:
@@ -963,11 +963,11 @@ def runFullChip(env):
                 printtime("DEBUG: Calling '%s'" % cmd)
                 subprocess.call(cmd,shell=True)
             except:
-                printtime("SFFMerge failed (library)")
+                printtime("SFFProtonMerge failed (library)")
 
             printtime("Merging Test Fragment SFF files")
             try:
-                cmd = 'SFFMerge'
+                cmd = 'SFFProtonMerge'
                 cmd = cmd + ' -i rawtf.sff'
                 cmd = cmd + ' -o %s ' % tfsff
                 for subdir in dirs:
@@ -982,7 +982,7 @@ def runFullChip(env):
                 printtime("DEBUG: Calling '%s'" % cmd)
                 subprocess.call(cmd,shell=True)
             except:
-                printtime("SFFMerge failed (test fragments)")
+                printtime("SFFProtonMerge failed (test fragments)")
 
 
         ########################################################
@@ -1044,7 +1044,7 @@ def runFullChip(env):
             printtime("Merging bam files")
             try:
         #        cmd = 'picard-tools MergeSamFiles'
-                cmd = 'java -Xmx2g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+                cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
                 for subdir in dirs:
                     if isbadblock(subdir, "Merging bam files"):
                         continue
@@ -1055,6 +1055,7 @@ def runFullChip(env):
                         printtime("ERROR: skipped %s" % bamfile)
                 cmd = cmd + ' O=%s/%s_%s.bam' % (ALIGNMENT_RESULTS, env['expName'], env['resultsName'])
                 cmd = cmd + ' ASSUME_SORTED=true'
+                cmd = cmd + ' CREATE_INDEX=true'
                 cmd = cmd + ' USE_THREADING=true'
                 cmd = cmd + ' VALIDATION_STRINGENCY=LENIENT'
                 printtime("DEBUG: Calling '%s'" % cmd)

@@ -28,11 +28,11 @@ class Devices:
 def disk_report():  
     report = {} # dictionary, {'deviceName': [1024-blocks,Used,Aval,Capac,MountedOn]}
     #If df fails after 2 seconds kill the process
-    p = subprocess.Popen("/opt/ion/iondb/bin/timeout.sh 2 df -P", shell=True,  
+    p = subprocess.Popen("ion_timeout.sh 2 df -P", shell=True,  
                          stdout=subprocess.PIPE)  
-    p.wait()
+    stdout, stderr = p.communicate()
     
-    dat = [i.strip().split(' ') for i in p.stdout.readlines()][1:]
+    dat = [i.strip().split(' ') for i in stdout.splitlines(True)][1:]
     for i in dat:
         key = i[0]
         report[key]=[]

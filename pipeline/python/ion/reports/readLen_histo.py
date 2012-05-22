@@ -26,10 +26,9 @@ def run_SFFSummary(sff_file, bId):
         com = "SFFSummary -o quality.%s.summary --sff-file %s --read-length 50,100,150 --min-length 0,0,0 --qual 0,17,20 -d readLen_%s.txt" % (bId, sff_file, bId)
         print "sffsummary" , com
         ret = call(com,shell=True)
-        if int(ret)!=0 and STATUS==None:
-            STATUS='ERROR'
     except:
         print 'Failed SFFSumary'
+        raise
 
 def run_barcodeSplit():
     pass

@@ -11,14 +11,13 @@
  */
 
 
-#include <vector>
-
-
+#include <limits.h>
 #include <pthread.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
 #include <vector>
+#include <algorithm>
 #include <list>
 #include <sstream>
 #include <stdlib.h>
@@ -55,6 +54,9 @@ public:
 		, out_file("Default")
         , output_dir("")
 		, genome_info("")
+		, flow_order("")
+		, flow_err_file("alignFlowErr.txt")
+		, score_flows(false)
 		, read_to_keep_file("")
 		, read_to_reject_file("")
 		, filter_length(20)
@@ -62,6 +64,7 @@ public:
 		, start_slop(0)
 		, sam_parsed_flag(0)
 		, total_reads(0)
+		, read_limit(LONG_MAX)
 		, sample_size(0)
 		, help_flag(false)
 		, skip_cov_flag(false)
@@ -84,13 +87,17 @@ public:
 		, truncate_soft_clipped(true)
 		, three_prime_clip(0)
 		, round_phred_scores(false)
-        , five_prime_justify(false)
+        , five_prime_justify(true)
+		, merged_region_file("merge_region.txt")
 		{}
 		string			bam_file; /**< a string representing the absolute path to a bam file, or just a file name*/
 		string			bam_index; /**< a string representing the absolute path to a bam file index*/
 		string			out_file;  /**< a string representing the absolute path to the prefix of output file names [Default: "Default"] */
         string          output_dir; /**< a string representing the path to an output directory, will try and make this directory if it doesn't exist already */
 		string			genome_info; /**< a string representing the absolute path to a genome.info.txt file (internal Ion Torrent file format [Default: ""] */
+		string			flow_order; /**< Sequencing flow order [Default: ""] */
+		string			flow_err_file; /**< output file for flow error info */
+		bool			score_flows; /**< Sequencing flow order [Default: ""] */
 		string			read_to_keep_file; /**< File with list of read IDs to use [Default: ""] */
 		string			read_to_reject_file; /**< File with list of read IDs to ignore [Default: ""] */
 		long			filter_length; /**< the minimum length a read must be to be included in calculations and output [Default: 20] */
@@ -98,6 +105,7 @@ public:
 		long			start_slop;/**< an integer representing the first N bases to be ignored when considering errors in an alignment */
 		int				sam_parsed_flag;/**< a flag to signal whether or not to create the sam.parsed file (can be very large file) */
 		long			total_reads;/**< a long to represent the total number of reads being input.  this is used for sampling purposes in order to extrapolate stats */
+		long			read_limit;/**< a long to represent the total number of alignments to read - useful to limit when debugging */
 		long			sample_size;/**< a long representing the number of reads to sample */
 		bool			help_flag;/**< a bool to print the help message to stdout.  exits the program if true */
 		bool			skip_cov_flag;/**< a bool that allows the user to skip coverage calculations.  this speeds up the program considerably, and reduces memory use */
@@ -151,8 +159,13 @@ public:
 									  of a "100 Q17" which means 2 errors in 100 bases.
 									*/
         bool five_prime_justify; /**< boolean whether to follow indel justification done by mapper or force 5prime */
+        string merged_region_file;
 	};
-	
+	//for region-specific errors
+	struct read_region{
+		int region_start_base;
+		int region_stop_base;		
+	}; 
 	/**
 	 * Simple constructor which only takes the AlignStats::options struct as a parameter.  
 	 * This unifies the initialization process, and constructors into 1 thing.  
@@ -218,7 +231,9 @@ private:
 	size_t my_worker_num; /**< this number is the worker thread id.  it is used to index into the concurrent data structure holding 
 						   *	pending worker data
 						   */
-	long total_reads_cached;/**< a long representing the total number of reads processed */
+	long total_reads_to_read; /**< a long representing the total number of alignments to inspect, useful to limit when debugging */
+	long total_reads_cached;/**< a long representing the total number of alignments read */
+	long total_reads_processed;/**< a long representing the total number of alignments analyzed */
 	//i/o members
 	
 	options opt;/**< an instance of AlignStats::options which holds the configuration for this particular call to AlignStats::go() */
@@ -305,13 +320,35 @@ private:
 													   * with key: length, value: total
 													   */
 	
-
 	std::string genome_name; /**< output name of genome from AlignStats::options.genome_info file */
 	std::string genome_version;/**< output name of genome version from AlignStats::options.genome_info file */
 	std::string index_version;/**< output name of genome index version from AlignStats::options.genome_info file */
 	long genome_length;/**< length of genome from AlignStats::options.genome_info file */
 
+	std::string			flow_order;	/**< Sequencing flow order */
+	bool				score_flows;	/**< true if flow-based error accounting should be performed */
+	std::vector<uint32_t>		n_flow_aligned;	/**< vector with i'th element showing number of reads that aligned up to flow i */
+	std::vector<uint32_t>		flow_err;	/**< vector with i'th element showing number of erroneous HP calls at flow i */
+	std::vector<uint32_t>		flow_err_bases;	/**< vector with i'th element showing number of erroneous base calls at flow i */
+	std::string			flow_err_file;	/**< path for output flow error summary table */
+
 	PileupFactory pileups;/**< a pileupfactory, see types/Pileup.h for documentation */
+	
+	//for region-specific errors: start
+	std::tr1::unordered_map<string, read_region> _read_regionmap; 
+	bool _region_positions_defined; 
+
+	int	_total_region_homo_err;	
+	int _total_region_mm_err;
+	int	_total_region_indel_err;
+	int	_total_region_ins_err;
+	int	_total_region_del_err;
+	
+	std::ofstream	_region_error_outputfile;
+	NativeMutex	 _region_error_outputfile_mutex; /**< a mutex to handle synchronized writes to the region error file*/
+	//*read_regionmap carries the result map
+	bool build_read_regionmap(string regionPostionFile, std::tr1::unordered_map<string, read_region> *read_regionmap);
+	//for region-specific errors: end
 	
 	/**
 	 * a simple function to initialize individual class members, but not data structures
@@ -347,6 +384,12 @@ private:
 	 * writes the alignment summary error table file
 	 */
 	void write_error_table();
+
+	/**
+	 * writes the alignment flow error summary file
+	 */
+	void write_flow_error_table();
+
 	/** 
 	 * read_bam is the Producer portion of the Producer/Consumer parallel paradigm.  This function does quite a bit
 	 * It detects if the BAM/SAM is sorted
@@ -369,6 +412,8 @@ private:
 	// Utility functions for parsing read names from file or stream
 	void readNamesFromFile(std::map<string,bool> &nameMap, std::string inFile);
 	bool readNextNameFromStream(std::string &readName, ifstream &inStream);
+
+	void countAlignedFlows(std::vector<int> &max_flow, std::vector<uint32_t> &flow_by_position);
 };
 
 #endif // ALIGNSTATS_H

@@ -3,11 +3,12 @@
 #define REGIONANALYSIS_H
 
 #include "Mask.h"
-#include "Separator.h"
+//#include "Separator.h"
 #include "IonErr.h"
 #include "DPTreephaser.h"
 #include "CommandLineOpts.h"
 #include "RegionWellsReader.h"
+#include "BaseCallerUtils.h"
 
 // RegionAnalysis
 //
@@ -21,7 +22,8 @@ public:
   RegionAnalysis();
 
   void analyze(vector<float> *_cf, vector<float> *_ie, vector<float> *_dr, RawWells *_wells, Mask *_mask,
-      SequenceItem *_libraryInfo, CommandLineOpts *_clo, const string& _flowOrder, int _numFlows, int numWorkers);
+      const vector<KeySequence>& _keys, const string& _flowOrder, int _numFlows, int numWorkers,
+      int cfiedrRegionsX, int cfiedrRegionsY, const string& _phaseEstimator);
 
 private:
   friend void * RegionAnalysisWorker(void *);
@@ -31,10 +33,12 @@ private:
   void NelderMeadOptimization(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters, int numEvaluations, int numParameters);
   float evaluateParameters(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters);
 
-  CommandLineOpts *   clo;
+  // Command Line Options
+  string phaseEstimator;
+
   RegionWellsReader   wellsReader;
   Mask *              mask;
-  SequenceItem *      libraryInfo;
+  vector<KeySequence> keys;
   string              flowOrder;
   int                 numFlows;
 

@@ -13,8 +13,10 @@
 #include <sstream>
 #include <string>
 #include <cassert>
+#include <exception>
 #include "Utils.h"
 #include "BAMReader.h"
+#include "sam_header.h"
 
 using namespace std;
 
@@ -40,27 +42,21 @@ BAMReader::BAMReader(const std::string& BAM_file, const std::string& Index_File)
 	
 }
 
-
 /* initialization code */
-
 void BAMReader::Initialize() {
-	file_p  = NULL;
-	bam_index = NULL;
-	file_open = false;
-	bam_header = bam_header_init();
-	
+  file_p  = NULL;
+  bam_index = NULL;
+  file_open = false;
+  bam_header = NULL;
+  //bam_header = bam_header_init();
 }
 
 // Destructor closes all open files:
-
 BAMReader::~BAMReader() {
 	
 	this->close();
 	
 }
- 
-
-
 
 /* functionality */
 void BAMReader::open() {
@@ -75,7 +71,6 @@ void BAMReader::open(const std::string& BAM_file) {
 	
 	
 }
-
 
 void BAMReader::open(const std::string& mode_stdin, const std::string& type_of_stdin) {
 		
@@ -96,7 +91,6 @@ void BAMReader::open(const std::string& mode_stdin, const std::string& type_of_s
 	}
 	
 }
-
 
 void BAMReader::_open() {
 	//std::cerr << "index_file.capacity(): " << index_file.capacity() << std::endl; 
@@ -134,11 +128,11 @@ void BAMReader::_open() {
 	
 }
 
-
 void BAMReader::_init() {
 	
 	file_open = true;
 	bam_header = file_p->header;
+        bam_header_object.init( bam_header );
 
 	for (int n_target = 0; n_target < bam_header->n_targets; n_target++) {
 		std::string isrt(bam_header->target_name[n_target]);
@@ -148,27 +142,22 @@ void BAMReader::_init() {
 
 }
 
-
 void BAMReader::close() {
 	
 	if (is_open()) {
 		samclose(file_p);
 		file_open = false;
 	} 
-	
 }
-
 
 // Was the open successful?
 bool BAMReader::is_open()   const {
 	return file_open;
 }
 
-
 BAMReader::operator bool() const {
 	return is_open();
 }
-
 
 //return number of references
 int BAMReader::num_refs() const {
@@ -179,8 +168,6 @@ int BAMReader::num_refs() const {
 	}
 
 }
-
-
 
 //return names strvec(string vector) of names
 const strvec& BAMReader::refs() const {	
@@ -193,10 +180,6 @@ const lenvec& BAMReader::lens() const {
 	return ref_lens;
 	
 }
-
-
-
-
 /**** iterator implementations *****/
 
 	/* iterator gets */
@@ -225,9 +208,6 @@ BAMReader::iterator BAMReader::get_iterator(const std::string& ref_seq_name) {
 	
 }
 
-
-
-
 BAMReader::iterator BAMReader::get_iterator(int ref_index, coord_t begin, coord_t end) {
 	return BAMReader::iterator(file_p, ref_index, bam_file, begin, end, ref_lens);
 	
@@ -243,7 +223,6 @@ BAMReader::iterator BAMReader::get_iterator(const std::string& ref_seq_name, coo
 	}
 
 }
-
 
 //gets a ref_index 
 int BAMReader::_findRef(const std::string& ref_seq_name) const {
@@ -263,7 +242,7 @@ int BAMReader::_findRef(const std::string& ref_seq_name) const {
 	
 }
 
-	/*iterator ctors/dtors and initialization*/
+/*iterator ctors/dtors and initialization*/
 
 BAMReader::iterator::iterator() {
 	_init();
@@ -379,14 +358,7 @@ void BAMReader::iterator::_index(const std::string& BAM_file) {
 	//documentation says status is always 0 for now. 
 }
 
-/*
-BAMReader::iterator::~iterator() {
-	
-	bam_iter_destroy(bam_iter);
-}
- */
-
-	/*	iteration	*/
+/*	iteration	*/
 
 
 
@@ -427,9 +399,221 @@ void BAMReader::iterator::next() {
 		
 		
 }
+
+BAMReader::iterator::~iterator() {
+    if(NULL != itr_record) {
+        bam_destroy1(itr_record);
+        itr_record = NULL;
+    }
+}
 	
+/* BAMHeader implementations */
+
+//ctor
+BAMReader::BAMHeader::BAMHeader() {
+  //setup default read group
+  //maybe?
+}
 
 
 
+void BAMReader::BAMHeader::init(bam_header_t* header) {
+  
+  header_ptr = header;
+  
+  //not sure what this one does, Heng Li's code:
+  if (header_ptr->l_text >= 3) {
+    if (header_ptr->dict == 0) 
+      header_ptr->dict = sam_header_parse2( header_ptr->text );
+  }
+  int num_entries = 0;
+  char type[2] = { 'R', 'G' };
+  char key_tag[2] = { 'I', 'D' };
+  char **rg_list = NULL;
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  if ( rg_list == NULL ) { 
+    /*
+     I hate doing this.  If there's a better way to check 
+     that the ID is or isn't there, I'd like to know
+     */
+    cerr << "[BAMReader::BAMHeader] RG is missing required ID field.  Ignoring read groups." << endl;
+      cerr << "lawlllll" << endl;
+    read_groups.push_back(BAMReader::BAMHeader::ReadGroup());
+    return;
+  } else {
+    for( int j = 0; j < num_entries; j++ ) {
+        read_groups.push_back(BAMReader::BAMHeader::ReadGroup());
+    }
+  }
+   
+  //get flow order
+  key_tag[0] = 'F'; key_tag[1] = 'O';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {
+    try {
+      read_groups[j].flow_order = rg_list[j];
+      read_groups[j].num_flows = read_groups[j].flow_order.length();
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }  
+  //get key sequence
+  key_tag[0] = 'K'; key_tag[1] = 'S';
+  num_entries = 0;
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {   
+    try {
+      read_groups[j].key_sequence = rg_list[j];
+      read_groups[j].key_length = read_groups[j].key_sequence.length();
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get ID
+  key_tag[0] = 'I'; key_tag[1] = 'D';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].group_id = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get CN
+  key_tag[0] = 'C'; key_tag[1] = 'N';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].sequencing_center = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get DS
+  key_tag[0] = 'D'; key_tag[1] = 'S';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].description = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get DT
+  key_tag[0] = 'D'; key_tag[1] = 'T';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].date_time = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get LB
+  key_tag[0] = 'L'; key_tag[1] = 'B';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {   
+    try {
+      read_groups[j].library = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get PG
+  key_tag[0] = 'P'; key_tag[1] = 'G';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) { 
+    try {
+      read_groups[j].program = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get PI
+  key_tag[0] = 'P'; key_tag[1] = 'I';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try { 
+      read_groups[j].predicted_median_insert_size = strtol(rg_list[j], NULL, 10);
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get PL
+  key_tag[0] = 'P'; key_tag[1] = 'L';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].sequencing_platform = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get PU
+  key_tag[0] = 'P'; key_tag[1] = 'U';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].platform_unit = rg_list[j];
+    } catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
+  //get SM
+  key_tag[0] = 'S'; key_tag[1] = 'M';
+  rg_list = parse_read_group( rg_list, type, key_tag, &num_entries );
+  for (int j = 0; j < num_entries; j++ ) {    
+    try {
+      read_groups[j].sample_name = rg_list[j];
+    }catch ( std::exception& e) {
+      //defaults are in place for the ReadGroup
+    }
+  }
 
+  free(rg_list); 
+}
 
+char** BAMReader::BAMHeader::parse_read_group( char** rg_list, char type[2], char key_tag[2], int* num_entries ) {
+  if (rg_list != NULL)
+    free(rg_list);
+  rg_list = sam_header2list( header_ptr->dict, type, key_tag, num_entries );
+  return rg_list;
+}
+
+BAMReader::BAMHeader::ReadGroup& BAMReader::BAMHeader::get_read_group(unsigned int id) {
+  if (read_groups.size() >= id) {
+     return read_groups[ id ];
+  } else {
+    //FIXME:  throw an exception instead
+    return default_group;
+  }
+}
+
+BAMReader::BAMHeader::ReadGroup::ReadGroup()
+:
+group_id("nothing meaningful"),
+sequencing_center("Timbuktu" ),
+flow_order("N"),
+key_sequence("N"),
+description("Default ReadGroup"),
+date_time("1/1/12"),
+library("not a library"),
+num_flows(-1),
+key_length(-1)
+{
+  
+}
+
+std::string BAMReader::BAMHeader::ReadGroup::to_string() {
+  
+  std::ostringstream strm;
+  strm << get_read_group_id() <<" "<< get_sequencing_center() <<" "<< get_description() <<" "<< get_date_time() 
+  <<" "<< get_flow_order() <<" "<< get_key_sequence() <<" "<< get_library() <<" "<< get_program() 
+  <<" "<< get_predicted_median_insert_size() <<" "<< get_sequencing_platform() <<" "<< get_platform_unit()
+  <<" "<< get_sample_name();
+  
+  return strm.str();
+    
+  
+
+}

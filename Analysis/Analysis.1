@@ -127,6 +127,19 @@ minimum allowed value is 5.
 Sets the nucleotide concentration used in the sequencing run in micro-molar
 units.  The default is 50uM.
 .TP
+--smoothing-file=\fIfilename\fR
+Define Tikhonov Smoothing coeffcient file to load, relative to the dat file directory.
+If this option is present, the raw data is smoothed as it's read in and all processing
+is done on the smoothed data.  The original data files are untouched.  (APB)
+.TP
+--smoothing
+Alternative to --smoothing-file.
+Uses pre-computed Tikhonov Smoothing coeffcients. Takes an optional arg that
+can be one of 05, 075, 10, 15, or 20.  10 is the assumed default.  Smaller numbers apply
+less smoothing.
+If this option is present, the raw data is smoothed as it's read in and all processing
+is done on the smoothed data.  The original data files are untouched.  (APB)
+.TP
 -v, --version
 Print version and exit
 .TP

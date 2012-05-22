@@ -12,13 +12,15 @@
 
 #include <string>
 #include <vector>
+
 using namespace std;
 
 
 
 class BasecallerRead {
 public:
-  void SetDataAndKeyNormalize(float *flowValues, int _numFlows, int *keyVec, int numKeyFlows);
+  void SetDataAndKeyNormalize(const float *flowValues, int _numFlows, const int *keyVec, int numKeyFlows);
+
   void flowToString(const string &flowOrder, string &seq);
 
   void FitBaselineVector(int numSteps, int stepSize, int startStep = 0);

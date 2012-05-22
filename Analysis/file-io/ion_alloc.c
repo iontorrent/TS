@@ -3,7 +3,7 @@
 #include "ion_error.h"
 #include "ion_alloc.h"
 
-inline void *
+void *
 ion_malloc(size_t size, const char *fn_name, const char *variable_name)
 {
   void *ptr = malloc(size);
@@ -13,7 +13,7 @@ ion_malloc(size_t size, const char *fn_name, const char *variable_name)
   return ptr;
 }
 
-inline void *
+void *
 ion_realloc(void *ptr, size_t size, const char *fn_name, const char *variable_name)
 {
   ptr = realloc(ptr, size);
@@ -23,7 +23,7 @@ ion_realloc(void *ptr, size_t size, const char *fn_name, const char *variable_na
   return ptr;
 }
 
-inline void *
+void *
 ion_calloc(size_t num, size_t size, const char *fn_name, const char *variable_name)
 {
   void *ptr = calloc(num, size);

@@ -1,95 +1,111 @@
 {% extends "rundb/ion_base_template.html" %}
-
 {% block pagination_holder %}{% endblock %}
-{% block current_tab%}jobs{% endblock %}
+{% block current_tab %}jobs{% endblock %}
 <!--{% block controls_holder %}{% endblock %}-->
 
 {% block pre_content %}
-<div>
-  <div class="clear">
-    <div class="left_heading">Jobs Servers</div>
-  </div>
-  <div class="clear"></div>
-  <table>
-    <thead>
+  <div>
+    <div class="clear">
+      <div class="left_heading">Jobs Servers</div>
+    </div>
+    <div class="clear"></div>
+    <table>
+      <thead>
       <tr>
-	<th>Location</th><th>IP</th><th>Status</th>
-	<th>Job Count</th><th>Uptime</th>
+        <th>Location</th>
+        <th>IP</th>
+        <th>Status</th>
+        <th>Job Count</th>
+        <th>Uptime</th>
       </tr>
-    </thead>
-    <tbody>
+      </thead>
+      <tbody>
       {% for name,ip,up,nrunning,uptime in servers %}{% spaceless %}
-      <tr class="{% cycle 'row1' 'row2' %}">
-	<td>{{name}}</td><td>{{ip}}</td>
-	<td>{% if up %}Running{% else %}Down{% endif %}</td>
-	<td>{% if up %}{{nrunning}}{% else %}-{% endif %}</td>
-	<td>
-	  {% if up %}
-	  {% if uptime.days %}
-	  {{uptime.days}} day{{uptime.days|pluralize}},
-	  {% endif %}
-	  {% if uptime.hours %}
-	  {{uptime.hours}} hour{{uptime.hours|pluralize}}, 
-	  {% endif %}
-	  {{uptime.minutes}} minute{{uptime.minutes|pluralize}},
-	  {{uptime.seconds}} second{{uptime.seconds|pluralize}}
-	  {% else %}-{% endif %}
-	</td>
-      </tr>
+        <tr class="{% cycle 'row1' 'row2' %}">
+          <td>{{ name }}</td>
+          <td>{{ ip }}</td>
+          <td>{% if up %}Running{% else %}Down{% endif %}</td>
+          <td>{% if up %}{{ nrunning }}{% else %}-{% endif %}</td>
+          <td>
+            {% if up %}
+              {% if uptime.days %}
+                {{ uptime.days }} day{{ uptime.days|pluralize }},
+              {% endif %}
+              {% if uptime.hours %}
+                {{ uptime.hours }} hour{{ uptime.hours|pluralize }},
+              {% endif %}
+              {{ uptime.minutes }} minute{{ uptime.minutes|pluralize }},
+              {{ uptime.seconds }} second{{ uptime.seconds|pluralize }}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
       {% endspaceless %}{% endfor %}
-    </tbody>
-  </table>
-</div>
+      </tbody>
+    </table>
+  </div>
 {% endblock pre_content %}
 
 
 {% block content %}
-<div>
-{% if not jobs %}
-<p class="centered_message">No active jobs.</p>
-{% else %}
-<div class="clear">
-  <div class="left_heading">Active Jobs</div>
-</div>
-<div class="clear"></div>
-<table>
-  <thead>
-    <tr>
-      <th>Job Server</th><th>Name</th><th>Job/PID</th><th>Type</th>
-      <th>Status Message</th><th>Report</th><th><!--Terminate--></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for sname,name,pid,result,atype,msg,report,experiment in jobs %}
-    {% spaceless %}
-    <tr class="{% cycle 'row1' 'row2' %}">
-      <td>{{sname}}</td>
-      <td>{{name}}</td><td>{{pid}}</td><td>{{atype}}</td><td>{{msg}}</td>
-      <td><a href="{{report.reportLink}}">{{report.resultsName}}</a></td>
-      <td class="termtd">
-	<a href="javascript:build_control_dialogue('{% url rundb.ajax.control_job report.pk "term" %}', '{{ report.resultsName }}')">
-	  Terminate
-	</a>
-      </td>
-    </tr>
-    {% endspaceless %}{% endfor %}
-  </tbody>
-</table>
-<div id="control_dialogue" class="control_dialogue"
-     title="Confirm Termination">
-  <p>Are you sure you want to terminate <span id="job_name"></span>?</p>
-  <div id="control_button_holder">
-    <div id="term_button_holder">
-      <input type="button" name="terminate" value="Terminate"/>
-    </div>
-    <div id="cancel_button_holder">
-      <input type="button" name="cancel" value="Cancel"/>
-    </div>
-  </div>
-</div>
-</div>
-<div id="control_status_dialogue" class="control_dialogue">
-  <p id="job_status_text"></p>
-</div>
-{% endif %}
+  <div>
+    {% if not jobs %}
+      <p class="centered_message">No active jobs.</p>
+    {% else %}
+      <div class="clear">
+        <div class="left_heading">Active Jobs</div>
+      </div>
+      <div class="clear"></div>
+      <table>
+        <thead>
+        <tr>
+          <th>Job Server</th>
+          <th>Name</th>
+          <th>Job/PID</th>
+          <th>Type</th>
+          <th>Status Message</th>
+          <th>Report</th>
+          <th><!--Terminate--></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for sname,name,pid,result,atype,msg,report,experiment in jobs %}
+          {% spaceless %}
+            <tr class="{% cycle 'row1' 'row2' %}">
+              <td>{{ sname }}</td>
+              <td>{{ name }}</td>
+              <td>{{ pid }}</td>
+              <td>{{ atype }}</td>
+              <td>{{ msg }}</td>
+              <td>
+                <a href="{{report.reportLink}}">{{ report.resultsName }}</a>
+              </td>
+              <td class="termtd">
+                <a href="javascript:build_control_dialogue('{% url rundb.ajax.control_job report.pk "term" %}', '{{ report.resultsName }}')">
+                  Terminate
+                </a>
+              </td>
+            </tr>
+          {% endspaceless %}{% endfor %}
+        </tbody>
+      </table>
+      <div id="control_dialogue" class="control_dialogue"
+           title="Confirm Termination">
+        <p>Are you sure you want to terminate
+          <span id="job_name"></span>
+          ?
+        </p>
+        <div id="control_button_holder">
+          <div id="term_button_holder">
+            <input type="button" name="terminate" value="Terminate"/>
+          </div>
+          <div id="cancel_button_holder">
+            <input type="button" name="cancel" value="Cancel"/>
+          </div>
+        </div>
+      </div>
+      </div>
+      <div id="control_status_dialogue" class="control_dialogue">
+        <p id="job_status_text"></p>
+      </div>
+    {% endif %}
 {% endblock content %}

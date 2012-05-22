@@ -23,9 +23,11 @@ class RegionAvgKeyReporter : public KeyReporter<T> {
     mPrefix = prefix;
     pthread_mutex_init(&mLock, NULL);
     mRegionAvgTraces.Init(nRows, nCols, rowStep, colStep);
-
+ 
     mKeys = keys;
     mT0.resize(mRegionAvgTraces.GetNumBin(), -1);
+    mMinPeakSig.resize(keys.size());
+    std::fill(mMinPeakSig.begin(), mMinPeakSig.end(), std::numeric_limits<double>::max() * -1);
     for (size_t binIx = 0; binIx < mRegionAvgTraces.GetNumBin(); binIx++) {
       int rowBin, colBin;
       mRegionAvgTraces.IndexToXY((int)binIx, rowBin, colBin); 
@@ -34,17 +36,26 @@ class RegionAvgKeyReporter : public KeyReporter<T> {
       int wellIndex = (rowEnd+rowStart)/2 * mRegionAvgTraces.GetCol() + (colEnd+colStart)/2;
       mT0[binIx] = t0[wellIndex];
     }
+    mMinPeakSig.resize(keys.size());
+    std::fill(mMinPeakSig.begin(), mMinPeakSig.end(), std::numeric_limits<double>::max() * -1);
   }
 
   ~RegionAvgKeyReporter() {
     pthread_mutex_destroy(&mLock);
   }
   
+  void SetMinKeyThreshold(int key, double val) {
+    mMinPeakSig[key] = val;
+  }
+
   void Report(const KeyFit &fit, 
 	      const Mat<T> &wellFlows,
 	      const Mat<T> &refFlows,
 	      const Mat<T> &predicted) {
     if (fit.keyIndex < 0 || fit.mad > 50 || refFlows.n_cols == 0) {
+      return;
+    }
+    if (fit.peakSig < mMinPeakSig[fit.keyIndex]) {
       return;
     }
     pthread_mutex_lock(&mLock);
@@ -123,6 +134,7 @@ class RegionAvgKeyReporter : public KeyReporter<T> {
 	std::vector<std::vector<float> > mRegionTraces;
   GridMesh<std::vector<SampleStats<float> > >  mRegionAvgTraces;
   std::vector<SampleStats<float> > mGlobalAvg;
+  std::vector<double> mMinPeakSig;
   std::ofstream mTraces;
   std::string mPrefix;
   std::vector<KeySeq> mKeys;

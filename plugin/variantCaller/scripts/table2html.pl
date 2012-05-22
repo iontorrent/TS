@@ -9,10 +9,12 @@ my $USAGE = "Usage:\n\t$CMD [options] <input table file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
   -d Assume first line starts with data (no column titles)
-  -t Add the first line as table column Titles in the output html, unless -d specified";
+  -t Add the first line as table column Titles in the output html, unless -d specified
+  -v Add IGV viewer link on rows";
 
 my $haveheader = 1;
 my $writeheader = 0;
+my $addviewer = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -21,6 +23,7 @@ while( scalar(@ARGV) > 0 )
     my $opt = shift;
     if($opt eq '-d') {$haveheader = 0;}
     elsif($opt eq '-t') {$writeheader = 1;}
+    elsif($opt eq '-v') {$addviewer = 1;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
     {
@@ -61,6 +64,7 @@ while( <INFILE> )
         if( $writeheader )
         {
             print "<tr> ";
+            print " <th>View</th>" if( $addviewer );
             foreach (@fields)
             {
                 printf " <th>%s</th>",$_;
@@ -70,6 +74,7 @@ while( <INFILE> )
         next;
     }
     print "<tr> ";
+    printf " <td><a class='igvTable' data-locus='%s:%s'>IGV</a></td>",$fields[0],$fields[1] if( $addviewer );
     foreach (@fields)
     {
         printf " <td>%s</td>",$_;

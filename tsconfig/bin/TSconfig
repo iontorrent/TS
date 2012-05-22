@@ -1,0 +1,383 @@
+#!/bin/bash
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+#
+#  Developer Notes.
+#       Usage design is that the ion-tsconfig package is installed on a ubuntu
+#       server.  Then TSconfig --update-torrent-suite is executed.  On a new system
+#       where .computenode or .masternode files are missing, there should be a
+#       prompt to ask which type to install.
+set -e
+
+#---                                    ---#
+#--- Include function definition file	---#
+#---                                    ---#
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/ts_functions
+
+#--------------------------------------
+# trap exit codes
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+
+#---                            ---#
+#---    Variable Declarations   ---#
+#---                            ---#
+EXECUTE=0
+OPTARGS="$@"
+CONF_HEAD_NODE=0        # Enables SGE qmaster,postgres,apache2,/results sharing
+CONF_COMPUTE_NODE=0     # Enables SGE exec
+CONF_PGM_SUPPORT=0      # Enables direct-connected PGMs and data dir sharing
+REMOVE_PGM_SUPPORT=0    # Removes PGM support
+CONF_PROXY=0            # Configure http proxy
+DELETE_PROXY=0          # Removes proxy settings
+UPDATE_SOFTWARE=0       # Get software updates and install
+UPDATE_HOSTNAME=0       # Change the hostname (requires reboot)
+CONF_TIME_ZONE=0        # Run timezone configuration script
+CONF_POSTFIX=0          # Run postfix configuration script
+ETH_DEV='eth0'			# outgoing network device
+APT_USB=0				# flags use of USB key drive as apt repository
+UNCONF_SERVER=0		    # Removes Head Node settings and configurations
+INITIAL_CONFIG=1        # Flags interactive configuration settings - only for initial configuration
+version=`echo '$Revision: 27554 $'|awk '{print $2}'`
+
+#---                                    ---#
+#---    Command Line Options Parsing    ---#
+#---                                    ---#
+
+#---    First, if no args given, print help ---#
+if [ $# == 0 ]; then
+    print_help
+    exit 0
+fi
+
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '-g')
+            EXECUTE=1
+        ;;
+        '-d'|'--debug')
+        	set -x
+        ;;
+        '-m')
+            echo -e "\nOption -m has been replaced\n"
+            echo -e "Use --configure-server instead\n\n"
+            exit 0
+        ;;
+        '-i')
+            echo -e "\nOption -i has been replaced\n"
+            echo -e "Use --configure-pgm-support instead\n\n"
+            exit 0
+        ;;
+        '--configure-server')
+            if [ $EXECUTE == 1 ];then user_msg "Configure server as Head Node"; fi
+            CONF_HEAD_NODE=1
+            CONF_PGM_SUPPORT=1
+        ;;
+		'--unconfigure-server')
+            if [ $EXECUTE == 1 ];then user_msg "Un-configure server settings"; fi
+			UNCONF_SERVER=1
+		;;
+        '--configure-compute')
+            if [ $EXECUTE == 1 ];then user_msg "Configure server as Compute Node"; fi
+            CONF_COMPUTE_NODE=1
+            CONF_PGM_SUPPORT=0
+        ;;
+        '--skip-init')   # do not execute interactive, initialization steps
+            INITIAL_CONFIG=0
+        ;;
+        '--skip-pgm-config')
+            CONF_PGM_SUPPORT=0
+        ;;
+        '--configure-pgm-support')
+            if [ $EXECUTE == 1 ];then user_msg "Configure PGM support"; fi
+            CONF_PGM_SUPPORT=1
+        ;;
+        '--remove-pgm-support')
+            if [ $EXECUTE == 1 ];then user_msg "Remove PGM support"; fi
+            REMOVE_PGM_SUPPORT=1
+            CONF_PGM_SUPPORT=0
+        ;;
+        '--change-hostname'|'-r')
+            if [ $EXECUTE == 1 ];then user_msg "Change server hostname"; fi
+            UPDATE_HOSTNAME=1
+            CONF_PGM_SUPPORT=0
+        ;;
+        '--update-torrent-suite'|'-s')
+            if [ $EXECUTE == 1 ];then user_msg "Check for and install Ion Software updates"; fi
+            UPDATE_SOFTWARE=1
+            CONF_PGM_SUPPORT=0  #makes sure we don't do initial configuring
+        ;;
+        '--configure-timezone'|'-z')
+            if [ $EXECUTE == 1 ];then user_msg "Configure time zone settings"; fi
+            CONF_TIME_ZONE=1
+            CONF_PGM_SUPPORT=0
+        ;;
+        '--configure-postfix'|'-p')
+            if [ $EXECUTE == 1 ];then user_msg "Configure postfix mail settings"; fi
+            CONF_POSTFIX=1
+            CONF_PGM_SUPPORT=0
+        ;;
+		'--eth-dev'|'-e')
+		    shift
+			ETH_DEV=$1
+		    if [ $EXECUTE == 1 ];then user_msg "Ethernet device specified: $ETH_DEV"; fi 
+		;;
+		'--apt-usb')
+		    if [ $EXECUTE == 1 ];then user_msg "Use Ion Install USB Drive as apt repository"; fi
+			APT_USB=1
+		;;
+        '--help'|'-h'|\?)
+            print_help
+            exit 0
+        ;;
+        '--version'|'-v')
+            user_msg "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+			exit 0
+        ;;
+        *)
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSconfig --help for options."
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+#---                                ---#
+#---    Check for too many options  ---#
+#---                                ---#
+NOPTS=$(how_many_options) || true
+if [ $NOPTS -gt 1 ]; then
+    echo -e "\nOnly one option at a time is allowed.\n"
+    exit 0
+fi
+
+#---                                                                        ---#
+#---    Exit and call script again this time logging all stdout and stderr  ---#
+#---                                                                        ---#
+if [ $EXECUTE -eq 0 ]; then
+    needs_root
+	rotate_log
+	#$0 -g $OPTARGS 2>&1 | tee $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
+    exec 3>&2   # fd 3 opened and directed to stderr; 'stores' original stderr fd
+    exec 2>$TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG    # Redirect stderr to a file
+	$0 -g $OPTARGS | tee $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
+    exit ${PIPESTATUS[0]}
+fi
+
+#---                    ---#
+#---    Main Execution  ---#
+#---                    ---#
+if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+    source /opt/ion/bin/ion-tsconfig.version.env
+fi
+log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetSvnRev`")"
+
+#---                                                    ---#
+#---    Test for bad command line option combinations   ---#
+#---                                                    ---#
+if [ $CONF_PGM_SUPPORT == 1 -a $REMOVE_PGM_SUPPORT == 1 ]; then
+    echo
+    echo "ERROR: Choose either --raw-data-server or --delete-raw-data-server, not both."
+    echo "Use TSconfig --help for options."
+    echo
+    log "ERROR: Command line option error"
+    log "$OPTARGS"
+    exit 1
+fi
+
+#---    Typical TS config should be with direct connect PGMs enabled    ---#
+if [ $CONF_HEAD_NODE == 1 ]; then
+    if [ $CONF_PGM_SUPPORT == 0 ]; then
+        echo "This server will NOT be configured to support direct-connected PGMs"
+        echo "If this is correct, enter Y and press the Enter key to continue."
+        echo "Else, press CTRL-C to exit the script."
+        echo "Use TSconfig --help for options."
+        echo -n "Continue?"
+        read -p "Continue? " usrmsg
+        case $usrmsg in
+        	y|Y)
+        	REMOVE_PGM_SUPPORT=1
+            ;;
+            *)
+            exit 1
+            ;;
+        esac
+    fi
+fi
+
+#---
+#---    N.B. When a server configuration is specified, all other options are ignored
+#---    except for the CONF_PGM_SUPPORT option 
+#---
+if [ $CONF_HEAD_NODE == 1 -o $CONF_COMPUTE_NODE == 1 ]; then
+    
+    #if ! network_tests $ETH_DEV; then
+    #    log "Cannot configure node: Failed network test"
+    #    exit 1
+    #fi
+    
+    if [ $CONF_HEAD_NODE == 1 ]; then
+    	log "Configure Head Node"
+        config_head_node
+    elif [ $CONF_COMPUTE_NODE == 1 ]; then
+    	log "Configure Compute Node"
+        config_compute_node
+    fi
+    
+    #Setup PGM support; export raw data directory
+    if [ $CONF_PGM_SUPPORT == 1 ]; then
+        config_pgm_support
+    elif [ $REMOVE_PGM_SUPPORT == 1 ];then
+    	log "Unconfigure PGM support"
+    	remove_pgm_support
+    fi
+    
+    #Call initial configuration steps which require user input
+    if [ $INITIAL_CONFIG == 1 ]; then
+        exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
+        config_password
+        dpkg-reconfigure tzdata
+    fi
+
+    echo "=================================================================="
+    echo "TSconfig configure process completed successfully"
+    echo "=================================================================="
+
+    exit 0
+fi
+
+#---
+if [ $UNCONF_SERVER -eq 1 ]; then
+    log "Unconfigure Server"
+	
+	echo
+	echo "This will disable the server from functioning as a normal Torrent Server."
+	echo "Only continue if you are prepared to reconfigure the server again."
+	echo -n "Okay to continue? (n|Y) "
+	read -p "Okay to continue? (n|Y) " userin
+	if [ "$userin" != "Y" ]; then
+		log "User-aborted unconfigure operation"
+		exit 0
+    fi
+	
+	unconfigure_torrentserver
+    
+    echo "=================================================================="
+    echo "Unconfigure server process completed successfully"
+    echo "=================================================================="
+    log "Unconfigure server process completed successfully"
+    exit 0
+fi
+
+
+#---
+#---    N.B. When a software update is specified, all other options are ignored
+#---
+if [ $UPDATE_SOFTWARE == 1 ]; then
+    if [ $APT_USB -eq 0 ]; then
+		if ! network_tests $ETH_DEV; then
+			msg="Cannot update software: Failed network test for device $ETH_DEV. Try using the --eth-dev argument to specify an alternate ethernet adapter"
+			error "$0:${LINENO}" "${msg}" 1
+		fi
+	fi
+	log "Torrent Suite update"
+    config_ionSoftware
+    
+    echo "=================================================================="
+    echo "TSconfig software update process completed successfully"
+    echo "=================================================================="
+    log "TSconfig process completed successfully"
+    
+    exit 0
+fi
+
+#---
+#---    N.B. When a hostname change is specified, all other options are ignored
+#---
+if [ $UPDATE_HOSTNAME == 1 ]; then
+    # TEST CODE
+    2>&-
+	if is_master; then
+    	echo -e "WARNING: Renaming a head node when there are compute nodes"
+        echo -e "configured will break the cluster: the compute nodes will"
+        echo -e "need to be reconfigured with the new head node name\n"
+        #TODO: check the tsconf.conf file for compute nodes.
+        #TODO: register compute nodes in tsconf.conf file.
+		log "Changing hostname"
+		change_hostname
+    else
+
+        log "Changing hostname of compute node is not supported"
+        #change_hostname
+
+        # TODO remove host from SGE
+        # qconf -de <hostname>
+        # qconf -ds <hostname>
+        # qconf -dh <hostname>
+        # remove from all.q (cluster queue)
+        # remove from host group @allhosts
+    fi
+    exit 0
+fi
+
+#---
+#---    N.B. When a proxy config is specified, all other options are ignored
+#---
+if [ $CONF_PROXY == 1 ]; then
+    log "Setting up global proxy setting"
+    set_global_proxy_environment
+    exit 0
+fi
+
+#---
+#---    N.B. When a proxy delete is specified, all other options are ignored
+#---
+if [ $DELETE_PROXY == 1 ]; then
+	log "Disabling proxy setting"
+    remove_global_proxy_environment
+    exit 0
+fi
+
+#---
+#---    N.B. When a delete raw data is specified, all other options are ignored
+#---
+if [ $REMOVE_PGM_SUPPORT == 1 ]; then
+	log "Remove settings supporting direct-connected PGMs"
+    remove_pgm_support
+    exit 0
+fi
+
+#---
+#---    Execute the timezone configuration script
+#---
+if [ $CONF_TIME_ZONE == 1 ]; then
+	log "Configuring timezone"
+    dpkg-reconfigure tzdata
+fi
+
+#---
+#---    Execute the postfix configuration script
+#---
+if [ $CONF_POSTFIX == 1 ]; then
+	log "configuring postfix"
+    dpkg-reconfigure postfix
+fi
+
+#---
+#---    This is last because the flag is enabled by default in the script
+#---
+if [ $CONF_PGM_SUPPORT == 1 ]; then
+
+    config_pgm_support
+
+    exit 0
+fi
+
+exit 0

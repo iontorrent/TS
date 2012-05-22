@@ -25,6 +25,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+//#include <tr1/unordered_map>
+
 using namespace std;
 
 
@@ -40,7 +42,7 @@ int main(int argc, const char* argv[])
 	opts.ParseCmdLine(argc, argv);
 	AlignStats::options opt;
 	get_options(opt, opts);
-
+	opt.score_flows = (opt.flow_order != "");
 	
 	// Open a BAM file:	
 	string extension = get_file_extension(opt.bam_file);
@@ -102,6 +104,7 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.bam_file,				"",					'i',"infile");
 	opts.GetOption(opt.out_file,				opt.out_file,				'o',"outfile");
 	opts.GetOption(opt.genome_info,				opt.genome_info,			'g',"genomeinfo");
+	opts.GetOption(opt.flow_order,				"",					'F',"flowOrder");
 	opts.GetOption(opt.read_to_keep_file,			"",					'K',"readsToKeep");
 	opts.GetOption(opt.read_to_reject_file,			"",					'R',"readsToReject");
 	opts.GetOption(opt.filter_length,			"20",					'l',"filterlength");
@@ -109,6 +112,7 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.start_slop,				"0",					's',"startslop");
 	opts.GetOption(opt.sam_parsed_flag,			"0",					'p',"samParsedFlag");
 	opts.GetOption(opt.total_reads,				"0",					't',"totalReads");
+	opts.GetOption(opt.read_limit,				"0",					'-',"readLimit");
 	opts.GetOption(opt.sample_size,				"0",					'z',"sampleSize");
 	opts.GetOption(opt.help_flag,				"false",				'h',"help");
 	opts.GetOption(opt.num_threads,				"4",					'n',"numThreads");
@@ -118,6 +122,7 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.iupac_flag,				"true",					'u',"iupac");
 	opts.GetOption(opt.keep_iupac,				"false",				'k',"keepIUPAC");
 	opts.GetOption(opt.max_coverage,			"20000",				'v',"maxCoverage");
+	opts.GetOption(opt.flow_err_file,			opt.flow_err_file,			'-' ,"flowErrFile");
 	opts.GetOption(opt.align_summary_file,			opt.align_summary_file,			'a',"alignSummaryFile");
 	opts.GetOption(opt.align_summary_min_len,		"50",					'c',"alignSummaryMinLen");
 	opts.GetOption(opt.align_summary_max_len,		"400",					'm',"alignSummaryMaxLen");
@@ -133,7 +138,10 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.round_phred_scores,			"true", 				'X',"roundPhredScores");
     opts.GetOption(opt.five_prime_justify,			"true", 				'P',"5primeJustify");
     opts.GetOption(opt.output_dir,                "",                       'd',"outputDir");
+    opts.GetOption(opt.merged_region_file,                "",                       'r',"mergedRegionFile");
 
+	if(opt.read_limit <= 0)
+		opt.read_limit = LONG_MAX;
 
 
 
@@ -165,6 +173,7 @@ void usage() {
 	<< "  -b,--stdinBam"<<"\t\t\t\t"<<": input is binary and from stdin"<< endl
 	<< "  -S,--stdinSam"<<"\t\t\t\t"<<": input is raw text sam file and from stdin"<< endl
 	<< "  -o,--out"<<"\t\t\t\t"<<": output name, prepended to default output files [Default value:  Default]" << endl
+	<< "  -r, --mergedRegion"<<"\t\t\t\t"<<": file including base postitions for merged region"<< endl
 	<<"General options:" << endl
 	<< "  -g,--genomeinfo"<<"\t\t\t"<<": genome.info.txt " << endl
 	<< "  -K,--readsToKeep"<<"\t\t\t"<<": file specifying list of read names to restrict to" << endl
@@ -179,9 +188,10 @@ void usage() {
 	<< "  -k,--keepIUPAC"<<	"\t\t\t"<<": user supply either true/false: keep IUPAC codes in qdna and tdna strings.  "
 									<<"\n\t\t\t\t\t  use only in conjunction with -u,--iupac.  Parameter has no effect otherwise [Default value: true] "<< endl
 	<< "  -t,--totalReads"<<"\t\t\t"<<": total number of reads in original fastq file [Default value: none]" << endl
+	<< "  --readLimit"<<"\t\t\t"<<": total number of reads to process [Default: 0 which means all]" << endl
 	<< "  -z,--sampleSize"<<"\t\t\t"<<": size of sampled alignment (or from genome.info.txt) [Default value: 0]"<<endl
 	<< "  -X,--roundPhredScores"<<"\t\t\t"<<": boolean value to allow rounding in the phred score calculations to handle the colloquial definition\n\t\t\t\t\t  of a \"100 Q17\" which means 2 errors in 100 bases. [Default value:  true]" << endl
-        << "  -P,--5primeJustify " <<"\t\t\t"<<": boolean value to follow indel justification \n\t\t\t\t\t  in SAM or force 5' justification.  Use this flag to force  5' justification [Default value:  false]" << endl
+        << "  -P,--5primeJustify " <<"\t\t\t"<<": boolean value to follow indel justification \n\t\t\t\t\t  in SAM or force 5' justification.  Use this flag to force  5' justification [Default value:  true]" << endl
 	<< "\n\nPerformance Options:" << endl
 	<< "  -n,--numThreads"<<"\t\t\t"<<": number of threads.  This is used to create the number of worker threads. "
 									 <<"\n\t\t\t\t\t  There is a constant IO thread in conjunction with this # [Default value: 4]" << endl
@@ -191,6 +201,7 @@ void usage() {
 	<< "  -T,--cutClippedBases"<<"\t\t\t"<<": A flag that will ignore soft clipped bases in all error calculations. [Default value:  true]"<<endl	
 	<< "  -3,--3primeClip"<<"\t\t\t"<<": An integer value that will ignore a specific # of soft clipped bases when calculating alignment statistics.  [Default value:  0]" << endl
 	<<"Error Table options:"<<endl
+	<< "  --flowErrFile"<<"\t\t\t"<<": optional file with reporting on number of HP and base errors per flow"<<endl
 	<< "  -a,--alignSummaryFile"<<"\t\t\t"<<": optional file that will produce a tab delimited table containing read lengths and the # of reads aligned"<<endl
 										  <<"\t\t\t\t\t  and the total # of reads with 0-alignSummaryMaxErr [Default value: alignTable.txt]" << endl
 	<< "  -c,--alignSummaryMinLen"<<"\t\t"<<": minimum length for read to be considered in table [Default value: 50]" << endl

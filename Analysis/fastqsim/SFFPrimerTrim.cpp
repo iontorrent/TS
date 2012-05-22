@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <cfloat>
 
-#include "../ByteSwapUtils.h"
+#include "ByteSwapUtils.h"
 
 #define MAGIC ('.' | ('s' << 8) | ('f' << 16) | ('f' << 24))
 #ifndef max

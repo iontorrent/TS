@@ -36,9 +36,16 @@ RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
 	deque<float> ppf = Rcpp::as<deque<float> >(RPPF);
 	deque<float> ssq = Rcpp::as<deque<float> >(RSSQ);
 
-	vec2  mean[2];
-	mat22 sigma[2];
-	vec2  prior;
+	//vec2  mean[2];
+	//mat22 sigma[2];
+	//vec2  prior;
+	vec mean[2];
+	mat sigma[2];
+	vec prior;
+    for(int i=0; i<2; ++i){
+        mean[i].set_size(2);
+        sigma[i].set_size(2,2);
+    }
 
 	bool converged = fit_normals(mean, sigma, prior, ppf, ssq);
 
@@ -73,14 +80,17 @@ RcppExport SEXP distanceFromMean(SEXP RMean, SEXP RSigma, SEXP RX)
 	RcppMatrix<double> tmpSigma(RSigma);
 	RcppVector<double> tmpX(RX);
 
-	vec2  mean;
-	mat22 sigma;
-	vec2  x;
+	//vec2  mean;
+	//mat22 sigma;
+	//vec2  x;
+	vec mean(2);
+	mat sigma(2,2);
+	vec x(2);
 
-	mean  << tmpMean(0) << tmpMean(1);
+	mean  << tmpMean(0)    << tmpMean(1);
 	sigma << tmpSigma(0,0) << tmpSigma(0,1) << endr
 	      << tmpSigma(1,0) << tmpSigma(1,1) << endr;
-	x     << tmpX(0) << tmpX(1);
+	x     << tmpX(0)       << tmpX(1);
 
 	bivariate_gaussian g(mean, sigma);
 	

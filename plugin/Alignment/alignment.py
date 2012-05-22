@@ -201,32 +201,32 @@ def make_simple_html(alignment):
     html_file.close()
     
 def make_zipfile(alignment):
-    
     zip_path = "%s.zip" % (alignment.file_prefix)
-    zip_name = "output_files.zip"
-    if os.path.isabs(zip_path):
-        head, tail = os.path.split(zip_path)
-        os.chdir(head)
+    zip_name = zip_path
     myzip = zipfile.ZipFile(zip_name, "w", allowZip64=True)
-    
-    for suffix in alignment.output_format:
-        file_name = "%s.%s" % (alignment.file_prefix, suffix)
-        if os.path.isabs(file_name):
-            head, tail = os.path.split(file_name)
-            file_name = tail
-        try:
+    def exist( f ):
+        if os.path.exists( f ) or os.path.isfile( f ):
+            print "[alignment.py] %s exists " % ( f )
+        else:
+            print "[alignment.py] %s does not exist" % ( f )
+    try:
+        for suffix in alignment.output_format:
+            file_name = "%s.%s" % (alignment.file_prefix, suffix)
+            if os.path.isabs(file_name):
+                head, tail = os.path.split(file_name)
+                file_name = tail
             myzip.write(file_name)
-        except zipfile.LargeZipFile:
-            print "[alignment.py] The zip file was too large, ZIP64 extensions could not be enabled"
-        except:
-            print "[alignment.py] Unexpected error creating zip"
-            traceback.print_exc()
-        finally:
-            myzip.close()
-        
+    except zipfile.LargeZipFile:
+        print "[alignment.py] The zip file was too large, ZIP64 extensions could not be enabled"
+    except:
+        print "[alignment.py] Unexpected error writing %s to %s" % ( file_name, zip_name ) 
+        exist( file_name )
+        exist( zip_name )
+        traceback.print_exc()
+    finally:
+        myzip.close()
     myzip.close()
-    
-    
+
 def create_igv_session(alignment, base_url, plugin_url):
     session_xml = open(alignment.output_dir + "/igv_session.xml", "w")
     session_xml.write('<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n')

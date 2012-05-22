@@ -13,6 +13,9 @@ Coverage summary for reads mapped over targeted loci in the referece.
 @Number of mapped reads
 Total number of reads mapped to the reference.
 
+@Number of filtered reads
+Total number of reads mapped to the reference after unique starts filtering.
+
 @Number of reads on target
 Total number of reads mapped to any targeted region of the reference. A read is considered to be on target
 if at least one aligned base overlaps a target region. A read that overlaps a targeted region but where
@@ -96,6 +99,10 @@ Number of called heterozygous INDELs in target regions or loci.
 
 @Homozygous INDELs
 Number of called homozygous INDELs in target regions or loci.
+
+@No Call Variants
+Number of variants detected that could not be definitely called as homozygous or heterozygous.
+Typically due to the apparent detection of multiple variants relative to the reference sequence.
 
 @Target Coverage
 Target base coverage is plotted against read depth, where read depth is the number of times

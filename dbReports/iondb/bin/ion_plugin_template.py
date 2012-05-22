@@ -1,4 +1,4 @@
-!/usr/bin/env python
+#!/usr/bin/env python
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 # Main Plugin run script that integrates results from each plugin and renders to a html template
 

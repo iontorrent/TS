@@ -28,8 +28,19 @@ v1_api.register(api.ContentResource())
 v1_api.register(api.ContentUploadResource())
 v1_api.register(api.UserEventLogResource())
 
+v1_api.register(api.KitInfoResource())
+v1_api.register(api.KitPartResource())
+v1_api.register(api.SequencingKitInfoResource())
+v1_api.register(api.SequencingKitPartResource())
+v1_api.register(api.LibraryKitInfoResource())
+v1_api.register(api.LibraryKitPartResource())
+v1_api.register(api.LibraryKeyResource())
+v1_api.register(api.ThreePrimeadapterResource())
+
+v1_api.register(api.MessageResource())
 
 v1_api.register(api.TorrentSuite())
+v1_api.register(api.IonReporter())
 
 urlpatterns = patterns(
     'iondb.rundb',
@@ -76,7 +87,9 @@ urlpatterns = patterns(
     (r'^editgenome/(\d+)$', 'genomes.edit_genome'),
     (r'^genomestatus/(\d+)$', 'genomes.genome_status'),
     (r'^newgenome/$', 'genomes.new_genome'),
+    (r'^rebuild_index/(?P<reference_id>\w+)$', 'genomes.start_index_rebuild'),
     (r'^upload/$', 'genomes.fileUpload'),
+    (r'^upload_plugin_zip/$', 'views.pluginZipUpload'),
     (r'^mobile/runs/$', 'mobile_views.runs'),
     (r'^mobile/run/(\d+)$', 'mobile_views.run'),
     (r'^mobile/report/(\d+)$', 'mobile_views.report'),
@@ -93,15 +106,14 @@ urlpatterns = patterns(
     (r'^editplan/(\d+)/$', 'views.edit_plan'),
     (r'^editexperiment/(\d+)/$', 'views.edit_experiment'),
     (r'^expack/$', 'views.exp_ack'),
-    (r'^test_task/(\w+)$', 'views.test_task'),
     (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),
+    (r'^publish/api/(?P<pub_name>\w+)$', 'publishers.publisher_api_upload'),
+    (r'^publish/plupload/(?P<pub_name>\w+)/$', 'publishers.write_plupload'),
     (r'^publish/(\w+)$', 'publishers.publisher_upload'),
     (r'^publish/$', 'publishers.upload_view'),
     (r'^published/$', 'publishers.list_content'),
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),
-    (r'how_is/(?P<host>[\w\.]+):(?P<port>\d+)/feeling$', 'views.how_are_you'),
-    (r'^external_ip/$', 'views.fetch_remote_content', {"url": settings.EXTERNAL_IP_URL}),
     )
 
 urlpatterns.extend(patterns(

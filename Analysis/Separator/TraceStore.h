@@ -124,6 +124,7 @@ class TraceStore {
   virtual void SetFlowIndex(size_t flowIx, size_t index) = 0;
   virtual bool HaveWell(size_t wellIx) = 0;
   virtual void SetHaveWellFalse(size_t wellIx) = 0;
+  virtual void SetReference(size_t wellIx, bool isReference) = 0;
   virtual bool IsReference(size_t wellIx) = 0;
   virtual bool HaveFlow(size_t flowIx) = 0;
   virtual size_t WellIndex(size_t row, size_t col) {return row * GetNumCols() + col; }

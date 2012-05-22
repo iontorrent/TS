@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "../file-io/ion_util.h"
 
-#include "../ByteSwapUtils.h"
+#include "ByteSwapUtils.h"
 
 #define MAGIC ('.' | ('s' << 8) | ('f' << 16) | ('f' << 24))
 

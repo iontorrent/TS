@@ -1,163 +1,158 @@
-{% extends "rundb/ion_base_template.html" %}
-{% load pagetools %}
+{% extends "rundb/ion_base_template.html" %}{% load pagetools %}
 {% block extra_head %}
 
 {% endblock extra_head %}
 {% block pagination_holder %}{% endblock %}
-{% block current_tab%}planning{% endblock %}
+{% block current_tab %}planning{% endblock %}
 {% block controls_holder %}{% endblock %}
 
 {% block full_page_content %}
 
-<script type="text/javascript" src="/site_media/jquery/js/jquery-barcode-2.0.2.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
-<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css" />
+  <script type="text/javascript"
+          src="/site_media/jquery/js/jquery-barcode-2.0.2.js"></script>
+  <script type="text/javascript"
+          src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+  <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css"
+        type="text/css"/>
 
-    <style>
-
+  <style>
     #toolbar {
-        padding: .5em;
-        margin: 1px;
-        margin-bottom: 6px;
-        overflow: hidden;
+      padding: .5em;
+      margin: 1px;
+      margin-bottom: 6px;
+      overflow: hidden;
     }
 
-    #addPlanButton{
-        float: left;
+    #addPlanButton {
+      float: left;
     }
 
-    #addPlansButton{
-        float: right;
+    #addPlansButton {
+      float: right;
     }
 
-    .bumpdown{
-        padding-bottom: 5px;
+    .bumpdown {
+      padding-bottom: 5px;
     }
+  </style>
 
-    </style>
-    
-<script type="text/javascript">
+  <script type="text/javascript">
+    $(document).ready(function () {
 
-    $(document).ready(function(){
+      $("#toolbar").addClass("ui-widget-header ui-corner-all");
 
-         $("#toolbar").addClass("ui-widget-header ui-corner-all");
+      $("#addPlanButton").button({
+        icons: {
+          primary: 'ui-icon-plusthick'
+        }, disabled: false});
 
-         $("#addPlanButton").button({
-                     icons: {
-                         primary: 'ui-icon-plusthick'
-                     }, disabled: false} );
+      $("#addPlansButton").button({
+        icons: {
+          primary: 'ui-icon-document'
+        }});
 
-         $("#addPlansButton").button({
-                     icons: {
-                         primary: 'ui-icon-document'
-                     }} );
+      $("#addPlanButton").click(function () {
+        window.location.href = '{% url rundb.views.add_plan %}';
+      });
 
-         $("#addPlanButton").click(function(){
-             window.location.href='{% url rundb.views.add_plan %}';
-         });
+      $("#addPlansButton").click(function () {
+        window.location.href = '{% url rundb.views.add_plans %}';
+      });
 
-        $("#addPlansButton").click(function(){
-            window.location.href='{% url rundb.views.add_plans %}';
-        });
+      $("#makeBarCodes").button();
+      $("#makeBarCodesLabel > *").css("font-size", "70%");
+      $("#makeBarCodesLabel").css("top", "-1px");
 
-        $("#makeBarCodes").button();
-        $("#makeBarCodesLabel > *").css("font-size","70%");
-        $("#makeBarCodesLabel").css("top","-1px");
+      //make the barcodes
+      $("#makeBarCodes").change(function () {
 
-        //make the barcodes
-        $("#makeBarCodes").change(function(){
+        $("#makeBarCodesLabel > *").css("font-size", "70%");
+        $("#makeBarCodesLabel").css("top", "-1px");
 
-            $("#makeBarCodesLabel > *").css("font-size","70%");
-            $("#makeBarCodesLabel").css("top","-1px");
+        if ($("#makeBarCodes").prop('checked')) {
+          $(".shortCode").hide();
+          $(".shortcode128").each(function () {
+            $(this).barcode($(this).data("barcode"), "code128", {barWidth: 2, barHeight: 30, bgColor: $(this).parent().parent().css("background-color") });
+          });
+        } else {
+          $(".shortcode128").empty();
+          $(".shortCode").show();
+        }
+      });
 
-                if ($("#makeBarCodes").prop('checked')){
-                    $(".shortCode").hide();
-                    $(".shortcode128").each(function(){
-                        $(this).barcode($(this).data("barcode"), "code128", {barWidth:2, barHeight:30, bgColor: $(this).parent().parent().css("background-color") });
-                    });
-                }else{
-                    $(".shortcode128").empty();
-                    $(".shortCode").show();
-                }
-        });
+    });
+  </script>
 
- });
+  <div style="margin-top: 25px">
+    <div class="roundedcornr_box_526903">
+      <div class="roundedcornr_top_526903">
+        <div></div>
+      </div>
+      <div class="roundedcornr_content_526903">
+        <div class="clear">
+          <div class="left_heading left bumpdown">Pending Runs</div>
+        </div>
+        <div class="bounded_container clear">
+          <div id="toolbar">
+            <div id="addPlanButton">Add Plan</div>
+            <div id="addPlansButton">Upload Plans</div>
+          </div>
 
-</script>
-
-            <div style="margin-top: 25px">
-
-            <div class="roundedcornr_box_526903">
-                <div class="roundedcornr_top_526903"><div></div></div>
-                <div class="roundedcornr_content_526903">
-
-                    <div class="clear">
-                        <div class="left_heading left bumpdown">Pending Runs</div>
-                    </div>
-                
-                    <div class="bounded_container clear">
-
-                        <div id="toolbar">
-
-                            <div id="addPlanButton">Add Plan</div>
-                            <div id="addPlansButton" >Upload Plans</div>
-
-                        </div>
-
-                        {% if plans %}
-                        <table>
-                            <thead>
-                            <tr class="sortables">
-                                <th>Plan Name</th>
-                                <th>Short Code
-                                    <input id="makeBarCodes" type="checkbox" /><label id="makeBarCodesLabel" for="makeBarCodes">Barcode</label>
-                                </th>
-                                <th>Project</th>
-                                <th>Sample</th>
-                                <th>Reference</th>
-                                <th>Date</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-
-                            {% for plan in plans %}{% spaceless %}
-                                <tr id="row_{{plan.pk}}" class="graphable {% cycle 'row1' 'row2' %}">
-                                    <td>
-                                        <a href="{% url rundb.views.edit_plan plan.pk%}"> {{ plan.planName }} </a>
-                                    </td>
-                                    <td>
-                                        <div class="shortcode128" data-barcode="{{ plan.planShortID }}" data-href="{% url rundb.views.edit_plan plan.pk%}">
-                                        </div>
-                                        <a class="shortCode" href="{% url rundb.views.edit_plan plan.pk%}"> {{ plan.planShortID }}</a>
-                                    </td>
-                                    <td>{{ plan.project|blankIfNone }}</td>
-                                    <td>{{ plan.sample|blankIfNone }}</td>
-                                    <td>{{ plan.library|blankIfNone}}</td>
-                                    <td>{{ plan.date|date:"M d Y" }}</td>
-                                </tr>
-                            {% endspaceless %}
-                            {% endfor %}
-
-                            </tbody>
-                        </table>
-                        {%  else %}
-                            <div style="padding: 20px; text-align: center;background: white;">
-                                <h3>There are no pending plans.</h3>
-                            </div>
-                        {%  endif %}
-
-                    </div>
-
-                </div>
-                <div class="roundedcornr_bottom_526903"><div></div></div>
+          {% if plans %}
+            <table>
+              <thead>
+              <tr class="sortables">
+                <th>Plan Name</th>
+                <th>Short Code
+                  <input id="makeBarCodes" type="checkbox"/>
+                  <label id="makeBarCodesLabel" for="makeBarCodes">Barcode
+                  </label>
+                </th>
+                <th>Project</th>
+                <th>Sample</th>
+                <th>Reference</th>
+                <th>Date</th>
+              </tr>
+              </thead>
+              <tbody>
+              {% for plan in plans %}{% spaceless %}
+                <tr id="row_{{plan.pk}}"
+                    class="graphable {% cycle 'row1' 'row2' %}">
+                  <td>
+                    <a href="{% url rundb.views.edit_plan plan.pk%}"> {{ plan.planName }} </a>
+                  </td>
+                  <td>
+                    <div class="shortcode128"
+                         data-barcode="{{ plan.planShortID }}"
+                         data-href="{% url rundb.views.edit_plan plan.pk%}"></div>
+                    <a class="shortCode"
+                       href="{% url rundb.views.edit_plan plan.pk%}"> {{ plan.planShortID }}</a>
+                  </td>
+                  <td>{{ plan.project|blankIfNone }}</td>
+                  <td>{{ plan.sample|blankIfNone }}</td>
+                  <td>{{ plan.library|blankIfNone }}</td>
+                  <td>{{ plan.date|date:"M d Y" }}</td>
+                </tr>
+              {% endspaceless %}
+              {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div style="padding: 20px; text-align: center;background: white;">
+              <h3>There are no pending plans.</h3>
             </div>
+          {% endif %}
         </div>
-    <br /> <br />
-    <div>
-
-
-        </div>
-
+      </div>
+      <div class="roundedcornr_bottom_526903">
+        <div></div>
+      </div>
     </div>
+  </div>
+  <br/>
+  <br/>
+  <div></div>
+
+  </div>
 
 {% endblock full_page_content %}

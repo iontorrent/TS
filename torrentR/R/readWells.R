@@ -3,7 +3,7 @@ readWells <- function(
 	col=NA,
 	row=NA,
 	bfMaskFile=NA,
-	bfMaskFileName="bfmask.bin",
+	bfMaskFileName="analysis.bfmask.bin",
 	colMin=NA,
 	rowMin=NA,
 	colMax=NA,
@@ -16,18 +16,22 @@ readWells <- function(
 	wellDir  <- dirname(wellPath)
 	wellFile <- basename(wellPath)
 
+  #we've swapped files around
+
 	# Check for a bfMaskFile unless specifically asked not to via ignoreBfMaskFile=TRUE
 	if(is.na(bfMaskFile) & !ignoreBfMaskFile) {
+
 	    bfMaskFile <- paste(wellDir,.Platform$file.sep,bfMaskFileName,sep="")
 	    if(file.exists(bfMaskFile)) {
-		if(file.access(bfMaskFile,mode=4)!=0) {
+		    if(file.access(bfMaskFile,mode=4)!=0) {
 		    warning(paste("file ",bfMaskFile," exists but is not readable, skipping\n",sep=""))
 		    bfMaskFile <- NA
 		}
 	    } else {
                 warning(paste("did not find bfmask file ",bfMaskFile,", proceeding without it\n",sep=""))
-		bfMaskFile <- NA
+		     bfMaskFile <- NA
 	    }
+
 	}
 
 

@@ -8,7 +8,8 @@
 #include <algorithm>
 #include <fstream>
 #include <stdlib.h>
-#include "FlowDiffStats.h"
+//#include "FlowDiffStats.h"
+#include "Utils.h"
 
 class ReportSet {
 
@@ -54,7 +55,7 @@ public:
     std::vector<std::string> words;
     std::vector<int> candidates;
     while(getline(in, line)) {
-      FlowDiffStats::ChopLine(words, line);
+      split(line,'\t',words);
       assert(static_cast<int>(words.size()) > colIdx);
       mWellIdx.push_back(atoi(words[colIdx].c_str()));
      }
@@ -71,7 +72,7 @@ public:
     assert(in.good());
     std::vector<std::string> words;
     while(getline(in, line)) {
-      FlowDiffStats::ChopLine(words, line);
+      split(line,'\t',words);
       int size = words.size();
       assert(size > colIx && size > rowIx);
       int idx = atoi(words[rowIx].c_str()) * mCols + atoi(words[colIx].c_str());

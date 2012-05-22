@@ -10,28 +10,39 @@
 template <class T>
 class MaskSample {
 public:
-    // Given a Mask and a MaskType, generate a random sample chosen
-    // from all wells of that type.
-    MaskSample(Mask& mask, MaskType type, std::size_t sampleSize)
-    : mSample(sampleSize)
-	{
-        T numWells = mask.W() * mask.H();
-	    for(T well=0; well<numWells; ++well){
-	        if(mask.Match(well, type))
-	            mSample.Add(well);
-	    }
-	    mSample.Finished();
-	}
+  // Given a Mask and a MaskType, generate a random sample chosen
+  // from all wells of that type.
+  MaskSample(Mask& mask, MaskType type, std::size_t sampleSize)
+  : mSample(sampleSize)
+  {
+    T numWells = mask.W() * mask.H();
+    for(T well=0; well<numWells; ++well){
+      if(mask.Match(well, type))
+        mSample.Add(well);
+    }
+    mSample.Finished();
+  }
 
-    std::size_t     SampleSize() const {return mSample.GetCount();}
-    std::vector<T>& Sample() {return mSample.GetData();}
+  MaskSample(Mask& mask, MaskType typeWanted, MaskType typeNotWanted, std::size_t sampleSize)
+  : mSample(sampleSize)
+  {
+    T numWells = mask.W() * mask.H();
+    for(T well=0; well<numWells; ++well){
+      if(mask.Match(well, typeWanted) and !mask.Match(well, typeNotWanted))
+        mSample.Add(well);
+    }
+    mSample.Finished();
+  }
+
+  std::size_t     SampleSize() const {return mSample.GetCount();}
+  std::vector<T>& Sample() {return mSample.GetData();}
 
 private:
-    MaskSample();
-    MaskSample(const MaskSample&);
-    MaskSample& operator=(const MaskSample&);
+  MaskSample();
+  MaskSample(const MaskSample&);
+  MaskSample& operator=(const MaskSample&);
 
-    ReservoirSample<T> mSample;
+  ReservoirSample<T> mSample;
 };
 
 #endif // MASKSAMPLE_H

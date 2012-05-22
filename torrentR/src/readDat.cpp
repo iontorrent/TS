@@ -24,6 +24,7 @@ RcppExport SEXP readDat(
   SEXP RnormStart,
   SEXP RnormEnd,
   SEXP RXTCorrect,
+  SEXP RchipType,
   SEXP RbaselineMinTime,
   SEXP RbaselineMaxTime,
   SEXP RloadMinTime,
@@ -51,6 +52,7 @@ RcppExport SEXP readDat(
     int   normStart         = Rcpp::as<int>(RnormStart);
     int   normEnd           = Rcpp::as<int>(RnormEnd);
     bool  XTCorrect         = Rcpp::as<bool>(RXTCorrect);
+    string chipType         = Rcpp::as<string>(RchipType);
     double baselineMinTime  = Rcpp::as<double>(RbaselineMinTime);
     double baselineMaxTime  = Rcpp::as<double>(RbaselineMaxTime);
     double loadMinTime      = Rcpp::as<double>(RloadMinTime);
@@ -94,6 +96,7 @@ RcppExport SEXP readDat(
       normStart,
       normEnd,
       XTCorrect,
+      chipType,
       baselineMinTime,
       baselineMaxTime,
       loadMinTime,
