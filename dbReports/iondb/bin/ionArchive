@@ -24,19 +24,14 @@ function start_function ()
     then
         start-stop-daemon --start \
             --pidfile ${PIDFILE} \
+            --make-pidfile \
             --background \
             --startas $EXEC_CMD
+        
         if [ $? -eq 0 ]
         then
-            sleep 1
-            pid=$(ps aux|grep "/usr/bin/python "${EXEC}|grep -v grep|awk '{print($2)}')
-            if [ "$pid" == "" ]; then
-                echo "ERROR: $DAEMON_NAME failed to start"
-                return 1
-            else
-                echo "Starting $DAEMON_NAME pid = $pid"
-                echo ${pid} > ${PIDFILE}
-            fi
+            pid=`cat ${PIDFILE}`
+            echo "Starting $DAEMON_NAME pid = $pid"
         else
             echo "Failed to start: $DAEMON_NAME"
             return 1

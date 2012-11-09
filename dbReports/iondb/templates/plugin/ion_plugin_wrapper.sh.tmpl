@@ -31,21 +31,17 @@ export PLUGINNAME={{ pluginname }}
 echo "Plugin: ${PLUGINNAME} - ${VERSION}"
 echo "Host: ${HOSTNAME}"
 if [ ! -z "${JOB_ID}" ]; then
-    echo "Running under SGE: ${SGE_ROOT}/${SGE_CELL}"
-    echo "Job: ${JOB_ID} - ${JOB_NAME}"
-    echo "Home: ${SGE_O_HOME}"
-    echo "Submit User: ${SGE_O_LOGNAME}"
-    echo "Submit Host: ${SGE_O_HOST}"
-    echo "Work Dir: '${SGE_O_WORKDIR}'"
-    if [ "${NSLOTS:-0}" -gt 1 ]; then echo "Slots: ${NSLOTS}"; cat "$TMP/machines"; fi
+    echo "SGE: ${SGE_ROOT}/${SGE_CELL} Home: ${SGE_O_HOME} Job: ${JOB_ID} - '${JOB_NAME}'"
+    echo "SGE User: ${SGE_O_LOGNAME} Host: ${SGE_O_HOST} Work Dir: '${SGE_O_WORKDIR}'"
+    if [ "${NSLOTS:-0}" -gt 1 ]; then echo "SGE Slots: ${NSLOTS}"; cat "$TMP/machines"; fi
 fi
 
 # Set initial 'Started' status, now that we have started executing
 ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin_name }} --msg 'Started'
 
 # Load function library
+#sourcefile=$(find /results/plugins {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions| head -n 1)
 sourcefile=/results/plugins/plugin_functions
-#$(find {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions)
 if [[ ! -e $sourcefile ]]; then
     echo "FATAL: Unable to find plugin_functions library"
     exit 1
@@ -67,7 +63,6 @@ cmd_line_args "$@"
 # TESTFRAG_KEY
 # RESULTS_DIR
 # URL_ROOT
-# TSP_ANALYSIS_CYCLES
 # TSP_ANALYSIS_DATE
 # TSP_ANALYSIS_NAME
 # TSP_CHIPTYPE
@@ -138,6 +133,7 @@ function plugin_error_trap
 {
     local exit_status=$?
     local message=${1:-"Unknown Error"}
+    echo "==============================================================================="
     echo "ERROR: Plugin exited unexpectedly with error: ${exit_status} - ${message}"
     exit ${exit_status}
 }
@@ -178,7 +174,7 @@ set -o xtrace
 RETVAL=$?
 
 echo "==============================================================================="
-echo "$PROGRAM: completing execution of plugin code"
+#echo "$PROGRAM: completing execution of plugin code"
 date +'end time=%Y-%m-%d %k:%M:%S.%N'
 endtime=$(date +%s)
 elapsedtime=$[($endtime - $starttime)]
@@ -193,6 +189,11 @@ else
     ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin.name }} --version "{{ runinfo.plugin.version }}" --convert --msg ${RETVAL}
 fi
 {% endif %}
+
+if [ -f output.json ]; then
+    #if there is a file name output.json then use the pluginsdk's reporting tool to write a document.json and generate report using templates
+    ( pluginReporting.py -d "${TSP_FILEPATH_PLUGIN_DIR}" -s startplugin.json -f output.json || /bin/true )
+fi
 
 # Result of final command determines plugin exit value
 exit $RETVAL

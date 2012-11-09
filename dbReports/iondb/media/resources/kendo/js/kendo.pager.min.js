@@ -1,0 +1,10 @@
+/*
+* Kendo UI Web v2012.1.322 (http://kendoui.com)
+* Copyright 2012 Telerik AD. All rights reserved.
+*
+* Kendo UI Web commercial licenses may be obtained at http://kendoui.com/web-license
+* If you do not own a commercial license, this file shall be governed by the
+* GNU General Public License (GPL) version 3.
+* For GPL requirements, please review: http://www.gnu.org/copyleft/gpl.html
+*/
+(function(a,b){function g(a,b,d,e){return a({idx:b,text:d,ns:c.ns,numeric:e})}var c=window.kendo,d=c.ui,e=d.Widget,f=a.proxy,h=e.extend({init:function(b,d){var g=this;e.fn.init.call(g,b,d),d=g.options,g.dataSource=d.dataSource,g.linkTemplate=c.template(g.options.linkTemplate),g.selectTemplate=c.template(g.options.selectTemplate),g._refreshHandler=f(g.refresh,g),g.dataSource.bind("change",g._refreshHandler),g.list=a('<ul class="k-pager k-reset k-numeric" />').appendTo(g.element),g._clickHandler=f(g._click,g),g.element.delegate("a","click",g._clickHandler),g.refresh()},destroy:function(){var a=this;a.element.undelegate("a","click",a._clickHandler),a.dataSource.unbind("change",a._refreshHandler)},options:{name:"Pager",selectTemplate:'<li><span class="k-state-active">#=text#</span></li>',linkTemplate:'<li><a href="\\#" class="k-link" data-#=ns#page="#=idx#">#=text#</a></li>',buttonCount:10},refresh:function(){var a=this,b,c,d=1,e="",f,h=a.page(),i=a.totalPages(),j=a.linkTemplate,k=a.options.buttonCount;h>k&&(f=h%k,d=f==0?h-k+1:h-f+1),c=Math.min(d+k-1,i),d>1&&(e+=g(j,d-1,"...",!1));for(b=d;b<=c;b++)e+=g(b==h?a.selectTemplate:j,b,b,!0);c<i&&(e+=g(j,b,"...",!1)),e===""&&(e=a.selectTemplate({text:1})),a.list.empty().append(e)},_click:function(b){var d=a(b.currentTarget).attr(c.attr("page"));b.preventDefault(),this.dataSource.page(d),this.trigger("change",{index:d})},totalPages:function(){return Math.ceil((this.dataSource.total()||0)/this.pageSize())},pageSize:function(){return this.dataSource.pageSize()||this.dataSource.total()},page:function(){return this.dataSource.page()||1}});d.plugin(h)})(jQuery)

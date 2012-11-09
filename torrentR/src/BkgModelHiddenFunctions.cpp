@@ -15,7 +15,7 @@ using namespace std;
 // etbR
 // RatioDrift
 // flow = number of flow
-RcppExport SEXP AdjustEmptyToBeadRatioForFlowR(SEXP R_etbR, SEXP R_NucModifyRatio, SEXP R_RatioDrift, SEXP R_flow) {
+RcppExport SEXP AdjustEmptyToBeadRatioForFlowR(SEXP R_etbR, SEXP R_NucModifyRatio, SEXP R_RatioDrift, SEXP R_flow, SEXP R_fit_taue) {
   SEXP ret = R_NilValue; 		// Use this when there is nothing to be returned.
   char *exceptionMesg = NULL;
 
@@ -24,12 +24,16 @@ RcppExport SEXP AdjustEmptyToBeadRatioForFlowR(SEXP R_etbR, SEXP R_NucModifyRati
     float NucModifyRatio = Rcpp::as<float>(R_NucModifyRatio);
     float RatioDrift = Rcpp::as<float>(R_RatioDrift);
     int flow = Rcpp::as<int>(R_flow);
+    bool fit_taue = Rcpp::as<bool> (R_fit_taue);
+    float out_val;
+    if (!fit_taue)
+      out_val = xAdjustEmptyToBeadRatioForFlow(etbR,NucModifyRatio,RatioDrift,flow);
+    else
+      out_val = xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR,NucModifyRatio,RatioDrift,flow);
 
-    float out_val = xAdjustEmptyToBeadRatioForFlow(etbR,NucModifyRatio,RatioDrift,flow);
-
-      RcppResultSet rs;
-      rs.add("etbR",      out_val);
-      ret = rs.getReturnList();
+    RcppResultSet rs;
+    rs.add("etbR",      out_val);
+    ret = rs.getReturnList();
 
   } catch(...) {
     exceptionMesg = copyMessageToR("unknown reason");
@@ -56,6 +60,31 @@ RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelR(SEXP R_etbR, SEXP R_
       rs.add("tauB",      out_val);
       ret = rs.getReturnList();
 
+  } catch(...) {
+    exceptionMesg = copyMessageToR("unknown reason");
+  }
+    
+  if(exceptionMesg != NULL)
+    Rf_error(exceptionMesg);
+
+  return ret;
+}
+
+
+RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelUsingTauER(SEXP R_etbR, SEXP R_tauE) {
+  SEXP ret = R_NilValue; 		// Use this when there is nothing to be returned.
+  char *exceptionMesg = NULL;
+
+  try {
+    float etbR = Rcpp::as<float>(R_etbR);
+    float tauE = Rcpp::as<float>(R_tauE);
+    
+    float out_val = xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR);
+    
+    RcppResultSet rs;
+    rs.add("tauB",      out_val);
+    ret = rs.getReturnList();
+    
   } catch(...) {
     exceptionMesg = copyMessageToR("unknown reason");
   }

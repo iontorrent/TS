@@ -3,6 +3,7 @@
 #define PROJECTIONSEARCHFIT_H
 
 #include "TraceCurry.h"
+#include <DotProduct.h>
 
 //@TODO: unify this single flow instance and the multiflow instance in BkgSearchAmplitude
 
@@ -69,8 +70,9 @@ class ProjectionSearchOneFlow
         MultiplyVectorByVector (tmp_eval, fval_cache, residual_weight, npts);
 
         // compute the scaling
-        float denom = cblas_sdot (npts,tmp_eval,1,tmp_eval,1);
-        float amult = (cblas_sdot (npts,tmp_eval,1,tmp_data,1) /denom);
+        float denom = DotProduct (npts,tmp_eval,tmp_eval);
+        float amult = DotProduct (npts,tmp_eval,tmp_data) /denom;
+
         A_new = amult * A_guess;
 
         // if we are very unlucky...we may have had a divide by zero here

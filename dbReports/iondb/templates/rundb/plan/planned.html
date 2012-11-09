@@ -1,0 +1,339 @@
+{% extends "rundb/plan/base.html" %}
+{% block extra_head %}
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" />    
+<script type="text/javascript" src="/site_media/resources/scripts/wizard.min.js"></script>
+
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>  
+ 
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/ui.spinner.css" />
+<script type="text/javascript" src="/site_media/resources/jquery/ui.spinner.min.js"></script>
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+
+<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css"/>
+
+{% endblock extra_head %}
+{% block sub-nav %}
+<li><a href="{% url plans %}">Templates</a></li>
+<li class="active"><a href="{% url planned %}">Planned Runs</a></li>
+{% endblock sub-nav %}
+{% block content %}
+
+<div class="content clearfix">
+	<h1 style="">Planned Runs</h1>
+	<div id='grid'></div>
+	
+	<div class="btn-group pull-left">						
+		<a class="btn delete_selected" href="{% url delete_plan_template 0 %}" style="margin-right: 4px;">Delete Selected</a>
+	</div>
+</div>
+<script id="RunTypeColumnTemplate" type="text/x-kendo-template">
+	# 
+	var runType = data.runType;
+	var applications = {AMPS : 'appl_ampliSeq',
+						GENS : 'appl_wildcard',
+						TARS : 'appl_targetSeq',
+						WGNM : 'appl_wholeGenome',
+						RNA : 'appl_rnaSeq'}; 
+	#
+						  
+	<span class="runTypeImageClass" rel="tooltip" title="#=tb.runTypeDescription(runType)#">
+		<img src="/site_media/resources/img/#=applications[runType]#.png" />
+	</span>
+	
+</script>
+<script id="SampleColumnTemplate" type="text/x-kendo-template">
+	# var barcodedSamples = data.barcodedSamples; #
+	# if (barcodedSamples && !$.isEmptyObject(barcodedSamples.toJSON())) { # 
+		# var json = barcodedSamples.toJSON(); #
+		#= tb.properties(json).length + " Samples " # <span class="" rel="popover" data-select="\#sample#=data.id#" data-title="#=data.planDisplayedName# (#=data.planShortID#)"> ... </span>
+		<div id="sample#=data.id#" class="hide">
+			<table class="table">
+			<thead>
+				<th>BC\#</th>
+				<th>Sample</th>
+			</thead>
+			<tbody>
+				
+			# for (key in json) { #
+			<tr>
+				 <td>#=key# </td>
+				 <td>#=json[key].sample# </td>
+			</tr>
+			# } #
+			</tbody>	
+			</table>
+		</div>
+	# } else { # 
+		#= sampleDisplayedName # 
+	# } #
+</script>
+<script id="ActionColumnTemplate" type="text/x-kendo-template">
+<div class="btn-group">
+	# var _id = id;# 
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"><span class="caret"></span></a>
+	<ul class="dropdown-menu pull-right">
+		<li>
+			<a href="#= '{% url review_plan_run 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
+		</li>
+		<li>
+			<a href="#= '{% url edit_plan_run 999999 %}'.replace('999999',_id)#" class="edit-plan">Edit</a>
+		</li>
+		<li>
+			<a href="#= '{% url delete_plan_template 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
+		</li>
+	</ul>
+</div>	
+</script>
+<script type="text/javascript">
+//models.PlannedExperiment.objects.filter(isReusable=False, planExecuted=False).order_by("-date", "planName")
+
+$(document).ready(function(){
+	var grid = $("#grid").kendoGrid({
+        dataSource: {
+        	type: "json",
+			transport: {
+                read: {
+                	url: "/rundb/api/v1/plannedexperiment/?isReusable=False&parentPlan=None&planExecuted=False",
+                	contentType: 'application/json; charset=utf-8',
+				    type: 'GET',
+				    dataType: 'json'
+                },
+				parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+                
+            },
+            schema: {
+            	data: "objects",
+            	total: "meta.total_count",
+                model: {
+                    fields: {
+                        id: { type: "number" },
+                        planShortID: { type: "string" },
+                        planDisplayedName: { type: "string" },
+                        barcodeId: { type: "string" },
+                        //runMode: { type: "string" },
+                        runType: { type: "string" },
+                        projects: { type: "string" },
+                        sampleDisplayedName: { type: "string" },
+                        date: { type: "string" }
+                    }
+                }
+            },
+            serverSorting: true,
+            sort: [{ field: "date", dir: "desc" }, { field: "planDisplayedName", dir: "asc" }],
+            serverPaging: true,                        	
+        	pageSize: 100
+        },
+        height: '446',
+        groupable: false,
+        scrollable: {
+        	virtual: true
+        },
+        selectable: false,
+        sortable: true,
+        pageable: false,
+		columns: [
+			{
+                field: "id",
+                title: "Select",
+                sortable: false,
+                template: "<input id='${id}' name='runs' type='checkbox'>"
+            } , {
+                field: "planShortID",
+                title: "Run Code"
+                // template: "<a href='/data/project/${id}/results'>${name}</a>"
+            } , {
+                field: "planDisplayedName",
+                title: "Run Plan Name",
+                sortable: true
+            } , {
+                field: "barcodeId",
+                title: "Barcodes",
+                sortable: true
+            // } , {
+                // field: "runMode",
+                // title: "Run Type",
+                // sortable: true,
+				// template: '<span rel="tooltip" title="#= tb.runModeDescription(runMode)#">#= tb.runModeShortDescription(runMode)#</span>'
+            } , {
+                field: "runType",
+                title: "Application",
+                sortable: true, 
+                template: kendo.template($('#RunTypeColumnTemplate').html())
+            } , {
+                field: "projects",
+                title: "Project",
+                sortable: false
+            } , {
+                title: "Sample",
+                sortable: false,
+                template: kendo.template($('#SampleColumnTemplate').html())
+            } , {
+                field: "date",
+                title: "Last Modified",
+                template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                title: " ",
+                width: '4%',
+                sortable: false,
+                template: kendo.template($("#ActionColumnTemplate").html())
+            }
+        ],
+        dataBound: function(e) {
+        	var source = "#grid";
+        	$(source + ' span[rel="popover"]').each(function(i, elem){
+        		$(elem).popover({
+    				content: $($(elem).data('select')).html()
+    			});
+			});
+        	$(source + ' table thead th:first').html("<span rel='tooltip' title='(De)select All'><input  class='selectall' type='checkbox'>&nbsp; Select </span>");
+        	
+        	$(source + ' .selectall').click(function(e) {
+        		// e.preventDefault();
+        		var state = $(this).is(':checked'); 
+        		$(source + ' table tbody tr td input[type="checkbox"]').each(function(i,j) {
+        			console.log(i, j);
+        			$(this).attr('checked', state);
+        			console.log($(this).attr('checked'));
+        		});
+        	});
+        	
+			$(source + ' .review-plan').click(function(e){
+				$('body').css("cursor", "wait");	
+				e.preventDefault();
+
+				var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+				$('body').prepend(busyDiv);
+				
+				url = $(this).attr('href');
+				
+				$('body #modal_review_plan').remove();
+				$.get(url, function(data) {
+				  	$('body').append(data);
+				    $( "#modal_review_plan" ).modal("show");
+				    return false;
+				}).done(function(data) { 
+			    	console.log("success:", url);
+			    	// $(that).trigger('remove_from_project_done', {values: e.values});
+				})
+			    .fail(function(data) {
+					$('body').css("cursor", "default");	
+					$('.myBusyDiv').empty();
+					$('body').remove('.myBusyDiv');
+					
+			    	$('#error-messages').empty();
+			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			    	console.log("error:", data);
+			    	 
+			    })
+			    .always(function(data) { /*console.log("complete:", data);*/ 
+			    	$('body').css("cursor", "default");	
+			    	$('.myBusyDiv').empty();
+					$('body').remove('.myBusyDiv');
+					delete busyDiv;
+			    });		
+			});        	
+			$(source + " .edit-plan").click(function (e) {
+				$('body').css("cursor", "wait");
+				e.preventDefault(); 
+
+				var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+				$('body').prepend(busyDiv);
+
+				url = $(this).attr('href');
+				
+				$('body #modal_plan_wizard').remove();
+				$('body #modal_plan_run').remove();
+				$.get(url, function(data) {
+				  	$('body').append(data);
+				  	
+				  	setTab('#ws-1');
+				  	$( "#modal_plan_wizard" ).data('source', source);
+				    $( "#modal_plan_wizard" ).modal("show");
+				    return false;
+				}).done(function(data) { 
+			    	console.log("success:", url);
+			    	// $(that).trigger('remove_from_project_done', {values: e.values});
+				})
+			    .fail(function(data) {
+					$('body').css("cursor", "default");
+			    	$('.myBusyDiv').empty();
+					$('body').remove('.myBusyDiv');
+										
+			    	$('#error-messages').empty();
+			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			    	console.log("error:", data);
+			    	 
+			    })
+			    .always(function(data) { /*console.log("complete:", data);*/ 
+			    	$('body').css("cursor", "default");
+			    	$('.myBusyDiv').empty();
+					$('body').remove('.myBusyDiv');
+					delete busyDiv;
+			    });
+			}); 
+			$(source + " .delete-plan").click(function (e) {
+				e.preventDefault();
+				url = $(this).attr('href');
+				$('body #modal_confirm_delete').remove();
+				$('modal_confirm_delete_done')
+				$.get(url, function(data) {
+				  	$('body').append(data);
+				  	$( "#modal_confirm_delete" ).data('source', source);
+				    $( "#modal_confirm_delete" ).modal("show");
+				    return false;
+				}).done(function(data) { 
+			    	console.log("success:",  url);
+				})
+			    .fail(function(data) {
+			    	$('#error-messages').empty();
+			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			    	console.log("error:", data);
+			    	 
+			    })
+			    .always(function(data) { /*console.log("complete:", data);*/ });
+			});
+		}                        
+    });
+    
+    $('.delete_selected').click(function (e) {
+    	var source = '#grid';
+		e.preventDefault();
+		e.stopPropagation();
+		var checked_ids = $("#grid input:checked").map(function() {
+			return $(this).attr("id");
+		}).get();
+		console.log(checked_ids);
+		
+		if (checked_ids.length > 0) {
+			url = $(this).attr('href').replace('0',checked_ids.join());
+			// alert(url);
+			$.get(url, function(data) {
+			    return false;
+			}).done(function(data) { 
+		    	console.log("success:",  url);
+		    	$('body').append(data);
+		    	$( "#modal_confirm_delete" ).data('source', source);
+		    	$('#modal_confirm_delete').modal("show");
+	    	})
+		    .fail(function(data) {
+		    	$('#error-messages').empty();
+		    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+		    	console.log("error:", data);
+		    	 
+		    })
+		    .always(function(data) { /*console.log("complete:", data);*/ });; 
+		}
+		
+	});
+    $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e) {
+    	console.log(e.target, e.relatedTarget);
+    	refreshKendoGrid($(e.target).data('source'));
+    });	
+    
+});
+</script>
+{% endblock content %}

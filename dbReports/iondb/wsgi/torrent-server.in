@@ -1,0 +1,216 @@
+<VirtualHost *:80>
+    ServerAdmin webmaster@localhost
+
+    DocumentRoot /var/www
+    <Directory />
+        Options FollowSymLinks
+        AllowOverride None
+    </Directory>
+    <Directory /var/www/>
+        Options Indexes FollowSymLinks MultiViews
+        AllowOverride None
+        Order allow,deny
+        Allow from all
+    </Directory>
+
+    ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+    <Directory "/usr/lib/cgi-bin">
+        AllowOverride None
+        Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+        Order allow,deny
+        Allow from all
+    </Directory>
+
+    <Directory "/var/www/site_media/">
+      # Cache js, css, and static resources for 1 week
+      <IfModule mod_expires.o>
+        ExpiresActive ON
+        ExpiresDefault A604800
+      </IfModule>
+    </Directory>
+
+    ## Enable compression for json results
+    <IfModule mod_deflate.c>
+        AddOutputFilterByType DEFLATE application/json
+    </IfModule>
+
+
+    ErrorLog /var/log/apache2/error.log
+
+    # Possible values include: debug, info, notice, warn, error, crit, alert, emerg.
+    LogLevel warn
+
+    # Log is filtered
+    CustomLog /var/log/apache2/access.log combined env=!dontlog
+
+    <Directory /var/www/output*>
+        # Allow localhost without auth
+        Order allow,deny
+        Allow from localhost
+        Satisfy Any
+
+        # Use apache auth, which uses WSGI and django database for validation
+        AuthType Basic
+        AuthName "Torrent Browser"
+        AuthUserFile /dev/null
+        AuthBasicProvider wsgi
+        Require valid-user
+
+        WSGIApplicationGroup iontorrent
+        WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+
+        # Redirect failures to login page
+        # NOTE - this looses current url, sends user to home. They already clicked cancel...
+        # NOTE - taking the user to / instead of /login/ b/c this has the right JS to handle both django and basic auth simultaneously. 
+        ErrorDocument 401 "<html><meta http-equiv=\"refresh\" content=\"0;url=/\"></html>"
+
+        AuthBasicAuthoritative Off
+
+        SetHandler none
+        Options FollowSymLinks MultiViews Indexes
+        DirectoryIndex Default_Report.php index.html index.htm index.php log.html drmaa_stdout.txt
+
+        <Files "ReportLog.html">
+            ForceType text/plain
+        </Files>
+
+        <IfModule mod_expires.c>
+            ExpiresActive On
+            ExpiresDefault M60
+            # Ensure that log files and generated html
+            # are revalidated immediately
+            ExpiresByType text/plain M0
+            ExpiresByType text/html M0
+        </IfModule>
+
+    </Directory>
+
+    <Location ~ "^/(data|configure|rundb|plan|monitor|report|logout)">
+        AuthType Basic
+        AuthName "Torrent Browser"
+        AuthUserFile /dev/null
+        AuthBasicProvider wsgi
+        Require valid-user
+
+        # Allow localhost without auth
+        Order allow,deny
+        Allow from localhost
+        Satisfy Any
+        
+        # Redirect failures to login page
+        # NOTE - this looses current url, sends user to home. They already clicked cancel...
+        # NOTE - taking the user to / instead of /login/ b/c this has the right JS to handle both django and basic auth simultaneously. 
+        ErrorDocument 401 "<html><meta http-equiv=\"refresh\" content=\"0;url=/\"></html>"
+        
+
+        WSGIApplicationGroup iontorrent
+        WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+        WSGIPassAuthorization On
+    </Location>
+    WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /data @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /configure @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /plan @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /monitor @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /report @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /login @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+    WSGIScriptAlias /logout @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+	WSGIApplicationGroup iontorrent
+	
+    # No auth required for login or registration pages
+    <Location "/login">
+        Require none
+        Satisfy Any
+        Allow from all
+    </Location>
+    
+    # Basic auth using a predefined creds to clear a browser's Authorization header for the "Torrent Browser" realm
+    <Location "/basicauthlogout">
+     	AuthType Basic
+        AuthName "Torrent Browser"
+        AuthUserFile /etc/apache2/users
+        Require valid-user
+        Order allow,deny
+        Allow from localhost
+        Satisfy Any
+        # Redirect failures to login page
+        # NOTE - this looses current url, sends user to home. They already clicked cancel...
+        # NOTE - taking the user to / instead of /login/ b/c this has the right JS to handle both django and basic auth simultaneously. 
+        ErrorDocument 404 "<html><meta http-equiv=\"refresh\" content=\"0;url=/\"></html>"
+        ErrorDocument 200 "<html><meta http-equiv=\"refresh\" content=\"0;url=/\"></html>"
+        
+    </Location>
+
+
+    # Provide different auth / permissions on API
+    <Location "/rundb/api/v1">
+        AuthType Basic
+        AuthName "Torrent Browser"
+        AuthUserFile /dev/null
+        AuthBasicProvider wsgi
+        Require valid-user
+        WSGIApplicationGroup iontorrent
+        WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+        WSGIPassAuthorization On
+
+        Order deny,allow
+        <Limit GET>
+            # Allow read-only access from private-networks RFC1918
+            Allow from 10.0.0.0/8
+            Allow from 192.168.0.0/24
+            Allow from 172.18.0.0/16
+            Allow from 127.0.0.0/8
+        </Limit>
+        Allow from localhost
+        Satisfy Any
+    </Location>
+
+    <Location "/admin">
+        AuthType Basic
+        AuthName "Torrent Browser"
+        AuthUserFile /dev/null
+        AuthBasicProvider wsgi
+        #Require valid-user
+
+        WSGIApplicationGroup iontorrent
+        WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
+        WSGIPassAuthorization On
+    </Location>
+    WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+
+    <Location "/ion-docs">
+        ErrorDocument 404 /docsnotfound.html
+    </Location>
+
+    ## Exclude some entries from log files
+    <IfModule mod_setenvif.c>
+        SetEnvIf Request_URI "/robots.txt" dontlog
+        SetEnvIf Request_URI "/favicon.ico" dontlog
+
+        # Polling from the messages API
+        SetEnvIf Request_URI "/rundb/api/v1/message/" dontlog
+        # Polling from RSM agent
+        SetEnvIf Request_URI "/rundb/api/v1/fileserver" dontlog
+        # Polling from progress bars
+        SetEnvIf Request_URI "/rundb/progress_bar/" dontlog
+        SetEnvIf Request_URI "/rundb/reports/progressbox" dontlog
+
+        #Exclude all internal traffic?
+        #SetEnvIf Remote_Addr "127.0.0.1" dontlog
+        # Exclude all auxiliary files
+        #SetEnvIfNoCase Request_URI "\.(jpg)|(png)|(css)|(js)|(ico)$" dontlog
+
+        # CustomLog entry in virtual host ends with env=!dontlog
+    </IfModule>
+
+    <FilesMatch "(progress_bar|progressbox)">
+        FileETag None
+        <IfModule mod_headers.c>
+            Header unset ETag
+            Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+            Header set Pragma "no-cache"
+            Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+        </IfModule>
+    </FilesMatch>
+
+</VirtualHost>

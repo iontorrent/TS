@@ -32,101 +32,24 @@ char *readline (FILE *fp)
   }
   return (line);
 }
-#ifndef ALIGNSTATS_IGNORE
 
-//@TODO:  Please replace this parser by json library and the file by a json file
-// this parser has broken once already because coding up unique file formats is a bad, bad idea
-char *GetExpLogParameter (const char *filename, const char *paramName)
+//void CreateResultsFolder (char *experimentName)
+void CreateResultsFolder (const char *experimentName)
 {
-  FILE *fp = NULL;
-  fopen_s (&fp, filename, "rb");
-  if (!fp)
+  // Create results folder
+  if (mkdir (experimentName, 0777))
   {
-    strerror (errno);
-    return (NULL);
-  }
-  char *parameter = NULL;
-  size_t size = 256; //getline resets line size as needed
-  char *line = (char *) malloc (size);
-  size_t testlen = strlen (paramName);
-  bool val_found = false;
-  while ( ((getline (&line,&size,fp)) > 0) & !val_found)  // stop at first occurrence
-  {
-    //fprintf (stderr, "Size is %d\n",(int) size);
-    //fprintf(stderr, "%s\n", line);
-    //fprintf(stderr, "%s\n", paramName);
-    //if (strstr (line, paramName))
-    if (!strncmp (line,paramName,testlen)) // find >start of line< containing keyword
+    if (errno == EEXIST)
     {
-      //fprintf(stderr,"Match: %s %s\n", paramName, line);
-      if (strlen (line) > (testlen)) // make sure line contains useful information past the hypothetical colon separator
-      {
-        //fprintf(stderr,"line long enough %d \n", (int)testlen);
-        if (line[testlen]==':') // make sure the keyword is separated from the data by a ':' and we are not in a substring hit by accident
-        {
-          //fprintf(stderr,"Found %s at %s\n", paramName, line);
-          char *sPtr = strchr (line, ':');  // guaranteed by above
-          sPtr++; //skip colon
-          //skip leading white space
-          while (isspace (*sPtr)) sPtr++;
-          parameter = (char *) malloc (sizeof (char) * (size + 2));
-          strcpy (parameter, sPtr);
-          val_found = true;
-        }
-      }
+      //already exists? well okay...
+    }
+    else
+    {
+      perror (experimentName);
+      exit (EXIT_FAILURE);
     }
   }
-  if (line)
-    free (line);
-  fclose (fp);
-  //DEBUG
-  //fprintf (stdout, "getExpLogParameter: %s %s\n", paramName, parameter);
-  return (parameter);
 }
-
-//@TODO:  what does this do when compared to the above?
-// why do we not simply call the above and push_back the resulting value?
-void GetExpLogParameters (const char *filename, const char *paramName, std::vector<std::string> &values)
-{
-  FILE *fp = NULL;
-  values.resize (0);
-  fopen_s (&fp, filename, "rb");
-  if (!fp)
-  {
-    strerror (errno);
-    return;
-  }
-  size_t size = 256; //getline resets line size as needed
-  char *line = (char *) malloc (size);
-  size_t testlen = strlen (paramName);
-  bool val_found = false;
-  while ( ((getline (&line,&size,fp)) > 0) & !val_found)
-  {
-    //fprintf (stderr, "Size is %d\n", size);
-//    if (strstr (line, paramName))
-    if (!strncmp (line,paramName,testlen)) // find >start of line< containing keyword
-    {
-      if (strlen (line) > testlen) // make sure line contains useful information past the hypothetical colon separator
-      {
-        if (line[testlen]==':') // make sure the keyword is separated from the data by a ':' and we are not in a substring hit by accident
-        {
-          char *sPtr = strchr (line, ':');
-          sPtr++; //skip colon
-          //skip leading white space
-          while (isspace (*sPtr)) sPtr++;
-          values.push_back (sPtr);
-          val_found = true;
-        }
-      }
-    }
-  }
-  if (line)
-  {
-    free (line);
-  }
-  fclose (fp);
-}
-#endif
 
 //
 //  Tests a string for containing a valid filesystem path
@@ -149,140 +72,6 @@ bool isFile (const char *path)
   return (S_ISREG (x.st_mode) ? true:false);
 }
 
-#ifndef ALIGNSTATS_IGNORE
-//
-// Parses explog.txt and returns a flag indicating whether wash flows are
-// present in the run data.
-// Returns 0 - no wash flow
-//   1 - wash flow present
-//     -1 - could not determine
-//
-int HasWashFlow (char *datapath)
-{
-  int washImages = -1; // Set default to indicate error determine value.
-  char *filepath = NULL;
-  char *argument = NULL;
-  filepath = getExpLogPath (datapath);
-
-  argument = GetExpLogParameter (filepath,"Image Map");
-  if (argument)
-  {
-    // Typical arg is
-    // "5 0 r4 1 r3 2 r2 3 r1 4 w2" - would be wash flow
-    //  "4 0 r4 1 r3 2 r2 3 r1" - would be no wash
-    int flowNum;
-
-    sscanf (argument,"%d", &flowNum);
-    if (flowNum == 5)
-    {
-      char *sPtr = strrchr (argument, 'w');
-      if (sPtr)
-        washImages = 1;
-      else
-        washImages = 0;
-    }
-    else if (flowNum == 4)
-    {
-      washImages = 0;
-    }
-    else
-    {
-      // Its not either the expected 5 or 4.
-      //Check the last part of the string for a 'w' character
-      char *sPtr = strrchr (argument, 'w');
-      if (sPtr)
-        washImages = 1;
-      else
-        washImages = 0;
-    }
-    free (argument);
-  }
-
-  if (filepath) free (filepath);
-
-  return (washImages);
-}
-
-char *GetPGMFlowOrder (char *path)
-{
-  char *flowOrder = NULL;
-  char *filepath = NULL;
-  char *argument = NULL;
-  filepath = getExpLogPath (path);
-
-  argument = GetExpLogParameter (filepath,"Image Map");
-  const char mapping[6] = {"0GCAT"};
-  if (argument)
-  {
-
-    // Typical arg is
-    // "5 0 r4 1 r3 2 r2 3 r1 4 w2" - would be wash flow
-    //  "4 0 r4 1 r3 2 r2 3 r1" - would be no wash
-    //  -OR-
-    // "4 0 T 1 A 2 C 3 G"
-    // -OR-
-    // "tcagtcagtcag"
-    //
-    //fprintf (stderr, "Raw string = '%s'\n", argument);
-
-    // First entry is number of flows in cycle, unless its not!
-    int numFlows = 0;
-    sscanf (argument,"%d", &numFlows);
-    if (numFlows == 0)
-    {
-      numFlows = strlen (argument);
-    }
-    assert (numFlows > 0);
-
-    // allocate memory for the floworder string
-    flowOrder = (char *) malloc (numFlows+1);
-
-
-    // Upper case everything
-    ToUpper (argument);
-    //fprintf (stdout, "argument = '%s'\n", argument);
-
-    //  Read string char at a time.
-    //  If its 'R' then
-    //   read next char as an integer and convert integer to Nuke
-    //  else if its T A C or G
-    //   set Nuke
-    //  else skip
-    int num = 0; //increments index into argument string
-    int cnt = 0; //increments index into flowOrder string
-    for (num = 0; argument[num] != '\n'; num++)
-    {
-      //fprintf (stdout, "We Got '%c'\n", argument[num]);
-      if (argument[num] == 'R')
-      {
-        //this will work as long as there are less than 10 reagent bottles on the PGM
-        int index = argument[num+1] - 48; //does this make anyone nervous?
-        //fprintf (stdout, "Index = %d\n", index);
-        assert (index > 0 && index < 9);
-        //fprintf (stdout, "mapping[%d] = %c\n", index, mapping[index]);
-        flowOrder[cnt++] = mapping[index];
-        flowOrder[cnt] = '\0';
-      }
-      else if (argument[num] == 'T' ||
-               argument[num] == 'A' ||
-               argument[num] == 'C' ||
-               argument[num] == 'G')
-      {
-        flowOrder[cnt++] = argument[num];
-        flowOrder[cnt] = '\0';
-      }
-      else
-      {
-        //skip this character
-      }
-    }
-
-    free (argument);
-  }
-  if (filepath) free (filepath);
-  return (flowOrder);
-}
-#endif
 
 //
 //Converts initial portion of a string to a long integer, with error checking
@@ -308,7 +97,7 @@ bool validIn (char *inStr, long *value)
 
   if (endPtr == inStr)
   {
-    fprintf (stderr, "No digits were found\n");
+    fprintf (stderr, "No digits were found in %s\n", inStr);
     return (EXIT_FAILURE);
   }
   //fprintf (stdout, "Converted to %ld\n", *value);
@@ -477,6 +266,7 @@ char *GetIonConfigFile (const char filename[])
     {
       free (string);
     }
+    //free (HOME);
   }
 
   // Search for config file in $ION_CONFIG:
@@ -494,6 +284,7 @@ char *GetIonConfigFile (const char filename[])
     {
       free (string);
     }
+    free(ION_CONFIG);
   }
 
   // Search for config file:
@@ -514,6 +305,7 @@ char *GetIonConfigFile (const char filename[])
   else
   {
     free (string);
+    string = NULL;
   }
 
   // Ultimate last ditch: hardcoded path
@@ -609,186 +401,6 @@ bool CopyFile (char *filefrom, char *fileto)
   return 0;
 }
 
-#ifndef ALIGNSTATS_IGNORE
-//
-//find number of cycles in dataset
-//
-int GetCycles (char *dir)
-{
-  int cycles = 0;
-
-  // Method using the explog.txt
-  char *filepath = NULL;
-  char *argument = NULL;
-  long value;
-  filepath = getExpLogPath (dir);
-
-  argument = GetExpLogParameter (filepath,"Cycles");
-  if (argument)
-  {
-    if (validIn (argument, &value))
-    {
-      fprintf (stderr, "Error getting num cycles from explog.txt\n");
-      exit (1);
-    }
-    else
-    {
-      cycles = (int) value;
-    }
-    free (argument);
-  }
-  else
-  {
-    //DEBUG
-    fprintf (stderr, "No Cycles keyword found\n");
-  }
-  free (filepath);
-  return (cycles);
-}
-
-//
-//Determine number of Flows in run from explog.txt
-//
-int GetTotalFlows (char *dir)
-{
-  int numFlows = 0;
-
-  // Method using the explog.txt
-  char *filepath = NULL;
-  char *argument = NULL;
-  long value;
-  filepath = getExpLogPath (dir);
-
-  argument = GetExpLogParameter (filepath,"Flows");
-  if (argument)
-  {
-    if (validIn (argument, &value))
-    {
-      fprintf (stderr, "Error getting num flows from explog.txt\n");
-      exit (1);
-    }
-    else
-    {
-      //DEBUG
-      //fprintf (stderr, "GetTotalFlows: '%s' '%d'\n", argument, (int) value);
-      numFlows = (int) value;
-    }
-    free (argument);
-  }
-  else
-  {
-    // No Flows keyword found - legacy file format pre Jan 2011
-    //DEBUG
-    fprintf (stderr, "No Flows keyword found\n");
-    int cycles = GetCycles (dir);
-    numFlows = 4 * cycles;
-  }
-  if (filepath) free (filepath);
-  //fprintf (stderr, "Returning numFlows = %d\n",numFlows);
-  return (numFlows);
-}
-
-//
-//return chip id string
-//
-char * GetChipId (const char *dir)
-{
-  // Method using the explog.txt
-  char *argument = NULL;
-  char *filepath = NULL;
-  filepath = getExpLogPath (dir);
-
-  argument = GetExpLogParameter (filepath,"ChipType");
-  if (argument)
-  {
-    char *chip = (char *) malloc (10);
-    int len = strlen (argument);
-    int y = 0;
-    for (int i = 0; i<len;i++)
-    {
-      if (isdigit (argument[i]))
-        chip[y++] = argument[i];
-    }
-    chip[y] = '\0';
-    free (filepath);
-    free (argument);
-    return (chip);
-  }
-  if (filepath) free (filepath);
-  return (NULL);
-}
-
-void GetChipDim (const char *type, int dims[2], const char *dir)
-{
-  if (type != NULL)
-  {
-    if (strncmp ("314",type,3) == 0)
-    {
-      dims[0] = 1280;
-      dims[1] = 1152;
-    }
-    else if (strncmp ("324",type,3) == 0)
-    {
-      dims[0] = 1280;
-      dims[1] = 1152;
-    }
-    else if (strncmp ("316",type,3) == 0)
-    {
-      dims[0] = 2736;
-      dims[1] = 2640;
-    }
-    else if (strncmp ("318",type,3) == 0)
-    {
-      dims[0] = 3392;
-      dims[1] = 3792;
-    }
-    else if (strncmp ("900",type,4) == 0)
-    {
-
-      // Method using the explog.txt
-      char *argument = NULL;
-      char *filepath = NULL;
-      filepath = getExpLogPath (dir);
-      long value;
-
-      argument = GetExpLogParameter (filepath,"Rows");
-      if (validIn (argument, &value))
-      {
-        fprintf (stderr, "Error getting rows from explog.txt\n");
-        dims[1] = 0;
-      }
-      else
-      {
-        //fprintf (stderr, "Rows: '%s' '%d'\n", argument, (int) value);
-        dims[1] = (int) value;
-      }
-
-      argument = GetExpLogParameter (filepath,"Columns");
-      if (validIn (argument, &value))
-      {
-        fprintf (stderr, "Error getting columns from explog.txt\n");
-        dims[0] = 0;
-      }
-      else
-      {
-        //fprintf (stderr, "Columns: '%s' '%d'\n", argument, (int) value);
-        dims[0] = (int) value;
-      }
-    }
-    else
-    {
-      dims[0] = 0;
-      dims[1] = 0;
-    }
-  }
-  else
-  {
-    dims[0] = 0;
-    dims[1] = 0;
-  }
-}
-#endif
-
 int GetNumLines (char *filename)
 {
   int cnt = 0;
@@ -863,6 +475,8 @@ char * GetProcessParam (const char *filePath, const char *pattern)
 
       //select the desired keyword.  note: whitespace would be a problem
       //if we searched for exact match.
+      // note that this is a latent bug, as strstr will find the pattern >anywhere< in the line
+      // if the keyword doesn't match, that's a problem with >the input file<, not with the parser
       if (strstr (keyword, pattern))
       {
         arg = (char *) malloc (strlen (argument) +1);
@@ -884,6 +498,7 @@ char * GetProcessParam (const char *filePath, const char *pattern)
  * For given width and height chip, and input region index and number of regions, return
  *  Region structure for unique region specified.
  */
+#ifndef ALIGNSTATS_IGNORE
 void defineSubRegion (int rows, int cols, int runIndex, int regionIdx, Region *cropRegions)
 {
 
@@ -932,7 +547,7 @@ void defineSubRegion (int rows, int cols, int runIndex, int regionIdx, Region *c
   }
 
 }
-
+#endif
 bool IsValid (const double *vals, int numVals)
 {
   int i;
@@ -972,76 +587,12 @@ void init_salute()
 }
 #endif
 
-//
-// updates a file called progress.txt which would be in the CWD when Analysis
-// is launched by web interface.
-//
-bool updateProgress (int transition)
+
+std::string get_time_iso_string(time_t time)
 {
-  char cmd[1024];
-  char *path = NULL;
-  bool error = false;
-  bool debugme = false;
-
-  path = strdup ("progress.txt");
-
-  switch (transition)
-  {
-      // Transition from beadfind to image processing
-    case WELL_TO_IMAGE:
-
-      if (debugme) fprintf (stderr, "Changing color of wellproc\n");
-      sprintf (cmd,
-               "sed -i 's/wellfinding.*/wellfinding = green/' "
-               "%s 2>/dev/null", path);
-      if (system (cmd))
-      {
-        error = true;
-        if (debugme) fprintf (stderr, "Error running system cmd\n");
-      }
-
-      if (debugme) fprintf (stderr, "Changing color of signalproc\n");
-      sprintf (cmd,
-               "sed -i 's/signalprocessing.*/signalprocessing = yellow/' "
-               "%s 2>/dev/null", path);
-      if (system (cmd))
-      {
-        error = true;
-        if (debugme) fprintf (stderr, "Error running system cmd\n");
-      }
-      break;
-      // Transition from image processing to signal processing
-    case IMAGE_TO_SIGNAL:
-
-      if (debugme) fprintf (stderr, "Changing color of signalproc\n");
-      sprintf (cmd,
-               "sed -i 's/signalprocessing.*/signalprocessing = green/' "
-               "%s 2>/dev/null", path);
-      if (system (cmd))
-      {
-        error = true;
-        if (debugme) fprintf (stderr, "Error running system cmd\n");
-      }
-
-      if (debugme) fprintf (stderr, "Changing color of basecalling\n");
-      sprintf (cmd,
-               "sed -i 's/basecalling.*/basecalling = yellow/' "
-               "%s 2>/dev/null", path);
-      if (system (cmd))
-      {
-        error = true;
-        if (debugme) fprintf (stderr, "Error running system cmd\n");
-      }
-
-      break;
-    default:
-      fprintf (stderr, "Unknown transition: %d\n", transition);
-      error = true;
-      break;
-  }
-
-  free (path);
-  return (error);
+  char time_buffer[1024];
+  strftime(time_buffer, 1024, "%Y-%m-%dT%H:%M:%S", localtime(&time));
+  return std::string(time_buffer);
 }
 
 int count_char (std::string s, char c)
@@ -1093,9 +644,12 @@ void split (const string& s, char c, vector<string>& v)
   string::size_type i = 0;
   string::size_type j = s.find (c);
   v.clear();
-  if (j == string::npos) {
+  if (j == string::npos)
+  {
     v.push_back (s);
-  } else {
+  }
+  else
+  {
     while (j != string::npos)
     {
       v.push_back (s.substr (i, j-i));
@@ -1148,6 +702,7 @@ int seqToFlow (const char *seq, int seqLen, int *ionogram, int ionogramLen, char
   return flows;
 }
 
+#ifndef ALIGNSTATS_IGNORE
 void flowToSeq (string &seq, hpLen_vec_t &hpLen, string &flowOrder)
 {
   unsigned int cycleLen = flowOrder.size();
@@ -1164,12 +719,11 @@ void flowToSeq (string &seq, hpLen_vec_t &hpLen, string &flowOrder)
     }
   }
 }
-
 //
 // Returns pointer to string containing path to explog.txt file
 // Can be in given raw data directory, or parent of given directory if its a gridded dataset
 //
-char * getExpLogPath (const char *dir)
+char * MakeExpLogPathFromDatDir (const char *dir)
 {
   //first try the given directory - default behavior for monogrid data
   char filename[] = {"explog.txt"};
@@ -1181,17 +735,33 @@ char * getExpLogPath (const char *dir)
     return filepath;
   }
   free (filepath);
+  filepath = NULL;
   //second try the parent directory
   char *parent = NULL;
   parent = strdup (dir);
   char *parent2 = dirname (parent);
   filepath = (char *) malloc (sizeof (char) * (strlen (filename) + strlen (parent2) + 2));
   sprintf (filepath, "%s/%s", parent2, filename);
-  free (parent);
+  if (parent)
+    free (parent);
+  //if (parent2)
+  //free (parent2);
+  
   if (isFile (filepath))
   {
     return filepath;
   }
+  // third try:
+  char filename_thumbnail[] = {"explog_final.txt"};
+  if (filepath) free (filepath);
+  filepath = (char *) malloc (sizeof (char) * (strlen (filename_thumbnail) + strlen (dir) + 2));
+  sprintf (filepath, "%s/%s", dir, filename_thumbnail);
+
+  if (isFile (filepath))
+  {
+    return filepath;
+  }
+  free(filepath);
   return NULL;
 }
 
@@ -1206,7 +776,7 @@ std::string GetMemUsage()
   vector<string> words;
   if (getline (file, line))
   {
-    split(line,' ',words);
+    split (line,' ',words);
   }
   if (words.size() < 3)
   {
@@ -1279,11 +849,11 @@ short GetPinHigh()
 {
   // should this be a supplied parameter like chip type?
   // no guarantee that chip type always defines pin values
-  ChipIdEnum chipId = ChipIdDecoder::GetGlobalChipId();
+  ChipIdEnum chipId = ChipIdDecoder::GetGlobalChipId();  //@TODO: bad use of fake global variable smuggled in through static 
   short pin_high = 0;
 
-  switch ( chipId )
-    {
+  switch (chipId)
+  {
     case ChipId314:
       pin_high = 0x3fff;
       break;
@@ -1298,15 +868,85 @@ short GetPinHigh()
       break;
     default:
       pin_high = 0x3fff;
-      fprintf(stdout, "Warning! ChipType unknown, defaulting pin_high to %d\n", pin_high);
-    }
-  return ( pin_high );
+      fprintf (stdout, "Warning! ChipType unknown, defaulting pin_high to %d\n", pin_high);
+  }
+  return (pin_high);
 }
 
 short GetPinLow()
 {
   short pin_low = 0;
-  return ( pin_low );
+  return (pin_low);
+}
+
+int GetSystemMemInBuffers()
+{
+  FILE *fp = NULL;
+  int mem = 0;
+  fp = popen ("cat /proc/meminfo | grep \"Buffers:\" | awk '{ print $2 }'", "r");
+
+  // if the grep finds nothing, then this returns a NULL fp...
+  if (fp == NULL)
+    return mem;
+
+  int n = fscanf (fp, "%d", &mem);
+
+  if (n != 1)
+    mem = 0;
+
+  pclose (fp);
+
+  return mem;
+}
+
+int GetCachedSystemMem()
+{
+  FILE *fp = NULL;
+  int mem = 0;
+  fp = popen ("cat /proc/meminfo | grep \"Cached:\" | awk '{ print $2 }'", "r");
+
+  // if the grep finds nothing, then this returns a NULL fp...
+  if (fp == NULL)
+    return mem;
+
+  int n = fscanf (fp, "%d", &mem);
+
+  if (n != 1)
+    mem = 0;
+
+  pclose (fp);
+
+  return mem;
+}
+
+int GetFreeSystemMem()
+{
+  FILE *fp = NULL;
+  int mem = 0;
+  fp = popen ("cat /proc/meminfo | grep \"MemFree:\" | awk '{ print $2 }'", "r");
+
+  // if the grep finds nothing, then this returns a NULL fp...
+  if (fp == NULL)
+    return mem;
+
+  int n = fscanf (fp, "%d", &mem);
+ 
+  if (n != 1)
+    mem = 0;
+
+  pclose (fp);
+
+  return mem;
 }
 
 
+int GetAbsoluteFreeSystemMemoryInKB()
+{
+  int freeMem = 0;
+
+  freeMem = GetFreeSystemMem() + GetCachedSystemMem() + GetSystemMemInBuffers();
+
+  return freeMem;
+}
+
+#endif

@@ -1,5 +1,9 @@
 /* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved */
 
+//! @file     RegionWellsReader.cpp
+//! @ingroup  BaseCaller
+//! @brief    RegionWellsReader. Thread-safe, poorly-regionized wrapper for RawWells. Delete soon.
+
 #include <cassert>
 #include <unistd.h>
 #include <sys/types.h>

@@ -8,10 +8,13 @@ from django.contrib import admin
 from django.forms import TextInput, Textarea
 
 from django.template import RequestContext
+from django.template.defaultfilters import filesizeformat
 from django.shortcuts import render_to_response
 from django.contrib.admin.views.decorators import staff_member_required
 
 from django import http
+
+from tastypie.bundle import Bundle
 
 from subprocess import Popen, PIPE
 
@@ -24,6 +27,7 @@ import re
 import logging
 import urllib
 
+from iondb.bin import setGlobalConfigDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +217,9 @@ def update(request):
         config = GlobalConfig.get()
         from iondb.rundb.api import GlobalConfigResource
         resource = GlobalConfigResource()
+        bundle = Bundle(config)
         serialized_config = resource.serialize(None,
-                                               resource.full_dehydrate(config),
+                                               resource.full_dehydrate(bundle),
                                                "application/json")
         return render_to_response(
             "admin/update.html",
@@ -243,8 +248,32 @@ def ot_log(request):
 
     response = http.HttpResponse(log, content_type=mime)
     return response
-
-
+    
+def setDefaultGC(request, instrument):
+    if instrument == 'pgm':
+        gc = setGlobalConfigDefaults.getPGMDefaults()
+    elif instrument == 'proton':
+        gc = setGlobalConfigDefaults.getProtonDefaults()
+    gc.save()    
+    logger.debug("GlobalConfig reset to '%s' default values" % instrument)
+            
+    return http.HttpResponse()
+    
+@staff_member_required
+def restoreDefaultGC(request):
+    gc = GlobalConfig.objects.get()
+    
+    global_defaults = { 
+            'current': gc,
+            'pgm': setGlobalConfigDefaults.getPGMDefaults(),
+            'proton': setGlobalConfigDefaults.getProtonDefaults()
+        }    
+    gc_fields = {}
+    for name, item in global_defaults.items():       
+        gc_fields[name] = [(field.verbose_name, field.value_to_string(item)) for field in GlobalConfig._meta.fields if field.name not in ['id','name','selected']]   
+    
+    return render_to_response("admin/restoreDefaultGC.html",{},RequestContext(request, {'gc_fields': gc_fields, 'gcID': gc.pk}))
+    
 @staff_member_required
 def updateOneTouch(request):
     """provide a simple interface to allow one touch updates"""
@@ -286,11 +315,43 @@ class ExperimentAdmin(admin.ModelAdmin):
     list_display = ('expName', 'date')
     search_fields = ['expName' ]
 
+class PluginResultAdmin(admin.ModelAdmin):
+    def total_size(self,obj):
+        if obj.size < 0:
+            return "N/A"
+        return filesizeformat(obj.size)
+    total_size.admin_order_field = 'size'
+
+    list_display = ('result', 'plugin', 'state', 'path', 'duration', 'total_size')
+    list_display_links = ('path',)
+    list_filter = ('state',)
+    search_fields = ('result', 'plugin')
+    readonly_fields = ('result', 'plugin', 'duration', 'path', 'total_size')
+    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path','total_size'), 'store')
+    ordering = ( "-id", )
+
+class PluginResultsInline(admin.StackedInline):
+    def total_size(self,obj):
+        if obj.size < 0:
+            return "N/A"
+        return filesizeformat(obj.size)
+    total_size.admin_order_field = 'size'
+
+    model = PluginResult
+    verbose_name = "Plugin Result"
+    extra = 0
+    can_delete = True
+    fields = (('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path', 'total_size'), 'store')
+    readonly_fields = ('duration', 'total_size', 'plugin', 'path')
+    radio_fields = {'state': admin.HORIZONTAL}
+    ordering = ( "endtime", "-id", )
 
 class ResultsAdmin(admin.ModelAdmin):
-    list_display = ('resultsName', 'experiment','timeStamp')
+    list_display = ('resultsName','experiment','timeStamp')
+    date_hierarchy = 'timeStamp'
     search_fields = ['resultsName']
-
+    inlines = [ PluginResultsInline, ]
+    ordering = ( "-id", )
 
 class TFMetricsAdmin(admin.ModelAdmin):
     list_display = ('name', 'report')
@@ -301,7 +362,7 @@ class TemplateAdmin(admin.ModelAdmin):
 
 
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('name',)
+    list_display = ('name','defaultlocation')
 
 
 class BackupAdmin(admin.ModelAdmin):
@@ -313,12 +374,8 @@ class BackupConfigAdmin(admin.ModelAdmin):
 
 
 class PluginAdmin(admin.ModelAdmin):
-    list_display = ('name','selected','version','date','active','path')
-
-
-class PluginResultAdmin(admin.ModelAdmin):
-    list_display = ('result', 'plugin', 'state', 'store')
-
+    list_display = ('name','selected','version','date','active','path','url')
+    list_filter = ('active','selected')
 
 class EmailAddressAdmin(admin.ModelAdmin):
     list_display = ('email','selected')
@@ -366,6 +423,26 @@ class ThreePrimeadapterAdmin(admin.ModelAdmin):
 class LibraryKeyAdmin(admin.ModelAdmin):
     list_display = ('direction', 'name','sequence','description', 'isDefault')
 
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'creator', 'public')
+
+class PlannedExperimentAdmin(admin.ModelAdmin):
+    list_display = ('planName','planShortID','date','isReverseRun','planExecuted')
+    list_filter = ('planExecuted',)
+    search_fields = ['planShortID',]
+    filter_horizontal = ('projects',)
+
+class DM_Reports(admin.ModelAdmin):
+	list_display = ("location","pruneLevel")
+    
+class DM_PruneGroup(admin.ModelAdmin):
+	list_display = ("name","pk","ruleNums","editable")
+    
+class DM_PruneRule(admin.ModelAdmin):
+	list_display = ("id","rule")
+
+class ReportStorageAdmin(admin.ModelAdmin):
+    list_display = ("name", "default")
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
@@ -374,7 +451,7 @@ admin.site.register(Location,LocationAdmin)
 admin.site.register(Rig)
 admin.site.register(FileServer)
 admin.site.register(TFMetrics, TFMetricsAdmin)
-admin.site.register(ReportStorage)
+admin.site.register(ReportStorage,ReportStorageAdmin)
 admin.site.register(RunScript)
 admin.site.register(Cruncher)
 admin.site.register(AnalysisMetrics)
@@ -391,16 +468,26 @@ admin.site.register(Chip,ChipAdmin)
 admin.site.register(dnaBarcode,dnaBarcodeAdmin)
 admin.site.register(RunType,RunTypeAdmin)
 admin.site.register(ThreePrimeadapter,ThreePrimeadapterAdmin)
-admin.site.register(PlannedExperiment)
+admin.site.register(PlannedExperiment,PlannedExperimentAdmin)
 admin.site.register(Publisher)
 admin.site.register(ContentUpload)
 admin.site.register(Content)
 admin.site.register(UserEventLog)
 admin.site.register(UserProfile)
 admin.site.register(VariantFrequencies)
+admin.site.register(dm_reports,DM_Reports)
+admin.site.register(dm_prune_group,DM_PruneGroup)
+admin.site.register(dm_prune_field,DM_PruneRule)
 #ref genome
 admin.site.register(ReferenceGenome,ReferenceGenomeAdmin)
+
+admin.site.register(Project,ProjectAdmin)
 
 admin.site.register(KitInfo)
 admin.site.register(KitPart)
 admin.site.register(LibraryKey, LibraryKeyAdmin)
+
+admin.site.register(QCType)
+admin.site.register(ApplProduct)
+admin.site.register(PEMetrics)
+

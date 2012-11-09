@@ -1,0 +1,4 @@
+[Mon Jul 23 09:58:48 EDT 2012] net.sf.picard.sam.CreateSequenceDictionary REFERENCE=ERCC92.fasta OUTPUT=ERCC92.dict    TRUNCATE_NAMES_AT_WHITESPACE=true NUM_SEQUENCES=2147483647 VERBOSITY=INFO QUIET=false VALIDATION_STRINGENCY=STRICT COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 CREATE_INDEX=false CREATE_MD5_FILE=false
+[Mon Jul 23 09:58:48 EDT 2012] Executing as www-data@gogots on Linux 2.6.32-21-server amd64; OpenJDK 64-Bit Server VM 1.6.0_20-b20; Picard version: 1.65(1160)
+[Mon Jul 23 09:58:48 EDT 2012] net.sf.picard.sam.CreateSequenceDictionary done. Elapsed time: 0.00 minutes.
+Runtime.totalMemory()=759955456

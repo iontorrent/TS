@@ -3,6 +3,8 @@
 
 import os
 import sys
+import json
+import traceback
 import subprocess
 import logging
 import logging.handlers
@@ -47,7 +49,7 @@ class PickleLogger(object):
         to use the logger in celery tasks as well
         """
         logger = logging.getLogger("tsconfig")
-        logfile = "/var/log/ion/tsconfig_install.log"
+        logfile = "/var/log/ion/tsconfig_gui.log"
         if not logger.handlers:
             logger.propagate = False
             logger.setLevel(logging.DEBUG)
@@ -111,6 +113,9 @@ def host_is_master():
     
 
 
+# This tells apt-get not to expect access to standard in.
+os.environ['DEBIAN_FRONTEND'] = 'noninteractive'
+
 
 ################################################################################
 #
@@ -132,94 +137,13 @@ if host_is_master():
 class TSconfig (object):
     
     def __init__(self):
-        # Lists of ubuntu packages required for Torrent Server.  Currently needs to be manually
-        # synchronized with lists stored in ts_functions.
-        self.SYS_PKG_LIST=[
-            'traceroute',
-            'arp-scan',
-            'nmap',
-            'links',
-            'lynx',
-            'minicom',
-            'mc',
-            'screen',
-            'make',
-            'gdb',
-            'gcc',
-            'build-essential',
-            'imagemagick',
-            'emacs23',
-            'vim',
-            'nano',
-            'curl',
-            'whois',
-            'figlet',
-            'binutils',
-            'sshpass',
-            'tk8.5',
-            'libmotif-dev',
-            'libxpm-dev',
-            'xorg',
-            'xfce4',
-            'gridengine-common',
-            'gridengine-client',
-            'gridengine-exec',
-            'libdrmaa1.0',
-            'iptables',
-            'ntp',
-            'nfs-kernel-server',
-            'openssh-server',
-            'samba',
-            'zip',
-            'libz-dev',
-            'postfix',
-            'python-pysam',
-            'python-simplejson',
-            'python-calabash',
-            'python-jsonpipe',
-            'perl',
-            'perl-doc',
-        ]
-        
-        self.SYS_PKG_LIST_MASTER_ONLY=[
-            'gridengine-master',
-            'gridengine-qmon',
-            'rabbitmq-server',
-            'vsftpd',
-            'postgresql',
-            'apache2',
-            'apache2-mpm-prefork',
-            'libapache2-mod-python',
-            'libapache2-mod-php5',
-            'dnsmasq',
-            'dhcp3-server',
-            'tomcat6',
-            'tomcat6-admin',
-            'python-django',
-        ]
-        
-        self.ION_PKG_LIST=[
-            'ion-gpu',
-            'ion-analysis',
-            'ion-alignment',
-            'ion-pipeline',
-            'tmap',
-            'samtools',
-            'ion-rsmts',
-            'ion-samita',
-            'ion-torrentr',
-            'ion-tsconfig',
-        ]
-        self.ION_PKG_LIST_MASTER_ONLY=[
-            'ion-plugins',
-            'ion-pgmupdates',
-            'ion-docs',
-            'ion-referencelibrary',
-            'ion-sampledata',
-            'ion-publishers',
-            'ion-onetouchupdater',
-            'ion-dbreports',
-        ]
+                
+        # Lists of ubuntu packages required for Torrent Server.
+        # See function updatePackageLists()
+        self.SYS_PKG_LIST=[]
+        self.SYS_PKG_LIST_MASTER_ONLY=[]
+        self.ION_PKG_LIST=[]
+        self.ION_PKG_LIST_MASTER_ONLY=[]
         
         # Internal states
         self.upst = {
@@ -257,7 +181,9 @@ class TSconfig (object):
         self.pkgprogress = None             # String of format "3/12" where package number of total package number progress.
         self.dbaccess = False               # Set when we can talk to database
         self.pkglist = []                   # List of packages with an update available
-        self.logger = PickleLogger()
+        self.logger = logger
+        self.packageListFile = os.path.join('/','usr','share','ion-tsconfig','torrentsuite-packagelist.json')
+        self.updatePackageLists()
         
         if not host_is_master():
             self.dbaccess = False
@@ -270,12 +196,14 @@ class TSconfig (object):
             except:
                 self.dbaccess = False
                 self.logger.info("Dbase access disabled")
+        
+        self.logger.info("TSconfig.__init__() executing")
+            
+    #--- End of __init__ ---#
 
     def reload_logger(self):
         logging.shutdown()
         self.logger = PickleLogger()
-            
-    #--- End of init ---#
 
     def set_testrun(self,flag):
         self.testrun = flag
@@ -290,9 +218,7 @@ class TSconfig (object):
         if new_state == self.state:
             return
         try:
-            gconfig = models.GlobalConfig.get()
-            gconfig.ts_update_status = self.upst[new_state]
-            gconfig.save()
+            models.GlobalConfig.objects.update(ts_update_status=self.upst[new_state])
             self.state = new_state
         except Exception as err:
             self.logger.error("Failed setting GlobalConfig ts_update_status to '%s'" % new_state)
@@ -309,12 +235,10 @@ class TSconfig (object):
         self.pkgprogress = "%s %d/%d" % (self.upst[self.state], self.progress_current, self.progress_total)
         if self.dbaccess:
             try:
-                gc = models.GlobalConfig.objects.all()[0]
-                gc.set_TS_update_status(self.pkgprogress)
-                gc.save()
+                models.GlobalConfig.objects.update(ts_update_status=self.pkgprogress)
                 self.logger.debug("Progress %s" % self.pkgprogress)
             except:
-                self.logger.debug("Unable to update database with progress")
+                self.logger.warn("Unable to update database with progress")
                 
     def get_pkgprogress(self,current,total):
         return self.pkgprogress
@@ -346,11 +270,38 @@ class TSconfig (object):
 
     def get_ionpkglist(self):
         if host_is_master():
-            list = self.ION_PKG_LIST_MASTER_ONLY + self.ION_PKG_LIST
+            list = self.ION_PKG_LIST + self.ION_PKG_LIST_MASTER_ONLY
         else:
             list = self.ION_PKG_LIST
         return list
     
+    ################################################################################
+    #
+    # Update internal list of packages to install
+    #
+    ################################################################################
+    def updatePackageLists(self):
+
+        try:
+            
+            self.logger.info("parsing %s" % self.packageListFile)
+            fp = open(self.packageListFile,'r')
+            pkgObj = json.load(fp)
+        
+            self.SYS_PKG_LIST               = pkgObj['packages']['system']['allservers']
+            
+            self.SYS_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['system']['master']
+            
+            self.ION_PKG_LIST               = pkgObj['packages']['torrentsuite']['allservers']
+            
+            self.ION_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['torrentsuite']['master']
+            
+            fp.close()
+            
+        except:
+            self.logger.exception(traceback.format_exc())
+            raise
+        
     ################################################################################
     #
     # Update apt repository database
@@ -382,6 +333,7 @@ class TSconfig (object):
             self.set_state('UF')
             return None
         else:
+            self.updatePackageLists()
             status, list = self.pollForUpdates()
             if status and len(list) > 0:
                 self.logger.info("There are %d updates!" % len(list))
@@ -391,6 +343,24 @@ class TSconfig (object):
                 self.set_state('N')
             
             return list
+    
+    ################################################################################
+    #
+    # Purge package files
+    #
+    ################################################################################
+    def TSpurge_pkgs(self):
+        try:
+            cmd = ['/usr/bin/apt-get',
+                   'autoclean']
+            p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout,stderr = p1.communicate()
+            if p1.returncode == 0:
+                self.logger.info ("autocleaned apt cache directory")
+            else:
+                self.logger.info ("Error during autoclean: %s" % stderr)
+        except:
+            self.logger.exception(traceback.format_exc())
     
     ################################################################################
     #
@@ -428,6 +398,7 @@ class TSconfig (object):
     ################################################################################
     def TSinstall_pkgs(self,pkglist):
         '''Calls apt-get install on each package in list'''
+        self.logger.debug("Inside TSinstall_pkgs")
         installed = {}
         numpkgs = len(pkglist)
         for i,pkg in enumerate(pkglist):
@@ -437,23 +408,24 @@ class TSconfig (object):
                    'install',
                    pkg]
             if not self.testrun:
+                self.logger.info("Installing %d of %d %s" % (i+1,numpkgs,pkg))
                 self.add_pkgprogress()
                 p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 stdout, stderr = p1.communicate()
                 self.logger.debug(stdout)
-                self.logger.debug("Installing %d of %d %s" % (i+1,numpkgs,pkg))
                 if p1.returncode == 0:
                     installed[pkg] = True
                 else:
-                    self.logger.error(stderr)
+                    self.logger.error("Package '%s' failed:\n%s" % (pkg, stderr))
                     installed[pkg] = False
             else:
                 self.add_pkgprogress()
-                self.logger.debug("FAKE! Installing %d of %d %s" % (i+1,numpkgs,pkg))
+                self.logger.info("FAKE! Installing %d of %d %s" % (i+1,numpkgs,pkg))
+                
         failed = [k for k, v in installed.items() if not v]
         if failed:
             dl_err = 'Upgrade failed to install completely.'
-            models.Message.error(dl_err)
+            self.logger.error(dl_err)
             # Potentially do something with `failed` here, such as return it.
         return all(installed.values())
 
@@ -475,12 +447,13 @@ class TSconfig (object):
         pkgnames.extend(self.ION_PKG_LIST_MASTER_ONLY)
         searchterms = ["^Inst "+l for l in pkgnames]
         for pkg in searchterms:
+            self.logger.debug("Checking: %s" % pkg)
             cmd2 = ['grep',pkg]
             p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             p2 = subprocess.Popen(cmd2, stdin=p1.stdout, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = p2.communicate()
             p1.communicate()
-
+    
             # p1 will have no stdout at this point since it was all read by p2
             if p1.wait() != 0:
                 self.logger.error(stderr)
@@ -503,10 +476,16 @@ class TSconfig (object):
     #
     ################################################################################
     def TSexec_download(self):
+        self.updatePackageLists()
         syspkglist = self.get_syspkglist()
         ionpkglist = self.get_ionpkglist()
         self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
 
+        #================================
+        # autoclean the apt cache
+        #================================
+        self.TSpurge_pkgs()
+        
         #================================
         # Download system packages
         #================================
@@ -548,6 +527,7 @@ class TSconfig (object):
         
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
         stdout, stderr = p1.communicate()
+        self.logger.debug("preinst_system_packages")
         self.logger.debug(stdout)
         if p1.returncode == 0:
             pass
@@ -562,6 +542,7 @@ class TSconfig (object):
         
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
         stdout, stderr = p1.communicate()
+        self.logger.debug("config_system_packages")
         self.logger.debug(stdout)
         if p1.returncode == 0:
             pass
@@ -573,6 +554,7 @@ class TSconfig (object):
         #================================
         #Nothing to do at the moment
         #================================
+        self.logger.debug("TSpreinst_ionpkg")
         pass
 
         return
@@ -582,6 +564,7 @@ class TSconfig (object):
         
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
         stdout, stderr = p1.communicate()
+        self.logger.debug("config_ion_packages")
         self.logger.debug(stdout)
         if p1.returncode == 0:
             pass
@@ -597,49 +580,66 @@ class TSconfig (object):
     ################################################################################
     def TSexec_update(self):
         
-        self.set_state('I')
-        syspkglist = self.get_syspkglist()
-        ionpkglist = self.get_ionpkglist()
-        self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
-        # Install TSconfig first so that it's code, executed through TSwrapper
-        # is upgraded Before execution below.
-        ionpkglist.remove("ion-tsconfig")
-        tsconfig_result = self.TSinstall_pkgs(["ion-tsconfig"])
-        if not tsconfig_result:
-            return False
+        try:
+            self.set_state('I')
+            self.logger.debug("Inside TSexec_update")
+            self.logger.debug("%d and %d" % (len(self.get_syspkglist()),len(self.get_ionpkglist())))
+            self.updatePackageLists()
+            syspkglist = self.get_syspkglist()
+            ionpkglist = self.get_ionpkglist()
+            self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
+            # Install TSconfig first so that it's code, executed through TSwrapper
+            # is upgraded Before execution below.
+            tsconfig_result = self.TSinstall_pkgs(["ion-tsconfig"])
+            if not tsconfig_result:
+                self.logger.warning("Could not install ion-tsconfig!")
+                return False
+    
+            #================================
+            # Get latest package lists
+            #================================
+            self.updatePackageLists()
+    
+            #================================
+            # Execute pre-System package install
+            #================================
+            self.TSpreinst_syspkg()
+            
+            #================================
+            # Install System packages
+            #================================
+            sys_result = self.TSinstall_pkgs(syspkglist)
+            
+            #================================
+            # Execute System configuration
+            #================================
+            self.TSpostinst_syspkg()
+            
+            #================================
+            # Execute pre-Ion package install
+            #================================
+            self.TSpreinst_ionpkg()
+            
+            #================================
+            # Install Ion packages
+            #================================
+            ion_result = self.TSinstall_pkgs(ionpkglist)
+            
+            #================================
+            # Execute Ion configuration
+            #================================
+            self.TSpostinst_ionpkg()
+            
+        except:
+            self.logger.exception(traceback.format_exc())
+            
+        success = sys_result and ion_result
+        if success:
+            self.logger.info("Successfully TSconfigured !")
+        else:
+            self.logger.error("Failed to TSconfigure.")
+        return success
 
-
-        #================================
-        # Execute pre-System package install
-        #================================
-        self.TSpreinst_syspkg()
-        
-        #================================
-        # Install System packages
-        #================================
-        sys_result = self.TSinstall_pkgs(syspkglist)
-        
-        #================================
-        # Execute System configuration
-        #================================
-        self.TSpostinst_syspkg()
-        
-        #================================
-        # Execute pre-Ion package install
-        #================================
-        self.TSpreinst_ionpkg()
-        
-        #================================
-        # Install Ion packages
-        #================================
-        ion_result = self.TSinstall_pkgs(ionpkglist)
-        
-        #================================
-        # Execute Ion configuration
-        #================================
-        self.TSpostinst_ionpkg()
-
-        return sys_result and ion_result
 ################################################################################
 #
 # End Class Definition: TSconfig

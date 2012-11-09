@@ -1,7 +1,6 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
  #include <string>
- #include "string.h"
  #include "Alignment.h"
 
  #define GAP '-'

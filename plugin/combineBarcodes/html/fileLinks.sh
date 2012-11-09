@@ -11,7 +11,6 @@ local OUTDIR="$TSP_FILEPATH_PLUGIN_DIR"
 if [ -n ${2} ]; then
     OUTDIR=${2}
 fi
-echo "<style type=\"text/css\">td {width:100% !important;padding:4px;text-align:left}</style>"
 echo "<div id=\"FileLinks\" class=\"report_block\">"
 echo " <h2>File Links</h2>"
 echo " <div class=\"demo_jui\">"

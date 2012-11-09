@@ -10,13 +10,11 @@
 #include "wells_data.h"
 #include "wells_chip.h"
 
-// TODO: we can avoid reading the whole .wells file if we know the byte offsets
-// when any min_row/max_row/min_col/max_col are given
 wells_chip_t *
-wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int32_t max_col)
+wells_chip_read1(FILE *fp)
 {
   wells_chip_t *chip = NULL;
-  int32_t i, j;
+  int32_t i;
   wells_data_t tmp_wells_data;
   fpos_t fpos;
 
@@ -57,6 +55,22 @@ wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int
   if(0 != fsetpos(fp, &fpos)) { // reset position
       ion_error(__func__, "ftell", Exit, ReadFileError);
   }
+
+  return chip;
+}
+
+// TODO: we can avoid reading the whole .wells file if we know the byte offsets
+// when any min_row/max_row/min_col/max_col are given
+wells_chip_t *
+wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int32_t max_col)
+{
+  wells_chip_t *chip = NULL;
+  int32_t i, j;
+
+  if(NULL == (chip = wells_chip_read1(fp))) {
+      return NULL;
+  }
+
 
   if(-1 == min_row && -1 == max_row && -1 == min_col && -1 == max_col) {
       // malloc
@@ -127,6 +141,28 @@ wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int
 
   return chip;
 }
+    
+int32_t
+wells_chip_write(FILE *fp, wells_chip_t *chip)
+{
+  int32_t i, j;
+
+  // write the header
+  if(0 == wells_header_write(fp, chip->header)) {
+      return 0;
+  }
+
+  // write the data
+  for(j=0;j<chip->num_cols;j++) {
+      for(i=0;i<chip->num_rows;i++) {
+          if(0 == wells_data_write(fp, chip->header, &chip->data[i][j])) {
+              return 0;
+          }
+      }
+  }
+
+  return 1;
+}
 
 void
 wells_chip_print(FILE *fp, wells_chip_t *chip, int32_t nonzero)
@@ -160,7 +196,7 @@ static int
 usage()
 {
   fprintf(stderr, "\n");
-  fprintf(stderr, "Usage: %s wellview <in.wells> [...]\n", PACKAGE_NAME); 
+  fprintf(stderr, "Usage: %s wellsview <in.wells> [...]\n", PACKAGE_NAME); 
   fprintf(stderr, "\n");
   fprintf(stderr, "Options:\n");
   fprintf(stderr, "         -r STRING   the minimum/maximum row range (ex. 0-20)\n");

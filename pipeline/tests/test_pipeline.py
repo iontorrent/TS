@@ -11,10 +11,10 @@ import os.path
 # the path from which these tests are run.
 test_dir = os.path.abspath(os.path.dirname(__file__))
 
-def test_relative(path):
+def is_relative(path):
     return os.path.normpath(os.path.join(test_dir, path))
 
-sys.path.extend(map(test_relative, [
+sys.path.extend(map(is_relative, [
     "../bin",
     "../python/",
 ]))

@@ -4,11 +4,11 @@ AdjustEmptyToBeadRatio<-function(
               etbR,
               NucModifyRatio,
               RatioDrift,
-              flow
+              flow,fitTauE                         
 ){
 
 	val <- .Call("AdjustEmptyToBeadRatioForFlowR",
-	      etbR,NucModifyRatio,RatioDrift,flow,
+	      etbR,NucModifyRatio,RatioDrift,flow,fitTauE,
           PACKAGE="torrentR"
         )
   return(val)
@@ -24,3 +24,31 @@ TauBFromLinearModel<-function(
         )
   return(val)
 }
+
+TauBFromLinearModelUsingTauE<-function(
+                etbR,tauE
+){
+
+	val <- .Call("ComputeTauBfromEmptyUsingRegionLinearModelUsingTauER",
+	      etbR,tauE,
+          PACKAGE="torrentR"
+        )
+  return(val)
+}
+
+CheckIfFittingTauE <- function(logFile) {
+  fitTauE = FALSE
+  if (file.exists(logFile)){
+    tmp = readLines(logFile,n=100)
+    for (i in 1:length(tmp)){
+      if ((length(grep("Command line",tmp[i])) >0 ) & (length(grep("--fitting-taue on",tmp[i])) >0)){
+        fitTauE = TRUE
+        break
+      }
+    }
+    return (fitTauE)
+  }
+  else 
+    print(sprintf("%s could not be found",logFile))
+}
+    

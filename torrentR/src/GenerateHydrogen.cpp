@@ -162,7 +162,6 @@ RcppExport SEXP SimplifyCalculateCumulativeIncorporationHydrogensR(
 
 
 
-
 RcppExport SEXP ComplexCalculateCumulativeIncorporationHydrogensR(
     SEXP R_nuc_rise, SEXP R_sub_steps, 
     SEXP R_deltaFrame, SEXP R_my_start, 
@@ -244,7 +243,7 @@ RcppExport SEXP ComplexCalculateCumulativeIncorporationHydrogensR(
 
 RcppExport SEXP CalculateNucRiseR(
     SEXP R_timeFrame, SEXP R_sub_steps, 
-    SEXP R_C, SEXP R_t_mid_nuc, SEXP R_sigma
+    SEXP R_C, SEXP R_t_mid_nuc, SEXP R_sigma, SEXP R_nuc_span
 ) {
   SEXP ret = R_NilValue; 		// Use this when there is nothing to be returned.
   char *exceptionMesg = NULL;
@@ -257,7 +256,7 @@ RcppExport SEXP CalculateNucRiseR(
     float max_concentration = Rcpp::as<float> (R_C);
     float t_mid_nuc = Rcpp::as<float> (R_t_mid_nuc);
     float sigma = Rcpp::as<float>(R_sigma);
-
+    float nuc_span = Rcpp::as<float>(R_nuc_span);
     int my_frame_len = time_frame.size();
 
     float  *old_time_frame;
@@ -276,7 +275,7 @@ RcppExport SEXP CalculateNucRiseR(
     // use the same nucleotide rise function as the bkgmodel setup uses
     
     int i_start;
-    i_start=SigmaRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma, true);
+    i_start=SigmaRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma, nuc_span, true);
 
     vector<double> my_vb_out;
     vector<double> my_t_out;
@@ -337,6 +336,7 @@ RcppExport SEXP CalculateNucRiseSplineR(
     float max_concentration = Rcpp::as<float> (R_C);
     float t_mid_nuc = Rcpp::as<float> (R_t_mid_nuc);
     float sigma = Rcpp::as<float>(R_sigma);
+
     float tangent_zero = Rcpp::as<float>(R_zero);
     float tangent_one = Rcpp::as<float>(R_one);
 

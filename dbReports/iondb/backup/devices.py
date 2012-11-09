@@ -4,9 +4,10 @@ import os, sys
 import subprocess
 
 class Devices:
-    def __init__(self, path, blocks, used, avail, capac, mounted):
+    def __init__(self, path, type, blocks, used, avail, capac, mounted):
         self.name = mounted.strip().split("/")[-1].strip()
         self.path = mounted
+        self.type = type
         self.blocks = blocks
         self.used = used
         self.avail = avail
@@ -20,15 +21,18 @@ class Devices:
         return float(100-int(self.capac.split('%')[0]))
     
     def get_path(self):
-        return self.mounted     
+        return self.mounted
     
     def get_available(self):
         return self.avail
+    
+    def get_type(self):
+        return self.type
 
 def disk_report():  
-    report = {} # dictionary, {'deviceName': [1024-blocks,Used,Aval,Capac,MountedOn]}
+    report = {} # dictionary, {'deviceName': [type,1024-blocks,Used,Aval,Capac,MountedOn]}
     #If df fails after 2 seconds kill the process
-    p = subprocess.Popen("ion_timeout.sh 2 df -P", shell=True,  
+    p = subprocess.Popen("ion_timeout.sh 2 df -TP", shell=True,  
                          stdout=subprocess.PIPE)  
     stdout, stderr = p.communicate()
     
@@ -41,18 +45,21 @@ def disk_report():
                 report[key].append(j)      
     devices = []
     for k,v in report.iteritems():
-        blocks = v[0]
-        used = v[1]
-        avail = v[2]
-        capac = v[3]
-        mounted = v[4]
-        devices.append(Devices(k,blocks,used,avail,capac,mounted))
+        type = v[0]
+        blocks = v[1]
+        used = v[2]
+        avail = v[3]
+        capac = v[4]
+        mounted = v[5]
+        devices.append(Devices(k,type,blocks,used,avail,capac,mounted))
     return devices
 
 def to_media(devArr):
     ret = []
     for i in devArr:
         path = i.get_path()
-        if 'media' in path:
+        type = i.get_type()
+        # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
+        if 'media' in path and ('ext' in type or 'nfs' in type):
             ret.append((path,path))
     return ret

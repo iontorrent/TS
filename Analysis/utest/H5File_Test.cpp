@@ -15,7 +15,7 @@ TEST(H5Handle_Test, QuickMatrixTest) {
     *i = count++;
   }
   //  mymat.raw_print(cout);
-  H5File::WriteMatrix("tmp.h5:/path/to/mat", mymat);
+  H5File::WriteMatrix("tmp.h5:/path/to/mat", mymat, false);
   Mat<float> m;
   H5File::ReadMatrix("tmp.h5:/path/to/mat", m);
   Mat<float>::iterator gold, test;

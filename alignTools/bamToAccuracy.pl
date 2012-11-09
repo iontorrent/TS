@@ -147,6 +147,7 @@ sub processBam {
   my($bamFile,$outDir,$maxLength) = @_;
 
   my $cwd = &getcwd();
+  $bamFile = "$cwd/$bamFile" unless($bamFile =~ /^\//);
   chdir $outDir;
   my $alignTableFile = "alignStats.txt";
   my $command = $opt->{"alignStats"};

@@ -26,7 +26,7 @@
 
 #include "BkgModSingleFlowFit.h"
 #include "ProjectionSearchFit.h"
-
+#include "AlternatingDirectionFit.h"
 
 
 class single_flow_optimizer
@@ -39,7 +39,7 @@ class single_flow_optimizer
     BkgModSingleFlowFit *oneFlowFitKrate;
     
    ProjectionSearchOneFlow *ProjectionFit;
-
+   AlternatingDirectionOneFlow *AltFit;
    
     // keep these around to avoid allocating when I need to talk to the above objects
     float max_param[2];
@@ -59,28 +59,32 @@ class single_flow_optimizer
     ~single_flow_optimizer();
     void SetUpperLimitAmplFit(float AmplLim,float krateLim);
     void SetLowerLimitAmplFit(float AmplLim,float krateLim);
-    void AllocLevMar(TimeCompression &time_c, PoissonCDFApproxMemo *math_poiss, float damp_kmult, bool var_kmult_only, float kmult_low_limit, float kmult_hi_limit);
+    void AllocLevMar(TimeCompression &time_c, PoissonCDFApproxMemo *math_poiss, float damp_kmult, bool var_kmult_only, float kmult_low_limit, float kmult_hi_limit, float AmplLowerLimit);
     void Delete();
 
     // picks from the below options
-    void FitOneFlow (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
+    void FitOneFlow (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
                                         flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     // my different optimizers
+    void FitStandardPath (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+        flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     void FitKrateOneFlow(int fnum, float *evect, 
-                                            bead_params *p, error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, 
+                                            bead_params *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, 
                                             int l_i_start, flow_buffer_info &my_flow, TimeCompression &time_c,
                                             EmphasisClass &emphasis_data,RegionTracker &my_regions);
                                             
-    void FitThisOneFlow(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
+    void FitThisOneFlow(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
                                            flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
 
                                     
     void FitProjection(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
                                            flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    void FitAlt(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+                                           flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions, bool krate_fit);
                                            
     void FillDecisionThreshold(float nuc_threshold);
     
-                                      
+                                     
     void SetProjectionSearchEnable(bool enable)
     {
         use_projection_search_ampl_fit = enable;

@@ -1,0 +1,126 @@
+{% extends "rundb/configure/base.html" %}
+{% block content %}
+  {% load pagetools %}<!DOCTYPE html>
+  <script type="text/javascript">
+      function cl_expcol(id) {
+        var i = document.getElementById(id);
+        if (i.style.display == '')
+          i.style.display = 'none';
+        else
+          i.style.display = '';
+        i = document.getElementById('ex'+id);
+        if (i.style.display == '')
+          i.style.display = 'none';
+        else
+          i.style.display = '';
+        i = document.getElementById('cl'+id);
+        if (i.style.display == '')
+          i.style.display = 'none';
+        else
+          i.style.display = '';
+      }
+  </script>
+  <script type="text/javascript">
+    $(document).ready(function () {
+          $(".chipLog").live('click',function(e){
+            e.preventDefault();
+            pk = $(this).data("pk");
+            url = "/rundb/getChipLog/" + pk;
+            $('#modal_chip_log').remove();
+
+            $.get(url, function(data) {
+              $('body').append(data);
+              $('#modal_chip_log').modal("show");
+              return false;
+            }).done(function(data) { 
+              console.log("success:", url);
+            })
+            .fail(function(data) {
+              $('#error-messages').empty();
+              $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+              console.log("error:", data);
+            })
+            .always(function(data) { /*console.log("complete:", data);*/ });
+          });
+    });
+  </script>
+
+  <div class="content clearfix">
+    {% ifequal error_state 0 %}
+      <b>{{ base_site_name }}</b><p>
+      <!-- Some Instructions For the Viewer -->
+      <p>
+      What the links do:<br>
+       <b>[Download]</b> will download the diagnostic archive file (zip format)<br>
+       <b>[View Log]</b> will extract and display the Init.log file<br>
+       <b>[PDF]</b> will download an Installation Acceptance Report</p>
+      
+      {% for key,values in files.items%}
+        <div class="content clearfix">
+        <p>Location: {{ key }}</p>
+        {% if values %}
+          {% for loc in locations_list %}
+	  		{% ifequal loc.1 key %}
+            <div class="content clearfix">
+              <div id="ex{{loc.0}}_{{loc.1}}"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[+]</a> {{ loc.0 }}:</div>
+              <div id="cl{{loc.0}}_{{loc.1}}" style="display:none"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[-]</a> {{ loc.0 }}:</div>
+              <ul id="{{loc.0}}_{{loc.1}}" style="display:none">
+              <!--<table>
+              {% for v in values %}{% ifequal v.1 loc %}
+                <tr><td>{{ v.0 }}</td><td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td><td><a href="/rundb/getChipPdf/{{ v.2 }}">[PDF]</a></td><td><p id="ex{{v.0}}" style="display:none"><a href="javascript:cl_expcol('{{v.0}}');">[+] View</a></p><p id="cl{{v.0}}"><a href="javascript:cl_expcol('{{v.0}}');">[+] View</a></p>
+              <ul id="{{v.0}}" style="display:none"><br />{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul>
+                </td></tr>
+              {% endifequal %}{% endfor %}</table>-->
+              <table>
+                <tr><th align="left"><br />Passed:</th></tr>
+                {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "T" %}
+                  <tr>
+                    <td>{{ v.0 }}</td>
+                    <td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td>
+                    <td>
+                      <td><a href="/rundb/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
+                    </td>
+                    <td><ul id="{{v.0}}" style="display:none">{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul></td>
+                    <td><a href="/rundb/getChipPdf/{{ v.2 }}">[PDF]</a></td>
+                  </tr>
+                {% endifequal %}{% endifequal %}{% endfor %}
+            
+                <tr><th align="left">Failed:</th></tr>
+                {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "F" %}
+                  <tr>
+                    <td>{{ v.0 }}</td>
+                    <td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td>
+                    <td>
+                      <td><a href="/rundb/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
+                    <td><ul id="{{v.0}}" style="display:none">{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul>
+                    </td>
+                  </tr>
+                {% endifequal %}{% endifequal %}{% endfor %}<tr></tr>
+              </table><br /></ul><br />
+            </div>
+	  		{% endifequal %}
+          {% endfor %}
+        {% else %}
+          <p> - - No data files available - -</p>
+        {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <!--Problem encountered. Detailed information below: {{ error_state }}<br /><br />{% for err in error %}{{ err.0 }}: {{ err.1 }}<br />{% endfor %}-->
+          <script language="Javascript">
+            alert ("Error: {{error.0.1}}")
+        window.location="/rundb/chips/"
+          </script>
+    {% endifequal %}
+  
+  <!--note: another good (and easy-to-read) solution to collapsible content:
+  function cl_expcol(id) {
+    var i = document.getElementById(id);
+  
+    if (i.style.display == '')
+      i.style.display = 'none';
+    else
+      i.style.display = '';
+  }-->
+  </div>
+{% endblock content %}

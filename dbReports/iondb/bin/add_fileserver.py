@@ -1,14 +1,7 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 #!/usr/bin/env python
-from djangoinit import *
-from django import db
-from django.db import transaction
-import sys
-import os
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-from django.db import models
+from djangoinit import *
 from iondb.rundb import models
 
 def add_location(locStr):
@@ -50,7 +43,7 @@ if __name__=="__main__":
     Adds a FileServer object.
     Defaults to the 'Home' location which is created by default elsewhere.
     '''
-	import sys
+    import sys
     import traceback
     try:
         label=sys.argv[1]

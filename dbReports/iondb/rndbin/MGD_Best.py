@@ -34,7 +34,7 @@ def best_getByChip(db, project_name, chipType, daterange, timeStart, timeEnd):
     return (db,results,report_storage,web_root)
 
 def best_getByProject(db, project_name, chipType, daterange, timeStart, timeEnd):
-    results = models.Experiment.objects.using(db).filter(project__istartswith=project_name).filter(chipType__icontains=chipType)
+    results = models.Results.objects.using(db).filter(projects__name__istartswith=project_name).filter(chipType__icontains=chipType)
     print 'Found %s %s %s runs at %s' % (len(results), chipType, project_name, db)
 
     report_storage = models.ReportStorage.objects.using(db).all().order_by('id')[0]

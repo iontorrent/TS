@@ -3,13 +3,8 @@
 
 # find_historical_best - dumps the best 50Q17/100Q17 run (date, #reads, link) recorded each week
 
-import sys
-import os
 import datetime
-from os import path
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django.db import models
+from iondb.bin.djangoinit import *
 from iondb.rundb import models
 
 # this function returns the best report of multiple reports per experiment

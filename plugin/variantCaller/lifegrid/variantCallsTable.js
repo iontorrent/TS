@@ -20,7 +20,7 @@ document.write('\
     <span class="nwrap">Target ID <input type="text" class="txtSearch" id="VC-txtSearchTargetID" size=11></span>\
     <span id="VC-filterHotSpot"><span class="nwrap">HotSpot ID <input type="text" class="txtSearch" id="VC-txtSearchHotSpotID" size=11></span></span>\
     <span class="nwrap">Type <select id="VC-selectVarType" class="txtSelect" style="width:55px"><option value=""/></select></span>\
-    <span class="nwrap">Ploidy <select id="VC-selectPloidy" class="txtSelect" style="width:55px"><option value=""/></select></span>\
+    <span class="nwrap">Zygosity <select id="VC-selectPloidy" class="txtSelect" style="width:55px"><option value=""/></select></span>\
     <span class="nwrap">Var Freq <input type="text" class="numSearch" id="VC-txtSearchFreqMin" size=4 value="0">\
       to <input type="text" id="VC-txtSearchFreqMax" class="numSearch" size=4 value="100"></span>\
     <span class="nwrap">Cov &ge; <input type="text" id="VC-txtSearchCovMin" class="numSearch" size=7 value=""></span>\
@@ -193,7 +193,11 @@ function ChromIGV(row, cell, value, columnDef, dataContext) {
   var pos = grid.getData().getItem(row)['chrom'] + ":" + value;
   var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
   var igvURL = window.location.protocol + "//" + window.location.host + locpath + "/igv.php3";
-  var href = "http://www.broadinstitute.org/igv/projects/current/igv.php?locus="+pos+"&sessionURL="+igvURL;
+  // link to Broad IGV
+  //var href = "http://www.broadinstitute.org/igv/projects/current/igv.php?locus="+pos+"&sessionURL="+igvURL;
+  // link to internal IGV
+  var launchURL = window.location.protocol + "//" + window.location.host + ":8080/IgvServlet/igv";
+  var href = launchURL + "?locus="+pos+"&sessionURL="+igvURL;
   return "<a href='"+href+"'>"+value+"</a>";
 }
 
@@ -216,8 +220,8 @@ columns.push({
   id: "vartype", name: "Type", field: "vartype", width: 46, minWidth: 40, maxWidth: 46, sortable: true,
   toolTip: "Type of variantion detected (SNP/INDEL)." });
 columns.push({
-  id: "ploidy", name: "Ploidy", field: "ploidy", width: 54, minWidth: 40, maxWidth: 46, sortable: true,
-  toolTip: "Assigned ploidy of the variation: Homozygous (Hom), Heterozygous (Het) or No Call (NC)." });
+  id: "ploidy", name: "Zygosity", field: "ploidy", width: 54, minWidth: 40, maxWidth: 46, sortable: true,
+  toolTip: "Assigned zygosity of the variation: Homozygous (Hom), Heterozygous (Het) or No Call (NC)." });
 columns.push({
   id: "reference", name: "Ref", field: "reference", width: 36, minWidth: 28,
   toolTip: "The reference base(s)." });

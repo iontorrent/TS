@@ -3,7 +3,6 @@
 set -e
 #set -x
 #echo "preinst $@"
-SETTINGS=@ION_INSTALL_PREFIX@/iondb/settings.py
 
 case "$1" in
     configure)
@@ -19,13 +18,18 @@ case "$1" in
         rm /tmp/OTlock
     fi
 
-    # Install Settings file
-    if [ -e "$SETTINGS" ]; then
-        echo "Making back-up of existing Ion Django settings file '$SETTINGS' as '$SETTINGS.backup'."
-        mv $SETTINGS $SETTINGS.backup
+    ## Early trigger of python support
+    #  This normally runs at the end of an apt-get run
+    #  But if modules we need are installed in the same pass various tasks fail due to missing packages,
+    #  because they aren't symlinked yet.
+    if which update-python-modules; then
+        update-python-modules --post-install
     fi
-    cp $SETTINGS.dist $SETTINGS
-	
+
+    ## Precompile / recompile python packages
+    #/usr/bin/python -O -m compileall "@ION_INSTALL_PREFIX@/iondb/"
+    (/usr/bin/python -m compileall -q -f "@ION_INSTALL_PREFIX@/iondb/" || /bin/true)
+
     #---											---#
     #---	Genome Directories Permissions, etc.	---#
     #---	head node only; /results shared out		---#
@@ -56,12 +60,21 @@ case "$1" in
     fi
     # Default Ubuntu file is empty. Config now in /etc/apache2/conf.d/
     touch /etc/apache2/httpd.conf
+    
+    #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in  
+	htpasswd -b -c /etc/apache2/users logout logout
 
-    # Enable mod_wsgi
+    # Enable mod_wsgi, mod_rewrite, mod_expires
     /usr/sbin/a2enmod wsgi
+    /usr/sbin/a2enmod rewrite
+    /usr/sbin/a2enmod expires
 
     # Switch to the torrent-server apache vhost
     /usr/sbin/a2dissite default
+
+    # Some machines have files instead of symlinks here, which a2ensite and a2dissite choke on.
+    /bin/rm -f /etc/apache2/sites-enabled/default /etc/apache2/sites-enabled/torrent-server
+
     /usr/sbin/a2ensite torrent-server
     # apache2 restarted by invoke-rc.d command below
 
@@ -79,12 +92,13 @@ case "$1" in
         # link does not exist...but it might be a file or dir.
         ln -s -f /results/analysis/output /var/www/output
     fi
-    
-    rm -f /var/www/media
-    ln -s /var/lib/python-support/python2.6/django/contrib/admin/media /var/www/media
-    
+
+    # Note, was a symlink, now a folder
+    rm -rf /var/www/media
+    mkdir -p /var/www/media
+
     rm -f /var/www/site_media
-    ln -s -f /opt/ion/iondb/media /var/www/site_media
+    ln -s -f @ION_INSTALL_PREFIX@/iondb/media /var/www/site_media
 
     #symLink for plugin media
     rm -f /var/www/pluginMedia
@@ -144,7 +158,7 @@ case "$1" in
     # ------------------------------------------
     SUDOFILE=/etc/sudoers
     sed -i '/www-data/ d' ${SUDOFILE}
-    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, /opt/ion/onetouch/findHosts.py" >> ${SUDOFILE}
+    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py" >> ${SUDOFILE}
     
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
@@ -152,36 +166,56 @@ case "$1" in
     if [ -d @PYTHON_LOCAL_SITE_PACKAGES@/ion ]; then
         rm -rf @PYTHON_LOCAL_SITE_PACKAGES@/ion
     fi
-   
-    
+
+    # Setup python and database environment
+    (
+        cd @ION_INSTALL_PREFIX@/iondb/
+
+        # Create ionadmin if a superuser doesn't exist
+        /usr/bin/python ./bin/initsprusr.py
+
+        # Legacy DB migration - Updates an existing database schema to 2.2
+        /usr/bin/python ./bin/migrate.py
+
+        # Django South DB migration - applies changes in rundb/migrations/
+        /usr/bin/python manage.py migrate --all --ignore-ghost-migrations --noinput
+
+        # Print current db migration state for diagnostic purposes
+        python manage.py migrate --list --noinput
+
+        # Full syncdb to create ContentTypes and Permissions
+        /usr/bin/python manage.py syncdb --noinput --all
+
+        # Backfill tastypie API keys
+        /usr/bin/python manage.py backfill_api_keys
+
+        # Loads Test Fragment entries into database
+        /usr/bin/python manage.py loaddata template_init.json
+
+ 
+        # Creates default report templates with site-specific content
+        /usr/bin/python ./bin/base_template.py
+        /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
+
+        # Updates existing database entries
+        # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
+        /usr/bin/python ./bin/install_script.py
 
 
-    #-------------------------------------------------------# 
-    #   Initial config requires creating a django superuser #
-    #   this step requires django-tastypie be installed     #
-    #-------------------------------------------------------#
-    cd @ION_INSTALL_PREFIX@/iondb/bin && python initsprusr.py ; cd -
+        # Collect static files (eg. admin pages css/js)
+        /usr/bin/python manage.py collectstatic --verbosity=0 --noinput --clear --link
 
-    # Initializes django (???)
-    cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py syncdb ; cd -
-    # Loads Test Fragment entries into database
-    cd @ION_INSTALL_PREFIX@/iondb/ && python manage.py loaddata template_init.json ; cd -
-    # Updates an existing database schema
-    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python migrate.py ; cd -
-    # Creates default report templates with site-specific content
-    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python base_template.py ; cd -
-    /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
-    # Updates existing database entries
-    cd @ION_INSTALL_PREFIX@/iondb/bin/ && python install_script.py ; cd -
+        cd -
+    )
 
     echo "NODENAME=rabbit@localhost" > /etc/rabbitmq/rabbitmq.conf
     service rabbitmq-server restart
     invoke-rc.d apache2 restart
-    invoke-rc.d ionCrawler start
-    invoke-rc.d ionJobServer start
-    invoke-rc.d ionArchive start
-    invoke-rc.d ionPlugin start
-    invoke-rc.d celeryd start
+    invoke-rc.d ionCrawler restart
+    invoke-rc.d ionJobServer restart
+    invoke-rc.d ionArchive restart
+    invoke-rc.d ionPlugin restart
+    invoke-rc.d celeryd restart
 
     # -------------------------------------------------------------------------
     # Configure Celery's RabbitMQ user, vhost, and permission state
@@ -193,16 +227,23 @@ case "$1" in
     if [[ ! `rabbitmqctl list_vhosts|grep ion` ]]; then
         echo "Adding RabbitMQ vhost 'ion' and setting permissions for user 'ion'"
         rabbitmqctl add_vhost ion
-        rabbitmqctl set_permissions -p ion ion "" ".*" ".*"
+        # Ubuntu Precise (12.04) specific
+        if grep -q precise <(lsb_release -c -s); then
+            rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
+        else
+            rabbitmqctl set_permissions -p ion ion "" ".*" ".*"
+        fi
     fi
 
     #load the references for a first time
-    (wget -q -O /dev/null http://localhost/rundb/references > /dev/null) || \
+    (wget -q -O /dev/null http://localhost/rundb/references/ > /dev/null) || \
         echo "Loading references failed."
 
-    #load the config page to update plugins
-    (wget -q -O /dev/null http://localhost/rundb/config> /dev/null) || \
-        echo "Loading config page failed."
+    #load the config page to update plugins and publishers
+    #(wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
+    #    echo "Loading plugin config page failed."
+    # Schedule plugin rescan task to run after 30 seconds
+    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=30)'
 
     # command to execute
     COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"

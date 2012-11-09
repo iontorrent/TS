@@ -1,0 +1,6 @@
+genome_name	ERCC92
+genome_version	ERCC92
+genome_length	82756
+index_version	tmap-f3
+fasta_md5checksum	339e0225f3294bf2bf89ac33d71a73c2
+original_fasta_md5checksum	339e0225f3294bf2bf89ac33d71a73c2

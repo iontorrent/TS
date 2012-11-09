@@ -55,17 +55,19 @@ install(PROGRAMS "${PROJECT_BINARY_DIR}/alignmentQC.pl" DESTINATION .)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/merge_alignTable.py" DESTINATION .)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/merge_alignment.summary.py" DESTINATION .)
 
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/MarkDuplicates.jar" DESTINATION .)
+
 install(PROGRAMS "${PROJECT_BINARY_DIR}/getref" DESTINATION .)
 
 install(PROGRAMS "${PROJECT_BINARY_DIR}/updateref.py" DESTINATION . RENAME updateref)
 
 if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name "picard")
-  set(proj_version "1.65")
+  set(proj_version "1.77")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
-    URL "http://updates.iontorrent.com/updates/software/external/picard-tools-1.65.tar.gz"
+    URL "http://updates.iontorrent.com/updates/software/external/picard-tools-1.77.tar.gz"
     #URL_MD5 
     # in source build
     BINARY_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
@@ -80,12 +82,10 @@ install(DIRECTORY "${ION_TS_EXTERNAL}/${proj_name_version}/" DESTINATION "/opt/p
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6,
-	libgcc1, 
-    libstdc++6, 
-    perl,
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl,
     unzip,
-    tmap (>= 0.0.19-1)")
+    samtools (>= 0.1.18),
+    tmap (>= 2.3.5)")
 set(CPACK_PACKAGE_DESCRIPTION "A set of script that aligns/maps fasta/fastq files to reference genome for QC")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

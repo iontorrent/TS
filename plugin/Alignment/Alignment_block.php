@@ -93,10 +93,10 @@ include("library/Alignment_Library.php");
 
         			print "<script>$('.tip').tipTip({ position : 'bottom' });</script>";
                                 print '<table id="alignment" class="heading" style="width: 100%; margin-left:0px;" >';
-                                print "<col width='300px' />";
-                                print "<col width='173px' />";
-                                print "<col width='173px' />";
-                                print "<col width='173px' />";
+                                print "<col width='250px' />";
+                                print "<col width='160px' />";
+                                print "<col width='160px' />";
+                                print "<col width='160px' />";
 
                                 print "<thead><tr><th> </th>";
 

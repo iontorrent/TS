@@ -1,0 +1,99 @@
+<div id="modal_confirm_delete" title="" class="modal hide" action="{{action}}" method="{{method}}">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		<h3 id="single_h3">Confirm Delete {{type|title}}</h3>
+		<h3 id="plural_h3" style="display:none;">Confirm Deletion of {{type|title}}s</h3>
+	</div>
+	<div class="modal-body">
+		<p id="single_msg">Are you sure you want to delete this {{type|lower}} <b>{{names}}</b> ({{id}})?</p>
+		<p id="plural_msg" style="display:none;">Are you sure you want to delete these {{type|lower}}s: <b>{{names}}</b> (<span id="ids_list"></span>)?</p>
+		
+		<div id="modal-error-messages"></div>
+	</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Cancel</a>
+		<a href="#" class="btn btn-danger">Yes, Delete!</a>
+	</div>		
+	
+	<script type="text/javascript">
+		var ids = {{ids|safe}};
+		var actions = {{actions|safe}};
+		if (ids.length > 1) {
+			$('#ids_list').text(ids.join());
+			$('#modal_confirm_delete *[id^="single_"]').hide();
+			$('#modal_confirm_delete *[id^="plural_"]').show();
+			$('#modal_confirm_delete .btn-danger').click(function(e) {
+				var that = this;				
+				e.preventDefault();
+				var error = false;
+				for (var i = 0; i < ids.length; i++) {
+					
+					var url = actions[i]
+						, type = $('#modal_confirm_delete').attr('method');
+						
+					console.log('transmitting :', type, url);
+			   		var jqxhr = $.ajax(url, {  
+		   						 type: type
+		   						, contentType: 'application/json'
+		   						, dataType: 'json'
+		   						, processData: false
+				    }).done(function(data) { 
+				    	console.log("success:",  url);
+			    	})
+				    .fail(function(data) {
+				    	error = true;
+				    	$('#modal_confirm_delete #modal-error-messages').empty();
+				    	$('#modal_confirm_delete #modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+				    	console.log("error:", data);
+				    	 
+				    })
+				    .always(function(data) { /*console.log("complete:", data);*/ });
+				} 
+				if (!error) {
+					if ($('#modal_confirm_delete').data('customevents')) {
+						jQuery.each($('#modal_confirm_delete').data('customevents'), function(i, elem) {
+				    		$('#modal_confirm_delete').trigger(elem, {}) 
+			    		});
+		    		}
+					$('#modal_confirm_delete').trigger('modal_confirm_delete_done', { values: e.values } );
+			    	$('#modal_confirm_delete').modal("hide");
+				}
+			});
+		} else {
+			$('#modal_confirm_delete .btn-danger').click(function(e) {
+				var that = this;
+				e.preventDefault();
+				var url = $('#modal_confirm_delete').attr('action')
+					, type = $('#modal_confirm_delete').attr('method');
+					
+				console.log('transmitting :', type, url);
+		   		var jqxhr = $.ajax(url, {
+		   						 type: type
+		   						, contentType: 'application/json'
+		   						, dataType: 'json'
+		   						, processData: false
+				    }).done(function(data) { 
+				    	console.log("success:",  url);
+				    	if ($('#modal_confirm_delete').data('customevents')) {
+				    		jQuery.each($('#modal_confirm_delete').data('customevents'), function(i, elem) {
+				    			$('#modal_confirm_delete').trigger(elem, {}) 
+			    			});
+			    		}
+						$('#modal_confirm_delete').trigger('modal_confirm_delete_done', { values: e.values } );
+				    	$('#modal_confirm_delete').modal("hide");
+			    	})
+				    .fail(function(data) {
+				    	$('#modal_confirm_delete #modal-error-messages').empty();
+				    	$('#modal_confirm_delete #modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+				    	console.log("error:", data);
+				    	 
+				    })
+				    .always(function(data) { /*console.log("complete:", data);*/ });
+			});
+		}
+		$('#modal_confirm_delete').on('hidden', function () {
+    		$('body #modal_confirm_delete').remove();
+   		});
+	</script>
+
+</div>

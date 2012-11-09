@@ -36,6 +36,7 @@ class ReadLenQscore(LibGraphs):
 class QXXAlign(LibGraphs):
     def plot(self):
         pylab.clf()
+        pylab.cla()
         if len(self.data) > 0:
             xaxis = [i for i in range(len(self.data))]
             ymax = max(self.data) + 10
@@ -52,6 +53,8 @@ class QXXAlign(LibGraphs):
             pylab.axis([0,xmax,0,ymax])#hardcode x axis to go from 0 - 200
             pylab.savefig(self.savepath)
             pylab.clf()
+            pylab.cla()
+            pylab.close()
 class ReadLen(LibGraphs):
     pass
 class MatchMissMatch(LibGraphs):
@@ -62,6 +65,8 @@ class Q10Align(QXXAlign):
 class Q17Align(QXXAlign):
     pass
 class Q20Align(QXXAlign):
+    pass
+class Q30Align(QXXAlign):
     pass
 class Q47Align(QXXAlign):
     pass

@@ -2,15 +2,15 @@
 #ifndef TRACECORRECTOR_H
 #define TRACECORRECTOR_H
 
-#include "BkgModel.h"
+#include "SignalProcessingMasterFitter.h"
 
 
 class TraceCorrector
 {
   public:
-    BkgModel &bkg; // reference to source class for now
+    SignalProcessingMasterFitter &bkg; // reference to source class for now
 
-      TraceCorrector (BkgModel &);
+      TraceCorrector (SignalProcessingMasterFitter &);
     ~TraceCorrector();
         // abuse the trace buffers
     void BackgroundCorrectAllBeadsInPlace (void);

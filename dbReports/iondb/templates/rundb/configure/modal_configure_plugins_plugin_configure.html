@@ -1,0 +1,9 @@
+{{ file|safe }}
+<script>
+  // Torrent Browser provides TB_plugin which is a JSON object with plugin information.
+  TB_plugin = {{ plugin|safe }};
+  {% if report %}
+    TB_result = {{ report }};
+    {%  endif %}
+    TB_TMAP = "{{ tmap }}";
+</script>

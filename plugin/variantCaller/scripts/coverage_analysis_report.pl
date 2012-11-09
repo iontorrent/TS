@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 use File::Basename;
 
@@ -26,6 +26,7 @@ my $statsfile2 = "";
 my $rowsumfile = "";
 my $helpfile ="";
 my $title="";
+my $isblock=0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -37,6 +38,7 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-A') {$helpfile = shift;}
     elsif($opt eq '-T') {$rowsumfile = shift;}
     elsif($opt eq '-t') {$title = shift;}
+    elsif($opt eq '-b') {$isblock = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
     {
@@ -83,13 +85,26 @@ if( $haverowsum )
     # remove any old file since calls will append to this
     unlink( $rowsumfile );
 }
-open( OUTFILE, ">>$outfile" ) || die "Cannot open output file $outfile.\n";
+open( OUTFILE, ">$outfile" ) || die "Cannot open output file $outfile.\n";
 
-if( $title ne "" )
+if( $title ne "" && $isblock==0)
 {
     # add simple formatting if no html tag indicated
     $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
-    print OUTFILE "$title\n";
+     print OUTFILE "$title\n";
+}
+
+if( $isblock==1 )
+{
+ print OUTFILE "<html><head>\n";
+ print OUTFILE "<style type=\"text/css\">\n";
+ print OUTFILE "table {font-family: \"Lucida Sans Unicode\", \"Lucida Grande\", Sans-Serif; font-size: 12px; cellspacing: 0; cellpadding: 0}\n";
+ print OUTFILE "td{border: 0px solid #BBB;overflow: visible;color: black}\n";
+ print OUTFILE "th{border: 1px solid #BBB;overflow: visible;background-color: #E4E5E4;}\n";
+ print OUTFILE "p, ul{font-family: \"Lucida Sans Unicode\", \"Lucida Grande\", Sans-Serif;}\n";
+ print OUTFILE ".zebra {  background-color: #E1EFFA;}\n";
+ print OUTFILE ".table_hover{	color: #009;	background-color: #6DBCEE;}\n";
+ print OUTFILE "</style></head><body>\n";
 }
 
 # Output read summary
@@ -99,8 +114,19 @@ if( $readsfile ne "" )
     my $readstable = readTextAsTableFormat( $readsfile );
     if( $readstable ne "" )
     {
-        print OUTFILE "<br/>\n";
-        print OUTFILE "<div class=\"statsdata center\" style=\"width:340px\">\n";
+        if( $isblock==0 )
+        {
+         print OUTFILE "<br/>\n";
+         print OUTFILE "<div class=\"statsdata center\" style=\"width:340px\">\n";
+        } 
+        else
+        {
+         print OUTFILE "<table><tr valign=\"top\"><td>\n";
+         print OUTFILE "<div class=\"statsdata center\" style=\"width:370px\"><table>\n";
+         print OUTFILE "<tr><th><span title=\"Alignment summary for trimmed reads mapped to the enriched or whole reference. \">Processed Alignments Summary</span></th></tr>\n";
+         print OUTFILE "<tr><td><div class=\"statsdata\">\n";        
+        }
+        
         print OUTFILE "$readstable\n";
         if( $haverowsum )
         {
@@ -108,7 +134,16 @@ if( $readsfile ne "" )
             $optionalKeyField = "Number of filtered reads";
             writeRowSum( $rowsumfile, $readsfile, \@keylist );
         }
-        print OUTFILE "</div><br/>\n";
+        
+        print OUTFILE "</div></td></tr></table>\n";
+      if( $isblock==1 )
+      {
+       print OUTFILE "</div></td><td>\n";
+       }
+       else
+       {
+       print OUTFILE "</div><br/>\n";
+       }
     }
 }
 
@@ -144,7 +179,14 @@ if( $haverowsum )
 }
 
 # write table foot
-print OUTFILE "</table></div>\n<br/><br/>\n";
+print OUTFILE "</table></div>\n";
+if( $isblock==1 ){
+print OUTFILE "</td></tr></table>\n";
+}
+else{
+print OUTFILE "<br/><br/>\n";
+}
+
 
 #print STDERR "> $outfile\n";
 #print STDERR "> $rowsumfile\n" if( $haverowsum );

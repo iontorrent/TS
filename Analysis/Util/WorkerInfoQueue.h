@@ -28,124 +28,47 @@ struct WorkerInfoQueueItem
 {
     bool finished;
     void *private_data;
+    WorkerInfoQueueItem()
+    {
+      finished = false;
+      private_data = NULL;
+    }
 };
 
-// helper class to distribute work items to a set of threads for processing
-// add class access is thread safe
+/// helper class to distribute work items to a set of threads for processing
+/// add class access is thread safe
 class WorkerInfoQueue
 {
-public:
-    // create a queue w/ that can hold the specified number of items
-    WorkerInfoQueue(int _depth)
-    {
-        depth = _depth;
-        rdndx = 0;
-        wrndx = 0;
-        num = 0;
-        not_done_cnt = 0;
-        qlist = new WorkerInfoQueueItem[depth];
+ public:
+  /** Create a queue w/ that can hold the specified number of items */
+  WorkerInfoQueue(int _depth);
 
-        pthread_mutex_init(&lock, NULL);
-        pthread_cond_init(&rdcond,NULL);
-        pthread_cond_init(&wrcond,NULL);
-        pthread_cond_init(&donecond,NULL);
-    }
+  /** Put a new item on the queue.  Blocks if the queue is full */
+  void PutItem(WorkerInfoQueueItem &new_item);
 
-    // put a new item on the queue.  this will block if the queue is full
-    void PutItem(WorkerInfoQueueItem &new_item)
-    {
-        // obtain the lock
-        pthread_mutex_lock(&lock);
+  /** remove an item from the queue.  this will block if the queue is empty */
+  WorkerInfoQueueItem GetItem(void);
 
-        // wait for someone to signal new free space
-        while (num >= depth)
-            pthread_cond_wait(&wrcond,&lock);
+  /** try to remove an item from the queue.  this will return item with empty data if the queue is empty */
+  WorkerInfoQueueItem TryGetItem(void);
 
-        qlist[wrndx] = new_item;
-        if (++wrndx >= depth) wrndx = 0;
-        num++;
-        not_done_cnt++;
+  // NOTE: just because the q is empty...doesn't mean the workers are done with the
+  // last item they pulled off.  Worker's decrement the 'not done' count whenever they
+  // finish a work item.  
+  /** Wait till all the work items have been completed */
+  void WaitTillDone(void);
 
-        // signal readers to check for the new item
-        pthread_cond_signal(&rdcond);
+  /* Call when a worker has completed a task */
+  void DecrementDone(void);
 
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-    }
-
-    // remove and item from the queue.  this will block if the queue is empty
-    WorkerInfoQueueItem GetItem(void)
-    {
-        WorkerInfoQueueItem item;
-
-        // obtain the lock
-        pthread_mutex_lock(&lock);
-
-        // wait for someone to signal a new item
-        while (num == 0)
-            pthread_cond_wait(&rdcond,&lock);
-
-        item = qlist[rdndx];
-        if (++rdndx >= depth) rdndx = 0;
-        num--;
-
-        // signal writers that more free space is available
-        pthread_cond_signal(&wrcond);
-
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-
-        return(item);
-    }
-
-    // NOTE: just because the q is empty...doesn't mean the workers are done with the
-    // last item they pulled off.  Worker's decrement the 'not done' count whenever they
-    // finish a work item.  This waits till all the work items have been completed
-    void WaitTillDone(void)
-    {
-        // obtain the lock
-        pthread_mutex_lock(&lock);
-
-        // wait for someone to signal new free space
-        while (not_done_cnt > 0)
-            pthread_cond_wait(&donecond,&lock);
-
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-    }
-
-    // Allows workers to indicate that they have completed a task
-    void DecrementDone(void)
-    {
-        // obtain the lock
-        pthread_mutex_lock(&lock);
-
-        // decrement done count
-        not_done_cnt--;
-
-        // if everything is done, signal the condition change
-        if (not_done_cnt == 0)
-            pthread_cond_signal(&donecond);
-
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-    }
-
-    ~WorkerInfoQueue()
-    {
-        pthread_cond_destroy(&donecond);
-        pthread_cond_destroy(&wrcond);
-        pthread_cond_destroy(&rdcond);
-        pthread_mutex_destroy(&lock);
-        delete [] qlist;
-    }
+  ~WorkerInfoQueue();
 
 private:
     int rdndx;
     int wrndx;
     int num;
-    int depth;
     int not_done_cnt;
+    int depth;
     WorkerInfoQueueItem *qlist;
 
     // synchronization objects
@@ -159,143 +82,26 @@ class DynamicWorkQueueGpuCpu {
 
 public:
 
-    // create a queue w/ that can hold the specified number of items
-    DynamicWorkQueueGpuCpu(int _depth)
-    {
-        start = false;
-        depth = _depth;
-        gpuRdIdx = 0;
-        cpuRdIdx = depth - 1;
-        wrIdx = 0;
-        not_done_cnt = 0;
-        qlist = new WorkerInfoQueueItem[depth];
+  // create a queue w/ that can hold the specified number of items
+  DynamicWorkQueueGpuCpu(int _depth);
 
-        pthread_mutex_init(&lock, NULL);
-        pthread_cond_init(&startcond,NULL);
-        pthread_cond_init(&donecond,NULL);
-    }
+  WorkerInfoQueueItem GetGpuItem();
+  WorkerInfoQueueItem GetCpuItem();
 
+  void PutItem(WorkerInfoQueueItem &new_item);
 
-    WorkerInfoQueueItem GetGpuItem() {
+  // NOTE: just because the q is empty...doesn't mean the workers are done with the
+  // last item they pulled off.  Worker's decrement the 'not done' count whenever they
+  // finish a work item.  This waits till all the work items have been completed
+  void WaitTillDone(void);
 
-        WorkerInfoQueueItem item;
+  // Allows workers to indicate that they have completed a task
+  void DecrementDone(void);
 
-        pthread_mutex_lock(&lock);
-        //printf("Acquiring lock gpu\n");    
+  void ResetIndices();
+  int getGpuReadIndex();
 
-
-        while (!start)
-            pthread_cond_wait(&startcond, &lock);
-    
-        if (gpuRdIdx == cpuRdIdx)
-            start = false;
-
-        //printf("Getting Gpu Item, GpuIdx: %d CpuIdx: %d, start: %d\n", gpuRdIdx, cpuRdIdx, start); 
-        item = qlist[gpuRdIdx++];
-            
-        //printf("Releasing lock gpu\n");    
-        pthread_mutex_unlock(&lock);         
-
-        return item;
-    }
-
-    WorkerInfoQueueItem GetCpuItem() {
-
-        WorkerInfoQueueItem item;
-
-        pthread_mutex_lock(&lock);
-        
-        //printf("Acquiring lock cpu\n");    
-
-
-        while (!start)
-            pthread_cond_wait(&startcond, &lock);
-       
-        if (cpuRdIdx == gpuRdIdx)
-            start = false;
-    
-        //printf("Getting Cpu Item, GpuIdx: %d CpuIdx: %d, start: %d\n", gpuRdIdx, cpuRdIdx, start); 
-        item = qlist[cpuRdIdx--];
-        
-        //printf("Releasing lock cpu\n");    
-        pthread_mutex_unlock(&lock);         
-
-        return item;
-    }
-
-    void PutItem(WorkerInfoQueueItem &new_item) {
-	
-       
-        qlist[wrIdx++] = new_item;
-        not_done_cnt++;
-    
-        //printf("Putting Item\n"); 
-        if (wrIdx == depth) {
-            pthread_mutex_lock(&lock);
-            //printf("Signalling to start\n");
-            start = true;
-            pthread_cond_broadcast(&startcond); 
-            pthread_mutex_unlock(&lock);
-        }
-           
-    }
-
-
-    // NOTE: just because the q is empty...doesn't mean the workers are done with the
-    // last item they pulled off.  Worker's decrement the 'not done' count whenever they
-    // finish a work item.  This waits till all the work items have been completed
-    void WaitTillDone(void)
-    {
-        // obtain the lock
-        pthread_mutex_lock(&lock);
-
-        // wait for someone to signal new free space
-        while (not_done_cnt > 0)
-            pthread_cond_wait(&donecond,&lock);
-
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-    }
-
-    // Allows workers to indicate that they have completed a task
-    void DecrementDone(void)
-    {
-        // obtain the lock
-        pthread_mutex_lock(&lock);
-
-        // decrement done count
-        not_done_cnt--;
-
-        // if everything is done, signal the condition change
-        if (not_done_cnt == 0) {
-            start = false;
-            pthread_cond_signal(&donecond);
-        }
-
-        // give up the lock
-        pthread_mutex_unlock(&lock);
-    }
-
-    void ResetIndices() {
-        pthread_mutex_lock(&lock);
-        wrIdx = 0;
-        gpuRdIdx = 0;
-        cpuRdIdx = depth - 1;
-        pthread_mutex_unlock(&lock);
-    }
-
-    int getGpuReadIndex() {
-        return gpuRdIdx;
-    }
-
-    ~DynamicWorkQueueGpuCpu()
-    {
-        pthread_cond_destroy(&donecond);
-        pthread_cond_destroy(&startcond);
-        pthread_mutex_destroy(&lock);
-        delete [] qlist;
-    }
-
+  ~DynamicWorkQueueGpuCpu();
 
 private:
     int gpuRdIdx;

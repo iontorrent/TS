@@ -1,0 +1,212 @@
+{% extends "rundb/configure/base.html" %}
+{% load pagetools %}
+{% block extra_head %}
+	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-transition.min.js"></script>
+	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.min.js"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.css" />
+	<style>
+	body .modal-wrapper {
+	    width: 1030px;
+	    margin-left: -515px;
+    }
+    .errorlist {
+    	margin-left: 0;
+  		list-style: none;
+    }
+	</style>
+	<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script>
+{% endblock extra_head %}
+{% block sub-nav %}
+	<li><a href="{% url configure_about %}">About</a></li>			
+	<li><a href="{% url configure_references %}">References</a></li>
+	<li><a href="{% url configure_services %}">Services</a></li>
+	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
+	<li class="active"><a href="{% url configure_configure %}">Configure</a></li>	
+{% endblock sub-nav %}
+<link href='site_media/css/jquery-ui.css' type="text/css" rel="stylesheet" />
+{% block content %}
+<script type="text/javascript">
+function add_prune_group() {
+	$("#add_prune_group").click(function(e){
+		e.preventDefault();
+	
+		url = $(e.currentTarget).attr('href');
+		$('body #modal_configure_report_data_mgmt_add_prune_group').remove();
+	
+		$.get(url, function(data) {
+		   $('body').append(data);
+		   $('#modal_configure_report_data_mgmt_add_prune_group').modal("show");
+		   return false;
+		}).done(function(data) { 
+	    	  console.log("success:", url);
+		}).fail(function(data) {
+    	  $('#error-messages').empty();
+    	  $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+    	  console.log("error:", data);
+        }).always(function(data) { /*console.log("complete:", data);*/ });
+	});
+}
+function delete_prune_group() {
+	$(".delete_prune_group").click(function(e){
+		e.preventDefault();
+	
+		url = $(e.currentTarget).attr('href');
+		$('body #modal_confirm_delete').remove();
+	
+		$.get(url, function(data) {
+		   $('body').append(data);
+		   $('#modal_confirm_delete').modal("show");
+		   return false;
+		}).done(function(data) { 
+	    	  console.log("success:", url);
+		}).fail(function(data) {
+    	  $('#error-messages').empty();
+    	  $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+    	  console.log("error:", data);
+        }).always(function(data) { /*console.log("complete:", data);*/ });
+	});
+}
+function edit_prune_groups() {
+	$("#edit_prune_groups").click(function(e){
+		e.preventDefault();
+		url = $(e.currentTarget).attr('href');
+		$('body #modal_configure_report_data_mgmt_edit_pruning_config').remove();
+	
+		$.get(url, function(data) {
+				$('body').append(data);
+				$('#modal_configure_report_data_mgmt_edit_pruning_config').modal("show");
+				return false;
+		}).done(function(data) { 
+	    	  console.log("success:", url);
+		}).fail(function(data) {
+			$('#error-messages').empty();
+			$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			console.log("error:", data);
+        }).always(function(data) { /*console.log("complete:", data);*/ });
+	});	
+}
+$(document).ready(function () {
+	$('input[name="pruneLevel"]:checked').parent().parent().parent().addClass('alert-success');
+	add_prune_group();
+	delete_prune_group();
+	edit_prune_groups();
+	
+	$('body').on('modal_confirm_delete_done', function (e) {
+		console.log('caught modal_confirm_delete_done event');
+		loadPruneGroups();	
+	});
+});
+
+function loadPruneGroups() {
+	checkedVal = $('#pruning_groups input:checked').val();
+	url = '{% url configure_report_data_mgmt_prunegroups %}'
+	$.get(url, function(data){
+		$('#pruning_groups').replaceWith(data);
+		$('#pruning_groups').find('input[type="radio"][value="' + checkedVal + '"]').attr('checked',true);
+		$('input[name="pruneLevel"]:checked').parent().parent().parent().addClass('alert-success');
+		
+		tb.toggleContent();
+		add_prune_group();
+		delete_prune_group();
+		edit_prune_groups();
+	});
+}
+
+</script>
+  <div class="content">
+    <h1>Report Data Management Configuration</h1>
+    <br>
+    <form id="configure_report_data_mgmt_form" class="form-horizontal" action="" method='post' enctype="multipart/form-data">
+    	<fieldset>
+    		<div class="control-group {%spaceless%}{%if form.location.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+    			<label class="control-label" for="id_location">Backup location</label>
+    			<div class="controls">
+    				{{ form.location }}
+    				{%if form.location.errors%}
+    				<div class="help-block">
+						{{form.location.errors}}
+					</div>
+					{% endif %}
+    				<div class="help-block">
+    					Select the backup directory. The backup directory appears in the drop down menu after the drive is mounted.
+    				</div>
+    			</div>
+    		</div>
+    		{% include 'rundb/configure/blocks/configure_report_data_mgmt_prunegroups.html' %}
+    		<div class="control-group {%spaceless%}{%if form.autoPrune.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+    			<label class="control-label" for="id_autoPrune">{{ form.autoPrune.label }}</label>
+    			<div class="controls">
+    				{{ form.autoPrune }}
+    				{%if form.autoPrune.errors%}
+    				<div class="help-block">
+						{{form.autoPrune.errors}}
+					</div>
+					{% endif %}
+    				<div class="help-block">
+    					Check to enable the auto-action feature. Uncheck to disable.
+    				</div>
+    			</div>
+    		</div>
+    		<div class="control-group {%spaceless%}{%if form.autoAction.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+    			<label class="control-label" for="id_autoAction">{{ form.autoAction.label }}</label>
+    			<div class="controls">
+    				{{ form.autoAction }}
+    				{%if form.autoAction.errors%}
+    				<div class="help-block">
+						{{form.autoAction.errors}}
+					</div>
+					{% endif %}
+    				<div class="help-block">
+    					Choose whether to automatically archive or prune reports after the specified number of days. To disable this feature, make sure the '{{ form.autoPrune.label }}' checkbox is unchecked (disabled).
+    					{{form.autoDays.errors}}
+    				</div>
+    			</div>
+    		</div>
+    		<div class="control-group {%spaceless%}{%if form.autoDays.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+    			<label class="control-label" for="id_autoDays">Auto-action delay (days)</label>
+    			<div class="controls">
+    				{{ form.autoDays }}
+    				{%if form.autoDays.errors%}
+    				<div class="help-block">
+						{{form.autoDays.errors}}
+					</div>
+					{% endif %}
+    				<div class="help-block">
+    					Set how old a report must be (in days) before being acted on if '{{ form.autoAction.label }}' is checked (enabled) and the Report is <b>not</b> marked as <i>Exempt</i>.
+    				</div>
+    			</div>
+    		</div>
+    		<div class="control-group">
+    			<label class="control-label">Disc space saved</label>
+    			<div class="controls">
+    				<div class="help-block">
+    					<table class="table">
+    						<thead>
+    						<tr>
+    							<th>Past Days</th>
+    							<th>Usage KB</th>
+    							<th>Usage GB</th>
+    						</tr>
+    						</thead>
+    						<tbody>
+						{% for space in spaceSaved %}
+						 	<tr>
+								<td>{{ space.0 }}</td>
+								<td>{{ space.1 }} KB </td>
+								<td>~{{ space.2 }} GB</td>
+							</tr>
+					  	{% ifequal space.3 'y' %}{% endifequal %}
+						{% endfor %}
+    						</tbody>
+						</table>
+    				</div>
+    			</div>
+    		</div>
+			<div class="form-actions">
+				<button type="submit" class="btn btn-primary btn-100 pull-right">Save</button>
+				<a href="{% url configure_configure %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
+			</div>
+    	</fieldset>
+    </form>
+  </div>
+{% endblock %}

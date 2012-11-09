@@ -28,38 +28,41 @@
 //  in a dozen locations across the code.
 class SystemContext{
   public:
-     char *dat_source_directory;
+    char *dat_source_directory;
     char *wells_output_directory;
-    char *basecaller_output_directory;
+    std::string analysisLocation; // full path in results_folder / terminated
 
     char wellsFileName[MAX_PATH_LENGTH];
     char tmpWellsFile[MAX_PATH_LENGTH];
     char runId[6];
     char wellsFilePath[MAX_PATH_LENGTH];
     char *wellStatFile;
-    char *experimentName;
+    char *stackDumpFile;
+    char *results_folder;
     int NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
     int LOCAL_WELLS_FILE;
     std::string wellsFormat;
+    char *explog_path;
 
+    //const char *GetResultsFolder();    
+    char *GetResultsFolder();    
     char *experimentDir(char *rawdataDir, char *dirOut);
     void DefaultSystemContext();
-    void GenerateContext(int from_wells);
-    // why we >pass< experimentName to this routine is a big mystery...
-    // expeerimentName is not the experimentName, it's a directory
-    void SetUpAnalysisLocation(char *experimentName, std::string &analysisLocation);
+    void GenerateContext();
+    void FindExpLogPath();
+    void SetUpAnalysisLocation();
     void MakeSymbolicLinkToOldDirectory (char *experimentName);
     void CopyFilesForReportGeneration (char *experimentName, SeqListClass &my_keys);
     void MakeNewTmpWellsFile( char *experimentName);
-    void CleanupTmpWellsFile(bool USE_RAWWELLS);
-    void CopyTmpWellFileToPermanent(bool USE_RAWWELLS, char *experimentName);
-    void CopyBasecallerOutput(char *dirname);
+
+    void CleanupTmpWellsFile();
+    void CopyTmpWellFileToPermanent( char *experimentName);
+    
     ~SystemContext();
 };
 
-void CreateResultsFolder(char *experimentName);
+
 // how exactly do these know the directory context???
 void  ClearStaleWellsFile (void);
-void  ClearStaleSFFFiles (void);
 
 #endif // SYSTEMCONTEXT_H

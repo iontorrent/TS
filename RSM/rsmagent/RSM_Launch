@@ -7,6 +7,9 @@ function start()
   then
     echo -n "Starting service: RSMAgent_TS"
     echo serialnumber:`dmidecode -s system-serial-number` > /opt/ion/RSM/serial_number.alt
+    # Note multiline input into product_info.alt
+    echo hardwarename:`dmidecode -s system-product-name` > /opt/ion/RSM/product_info.alt
+    echo biosversion:`dmidecode -s bios-version` >> /opt/ion/RSM/product_info.alt
     start-stop-daemon --start --chuid ionadmin --background --chdir "/opt/ion/RSM" --exec "/opt/ion/RSM/RSMAgent.sh"
   else
     echo "RSMAgent_TS already running?"

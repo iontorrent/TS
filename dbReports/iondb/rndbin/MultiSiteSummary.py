@@ -41,6 +41,8 @@ class MetricRecord:
         self.siteFilter = False
         self.plugin = False
         self.reverse = False
+        self.projectFilter = False
+        self.project = ''
         if (':' in metricName):
             self.plugin = True
             self.pluginStore = metricName.split(':')[0]
@@ -48,6 +50,9 @@ class MetricRecord:
     def Reverse(self):
         self.reverse = True
         self.recordValue = 999999
+    def SetProject(self, project):
+        self.projectFilter = True
+        self.project = project
 
 
 def BuildTrackingMetrics(metricRecordList, site):
@@ -84,7 +89,11 @@ def BuildTrackingMetrics(metricRecordList, site):
                     libmetrics = None
     
                 if libmetrics is not None:
-                    if libmetrics.align_sample == 0:
+                    try:
+                        isPairedEnd = (rep.metaData["paired"] == 1)
+                    except:
+                        isPairedEnd = False
+                    if libmetrics.align_sample == 0 and not isPairedEnd:
                         valtext = getattr(libmetrics, metricRecord.metricName)
                         val = int(valtext)
                         if val > bestVal:
@@ -126,8 +135,6 @@ def BuildMetrics(metricRecordList, site):
 
     # filters we can use to ignore/keep records of interest while looping over all of them
     chipFilter = True
-    projectFilter = False
-    project = ''
     dateFilter = False
 
     # select all result records (maybe here would be a good place to just get them all into memory fast?)
@@ -135,6 +142,9 @@ def BuildMetrics(metricRecordList, site):
     repList = models.Results.objects.using(site).select_related()  # or we can filter by date for example: filter(timeStamp__range=(queryStart,queryEnd))
     print "forcing repList loading"
     theLen = len(repList) # force load of database table across net
+
+    # for any projects we have, make additional sub-filtered lists
+    repList_avalanche = repList.filter(projects__name='avalanche')
 
     libList = models.LibMetrics.objects.using(site).select_related()
     print "forcing libmetrics loading"
@@ -164,7 +174,10 @@ def BuildMetrics(metricRecordList, site):
 
         print 'updating report list...'
         # look at all reports
-        for rep in repList:
+        useRepList = repList
+        if metricRecord.projectFilter:
+            useRepList = repList_avalanche
+        for rep in useRepList:
             libmetrics = None
             # look up the library table entry from the report pk via our pre-generated hash lookup array
             try:
@@ -175,7 +188,12 @@ def BuildMetrics(metricRecordList, site):
             except:
                 libmetrics = None
 
-            if libmetrics is not None:
+            try:
+                isPairedEnd = (rep.metaData["paired"] == 1)
+            except:
+                isPairedEnd = False
+
+            if libmetrics is not None and not isPairedEnd:
                 # optional filters
                 ok = True
                 if ok and chipFilter:
@@ -183,10 +201,13 @@ def BuildMetrics(metricRecordList, site):
                     if (metricRecord.chip in rep.experiment.chipType):
                         ok = True
 
-                if ok and projectFilter:
-                    ok = False
-                    if re.search(project, rep.experiment.project, re.IGNORECASE):
-                        ok = True
+                #if ok and metricRecord.projectFilter:
+                    #ok = False
+                    #if re.search(metricRecord.project, rep.experiment.project, re.IGNORECASE):
+                    #projectNames = rep.projectNames()
+                    #for projectName in projectNames.split(','):
+                        #if re.search(metricRecord.project, projectName, re.IGNORECASE):
+                            #ok = True
 
                 if ok and metricRecord.dateFilter:
                     ok = False
@@ -296,7 +317,9 @@ def lookupSite(url):
 
 
 if __name__=="__main__":
-    siteList = ['ioneast', 'ionwest', 'beverly', 'pbox', 'ioncarlsbad']
+    #siteList = ['ioneast', 'ionwest', 'beverly', 'pbox', 'ioncarlsbad']
+    siteList = ['ioneast', 'ionwest', 'beverly', 'ioncarlsbad']
+    #siteList = ['ioncarlsbad']
 
     metricRecords = []
 
@@ -379,6 +402,17 @@ if __name__=="__main__":
     #pluginMetric.Reverse()
     #metricRecords.append(pluginMetric)
 
+    # Avalanche metrics tracking
+    av_314_q17 = MetricRecord('q17_mapped_bases', 10, '314')
+    av_314_q17.SetProject('avalanche')
+    metricRecords.append(av_314_q17)
+    av_316_q17 = MetricRecord('q17_mapped_bases', 10, '316')
+    av_316_q17.SetProject('avalanche')
+    metricRecords.append(av_316_q17)
+    av_318_q17 = MetricRecord('q17_mapped_bases', 10, '318')
+    av_318_q17.SetProject('avalanche')
+    metricRecords.append(av_318_q17)
+
     today = datetime.date.today()
     timeStart = datetime.datetime(today.year, today.month, today.day)
     daysFromMonday = timeStart.weekday() # Monday is 0, so if its Thursday (3), we need to go back 3 days
@@ -418,11 +452,20 @@ if __name__=="__main__":
     print 'Weekly metrics captured from %s to %s' % (timeStart, timeEnd)
     html.write('Weekly metrics captured from %s to %s<br>' % (timeStart, timeEnd))
 
+    # write all non project-specific metrics first
     for metricRecord in metricRecords:
         # quick cleanup of recordValue to make sure it now reflects the top record, not the barrier to entry for a record
         if metricRecord.numInList > 0:
             rep, metricRecord.recordValue, q17bases, q20bases, webRoot = metricRecord.recordReportList[0]
-        DumpMetric(metricRecord)
+        if not metricRecord.projectFilter:
+            DumpMetric(metricRecord)
+
+    # now write out any project-specific metrics
+    project = 'avalanche'
+    html.write('</br></br>Tracking for project: %s</br></br>' % project)
+    for metricRecord in metricRecords:
+        if metricRecord.projectFilter and project == metricRecord.project:
+            DumpMetric(metricRecord)
 
     html.write('</body></html>\n')
     html.close()

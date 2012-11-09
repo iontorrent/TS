@@ -1,0 +1,230 @@
+{% extends "rundb/data/base.html" %}
+{% block sub-nav %}
+    <li class="active"><a href="{% url data %}">Data</a></li>
+    <li><a href="{% url projects %}">Projects</a></li>               
+{% endblock sub-nav %}
+{% block extra_head %}
+<link href="/site_media/css/chosen.css" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        width: 200px;
+        height: 30px;
+        float: left;
+        margin: 0 15px 15px 0;
+    }
+    .search-field #rangeA {
+        margin: 0;
+        width: 190px;
+    }
+    .search-field select {
+        width: 200px;
+    }
+    .icon-unchecked {
+        opacity: 0.25;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=25);
+    }
+    .icon-unchecked:hover {
+        opacity: 1.0;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=100);
+    }
+</style>
+<script type="text/javascript">
+  $(document).ready(function () {
+    $(".reportLog").live('click',function(e){
+	e.preventDefault();
+	pk = $(this).data("pk");
+	url = "/rundb/metaDataLog/" + pk;
+	$('body #modal_report_log').remove();
+
+	$.get(url, function(data) {
+	   $('body').append(data);
+	   $('#modal_report_log').modal("show");
+	   return false;
+	}).done(function(data) { 
+    	  console.log("success:", url);
+	})
+        .fail(function(data) {
+    	  $('#error-messages').empty();
+    	  $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+    	  console.log("error:", data);
+    	 
+        })
+        .always(function(data) { /*console.log("complete:", data);*/ });
+    });
+  });
+</script>
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script src="/site_media/js/chosen.jquery.js"></script>
+<script src="/site_media/js/jquery.daterangepicker.js"></script>
+{% endblock extra_head %}
+{% block content %}
+<div id="data_view" class="content group">
+    <div class="btn-group pull-right" data-toggle="buttons-radio">
+        <button id="view_full" class="btn">Full</button>
+        <button id="view_table" class="btn active">Table</button>
+    </div>
+    <h1 style="margin-bottom:5px;">Completed Runs & Results</h1>
+    <div id="search_bar" class="well">
+    	{%spaceless%}
+        <div class="row-fluid">
+            <div class="search-field">
+                <input type="text" value="" id="rangeA" placeholder="Date"/>
+            </div>
+            <div class="input-append search-field">
+                <input id="search_text" type="text" placeholder="Search names" style="width: 151px;" /><button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+            </div>
+            <div class="search-field">
+                <select id="id_project" name="project"
+                        data-placeholder="Any project" class="chzn-select">
+                    <option value=""></option>
+                    {% for project in search.combined.projects %}
+                        <option value="{{ project }}">{{ project }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field">
+                <select id="id_sample" name="sample" data-placeholder="Any Sample" class="chzn-select">
+                    <option value=""></option>
+                    {% for sample in search.experiment.sample %}
+                        <option value="{{ sample }}">{{ sample }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field">
+                <select id="id_reference" name="reference" data-placeholder="Any Reference" class="chzn-select">
+                    <option value=""></option>
+                    {% for reference in search.experiment.library %}
+                        <option value="{{ reference }}">{{ reference }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field">
+                <select id="id_flows" name="flows" data-placeholder="All Flows"
+                        class="chzn-select">
+                    <option value=""></option>
+                    {% for flows in search.combined.flows %}
+                        <option value="{{ flows }}">{{ flows }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field">
+                <select id="id_chip" name="chipType" data-placeholder="Any Chip"
+                        class="chzn-select">
+                    <option value=""></option>
+                    {% for chip in search.experiment.chipType %}
+                        <option value="{{ chip }}">{{ chip }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="search-field">
+                <select id="id_pgm" name="pgmName" data-placeholder="Any PGM"
+                        class="chzn-select">
+                    <option value=""></option>
+                    {% for pgm in search.experiment.pgmName %}
+                        <option value="{{ pgm }}">{{ pgm }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row-fluid">
+            
+            <!--<div class="input-append">
+                <input id="debug_url" type="text" placeholder="http://green.itw" style="width: 151px;" /><button id="search" class="btn" type="button" style="margin: 0 0 0 -1px">Debug Search</button>
+            </div>-->
+        </div>
+        {%endspaceless%}
+    </div>
+    
+    <div id="experiment_list_table"></div>
+    
+</div>
+<script>
+$(document).ready(function(){
+	$('#experiment_list_table').kendoGrid({
+	    dataSource: {
+	    	type: "json",
+			transport: {
+	            read: {
+	            	url: "/rundb/api/v1/compositeexperiment/",
+	            	contentType: 'application/json; charset=utf-8',
+				    type: 'GET',
+				    dataType: 'json'
+	            },
+				parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+	            
+	        },
+	        schema: {
+	        	data: "objects",
+	        	total: "meta.total_count",
+	            model: {
+	                fields: {
+	                }
+	            }
+	        },
+	        serverSorting: true,
+	        serverFiltering: true,
+	        serverPaging: true,                        	
+	    	pageSize: 10
+	    },
+	    height: 'auto',
+	    groupable: false,
+	    scrollable: false,
+	    selectable: false,
+	    sortable: true,
+	    pageable: true,
+		columns: [ {
+	            title: "Favorite"
+	            , sortable: false
+	        } , {
+	            title: "Instrument"
+	            , sortable: false
+	        } , {
+	            title: "Sample"
+	            , sortable: false
+	        } , {
+	            title: "Application"
+	            , sortable: false
+	        } , {
+	            title: "Run Type"
+	            , sortable: false
+	        } , {
+	            title: "Barcode"
+	            , sortable: false
+	        } , {
+	            title: "Projects"
+	            , sortable: false
+	        } , {
+	            title: "Ref Genome"
+	            , sortable: false
+	        } , {
+	            title: "Completed"
+	            , sortable: false
+	        } , {
+	            title: "Report Name"
+	            , sortable: false
+	        } , {
+	            title: "Total Output"
+	            , sortable: false
+	        } , {
+	            title: "Total Reads"
+	            , sortable: false
+	        } , {
+	            title: "Mode Read Length"
+	            , sortable: false
+	        } , {
+	            title: "%>Q30 reads"
+	            , sortable: false
+	        } , {
+	            title: "Actions"
+	        }
+	    ]
+    });	
+});
+</script>
+{% endblock content %}

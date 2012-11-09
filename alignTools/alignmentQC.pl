@@ -17,13 +17,15 @@ my $opt = {
   "start-slop"             => 0,
   "sample-size"            => 0,
   "max-plot-read-len"      => 400,
-  "qscores"                => "7,10,17,20,47",
+  "qscores"                => "7,10,17,20,30,47",
   "threads"                => &numCores(),
   "aligner"                => "tmap",
   "aligner-opts-rg"        => undef,                 # primary options (for -R to TMAP)
-  "aligner-opts-extra"     => "stage1 map1 map2 map3", # this could include stage and algorithm options
+  "aligner-opts-extra"     => "stage1 map4", # this could include stage and algorithm options
   "aligner-opts-pairing"   => "-Q 2 -S 1 -b 200 -c 30 -d 3", # read pairing-specific options
+  "mark-duplicates"        => 0,
   "bidirectional"          => 0, # if true then will pass tmap --bidirectional option
+  "skip-alignStats"        => 0, # if true then will disable alignStats
   "aligner-format-version" => undef,
   "align-all-reads"        => 0,
   "genome-path"            => ["/referenceLibrary","/results/referenceLibrary","/opt/ion/referenceLibrary"],
@@ -50,7 +52,9 @@ GetOptions(
   "aligner-opts-rg=s"        => \$opt->{"aligner-opts-rg"},
   "aligner-opts-extra=s"     => \$opt->{"aligner-opts-extra"},
   "aligner-opts-pairing=s"   => \$opt->{"aligner-opts-pairing"},
+  "mark-duplicates"          => \$opt->{"mark-duplicates"},
   "bidirectional"            => \$opt->{"bidirectional"},
+  "skip-alignStats"          => \$opt->{"skip-alignStats"},
   "c|align-all-reads"        => \$opt->{"align-all-reads"},
   "a|genome-path=s@"         => \$opt->{"genome-path"},
   "p|sam-parsed"             => \$opt->{"sam-parsed"},
@@ -69,10 +73,10 @@ unlink($opt->{"logfile"}) if(-e $opt->{"logfile"});
 my @nReads = ();
 foreach my $readFile (@{$opt->{"readFile"}}) {
   my $n = &getReadNumber($readFile,$opt->{"readFileType"});
-  print STDERR "WARNING: $0: no reads to align in $readFile\n" if($n==0);
+  print STDOUT "WARNING: $0: no reads to align in $readFile\n" if($n==0);
   push(@nReads,$n);
   if($n != $nReads[0]) {
-    print STDERR "WARNING: $0: expected ".$nReads[0]." reads but found $n while parsing $readFile\n";
+    print STDOUT "WARNING: $0: expected ".$nReads[0]." reads but found $n while parsing $readFile\n";
     exit(1);
   }
 }
@@ -83,8 +87,8 @@ print "Aligning $nReads reads from ".join(" and ",@{$opt->{"readFile"}})."\n";
 my $indexVersion = defined($opt->{"aligner-format-version"}) ? $opt->{"aligner-format-version"} : &getIndexVersion();
 my($refDir,$refInfo,$refFasta,$infoFile) = &findReference($opt->{"genome-path"},$opt->{"genome"},$opt->{"aligner"},$indexVersion);
 
-if(defined($opt->{"aligner-opts-rg"}) && ($opt->{"aligner-opts-rg"}=~/-R "SM:([^"]+)"/)) {
-  my $project = $1;
+if( -f 'explog.txt') {
+  my $project = `grep ^Project: explog.txt|cut -f2- -d" "`; chomp $project;
   print "Checking if $refDir/project/$project exists\n";
   if ($project && -r "$refDir/project/$project") {
     print "Found hard-coded genomes, checking if readFile pattern matches\n";
@@ -171,14 +175,29 @@ if($opt->{"aligner"} eq "tmap") {
   }
   $command .= " --bidirectional" if($opt->{"bidirectional"});
   $command .= " ".$opt->{"aligner-opts-rg"} if(defined($opt->{"aligner-opts-rg"}));
+  $command .= " -u -o 0"; # NB: random seed based on read and outputs SAM
   die if(!defined($opt->{"aligner-opts-extra"}));
   $command .= " ".$opt->{"aligner-opts-extra"};
   $command .= " 2>> ".$opt->{"logfile"};
-  $command .= " | samtools view -Sbu - | samtools sort -m 8000000000 - $bamBase";
+  if(0 == $opt->{"mark-duplicates"}) {
+      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile QUIET=TRUE SO=coordinate";
+  }
+  else {
+      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile.tmp QUIET=TRUE SO=coordinate";
+  }
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));
 } else {
   die "$0: invalid aligner option: ".$opt->{"aligner"}."\n";
+}
+if(1 == $opt->{"mark-duplicates"}) {
+    # TODO: how do we get the '/usr/local/bin/' path?
+    my $command = "java -Xmx8G -jar /usr/local/bin/MarkDuplicates.jar I=$bamFile.tmp O=$bamFile M=$bamFile.markduplictes.metrics.txt AS=true VALIDATION_STRINGENCY=SILENT"; # FIXME
+	print "  $command\n";
+    die "$0: Failure during mark duplicates\n" if(&executeSystemCall($command));
+    $command = "rm -v $bamFile.tmp";
+	print "  $command\n";
+    die "$0: Failure mark duplicates cleanup\n" if(&executeSystemCall($command));
 }
 die "$0: Failure during bam indexing\n" if(&executeSystemCall("samtools index $bamFile"));
 
@@ -186,31 +205,35 @@ my $alignStopTime = time();
 my $alignTime = &ceil(($alignStopTime-$alignStartTime)/60);
 print "Alignment time: $alignTime minutes\n";
 
-# Alignment post-processing
-my $postAlignStartTime = time();
-my $commandPostProcess = "alignStats";
-$commandPostProcess .= " -i $bamFile";
-$commandPostProcess .= " -g $infoFile";
-$commandPostProcess .= " -n ".$opt->{"threads"};
-$commandPostProcess .= " -l ".$opt->{"filter-length"};
-$commandPostProcess .= " -m ".$opt->{"max-plot-read-len"};
-$commandPostProcess .= " -q ".$opt->{"qscores"};
-$commandPostProcess .= " -s ".$opt->{"start-slop"};
-$commandPostProcess .= " -a alignTable.txt";
-$commandPostProcess .= " -p 1" if($opt->{"sam-parsed"});
-if($opt->{"sample-size"}) {
-  $commandPostProcess .= " --totalReads $nReads";
-  $commandPostProcess .= " --sampleSize ".$opt->{"sample-size"};
+if($opt->{"skip-alignStats"} == 0){
+    # Post-process alignments to derive summary statistics
+    my $postAlignStartTime = time();
+    my $commandPostProcess = "alignStats";
+    $commandPostProcess .= " --infile "      . $bamFile;
+    $commandPostProcess .= " --genomeinfo "  . $infoFile;
+    $commandPostProcess .= " --numThreads "  . $opt->{"threads"};
+    $commandPostProcess .= " --qScores "     . $opt->{"qscores"};
+    $commandPostProcess .= " --startslop "   . $opt->{"start-slop"};
+    $commandPostProcess .= " --alignSummaryFilterLen " . $opt->{"filter-length"};
+    $commandPostProcess .= " --alignSummaryMaxLen "    . $opt->{"max-plot-read-len"};
+    $commandPostProcess .= " --errTableMaxLen "        . $opt->{"max-plot-read-len"};
+    $commandPostProcess .= " --errTableTxtFile "       . "alignStats_err.txt";
+    $commandPostProcess .= " --errTableJsonFile "      . "alignStats_err.json";
+    $commandPostProcess .= " --samParsedFlag 1" if($opt->{"sam-parsed"});
+    if($opt->{"sample-size"}) {
+      $commandPostProcess .= " --totalReads $nReads";
+      $commandPostProcess .= " --sampleSize ".$opt->{"sample-size"};
+    }
+    if($opt->{"output-dir"}) {
+      $commandPostProcess .= " --outputDir ".$opt->{"output-dir"};
+    }
+    $commandPostProcess .= " 2>> ".$opt->{"logfile"};
+    print "  $commandPostProcess\n";
+    die "$0: Failure during alignment post-processing (take 1)\n" if(&executeSystemCall($commandPostProcess));
+    my $postAlignStopTime = time();
+    my $postAlignTime = &ceil(($postAlignStopTime-$postAlignStartTime)/60);
+    print "Alignment post-processing time: $postAlignTime minutes\n";
 }
-if($opt->{"output-dir"}) {
-  $commandPostProcess .= " --outputDir ".$opt->{"output-dir"};
-}
-$commandPostProcess .= " 2>> ".$opt->{"logfile"};
-print "  $commandPostProcess\n";
-die "$0: Failure during alignment post-processing\n" if(&executeSystemCall($commandPostProcess));
-my $postAlignStopTime = time();
-my $postAlignTime = &ceil(($postAlignStopTime-$postAlignStartTime)/60);
-print "Alignment post-processing time: $postAlignTime minutes\n";
 
 # flowspace realignment, if requested
 #if($opt->{"realign"}) {
@@ -258,13 +281,13 @@ sub executeSystemCall {
 
   my $problem = 0;
   if($exeFail || $died || $exitCode) {
-    print STDERR "$0: problem encountered running command \"$command\"\n";
+    print STDOUT "$0: problem encountered running command \"$command\"\n";
     if($exeFail) {
-      print STDERR "Failed to execute command: $!\n";
+      print STDOUT "Failed to execute command: $!\n";
     } elsif ($died) {
-      print STDERR sprintf("Child died with signal %d, %s coredump\n", $died,  $core ? 'with' : 'without');
+      print STDOUT sprintf("Child died with signal %d, %s coredump\n", $died,  $core ? 'with' : 'without');
     } else {
-      print STDERR "Child exited with value $exitCode\n";
+      print STDOUT "Child exited with value $exitCode\n";
     }
     $problem = 1;
   }
@@ -297,17 +320,17 @@ sub checkArgs {
   my $badArgs = 0;
   if($opt->{"threads"} < 1) {
     $badArgs = 1;
-    print STDERR "ERROR: $0: must specify a positive number of threads\n";
+    print STDOUT "ERROR: $0: must specify a positive number of threads\n";
   }
   my $nReadFiles = scalar @{$opt->{"readFile"}};
   if($nReadFiles < 1 || $nReadFiles > 2) {
     $badArgs = 1;
-    print STDERR "ERROR: $0: must specify at least one file of input reads with -i or --input option\n" if($nReadFiles < 1);
-    print STDERR "ERROR: $0: must specify at most two files of input reads with -i or --input option\n" if($nReadFiles > 2);
+    print STDOUT "ERROR: $0: must specify at least one file of input reads with -i or --input option\n" if($nReadFiles < 1);
+    print STDOUT "ERROR: $0: must specify at most two files of input reads with -i or --input option\n" if($nReadFiles > 2);
   } else {
     my $first=1;
     foreach my $readFile (@{$opt->{"readFile"}}) {
-      if($readFile =~ /^(.+)\.(fasta|fastq|sff)$/i) {
+      if($readFile =~ /^(.+)\.(fasta|fastq|sff|bam)$/i) {
         my $readFileType = $2;
         push(@{$opt->{"readFileBase"}},$1);
         if($first) {
@@ -315,17 +338,17 @@ sub checkArgs {
           $opt->{"readFileType"} = lc($readFileType);
         } elsif($opt->{"readFileType"} ne lc($readFileType)) {
           $badArgs = 1;
-          print STDERR "ERROR: $0: input read files should have same suffix\n";
+          print STDOUT "ERROR: $0: input read files should have same suffix\n";
         }
       } else {
         $badArgs = 1;
-        print STDERR "ERROR: $0: suffix of input reads filename $readFile should be one of (.fasta, .fastq, .sff)\n";
+        print STDOUT "ERROR: $0: suffix of input reads filename $readFile should be one of (.fasta, .fastq, .sff)\n";
       }
     }
   }
   if(!defined($opt->{"genome"})) {
     $badArgs = 1;
-    print STDERR "ERROR: $0: must specify reference genome with -g or --genome option\n";
+    print STDOUT "ERROR: $0: must specify reference genome with -g or --genome option\n";
   }
   if($badArgs) {
     &usage();
@@ -334,17 +357,17 @@ sub checkArgs {
 
   # Check args for things that might be problems
   if($opt->{"threads"} > &numCores()) {
-    print STDERR "WARNING: $0: number of threads is larger than number available, limiting.\n";
+    print STDOUT "WARNING: $0: number of threads is larger than number available, limiting.\n";
     $opt->{"threads"} = &numCores();
   }
 }
 
 sub usage () {
-  print STDERR << "EOF";
+  print STDOUT << "EOF";
 
 usage: $0
   Required args:
-    -i,--input myReads         : File to align (fasta/fastq/sff).  Use twice
+    -i,--input myReads         : File to align (fasta/fastq/sff/bam).  Use twice
                                  for paired read mapping
     -g,--genome mygenome       : Genome to which to align
   Optional args:
@@ -376,6 +399,7 @@ usage: $0
                                   "-Q 2 -S 1 -b 200 -c 100 -d 3 -L -l 5" will be used).
     --bidirectional             : Indicates that reads are bidirectional merged reads
                                   so that the BAM flag will be appropriately set
+    --skip-alignStats           : Indicate whether alignStats will be skippeed
     -c,--align-all-reads        : Over-ride possible sampling, align all reads
     -a,--genome-path /dir       : Path in which references can be found.  Can
                                   be specified multiple times.  By default
@@ -426,9 +450,9 @@ sub findReference {
   }
 
   if(!$found) {
-    print STDERR "ERROR: $0: unable to find reference genome $dirName\n";
-    print STDERR "Searched in the following locations:\n";
-    print STDERR join("\n",map {"$_/$dirName"} reverse(@$genomePath))."\n";
+    print STDOUT "ERROR: $0: unable to find reference genome $dirName\n";
+    print STDOUT "Searched in the following locations:\n";
+    print STDOUT join("\n",map {"$_/$dirName"} reverse(@$genomePath))."\n";
     die;
   }
 
@@ -470,6 +494,11 @@ sub getReadNumber {
     $nReads =~ s/\s+//g;
   } elsif($fileType eq "sff") {
     my $command = "SFFSummary -q 0 -m 0 -s $readFile | grep \"^reads\" | cut -f2- -d\\ ";
+    die "$0: Failed to determine number of reads from $readFile\n" if(&executeSystemCall($command,\$nReads));
+    chomp $nReads;
+    $nReads =~ s/\s+//g;
+  } elsif($fileType eq "bam") {
+    my $command = "samtools flagstat $readFile |head -1 | cut -f1 -d+";
     die "$0: Failed to determine number of reads from $readFile\n" if(&executeSystemCall($command,\$nReads));
     chomp $nReads;
     $nReads =~ s/\s+//g;

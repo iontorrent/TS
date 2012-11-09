@@ -56,6 +56,7 @@ class TraceCurry
     void  SetContextParams(int _i_start, float *c_dntp_top, int _sub_steps, float _C,
                            float _SP, float _region_kr, float _kmax, float _d, float _sens, float _gain, float _tauB);
     float GetStartAmplitude(){ return(p->Ampl[fnum]);};
+    float GuessAmplitude(float *red_obs);
     float GetStartKmult(){return(p->kmult[fnum]);};
     void IntegrateRedObserved(float *red, float *red_obs);
     void ResetEval(){eval_count = 0;};

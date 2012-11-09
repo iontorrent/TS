@@ -32,14 +32,13 @@ def findVersions():
     packages = sorted(packages)
 
     ret = SortedDict()
-#    ret = dict()
     for package in packages:
         #command for version checking
-        com = "dpkg -s %s | grep Version | head -1" % package
+        com = "dpkg -l %s | grep ^ii | awk '{print $3}'" % package
         try:
             a = subprocess.Popen(com, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             #just get the version number
-            tolist = a.stdout.readlines()[0].strip().split("Version: ")[1]
+            tolist = a.stdout.readlines()[0].strip()
             ret[package] = tolist
         except:
 #            traceback.print_exc()

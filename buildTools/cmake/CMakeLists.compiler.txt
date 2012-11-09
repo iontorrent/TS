@@ -7,7 +7,37 @@ ENDIF()
 
 # Compiler flags
 # -D_DEBUG enables memory debugging, but it isn't working
-set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -Werror -O0 -g -fPIC -Wno-write-strings -Wno-unused-parameter -DION_DEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "-Wall -Wextra -Werror -O6 -g -fPIC -Wno-write-strings -Wno-unused-parameter")
-set(CMAKE_CXX_FLAGS_PROFILE "-Wall -Wextra -Werror -O6 -g -fPIC -Wno-write-strings -Wno-unused-parameter -lunwind -lprofiler")
-set(CMAKE_SHARED_LINKER_FLAGS "-Wall")
+#set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC -Wno-write-strings -Wno-unused-parameter -Wpointer-arith -Wstrict-aliasing=2 -msse3 -march=native")
+set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Wno-write-strings -Wno-unused-parameter -msse3 -fPIC")
+if (CMAKE_COMPILER_IS_GNUCC)
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
+                    OUTPUT_VARIABLE GCC_VERSION)
+    if (GCC_VERSION VERSION_GREATER 4.3 OR GCC_VERSION VERSION_EQUAL 4.3)
+        #message(STATUS "Version >= 4.3")
+        # This breaks a few files in current build tree under CMAKE_BUILD_TYPE_RELEASE. Need to test more.
+        #set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wstrict-overflow")
+    endif()
+
+endif()
+
+set(ION_COMMON_FLAGS_DEBUG "${ION_COMMON_FLAGS} -O0 -g -DION_DEBUG")
+set(ION_COMMON_FLAGS_RELEASE "${ION_COMMON_FLAGS} -O6 -g -fopenmp")
+set(ION_COMMON_FLAGS_PROFILE "${ION_COMMON_FLAGS} -O6 -g -lunwind -lprofiler")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wall ")
+
+# NB: -Werror is added below to avoid breaking build until C warnings are fixed.
+# It should be moved up to ION_COMMON_FLAGS once these have been resolved.
+
+# Add any C specific flags here
+set(CMAKE_C_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG}")
+set(CMAKE_C_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE}")
+set(CMAKE_C_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE}")
+
+# Add any C++ specific flags here
+set(CMAKE_CXX_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG} -Werror")
+set(CMAKE_CXX_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE} -Werror")
+set(CMAKE_CXX_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE} -Werror")
+
+#message("DEBUG CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG}")
+#message("RELEASE CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE}")
+

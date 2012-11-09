@@ -2,12 +2,11 @@
 #ifndef CAFIESOLVER_H
 #define CAFIESOLVER_H
 
-#include "PerBaseQual.h"
 #include "RawWells.h"
 #include "SFFWrapper.h"
 #include <vector>
 #include "bivariate_gaussian.h"
-//#include "Separator.h"
+#include "ChipIdDecoder.h"
 
 struct DNATemplate {
 	int		base;

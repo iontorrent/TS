@@ -59,7 +59,6 @@ public:
 		, score_flows(false)
 		, read_to_keep_file("")
 		, read_to_reject_file("")
-		, filter_length(20)
 		, q_scores("7,10,17,20,47")
 		, start_slop(0)
 		, sam_parsed_flag(0)
@@ -74,13 +73,18 @@ public:
 		, iupac_flag(true)
 		, keep_iupac(false)
 		, max_coverage(20000)
-		, align_summary_file("alignTable.txt")
+		, align_summary_filter_len(20)
 		, align_summary_min_len(50)
 		, align_summary_max_len(400)
 		, align_summary_len_step(50)
-		, align_summary_max_errors(3)
-		, align_summary_filter_len(50) 
-		, align_summary_filter_accuracy(0.9)
+		, err_table_txt_file("alignStats_err.txt")
+		, err_table_json_file("alignStats_err.json")
+		, err_table_filter_len(50) 
+		, err_table_filter_accuracy(0.9)
+		, err_table_min_len(50)
+		, err_table_max_len(400)
+		, err_table_len_step(50)
+		, err_table_max_errors(3)
 		, stdin_sam_flag(false)
 		, stdin_bam_flag(false)
 		, list_of_files("")
@@ -100,7 +104,6 @@ public:
 		bool			score_flows; /**< Sequencing flow order [Default: ""] */
 		string			read_to_keep_file; /**< File with list of read IDs to use [Default: ""] */
 		string			read_to_reject_file; /**< File with list of read IDs to ignore [Default: ""] */
-		long			filter_length; /**< the minimum length a read must be to be included in calculations and output [Default: 20] */
 		string			q_scores;/**< a comma seperate string of integers reprsenting the phred values to use for the alignment.summary output */
 		long			start_slop;/**< an integer representing the first N bases to be ignored when considering errors in an alignment */
 		int				sam_parsed_flag;/**< a flag to signal whether or not to create the sam.parsed file (can be very large file) */
@@ -124,24 +127,28 @@ public:
 									  *   if a particular position has > max_coverage reads aligning to it, only the first
 									  *	  N reads are used, where N = max_coverage. [Default: 20000]  
 									  */
-		string			align_summary_file; /**< a string representing the absolute path for the alignment summary error table */
-		int				align_summary_min_len;/**< an int representing the minimum length for a read to be considered in the alignment summary error table */
-		int				align_summary_max_len;/**< an int representing the maximum length for a read to be considered in the alignment summary error table */
-		int				align_summary_len_step;/**< an int representing the interval of read lengths between the min and max lengths
+		long				align_summary_filter_len; /**< the minimum length a read must be to be included in AQ# results output [Default: 20] */
+		int				align_summary_min_len;/**< an int representing the minimum length for a read to be considered in the alignment summary table */
+		int				align_summary_max_len;/**< an int representing the maximum length for a read to be considered in the alignment summary table */
+		int				align_summary_len_step;/**< an int representing the interval of read lengths between the min and max lengths */
+
+		string				err_table_txt_file; /**< a string representing the absolute path for the alignment error table in txt format*/
+		string				err_table_json_file; /**< a string representing the absolute path for the alignment error table in json format*/
+		int				err_table_filter_len;/**< an int represting the minimum lenght a read must be in order to be considered for the alignment error */
+		double				err_table_filter_accuracy; /**< a double representing the % of the read that must be error free in order to be considered for the alignment 
+														*   error table.  This filter value doesn't effect the alignment.summary or sam.parsed output.
+														*   Filtering formula:  if (((err_table_filter_len - cummaltive_errors_in_read) / err_table_filter_len) > err_table_filter_accuracy)
+														*/
+		int				err_table_min_len;/**< an int representing the minimum length for a read to be considered in the alignment error table */
+		int				err_table_max_len;/**< an int representing the maximum length for a read to be considered in the alignment error table */
+		int				err_table_len_step;/**< an int representing the interval of read lengths between the min and max lengths
 												*	 in the alignment summary table
 												*/
-		int				align_summary_max_errors;/**< an int representing the maximum number of errors to be output to the table.  one column is produced for each +1 value 
-												  *	  until the value stored in align_summary_max_errors.  For instance, if this is 3 the columns output would be:
+		int				err_table_max_errors;/**< an int representing the maximum number of errors to be output to the table.  one column is produced for each +1 value 
+												  *	  until the value stored in err_table_max_errors.  For instance, if this is 3 the columns output would be:
 												  *		err1	err2	err3+
 												  *	  The final column always has a trailing + character.  This indicates that reads in this column have at least that number of errors
 												  */
-		int				align_summary_filter_len;/**< an int represting the minimum lenght a read must be in order to be considered for the alignment summary error
-												  *   table.  This length is also used for the alignment.summary file and sam.parsed
-												  */
-		double			align_summary_filter_accuracy; /**< a double representing the % of the read that must be error free in order to be considered for the alignment summary
-														*   error table.  This filter value doesn't effect the alignment.summary or sam.parsed output.
-														*   Filtering formula:  if (((align_summary_filter_len - cummaltive_errors_in_read) / align_summary_filter_len) > align_summary_filter_accuracy)
-														*/
 		
 		//stdin options
 		bool stdin_sam_flag;/**< a bool representing whether or not the input is from stdin, and raw text input */
@@ -275,16 +282,10 @@ private:
 												 */
 	
 	//error table data members
-	std::vector<int>					error_table_read_lens; /**<  a vector that holds all the read lengths that need to be output to the
-																*	alignment summarry error table, and alignment.summary file in ascending order
-																*/
-	std::vector<long>					error_table_read_totals;/**< a vector that holds all the total # of reads for each read length in
-																 * the error_table_read_lens vector.  
-																 */
-	std::vector<int>					error_table_errors_at_len; /**< a vector which holds all of the errors from every read summed for a specific
-																	* position in the read.  For instance, this vector could have an index that has all the errors
-																	* 
-																	*/
+	std::vector<int>					alignment_summary_read_lens; /**< read lengths for alignment summary */
+	std::vector<int>					error_table_read_lens; /**< read lengths for error table */
+	std::vector<long>					error_table_read_totals;/**< total # of reads for each read length in the error_table_read_lens vector */
+	std::vector<long>					error_table_errors_at_len; /**< #errors from every read summed for a specific position in the read */
 	typedef	std::tr1::unordered_map<int, int>		error_to_length_map; /**< key: error value: total */
 	typedef std::tr1::unordered_map<int, error_to_length_map > error_table_type; /**< key: length, value: error_to_length_map */
 	typedef std::vector<long>			read_totals_t;  /**< a type representing the totals for each read length we care about in ascending order by length 
@@ -299,26 +300,20 @@ private:
 										  * value:  an unordered_map of error_to_length_map (typedef is right above this)
 										  */
 	
+	long				mapped_bases;
+	long				mapped_reads;
 	phred_to_totals_t		alignment_summary_map; /**< data structure representing total reads for each phred score with certain lengths
 													* key: phred score
 													* value: read_totals_t 
 													*/
 	
-	length_to_total_map_t		unaligned_read_totals; /**< map containing totals of unaligned reads for certain lengths
-														* with key: length, value: total
-														*/
-	length_to_total_map_t		clipped_read_totals;/**< map containing totals of reads thats would have met a length criteria but were soft clipped 
-													 * to a length less than the length of interest 
-													 * with key: length, value: total
-													 */
-	
-	length_to_total_map_t		filtered_read_totals;/**< map containing totals of reads that pass filtering
-													  * with key: length, value: total
-													  */
-	
-	length_to_total_map_t		total_error_to_length;/**< map containing totals of errors of all reads at a specific length in the read
-													   * with key: length, value: total
-													   */
+	length_to_total_map_t		unaligned_read_totals;  /**< #unaligned reads at each length */
+	length_to_total_map_t		clipped_read_totals;    /**< #clipped reads at each length */
+	length_to_total_map_t		filtered_read_totals;   /**< #reads filtered out at each length */
+	length_to_total_map_t		total_error_to_length;  /**< total #errors up to and including read position */
+	length_to_total_map_t		per_position_mismatch;  /**< total #mismatches at read position */
+	length_to_total_map_t		per_position_insertion; /**< total #insertions at read position */
+	length_to_total_map_t		per_position_deletion;  /**< total #deletions at read position */
 	
 	std::string genome_name; /**< output name of genome from AlignStats::options.genome_info file */
 	std::string genome_version;/**< output name of genome version from AlignStats::options.genome_info file */
@@ -345,6 +340,7 @@ private:
 	int	_total_region_del_err;
 	
 	std::ofstream	_region_error_outputfile;
+	std::ofstream	_region_error_positions_outputfile;
 	NativeMutex	 _region_error_outputfile_mutex; /**< a mutex to handle synchronized writes to the region error file*/
 	//*read_regionmap carries the result map
 	bool build_read_regionmap(string regionPostionFile, std::tr1::unordered_map<string, read_region> *read_regionmap);
@@ -381,9 +377,13 @@ private:
 	 */
 	void write_alignment_summary();
 	/**
-	 * writes the alignment summary error table file
+	 * writes the alignment summary error table file in text format
 	 */
-	void write_error_table();
+	void write_error_table_txt(string outFile);
+	/**
+	 * writes the alignment summary error table file in json format
+	 */
+	void write_error_table_json(string outFile);
 
 	/**
 	 * writes the alignment flow error summary file

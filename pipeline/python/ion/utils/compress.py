@@ -22,7 +22,11 @@ def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True):
     printtime("Start make_zip on %s" % to_zip)
     if os.path.exists(to_zip):
         if use_sys_zip:
-            cmd = "zip %s %s" % (zip_file,to_zip)
+            if arcname != None:
+                # This is a hack to trigger only storing of names, no directory heirarchy
+                cmd = "zip --junk-paths %s %s" % (zip_file,to_zip)
+            else:
+                cmd = "zip %s %s" % (zip_file,to_zip)
             try:
                 os.system(cmd)
             except:

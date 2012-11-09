@@ -10,8 +10,8 @@
 import os
 import sys
 import commands
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
+import iondb.bin.djangoinit
 from iondb.rundb import models
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
 # ===================
 # Print message on failure
 # ===================
-function failure()
+failure()
 {
     echo "Warning: $1" 1>&2
 }
@@ -12,7 +12,7 @@ function failure()
 # ================================
 # command line argument parsing
 # ================================
-function cmd_line_args_old ()
+cmd_line_args_old ()
 {
     export RAW_DATA_DIR=""
     export ANALYSIS_DIR=""
@@ -67,7 +67,7 @@ function cmd_line_args_old ()
 
 }
 
-function cmd_line_args()
+cmd_line_args()
 {
     while [ $1 ]; do
         case $1 in
@@ -131,7 +131,7 @@ function cmd_line_args()
     echo "$PROGRAM: starting execution of plugin code"
 }
 
-function backwards_compatible()
+backwards_compatible()
 {
     if [ ! -z $RUNINFO__RAW_DATA_DIR ]; then
         export RAW_DATA_DIR=$RUNINFO__RAW_DATA_DIR
@@ -162,11 +162,11 @@ function backwards_compatible()
 #---                                                                        ---#
 #---    Creates shell variables from keyword and assigns value as value        ---#
 #---                                                                        ---#
-function makeVarsFromJson()
+makeVarsFromJson()
 {
-    IFS=$'\n'
+    local IFS=$'\n'
     for line in $(jsonpipe < $1);do
-        if echo $line|egrep -q '({}|\[])'; then
+        if echo $line|egrep -q '(\{}|\[])'; then
             :
         else
             line=$(echo $line|sed 's:^/::g')
@@ -189,7 +189,7 @@ function makeVarsFromJson()
                 #convert to uppercase
                 var_name=$(echo ${var_name^^}|sed 's:/:__:g')
                 #echo $var_name=$var_val
-                export eval $var_name="$var_val"
+                export eval "${var_name}"="${var_val}"
             fi
 
         fi 
@@ -199,20 +199,20 @@ function makeVarsFromJson()
 # ===========================
 # validate required inputs
 # ===========================
-function input_validation()
+input_validation()
 {
     # These are guaranteed to be set by TLScript.py (ion_analysis_00.py)
-    if [ "${RAW_DATA_DIR}" == "" ]; then
+    if [ "${RAW_DATA_DIR}" = "" ]; then
         failure "RAW_DATA_DIR not defined."
-    elif [ "${ANALYSIS_DIR}" == "" ]; then
+    elif [ "${ANALYSIS_DIR}" = "" ]; then
         failure "ANALYSIS_DIR not defined."
-    elif [ "${LIBRARY_KEY}" == "" ]; then
+    elif [ "${LIBRARY_KEY}" = "" ]; then
         failure "LIBRARY_KEY not defined."
-    elif [ "${TESTFRAG_KEY}" == "" ]; then
+    elif [ "${TESTFRAG_KEY}" = "" ]; then
         failure "TESTFRAG_KEY not defined."
-    elif [ "${RESULTS_DIR}" == "" ]; then
+    elif [ "${RESULTS_DIR}" = "" ]; then
         failure "RESULTS_DIR not defined."
-    elif [ "${URL_ROOT}" == "" ]; then
+    elif [ "${URL_ROOT}" = "" ]; then
         failure "URL_ROOT not defined."
     fi
 
@@ -246,28 +246,67 @@ function input_validation()
 # =========================================
 # generate useful variables
 # =========================================
-function define_local_vars ()
+define_local_vars ()
 {
-    if [ -f ${ANALYSIS_DIR}/expMeta.dat ]; then
-        EXPMETA_PATH=${ANALYSIS_DIR}/expMeta.dat
-    else
-        EXPMETA_PATH=${ANALYSIS_DIR}/../expMeta.dat
-    fi
-    
-    export TSP_RUN_NAME=$(grep '^Run Name' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_RUN_DATE=$(grep '^Run Date' ${EXPMETA_PATH} | cut -f2 -d'=')
-    export TSP_ANALYSIS_NAME=$(grep '^Analysis Name' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_ANALYSIS_DATE=$(grep '^Analysis Date' ${EXPMETA_PATH} | cut -f2 -d'=')
-    export TSP_ANALYSIS_CYCLES=$(grep '^Analysis Cycles' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_PROJECT=$(grep '^Project' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_LIBRARY=$(grep '^Library' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_SAMPLE=$(grep 'Sample' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_PGM_NAME=$(grep '^PGM' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_NOTES="$(grep '^Notes' ${EXPMETA_PATH} | cut -f2 -d'=')"
-    export TSP_CHIPTYPE=$(grep '^Chip Type' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/[ \"]//g')
+    export REPORT_ROOT_DIR=${RUNINFO__ANALYSIS_DIR:-$ANALYSIS_DIR}
+    export SIGPROC_DIR=${RUNINFO__SIGPROC_DIR:-${ANALYSIS_DIR}/sigproc_results/}
+    export BASECALLER_DIR=${RUNINFO__BASECALLER_DIR:-${ANALYSIS_DIR}/basecaller_results/}
+    export ALIGNMENT_DIR=${RUNINFO__ALIGNMENT_DIR:-$ANALYSIS_DIR}
 
-    export TSP_FILEPATH_OUTPUT_STEM=${ANALYSIS_DIR}/${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
-    export TSP_URLPATH_OUTPUT_STEM=${URL_ROOT}/${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+    # Fallback to ANALYSIS_DIR for compatibility with older runs
+    if [ ! -d ${SIGPROC_DIR} ]; then
+        export SIGPROC_DIR=${ANALYSIS_DIR}
+    fi
+    if [ ! -d ${BASECALLER_DIR} ]; then
+        export BASECALLER_DIR=${ANALYSIS_DIR}
+    fi
+
+    if [ -f ${REPORT_ROOT_DIR}/expMeta.dat ]; then
+        EXPMETA_PATH=${REPORT_ROOT_DIR}/expMeta.dat
+    else
+        EXPMETA_PATH=${REPORT_ROOT_DIR}/../expMeta.dat
+    fi
+
+    export TSP_RUN_NAME=$(grep '^Run Name =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_RUN_DATE=$(grep '^Run Date =' ${EXPMETA_PATH} | cut -f2 -d'=')
+    export TSP_ANALYSIS_NAME=$(grep '^Analysis Name =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_ANALYSIS_DATE=$(grep '^Analysis Date =' ${EXPMETA_PATH} | cut -f2 -d'=')
+    export TSP_PROJECT=$(grep '^Project =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_LIBRARY=$(grep '^Library =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_SAMPLE=$(grep 'Sample =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_PGM_NAME=$(grep '^PGM =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
+    export TSP_NOTES="$(grep '^Notes =' ${EXPMETA_PATH} | cut -f2 -d'=')"
+    export TSP_CHIPTYPE=$(grep '^Chip Type =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/[ \"]//g')
+
+    export TSP_RUNID=$(grep '^runID =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+    export TSP_FLOWORDER=$(grep '^Flow Order =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+    export TSP_LIBRARY_KEY=$(grep '^Library Key =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+    export TSP_TF_KEY=$(grep '^TF Key =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+    export TSP_NUM_FLOWS=$(grep '^Run Flows =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+
+    # Fallback for reports <=2.2
+    if [ "${TSP_RUNID}" == "" ]; then
+        export TSP_RUNID=$(grep '^runId' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    fi
+    if [ "${TSP_FLOWORDER}" == "" ]; then
+        export TSP_FLOWORDER=$(grep '^flowOrder' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    fi
+    if [ "${TSP_LIBRARY_KEY}" == "" ]; then
+        export TSP_LIBRARY_KEY=$(grep '^libraryKey' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    fi
+    if [ "${TSP_TF_KEY}" == "" ]; then
+        export TSP_TF_KEY=$(grep '^tfKey' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    fi
+    if [ "${TSP_NUM_FLOWS}" == "" ]; then
+        export TSP_NUM_FLOWS=$(grep '^numFlows' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    fi
+
+    export TSP_FILEPATH_OUTPUT_STEM=${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+    export TSP_URLPATH_OUTPUT_STEM=${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+
+    SIGPROC_REPORT=${SIGPROC_DIR#${ANALYSIS_DIR}}
+    BASECALLER_REPORT=${BASECALLER_DIR#${ANALYSIS_DIR}}
+    ALIGNMENT_REPORT=${ALIGNMENT_DIR#${ANALYSIS_DIR}}
 
     # FASTA File Locator
     if [ "$RUNINFO__TMAP_VERSION" != "" ]; then
@@ -276,51 +315,45 @@ function define_local_vars ()
         echo "WARNING: Using hardcoded path to genome index files!"
         GENPATH="/results/referenceLibrary/tmap-f3"
     fi
-    fastafile=$(find $GENPATH -maxdepth 2 -name ${TSP_LIBRARY}.fasta|head -1)
+    fastafile=$(find -L "$GENPATH" -maxdepth 2 -name "${TSP_LIBRARY}.fasta"|head -1)
     export TSP_FILEPATH_GENOME_FASTA=
     export TSP_URLPATH_GENOME_FASTA=
-    if [ ! -z $fastafile ]; then
-        export TSP_FILEPATH_GENOME_FASTA=$fastafile
+    if [ ! -z "$fastafile" ]; then
+        export TSP_FILEPATH_GENOME_FASTA="$fastafile"
         # strip portion of filepath not in URL path: tmap-* link in /var/www/output
-        fastaweb=${fastafile#*referenceLibrary\/}
+        fastaweb="${fastafile#*referenceLibrary\/}"
         #export TSP_URLPATH_GENOME_FASTA=${RUNINFO__NET_LOCATION}/output/${fastaweb}
         # relative web path. relative to html root
-        export TSP_URLPATH_GENOME_FASTA=/output/${fastaweb}
+        export TSP_URLPATH_GENOME_FASTA="/output/${fastaweb}"
     fi
 
-    export TSP_FILEPATH_FASTQ=${TSP_FILEPATH_OUTPUT_STEM}.fastq
+    export TSP_FILEPATH_FASTQ=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.fastq
     export TSP_FILEPATH_FASTQ_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.fastq.zip
-    export TSP_URLPATH_FASTQ=${TSP_URLPATH_OUTPUT_STEM}.fastq
-    export TSP_URLPATH_FASTQ_ZIP=${TSP_URLPATH_OUTPUT_STEM}.fastq.zip
+    export TSP_URLPATH_FASTQ=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.fastq
+    export TSP_URLPATH_FASTQ_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.fastq.zip
 
-    export TSP_FILEPATH_SFF=${TSP_FILEPATH_OUTPUT_STEM}.sff
+    export TSP_FILEPATH_SFF=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.sff
     export TSP_FILEPATH_SFF_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.sff.zip
-    export TSP_URLPATH_SFF=${TSP_URLPATH_OUTPUT_STEM}.sff
-    export TSP_URLPATH_SFF_ZIP=${TSP_URLPATH_OUTPUT_STEM}.sff.zip
+    export TSP_URLPATH_SFF=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.sff
+    export TSP_URLPATH_SFF_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.sff.zip
 
-    export TSP_FILEPATH_TF_SFF=${TSP_FILEPATH_OUTPUT_STEM}.tf.sff
+    export TSP_FILEPATH_TF_SFF=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.tf.sff
     export TSP_FILEPATH_TF_SFF_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.tf.sff.zip
-    export TSP_URLPATH_TF_SFF=${TSP_URLPATH_OUTPUT_STEM}.tf.sff
-    export TSP_URLPATH_TF_SFF_ZIP=${TSP_URLPATH_OUTPUT_STEM}.tf.sff.zip
+    export TSP_URLPATH_TF_SFF=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.tf.sff
+    export TSP_URLPATH_TF_SFF_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.tf.sff.zip
 
-    export TSP_FILEPATH_BAM=${TSP_FILEPATH_OUTPUT_STEM}.bam
-    export TSP_FILEPATH_BAI=${TSP_FILEPATH_OUTPUT_STEM}.bam.bai
-    export TSP_URLPATH_BAM=${TSP_URLPATH_OUTPUT_STEM}.bam
-    export TSP_URLPATH_BAI=${TSP_URLPATH_OUTPUT_STEM}.bam.bai
-
-    export TSP_FLOWORDER=$(grep '^flowOrder' ${ANALYSIS_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    export TSP_RUNID=$(grep '^runId' ${ANALYSIS_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    export TSP_LIBRARY_KEY=$(grep '^libraryKey' ${ANALYSIS_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    export TSP_TF_KEY=$(grep '^tfKey' ${ANALYSIS_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    export TSP_NUM_FLOWS=$(grep '^numFlows' ${ANALYSIS_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    export TSP_FILEPATH_BAM=${ALIGNMENT_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.bam
+    export TSP_FILEPATH_BAI=${ALIGNMENT_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.bam.bai
+    export TSP_URLPATH_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.bam
+    export TSP_URLPATH_BAI=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.bam.bai
 
     export TSP_FILEPATH_PLUGIN_DIR=${RESULTS_DIR}
     export TSP_URLPATH_PLUGIN_DIR=${URL_ROOT}/plugin_out/${PLUGINNAME}_out
 
-    export TSP_FILEPATH_BARCODE_TXT=${ANALYSIS_DIR}/barcodeList.txt
+    export TSP_FILEPATH_BARCODE_TXT=${REPORT_ROOT_DIR}/barcodeList.txt
     export TSP_URLPATH_BARCODE_TXT=${URL_ROOT}/barcodeList.txt
-    
-    # /results/plugins/scratch  # ${DIRNAME}/../scratch
+
+    #export TSP_PLUGIN_SCRATCH=${DIRNAME}/../scratch
     export TSP_PLUGIN_SCRATCH=/results/plugins/scratch
 
     # Clearer alias for DIRNAME
@@ -329,7 +362,7 @@ function define_local_vars ()
 
 #*! @function
 #  @param  $*  the file to be tested 
-function test_for_file ()
+test_for_file ()
 {
     if [ ! -f $* ]; then
         failure "file '$*' was not found";
@@ -338,7 +371,7 @@ function test_for_file ()
 
 #*! @function
 #  @param  $*  the executable to be tested
-function test_for_executable ()
+test_for_executable ()
 {
     eval which $* 2>/dev/null 1>/dev/null;
     if test $? != 0; then
@@ -347,4 +380,4 @@ function test_for_executable ()
 }
 
 # Export functions to launch scripts
-export -f failure test_for_file test_for_executable
+export failure test_for_file test_for_executable

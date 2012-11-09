@@ -86,7 +86,7 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			RcppVector<int> maskBead(nX);
 			RcppVector<int> maskLive(nX);
 			RcppVector<int> maskDud(nX);
-			RcppVector<int> maskAmbiguous(nX);
+			RcppVector<int> maskReference(nX);
 			RcppVector<int> maskTF(nX);
 			RcppVector<int> maskLib(nX);
 			RcppVector<int> maskPinned(nX);
@@ -115,7 +115,7 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 				maskBead(i)                 = (mask & MaskBead) > 0;
 				maskLive(i)                 = (mask & MaskLive) > 0;
 				maskDud(i)                  = (mask & MaskDud) > 0;
-				maskAmbiguous(i)            = (mask & MaskAmbiguous) > 0;
+				maskReference(i)            = (mask & MaskReference) > 0;
 				maskTF(i)                   = (mask & MaskTF) > 0;
 				maskLib(i)                  = (mask & MaskLib) > 0;
 				maskPinned(i)               = (mask & MaskPinned) > 0;
@@ -170,7 +170,7 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			rs.add("maskBead",         maskBead);
 			rs.add("maskLive",         maskLive);
 			rs.add("maskDud",          maskDud);
-			rs.add("maskAmbiguous",    maskAmbiguous);
+			rs.add("maskReference",    maskReference);
 			rs.add("maskTF",           maskTF);
 			rs.add("maskLib",          maskLib);
 			rs.add("maskPinned",       maskPinned);

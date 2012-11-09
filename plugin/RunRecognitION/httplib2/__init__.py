@@ -23,7 +23,7 @@ __contributors__ = ["Thomas Broyer (t.broyer@ltgt.net)",
     "Sam Ruby",
     "Louis Nyffenegger"]
 __license__ = "MIT"
-__version__ = "0.7.0"
+__version__ = "0.7.4"
 
 import re
 import sys
@@ -36,6 +36,7 @@ import gzip
 import zlib
 import httplib
 import urlparse
+import urllib
 import base64
 import os
 import copy
@@ -43,10 +44,10 @@ import calendar
 import time
 import random
 import errno
-# remove depracated warning in python2.6
 try:
     from hashlib import sha1 as _sha, md5 as _md5
 except ImportError:
+    # prior to Python 2.5, these were separate modules
     import sha
     import md5
     _sha = sha.new
@@ -58,7 +59,10 @@ import socket
 try:
     from httplib2 import socks
 except ImportError:
-    socks = None
+    try:
+        import socks
+    except ImportError:
+        socks = None
 
 # Build the appropriate socket wrapper for ssl
 try:
@@ -148,6 +152,7 @@ class ServerNotFoundError(HttpLib2Error): pass
 class ProxiesUnavailableError(HttpLib2Error): pass
 class CertificateValidationUnsupported(HttpLib2Error): pass
 class SSLHandshakeError(HttpLib2Error): pass
+class NotSupportedOnThisPlatform(HttpLib2Error): pass
 class CertificateHostnameMismatch(SSLHandshakeError):
   def __init__(self, desc, host, cert):
     HttpLib2Error.__init__(self, desc)
@@ -530,6 +535,8 @@ class DigestAuthentication(Authentication):
                 self.challenge['nc'],
                 self.challenge['cnonce'],
                 )
+        if self.challenge.get('opaque'):
+            headers['authorization'] += ', opaque="%s"' % self.challenge['opaque']
         self.challenge['nc'] += 1
 
     def response(self, response, content):
@@ -726,23 +733,110 @@ class KeyCerts(Credentials):
     name/password are mapped to key/cert."""
     pass
 
+class AllHosts(object):
+  pass
 
 class ProxyInfo(object):
-  """Collect information required to use a proxy."""
-  def __init__(self, proxy_type, proxy_host, proxy_port, proxy_rdns=None, proxy_user=None, proxy_pass=None):
-      """The parameter proxy_type must be set to one of socks.PROXY_TYPE_XXX
-      constants. For example:
+    """Collect information required to use a proxy."""
+    bypass_hosts = ()
 
-p = ProxyInfo(proxy_type=socks.PROXY_TYPE_HTTP, proxy_host='localhost', proxy_port=8000)
-      """
-      self.proxy_type, self.proxy_host, self.proxy_port, self.proxy_rdns, self.proxy_user, self.proxy_pass = proxy_type, proxy_host, proxy_port, proxy_rdns, proxy_user, proxy_pass
+    def __init__(self, proxy_type, proxy_host, proxy_port,
+        proxy_rdns=None, proxy_user=None, proxy_pass=None):
+        """The parameter proxy_type must be set to one of socks.PROXY_TYPE_XXX
+        constants. For example:
 
-  def astuple(self):
-    return (self.proxy_type, self.proxy_host, self.proxy_port, self.proxy_rdns,
-        self.proxy_user, self.proxy_pass)
+        p = ProxyInfo(proxy_type=socks.PROXY_TYPE_HTTP,
+            proxy_host='localhost', proxy_port=8000)
+        """
+        self.proxy_type = proxy_type
+        self.proxy_host = proxy_host
+        self.proxy_port = proxy_port
+        self.proxy_rdns = proxy_rdns
+        self.proxy_user = proxy_user
+        self.proxy_pass = proxy_pass
 
-  def isgood(self):
-    return (self.proxy_host != None) and (self.proxy_port != None)
+    def astuple(self):
+        return (self.proxy_type, self.proxy_host, self.proxy_port,
+            self.proxy_rdns, self.proxy_user, self.proxy_pass)
+
+    def isgood(self):
+        return (self.proxy_host != None) and (self.proxy_port != None)
+
+    @classmethod
+    def from_environment(cls, method='http'):
+        """
+        Read proxy info from the environment variables.
+        """
+        if method not in ['http', 'https']:
+          return
+
+        env_var = method + '_proxy'
+        url = os.environ.get(env_var, os.environ.get(env_var.upper()))
+        if not url:
+          return
+        pi = cls.from_url(url, method)
+
+        no_proxy = os.environ.get('no_proxy', os.environ.get('NO_PROXY', ''))
+        bypass_hosts = []
+        if no_proxy:
+          bypass_hosts = no_proxy.split(',')
+        # special case, no_proxy=* means all hosts bypassed
+        if no_proxy == '*':
+          bypass_hosts = AllHosts
+
+        pi.bypass_hosts = bypass_hosts
+        return pi
+
+    @classmethod
+    def from_url(cls, url, method='http'):
+        """
+        Construct a ProxyInfo from a URL (such as http_proxy env var)
+        """
+        url = urlparse.urlparse(url)
+        username = None
+        password = None
+        port = None
+        if '@' in url[1]:
+          ident, host_port = url[1].split('@', 1)
+          if ':' in ident:
+            username, password = ident.split(':', 1)
+          else:
+            password = ident
+        else:
+          host_port = url[1]
+        if ':' in host_port:
+          host, port = host_port.split(':', 1)
+        else:
+          host = host_port
+
+        if port:
+            port = int(port)
+        else:
+            port = dict(https=443, http=80)[method]
+
+        proxy_type = 3 # socks.PROXY_TYPE_HTTP
+        return cls(
+            proxy_type = proxy_type,
+            proxy_host = host,
+            proxy_port = port,
+            proxy_user = username or None,
+            proxy_pass = password or None,
+        )
+
+    def applies_to(self, hostname):
+        return not self.bypass_host(hostname)
+
+    def bypass_host(self, hostname):
+        """Has this host been excluded from the proxy config"""
+        if self.bypass_hosts is AllHosts:
+          return True
+
+        bypass = False
+        for domain in self.bypass_hosts:
+          if hostname.endswith(domain):
+            bypass = True
+
+        return bypass
 
 
 class HTTPConnectionWithTimeout(httplib.HTTPConnection):
@@ -784,7 +878,7 @@ class HTTPConnectionWithTimeout(httplib.HTTPConnection):
                 if self.debuglevel > 0:
                     print "connect: (%s, %s)" % (self.host, self.port)
 
-                self.sock.connect(sa)
+                self.sock.connect((self.host, self.port) + sa[2:])
             except socket.error, msg:
                 if self.debuglevel > 0:
                     print 'connect fail:', (self.host, self.port)
@@ -867,7 +961,7 @@ class HTTPSConnectionWithTimeout(httplib.HTTPSConnection):
             host_re = host.replace('.', '\.').replace('*', '[^.]*')
             if re.search('^%s$' % (host_re,), hostname, re.I):
                 return True
-            return False
+        return False
 
     def connect(self):
         "Connect to a host on a given (SSL) port."
@@ -932,6 +1026,9 @@ SCHEME_TO_CONNECTION = {
 
 # Use a different connection object for Google App Engine
 try:
+  from google.appengine.api import apiproxy_stub_map
+  if apiproxy_stub_map.apiproxy.GetStub('urlfetch') is None:
+    raise ImportError  # Bail out; we're not actually running on App Engine.
   from google.appengine.api.urlfetch import fetch
   from google.appengine.api.urlfetch import InvalidURLError
   from google.appengine.api.urlfetch import DownloadError
@@ -977,7 +1074,8 @@ try:
             deadline=self.timeout,
             validate_certificate=self.validate_certificate)
         self.response = ResponseDict(response.headers)
-        self.response['status'] = response.status_code
+        self.response['status'] = str(response.status_code)
+        self.response.status = response.status_code
         setattr(self.response, 'read', lambda : response.content)
 
       # Make sure the exceptions raised match the exceptions expected.
@@ -987,7 +1085,10 @@ try:
         raise httplib.HTTPException()
 
     def getresponse(self):
-      return self.response
+      if self.response:
+        return self.response
+      else:
+        raise httplib.HTTPException()
 
     def set_debuglevel(self, level):
       pass
@@ -1030,11 +1131,10 @@ class Http(object):
 
 and more.
     """
-    def __init__(self, cache=None, timeout=None, proxy_info=None,
+    def __init__(self, cache=None, timeout=None,
+                 proxy_info=ProxyInfo.from_environment,
                  ca_certs=None, disable_ssl_certificate_validation=False):
         """
-        The value of proxy_info is a ProxyInfo instance.
-
         If 'cache' is a string then it is used as a directory name for
         a disk cache. Otherwise it must be an object that supports the
         same interface as FileCache.
@@ -1043,6 +1143,13 @@ and more.
         then Python's default timeout for sockets will be used. See
         for example the docs of socket.setdefaulttimeout():
         http://docs.python.org/library/socket.html#socket.setdefaulttimeout
+
+        `proxy_info` may be:
+          - a callable that takes the http scheme ('http' or 'https') and
+            returns a ProxyInfo instance per request. By default, uses
+            ProxyInfo.from_environment.
+          - a ProxyInfo instance (static proxy config).
+          - None (proxy disabled).
 
         ca_certs is the path of a file containing root CA certificates for SSL
         server certificate validation.  By default, a CA cert file bundled with
@@ -1154,7 +1261,6 @@ and more.
                     conn.close()
                     conn.connect()
                     continue
-                pass
             try:
                 response = conn.getresponse()
             except (socket.error, httplib.HTTPException):
@@ -1292,6 +1398,8 @@ a string that contains the response entity body.
                 scheme = 'https'
                 authority = domain_port[0]
 
+            proxy_info = self._get_proxy_info(scheme, authority)
+
             conn_key = scheme+":"+authority
             if conn_key in self.connections:
                 conn = self.connections[conn_key]
@@ -1304,21 +1412,21 @@ a string that contains the response entity body.
                         conn = self.connections[conn_key] = connection_type(
                                 authority, key_file=certs[0][0],
                                 cert_file=certs[0][1], timeout=self.timeout,
-                                proxy_info=self.proxy_info,
+                                proxy_info=proxy_info,
                                 ca_certs=self.ca_certs,
                                 disable_ssl_certificate_validation=
                                         self.disable_ssl_certificate_validation)
                     else:
                         conn = self.connections[conn_key] = connection_type(
                                 authority, timeout=self.timeout,
-                                proxy_info=self.proxy_info,
+                                proxy_info=proxy_info,
                                 ca_certs=self.ca_certs,
                                 disable_ssl_certificate_validation=
                                         self.disable_ssl_certificate_validation)
                 else:
                     conn = self.connections[conn_key] = connection_type(
                             authority, timeout=self.timeout,
-                            proxy_info=self.proxy_info)
+                            proxy_info=proxy_info)
                 conn.set_debuglevel(debuglevel)
 
             if 'range' not in headers and 'accept-encoding' not in headers:
@@ -1464,6 +1572,19 @@ a string that contains the response entity body.
 
         return (response, content)
 
+    def _get_proxy_info(self, scheme, authority):
+        """Return a ProxyInfo instance (or None) based on the scheme
+        and authority.
+        """
+        hostname, port = urllib.splitport(authority)
+        proxy_info = self.proxy_info
+        if callable(proxy_info):
+            proxy_info = proxy_info(scheme)
+
+        if (hasattr(proxy_info, 'applies_to')
+            and not proxy_info.applies_to(hostname)):
+            proxy_info = None
+        return proxy_info
 
 
 class Response(dict):

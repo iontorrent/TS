@@ -9,18 +9,31 @@
 #include <math.h>
 #include <pthread.h>
 #include <vector>
+#include <tr1/unordered_map>
+#include <set>
+#include <fstream>
 #include "IonVersion.h"
+
+#include "api/BamReader.h"
+#include "api/SamHeader.h"
+#include "api/BamAlignment.h"
+#include "api/BamWriter.h"
 
 extern "C" {
 	#include "../file-io/sff_definitions.h"
 	#include "../file-io/sff_header.h"
 	#include "../file-io/sff_read_header.h"
 	#include "../file-io/sff_read.h"
+    #include "../file-io/ion_alloc.h"
 }
 #include "SmithWaterman.h"
 #include "semaphore.h"
 
+#define DEAFAUL_QUALITY 62
+
 using namespace ion;
+using namespace std;
+using namespace BamTools;
 
 /* D E F I N E S *************************************************************/
 #define VERSION "0.1.0"
@@ -33,14 +46,11 @@ using namespace ion;
 #define MAX_NUM_THREADS 10
 #define MAX_PAIRS_PER_THREAD 10000
 
-
 #ifdef _DEBUG
-	 const int DEBUG = 1;
+	const int DEBUG = 1;
 #else
-	 const int DEBUG = 0;
+	const int DEBUG = 0;
 #endif
-
-//const int DEBUG = 1;
 
 /* P R O T O T Y P E S *******************************************************/
 void help_message(void);
@@ -49,7 +59,8 @@ void process_options(int argc, char *argv[]);
 void process_sff(char *sff_file, char *sff_file_rev,  char *fastq_file, char *out_sff_file, int trim_flag);
 char* getBasename(char *path);
 void tokenizeName(char *name_fwd, char *name_rev, int fwdlen, int revlen, int * fwd_x, int *fwd_y, int *rev_x, int *rev_y);
-int getNextSFFPair( int numReads, bool *fwd, bool *rev, FILE *sff_fp, FILE *sff_fp_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev);
+//int getNextSFFPair( int numReads, bool *fwd, bool *rev, FILE *sff_fp, FILE *sff_fp_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev);
+int getNextSFFPair( int numReads, bool *fwd, bool *rev, BamReader *pBamReader, BamReader *pBamReader_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev);
 
 std::string intToString(int x, int width);
 std::string reverseComplement(std::string a);
@@ -65,20 +76,20 @@ void construct_fastq_entry(FILE *fp,
 			   int nflows,
 			   uint8_t *flow_index, uint8_t *flow_index_rev);
 
-void output_fastq_entry(FILE *fp, char *name, std::string bases, uint8_t *quality, int nbases, int left_trim);
+void output_fastq_entry(FILE *fp, char *name, std::string bases, int left_trim);
 
 int roundsff(double x);
 int errorCorrect(Alignment *alignment,  int*, int*, uint16_t *, uint16_t *,  char *, uint16_t, char *, uint16_t, ion_string_t *, ion_string_t *,
-				uint16_t **, uint8_t **, uint8_t **, char **, int *, int *, bool *, int nbasesRev, 
+				uint16_t **, uint8_t **, uint8_t **, char **, char **, int *, int *, bool *, int nbasesRev, 
 				int *mergedRegionStartBase, int *mergedRegionStopBase,  int *mergedRegionStartBaseFwd, int *mergedRegionStopBaseFwd,
 				int *mergedRegionStartBaseRev, int *mergedRegionStopBaseRev, bool regionInfo);
 
-void adjustRegionPositions(int totalFwdFlows, int totalRevFlows, std::string regionFwdFlowAligned, std::string regionRevFlowAligned, int *flowIndexFwdAligned,int *flowIndexRevAligned, 
-				uint16_t *flow_fwd_signal, uint16_t *flow_rev_signal, int &leftSafeBand, int &rightSafeBand, int &fwdStartOffset, int &fwdStopOffset, 
-				int &revStartOffset, int &revStopOffset); 
+void refineFlowAlignment(int *flowIndexFwd, int *flowIndexRev,std::string &fwdFlowAligne, std::string &revFlowAligned, char *flow_seq_fwd, char *flow_seq_rev, uint16_t *flow_sig_fwd, uint16_t *flow_sig_rev);
+std::string refineGapRegion(int *flowIndexFwd, int *flowIndexRev,std::string &flowFwdAligned, std::string &flowRevAligned, char *flow_seq_fwd, char *flow_seq_rev, uint16_t *flow_sig_fwd, uint16_t *flow_sig_rev, int reg_start, int reg_stop, bool gaps_on_fwd);
+
 
 /* G L O B A L S *************************************************************/
-char fastq_file[FASTQ_FILENAME_MAX_LENGTH] = { '\0' };
+char output_fastq_file[FASTQ_FILENAME_MAX_LENGTH] = { '\0' };
 char output_sff_file[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 char output_sff_file_corrected[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 char output_sff_file_singleton_fwd[SFF_FILENAME_MAX_LENGTH] = { '\0' };
@@ -90,12 +101,24 @@ char output_merged_region_file_fwd[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 char output_merged_region_file_rev[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 char output_statistics_file[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 
-FILE *sff_fp, *sff_fp_rev, *fastq_fp, *out_sff_fp, *out_sff_fwd_fp, *out_sff_rev_fp, *out_sff_paired_fwd_fp, *out_sff_paired_rev_fp;
+FILE *fastq_fp; //*sff_fp, *sff_fp_rev, *out_sff_fp, *out_sff_fwd_fp, *out_sff_rev_fp, *out_sff_paired_fwd_fp, *out_sff_paired_rev_fp;
 FILE *region_merged_fp, *region_merged_fwd_fp, *region_merged_rev_fp;  
 FILE *output_stats_fp;
  
 char sff_file_fwd[SFF_FILENAME_MAX_LENGTH] = { '\0' };
 char sff_file_rev[SFF_FILENAME_MAX_LENGTH] = { '\0' };
+
+//variables and functions for the handling of strand bias
+char input_strand_bias_file_fwd[SFF_FILENAME_MAX_LENGTH] = { '\0' };
+char input_strand_bias_file_rev[SFF_FILENAME_MAX_LENGTH] = { '\0' };
+bool has_strand_bias_info_fwd = false;
+bool has_strand_bias_info_rev = false;
+std::tr1::unordered_map<std::string, std::set<int> > strand_bias_flow_index_map_fwd;
+std::tr1::unordered_map<std::string, std::set<int> > strand_bias_flow_index_map_rev;
+bool build_strand_bias_map(std::string strand_bias_file, std::tr1::unordered_map<std::string, std::set<int> > *bias_map);
+bool find_read_in_bias_map(std::string read_name, std::tr1::unordered_map<std::string, std::set<int> > *bias_map, std::set<int> *bias_flow_index_set);
+bool find_flow_index_with_bias(std::set<int> bias_flow_index_set, int flow_index);
+
 char flow_order[64] = FLOW_ORDER;
 int skipFWD = 0;
 int skipREV = 0;
@@ -117,6 +140,9 @@ int totalFlowLengthFwd = 260; //default values, changed later from sff read head
 int totalFlowLengthRev = 260;
 bool outputIdenticalOnly = false;
 
+BamWriter bamWriter_c, bamWriter_f, bamWriter_r, bamWriter_fo, bamWriter_ro;
+string rname, rname_rev;
+
 //create two couting semaphores to keep track of max number of threads currently running and max number of total threads opened
 semaphore_t max_threads_sem;
 semaphore_t total_threads_sem;
@@ -129,13 +155,15 @@ struct sff_pair {
 	sff_read_header_t *rh_rev;
 	sff_read_t *rd;
 	sff_read_t *rd_rev;
+	string* fastqString;
 	int merged_region_start_base;
 	int merged_region_stop_base;
 	int merged_region_start_base_fwd;
 	int merged_region_stop_base_fwd;
 	int merged_region_start_base_rev;
 	int merged_region_stop_base_rev;
-	sff_pair():fwd_present(0),rev_present(0),isCorrected(0), rh(NULL),rh_rev(NULL),rd(NULL),rd_rev(NULL), 
+	
+	sff_pair():fwd_present(0),rev_present(0),isCorrected(0), rh(NULL),rh_rev(NULL),rd(NULL),rd_rev(NULL), fastqString(NULL),
 			merged_region_start_base(0), merged_region_stop_base(0),
 			merged_region_start_base_fwd(0), merged_region_stop_base_fwd(0),
 			merged_region_start_base_rev(0), merged_region_stop_base_rev(0) {
@@ -157,11 +185,15 @@ bool dump_region_info = false;
 
 /* M A I N *******************************************************************/
 int main(int argc, char *argv[]) {
-	std::cout << "PROGRAM : PairedEnd ErrorCorrection SFF " << std::endl;
+    std::cout << "PROGRAM : PairedEnd ErrorCorrection BAM " << std::endl;
 	std::cout << "Version : " << IonVersion::GetVersion() << " (r" << IonVersion::GetSvnRev() << ")" << std::endl;
 	std::cout << "Author  : Sowmi Utiramerur " << std::endl;
     process_options(argc, argv);
-    process_sff(sff_file_fwd,sff_file_rev, fastq_file, output_sff_file_corrected, trim_flag);
+    if(has_strand_bias_info_fwd)
+        has_strand_bias_info_fwd = build_strand_bias_map(input_strand_bias_file_fwd, &strand_bias_flow_index_map_fwd);
+    if(has_strand_bias_info_rev)
+        has_strand_bias_info_rev = build_strand_bias_map(input_strand_bias_file_rev, &strand_bias_flow_index_map_rev);
+    process_sff(sff_file_fwd,sff_file_rev, output_fastq_file, output_sff_file_corrected, trim_flag);
 
     return 0;
 }
@@ -169,16 +201,18 @@ int main(int argc, char *argv[]) {
 /* F U N C T I O N S *********************************************************/
 void
 help_message() {
-    fprintf(stdout, "Usage: %s %s %s %s\n", PRG_NAME, "[options]", "<Fwd sff_file>", "<Reverse sff_file>");
+    fprintf(stdout, "Usage: %s %s %s %s\n", PRG_NAME, "[options]", "<Fwd bam_file>", "<Reverse bam_file>");
     fprintf(stdout, "\t%-20s%-20s\n", "-h", "This help message");
     fprintf(stdout, "\t%-20s%-20s\n", "-v", "Program and version information");
     fprintf(stdout, "\t%-20s%-20s %s %s\n",
-                  	" -s <corrected sff file name>",
+                    " -s <corrected bam file name>",
 					" -n <number of threads>",
 					" -r 'dump merge region information' "
 					" -a 'output only reads that are identical in Fwd and Reverse tags - Increased accuracy, lower throughput' "
-                    " Input SFF file from Fwd sequenceing",
-                    " Input SFF file from Reverse sequencing");
+                    " -b <system bias file name from forward run> "
+                    " -c <system bias file name from reverse run> "
+                    " Input bam file from Fwd sequenceing",
+                    " Input bam file from Reverse sequencing");
 }
 
 void
@@ -206,9 +240,12 @@ process_options(int argc, char *argv[]) {
     int c;
     int index;
    
-	char *opt_so_value = NULL;
+	char *opt_so_value = NULL;    
 	char *opt_num_threads = NULL;
-    while( (c = getopt(argc, argv, "hvarn:s:")) != -1 ) {
+    char *opt_bias_file_fwd = NULL;
+    char *opt_bias_file_rev= NULL;
+
+    while( (c = getopt(argc, argv, "hvarn:s:b:c:")) != -1 ) {
 		
         switch(c) {
             case 'h':
@@ -221,7 +258,6 @@ process_options(int argc, char *argv[]) {
                 break;
          	case 's':
                 opt_so_value = optarg;
-				
                 break;
             case 'n':
                 opt_num_threads = optarg;   
@@ -234,17 +270,34 @@ process_options(int argc, char *argv[]) {
 			case 'a':
 				outputIdenticalOnly = true;
 				break;
-             default:
+            case 'b':
+                opt_bias_file_fwd = optarg;
+                break;
+            case 'c':
+                opt_bias_file_rev = optarg;
+                break;
+            default:
                 abort();
         }
     }
     
 	if ( opt_so_value != NULL ) {
         strncpy(output_sff_file, opt_so_value, SFF_FILENAME_MAX_LENGTH-1);
-        output_sff_file[SFF_FILENAME_MAX_LENGTH-1]='\0';
-		
+        output_sff_file[SFF_FILENAME_MAX_LENGTH-1]='\0';		
     }
 	
+    if ( opt_bias_file_fwd != NULL ) {
+        strncpy(input_strand_bias_file_fwd, opt_bias_file_fwd, SFF_FILENAME_MAX_LENGTH-1);
+        input_strand_bias_file_fwd[SFF_FILENAME_MAX_LENGTH-1]='\0';
+        has_strand_bias_info_fwd = true;
+    }
+
+    if ( opt_bias_file_rev != NULL ) {
+        strncpy(input_strand_bias_file_rev, opt_bias_file_rev, SFF_FILENAME_MAX_LENGTH-1);
+        input_strand_bias_file_rev[SFF_FILENAME_MAX_LENGTH-1]='\0';
+        has_strand_bias_info_rev = true;
+    }
+
 	if (opt_num_threads != NULL) {
 		max_threads = atoi(opt_num_threads);
 	}
@@ -253,16 +306,18 @@ process_options(int argc, char *argv[]) {
 	
 	char basename[SFF_FILENAME_MAX_LENGTH] = { '\0' };
   	getBaseName(output_sff_file, basename);
+	strcpy(output_fastq_file,basename);
+	strcat(output_fastq_file, "_corrected.fastq");
 	strcpy(output_sff_file_corrected,basename);
-	strcat(output_sff_file_corrected, "_corrected.sff");
+	strcat(output_sff_file_corrected, "_corrected.bam");
 	strcpy(output_sff_file_singleton_fwd, basename);
-	strcat(output_sff_file_singleton_fwd, "_Singleton_Fwd.sff");
+	strcat(output_sff_file_singleton_fwd, "_Singleton_Fwd.bam");
 	strcpy(output_sff_file_singleton_rev, basename);
-	strcat(output_sff_file_singleton_rev, "_Singleton_Rev.sff");
+	strcat(output_sff_file_singleton_rev, "_Singleton_Rev.bam");
 	strcpy(output_sff_file_paired_fwd, basename);
-	strcat(output_sff_file_paired_fwd, "_Paired_Fwd.sff");
+	strcat(output_sff_file_paired_fwd, "_Paired_Fwd.bam");
 	strcpy(output_sff_file_paired_rev, basename);
-	strcat(output_sff_file_paired_rev, "_Paired_Rev.sff");
+	strcat(output_sff_file_paired_rev, "_Paired_Rev.bam");
 	strcpy(output_statistics_file, basename);
 	strcat(output_statistics_file, "_statistics_info.txt");
 	
@@ -284,7 +339,7 @@ process_options(int argc, char *argv[]) {
 	
     if (argc - index < 2) {
 	
-		fprintf(stderr, "[ERROR] Need to specify atleast two SFF files as input (Fwd and Reverse runs) \n");
+        fprintf(stderr, "[ERROR] Need to specify at least two BAM files as input (Fwd and Reverse runs) \n");
 		help_message();
 		exit(1);
     }
@@ -299,7 +354,7 @@ process_options(int argc, char *argv[]) {
     /* ensure that a sff file was at least passed in! */
     if ( !strlen(sff_file_fwd) || !strlen(sff_file_rev) ) {
         fprintf(stderr, "%s %s '%s %s' %s\n",
-                "[err] Need to specify two sff files!",
+                "[err] Need to specify two BAM files!",
                 "See", PRG_NAME, "-h", "for usage!");
         exit(1);
     }
@@ -414,7 +469,7 @@ void *process_sff_pairs(void *ptr)
 			
 			flow_index_sum = sumFlowIndex(flow_index, nbases, left_clip); 
 			flow_index_rev_sum = reverseFlowIndex(flow_index_rev, nbases_rev, left_clip_rev);			
-		
+			
 			alignment = aligner->align(str1, revComplement_str2, 2, 0.5, -1); //smith waterman alignment of fwd and rev bases
 			alignment->setName1(name);
 			alignment->setName2(name_rev);
@@ -424,6 +479,7 @@ void *process_sff_pairs(void *ptr)
 				uint8_t *corr_flow_index ;
 				uint8_t *corr_quality ;
 				char *corr_bases;
+				char *corr_fastq_bases;
 				int totalBases = 0;
 				int mergedRegionStartBase = 0;
 				int mergedRegionStopBase = 0;
@@ -436,7 +492,7 @@ void *process_sff_pairs(void *ptr)
 				bool isIdentical = false;
 				
 				totalBases = errorCorrect(alignment, flow_index_sum, flow_index_rev_sum, flow, flow_rev, h->flow->s, h->flow_length, h_rev->flow->s, h_rev->flow_length,
-												quality, quality_rev, &corr_flow, &corr_flow_index, &corr_quality, &corr_bases, &newLeftClip, &newRightClip, &isIdentical, nbases_rev,
+												quality, quality_rev, &corr_flow, &corr_flow_index, &corr_quality, &corr_bases, &corr_fastq_bases, &newLeftClip, &newRightClip, &isIdentical, nbases_rev,
 												&mergedRegionStartBase, &mergedRegionStopBase, &mergedRegionStartBaseFwd, &mergedRegionStopBaseFwd, &mergedRegionStartBaseRev, &mergedRegionStopBaseRev, dump_region_info);	
 			
 				if (isIdentical && outputIdenticalOnly) {
@@ -460,42 +516,76 @@ void *process_sff_pairs(void *ptr)
 					for(int i=0; i<totalBases; i++){
 						rd_corrected->quality->s[i] = corr_quality[i];			
 					}
-					rh->n_bases = totalBases;
+                    //rh->n_bases = totalBases;
 					
+
 					if (newRightClip > 0)
 					{
 						rh->clip_qual_right = newRightClip;
+                        rh->clip_adapter_right = newRightClip;
 						
 					}
 					else if (right_clip_orig > totalBases) {
                         rh->clip_qual_right = totalBases;
+                        rh->clip_adapter_right = totalBases;
                     }
+                    rh->n_bases = rh->clip_qual_right + 1;
+
+/*
+                    rh->clip_adapter_right = totalBases + 1;
+                    rh->clip_qual_right = totalBases + 1;
+*/
 
 					localNumCorrected++;
 					//release original read data rd as its no longer needed
 					sff_read_destroy(rd);
 					current_pair->rd = rd_corrected;
 					current_pair->isCorrected = 1;		
-					free(corr_bases);
-					free(corr_quality);
+					
 					
 					if(dump_region_info){					
 						
 						current_pair->merged_region_start_base = mergedRegionStartBase - left_clip;
 						current_pair->merged_region_stop_base = mergedRegionStopBase - left_clip;
-						current_pair->merged_region_start_base_fwd = mergedRegionStartBaseFwd;
-						current_pair->merged_region_stop_base_fwd = mergedRegionStopBaseFwd;						
-						//revert positions for reverse read
-						int temp = nbases_rev -1 - mergedRegionStopBaseRev;
-						mergedRegionStopBaseRev = nbases_rev -1 - mergedRegionStartBaseRev; 
-						mergedRegionStartBaseRev = temp;				
-						current_pair->merged_region_start_base_rev = mergedRegionStartBaseRev;
-						current_pair->merged_region_stop_base_rev = mergedRegionStopBaseRev;						
+						current_pair->merged_region_start_base_fwd = mergedRegionStartBaseFwd - left_clip;
+						current_pair->merged_region_stop_base_fwd = mergedRegionStopBaseFwd - left_clip;		
+						//revert positions for reverse read																					
+						current_pair->merged_region_start_base_rev = mergedRegionStartBaseRev - left_clip_rev;
+						current_pair->merged_region_stop_base_rev = mergedRegionStopBaseRev - left_clip_rev;						
 						
 					}					
 					
 					//fprintf(stdout,"Name = %s, Iscorrected = %d \n", current_pair->rh->name->s, current_pair->isCorrected);
-			
+					//construct bases and qv for merged Fwd+Rev read to be output only to fastq file
+					/*
+					if (alignment->getStart2() + alignment->getLengthOfSequence2() < (int)revComplement_str2.length()) {
+						string revExtnString = revComplement_str2.substr(alignment->getStart2() + alignment->getLengthOfSequence2());
+						string* mergedFastqBaseString = new string((const char *)corr_bases, rh->clip_qual_right);
+						std::cout << "ERROR: right Clip = " << right_clip << " New right clip = " << newRightClip << " rh clip = " << rh->clip_qual_right << std::endl;
+						std::cout << *mergedFastqBaseString << std::endl;
+						*mergedFastqBaseString = *mergedFastqBaseString + revExtnString;
+						current_pair->fastqString = mergedFastqBaseString;
+						
+							
+							std::cout << revExtnString << std::endl;
+							std::cout << *mergedFastqBaseString << std::endl;
+							std::cout << revComplement_str2 << std::endl;
+						
+					}
+					else 
+						current_pair->fastqString = new string((const char *)corr_bases, rh->clip_qual_right);
+					*/
+					current_pair->fastqString = new string((const char *)corr_fastq_bases);
+					if (DEBUG) {
+					std::cout << "ERROR: right Clip = " << right_clip << " New right clip = " << newRightClip << " rh clip = " << rh->clip_qual_right << std::endl;
+					std::cout << corr_bases << std::endl;
+					std::cout << corr_fastq_bases << std::endl;
+					std::cout << revComplement_str2 << std::endl;
+					}
+					
+					free(corr_fastq_bases);
+					free(corr_bases);
+					free(corr_quality);
 				}
 				else {
 					localNumUnCorrected++;
@@ -547,32 +637,241 @@ void *process_sff_pairs(void *ptr)
 			current_pair = sff_pairs[counter++];
 			
 			if (current_pair->isCorrected) {
-				sff_read_header_write(out_sff_fp, current_pair->rh);
-				sff_read_write(out_sff_fp, h, current_pair->rh, current_pair->rd);
+				//sff_read_header_write(out_sff_fp, current_pair->rh);
+				//sff_read_write(out_sff_fp, h, current_pair->rh, current_pair->rd);
 				
+				//JZ begins
+				BamAlignment bam_alignmentc;
+				bam_alignmentc.SetIsMapped(false);
+				bam_alignmentc.Name = current_pair->rh->name->s;
+				size_t nBases = current_pair->rh->n_bases + 1 - current_pair->rh->clip_qual_left;
+				if(current_pair->rh->clip_qual_right > 0)
+				{
+					nBases = current_pair->rh->clip_qual_right - current_pair->rh->clip_qual_left;
+				}
+				if(nBases > 0)
+				{
+					bam_alignmentc.QueryBases.reserve(nBases);
+					bam_alignmentc.Qualities.reserve(nBases);
+					for (int base = current_pair->rh->clip_qual_left - 1; base < current_pair->rh->clip_qual_right - 1; ++base)
+					{
+						bam_alignmentc.QueryBases.push_back(current_pair->rd->bases->s[base]);
+						bam_alignmentc.Qualities.push_back(current_pair->rd->quality->s[base] + 33);
+					}
+				}
+
+				int clip_flow = 0;
+				for (unsigned int base = 0; base < current_pair->rh->clip_qual_left && base < current_pair->rh->n_bases; ++base)
+				{
+					clip_flow += current_pair->rd->flow_index[base];
+				}
+				if (clip_flow > 0)
+				{
+					clip_flow--;
+				}
+
+                bam_alignmentc.AddTag("RG","Z", rname);
+				bam_alignmentc.AddTag("PG","Z", string("sff2bam"));
+				bam_alignmentc.AddTag("ZF","i", clip_flow); // TODO: trim flow
+				vector<uint16_t> flowgram0(h->flow_length);
+				copy(current_pair->rd->flowgram, current_pair->rd->flowgram + h->flow_length, flowgram0.begin());
+				bam_alignmentc.AddTag("FZ", flowgram0);
+
+				bamWriter_c.SaveAlignment(bam_alignmentc);
+				//JZ ends
+				//std::cout << " Fastq entry for read " << current_pair->rh->name->s << std::endl;
+				//std::cout << " String = " << *current_pair->fastqString << " Clip value = " <<  current_pair->rh->clip_qual_left << std::endl;
+				output_fastq_entry(fastq_fp, current_pair->rh->name->s, *(current_pair->fastqString), current_pair->rh->clip_qual_left);
 				if(dump_region_info){
+					/*
+					std::string read_id(current_pair->rh->name->s);
+					read_id = read_id.substr(6);
+					fprintf(region_merged_fp, "%s\t%d\t%d\n", read_id.c_str(), current_pair->merged_region_start_base, current_pair->merged_region_stop_base);
+					fprintf(region_merged_fwd_fp, "%s\t%d\t%d\n", read_id.c_str(), current_pair->merged_region_start_base_fwd, current_pair->merged_region_stop_base_fwd);
+					fprintf(region_merged_rev_fp, "%s\t%d\t%d\n", read_id.c_str(), current_pair->merged_region_start_base_rev, current_pair->merged_region_stop_base_rev);
+					*/
 					fprintf(region_merged_fp, "%s\t%d\t%d\n", current_pair->rh->name->s, current_pair->merged_region_start_base, current_pair->merged_region_stop_base);
 					fprintf(region_merged_fwd_fp, "%s\t%d\t%d\n", current_pair->rh->name->s, current_pair->merged_region_start_base_fwd, current_pair->merged_region_stop_base_fwd);
-					fprintf(region_merged_rev_fp, "%s\t%d\t%d\n", current_pair->rh_rev->name->s, current_pair->merged_region_start_base_rev, current_pair->merged_region_stop_base_rev);				
+					fprintf(region_merged_rev_fp, "%s\t%d\t%d\n", current_pair->rh_rev->name->s, current_pair->merged_region_start_base_rev, current_pair->merged_region_stop_base_rev);		
+					
 				} 
 				
 				numCorrected++;	
 								
 			}
 			else if (current_pair->fwd_present && current_pair->rev_present) {
-				sff_read_header_write(out_sff_paired_fwd_fp, current_pair->rh);
-				sff_read_write(out_sff_paired_fwd_fp, h, current_pair->rh, current_pair->rd);
-				sff_read_header_write(out_sff_paired_rev_fp, current_pair->rh_rev);
-				sff_read_write(out_sff_paired_rev_fp, h_rev, current_pair->rh_rev, current_pair->rd_rev);
+				//sff_read_header_write(out_sff_paired_fwd_fp, current_pair->rh);
+				//sff_read_write(out_sff_paired_fwd_fp, h, current_pair->rh, current_pair->rd);
+				//sff_read_header_write(out_sff_paired_rev_fp, current_pair->rh_rev);
+				//sff_read_write(out_sff_paired_rev_fp, h_rev, current_pair->rh_rev, current_pair->rd_rev);
+
+				//JZ begins
+				BamAlignment bam_alignmentf;
+				bam_alignmentf.SetIsMapped(false);
+				bam_alignmentf.Name = current_pair->rh->name->s;
+				size_t nBases = current_pair->rh->n_bases + 1 - current_pair->rh->clip_qual_left;
+				if(current_pair->rh->clip_qual_right > 0)
+				{
+					nBases = current_pair->rh->clip_qual_right - current_pair->rh->clip_qual_left;
+				}
+				if(nBases > 0)
+				{
+					bam_alignmentf.QueryBases.reserve(nBases);
+					bam_alignmentf.Qualities.reserve(nBases);
+					for (int base = current_pair->rh->clip_qual_left - 1; base < current_pair->rh->clip_qual_right - 1; ++base)
+					{
+						bam_alignmentf.QueryBases.push_back(current_pair->rd->bases->s[base]);
+						bam_alignmentf.Qualities.push_back(current_pair->rd->quality->s[base] + 33);
+					}
+				}
+
+				int clip_flow = 0;
+				for (unsigned int base = 0; base < current_pair->rh->clip_qual_left && base < current_pair->rh->n_bases; ++base)
+				{
+					clip_flow += current_pair->rd->flow_index[base];
+				}
+				if (clip_flow > 0)
+				{
+					clip_flow--;
+				}
+
+                bam_alignmentf.AddTag("RG","Z", rname);
+				bam_alignmentf.AddTag("PG","Z", string("sff2bam"));
+				bam_alignmentf.AddTag("ZF","i", clip_flow); // TODO: trim flow
+				vector<uint16_t> flowgram0(h->flow_length);
+				copy(current_pair->rd->flowgram, current_pair->rd->flowgram + h->flow_length, flowgram0.begin());
+				bam_alignmentf.AddTag("FZ", flowgram0);
+
+				bamWriter_f.SaveAlignment(bam_alignmentf);
+
+				BamAlignment bam_alignmentr;
+				bam_alignmentr.SetIsMapped(false);
+				bam_alignmentr.Name = current_pair->rh_rev->name->s;
+                nBases = current_pair->rh_rev->n_bases + 1 - current_pair->rh_rev->clip_qual_left;
+				if(current_pair->rh_rev->clip_qual_right > 0)
+				{
+					nBases = current_pair->rh_rev->clip_qual_right - current_pair->rh_rev->clip_qual_left;
+				}
+				if(nBases > 0)
+				{
+					bam_alignmentr.QueryBases.reserve(nBases);
+					bam_alignmentr.Qualities.reserve(nBases);
+					for (int base = current_pair->rh_rev->clip_qual_left - 1; base < current_pair->rh_rev->clip_qual_right - 1; ++base)
+					{
+						bam_alignmentr.QueryBases.push_back(current_pair->rd_rev->bases->s[base]);
+						bam_alignmentr.Qualities.push_back(current_pair->rd_rev->quality->s[base] + 33);
+					}
+				}
+
+                 clip_flow = 0;
+				for (unsigned int base = 0; base < current_pair->rh_rev->clip_qual_left && base < current_pair->rh_rev->n_bases; ++base)
+				{
+					clip_flow += current_pair->rd_rev->flow_index[base];
+				}
+				if (clip_flow > 0)
+				{
+					clip_flow--;
+				}
+
+                bam_alignmentr.AddTag("RG","Z", rname_rev);
+				bam_alignmentr.AddTag("PG","Z", string("sff2bam"));
+				bam_alignmentr.AddTag("ZF","i", clip_flow); // TODO: trim flow
+                vector<uint16_t> flowgram1(h_rev->flow_length);
+                copy(current_pair->rd_rev->flowgram, current_pair->rd_rev->flowgram + h_rev->flow_length, flowgram1.begin());
+                bam_alignmentr.AddTag("FZ", flowgram1);
+
+				bamWriter_r.SaveAlignment(bam_alignmentr);
+				//JZ ends
+
 				numUnCorrected++;
 			}
 			else if (current_pair->fwd_present && !current_pair->rev_present) {
-				sff_read_header_write(out_sff_fwd_fp, current_pair->rh);
-				sff_read_write(out_sff_fwd_fp, h, current_pair->rh, current_pair->rd);
+				//sff_read_header_write(out_sff_fwd_fp, current_pair->rh);
+				//sff_read_write(out_sff_fwd_fp, h, current_pair->rh, current_pair->rd);
+
+				//JZ begins
+				BamAlignment bam_alignmentf;
+				bam_alignmentf.SetIsMapped(false);
+				bam_alignmentf.Name = current_pair->rh->name->s;
+				size_t nBases = current_pair->rh->n_bases + 1 - current_pair->rh->clip_qual_left;
+				if(current_pair->rh->clip_qual_right > 0)
+				{
+					nBases = current_pair->rh->clip_qual_right - current_pair->rh->clip_qual_left;
+				}
+				if(nBases > 0)
+				{
+					bam_alignmentf.QueryBases.reserve(nBases);
+					bam_alignmentf.Qualities.reserve(nBases);
+					for (int base = current_pair->rh->clip_qual_left - 1; base < current_pair->rh->clip_qual_right - 1; ++base)
+					{
+						bam_alignmentf.QueryBases.push_back(current_pair->rd->bases->s[base]);
+						bam_alignmentf.Qualities.push_back(current_pair->rd->quality->s[base] + 33);
+					}
+				}
+
+				int clip_flow = 0;
+				for (unsigned int base = 0; base < current_pair->rh->clip_qual_left && base < current_pair->rh->n_bases; ++base)
+				{
+					clip_flow += current_pair->rd->flow_index[base];
+				}
+				if (clip_flow > 0)
+				{
+					clip_flow--;
+				}
+
+                bam_alignmentf.AddTag("RG","Z", rname);
+				bam_alignmentf.AddTag("PG","Z", string("sff2bam"));
+				bam_alignmentf.AddTag("ZF","i", clip_flow); // TODO: trim flow
+				vector<uint16_t> flowgram0(h->flow_length);
+				copy(current_pair->rd->flowgram, current_pair->rd->flowgram + h->flow_length, flowgram0.begin());
+				bam_alignmentf.AddTag("FZ", flowgram0);
+
+				bamWriter_fo.SaveAlignment(bam_alignmentf);
+				//JZ ends
 			}
 			else if (current_pair->rev_present && !current_pair->fwd_present) {
-				sff_read_header_write(out_sff_rev_fp, current_pair->rh_rev);
-				sff_read_write(out_sff_rev_fp, h_rev, current_pair->rh_rev, current_pair->rd_rev);
+				//sff_read_header_write(out_sff_rev_fp, current_pair->rh_rev);
+				//sff_read_write(out_sff_rev_fp, h_rev, current_pair->rh_rev, current_pair->rd_rev);
+
+				//JZ begins
+				BamAlignment bam_alignmentr;
+				bam_alignmentr.SetIsMapped(false);
+				bam_alignmentr.Name = current_pair->rh_rev->name->s;
+				size_t nBases = current_pair->rh_rev->n_bases + 1 - current_pair->rh_rev->clip_qual_left;
+				if(current_pair->rh_rev->clip_qual_right > 0)
+				{
+					nBases = current_pair->rh_rev->clip_qual_right - current_pair->rh_rev->clip_qual_left;
+				}
+				if(nBases > 0)
+				{
+					bam_alignmentr.QueryBases.reserve(nBases);
+					bam_alignmentr.Qualities.reserve(nBases);
+					for (int base = current_pair->rh_rev->clip_qual_left - 1; base < current_pair->rh_rev->clip_qual_right - 1; ++base)
+					{
+						bam_alignmentr.QueryBases.push_back(current_pair->rd_rev->bases->s[base]);
+						bam_alignmentr.Qualities.push_back(current_pair->rd_rev->quality->s[base] + 33);
+					}
+				}
+
+				int clip_flow = 0;
+				for (unsigned int base = 0; base < current_pair->rh_rev->clip_qual_left && base < current_pair->rh_rev->n_bases; ++base)
+				{
+					clip_flow += current_pair->rd_rev->flow_index[base];
+				}
+				if (clip_flow > 0)
+				{
+					clip_flow--;
+				}
+
+                bam_alignmentr.AddTag("RG","Z", rname_rev);
+				bam_alignmentr.AddTag("PG","Z", string("sff2bam"));
+				bam_alignmentr.AddTag("ZF","i", clip_flow); // TODO: trim flow
+				vector<uint16_t> flowgram0(h_rev->flow_length);
+				copy(current_pair->rd_rev->flowgram, current_pair->rd_rev->flowgram + h_rev->flow_length, flowgram0.begin());
+				bam_alignmentr.AddTag("FZ", flowgram0);
+
+				bamWriter_ro.SaveAlignment(bam_alignmentr);
+				//JZ ends
 			}
 			
 			//release memory 
@@ -588,6 +887,7 @@ void *process_sff_pairs(void *ptr)
 				sff_read_header_destroy(current_pair->rh_rev);
 				sff_read_destroy(current_pair->rd_rev);
 			}
+			delete current_pair->fastqString;
 			//fprintf(stdout, "finished writing record number %d \n", counter);
 			
 		}
@@ -648,7 +948,7 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 		fprintf(stdout, "fwd file = %s \n", sff_file);
 		fprintf(stdout, "rev file = %s \n", sff_file_rev);
 	}
-    if ( (sff_fp = fopen(sff_file, "r")) == NULL ) {
+/*    if ( (sff_fp = fopen(sff_file, "r")) == NULL ) {
         fprintf(stderr,
                 "[ERROR] Could not open file '%s' for reading.\n", sff_file);
         exit(1);
@@ -659,7 +959,7 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
                 "[ERROR] Could not open file '%s' for reading.\n", sff_file_rev);
         exit(1);
     }
-
+	
 	if ( (out_sff_fp = fopen(output_sff_file_corrected, "wb")) == NULL) {
 		fprintf(stderr,
                 "[ERROR] Could not open SFF file '%s' for writing.\n", output_sff_file_corrected);
@@ -687,7 +987,7 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
                 "[ERROR] Could not open SFF file '%s' for writing.\n", out_sff_file);
         exit(1);
     }
-
+*/
 	if ( (output_stats_fp = fopen(output_statistics_file, "w" )) == NULL) {
 		fprintf(stderr,
                 "[ERROR] Could not output Statistics file '%s' for writing.\n", output_statistics_file);
@@ -710,17 +1010,163 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 	        exit(1);
 	    }		
 	}
-
 	
-	h = sff_header_read(sff_fp);
-	h_rev = sff_header_read(sff_fp_rev);
+//	h = sff_header_read(sff_fp);
+//	h_rev = sff_header_read(sff_fp_rev);
 
+	//JZ begins
+    BamReader bamReader;
+    if (!bamReader.Open(sff_file))
+    {
+		fprintf(stderr,
+                "[ERROR] Could not open file '%s' for reading.\n", sff_file);
+        exit(1);
+    }
+    BamReader bamReader_rev;
+    if (!bamReader_rev.Open(sff_file_rev))
+    {
+		bamReader.Close();
+		fprintf(stderr,
+                "[ERROR] Could not open file '%s' for reading.\n", sff_file_rev);
+        exit(1);
+    }
+
+	SamHeader samHeader = bamReader.GetHeader();
+    if(!samHeader.HasReadGroups())
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+        fprintf(stderr,
+                "[ERROR] there is no read group in file '%s'.\n", sff_file);
+        exit(1);
+    }
+
+    string flow_order;
+    string key;
+    for (SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr )
+    {
+        if(itr->HasFlowOrder())
+        {
+            flow_order = itr->FlowOrder;
+        }
+        if(itr->HasKeySequence())
+        {
+            key = itr->KeySequence;
+        }
+    }
+	    
+    uint16_t nFlows = flow_order.length();
+    uint16_t nKeys = key.length();
+    if(!nFlows || nKeys < 1)
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+        fprintf(stderr,
+                "[ERROR] there is no flow order or key in file '%s'.\n", sff_file);
+        exit(1);
+    }
+
+    h = sff_header_init1(0, nFlows, flow_order.c_str(), key.c_str());
+
+	SamHeader samHeader_rev = bamReader_rev.GetHeader();
+    if(!samHeader_rev.HasReadGroups())
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+        fprintf(stderr,
+                "[ERROR] there is no read group in file '%s'.\n", sff_file_rev);
+        exit(1);
+    }
+
+    string flow_order_rev;
+    string key_rev;
+    for (SamReadGroupIterator itr = samHeader_rev.ReadGroups.Begin(); itr != samHeader_rev.ReadGroups.End(); ++itr )
+    {
+        if(itr->HasFlowOrder())
+        {
+            flow_order_rev = itr->FlowOrder;
+        }
+        if(itr->HasKeySequence())
+        {
+            key_rev = itr->KeySequence;
+        }
+    }
+	    
+    uint16_t nFlows_rev = flow_order_rev.length();
+    uint16_t nKeys_rev = key_rev.length();
+    if(!nFlows_rev || nKeys_rev < 1)
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+        fprintf(stderr,
+                "[ERROR] there is no flow order or key in file '%s'.\n", sff_file_rev);
+        exit(1);
+    }
+
+    h_rev = sff_header_init1(0, nFlows_rev, flow_order_rev.c_str(), key_rev.c_str());
+
+	RefVector refvec;
+	bamWriter_c.SetCompressionMode(BamWriter::Compressed);
+    if(!bamWriter_c.Open(output_sff_file_corrected, samHeader, refvec))
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+        fprintf(stderr,
+                "[ERROR] Could not open file '%s' for writing.\n", output_sff_file_corrected);
+        exit(1);
+    }
+	bamWriter_f.SetCompressionMode(BamWriter::Compressed);
+    if(!bamWriter_f.Open(output_sff_file_paired_fwd, samHeader, refvec))
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+		bamWriter_c.Close();
+        fprintf(stderr,
+                "[ERROR] Could not open file '%s' for writing.\n", output_sff_file_paired_fwd);
+        exit(1);
+    }
+	bamWriter_fo.SetCompressionMode(BamWriter::Compressed);
+    if(!bamWriter_fo.Open(output_sff_file_singleton_fwd, samHeader, refvec))
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+		bamWriter_c.Close();
+		bamWriter_f.Close();
+        fprintf(stderr,
+                "[ERROR] Could not open file '%s' for writing.\n", output_sff_file_singleton_fwd);
+        exit(1);
+    }
+	bamWriter_r.SetCompressionMode(BamWriter::Compressed);
+    if(!bamWriter_r.Open(output_sff_file_paired_rev, samHeader_rev, refvec))
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+		bamWriter_c.Close();
+		bamWriter_f.Close();
+		bamWriter_fo.Close();
+        fprintf(stderr,
+                "[ERROR] Could not open file '%s' for writing.\n", output_sff_file_paired_rev);
+        exit(1);
+    }
+	bamWriter_ro.SetCompressionMode(BamWriter::Compressed);
+    if(!bamWriter_ro.Open(output_sff_file_singleton_rev, samHeader_rev, refvec))
+    {
+        bamReader.Close();
+		bamReader_rev.Close();
+		bamWriter_c.Close();
+		bamWriter_f.Close();
+		bamWriter_fo.Close();
+		bamWriter_r.Close();
+        fprintf(stderr,
+                "[ERROR] Could not open file '%s' for writing.\n", output_sff_file_singleton_rev);
+        exit(1);
+    }
+	//JZ ends
 	
     //read_sff_common_header(sff_fp, &h);
     //read_sff_common_header(sff_fp_rev, &h_rev);
 
-    //verify_sff_common_header(PRG_NAME, VERSION, &h);
-	
+    //verify_sff_common_header(PRG_NAME, VERSION, &h);	
 	
 	if (DEBUG) {
     printf("size of header: %d \n", (int)sizeof(sff_header_t));
@@ -757,13 +1203,13 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 	totalFlowLengthRev = h_rev->flow_length;
 	
 	//write sff common header first to output SFF file
-	sff_header_write(out_sff_fp, h);
+/*	sff_header_write(out_sff_fp, h);
 	sff_header_write(out_sff_fwd_fp, h);
 	sff_header_write(out_sff_paired_fwd_fp, h);
 	sff_header_write(out_sff_paired_rev_fp, h_rev);
 	sff_header_write(out_sff_rev_fp, h_rev);
 	fseekOffset = sizeof(h->magic) + sizeof(h->index_offset) + sizeof(h->index_length); //seek to this location in file to set the nreads value in header at the end of processing
-	
+*/	
     if ( !strlen(fastq_file) ) {
         fastq_fp = stdout;
     }
@@ -776,20 +1222,18 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
         }
     }
 
-
 	int readsPerThreadCounter = 0;
 
     int totalReads = 0;
     bool fwd_present = 0;
     bool rev_present = 0;
-	int thread_ret_value = 0;
-	
-   
+	int thread_ret_value = 0;   
    
 	sff_pairs_thread *sffPairArray = NULL;
-	
-    while (!getNextSFFPair(totalReads, &fwd_present, &rev_present, sff_fp, sff_fp_rev, &rh, &rh_rev, &rd, &rd_rev, h, h_rev) )  {
- 		totalReads++;
+
+    //while (!getNextSFFPair(totalReads, &fwd_present, &rev_present, sff_fp, sff_fp_rev, &rh, &rh_rev, &rd, &rd_rev, h, h_rev) )  {
+    while (!getNextSFFPair(totalReads, &fwd_present, &rev_present, &bamReader, &bamReader_rev, &rh, &rh_rev, &rd, &rd_rev, h, h_rev) )  {
+		totalReads++;
 		sff_pair *readPair = new sff_pair();
 		readPair->fwd_present = fwd_present;
 		readPair->rev_present = rev_present;
@@ -894,7 +1338,7 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 	
 	
 	//once all the paired and corrected records are written to sff file, reset the number of reads in sff commonheader
-	h->n_reads = numCorrected;
+/*	h->n_reads = numCorrected;
 	fseek(out_sff_fp, 0, SEEK_SET);
 	sff_header_write(out_sff_fp, h);
 	
@@ -914,10 +1358,7 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 	h_rev->n_reads = numUnCorrected;
 	fseek(out_sff_paired_rev_fp, 0, SEEK_SET);
 	sff_header_write(out_sff_paired_rev_fp, h_rev);
-	
-	
-       
-
+*/ 
     fprintf(output_stats_fp, "Summary Statistics	 \n");
     fprintf(output_stats_fp, "Number of beads present in both FWD and REV = %d \n", both_fwd_rev_present);
     fprintf(output_stats_fp, "Number of beads present just in FWD         = %d \n", fwd_only_present);
@@ -928,22 +1369,30 @@ process_sff(char *sff_file, char *sff_file_rev, char *fastq_file, char *out_sff_
 	sff_header_destroy(h);
 	sff_header_destroy(h_rev);
    
-    fclose(sff_fp);
+/*    fclose(sff_fp);
     fclose(sff_fp_rev);
 	fclose(out_sff_fp);
 	fclose(out_sff_fwd_fp);
 	fclose(out_sff_rev_fp);
 	fclose(out_sff_paired_fwd_fp);
 	fclose(out_sff_paired_rev_fp);
+*/
+	//JZ begins
+    bamReader.Close();
+	bamReader_rev.Close();
+	bamWriter_c.Close();
+	bamWriter_f.Close();
+	bamWriter_fo.Close();
+	bamWriter_r.Close();
+	//JZ ends
 	fclose(output_stats_fp);
+	fclose(fastq_fp);
 	
 	if(dump_region_info){
 		fclose(region_merged_fp);
 		fclose(region_merged_fwd_fp);
 		fclose(region_merged_rev_fp);		
 	}
-	
-
 }
 
 void tokenizeName(char *name_fwd, char *name_rev, int fwdlen, int revlen, int * fwd_x, int *fwd_y, int *rev_x, int *rev_y) {
@@ -1000,8 +1449,8 @@ void tokenizeName(char *name_fwd, char *name_rev, int fwdlen, int revlen, int * 
 
 }
 
-
-int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sff_fp, FILE *sff_fp_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev){
+//int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sff_fp, FILE *sff_fp_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev){
+int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, BamReader *pBamReader, BamReader *pBamReader_rev, sff_read_header_t **rh, sff_read_header_t **rh_rev, sff_read_t **rd, sff_read_t **rd_rev, sff_header_t *h, sff_header_t *h_rev){
    int retVal = 0;
    int EOF_FWD = 0;
    int EOF_REV = 0;
@@ -1022,8 +1471,20 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sf
    (*fwd_present) = 1;
    (*rev_present) = 1;
 
+	//JZ begins   
+	uint16_t nFlows = h->flow_length;
+	uint16_t nKeys = h->key_length;    	
+
+	uint16_t nFlows_rev = h_rev->flow_length;
+	uint16_t nKeys_rev = h_rev->key_length;
+	
+    BamAlignment alignment;
+    vector<uint16_t> flowInt(nFlows);
+    vector<uint16_t> flowInt_rev(nFlows_rev);    
+	//JZ ends
+
    if (numReads == 0) {
-		*rh = sff_read_header_read(sff_fp);
+/*		*rh = sff_read_header_read(sff_fp);
 		EOF_FWD = (*rh==NULL)?1:0;
         if (!EOF_FWD) {
 			*rd = sff_read_read(sff_fp, h, *rh);
@@ -1035,7 +1496,154 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sf
 			*rd_rev = sff_read_read(sff_fp_rev, h_rev, *rh_rev);
 			EOF_REV = (*rd_rev==NULL)?1:0;
 		}
+*/
+        //JZ begins
+   		*rh = NULL;
+		*rd = NULL;
+		EOF_FWD = 1;
+        if(pBamReader->GetNextAlignment(alignment) && alignment.GetTag("FZ", flowInt))
+		{	
+			rname = alignment.Name;
+            int index0 = rname.find(":");
+            rname = rname.substr(0, index0);
+			*rh = sff_read_header_init();
+            (*rh)->name_length = alignment.Name.length();
+            (*rh)->name = ion_string_init(alignment.Name.length()+1);
+            strcpy((*rh)->name->s, (char*)alignment.Name.c_str());
+            (*rh)->n_bases = nKeys + alignment.Length;
+			(*rh)->clip_qual_left = nKeys + 1;
+			(*rh)->clip_adapter_left = 0;	
+			(*rh)->clip_qual_right = (*rh)->n_bases + 1;
+			(*rh)->clip_adapter_right = (*rh)->n_bases + 1;
 
+			*rd = sff_read_init();
+            (*rd)->flowgram = (uint16_t*)ion_malloc(sizeof(uint16_t)*nFlows, __func__, "(*rd)->flowgram");
+            (*rd)->flow_index = (uint8_t*)ion_malloc(sizeof(uint8_t)*((*rh)->n_bases), __func__, "(*rd)->flow_index");
+            (*rd)->bases = ion_string_init((*rh)->n_bases+1);
+            (*rd)->quality = ion_string_init((*rh)->n_bases+1);
+
+            copy(flowInt.begin(), flowInt.end(), (*rd)->flowgram);
+
+            uint32_t nBase = 0;
+			int index = 1;
+			vector<uint16_t>::iterator iter = flowInt.begin();
+			while(nBase < (*rh)->n_bases && iter != flowInt.end())
+			{
+				int nHp = ((*iter) + 50) / 100;
+				if(nHp > 0)
+				{
+					(*rd)->flow_index[nBase] = index;
+					++nBase;
+					--nHp;
+					while(nHp > 0 && nBase < (*rh)->n_bases)
+					{
+						(*rd)->flow_index[nBase] = 0;
+						++nBase;
+						--nHp;
+					}
+					index = 1;
+				}
+				else
+				{
+					++index;
+				}
+
+				++iter;
+			} 	
+					  
+			for(nBase = 0; nBase < nKeys; ++nBase)
+			{
+                (*rd)->bases->s[nBase] = h->key->s[nBase];
+                (*rd)->quality->s[nBase] = DEAFAUL_QUALITY;
+			}
+
+            for(int base = 0; base < alignment.Length; ++base, ++nBase)
+			{
+                (*rd)->bases->s[nBase] = alignment.QueryBases[base];
+                (*rd)->quality->s[nBase] = alignment.Qualities[base] - 33;
+            }
+
+            (*rd)->bases->l = (*rh)->n_bases;
+            (*rd)->quality->l = (*rh)->n_bases;
+            (*rd)->bases->s[(*rd)->bases->l]='\0';
+            (*rd)->quality->s[(*rd)->quality->l]='\0';
+
+			EOF_FWD = 0;
+		}
+
+   		*rh_rev = NULL;
+		*rd_rev = NULL;
+		EOF_REV = 1;
+        if(pBamReader_rev->GetNextAlignment(alignment) && alignment.GetTag("FZ", flowInt_rev))
+		{	
+			rname_rev = alignment.Name;
+			int index1 = rname_rev.find(":");
+			rname_rev = rname_rev.substr(0, index1);
+			*rh_rev = sff_read_header_init();
+            (*rh_rev)->name_length = alignment.Name.length();
+            (*rh_rev)->name = ion_string_init(alignment.Name.length()+1);
+            strcpy((*rh_rev)->name->s,(char*)alignment.Name.c_str());
+            (*rh_rev)->n_bases = nKeys_rev + alignment.Length;
+			(*rh_rev)->clip_qual_left = nKeys_rev + 1;
+			(*rh_rev)->clip_adapter_left = 0;	
+			(*rh_rev)->clip_qual_right = (*rh_rev)->n_bases + 1;
+			(*rh_rev)->clip_adapter_right = (*rh_rev)->n_bases + 1;
+
+			*rd_rev = sff_read_init();
+            (*rd_rev)->flowgram = (uint16_t*)ion_malloc(sizeof(uint16_t)*nFlows_rev, __func__, "(*rd_rev)->flowgram");
+            (*rd_rev)->flow_index = (uint8_t*)ion_malloc(sizeof(uint8_t)*((*rh_rev)->n_bases), __func__, "(*rd_rev)->flow_index");
+            (*rd_rev)->bases = ion_string_init((*rh_rev)->n_bases+1);
+            (*rd_rev)->quality = ion_string_init((*rh_rev)->n_bases+1);
+
+            copy(flowInt_rev.begin(), flowInt_rev.end(), (*rd_rev)->flowgram);
+
+            unsigned int nBase = 0;
+            int index = 1;
+            vector<uint16_t>::iterator iter = flowInt_rev.begin();
+			while(nBase < (*rh_rev)->n_bases && iter != flowInt_rev.end())
+			{
+				int nHp = ((*iter) + 50) / 100;
+				if(nHp > 0)
+				{
+					(*rd_rev)->flow_index[nBase] = index;
+					++nBase;
+					--nHp;
+					while(nHp > 0 && nBase < (*rh_rev)->n_bases)
+					{
+						(*rd_rev)->flow_index[nBase] = 0;
+						++nBase;
+						--nHp;
+					}
+					index = 1;
+				}
+				else
+				{
+					++index;
+				}
+
+				++iter;
+			} 	
+
+            for(nBase = 0; nBase < nKeys_rev; ++nBase)
+            {
+                (*rd_rev)->bases->s[nBase] = h_rev->key->s[nBase];
+                (*rd_rev)->quality->s[nBase] = DEAFAUL_QUALITY;
+            }
+
+            for(int base = 0; base < alignment.Length; ++base, ++nBase)
+            {
+                (*rd_rev)->bases->s[nBase] = alignment.QueryBases[base];
+                (*rd_rev)->quality->s[nBase] = alignment.Qualities[base] - 33;
+            }
+
+            (*rd_rev)->bases->l = (*rh_rev)->n_bases;
+            (*rd_rev)->quality->l = (*rh_rev)->n_bases;
+            (*rd_rev)->bases->s[(*rd_rev)->bases->l]='\0';
+            (*rd_rev)->quality->s[(*rd_rev)->quality->l]='\0';
+
+			EOF_REV = 0;
+		}
+		//JZ ends
 
 	if (EOF_FWD && EOF_REV) {
 	   retVal = 1;
@@ -1090,12 +1698,84 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sf
    else {
 	//fprintf(stdout, "skipfwd=%d skiprev=%d \n", skipFWD, skipREV);
    	if (!skipFWD) {
-   		*rh = sff_read_header_read(sff_fp);
+ /*  		*rh = sff_read_header_read(sff_fp);
 		EOF_FWD = (*rh==NULL)?1:0; 
 		if (!EOF_FWD){
 			*rd = sff_read_read(sff_fp, h, *rh);
 			EOF_FWD = (*rd==NULL)?1:0; 
 		}
+*/
+        //JZ begins
+   		*rh = NULL;
+		*rd = NULL;
+		EOF_FWD = 1;
+        if(pBamReader->GetNextAlignment(alignment) && alignment.GetTag("FZ", flowInt))
+		{	
+			*rh = sff_read_header_init();
+            (*rh)->name_length = alignment.Name.length();
+            (*rh)->name = ion_string_init(alignment.Name.length()+1);
+            strcpy((*rh)->name->s, (char*)alignment.Name.c_str());
+            (*rh)->n_bases = nKeys + alignment.Length;
+			(*rh)->clip_qual_left = nKeys + 1;
+			(*rh)->clip_adapter_left = 0;	
+			(*rh)->clip_qual_right = (*rh)->n_bases + 1;
+			(*rh)->clip_adapter_right = (*rh)->n_bases + 1;
+
+			*rd = sff_read_init();
+            (*rd)->flowgram = (uint16_t*)ion_malloc(sizeof(uint16_t)*nFlows, __func__, "(*rd)->flowgram");
+            (*rd)->flow_index = (uint8_t*)ion_malloc(sizeof(uint8_t)*((*rh)->n_bases), __func__, "(*rd)->flow_index");
+            (*rd)->bases = ion_string_init((*rh)->n_bases+1);
+            (*rd)->quality = ion_string_init((*rh)->n_bases+1);
+
+			copy(flowInt.begin(), flowInt.end(), (*rd)->flowgram);
+
+			uint32_t nBase = 0;
+			int index = 1;
+			vector<uint16_t>::iterator iter = flowInt.begin();
+			while(nBase < (*rh)->n_bases && iter != flowInt.end())
+			{
+				int nHp = ((*iter) + 50) / 100;
+				if(nHp > 0)
+				{
+					(*rd)->flow_index[nBase] = index;
+					++nBase;
+					--nHp;
+					while(nHp > 0 && nBase < (*rh)->n_bases)
+					{
+						(*rd)->flow_index[nBase] = 0;
+						++nBase;
+						--nHp;
+					}
+					index = 1;
+				}
+				else
+				{
+					++index;
+				}
+
+				++iter;
+			} 	
+
+            for(nBase = 0; nBase < nKeys; ++nBase)
+            {
+                (*rd)->bases->s[nBase] = h->key->s[nBase];
+                (*rd)->quality->s[nBase] = DEAFAUL_QUALITY;
+            }
+
+            for(int base = 0; base < alignment.Length; ++base, ++nBase)
+            {
+                (*rd)->bases->s[nBase] = alignment.QueryBases[base];
+                (*rd)->quality->s[nBase] = alignment.Qualities[base] - 33;
+            }
+
+            (*rd)->bases->l = (*rh)->n_bases;
+            (*rd)->quality->l = (*rh)->n_bases;
+            (*rd)->bases->s[(*rd)->bases->l]='\0';
+            (*rd)->quality->s[(*rd)->quality->l]='\0';
+
+			EOF_FWD = 0;
+		}
+		//JZ ends
    	}
    	else {
 		//*rh = prev_fwd_read_header;
@@ -1104,12 +1784,84 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sf
   	}
   
   	if (!skipREV) {
-		*rh_rev = sff_read_header_read(sff_fp_rev);
+/*		*rh_rev = sff_read_header_read(sff_fp_rev);
 		EOF_REV = (*rh_rev==NULL)?1:0; 
         if (!EOF_REV){
 			*rd_rev = sff_read_read(sff_fp_rev, h_rev, *rh_rev);
 			EOF_REV = (*rd_rev==NULL)?1:0; 
 		}
+*/
+		//JZ begins
+   		*rh_rev = NULL;
+		*rd_rev = NULL;
+		EOF_REV = 1;
+        if(pBamReader_rev->GetNextAlignment(alignment) && alignment.GetTag("FZ", flowInt_rev))
+		{	
+			*rh_rev = sff_read_header_init();
+            (*rh_rev)->name_length = alignment.Name.length();
+            (*rh_rev)->name = ion_string_init(alignment.Name.length()+1);
+            strcpy((*rh_rev)->name->s, (char*)alignment.Name.c_str());
+            (*rh_rev)->n_bases = nKeys_rev + alignment.Length;
+			(*rh_rev)->clip_qual_left = nKeys_rev + 1;
+			(*rh_rev)->clip_adapter_left = 0;	
+			(*rh_rev)->clip_qual_right = (*rh_rev)->n_bases + 1;
+            (*rh_rev)->clip_adapter_right = (*rh_rev)->n_bases + 1;
+
+			*rd_rev = sff_read_init();
+            (*rd_rev)->flowgram = (uint16_t*)ion_malloc(sizeof(uint16_t)*nFlows_rev, __func__, "(*rd_rev)->flowgram");
+            (*rd_rev)->flow_index = (uint8_t*)ion_malloc(sizeof(uint8_t)*((*rh_rev)->n_bases), __func__, "(*rd_rev)->flow_index");
+            (*rd_rev)->bases = ion_string_init((*rh_rev)->n_bases+1);
+            (*rd_rev)->quality = ion_string_init((*rh_rev)->n_bases+1);
+
+            copy(flowInt_rev.begin(), flowInt_rev.end(), (*rd_rev)->flowgram);
+
+            uint32_t nBase = 0;
+			int index = 1;
+			vector<uint16_t>::iterator iter = flowInt_rev.begin();
+			while(nBase < (*rh_rev)->n_bases && iter != flowInt_rev.end())
+			{
+				int nHp = ((*iter) + 50) / 100;
+				if(nHp > 0)
+				{
+					(*rd_rev)->flow_index[nBase] = index;
+					++nBase;
+					--nHp;
+					while(nHp > 0 && nBase < (*rh_rev)->n_bases)
+					{
+						(*rd_rev)->flow_index[nBase] = 0;
+						++nBase;
+						--nHp;
+					}
+					index = 1;
+				}
+				else
+				{
+					++index;
+				}
+
+				++iter;
+			} 	
+		
+            for(nBase = 0; nBase < nKeys_rev; ++nBase)
+            {
+                (*rd_rev)->bases->s[nBase] = h_rev->key->s[nBase];
+                (*rd_rev)->quality->s[nBase] = DEAFAUL_QUALITY;
+            }
+
+            for(int base = 0; base < alignment.Length; ++base, ++nBase)
+            {
+                (*rd_rev)->bases->s[nBase] = alignment.QueryBases[base];
+                (*rd_rev)->quality->s[nBase] = alignment.Qualities[base] - 33;
+            }
+
+            (*rd_rev)->bases->l = (*rh_rev)->n_bases;
+            (*rd_rev)->quality->l = (*rh_rev)->n_bases;
+            (*rd_rev)->bases->s[(*rd_rev)->bases->l]='\0';
+            (*rd_rev)->quality->s[(*rd_rev)->quality->l]='\0';
+
+			EOF_REV = 0;
+		}
+		//JZ ends
   	}
   	else {
 		//*rh_rev = prev_rev_read_header;
@@ -1171,14 +1923,16 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, FILE *sf
   return retVal;
 }
 
-void output_fastq_entry(FILE *fp, char *name, std::string bases, uint8_t *quality, int nbases, int left_trim) {
+void output_fastq_entry(FILE *fp, char * name, std::string bases,  int left_trim) {
   register int j;
   uint8_t quality_char;
   std::string out = bases.substr(left_trim);
+  int nbases = out.length();
   if (nbases != 0) {
 	fprintf(fp,"@%s\n%s\n+\n", name, out.c_str());
-	 for (j = 0; j < nbases-left_trim; j++) {
-                quality_char = (quality[j] <= 93 ? quality[j] : 93) + 33;
+	 for (j = 0; j < nbases; j++) {
+				  quality_char = 66;
+               // quality_char = (quality[j] <= 93 ? quality[j] : 93) + 33;
                 fprintf(fp, "%c", (char) quality_char );
         }
         fprintf(fp, "\n");
@@ -1336,7 +2090,7 @@ std::string intToString(int x, int width) {
  }
 
 int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, uint16_t *flow_sig, uint16_t * flow_rev_sig, char *flow_fwd, uint16_t flow_len, char *flow_rev, 
-				uint16_t flow_rev_len, ion_string_t *quality, ion_string_t *quality_rev, uint16_t **corr_flow, uint8_t **corr_flow_index, uint8_t **corr_quality, char **corr_bases, int* leftClip, int* rightClip,
+				uint16_t flow_rev_len, ion_string_t *quality, ion_string_t *quality_rev, uint16_t **corr_flow, uint8_t **corr_flow_index, uint8_t **corr_quality, char **corr_bases, char **corr_fastq_bases, int* leftClip, int* rightClip,
 				bool *isIdentical, int nbasesRev, int *mergedRegionStartBase, int *mergedRegionStopBase, int *mergedRegionStartBaseFwd, int *mergedRegionStopBaseFwd, int *mergedRegionStartBaseRev, int *mergedRegionStopBaseRev, bool regionInfo) {
 				
 		int NAME_WIDTH = 18;
@@ -1347,8 +2101,17 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		std::string markup = alignment->getMarkupLine();
 	    std::string name1 = alignment->getName1();
 		std::string name2 = alignment->getName2();	
-		int length = sequence1.length() > sequence2.length() ? sequence2.length() : sequence1.length();
-		
+
+        //variables for the handling of strand bias
+        bool fwd_flow_has_bias = false;
+        bool rev_flow_has_bias = false;
+        bool fwd_flow_index_has_bias = false;
+        bool rev_flow_index_has_bias = false;
+        std::set<int> fwd_flow_bias_index_set;
+        std::set<int> rev_flow_bias_index_set;
+
+		int length = sequence1.length() > sequence2.length() ? sequence2.length() : sequence1.length();	
+
 		
 		std::string buffer = "";
 	    std::string preMarkup = "";
@@ -1372,23 +2135,11 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		int rightClipFlowIndex = 0;
 		
 		int mergedRegionStartFlow = 0;
-		int mergedRegionStopFlow = 0;		
+		int mergedRegionStopFlow = 0;
+		int mergedRegionStartFlowRev = 0;
+		int mergedRegionStopFlowRev = 0;			
 		int mergedRegionFlowLen = 0;
-		std::string regionFwdFlowAligned = "";
-		std::string regionRevFlowAligned = "";
-		int regionAlignCase  = 0;		
-		
-		int regionLengthFwd = alignment->getLengthOfSequence1();
-		int regionLengthRev = alignment->getLengthOfSequence2();
-		
-		*mergedRegionStartBase = alignment->getStart1(); 
-		*mergedRegionStopBase =  (*mergedRegionStartBase)  + regionLengthFwd - 1;
-		
-		*mergedRegionStartBaseFwd = alignment->getStart1();
-		*mergedRegionStartBaseRev = alignment->getStart2();	
-
-		*mergedRegionStopBaseFwd = (*mergedRegionStartBaseFwd)  + regionLengthFwd - 1;
-		*mergedRegionStopBaseRev = (*mergedRegionStartBaseRev)  + regionLengthRev - 1;		
+		int regionAlignCase  = 0;
 
 		SmithWaterman *flowAligner = new SmithWaterman();
 		Alignment *flowAlignment = NULL;
@@ -1472,9 +2223,7 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		
 		int startPos1 = oldPosition1-1;
 		int startPos2 = oldPosition2-1;
-		//if (flow_rev_len > flow_len)
-		//	flow_len = flow_rev_len;
-	
+		
 		int *flowIndexFwdAligned = new int[flow_len];
 		int *flowIndexRevAligned = new int[flow_len];
 		int *flowIndexFwdCorrected = new int[flow_len];
@@ -1494,6 +2243,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		int endPosition1 = alignment->getStart1() + alignment->getLengthOfSequence1();
 		int endPosition2 = alignment->getStart2() + alignment->getLengthOfSequence2(); 
 
+		int lastFwdFlowIndex;
+		int lastRevFlowIndex;
 		
 		while (startPos1 < endPosition1 ) {	
 			curFlow = flow_index[startPos1];
@@ -1572,23 +2323,22 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 				}
 				numIdentical++;
 				//*leftClip = oldPosition1;
-				regionAlignCase = 1;
-				regionFwdFlowAligned = flowAlign;
-				regionRevFlowAligned = flowAlignRev;				
+				regionAlignCase = 1;		
 				*isIdentical = true;
 				if (flowIndexRevAligned[totalRevFlows-1] < 20)
 					rightClipFlowIndex = flowIndexFwdAligned[totalFwdFlows-1];
+
 				
 				if (outputIdenticalOnly) {
 				
 				  *rightClip = endPosition1-1; //set the right clip to end of the alignment
 				  
 				  delete[] flowIndexFwdAligned;
-			          delete[] flowIndexRevAligned;
+		          delete[] flowIndexRevAligned;
 				  delete[] flow_fwd_sig;
-		                  delete[] flowIndexFwdCorrected;
-           			  delete[] flowIndexRevCorrected;
-	              		  delete[] flowPriors;
+	              delete[] flowIndexFwdCorrected;
+           		  delete[] flowIndexRevCorrected;
+	              delete[] flowPriors;
 				  delete flowAlignment;
 				  delete flowAligner;
 				  flowAligner = NULL;
@@ -1599,6 +2349,9 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					}
 					return 0; 
 				}
+				//to generate merged read for fastq file used in denovo
+				lastFwdFlowIndex = flowIndexFwdAligned[totalFwdFlows-1];
+				lastRevFlowIndex = flowIndexRevAligned[totalRevFlows-1];
 			}
 			else if (flowAlign.compare(flowAlignRev) != 0) { //base space alignment is not identical and flow/homopolymer alignment is also not identical		 
 				 flowAlignment = flowAligner->align(flowAlign, flowAlignRev, 0.5, 0.5, -2); //actually align the homopolymers space or flowspace
@@ -1610,9 +2363,7 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 				 int flowLen = flowSeq1.length() > flowSeq2.length() ? flowSeq2.length() : flowSeq1.length();
 				 
 				 regionAlignCase = 2;
-				 mergedRegionFlowLen = flowLen;
-				 regionFwdFlowAligned = flowSeq1;  
-				 regionRevFlowAligned = flowSeq2;				 
+				 mergedRegionFlowLen = flowLen;	 
 				 //int flowLen = length;
 				 char fchar1, fchar2; 
 				 int k = 0;
@@ -1692,7 +2443,7 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 						}
 						else {
 							prevRevFoundIndex = flowIndexRevAligned[adjPosition2-1];
-						//	std::cout << "ERROR: Unable to find flow in rev read for Base " << fchar1 << " between flow positions " << flowIndexRevAligned[adjPosition2] << " and " << flowIndexRevAligned[adjPosition2-1] << std::endl;
+							//std::cout << "ERROR: Unable to find flow in rev read for Base " << fchar1 << " between flow positions " << flowIndexRevAligned[adjPosition2] << " and " << flowIndexRevAligned[adjPosition2-1] << std::endl;
 							flowIndexRevCorrected[k] = -10;
 							flowPriors[flowIndexFwdCorrected[k]-1] = MISMATCH_PRIOR;
 							miscount++;
@@ -1730,6 +2481,7 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					return 0; // unable to correct due to misaligned flows, so the record should go into Singleton file
 				}
 				else {
+  				    //refineFlowAlignment(flowIndexFwdCorrected, flowIndexRevCorrected, flowSeq1, flowSeq2, flow_fwd, flow_rev, flow_fwd_sig, flow_rev_sig);				 
 					//std::cout << "correct flow space alignment " << std::endl;		
 					int cA = 0;
 					std::string correctedAlignIndex = "";
@@ -1742,56 +2494,70 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					char correctedbase = ' ';
 					int homPoly = 0;
 							
-					
+                    fwd_flow_has_bias = find_read_in_bias_map(name1, &strand_bias_flow_index_map_fwd, &fwd_flow_bias_index_set);
+                    rev_flow_has_bias = find_read_in_bias_map(name2, &strand_bias_flow_index_map_rev, &rev_flow_bias_index_set);
+
 					while (cA < flowLen) {
 						avgFlowSignal = 0;
 						
 						findex = flowIndexFwdCorrected[cA];
 						findexRev = flowIndexRevCorrected[cA];
-						
-						if (DEBUG) {
-							correctedAlignIndex += intToString(findex,3);
-							correctedAlignRevIndex += intToString(findexRev,3);
-						}
 
-						if (findex != -10) {	
-							
-							avgFlowSignal += flow_sig[findex-1];
-							correctedbase = flow_fwd[findex-1];
-							homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
-							fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
-							if (DEBUG)
-								correctedAlign += intToString(flow_sig[findex-1], 3);
-						}					
-						else {
-							if (DEBUG)
-								correctedAlign += intToString(0, 3);
-						}
+                        fwd_flow_index_has_bias = false;
+                        rev_flow_index_has_bias = false;
 
-						if (findexRev != -10) {
-							avgFlowSignal += flow_rev_sig[findexRev-1];
-							homPolyRev = roundsff((float)flow_rev_sig[findexRev-1]/100);
-							if (DEBUG)
-								correctedAlignRev += intToString(flow_rev_sig[findexRev-1],3);
-						}
-						else {
-							if (DEBUG)
-								correctedAlignRev += intToString(0,3);
-						}
-						
-						//update the flow signals with corrected values
-						if (findex != -10 && findexRev != -10) {
-							if (abs((int)(avgFlowSignal/2 - flow_sig[findex-1])) < 50)
-							flow_sig[findex-1] = (uint16_t) avgFlowSignal/2;
-						}
-						else if (findex != -10 && findexRev == -10) {
-							if (flow_sig[findex-1] < 75)
-								flow_sig[findex-1] = 0;
-						}
-						
-					
-						avgFlowSignal /= 200;
-						
+                        if(fwd_flow_has_bias && findex != -10) fwd_flow_index_has_bias = find_flow_index_with_bias(fwd_flow_bias_index_set, findex);
+                        if(rev_flow_has_bias && findexRev !=-10) rev_flow_index_has_bias = find_flow_index_with_bias(rev_flow_bias_index_set, findexRev);
+
+
+                        if (DEBUG) {
+                            correctedAlignIndex += intToString(findex,3);
+                            correctedAlignRevIndex += intToString(findexRev,3);
+                        }
+
+                        if (findex != -10) {
+
+                            avgFlowSignal += flow_sig[findex-1];
+                            correctedbase = flow_fwd[findex-1];
+                            homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
+                            fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
+                            if (DEBUG)
+                                correctedAlign += intToString(flow_sig[findex-1], 3);
+                        }
+                        else {
+                            if (DEBUG)
+                                correctedAlign += intToString(0, 3);
+                        }
+
+                        if (findexRev != -10) {
+                            if(!fwd_flow_index_has_bias && !rev_flow_index_has_bias) avgFlowSignal += flow_rev_sig[findexRev-1];
+                            homPolyRev = roundsff((float)flow_rev_sig[findexRev-1]/100);
+                            if (DEBUG)
+                                correctedAlignRev += intToString(flow_rev_sig[findexRev-1],3);
+                        }
+                        else {
+                            if (DEBUG)
+                                correctedAlignRev += intToString(0,3);
+                        }
+
+                        //update the flow signals with corrected values
+                        if(!fwd_flow_index_has_bias && !rev_flow_index_has_bias){
+                            if (findex != -10 && findexRev != -10) {
+                                if (abs((int)(avgFlowSignal/2 - flow_sig[findex-1])) < 50)
+                                flow_sig[findex-1] = (uint16_t) avgFlowSignal/2;
+                            }
+                            else if (findex != -10 && findexRev == -10) {
+                                if (flow_sig[findex-1] < 75)
+                                    flow_sig[findex-1] = 0;
+                            }
+
+                            avgFlowSignal /= 200;
+                        }
+                        else{
+                            avgFlowSignal /= 100;
+                        }
+
+
 						homPoly = roundsff(avgFlowSignal );	
 						avgDev = fabs(avgFlowSignal - homPoly)*100;
 						if (findex != -10 && findexRev != -10) {
@@ -1809,18 +2575,20 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 						
 						cA++;
 					} 	
-					
-					if (flowIndexRevCorrected[flowLen-1] < 20 )  
-						rightClipFlowIndex = flowIndexFwdCorrected[flowLen-1];
+					  
+					if (flowIndexRevCorrected[flowLen-1] < 20 )
+ 						  rightClipFlowIndex = flowIndexFwdCorrected[flowLen-1];
 					
 					if (DEBUG) {
-						std::cout << "Corrected Alignment:" << std::endl;
 						std::cout << correctedAlignIndex << std::endl;	
 						std::cout << correctedAlignRevIndex << std::endl;
 						std::cout << correctedAlign << std::endl;
 						std::cout << correctedAlignRev << std::endl;
 						
 					}
+					
+					lastFwdFlowIndex = flowIndexFwdCorrected[flowLen-1];
+					lastRevFlowIndex = flowIndexRevCorrected[flowLen-1];
 
 				}
 				
@@ -1833,37 +2601,52 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		    else {
 				//flowsignal alignment is identical 
 				//numCorrected++;
-		    	regionAlignCase = 3;
-				regionFwdFlowAligned = flowAlign;
-				regionRevFlowAligned = flowAlignRev;				
+		    	regionAlignCase = 3;	
 				int homPoly = 0;
 				char correctedbase = ' ';
 				int count = 0;
 				int findex = 0, findexrev = 0;
 				float avgFlowSignal = 0;
+
+                fwd_flow_has_bias = find_read_in_bias_map(name1, &strand_bias_flow_index_map_fwd, &fwd_flow_bias_index_set);
+                rev_flow_has_bias = find_read_in_bias_map(name2, &strand_bias_flow_index_map_rev, &rev_flow_bias_index_set);
+
 				while (count < totalFwdFlows) {
 				   avgFlowSignal = 0;
 				   findex = flowIndexFwdAligned[count];
 				   findexrev = flowIndexRevAligned[count];
-				   
-				   if (findex > 0) {
-					correctedbase = flow_fwd[findex-1];
-					avgFlowSignal += flow_sig[findex-1];
-					homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
-					fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
-				   }
-				   if (findexrev > 0) {
-					avgFlowSignal += flow_rev_sig[findexrev-1];
-					homPolyRev = roundsff((float)flow_rev_sig[findexrev-1]/100);
-				   }
 
-				  if (abs((int)(avgFlowSignal/2 - flow_sig[findex-1])) < 50)
-					flow_sig[findex-1] = (uint16_t)avgFlowSignal/2;
-				  
-				  avgFlowSignal /= 200;
-				  homPoly = roundsff(avgFlowSignal);
-				  avgDev = fabs(avgFlowSignal - homPoly)*100;
-				  if (findex > 0) {
+                   fwd_flow_index_has_bias = false;
+                   rev_flow_index_has_bias = false;
+
+                   if(fwd_flow_has_bias && findex > 0) fwd_flow_index_has_bias = find_flow_index_with_bias(fwd_flow_bias_index_set, findex);
+                   if(rev_flow_has_bias && findexrev >0) rev_flow_index_has_bias = find_flow_index_with_bias(rev_flow_bias_index_set, findexrev);
+
+
+                   if (findex > 0) {
+                       correctedbase = flow_fwd[findex-1];
+                       avgFlowSignal += flow_sig[findex-1];
+                       homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
+                       fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
+                   }
+
+                   if(!fwd_flow_index_has_bias && !rev_flow_index_has_bias){
+                     if (findexrev > 0) {
+                         avgFlowSignal += flow_rev_sig[findexrev-1];
+                         homPolyRev = roundsff((float)flow_rev_sig[findexrev-1]/100);
+                     }
+                     if (abs((int)(avgFlowSignal/2 - flow_sig[findex-1])) < 50)
+                        flow_sig[findex-1] = (uint16_t)avgFlowSignal/2;
+
+                     avgFlowSignal /= 200;
+                   }
+                   else{
+                       avgFlowSignal /= 100;
+                   }
+
+                   homPoly = roundsff(avgFlowSignal);
+                   avgDev = fabs(avgFlowSignal - homPoly)*100;
+                   if (findex > 0) {
 					 
 					 if (homPolyFwd != homPolyRev) {
 						flowPriors[findex-1] = MISMATCH_PRIOR;
@@ -1887,7 +2670,7 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					 }
 					 */
 
-				  }
+                  }
 				  count++;
 
 				}	//end while loop
@@ -1895,45 +2678,47 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 				if (flowIndexRevAligned[totalRevFlows-1] < 20 )
 					rightClipFlowIndex = flowIndexFwdAligned[totalFwdFlows-1];
 				
+				lastFwdFlowIndex = flowIndexFwdAligned[totalFwdFlows-1];
+				lastRevFlowIndex = flowIndexRevAligned[totalRevFlows-1];
 		    }
 		
 			//adjust merge flow positions to minimize the cases of clipping in region-specific error calculation 
 			if(regionInfo){
 				int leftSafeBand = 0;
 				int rightSafeBand = 0;
-				
+
 				if(regionAlignCase==1 || regionAlignCase==3){
 					leftSafeBand = totalFwdFlows/4;
 					rightSafeBand = totalFwdFlows/8;					
 					mergedRegionStartFlow = flowIndexFwdAligned[leftSafeBand]; 
-					mergedRegionStopFlow = flowIndexFwdAligned[totalFwdFlows-1-rightSafeBand];				
+					mergedRegionStopFlow = flowIndexFwdAligned[totalFwdFlows-1-rightSafeBand];
+					mergedRegionStartFlowRev = flowIndexRevAligned[leftSafeBand]; 
+					mergedRegionStopFlowRev = flowIndexRevAligned[totalFwdFlows-1-rightSafeBand];						
 				}else if(regionAlignCase==2){
 					leftSafeBand = mergedRegionFlowLen/4;
 					rightSafeBand = mergedRegionFlowLen/8;
+					
 					mergedRegionStartFlow = flowIndexFwdCorrected[leftSafeBand];
 					mergedRegionStopFlow = flowIndexFwdCorrected[mergedRegionFlowLen-1-rightSafeBand];
-					while(mergedRegionStartFlow==-10 && leftSafeBand>0){
+					mergedRegionStartFlowRev = flowIndexRevCorrected[leftSafeBand];
+					mergedRegionStopFlowRev = flowIndexRevCorrected[mergedRegionFlowLen-1-rightSafeBand];
+					
+					while((mergedRegionStartFlow==-10 || mergedRegionStartFlowRev==-10)&& leftSafeBand>0){
 						leftSafeBand--;
-						mergedRegionStartFlow = flowIndexFwdCorrected[leftSafeBand];											
+						mergedRegionStartFlow = flowIndexFwdCorrected[leftSafeBand];
+						mergedRegionStartFlowRev = flowIndexRevCorrected[leftSafeBand];
 					}
-					while(mergedRegionStopFlow==-10 && rightSafeBand>0){
+					while((mergedRegionStopFlow==-10 || mergedRegionStopFlowRev==-10)&& rightSafeBand>0){
 						rightSafeBand--;
 						mergedRegionStopFlow = flowIndexFwdCorrected[mergedRegionFlowLen-1-rightSafeBand];
+						mergedRegionStopFlowRev = flowIndexRevCorrected[mergedRegionFlowLen-1-rightSafeBand];						
 					}					
 				}
 				
-				int fwdStartOffset = 0;
-				int fwdStopOffset = 0;
-				int revStartOffset = 0;
-				int revStopOffset = 0;			
-			
-				adjustRegionPositions(totalFwdFlows, totalRevFlows, regionFwdFlowAligned, regionRevFlowAligned, flowIndexFwdAligned, flowIndexRevAligned, 
-										flow_fwd_sig, flow_rev_sig, leftSafeBand, rightSafeBand, fwdStartOffset, fwdStopOffset, revStartOffset, revStopOffset);
+				int temp_flow = mergedRegionStartFlowRev;
+				mergedRegionStartFlowRev = mergedRegionStopFlowRev;
+				mergedRegionStopFlowRev = temp_flow;		
 
-				*mergedRegionStartBaseFwd = *mergedRegionStartBaseFwd + fwdStartOffset;
-				*mergedRegionStopBaseFwd = *mergedRegionStopBaseFwd - fwdStopOffset;
-				*mergedRegionStartBaseRev = *mergedRegionStartBaseRev + revStartOffset;
-				*mergedRegionStopBaseRev = *mergedRegionStopBaseRev - revStopOffset;
 			}
 			
 			//once all the flows have been corrected and priors assigned, now call bases and baseQVs bases on the corrected flowgram
@@ -1942,6 +2727,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 			int baseIncCounter = 0;
 			float FlowSig = 0;
 			int homPoly = 0;
+			int totalFastqBases = 0;
+			int totalFastqFwdBases = 0;
 			for (int n = 0; n < flow_len; n++) {
 					FlowSig = flow_sig[n];
 					homPoly = roundsff((float)FlowSig/100);
@@ -1949,14 +2736,29 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					while (baseIncCounter < homPoly) {
 						baseIncCounter++;
 						totBases++;
+						if (n <= lastFwdFlowIndex) 
+							totalFastqBases++;
+							
 					}
 						
+			}
+			totalFastqFwdBases = totalFastqBases-1;
+			
+			for (int n = 0; n < lastRevFlowIndex; n++) {
+				FlowSig = flow_rev_sig[n];
+				homPoly = roundsff((float)FlowSig/100);
+				baseIncCounter = 0;
+				while (baseIncCounter < homPoly) {
+						baseIncCounter++;
+						totalFastqBases++;
+				}
 			}
 			
 			*corr_flow = (uint16_t *) malloc(flow_len * sizeof(uint16_t) );
 			*corr_flow_index = (uint8_t *) malloc( totBases * sizeof(uint8_t)  );
 			*corr_quality = (uint8_t *) malloc( totBases * sizeof(uint8_t)  );
 			*corr_bases = (char * ) malloc( totBases+1 * sizeof(char) );
+			*corr_fastq_bases = (char *) malloc( totalFastqBases+1 * sizeof(char));
 			
 				prevTotBases = totBases;
 				baseIncCounter = 0;
@@ -2025,13 +2827,129 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					}
 					
 					
-					if(mergedRegionStartFlow -1 == n) *mergedRegionStartBase = totBases - 1;
-					if(mergedRegionStopFlow -1 == n) *mergedRegionStopBase = totBases - 1;							
+					if(mergedRegionStartFlow -1 == n) *mergedRegionStartBase = totBases - baseIncCounter; 
+					if(mergedRegionStopFlow -1 == n) *mergedRegionStopBase = totBases - 1;			
 	
 						
 				}
+				//copy the fwd bases to fastq bases for denovo assembly
+				strncpy(*corr_fastq_bases, (const char *)(*corr_bases), totalFastqFwdBases);
 				
 				(*corr_bases)[totBases] = '\0';
+				
+				
+				//now go ahead and append to fastq string from reverse bases, remember to complement the bases
+				for (int n = lastRevFlowIndex-2; n > 10; n--) {
+					FlowSig = flow_rev_sig[n];
+					homPoly = roundsff(((float)FlowSig)/100);
+					baseIncCounter = 0;
+					while (baseIncCounter < homPoly) {
+						if (totalFastqFwdBases >= totalFastqBases) {
+							std::cout << "ERROR: totalFastqFwdBases = " << totalFastqFwdBases << " totalFastqBases " << totalFastqBases << endl;
+						}
+						(*corr_fastq_bases)[totalFastqFwdBases++] = complimentNuc(flow_rev[n]);
+						baseIncCounter++;
+					}
+				}
+				if (totalFastqFwdBases > totalFastqBases)
+					std::cout << "ERROR: totalFastqFwdBases = " << totalFastqFwdBases << " totalFastqBases " << totalFastqBases << endl;
+					
+					
+				(*corr_fastq_bases)[totalFastqFwdBases] = '\0';
+				
+			    if(regionInfo){
+					//below for fwd read			    	
+					int totBases_fwd = 0;
+					prevTotBases = 0;
+					baseIncCounter = 0;
+					FlowSig = 0;
+					homPoly = 0;	
+			
+					for (int n = 0; n < flow_len; n++) {
+							FlowSig = flow_fwd_sig[n];
+							homPoly = roundsff((float)FlowSig/100);
+							baseIncCounter = 0;
+							while (baseIncCounter < homPoly) {
+								baseIncCounter++;
+								totBases_fwd++;
+							}
+								
+					}		
+				
+					prevTotBases = totBases_fwd;
+					baseIncCounter = 0;
+					totBases_fwd = 0;
+					homPoly = 0;			
+
+					for (int n = 0; n < flow_len; n++) 
+					{
+						FlowSig = flow_fwd_sig[n];
+						homPoly = roundsff(((float)FlowSig)/100);										
+						baseIncCounter = 0;
+						
+						while (baseIncCounter < homPoly) {
+							if (totBases_fwd > prevTotBases) {
+								std::cerr << "ERROR: FWD Calcuting Bases from Flow signals, total bases before " << prevTotBases << " and after " << totBases << " are not matching " << std::endl;
+								exit(-1);	
+							}					
+							
+							totBases_fwd++;
+							baseIncCounter++;												
+						}
+						if(mergedRegionStartFlow -1 == n) *mergedRegionStartBaseFwd = totBases_fwd - baseIncCounter;
+						if(mergedRegionStopFlow -1 == n) *mergedRegionStopBaseFwd = totBases_fwd - 1;							
+												
+					}
+
+					//above for fwd
+
+					//below for rev read
+					int totBases_rev = 0;
+					prevTotBases = 0;
+					baseIncCounter = 0;
+					FlowSig = 0;
+					homPoly = 0;
+
+					for (int n = 0; n < flow_len; n++) {
+							FlowSig = flow_rev_sig[n];
+							homPoly = roundsff((float)FlowSig/100);
+							baseIncCounter = 0;
+							while (baseIncCounter < homPoly) {
+								baseIncCounter++;
+								totBases_rev++;
+							}
+								
+					}		
+				
+					prevTotBases = totBases_rev;
+					baseIncCounter = 0;
+					totBases_rev = 0;
+					homPoly = 0;		
+					
+
+					for (int n = 0; n < flow_len; n++) 
+					{
+						FlowSig = flow_rev_sig[n];
+						homPoly = roundsff(((float)FlowSig)/100);										
+						baseIncCounter = 0;
+						
+						while (baseIncCounter < homPoly) {
+							if (totBases_rev > prevTotBases) {
+								std::cerr << "ERROR: REV read Calcuting Bases from Flow signals, total bases before " << prevTotBases << " and after " << totBases << " are not matching " << std::endl;
+								exit(-1);	
+							}				
+								
+							totBases_rev++;
+							baseIncCounter++;												
+						}
+						if(mergedRegionStartFlowRev -1 == n) *mergedRegionStartBaseRev = totBases_rev - baseIncCounter;
+						if(mergedRegionStopFlowRev -1 == n) *mergedRegionStopBaseRev = totBases_rev - 1;				
+																			
+					}				
+					//above for rev
+			    }
+				   
+				
 			
 				
 		if (DEBUG) {		
@@ -2067,74 +2985,275 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		return o;
 	}
 	
-	void adjustRegionPositions(int totalFwdFlows, int totalRevFlows, std::string regionFwdFlowAligned, std::string regionRevFlowAligned, int *flowIndexFwdAligned,int *flowIndexRevAligned, 
-					uint16_t *flow_fwd_signal, uint16_t *flow_rev_signal, int &leftSafeBand, int &rightSafeBand, int &fwdStartOffset, int &fwdStopOffset, 
-					int &revStartOffset, int &revStopOffset) //the last six variables return values
-	{
-		int *fwdHPNumbers = new int[totalFwdFlows];
-		int *revHPNumbers = new int[totalRevFlows]; 
-		float FlowSig = 0;
-		int homoPoly = 0;
+void refineFlowAlignment(int *flowIndexFwd, int *flowIndexRev,std::string &fwdFlowAligned, std::string &revFlowAligned, char *flow_seq_fwd, char *flow_seq_rev, uint16_t *flow_sig_fwd, uint16_t *flow_sig_rev)
+{	
+	//0): find out GAPS (>2) on foward flow and reverse flow separately
+	//1): rearrange flow alignment  
+		
+	int flowLen = fwdFlowAligned.length(); //equals revFlowAligned.length();
+		
+	bool start_defined = false;
+	bool stop_defined = false;
+	
+	int reg_start = 0;
+	int reg_stop = 0;
 
-		for (int n = 0; n < totalFwdFlows; n++) 
-		{
-			int index = flowIndexFwdAligned[n]-1;
-			FlowSig = flow_fwd_signal[index];
-			homoPoly  = roundsff(((float)FlowSig)/100);
-			fwdHPNumbers[n] = homoPoly;
+	for (int i = 2; i < flowLen-2; i++) {
+		if(fwdFlowAligned.at(i-1)!=GAP && fwdFlowAligned.at(i)==GAP && start_defined==false ){
+			reg_start = i;
+			start_defined = true;
 		}
+		if(fwdFlowAligned.at(i)==GAP && fwdFlowAligned.at(i+1)!=GAP && stop_defined ==false){
+			reg_stop = i;
+			stop_defined = true;
+		}			
+		if(start_defined && stop_defined && (reg_stop - reg_start)>=1 
+		&& fwdFlowAligned.at(reg_start-2)!=GAP && fwdFlowAligned.at(reg_stop+2)!=GAP
+		&& revFlowAligned.at(reg_start-2)!=GAP && revFlowAligned.at(reg_stop+2)!=GAP		
+		&& revFlowAligned.at(reg_start-1)!=GAP && revFlowAligned.at(reg_stop+1)!=GAP){
+			reg_start = reg_start - 2;
+			reg_stop = reg_stop + 2;
+			fwdFlowAligned = refineGapRegion(flowIndexFwd, flowIndexRev,fwdFlowAligned, revFlowAligned, flow_seq_fwd, flow_seq_rev, flow_sig_fwd, flow_sig_rev, reg_start, reg_stop, true);
+			start_defined = false;
+			stop_defined = false;
+		}		
+	}		
+	
+	start_defined = false;
+	stop_defined = false;
+	
+	reg_start = 0;
+	reg_stop = 0;
+
+	for (int i = 2; i < flowLen-2; i++) {
+		if(revFlowAligned.at(i-1)!=GAP && revFlowAligned.at(i)==GAP && start_defined==false ){
+			reg_start = i;
+			start_defined = true;
+		}
+		if(revFlowAligned.at(i)==GAP && revFlowAligned.at(i+1)!=GAP && stop_defined ==false){
+			reg_stop = i;
+			stop_defined = true;
+		}			
+		if(start_defined && stop_defined && (reg_stop - reg_start)>=1 
+		&& revFlowAligned.at(reg_start-2)!=GAP && revFlowAligned.at(reg_stop+2)!=GAP
+		&& fwdFlowAligned.at(reg_start-2)!=GAP && fwdFlowAligned.at(reg_stop+2)!=GAP		
+		&& fwdFlowAligned.at(reg_start-1)!=GAP && fwdFlowAligned.at(reg_stop+1)!=GAP){
+			reg_start = reg_start - 2;
+			reg_stop = reg_stop + 2;		
+			revFlowAligned = refineGapRegion(flowIndexFwd, flowIndexRev,fwdFlowAligned, revFlowAligned, flow_seq_fwd, flow_seq_rev, flow_sig_fwd, flow_sig_rev, reg_start, reg_stop, false);							
+			start_defined = false;
+			stop_defined = false;
+		}		
+	}		
+
+}
+	
+
+//flowIndexFwd, flowIndexRev: flowIndexFwdCorrected, flowIndexRevCorrected, -10 means no match found 
+//flowFwdAligned, flowRevAligned: result of flowAlignment = flowAligner->align(flowAlign, flowAlignRev, 0.5, 0.5, -2);
+std::string refineGapRegion(int *flowIndexFwd, int *flowIndexRev,std::string &flowFwdAligned, std::string &flowRevAligned, char *flow_seq_fwd, char *flow_seq_rev, uint16_t *flow_sig_fwd, uint16_t *flow_sig_rev, int reg_start, int reg_stop, bool gaps_on_fwd)
+{
+//need to evaluate refinement results:
+//invalid: flow index gap is smaller than alignment gap
+	
+	int flow_len = flowFwdAligned.length();
+	
+	std::string corrected_gap_flows;
+	
+	if(gaps_on_fwd){	
+		int *flowIndexFwd_orig = new int[flow_len]; 
+		memcpy(flowIndexFwd_orig, flowIndexFwd, flow_len*sizeof(int)); //copy value
 				
-		for (int n = 0; n < totalRevFlows; n++) 
-		{
-			int index = flowIndexRevAligned[n]-1;
-			FlowSig = flow_rev_signal[index];
-			homoPoly  = roundsff(((float)FlowSig)/100);
-			revHPNumbers[n] = homoPoly;
-		}
+		corrected_gap_flows = flowFwdAligned;
+		int fwdFlowIndexStart = flowIndexFwd[reg_start];
+		int fwdFlowIndexStop = flowIndexFwd[reg_stop];
+		int k = reg_start;
+		for(int i=fwdFlowIndexStart; i<=fwdFlowIndexStop; i++){		
+			if(k>reg_stop){
+				corrected_gap_flows = flowFwdAligned;
+				break;
+			}
+			if(flow_seq_fwd[i-1]==flowRevAligned[k]){ //a hit from fwd_flow to rev_flow sequence
+				flowIndexFwd[k] = i; 
+				int num_hp = roundsff((float)flow_sig_fwd[i-1]/100);
+				if(num_hp>=1) {
+					corrected_gap_flows.replace(k, 1, flowRevAligned, k, 1); //a hit from called fwd_flow (large signal) to rev_flow sequence				
+				}
+				else corrected_gap_flows.replace(k, 1, "-"); //a hit from non-called fwd_flow (no signal or small signal) to rev_flow sequence
+				k++;
+			}
+			else{//no hit, move to next fwd flow
+				continue; //k does not change
+				}				
+			}
+		//check if refinement is ok
 		
-		int lenFwdAlignedFlowPadded =  regionFwdFlowAligned.length(); 
-		int lenRevAlignedFlowPadded =  regionRevFlowAligned.length(); 
+		int fwd_ind_non_gap[100];
+		int fwd_ind_non_gap_pos[100];
+		int num_fwd_ind_non_gap = 0;
 		
-		int fwdFlowPos = 0;
-		int revFlowPos = 0;
-		
-		for(int k=0; k<leftSafeBand; k++){
-			if(regionFwdFlowAligned.at(k)!='-') fwdFlowPos++; //this is the number of bases, not index: need to -1 for index
-			if(regionRevFlowAligned.at(k)!='-') revFlowPos++;			
-		}
-			
-		fwdStartOffset = 0;
-		for(int i=0; i<fwdFlowPos; i++){
-			fwdStartOffset = fwdStartOffset + fwdHPNumbers[i];
-		}
-		revStartOffset = 0;
-		for(int i=0; i<revFlowPos; i++){
-			revStartOffset = revStartOffset + revHPNumbers[i];
+		for(int i = reg_start; i<= reg_stop; i++){
+			if(flowIndexFwd[i]==-10) continue;
+			fwd_ind_non_gap[num_fwd_ind_non_gap] = flowIndexFwd[i];
+			fwd_ind_non_gap_pos[num_fwd_ind_non_gap] = i;
+			num_fwd_ind_non_gap++;
 		}		
 		
-		//below is for stop side
+		for(int i = 1; i < num_fwd_ind_non_gap; i++){
+			if(fwd_ind_non_gap[i]-fwd_ind_non_gap[i-1] < fwd_ind_non_gap_pos[i]-fwd_ind_non_gap_pos[i-1]){
+				corrected_gap_flows = flowFwdAligned; //refinement is not successful or not possible 
+				memcpy(flowIndexFwd, flowIndexFwd_orig, flow_len*sizeof(int));
+				break;				    		
+				}
+			}
+		delete[] flowIndexFwd_orig;
+						
 		
-		fwdFlowPos = 0;
-		revFlowPos = 0;
-		
-		for(int k=lenFwdAlignedFlowPadded -1 -rightSafeBand; k<lenFwdAlignedFlowPadded - 1; k++){
-			if(regionFwdFlowAligned.at(k)!='-') fwdFlowPos++;						
+		}else
+		{ //gaps_on_reverse		
+			
+			int *flowIndexRev_orig = new int[flow_len]; 
+			memcpy(flowIndexRev_orig, flowIndexRev, flow_len*sizeof(int)); //copy value
+							
+			corrected_gap_flows = flowRevAligned;
+			int revFlowIndexStart = flowIndexRev[reg_start]; 
+			int revFlowIndexStop = flowIndexRev[reg_stop];	
+			
+			int k = reg_start;
+			for(int i=revFlowIndexStart; i>=revFlowIndexStop; i--){	
+				if(k>reg_stop){
+					corrected_gap_flows = flowRevAligned;
+					break;
+				}				
+				if(complimentNuc(flow_seq_rev[i-1])==flowFwdAligned[k]){ //a hit from fwd_flow to rev_flow sequence
+					flowIndexRev[k] = i; 
+					int num_hp = roundsff((float)flow_sig_rev[i-1]/100);
+					if(num_hp>=1) {
+						corrected_gap_flows.replace(k, 1, flowFwdAligned, k, 1); //a hit from called fwd_flow (large signal) to rev_flow sequence				
+					}
+					else corrected_gap_flows.replace(k, 1, "-"); //a hit from non-called fwd_flow (no signal or small signal) to rev_flow sequence
+					k++;
+				}
+				else{//no hit, move to next fwd flow
+					continue; //k does not change
+					}
+				}
+			
+			//check if refinement is ok
+			
+			int rev_ind_non_gap[100];
+			int rev_ind_non_gap_pos[100];
+			int num_rev_ind_non_gap = 0;
+			
+			for(int i = reg_start; i<= reg_stop; i++){
+				if(flowIndexRev[i]==-10) continue;
+				rev_ind_non_gap[num_rev_ind_non_gap] = flowIndexRev[i];
+				rev_ind_non_gap_pos[num_rev_ind_non_gap] = i;
+				num_rev_ind_non_gap++;
+			}		
+			
+			for(int i = 1; i < num_rev_ind_non_gap; i++){
+				if(rev_ind_non_gap[i-1]-rev_ind_non_gap[i] < rev_ind_non_gap_pos[i]-rev_ind_non_gap_pos[i-1]){
+					corrected_gap_flows = flowRevAligned; //refinement is not successful or not possible 
+					memcpy(flowIndexRev, flowIndexRev_orig, flow_len*sizeof(int));
+					break;				    		
+					}
+				}
+				
+			delete[] flowIndexRev_orig;
 		}
-		for(int k=lenRevAlignedFlowPadded -1 -rightSafeBand; k<lenRevAlignedFlowPadded - 1; k++){			 
-			if(regionRevFlowAligned.at(k)!='-') revFlowPos++;			
-		}
-		
-		
-		fwdStopOffset = 0;
-		for(int i=totalFwdFlows -1; i>totalFwdFlows -1 - fwdFlowPos; i--){
-			fwdStopOffset = fwdStopOffset + fwdHPNumbers[i];
-		}
-		revStopOffset = 0;
-		for(int i=totalRevFlows -1; i>totalRevFlows -1 - revFlowPos; i--){
-			revStopOffset = revStopOffset + revHPNumbers[i];
-		}							
-		
-		delete[] fwdHPNumbers;
-		delete[] revHPNumbers;
+	
+	
+	return corrected_gap_flows;
+	
+}
 
-	}
+bool build_strand_bias_map(std::string strand_bias_file, std::tr1::unordered_map<std::string, std::set<int> > *bias_map){
+
+    std::string read_name;
+    int bias_pos;
+    std::string ref_name;
+    int flow_index;
+    std::tr1::unordered_map<std::string,std::set<int> >::iterator read_flow_index_with_bias;
+    std::ifstream fp_strand_bias;
+
+    fp_strand_bias.open(strand_bias_file.c_str());
+    std::string line;
+
+    if (fp_strand_bias.fail()) {
+        std::cerr << "strand bias file couldn't be opened" << std::endl;
+        fp_strand_bias.close();
+        return false;
+    } else {
+        while (fp_strand_bias.good()) {
+            fp_strand_bias >> ref_name;
+            fp_strand_bias >> bias_pos;
+            fp_strand_bias >> read_name;
+            fp_strand_bias >> flow_index;
+
+            read_flow_index_with_bias = (*bias_map).find(read_name);
+
+            if(read_flow_index_with_bias!=(*bias_map).end()){ //insert to an existing Set
+                 std::set<int> myset;
+                 myset = read_flow_index_with_bias->second;
+                 myset.insert(flow_index);
+                 (*bias_map)[read_name] = myset;
+             }else{ //insert to a new Set
+                 std::set<int> myset;
+                 myset.clear();
+                 myset.insert(flow_index);
+                 (*bias_map).insert (std::make_pair<std::string,std::set<int> >(read_name,myset));
+             }
+           }
+        }
+        fp_strand_bias.close();    
+
+/*
+    std::tr1::unordered_map<std::string,std::set<int> >::const_iterator found_set;
+
+    for(found_set=(*bias_map).begin(); found_set!=(*bias_map).end(); found_set++){
+
+        std::set<int>::iterator it;
+
+        if(found_set->second.size()>1){
+            std::cout << "read " << found_set->first << " contains more than 1 biased positions: ";
+            for(it=found_set->second.begin(); it!=found_set->second.end(); it++){
+                std::cout << " " << *it;
+            }
+
+            std::cout << std::endl;
+        }
+
+    }
+*/
+
+    return true;
+
+}
+
+bool find_read_in_bias_map(std::string read_name, std::tr1::unordered_map<std::string, std::set<int> > *bias_map, std::set<int> *bias_flow_index_set){
+
+    std::tr1::unordered_map<std::string,std::set<int> >::const_iterator found_set;
+    found_set = (*bias_map).find (read_name);
+    if(found_set!=(*bias_map).end()){
+        *bias_flow_index_set = (*found_set).second;
+        return true;
+    }else{
+        return false;
+    }
+
+}
+
+bool find_flow_index_with_bias(std::set<int> bias_flow_index_set, int flow_index){
+
+    std::set<int>::iterator it;
+    it = bias_flow_index_set.find(flow_index);
+    if(it!=bias_flow_index_set.end()){
+        return true;
+    }else{
+        return false;
+    }
+
+}
+
+

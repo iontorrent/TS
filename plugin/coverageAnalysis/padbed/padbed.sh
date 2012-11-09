@@ -85,6 +85,14 @@ if [ $? -ne 0 ]; then
   echo "\$ $BCMD" >&2
   exit 1;
 fi
+
+# mergeBed re-orders the regions to alpha-num - need to re-order back to genome order
+mv "$BEDOUT" "$BEDOUTTMP"
+for CHRID in `awk '{print $1}' "$GENOME"`
+do
+  AWKCMD="awk '\$1==\"$CHRID\" {print}' \"$BEDOUTTMP\" >> \"$BEDOUT\""
+  eval "$AWKCMD"
+done
 rm -f "$BEDOUTTMP"
 
 if [ $SHOWLOG -eq 1 ]; then

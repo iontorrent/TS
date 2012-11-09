@@ -1,0 +1,16 @@
+/**
+http://www.jshint.com/docs/ 
+    "validthis": true,
+    "laxcomma" : true,
+    "laxbreak" : true,
+    "browser"  : true,
+    "debug"    : true,
+    "boss"     : true,
+    "expr"     : true,
+    "asi"      : true,
+    "eqeqeq"   : true,
+    "undef"    : true,
+    "curly"    : true
+*/
+{
+}

@@ -4,10 +4,10 @@
 """
 Loads Fullchip analysis pipeline
 Uses output from there to generate charts and graphs and dumps to current directory
-Adds key metrics to database(not implemented yet)
+Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 30539 $")
+__version__ = filter(str.isdigit, "$Revision: 43376 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -18,24 +18,24 @@ import tempfile
 
 # matplotlib/numpy compatibility
 os.environ['HOME'] = tempfile.mkdtemp()
-from matplotlib import use
-use("Agg")
+#from matplotlib import use
+#use("Agg")
 
 # import /etc/torrentserver/cluster_settings.py, provides JOBSERVER_HOST, JOBSERVER_PORT
 import sys
 sys.path.append('/etc')
 from torrentserver.cluster_settings import *
 
+import hashlib
 import ConfigParser
 import shutil
 import socket
-import subprocess
 import time
 import traceback
-import fnmatch
 import json
 import xmlrpclib
 from ion.utils import blockprocessing
+from ion.utils import explogparser
 from ion.utils import sigproc
 from ion.utils import basecaller
 from ion.utils import alignment
@@ -52,7 +52,7 @@ from urlparse import urlunsplit
 #from ion.analysis import cafie,sigproc
 #from ion.fileformats import sff
 from ion.reports import blast_to_ionogram, \
-    parseBeadfind, parseProcessParams, beadDensityPlot, \
+    parseBeadfind, parseProcessParams, \
     libGraphs, beadHistogram
 
 from ion.reports.plotters import *
@@ -96,13 +96,6 @@ def getExpLogMsgs(env):
         line = f.readline()
 
     f.close()
-    
-    # internal hack for easy access to experiment log file
-    try:
-        if os.path.isfile("/opt/ion/.ion-internal-server"):
-            os.symlink(inputFile,'./explog_final.txt')
-    except:
-        printtime(traceback.format_exc())
         
     return False
 
@@ -119,7 +112,7 @@ def get_pgm_log_files(rawdatadir):
     'Controller',
     'debug']
     for afile in files:
-        make_zip ('pgm_logs.zip',os.path.join(rawdatadir,afile), afile)
+        make_zip ('pgm_logs.zip',os.path.join(rawdatadir,afile),arcname=afile)
 
     return
 
@@ -131,110 +124,54 @@ def GetBlocksToAnalyze(env):
 
         block = {'id_str':'',
                 'datasubdir':'',
-                'jobcmd':[],
                 'jobid':None,
                 'status':None}
 
-        base_args = env['analysisArgs'].strip().split(' ')
-        base_args.append("--libraryKey=%s" % env["libraryKey"])
-        base_args.append("--tfKey=%s" % env["tfKey"])
-        base_args.append("--no-subdir --wellsfileonly")
-
         if is_thumbnail:
-            thumbnailsize = blockprocessing.getThumbnailSize(env['exp_json'])
             block['id_str'] = 'thumbnail'
-            base_args.append("--cfiedr-regions-size=50x50")
-            base_args.append("--block-size=%sx%s" % (thumbnailsize[0], thumbnailsize[1]))
-            base_args.append("--beadfind-thumbnail 1")
-            base_args.append("--bkg-debug-param 1")
 
         elif is_wholechip:
             block['id_str'] = 'wholechip'
 
-        base_args.append("--output-dir=%s" % env['SIGPROC_RESULTS'])
-
-        block['jobcmd'] = base_args
-        print base_args
         print block
         blocks.append(block)
 
     else:
-        explogblocks = blockprocessing.getBlocksFromExpLog(env['exp_json'])
+        explogblocks = explogparser.getBlocksFromExpLogJson(env['exp_json'],excludeThumbnail=True)
         for block in explogblocks:
-            #ignore thumbnail
-            if block['id_str'] =='thumbnail':
-                continue
-
-            base_args = env['analysisArgs'].strip().split(' ')
-            # raw data dir is last element in analysisArgs and needs the block subdirectory appended
-            base_args[-1] = os.path.join(base_args[-1], block['datasubdir'])
-            rawDirectory = base_args[-1]
-            base_args.append("--libraryKey=%s" % env["libraryKey"])
-            base_args.append("--no-subdir --wellsfileonly")
-            base_args.append("--output-dir=%s" % env['SIGPROC_RESULTS'])
-
-            block['jobcmd'] = base_args
+            rawDirectory = block['datasubdir']
             print "expblock: " + str(block)
-            if (block['autoanalyze'] and block['analyzeearly']) or os.path.isdir(rawDirectory):
-                print "base_args: " + str(base_args)
+            if (block['autoanalyze'] and block['analyzeearly']) or os.path.isdir(os.path.join(env['pathToRaw'],rawDirectory)) or env['blockArgs'] == "fromWells":
                 print "block: " + str(block)
                 blocks.append(block)
 
     return blocks
 
-def initBlockReport(blockObj):
 
-    file_in = open("ion_params_00.json", 'r')
-    TMP_PARAMS = json.loads(file_in.read())
-    file_in.close()
+def hash_matches(full_filename):
+    ret = False
+    try:
+        with open(full_filename,'rb') as f:
+            binary_content = f.read()
+            md5sum = hashlib.md5(binary_content).hexdigest()
 
-    if is_wholechip:
-        resultDir = "./"
-    elif is_thumbnail:
-        resultDir = "./"
-    else:
-        resultDir = './%s%s' % ('block_', blockObj['id_str'])
+        head, tail = os.path.split(full_filename)
+        with open(os.path.join(head,'MD5SUMS'),'r') as f:
+            lines = f.readlines()
+        expected_md5sums = {}
+        for line in lines:
+            ahash,filename = line.split()
+            expected_md5sums[filename]=ahash
+        ret = (expected_md5sums[tail]==md5sum)
+    except:
+        traceback.print_exc()
+        pass
+    return ret
 
-        if not os.path.exists(resultDir):
-            os.mkdir(resultDir)
-
-        # update path to data
-        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['id_str'])
-
-        cwd = os.getcwd()
-        r = subprocess.call(["ln", "-s", os.path.join(cwd,"Default_Report.php"), os.path.join(resultDir,"Default_Report.php")])
-        if r:
-            printtime("couldn't create symbolic link")
-        r = subprocess.call(["ln", "-s", os.path.join(cwd,"parsefiles.php"), os.path.join(resultDir,"parsefiles.php")])
-        if r:
-            printtime("couldn't create symbolic link")
-        r = subprocess.call(["ln", "-s", os.path.join(cwd,"DefaultTFs.conf"), os.path.join(resultDir,"DefaultTFs.conf")])
-        if r:
-            printtime("couldn't create symbolic link")
-
-    # update analysisArgs section
-    TMP_PARAMS["analysisArgs"] = ' '.join(blockObj['jobcmd'])
-
-    if os.path.isfile("/opt/ion/.ion-internal-server"):
-        TMP_PARAMS['sam_parsed'] = True
-        printtime("HEY! Found .ion-internal-server")
-    else:
-        TMP_PARAMS['sam_parsed'] = False
-        printtime("No file named .ion-internal-server")
-
-    #write block specific ion_params_00.json
-    file_out = open("%s/ion_params_00.json" % resultDir, 'w')
-    json.dump(TMP_PARAMS, file_out)
-    file_out.close()
-
-    return resultDir
 
 def spawn_cluster_job(rpath, scriptname, args, holds=None):
-    out_path = "%s/drmaa_stdout_block.html" % rpath
+    out_path = "%s/drmaa_stdout_block.txt" % rpath
     err_path = "%s/drmaa_stderr_block.txt" % rpath
-    logout = open(os.path.join(out_path), "w")
-    logout.write("<html><pre> \n")
-    logout.close()
     cwd = os.getcwd()
 
     #SGE
@@ -242,12 +179,6 @@ def spawn_cluster_job(rpath, scriptname, args, holds=None):
     if is_thumbnail:
         sge_queue = 'thumbnail.q'
     jt_nativeSpecification = "-pe ion_pe 1 -q " + sge_queue
-
-    # TODO experiment
-    if is_blockprocessing and ("X1" in rpath): # process some blocks on instrument
-        if env['pgmName'] == "Mustang": # != ""
-            sge_queue = "proton_" + env['pgmName'].lower() + ".q"
-            jt_nativeSpecification = "-q " + sge_queue
 
     printtime("Use "+ sge_queue)
 
@@ -294,7 +225,8 @@ if __name__=="__main__":
 
     blockprocessing.printheader()
 
-    env = blockprocessing.getparameter()
+    env,warn = explogparser.getparameter()
+    print warn    
 
     try:
         primary_key = open("primary.key").readline()
@@ -337,16 +269,6 @@ if __name__=="__main__":
     #drops a zip file of the pgm log files
     get_pgm_log_files(env['pathToRaw'])
 
-    #copy explog.txt into report directory
-    try:
-        explogfilepath = os.path.join(env['pathToRaw'],'explog.txt')
-        if os.path.exists(explogfilepath):
-            shutil.copy(explogfilepath, ".")
-        else:
-            printtime("ERROR: %s doesn't exist" % explogfilepath)
-    except:
-        printtime(traceback.format_exc())
-
     # Generate a system information file for diagnostics purposes.
     try:
         com="/usr/bin/ion_sysinfo 2>&1 >> ./sysinfo.txt"
@@ -355,18 +277,16 @@ if __name__=="__main__":
         print traceback.format_exc()
 
     #############################################################
-    # Code to start full chip analysis                           #
+    # Code to start full chip analysis                          #
     #############################################################
     os.umask(0002)
 
-    # define entry point
-    print "blockArgs '"+str(env['blockArgs'])+"'"
-    print "previousReport: '"+str(env['previousReport'])+"'"
-
+    '''
     fromwellsfiles = []
     fromwellsfiles.append("iontrace_Library.png")
     fromwellsfiles.append("1.wells")
     fromwellsfiles.append("bfmask.stats")
+    fromwellsfiles.append("analysis.bfmask.stats")
     fromwellsfiles.append("analysis.bfmask.bin")
     fromwellsfiles.append("Bead_density_raw.png")
     fromwellsfiles.append("Bead_density_contour.png")
@@ -380,84 +300,141 @@ if __name__=="__main__":
     fromsfffiles.append("bfmask.bin")
     fromsfffiles.append("readLen.txt")
     fromsfffiles.append("raw_peak_signal")
-    fromsfffiles.append("beadSummary.filtered.txt")
+    fromsfffiles.append("BaseCaller.json")
+    '''
+    print "oninstranalysis:(%s)" % env['oninstranalysis']
+    if env['oninstranalysis'] and is_blockprocessing:
+        env['blockArgs'] = "fromRaw" # because heatmaps have to be generated on TS
+
+    # define entry point
+    print "blockArgs '"+str(env['blockArgs'])+"'"
+    print "previousReport: '"+str(env['previousReport'])+"'"
+
+    explogfilepath = os.path.join(env['pathToRaw'],'explog.txt')
+    explogfinalfilepath = os.path.join(env['pathToRaw'],'explog_final.txt')
 
     if env['blockArgs'] == "fromRaw":
         runFromRaw = True
         runFromWells = True
         runFromSFF = True
+
+        if env['oninstranalysis'] and is_blockprocessing:
+            os.symlink(os.path.join(env['pathToRaw'], 'onboard_results', env['SIGPROC_RESULTS']), env['SIGPROC_RESULTS'])
+        else:
+            if not os.path.isdir(env['SIGPROC_RESULTS']):
+                try:
+                    os.mkdir(env['SIGPROC_RESULTS'])
+                except:
+                    traceback.print_exc()
+
+        if not os.path.isdir(env['BASECALLER_RESULTS']):
+            try:
+                os.mkdir(env['BASECALLER_RESULTS'])
+            except:
+                traceback.print_exc()
+
     elif env['blockArgs'] == "fromWells":
         runFromRaw = False
         runFromWells = True
         runFromSFF = True
-        #r = subprocess.call(["ln", "-s", os.path.join(env['previousReport'], env['SIGPROC_RESULTS'])])
-        for afilename in fromwellsfiles:
+        explogfilepath = os.path.join(env['previousReport'],'explog.txt')
+        explogfinalfilepath = os.path.join(env['previousReport'],'explog_final.txt')
+
+        sigproc_target = os.path.join(env['previousReport'], env['SIGPROC_RESULTS'])
+
+        # fix, try to prepare old reports
+        if not os.path.exists(sigproc_target):
+            os.symlink(env['previousReport'], sigproc_target)
+
+        os.symlink(sigproc_target,env['SIGPROC_RESULTS'])
+
+        if not os.path.isdir(env['BASECALLER_RESULTS']):
             try:
-                shutil.copy( os.path.join(env['previousReport'], env['SIGPROC_RESULTS'], afilename) ,  os.path.join(env['SIGPROC_RESULTS'], afilename) )
+                os.mkdir(env['BASECALLER_RESULTS'])
             except:
                 traceback.print_exc()
     elif env['blockArgs'] == "fromSFF":
         runFromRaw = False
         runFromWells = False
         runFromSFF = True
-        #r = subprocess.call(["ln", "-s", os.path.join(env['previousReport'], env['SIGPROC_RESULTS'])])
-        for afilename in fromwellsfiles:
-            try:
-                shutil.copy( os.path.join(env['previousReport'], env['SIGPROC_RESULTS'], afilename) ,  os.path.join(env['SIGPROC_RESULTS'], afilename) )
-            except:
-                traceback.print_exc()
-        #r = subprocess.call(["ln", "-s", os.path.join(env['previousReport'], env['BASECALLER_RESULTS'])])
-        for afilename in fromsfffiles:
-            try:
-                shutil.copy( os.path.join(env['previousReport'], env['BASECALLER_RESULTS'], afilename) ,  os.path.join(env['BASECALLER_RESULTS'], afilename) )
-            except:
-                traceback.print_exc()
-        # barcode processing: copy barcodeSplit SFF/FASTQ files
-        bcpath_old = os.path.join(env['previousReport'],env['DIR_BC_FILES'])        
-        if os.path.exists(bcpath_old):
-            printtime("Found barcode folder")
-            try:
-                if not os.path.exists(env['DIR_BC_FILES']):
-                    os.mkdir(env['DIR_BC_FILES'])
-                alist = os.listdir(bcpath_old)
-                extlist = ['sff','fastq']
-                for ext in extlist:
-                    filelist = fnmatch.filter(alist, "*." + ext)
-                    for bfile in filelist:
-                        shutil.copy( os.path.join(bcpath_old, bfile), os.path.join(env['DIR_BC_FILES'], bfile) )
-            except:
-                traceback.print_exc()
+        explogfilepath = os.path.join(env['previousReport'],'explog.txt')
+        explogfinalfilepath = os.path.join(env['previousReport'],'explog_final.txt')
+        previous_raw_peak_signal = os.path.join(env['previousReport'], 'raw_peak_signal')
+
+        sigproc_target = os.path.join(env['previousReport'], env['SIGPROC_RESULTS'])
+        basecaller_target = os.path.join(env['previousReport'], env['BASECALLER_RESULTS'])
+
+        # fix, try to prepare old reports
+        if not os.path.exists(sigproc_target):
+            os.symlink(env['previousReport'], sigproc_target)
+        if not os.path.exists(basecaller_target):
+            os.symlink(env['previousReport'], basecaller_target)
+
+        os.symlink(sigproc_target,env['SIGPROC_RESULTS'])
+        os.symlink(basecaller_target, env['BASECALLER_RESULTS'])
+        os.symlink(previous_raw_peak_signal, 'raw_peak_signal')
     else:
         printtime("WARNING: start point not defined, create new report from raw data")
         runFromRaw = True
         runFromWells = True
         runFromSFF = True
 
-    blockprocessing.initreports(env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'])
-    logout = open("ReportLog.html", "w")
-    logout.close()
+        if not os.path.isdir(env['SIGPROC_RESULTS']):
+            try:
+                os.mkdir(env['SIGPROC_RESULTS'])
+            except:
+                traceback.print_exc()
+        if not os.path.isdir(env['BASECALLER_RESULTS']):
+            try:
+                os.mkdir(env['BASECALLER_RESULTS'])
+            except:
+                traceback.print_exc()
 
+    #copy explog.txt into report directory
+    try:
+        if os.path.exists(explogfilepath):
+            shutil.copy(explogfilepath, ".")
+        else:
+            printtime("ERROR: %s doesn't exist" % explogfilepath)
+    except:
+        printtime(traceback.format_exc())
+
+    pluginbasefolder = 'plugin_out'
+    blockprocessing.initTLReport(pluginbasefolder)
+    
+    env['report_root_dir'] = os.getcwd()
+    
     sys.stdout.flush()
     sys.stderr.flush()
-
-    try:
-        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % (JOBSERVER_HOST, JOBSERVER_PORT), verbose=False, allow_none=True)
-    except (socket.error, xmlrpclib.Fault):
-        traceback.print_exc()
-
-    basefolder = 'plugin_out'
-    if not os.path.isdir(basefolder):
-        os.umask(0000)   #grant write permission to plugin user
-        os.mkdir(basefolder)
-        os.umask(0002)
 
     #-------------------------------------------------------------
     # Update Report Status to 'Started'
     #-------------------------------------------------------------
     try:
-        jobserver.updatestatus(os.path.join(os.getcwd(),'primary.key'),'Started',True)
+        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % (JOBSERVER_HOST, JOBSERVER_PORT), verbose=False, allow_none=True)
+        debugging_cwd = os.getcwd()
     except:
         traceback.print_exc()
+    
+    def set_result_status(status):
+        try:
+            primary_key_file = os.path.join(os.getcwd(),'primary.key')
+            jobserver.updatestatus(primary_key_file, status, True)
+            printtime("TLStatus %s\tpid %d\tpk file %s started in %s" % 
+                (status, os.getpid(), primary_key_file, debugging_cwd))
+        except:
+            traceback.print_exc()
+
+    set_result_status('Started')
+        
+    
+    #-------------------------------------------------------------
+    # Initialize plugins
+    #-------------------------------------------------------------
+    plugins = blockprocessing.get_plugins_to_run(env['plugins'], env['report_type']) 
+    blocklevel_plugins = [] 
+    if is_blockprocessing:
+      blocklevel_plugins = [p for p in plugins if ('runlevel' in p.keys() and 'block' in p['runlevel'])]    
         
     #-------------------------------------------------------------
     # Gridded data processing
@@ -468,7 +445,7 @@ if __name__=="__main__":
     # List of block objects to analyze
     blocks = GetBlocksToAnalyze(env)
     dirs = ['block_%s' % block['id_str'] for block in blocks]
-#    dirs = ['%s/block_%s' % (SIGPROC_RESULTS, block['id_str']) for block in blocks]
+    # dirs = ['%s/block_%s' % (SIGPROC_RESULTS, block['id_str']) for block in blocks]
 
     #####################################################
     # Create block reports                              #
@@ -478,67 +455,140 @@ if __name__=="__main__":
     doblocks = 1
     if doblocks:
 
-        sigproc_job_list = []
-        basecaller_job_list = []
-        alignment_job_list = []
+        sigproc_job_dict = {}
+        basecaller_job_dict = {}
+        alignment_job_dict = {}
+        merge_job_dict = {}
 
-        result_dirs = []
-        for idx, block in enumerate(blocks):
-            result_dirs.append(initBlockReport(block))
+        result_dirs = {}
+        for block in blocks:
+            result_dirs[block['id_str']] = blockprocessing.initBlockReport(block, env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'], env['oninstranalysis'])
 
-        if runFromRaw:
-            printtime("PROCESSING FROM RAW")
+        # create a list of blocks
+        blocks_to_process = []
+        blocks_to_process.extend(blocks)
+        timeout = 3*60*60
+        if env['oninstranalysis'] and is_blockprocessing:
+            timeout = 36*60*60
+        
+        env['block_dirs'] = [os.path.join(env['report_root_dir'],result_dirs[block['id_str']]) for block in blocks_to_process]
 
-            for idx, block in enumerate(blocks):
-                block['jobid'] = spawn_cluster_job(result_dirs[idx],'BlockTLScript.py', '--do-sigproc')
-                sigproc_job_list.append( str(block['jobid']) )
-                printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
-            if not is_thumbnail and not is_wholechip:
-                jid = spawn_cluster_job('.','MergeTLScript.py','--do-sigproc',sigproc_job_list)
+        while len(blocks_to_process) > 0 and timeout > 0:
+            for block in blocks_to_process:
+                printtime('waiting for %s block(s) to start' % str(len(blocks_to_process)))
+                sys.stdout.flush()
+                sys.stderr.flush()
 
-        if runFromWells:
-            printtime("PROCESSING FROM WELLS")
+                if runFromRaw:
+                    if is_thumbnail or is_wholechip:
+                        data_file = os.path.join(env['pathToRaw'],'acq_0000.dat')
+                    else:
+                        data_file = os.path.join(env['pathToRaw'],block['id_str'],'acq_0000.dat')
 
-            for idx, block in enumerate(blocks):
-                if env['blockArgs'] == "fromWells":
-                    wait_list = []
-                else:
-                    wait_list = [ sigproc_job_list[idx] ]
-                block['jobid'] = spawn_cluster_job(result_dirs[idx],'BlockTLScript.py','--do-basecalling',wait_list)
-                basecaller_job_list.append( str(block['jobid']) )
-                printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
-            if not is_thumbnail and not is_wholechip:
-                jid = spawn_cluster_job('.','MergeTLScript.py','--do-basecalling',basecaller_job_list)
+                    if env['oninstranalysis'] and is_blockprocessing:
+                        data_file = os.path.join(env['SIGPROC_RESULTS'],'block_'+block['id_str'])
 
-        if runFromSFF:
-            printtime("PROCESSING FROM SFF")
+                    if os.path.exists(data_file):
 
-            for idx, block in enumerate(blocks):
-                if env['blockArgs'] == "fromSFF":
-                    wait_list = []
-                else:
-                    wait_list = [ basecaller_job_list[idx] ]
-                block['jobid'] = spawn_cluster_job(result_dirs[idx],'BlockTLScript.py','--do-alignment',wait_list)
-                alignment_job_list.append( str(block['jobid']) )
-                printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
-            if not is_thumbnail and not is_wholechip:
-                jid = spawn_cluster_job('.','MergeTLScript.py','--do-alignment',alignment_job_list)
-            else:
-                jid = spawn_cluster_job('.','MergeTLScript.py','--do-zipping',alignment_job_list)
+                        if env['oninstranalysis'] and is_blockprocessing:
+                            # wait until transfer seems to be finished
+                            mod_time = os.stat(data_file).st_mtime
+                            cur_time = time.time()
+                            if cur_time - mod_time < 120:
+                                printtime("mtime %s" % mod_time)
+                                printtime("ctime %s" % cur_time)
+                                timeout -= 10
+                                time.sleep (10)
+                                continue
+
+                            wells_file = os.path.join(data_file, '1.wells')
+                            if not hash_matches(wells_file):
+                                printtime("WARNING: %s might be corrupt" % wells_file)
+                                #blocks_to_process.remove(block)
+                                #continue
+                            
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', '--do-sigproc')
+                        sigproc_job_dict[block['id_str']] = str(block['jobid'])
+                        printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
+                    else:
+                        printtime("missing %s" % data_file)
+                        timeout -= 10
+                        time.sleep (10)
+                        continue
+
+
+                if runFromWells:
+                    try:
+                        if env['blockArgs'] == "fromWells":
+                            wait_list = []
+                        else:
+                            wait_list = [ sigproc_job_dict[block['id_str']] ]
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py','--do-basecalling',wait_list)
+                        basecaller_job_dict[block['id_str']] = str(block['jobid'])
+                        printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
+                    except:
+                        printtime("submitting basecaller job for block (%s) failed" % block['id_str'])
+
+
+                if runFromSFF:
+                    try:
+                        if env['blockArgs'] == "fromSFF":
+                            wait_list = []
+                        else:
+                            wait_list = [ basecaller_job_dict[block['id_str']] ]
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py','--do-alignment',wait_list)
+                        alignment_job_dict[block['id_str']] = str(block['jobid'])
+                        printtime("Submitted block (%s) alignment job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
+                    except:
+                        printtime("submitting alignment job for block (%s) failed" % block['id_str'])
+
+                blocks_to_process.remove(block)
+
+
+        if not is_thumbnail and not is_wholechip:
+            if runFromRaw:
+                merge_job_dict['sigproc'] = spawn_cluster_job('.','MergeTLScript.py','--do-sigproc',sigproc_job_dict.values())
+            if runFromWells:
+                merge_job_dict['basecaller'] = spawn_cluster_job('.','MergeTLScript.py','--do-basecalling',basecaller_job_dict.values())
+            if runFromSFF:
+                merge_job_dict['alignment'] = spawn_cluster_job('.','MergeTLScript.py','--do-alignment',alignment_job_dict.values()+[merge_job_dict.get('basecaller','')])
+        else:
+            merge_job_dict['merge/zipping'] = spawn_cluster_job('.','MergeTLScript.py','--do-zipping',alignment_job_dict.values())
+
 
         # write job id's to file
         f = open('job_list.txt','w')
-        for jobid in sigproc_job_list:
+        job_list = {}
+        job_list['merge']= merge_job_dict
+        for block, jobid in sigproc_job_dict.items():
             f.write(jobid+'\n')
-        for jobid in basecaller_job_list:
+            job_list[block] = {'sigproc': jobid}
+        for block, jobid in basecaller_job_dict.items():
             f.write(jobid+'\n')
-        for jobid in alignment_job_list:
+            if job_list.has_key(block):            
+                job_list[block]['basecaller'] = jobid
+            else:
+                job_list[block] = {'basecaller': jobid}    
+        for block, jobid in alignment_job_dict.items():
             f.write(jobid+'\n')
+            if job_list.has_key(block):            
+                job_list[block]['alignment'] = jobid
+            else:
+                job_list[block] = {'alignment': jobid}    
+        for jobname, jobid in merge_job_dict.items():
+            f.write(jobid+'\n')            
         f.close()
+        # write more descriptive json list of jobs
+        with open('job_list.json','w') as f:
+            f.write(json.dumps(job_list,indent=2))
+
+        # multilevel plugins preprocessing level
+        blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'pre')
 
         # Watch status of jobs.  As they finish remove the job from the list.
 
         pl_started = False
+        alignment_job_list = alignment_job_dict.values()
         while len(alignment_job_list) > 0:
             for job in alignment_job_list:
                 block = [block for block in blocks if block['jobid'] == job][0]
@@ -549,53 +599,48 @@ if __name__=="__main__":
                     traceback.print_exc()
                     continue
 
+                if (len(blocklevel_plugins) > 0) and (block['status']=='done'):
+                    block_pluginbasefolder = os.path.join(result_dirs[block['id_str']],pluginbasefolder)
+                    env['blockId'] = block['id_str']
+                    if not os.path.isdir(block_pluginbasefolder):
+                        oldmask = os.umask(0000)   #grant write permission to plugin user
+                        os.mkdir(block_pluginbasefolder)
+                        os.umask(oldmask)  
+                    plugins = blockprocessing.runplugins(plugins, env, block_pluginbasefolder, url_root, 'block')
+
                 if block['status']=='done' or block['status']=='failed' or block['status']=="DRMAA BUG":
                     printtime("Job %s has ended with status %s" % (str(block['jobid']),block['status']))
                     alignment_job_list.remove(block['jobid'])
 #                else:
 #                    printtime("Job %s has status %s" % (str(block['jobid']),block['status']))
-
-                # Hack
-                if is_thumbnail and not pl_started:
-                    if os.path.exists('progress.txt'):
-                        f = open('progress.txt')
-                        text = f.read()
-                        f.close()
-                    else:
-                        printtime("progress.txt not found (waiting for Analysis)")
-                        continue
-                    try:
-                        matches = re.findall(r"wellfinding = green", text)
-                        if len(matches) != 0:
-                            pl_started = True
-                            plugin_set = set()
-                            plugin_set.add('rawPlots')
-                            plugin_set.add('separator')
-                            plugin_set.add('chipNoise')
-                            blockprocessing.run_selective_plugins(plugin_set, env, basefolder, url_root)
-                    except:
-                        traceback.print_exc()
-                        continue
+                
+            if os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'separator.mask.bin')) and not pl_started:
+                plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'separator')
+                pl_started = True
 
 
             printtime("waiting for %d blocks to be finished" % len(alignment_job_list))
-            time.sleep (5)
+            time.sleep (10)
 
-        if not is_thumbnail and not is_wholechip:
-            while True:
+        merge_job_list = merge_job_dict.keys()
+        while len(merge_job_list) > 0:
+            for key in merge_job_list:
+
                 #check status of jobid
                 try:
+                    jid = merge_job_dict[key]
                     merge_status = jobserver.jobstatus(jid)
                 except:
                     traceback.print_exc()
                     continue
 
                 if merge_status=='done' or merge_status=='failed' or merge_status=="DRMAA BUG":
-                    printtime("Job %s has ended with status %s" % (jid,merge_status))
+                    printtime("Job %s, %s has ended with status %s" % (key,jid,merge_status))
+                    merge_job_list.remove(key)
                     break
 
-            printtime("waiting for merge block")
-            time.sleep (5)
+            printtime("waiting for %d merge jobs to be finished" % len(merge_job_list))
+            time.sleep (10)
 
 
     printtime("All jobs processed")
@@ -642,8 +687,8 @@ if __name__=="__main__":
         tfmapperstats_outputfile = os.path.join(env['BASECALLER_RESULTS'],"TFStats.json")
         merged_bead_mask_path = os.path.join(env['SIGPROC_RESULTS'], 'MaskBead.mask')
         QualityPath = os.path.join(env['BASECALLER_RESULTS'],'quality.summary')
-        peakOut = 'raw_peak_signal'
-        beadPath = os.path.join(env['SIGPROC_RESULTS'],'bfmask.stats')
+        peakOut = os.path.join('.','raw_peak_signal')
+        beadPath = os.path.join(env['SIGPROC_RESULTS'],'analysis.bfmask.stats')
         procPath = os.path.join(env['SIGPROC_RESULTS'],'processParameters.txt')
         filterPath = None
         reportLink = True
@@ -662,7 +707,7 @@ if __name__=="__main__":
                             if int(status) == 2:
                                 STATUS = 'Checksum Error'
                             elif int(status) == 3:
-                                STATUS = 'PGM Operation Error'#'No Live Beads'
+                                STATUS = 'No Live Beads'
                             else:
                                 STATUS = "Error in %s" % component
                         elif component == 'alignmentQC.pl':
@@ -687,12 +732,13 @@ if __name__=="__main__":
             os.path.join(mycwd,peakOut),
             os.path.join(mycwd,QualityPath),
             os.path.join(mycwd,BaseCallerJsonPath),
+            "", #pe.json
             os.path.join(mycwd,'primary.key'),
             os.path.join(mycwd,'uploadStatus'),
             STATUS,
             reportLink)
         # this will replace the five progress squares with a re-analysis button
-        print "jobserver.uploadmetrics retured: "+str(ret_message)
+        print "jobserver.uploadmetrics returned: "+str(ret_message)
     except:
         traceback.print_exc()
 
@@ -709,23 +755,34 @@ if __name__=="__main__":
     except:
         printtime("RSM createExperimentMetrics.py failed")
 
+
+    #copy explog_final.txt into report directory
+    try:
+        if os.path.exists(explogfinalfilepath):
+            shutil.copy(explogfinalfilepath, ".")
+        else:
+            printtime("ERROR: %s doesn't exist" % explogfinalfilepath)
+    except:
+        printtime(traceback.format_exc())
+
+
+
     ########################################################
     # Write checksum_status.txt to raw data directory      #
     ########################################################
     if is_wholechip:
-        try:
-            if os.path.isfile("analysis_return_code.txt"):
-                shutil.copyfile("analysis_return_code.txt",os.path.join(env['pathToRaw'],"checksum_status.txt"))
-        except:
-            traceback.print_exc()
+        raw_return_code_file = os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt")
+    elif is_blockprocessing:
+        raw_return_code_file = os.path.join(env['BASECALLER_RESULTS'],"composite_return_code.txt")
 
-    if is_thumbnail or is_wholechip:
-        blockprocessing.runplugins(env, basefolder, url_root)
-    else:
-        plugin_set = set()
-        plugin_set.add('torrentscout')
-        plugin_set.add('rawPlots')
-        blockprocessing.run_selective_plugins(plugin_set, env, basefolder, url_root)
+    try:
+        if (is_wholechip or is_blockprocessing) and os.path.isfile(raw_return_code_file):
+            shutil.copyfile(raw_return_code_file,os.path.join(env['pathToRaw'],"checksum_status.txt"))
+    except:
+        traceback.print_exc()
+
+    # default plugin level
+    plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root)    
 
     if env['isReverseRun'] and env['pe_forward'] != "None":
         try:
@@ -739,5 +796,11 @@ if __name__=="__main__":
 
     getExpLogMsgs(env)
     get_pgm_log_files(env['pathToRaw'])
+    
+    # multilevel plugins postprocessing
+    blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'post')
+    # plugins last level - plugins in this level will wait for all previously launched plugins to finish
+    blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'last')
+    
     printtime("Run Complete")
     sys.exit(0)

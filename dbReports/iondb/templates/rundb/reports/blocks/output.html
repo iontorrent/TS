@@ -1,0 +1,44 @@
+<section id="OutputFiles">
+	<div class="row-fluid">
+		<div class="span12">
+			<a dynamic-navbar-section="" href="#OutputFiles">
+				<h2><span>Output Files</span></h2>
+			</a>
+		</div>
+	</div>			
+	
+	<div>				
+		<div id="fileSection" class="row-fluid">
+
+			<table id="file_table" class="">
+				<thead>
+					<tr>
+						<th>File Type</th>
+						<th>Reads</th>
+						<th>Aligned Reads</th>
+					</tr>
+				</thead>
+				<tbody>
+          		{% for output_group in output_file_groups %}
+					<tr>
+						<td>{{output_group.name}}</td>
+						<td>
+			              <a class="btn" rel='tooltip' title="Unaligned reads in the BAM format" href="{{output_group.basecaller_bam}}" style="opacity:{{output_group.basecaller_bam_dim}};">BAM</a>
+			              <a class="btn" rel='tooltip' title="Reads in SFF format. SFF format is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{output_group.sff}}" style="opacity:{{output_group.sff_dim}};">SFF</a>
+			              <a class="btn" href="{{output_group.fastq}}" style="opacity:{{output_group.fastq_dim}};">FASTQ</a>
+						</td>
+						<td>
+							<span class="btn-group">
+				              <a class="btn" href="{{output_group.bam}}" style="opacity:{{output_group.bam_dim}};">BAM</a>
+				              <a class="btn" rel='tooltip' title="BAM index file"  href="{{output_group.bai}}" style="opacity:{{output_group.bai_dim}};">BAI</a>
+				            </span>
+						</td>
+					</tr>
+				{% endfor %}
+				</tbody>
+			</table>
+			
+		</div><!-- row-fluid -->
+		
+	</div><!-- section -->			
+</section>

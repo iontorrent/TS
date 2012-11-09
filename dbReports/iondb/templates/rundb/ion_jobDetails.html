@@ -1,0 +1,149 @@
+{% extends "rundb/data/base.html" %}
+{% for s in temp.pruneChoices %}<li>{{ s }}</li>{% endfor %}
+{% block pagination_holder %}
+{% endblock pagination_holder %}
+{% block controls_holder %}
+{% endblock controls_holder %}
+
+
+
+{% block content %}
+
+  <style>
+    table, th, tr {
+      border-collapse: collapse;
+    }
+
+    tr, th, td {
+      border-left: 0px;
+      border-right: 0px;
+      border-bottom: 1px solid black;
+      padding-top: 10px;
+      padding-bottom: 10px;
+      margin: 10px;
+      font-size: 10pt;
+      margin-left: 10px;
+
+    }
+
+    input {
+      margin-right: 15px;
+    }
+
+    #toolbar {
+      padding: .5em;
+      margin: 1px;
+      margin-top: 20px;
+      font-size: 12px;
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+
+    #save {
+      float: right;
+    }
+
+    #can {
+      float: right;
+    }
+  </style>
+
+  <script type="text/javascript">
+    $(document).ready(function () {
+      $("#toolbar").addClass("ui-widget-header ui-corner-all");
+
+      $("#can").button();
+      $(".jstat").click(function(e){
+	e.preventDefault();
+	
+	url = $(this).data("link");
+	$('body #modal_jobstat').remove();
+
+	$.get(url, function(data) {
+	   $('body').append(data);
+	   $('#modal_jobstat').modal("show");
+	   return false;
+	}).done(function(data) { 
+    	  console.log("success:", url);
+	})
+        .fail(function(data) {
+    	  $('#error-messages').empty();
+    	  $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+    	  console.log("error:", data);
+    	 
+        })
+        .always(function(data) { /*console.log("complete:", data);*/ });
+        });
+      });
+  </script>
+  <script type="text/javascript">
+    var dge=document.getElementById;
+    function cl_expcol(a){
+      if(!dge)return;
+      document.getElementById(a).style.display=(document.getElementById(a).style.display=='none')?'block':'none';
+    }
+    
+    function cl_expsupcol(a){
+      if(!dge)return;
+      document.getElementById(a).style.display=(document.getElementById(a).style.display=='none')?'block':'none';
+    }
+  </script>
+
+  <div class="margins">
+    <h1>Grid Engine Job Details</h1>
+    <form action="" method='post' enctype="multipart/form-data">
+     <br /><a href="javascript:cl_expcol('exOverviewTable');">[+]</a><b> Queue Overview</b>
+     <ul id='exOverviewTable'>
+<!--This table will present an overview of currently running queues.-->
+      <table>
+	<tbody>
+	  <tr align='center'>
+	    <th>Name</th>
+	    <th># Pending</th>
+	    <th># Running</th>
+	    <th># Slots</th>
+	    <th>% Used</th>
+	  </tr>
+	  {% for queue in qList %}
+	    <tr align='center'>
+	      <th>{{ queue.0 }}</th>
+	      <td>{{ queue.1 }}</td>
+	      <td>{{ queue.2 }}</td>
+	      <td>{{ queue.3 }}</td>
+	      <td>{{ queue.4 }}%</td>
+	    </tr>
+	  {% endfor %}
+	</tbody>
+      </table>
+     </ul>
+<!--This table handles information about specific jobs.-->
+      <table>
+        <tbody>
+	  <tr><th>Job Information:</th></tr>
+	  {% for job in tlJobs %}
+	  <tr>
+	  <td><a href="javascript:cl_expcol('ex{{job.pk}}');">[+]</a> Report {{ job.Results.resultsName }}, job #<a href="#" class="jstat" data-link="/rundb/jobStat/{{ job.jid }}">{{ job.jid }}</a>, pk={{ job.pk }}, done: ~{{ job.finished }}%
+		<ul id='ex{{job.pk}}' style="display:none">
+		{% for bl in job.blocks %}<br />
+		  <a href="javascript:cl_expsupcol('ex{{bl}}');">[+]</a> {{ bl }}
+		    <ul id='ex{{bl}}'>
+		      {% for subJob in job.subJobs %}
+		        {% ifequal bl subJob.3 %}
+			  <li><a href="#" class="jstat" data-link="/rundb/jobStat/{{ subJob.0 }}">{{ subJob.0 }}</a>, {{ subJob.1 }}, {{ subJob.2 }}, {{ subJob.3 }}</li>
+		        {% endifequal %}
+		      {% endfor %}
+		    </ul>
+	    {% endfor %}
+	    </ul>
+	    </td>
+	  </tr>
+	  {% endfor %}
+	</tbody>
+      </table>
+      <div id="toolbar">
+	<input id="can" type="Button" value="Okay" name="Okay"
+               onclick="javascript:window.location.href='{% url rundb.views.servers %}';"/>
+      </div>
+    </form>
+  </div>
+{% endblock %}

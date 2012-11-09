@@ -31,12 +31,16 @@ class XtalkCurry{
     BkgTrace *my_trace_p;
     bool use_vectorization;
 
+    float *my_generic_xtalk;
+
     bool fast_compute;
     
     XtalkCurry();
+    ~XtalkCurry();
     void ExecuteXtalkFlux(int ibd, float *my_xtflux);
-   void NewXtalkFlux (int ibd,float *my_xtflux);
-   void ExcessXtalkFlux (int ibd,float *my_xtflux);
+   void NewXtalkFlux (int cx, int cy,float *my_xtflux);
+   void ExcessXtalkFlux (int cx, int cy,float *my_xtflux, float *my_nei_flux);
+   void ComputeTypicalCrossTalk(float *my_xtalk_buffer, float *my_nei_buffer);
    void CloseOverPointers(Region *_region, CrossTalkSpecification *_xtalk_spec_p,
                              BeadTracker *_my_beads_p, RegionTracker *_my_regions_p,
                              TimeCompression *_time_cp, PoissonCDFApproxMemo *_math_poiss,

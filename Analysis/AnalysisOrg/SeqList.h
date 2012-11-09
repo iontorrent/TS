@@ -18,11 +18,11 @@ class SeqListClass{
   ~SeqListClass();
   void Delete();
   void Allocate(int numItems);
-  void StdInitialize(char *flowOrder, char *libKey, char *tfKey, FILE *fpLog);
+  void StdInitialize(char *flowOrder, char *libKey, char *tfKey);
   void UpdateMinFlows(int &minNumKeyFlows);
   void UpdateMaxFlows(int &maxNumKeyFlows);
 };
 
-void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_flowOrder, char *libKey, char *tfKey, FILE *fpLog);
+void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_flowOrder, char *libKey, char *tfKey);
 
 #endif // SEQLIST_H

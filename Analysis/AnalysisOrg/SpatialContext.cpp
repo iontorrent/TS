@@ -1,5 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "SpatialContext.h"
+#include "HandleExpLog.h"
+#include "ImageTransformer.h"
 
 
 void SpatialContext::DefaultSpatialContext()
@@ -12,10 +14,10 @@ void SpatialContext::DefaultSpatialContext()
   chipRegion.h=0;
   cols = 0;
   rows = 0;
-  regionXOrigin = 624;
-  regionYOrigin = 125;
-  regionXSize = 50;
-  regionYSize = 50;
+  // regionXSize = 50;
+  // regionYSize = 50;
+  regionXSize = 0;
+  regionYSize = 0;
   cropRegions = NULL;
   numCropRegions = 0;
   // some raw image processing (like cross talk correction in the Image class) needs the absolute coordinates of the
@@ -36,34 +38,19 @@ void SpatialContext::DefaultSpatialContext()
 SpatialContext::~SpatialContext()
 {
   if (cropRegions)
-    free (cropRegions);
+    delete (cropRegions);
 }
 
-void SpatialContext::FindDimensionsByType (char *dat_source_directory)
+void SpatialContext::FindDimensionsByType (char *explog_path)
 {
-  char *chipType = GetChipId (dat_source_directory);
-  ChipIdDecoder::SetGlobalChipId (chipType); // @TODO: bad coding style, function side effect setting global variable
   int dims[2];
-  GetChipDim (chipType, dims, dat_source_directory); // @what if we're doing from wells and there are no dats?
+  GetChipDim (ChipIdDecoder::GetChipType(), dims, explog_path); // @what if we're doing from wells and there are no dats?
   chip_len_x = dims[0];
   chip_len_y = dims[1];
 }
 
 //@TODO: these are really methods for location context, but...
 //@TODO there are some weird effects in them that I don't like
-
-
-//@TODO:  bad, bad to use side effects and global variables like this
-void ExportSubRegionSpecsToImage (SpatialContext &loc_context)
-{
-  // Default analysis mode sets values to 0 and whole-chip processing proceeds.
-  // otherwise, command line override (--analysis-region) can define a subchip region.
-  Image::chipSubRegion.row = (loc_context.GetChipRegion()).row;
-  Image::chipSubRegion.col = (loc_context.GetChipRegion()).col;
-  Image::chipSubRegion.h = (loc_context.GetChipRegion()).h;
-  Image::chipSubRegion.w = (loc_context.GetChipRegion()).w;
-
-}
 
 
 //@TODO: for example, doesn't loc_context contain rows & cols?
@@ -73,8 +60,7 @@ void FixCroppedRegions (SpatialContext &loc_context, int _rows, int _cols)
   if (!loc_context.cropRegions)
   {
     loc_context.numCropRegions = 1;
-    loc_context.cropRegions = (Region *) malloc (sizeof (Region));
-    SetUpWholeChip (loc_context.cropRegions[0],_rows,_cols);
+    loc_context.cropRegions = new Region(0, 0, _cols, _rows);
   }
 }
 
@@ -100,13 +86,9 @@ void SetUpRegionDivisions (SpatialContext &loc_context, int _rows, int _cols)
 }
 
 
-void SetUpRegionsForAnalysis (int _rows, int _cols, SpatialContext &loc_context, Region &wholeChip)
+void SetUpRegionsForAnalysis (int _rows, int _cols, SpatialContext &loc_context)
 {
-
   FixCroppedRegions (loc_context, _rows, _cols);
-
   SetUpRegionDivisions (loc_context,_rows,_cols);
-  SetUpWholeChip (wholeChip,_rows,_cols);
-
 }
 

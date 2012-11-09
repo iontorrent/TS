@@ -1,0 +1,24 @@
+{% extends "rundb/configure/base.html" %}
+{% block sub-nav %}
+	<li class="active"><a href="{% url configure_about %}">About</a></li>			
+	<li><a href="{% url configure_references %}">References</a></li>
+	<li><a href="{% url configure_services %}">Services</a></li>
+	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
+	<li><a href="{% url configure_configure %}">Configure</a></li>	
+{% endblock sub-nav %}
+{% block content %}
+<div id='loading' class="modal-backdrop in k-loading-image"></div>
+<script type="text/javascript">
+$(document).ready(function(){
+	$.ajax({
+		url: '{{url}}'
+		, type: '{{type}}'
+	}).done(function(data) {
+		$('#loading').parent().append(data);	
+		$('#loading').remove();
+	}).fail(function(data) {
+    	console.log("error:", data);
+    }).always(function(data) { /*console.log("complete:", data);*/ });	;
+});
+</script>
+{% endblock content %}

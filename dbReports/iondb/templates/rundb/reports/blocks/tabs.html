@@ -1,0 +1,68 @@
+<section id="tabs">
+	<ul class="nav nav-tabs inContentTabs" id="ReportDetailsTab">
+		<li class="active">
+			<a data-toggle="tab" href="#PluginOutput">Plugin Summary</a>
+		</li>
+		<li>
+			<a data-toggle="tab" href="#TestFragments">Test Fragments</a>
+		</li>
+		<li>
+			<a data-toggle="tab" href="#AnalysisDetails">Analysis Details</a>
+		</li>
+		<li>
+			<a data-toggle="tab" href="#Support">Support</a>
+		</li>
+		<li>
+			<a data-toggle="tab" href="#SoftwareVersion">Software Version</a>
+		</li>
+	</ul>				
+	<div id="ReportDetailsTabContent" class="tab-content">
+		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
+			
+			<a id="pluginDialogButton" class="btn btn-tertiary">Select plugins to run</a>
+			<a id="pluginRefresh" class="btn btn-tertiary pull-right">Refresh plugin status</a>
+
+
+			<div id="pluginStatus" >
+			    <div>
+			        <div id="pluginStatusLoad"></div>
+
+			        <div id="pluginStatusTable">
+			        </div>
+			    </div><!--plugin status wrapper -->
+			</div>
+
+			<pre id="logBox" style="display:none"></pre>
+
+		</div>
+		
+	  {% include "rundb/reports/blocks/testfragments.html" %}  
+		
+		<div id="AnalysisDetails" data-title="Analysis Details" class="tab-pane">
+		</div>
+		
+		<div id="Support" data-title="Support" class="tab-pane">
+			<ul>
+				<li>Download the <a href="/rundb/getCSA/{{report.pk}}.zip">Customer Support Archive</li>
+				<li><a href="log">View the report log</a></li>
+			<ul>
+		</div>
+		
+		<div id="SoftwareVersion" data-title="Software Version" class="tab-pane">
+		</div>
+		
+	</div>
+</section>
+
+
+<div class="modal hide" id="plugin-modal">
+  <div class="modal-header">
+    <a class="close" data-dismiss="modal">&times;</a>
+    <h3 id="modal-header"></h3>
+  </div>
+  <div class="modal-body" id="modal-body">
+  </div>
+  <div class="modal-footer">
+    <a href="#" class="btn" data-dismiss="modal">Close</a>
+  </div>
+</div>

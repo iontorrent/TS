@@ -1,0 +1,3450 @@
+<div id="modal_plan_wizard" title="" class="modal modal-900 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		{% if intent == "Plan Run New" %}
+		<h1 id="modal_plan_wizard-title">New {{selectedApplProductData.runType.description}} Run Plan</h1>
+		{% elif intent == "New" %}
+		<h1 id="modal_plan_wizard-title">Add New {{selectedApplProductData.runType.description}} Template</h1>
+		{% elif intent == "Copy" or intent == "Edit" %}
+		<h1 id="modal_plan_wizard-title">{{intent}} Template: {{selectedPlanTemplate.planDisplayedName}}</h1>
+		{% elif intent == "Plan Run" %}
+		<h1 id="modal_plan_wizard-title">Plan Run from Template: {{selectedPlanTemplate.planDisplayedName}}</h1>
+		{% elif intent == "EditPlan" %}
+		<h1 id="modal_plan_wizard-title">Edit Planned Run: {{selectedPlanTemplate.planDisplayedName}}</h1>		
+		{% else %}
+		<h1 id="modal_plan_wizard-title">{{intent}} {{selectedPlanTemplate.planDisplayedName}}</h1>
+		{% endif %}
+	</div>
+	<div class="modal-body">
+		<form id="planTemplateWizard" name="planTemplateWizard" method="POST" action="{% url save_plan_or_template %}">
+
+		<div class="workflow">
+			<ul class="workflow-menu group">
+				<li class="first-wf-tab dark-tab active-tab">
+					<a href="#ws-1">
+						<b><span><span>Application</span></span></b>
+					</a>
+				</li>
+				<li class="dark-tab next-tab">
+					<a href="#ws-2">
+						<b><span><span>Kits</span></span></b>
+					</a>			
+				</li>
+				<li class="dark-tab dark-tab-last">
+					<a href="#ws-3">
+						<b><span><span>Monitor</span></span></b>
+					</a>			
+				</li>
+				<li class="first-light-tab">
+					<a href="#ws-4">
+						<b><span><span>Reference</span></span></b>
+					</a>			
+				</li>
+				<li class="">
+					<a href="#ws-5">
+						<b><span><span>Plugins</span></span></b>
+					</a>			
+				</li>
+				<li class="">
+					<a href="#ws-6">
+						<b><span><span>Project</span></span></b>
+					</a>			
+				</li>
+				<li class="">
+					<a href="#ws-7">
+						<b><span><span>Export</span></span></b>
+					</a>			
+				</li>
+				<li class="last-wf-tab">
+					<a href="#ws-8">
+						<b><span><span>{%if intent == "Plan Run" or intent == "Plan Run New" %}Plan{% else %}Save{% endif %}</span></span></b>
+					</a>			
+				</li>
+			</ul>
+			<div class="workflow-steps">	
+				<!-- APPLICATION -->	
+				<div id="ws-1" class="workflow-step " style="display: block;">
+					<div class="workflow-step-content">				    
+					<table class="plan-grid">
+						<tr>
+							<td width="50%">
+								<p class="form-label">Application:</p>
+								<span class="option-group">
+									{% for applType in planTemplateData.runTypes %}
+				    					{% if selectedApplProductData %}
+											{% ifequal applType.runType selectedApplProductData.runType.runType %}
+												<p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+											{% else %}
+												<p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+											{% endifequal %}
+				    					{% else %}
+											{% ifequal applType.runType selectedPlanTemplate.runType %}
+												<p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+											{% else %}
+												<p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+											{% endifequal %}
+				    					{% endif %}
+									{% endfor %}
+								</span>
+							</td>
+							<td width="50%">
+								<p class="form-label">Run Type:</p>
+								<span class="option-group">								
+									{% if selectedApplProductData %}
+										<!-- if no PE libKits are active, peForwardLibKeys will be none and we'll hide the pe run mode -->
+										{% if planTemplateData.peForwardLibKeys %}
+											{% if selectedApplProductData.isDefaultPairedEnd %}
+												<p><input type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+												<p><input checked="checked" type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>
+											{% else %}
+												<p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+												<p><input type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>  
+											{% endif %}
+										{% else %}
+											<p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+										{% endif %}
+			    					{% else %}	
+										<!-- if no PE libKits are active, peForwardLibKeys will be none and we'll hide the pe run mode -->
+										{% if planTemplateData.peForwardLibKeys %}
+											{% ifequal selectedPlanTemplate.runMode  "pe" %}
+												<p><input type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+												<p><input checked="checked" type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>
+											{% else %}
+												<p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+												<p><input type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>    												
+											{% endifequal %}
+										{% else %}
+											<p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+										{% endif %}
+											
+			    					{% endif %}
+								</span>
+							</td>
+						</tr>
+					</table>
+					</div>
+				</div>
+				<!-- KITS -->
+				<div id="ws-2" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">
+					<table class="plan-grid">
+						<tr>
+							<td>
+							<p class="form-label">Sample Preparation Kit (optional):</p>
+							<select id="samplePrepKitName" name="samplePrepKitName" value="" class="select-group">
+							<option value=""></option>
+							{% for samplePrepKit in planTemplateData.samplePrepKits %}
+    							{% if selectedApplProductData %}
+									{% ifequal samplePrepKit.name selectedApplProductData.defaultSamplePrepKit.name %}
+										<option SELECTED value="{{samplePrepKit.name}}">{{samplePrepKit}}</option>
+									{% else %}
+										<option value="{{samplePrepKit.name}}">{{samplePrepKit}}</option>
+									{% endifequal %}    						
+								{% else %}														
+									{% ifequal samplePrepKit.name selectedPlanTemplate.samplePrepKitName %}
+										<option SELECTED value="{{samplePrepKit.name}}">{{samplePrepKit}}</option>
+									{% else %}
+										<option value="{{samplePrepKit.name}}">{{samplePrepKit}}</option>
+									{% endifequal %}
+								{% endif %}
+
+							{% endfor %}
+							</select>
+							</td>
+							
+							<td>
+							<p class="form-label">Barcode Set (optional):</p>
+							<input value="False" name="isBarcodedPlan" id="isBarcodedPlan" type="hidden"/>
+					    
+							<select id="barcodeName" name="barcodeId" value="" class="select-group">
+							<option value=""></option>
+							{% for barcodeKit in planTemplateData.barcodes %}
+								{% if selectedApplProductData %}
+									<option value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+								{% else %}
+									{% ifequal barcodeKit.name selectedPlanTemplate.barcodeId %}
+										<option SELECTED value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+									{% else %}
+										<option value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+									{% endifequal %}
+								{% endif %}
+							{% endfor %}
+							</select> 						
+							</td>
+						</tr>
+
+						<tr>
+							<td>
+								<p class="form-label">Library Kit Type:
+								<a href="#" class="btn extra_kit_inline">Details &nbsp;+</a>
+								</p>
+								<select id="librarykitname" name="librarykitname" value="" class="select-group">
+								<option value=""></option>
+								{% for libKit in planTemplateData.libKits %}
+		    						{% if selectedApplProductData %}
+										{% if selectedApplProductData.isDefaultPairedEnd  %}
+											{% ifequal libKit.name selectedApplProductData.peLibKit.name %}
+												<option SELECTED value="{{libKit.name}}">{{libKit}}</option>
+											{% else %}
+												<option value="{{libKit.name}}">{{libKit}}</option>
+											{% endifequal %}
+										{% else %}
+											{% ifequal libKit.name selectedApplProductData.libKit.name %}
+												<option SELECTED value="{{libKit.name}}">{{libKit}}</option>
+											{% else %}
+												<option value="{{libKit.name}}">{{libKit}}</option>
+											{% endifequal %}
+										{% endif %}
+									{% else %}														
+										{% ifequal libKit.name selectedPlanTemplate.librarykitname %}
+											<option SELECTED value="{{libKit.name}}">{{libKit}}</option>
+										{% else %}
+											<option value="{{libKit.name}}">{{libKit}}</option>
+										{% endifequal %}
+									{% endif %}
+
+								{% endfor %}
+								</select>
+							</td>
+							
+						</tr>
+					</table>
+
+					<div class="extra_kit_forward_info row-fluid" style="display: none;">
+						<table class="plan-grid">
+							<tr>
+								<td>
+									<p class="form-label">Forward Library Key:</p>
+									<select id="libraryKey" name="libraryKey" value="" class="select-group">
+									<option value=""></option>
+									
+									{% for libKey in planTemplateData.forwardLibKeys %}
+			    						{% if selectedApplProductData %}
+											{% if libKey.isDefault %}
+												{% ifequal libKey.runMode 'single' %}
+													<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+												{% else %}
+													<option value="{{libKey.sequence}}">{{libKey}}</option>
+												{% endifequal %}											
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endif %}
+										{% else %}						
+											{% ifequal libKey.sequence selectedPlanTemplate.libraryKey %}
+												<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>
+								</td>
+								
+								<td>
+									<p class="form-label">Forward 3' Adapter:</p>
+									<select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
+									<option value=""></option>
+									
+									{% for adapter in planTemplateData.forward3Adapters %}
+			    						{% if selectedApplProductData %}
+											{% if adapter.isDefault %}
+												{% ifequal adapter.runMode 'single' %}
+													<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+												{% else %}
+													<option value="{{adapter.sequence}}">{{adapter}}</option>
+												{% endifequal %}												
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endif %}
+										{% else %}	
+											{% ifequal adapter.sequence selectedPlanTemplate.forward3primeadapter %}
+												<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>			
+								</td>
+							</tr>
+						</table>
+						<!--/div -->
+						<br>
+					</div>
+						
+					<div class="extra_kit_pe_forward_info row-fluid" style="display: none;">					
+						<table class="plan-grid">
+							<tr>
+								<td>
+									<p class="form-label">Forward Library Key:</p>
+									<select id="peForwardLibraryKey" name="peForwardLibraryKey" value="" class="select-group">
+									<option value=""></option>
+									
+									{% for libKey in planTemplateData.peForwardLibKeys %}
+			    						{% if selectedApplProductData %}
+											{% if libKey.isDefault %}
+												{% ifequal libKey.runMode 'single' %}
+													<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+												{% else %}
+													<option value="{{libKey.sequence}}">{{libKey}}</option>
+												{% endifequal %}											
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endif %}
+										{% else %}	
+											{% ifequal libKey.sequence selectedPlanTemplate.libraryKey %}
+												<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>
+								</td>
+							
+								<td>
+									<p class="form-label">Forward 3' Adapter:</p>
+									<select id="peForward3primeAdapter" name="peForward3primeAdapter" value="" class="select-group">
+									<option value=""></option>
+
+									{% for adapter in planTemplateData.peForward3Adapters %}
+			    						{% if selectedApplProductData %}
+											{% ifequal adapter.runMode 'pe' %}
+												{% ifequal adapter.name 'Ion Paired End Fwd' %}
+													<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+												{% else %}
+													<option value="{{adapter.sequence}}">{{adapter}}</option>
+												{% endifequal %}												
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endifequal %}
+										{% else %}
+											{% ifequal adapter.sequence selectedPlanTemplate.forward3primeadapter %}
+												<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>			
+								</td>
+							</tr>
+						</table>
+					</div>					
+
+					<div class="extra_kit_pe_reverse_info row-fluid" style="display: none;">
+						<table class="plan-grid">
+							<tr>
+								<td>
+									<p class="form-label">Reverse Library Key:</p>
+									<select id="reverselibrarykey" name="reverselibrarykey" value="" class="select-group">
+									<option value=""></option>
+									
+									{% for libKey in planTemplateData.reverseLibKeys %}
+			    						{% if selectedApplProductData %}
+											{% if libKey.isDefault %}
+												{% ifequal libKey.runMode 'pe' %}
+													<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+												{% else %}
+													<option value="{{libKey.sequence}}">{{libKey}}</option>
+												{% endifequal %}											
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endif %}
+										{% else %}
+											{% ifequal libKey.sequence selectedPlanTemplate.reverselibrarykey %}
+												<option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+											{% else %}
+												<option value="{{libKey.sequence}}">{{libKey}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>
+								</td>
+								
+								<td>
+									<p class="form-label">Reverse 3' Adapter:</p>
+									<select id="reverse3primeAdapter" name="reverse3primeAdapter" value="" class="select-group">
+									<option value=""></option>
+									
+									{% for adapter in planTemplateData.reverse3Adapters %}
+			    						{% if selectedApplProductData %}
+											{% if adapter.isDefault %}
+												{% ifequal adapter.runMode 'pe' %}
+													<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+												{% else %}
+													<option value="{{adapter.sequence}}">{{adapter}}</option>
+												{% endifequal %}												
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endif %}
+										{% else %}
+											{% ifequal adapter.sequence selectedPlanTemplate.reverse3primeadapter %}
+												<option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+											{% else %}
+												<option value="{{adapter.sequence}}">{{adapter}}</option>
+											{% endifequal %}
+										{% endif %}
+
+									{% endfor %}
+									</select>			
+								</td>
+							</tr>
+							<tr>
+								<td>
+								<p class="form-label">Paired-End Library Adapter:</p>
+								<select id="pairedEndLibraryAdapterName" name="pairedEndLibraryAdapterName" value="" class="select-group">
+								<option value=""></option>
+								
+								{% for adapter in planTemplateData.pairedEndLibAdapters %}
+		    						{% if selectedApplProductData %}
+		    							{% ifequal adapter.name "Paired-end library adapter kit" %}
+		    								<option SELECTED value="{{adapter.name}}">{{adapter}}</option>
+		    							{% else %}
+											<option value="{{adapter.name}}">{{adapter}}</option>
+										{% endifequal %}
+									{% else %}														
+										{% ifequal adapter.name selectedPlanTemplate.pairedEndLibraryAdapterName %}
+											<option SELECTED value="{{adapter.name}}">{{adapter}}</option>
+										{% else %}
+											<option value="{{adapter.name}}">{{adapter}}</option>
+										{% endifequal %}
+									{% endif %}
+
+								{% endfor %}
+								</select>			
+								</td>							
+							</tr>
+						</table>
+						<br>
+					</div>
+
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">Templating Kit:</p>
+								<select id="templatekitname" name="templatekitname" value="" class="select-group">
+								<option value="" style="width:50px;"></option>
+								{% for templateKit in planTemplateData.templateKits %}
+									{% if selectedApplProductData %}
+										{% ifequal templateKit.name selectedApplProductData.templateKit.name %}
+											<option SELECTED value="{{templateKit.name}}">{{templateKit.name}}</option>
+										{% else %}
+											<option value="{{templateKit.name}}">{{templateKit.name}}</option>
+										{% endifequal %}
+									{% else %}
+										{% ifequal templateKit.name selectedPlanTemplate.templatingKitName %}
+											<option SELECTED value="{{templateKit.name}}">{{templateKit.name}}</option>
+										{% else %}
+											<option value="{{templateKit.name}}">{{templateKit.name}}</option>
+										{% endifequal %}
+									{% endif %}
+								{% endfor %}								
+								</select>                           
+							</td>
+							
+							<td>
+								<p class="form-label">Control Sequence (optional):</p>
+								<select id="controlsequence" name="controlsequence" value="" class="select-group">
+								<option value="" style="width:50px;"></option>
+								{% for controlSeqKit in planTemplateData.controlSeqKits %}
+								{% if selectedApplProductData %}
+									<option value="{{controlSeqKit.name}}">{{controlSeqKit.name}}</option>
+								{% else %}
+									{% ifequal controlSeqKit.name selectedPlanTemplate.controlSequencekitname %}
+										<option SELECTED value="{{controlSeqKit.name}}">{{controlSeqKit.name}}</option>
+									{% else %}
+										<option value="{{controlSeqKit.name}}">{{controlSeqKit.name}}</option>
+									{% endifequal %}
+								{% endif %}
+								{% endfor %}									
+								</select>
+							</td>
+						</tr> 			
+						<tr>
+							<td>
+								<p class="form-label">Sequence Kit:</p>
+								{% for seqKit in planTemplateData.seqKits %}
+    						    	<input value="{{seqKit.flowCount}}"  id="{{seqKit.name}}" name="{{seqKit.name}}" type="hidden"/>
+    						    {% endfor %}
+								<select id="sequencekitname" name="sequencekitname" value="" class="select-group">
+								<option value=""></option>
+								{% for seqKit in planTemplateData.seqKits %}
+									{% if selectedApplProductData %}
+										{% if selectedApplProductData.isDefaultPairedEnd %}
+											{% ifequal seqKit.name selectedApplProductData.peSeqKit.name %}
+												<option SELECTED value="{{seqKit.name}}">{{seqKit.description}}</option>
+											{% else %}
+												<option value="{{seqKit.name}}">{{seqKit.description}}</option>
+											{% endifequal %}
+										{% else %}
+											{% ifequal seqKit.name selectedApplProductData.seqKit.name %}
+												<option SELECTED value="{{seqKit.name}}">{{seqKit.description}}</option>
+											{% else %}
+												<option value="{{seqKit.name}}">{{seqKit.description}}</option>
+											{% endifequal %}
+										{% endif %}
+									{% else %}
+										{% ifequal seqKit.name selectedPlanTemplate.sequencekitname %}
+											<option SELECTED value="{{seqKit.name}}">{{seqKit.description}}</option>
+										{% else %}
+											<option value="{{seqKit.name}}">{{seqKit.description}}</option>
+										{% endifequal %}														
+									{% endif %}
+								{% endfor %}
+								</select>                               
+							</td>
+							
+							<td>
+								<p class="form-label">Chip Type (optional):</p>
+								<select id="chipType" name="chipType" class="select-group">
+								<option value=""></option>
+								{% for chipType in planTemplateData.chipTypes %}
+									{% if selectedApplProductData %}
+										{% ifequal chipType.name selectedApplProductData.chipType %}
+											<option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+										{% else %}
+											<option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+										{% endifequal %}
+									{% else %}
+										{% ifequal chipType.name selectedPlanTemplate.chipType %}
+											<option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+										{% else %}
+											<option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+										{% endifequal %}    													
+									{% endif %}
+								{% endfor %}
+								</select>
+							</td>
+						</tr> 														
+						<tr>
+							<td>
+								<p class="form-label">Flows:</p>
+								{% if selectedApplProductData %}
+									{% if selectedApplProductData.isDefaultPairedEnd %}
+										{% if selectedApplProductData.peSeqKit %}
+											<input type="text" id="flows" name="flows" value="{{selectedApplProductData.peSeqKit.flowCount}}" class="input-spinner" style="width:50px;"> 
+										{% else %}
+											<input type="text" id="flows" name="flows" value="" class="input-spinner" style="width:50px;">
+										{% endif %}
+									{% else %}
+										{% if selectedApplProductData.seqKit %}
+											<input type="text" id="flows" name="flows" value="{{selectedApplProductData.seqKit.flowCount}}" class="input-spinner" style="width:50px;"> 
+										{% else %}
+											<input type="text" id="flows" name="flows" value="" class="input-spinner" style="width:50px;">
+										{% endif %}
+									{% endif %}
+								{% else %}
+									<input type="text" id="flows" name="flows" value="{{selectedPlanTemplate.flows}}" class="input-spinner" style="width:50px;"> 
+								{% endif %}
+							</td>
+						</tr>
+					</table>
+					<br>
+					</div>
+				</div>
+				
+				<!-- QC -->
+				<div id="ws-3" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">			
+					<table class="plan-grid">
+						{% if selectedApplProductData %}
+							{% for qcType in planTemplateData.qcTypes %}
+								{% if forloop.counter0|divisibleby:"2" %}
+									<tr>
+										<td width="50%">
+											<p class="form-label">{{qcType.qcName}}:</p>
+											<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value="{{qcType.defaultThreshold}}"></p>
+											</td>
+								{% else %}
+										<td width="50%">
+											<p class="form-label">{{qcType.qcName}}:</p>
+											<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value="{{qcType.defaultThreshold}}"></p>
+											</td>
+									</tr>
+								{% endif %}
+							{% endfor %}
+						{% else %}
+							{% for qcType in planTemplateData.qcTypes %}
+								{% if forloop.counter0|divisibleby:"2" %}
+									<tr>
+										<td width="50%">
+											<p class="form-label">{{qcType.qcName}}:</p>
+												
+											{% if selectedPlanTemplate.plannedexperimentqc_set.count > 0 %}
+												{% for qcValue in selectedPlanTemplate.plannedexperimentqc_set.all %}
+													{% ifequal qcType.qcName qcValue.qcType.qcName %}
+														<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value="{{qcValue.threshold}}"></p>
+													{% endifequal %}
+												{% endfor %}
+											{% else %}
+												<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value=""></p>
+											{% endif %}
+										</td>
+								{% else %}
+										<td width="50%">
+										<p class="form-label">{{qcType.qcName}}:</p>
+											
+										{% if selectedPlanTemplate.plannedexperimentqc_set.count > 0 %}												
+											{% for qcValue in selectedPlanTemplate.plannedexperimentqc_set.all %}
+												{% ifequal qcType.qcName qcValue.qcType.qcName %}
+													<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value="{{qcValue.threshold}}"></p>
+												{% endifequal %}
+											{% endfor %}
+										{% else %}
+											<p><span class="less-than">&le;</span><input id="qcValues_{{forloop.counter}}" name="{{qcType.qcName}}" type="text" class="input-spinner" style="width:35px;" value=""></p>
+										{% endif %}
+										</td>
+									</tr>														
+								{% endif %}
+							{% endfor %}						
+						{% endif %}	    																					
+
+						<!-- </tr> -->                           
+					</table>
+					</div>
+				</div>		
+				<!-- REFERENCE -->
+				<div id="ws-4" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">Reference Library:</p>
+								<select id="library" name="library" class="select-group">
+										
+								<option value=""></option>
+										
+								{% if selectedApplProductData %}
+									{% for ref in planTemplateData.references %}
+										{% ifequal ref.short_name selectedApplProductData.reference %}
+											<option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+										{% else %}
+											{% ifequal ref.name selectedApplProductData.reference %}
+												<option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+											{% else %}
+												<option value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+										
+									{% if selectedApplProductData.reference not in planTemplateData.referenceShortNames %}
+										<option SELECTED class="entryNotFound" value="{{selectedApplProductData.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{{selectedApplProductData.reference}}</option>
+									{% endif %}
+								{% else %}
+									{% for ref in planTemplateData.references %}
+										{% ifequal ref.short_name selectedPlanTemplate.library %}
+											<option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+										{% else %}
+											{% ifequal ref.name selectedPlanTemplate.library %}
+												<option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+											{% else %}
+												<option value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+									
+									{% if selectedPlanTemplate.library %}
+										{% if selectedPlanTemplate.library not in planTemplateData.referenceShortNames %}
+											<option SELECTED class="entryNotFound" value="{{selectedPlanTemplate.library}}">(Not Found) {{selectedPlanTemplate.library}}</option>
+										{% endif %}
+									{% endif %}
+								{% endif %}
+
+								</select>
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<p class="form-label">Target Regions BED File:</p>
+								<select id="bedfile" name="bedfile" class="select-group">
+								<option value=""></option>
+										
+								{% if selectedApplProductData %}
+									{% for bedFile in planTemplateData.bedFiles %}
+										{% ifequal bedFile.path selectedApplProductData.targetBedFile %}
+											<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+										{% else %}
+											{% ifequal bedFile.file selectedPlanTemplate.bedfile %}
+												<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% else %}										
+												<option value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+
+									{% if selectedApplProductData.targetBedFile %}
+										{% if selectedApplProductData.targetBedFile not in planTemplateData.bedFileFullPaths and selectedApplProductData.targetBedFile not in planTemplateData.bedFilePaths %}
+											<option SELECTED value="{{selectedApplProductData.targetBedFile}}">(Not Found) {{selectedApplProductData.targetBedFile}}</option>
+										{% endif %}
+									{% endif %}
+									
+								{% else %}
+									{% for bedFile in planTemplateData.bedFiles %}
+										{% ifequal bedFile.path selectedPlanTemplate.bedfile %}
+											<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+										{% else %}
+											{% ifequal bedFile.file selectedPlanTemplate.bedfile %}
+												<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% else %}										
+												<option value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+
+									{% if selectedPlanTemplate.bedfile %}
+										{% if selectedPlanTemplate.bedfile not in planTemplateData.bedFileFullPaths and selectedPlanTemplate.bedfile not in planTemplateData.bedFilePaths %}
+											<option SELECTED value="{{selectedPlanTemplate.bedfile}}">(Not Found) {{selectedPlanTemplate.bedfile}}</option>
+										{% endif %}
+									{% endif %}
+
+								{% endif %}
+								</select>							
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<p class="form-label">Hotspot Regions BED File:</p>								
+								<select id="regionfile" name="regionfile" class="select-group">
+								<option value=""></option>
+								
+								{% if selectedApplProductData %}
+									{% for bedFile in planTemplateData.hotspotFiles %}
+										{% ifequal bedFile.path selectedApplProductData.hotSpotBedFile %}
+											<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+										{% else %}
+											{% ifequal bedFile.file selectedPlanTemplate.regionfile %}
+												<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% else %}										
+												<option value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+
+									{% if selectedApplProductData.hotSpotBedFile %}
+										{% if selectedApplProductData.hotSpotBedFile not in planTemplateData.hotspotFullPaths and selectedApplProductData.hotSpotBedFile not in planTemplateData.hotspotPaths%}
+											<option SELECTED value="{{selectedApplProductData.hotSpotBedFile}}">(Not Found) {{selectedApplProductData.hotSpotBedFile}}</option>
+										{% endif %}										
+									{% endif %}
+									
+								{% else %}
+									{% for bedFile in planTemplateData.hotspotFiles %}
+										{% ifequal bedFile.path selectedPlanTemplate.regionfile %}
+											<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+										{% else %}
+											{% ifequal bedFile.file selectedPlanTemplate.regionfile %}
+												<option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% else %}										
+												<option value="{{bedFile.file}}">{{bedFile.path}}</option>
+											{% endifequal %}
+										{% endifequal %}
+									{% endfor %}
+									
+									{% if selectedPlanTemplate.regionfile %}
+										{% if selectedPlanTemplate.regionfile not in planTemplateData.hotspotFullPaths and selectedPlanTemplate.regionfile not in planTemplateData.hotspotPaths%}
+											<option SELECTED value="{{selectedPlanTemplate.regionfile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{selectedPlanTemplate.regionfile}}</option>
+										{% endif %}	
+									{% endif %}
+
+								{% endif %}
+								
+								</select>					
+							</td>
+						</tr>
+					</table>
+					</div>
+				</div>	
+				<!-- PLUGINS -->
+				<div id="ws-5" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">Select the plugin(s) to execute:</p>
+								<div style="border:1px solid #0981d2;overflow: auto;width:350px;height:125px;padding:5px">
+									<span class="option-group">
+									{% if selectedApplProductData %}
+										{% for plugin in planTemplateData.plugins %}										
+											{% if plugin.autorun %}
+												<p><input type="checkbox" id="plugins" name="plugins" checked="checked" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}} </p>
+											{% else %}
+												<p><input type="checkbox" id="plugins" name="plugins" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}} </p>
+											{% endif %}
+										
+											{% if "variantCall" in plugin.name %}
+												<p style="padding-left:25px; font-size:11px;">
+												Frequency:  											
+    													
+												{% for variantFreq in planTemplateData.variantfrequencies %}
+													{% ifequal variantFreq.name selectedApplProductData.defaultVariantFrequency %} 
+														<input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio" checked="checked"> {{variantFreq.name}}
+													{% else %}
+														<input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
+													{% endifequal %}
+												{% endfor %}
+												</p>
+											{% endif %}
+										{% endfor %}
+									{% else %}
+										{% for plugin in planTemplateData.plugins %}	
+											{% if plugin.selected %}
+												<p><input type="checkbox" id="plugins" name="plugins" checked="checked" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}} </p>
+											{% else %}
+												<p><input type="checkbox" id="plugins" name="plugins" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}} </p>
+											{% endif %}
+								
+											{% if "variantCall" in plugin.name %}
+												<p style="padding-left:25px; font-size:11px;">
+													Frequency:  											
+												
+												{% for variantFreq in planTemplateData.variantfrequencies %}
+													{% ifequal variantFreq.name selectedPlanTemplate.variantfrequency %} 
+														<input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio" checked="checked"> {{variantFreq.name}}
+													{% else %}
+														<input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
+													{% endifequal %}
+												{% endfor %}
+											{% endif %}
+										{% endfor %}
+										</p>
+									{% endif %}										
+									</span>
+								</div>
+							</td>
+						</tr>
+					</table>	
+					</div>
+				</div>	
+				<!-- PROJECT -->
+				<div id="ws-6" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">Select the project(s) that will receive output:</p>
+								<div style="border:1px solid #0981d2;overflow: auto;width:350px;height:125px;padding:5px">
+									<span class="option-group">
+									{% for project in planTemplateData.projects %}
+									
+										{% if selectedProjectNames %}
+											{% if project.name in selectedProjectNames %}
+												<p><input id="projects" name="projects" checked="checked" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+											{% else %}
+												<p><input id="projects" name="projects" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+											{% endif %}
+										{% else %}
+											<p><input id="projects" name="projects" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+										{% endif %}
+									{% endfor %}    											
+									</span>									
+								</div>
+								<div style="padding:5px 0;width:350px;text-align:right">
+                  <div class="input-append search-field pull-left">
+				              <label for="projects_search_text" class="hide">Search Names</label>
+				              <input id="projects_search_text" type="text" placeholder="Search names" style="width: 150px;" /><button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+			            </div>
+									<a href="#" class="btn add_project_inline">Add Project...</a>
+								</div>	
+		
+								<div id="ws-6_addProjects" class="ws-6_addProjects" style="display: none;">		    				
+		    						<p class="form-label">Enter project name(s) (comma-separated):</p>					
+		    						<textarea id="newProjects" name="newProjects" style="width:70%;height:40px;"></textarea>
+		    						<p id="newProjects-error"></p>
+		    					</div>
+							</td>
+						</tr>
+					</table>
+					</div>
+				</div>	
+				<!-- EXPORT -->
+				<div id="ws-7" class="workflow-step " style="display: none;">
+		    		<input value=""  id="ir1_irWorkflow_defaults" name="ir1_irWorkflow_defaults" type="hidden"/>
+		    		
+					<div class="workflow-step-content">
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">Select the data loader(s) to invoke:</p>
+								<div style="border:1px solid #0981d2;overflow:auto; width:350px;height:90px;padding:5px;">
+									<span class="option-group">
+									{% if selectedApplProductData %}
+									
+										{% for uploader in planTemplateData.IRuploads %}
+											{% if uploader.autorun %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>											
+											{% else %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+											{% endif %}
+										{% endfor %}
+							
+										{% for uploader in planTemplateData.uploaders %}
+											{% if uploader.autorun %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>											
+											{% else %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+											{% endif %}
+										{% endfor %}
+									{% else %}							
+										{% for uploader in planTemplateData.IRuploads %}
+											{% if uploader.selected %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>											
+											{% else %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+											{% endif %}
+										{% endfor %}
+						
+										{% for uploader in planTemplateData.uploaders %}
+											{% if uploader.selected %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>											
+											{% else %}
+												<p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+											{% endif %}
+										{% endfor %}									
+	
+									{% endif %}
+									
+									<!-- <p><input type="checkbox">NextBio Uploader</p> -->
+									<!-- <p><input type="checkbox" checked>GALAXY Uploader</p> -->
+									</span>
+								</div>
+								<br>
+							</td>
+						</tr>
+						<!--
+						<tr>
+							<td>
+								<p class="form-label">External file location to save a copy of data:</p>
+								<input type="file">
+							</td>
+						</tr>
+						-->
+					</table>
+					
+
+					<div id="ws-7_ir1_IRConfig"  class="ir1_hideable_IRConfig" style="display: none;">
+					<table class="plan-grid">
+						<tr>
+							<td>
+								<p class="form-label">IonReporter v1.0 Workflow Configuration:</p>
+								<select id="ir1_irWorkflow" name="ir1_irWorkflow_select" class="ir1_irWorkflow_select select-group" style="width:150px;">
+									<option value=""></option>
+								</select>															
+							</td>
+						</tr>
+					</table>
+					</div>
+
+					</div>
+				</div>		
+				<!-- SAVE -->				
+				<div id="ws-8" class="workflow-step " style="display: none;">
+					<div class="workflow-step-content">
+						<input value="True" name="usePreBeadfind" id="usePreBeadfind" type="hidden"/>
+						<input value="True" name="usePostBeadfind" id="usePostBeadfind" type="hidden"/>
+						<input value="False" name="isSystem" id="isSystem" type="hidden"/>
+
+				    	<input value=""  id="submitIntent" name="submitIntent" type="hidden"/>
+				    		
+				    	<input value=""  id="samples_workaround" name="samples_workaround" type="hidden"/>
+				    	<input value=""  id="notes_workaround" name="notes_workaround" type="hidden"/>
+				    	
+				    	<input value=""  id="bcSamples_workaround" name="bcSamples_workaround" type="hidden"/>
+				    	<input value=""  id="irWorkflow_defaults" name="irWorkflow_defaults" type="hidden"/>				    	
+				    	<input value=""  id="irRelation_defaults" name="irRelation_defaults" type="hidden"/>	
+				    	<input value=""  id="irRelationRole_defaults" name="irRelationRole_defaults" type="hidden"/>	
+				    	
+				    	{% if intent == "Plan Run" or intent == "Plan Run New" or intent == "EditPlan" %}
+				    	<div id="ws-8_planRun" class="ws-8_planRun">
+						<table class="plan-grid">
+							{% if intent == "Plan Run" %}
+			    			<tr>
+								<td>
+			    					<p class="form-label">Template Name:</p>					
+			    					<p>{{planDisplayedName}}<p>
+			    					<p>{{selectedPlanTemplate.planDisplayedName}}<p>
+			    				</td>			    				
+			    			</tr>
+			    			{% endif %}
+							<tr>
+								<td>
+									<p class="form-label">Run Plan Name (required):</p>
+									{% if selectedApplProductData %}
+										<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="" style="width:400px;"></p>
+									{% else %}
+										{% ifequal intent "Copy" %}
+											<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="Copy of {{selectedPlanTemplate.planDisplayedName}}" style="width:400px;"></p>
+										{% else %}
+											<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="{{selectedPlanTemplate.planDisplayedName}}" style="width:400px;"></p>
+										{% endifequal %}
+									{% endif %}
+								</td>
+							</tr>
+							
+			    			<tr>
+		    					<td>
+								<div id="ws-8_barcodedSamples" class="ws-8_barcodedSamples" style="display: none;">
+									<table id="ws-8_barcodedSampleTableContainer" class="plan-grid">
+									<tr>
+									<td>
+										<p class="form-label bcSample_hideable_basic">Enter a sample name for each barcode used (required at least one sample):</p>
+										<div style="border:1px solid #0981d2;overflow: auto;width:850px;height:225px;padding:5px">
+											<span class="option-group">							
+											<table id="ws-8_barcodedSampleTable" class="ws-8_barcodedSampleTable">
+												<tbody>
+																							
+												<tr class="barcodedSampleTableHeader">	
+
+													<div id="ws-8_barcodedSampleTableHeader_basic" class="bcSample_hideable_basic" style="display: none;">													
+														<th class="bcSample_hideable_basic" style="width:150px; text-align: left; font-weight: bold;">BC #</th>
+														<th class="bcSample_hideable_basic" style="width:150px; text-align: left; font-weight: bold;">Sequence</th>
+														<th class="bcSample_hideable_basic" style="width:100px; text-align: center; font-weight: bold;"></th>
+														<th class="bcSample_hideable_basic" style="width:150px; text-align: center; font-weight: bold;">Sample Name</th>
+													</div>
+
+													<div id="ws-8_barcodedSampleTableHeader_IRConfig" class="bcSample_hideable_IRConfig" style="display: none;">													
+														<th class="bcSample_hideable_IRConfig" style="width:200x; text-align: center; font-weight: bold;">Workflow</th>
+														<th class="bcSample_hideable_IRConfig" style="width:120px; text-align: center; font-weight: bold;">Relation</th>
+														<th class="bcSample_hideable_IRConfig" style="width:100px; text-align: center; font-weight: bold;"></th>
+														<th class="bcSample_hideable_IRConfig" style="width:100px; text-align: center; font-weight: bold;">Relation Role</th>
+														<th class="bcSample_hideable_IRConfig" style="width:100px; text-align: center; font-weight: bold;">Set ID</th>
+													</div>
+												</tr>
+												
+												<div id="ws-8_barcodedSampleTableContent" style="display: none;">
+														
+													{% for barcode in planTemplateData.barcodeKitInfo %}
+														<tr id="row_{{barcode.pk}}" class="{{barcode.name}}">
+
+														<div id="ws-8_barcodedSampleTableContent_{{barcode.name}}_basic" class="bcSample_hideable_basic" style="display: none;">													
+															<td class="bcSample_hideable_basic" style="width:150px;" id="bcSample_index_{{barcode.name}}_{{barcode.index}}" name="bcId" value="{{barcode.pk}}">{{barcode.id_str}}</td>
+															<td class="bcSample_hideable_basic" style="width:150px;" id="bcSample_seq_{{barcode.index}}" name="bcSeq" value="{{barcode.sequence}}">{{barcode.sequence}}<td>
+															<td class="bcSample_hideable_basic" style="width:150px; text-align: left;"><input id="bcSample_sample_{{barcode.name}}_{{barcode.index}}" type="text" name="bcKey|{{barcode.pk}}" value="" style="width:200px;"></p></td>
+														</div>
+
+														<div id="ws-8_barcodedSampleTableContent_{{barcode.name}}_IRConfig"  class="bcSample_hideable_IRConfig" style="display: none;">
+															<td class="bcSample_hideable_IRConfig" style="width:200px;" id="bcSample_irWorkflow_{{barcode.index}}" name="bcIrWorkflow">
+																<select id="bcSample_irWorkflow_select_{{barcode.name}}_{{barcode.index}}" name="bcIrWorkflow_select" class="irWorkflow_select select-group" style="width:150px;">
+																<option value=""></option>
+																</select>															
+															</td>
+															<td class="bcSample_hideable_IRConfig" style="width:120px;" id="bcSample_irRelation_{{barcode.index}}" name="bcIrRelation">
+																<select id="bcSample_irRelation_select_{{barcode.name}}_{{barcode.index}}" name="bcIrRelation_select" class="irRelation_select select-group" style="width:120px;" >
+																<option value=""></option>
+																</select>															
+															<td>
+															<td class="bcSample_hideable_IRConfig" style="width:100px;" id="bcSample_irRelationRole_{{barcode.index}}" name="bcIrRelationRole">
+																<select id="bcSample_irRelationRole_select_{{barcode.name}}_{{barcode.index}}" name="bcIrRelationRole_select" class="irRelationRole_select select-group" style="width:100px;" >
+																<option value=""></option>
+																</select>														
+															</td>
+
+															<td class="bcSample_hideable_IRConfig" style="width:100px;" id="bcSample_irSetId_{{barcode.index}}" name="bcIrSetId">
+																<input id="bcSample_irSetId_select_{{barcode.name}}_{{barcode.index}}" name="bcIrSetId_select" class="irSetId_select input-spinner" type="text" value=0 style="width:40px;" ></p>
+															</td>
+														</div>													
+														</tr>
+													{% endfor %}
+												</div>
+										
+												</tbody>
+
+											</table>
+											</span>
+										</div>
+									</td>
+									</tr>
+									</table>	
+									<br>
+								</div>
+
+								<div id="ws-8_nonBarcodedSamples_irConfig" class="ws-8_nonBarcodedSamples_irConfig" style="display: none;">
+								<table id="ws-8_nonBarcodedSampleTableContainer" class="plan-grid">
+								<tr>
+								<td>
+									<p class="form-label" rel="tooltip" title="Create one run plan for each sample entered">Enter a sample name for each plan (required):</p>
+									<div style="border:1px solid #0981d2;overflow: auto;width:670px;height:225px;padding:5px">
+										<span class="option-group">							
+										<table id="ws-8_nonBarcodedSampleTable" class="ws-8_nonBarcodedSampleTable">
+											<tbody>
+																						
+											<tr class="nonBarcodedSampleTableHeader">
+												<th style="width:150px; text-align: center; font-weight: bold;">Sample Name</th>
+
+												<div id="ws-8_nonBarcodedSampleTableHeader_IRConfig" style="display: none;">													
+													<th style="width:200x; text-align: center; font-weight: bold;">Workflow</th>
+													<th style="width:120px; text-align: center; font-weight: bold;">Relation</th>
+													<th style="width:100px; text-align: center; font-weight: bold;"></th>
+													<th style="width:100px; text-align: center; font-weight: bold;">Relation Role</th>
+													<th style="width:100px; text-align: center; font-weight: bold;">Set ID</th>
+												</div>
+											</tr>
+
+											{% for i in planTemplateData.nonBarcodedSamples_irConfig_loopCounter %}
+												<tr id="row_{{forloop.counter}}" class="ws-8_nonBarcodedSampleTableRow">
+
+												<td style="width:150px; text-align: left;"><input id="sample_irSample_{{forloop.counter}}" type="text" name="sample_irConfig" value="" style="width:200px;"></p></td>
+
+													<td style="width:200px;" id="sample_irWorkflow_{{forloop.counter}}" name="bcIrWorkflow">
+														<select id="sample_irWorkflow_select_{{forloop.counter}}" name="irWorkflow_select" class="irWorkflow_select select-group" style="width:150px;">
+														<option value=""></option>
+														</select>															
+													</td>
+													<td style="width:120px;" id="sample_irRelation_{{forloop.counter}}" name="bcIrRelation">
+														<select id="sample_irRelation_select_{{forloop.counter}}" name="irRelation_select" class="irRelation_select select-group" style="width:120px;">
+														<option value=""></option>
+														</select>															
+													<td>
+													<td style="width:100px;" id="sample_irRelationRole_{{forloop.counter}}" name="bcIrRelationRole">
+														<select id="sample_irRelationRole_select_{{forloop.counter}}" name="irRelationRole_select" class="irRelationRole_select select-group" style="width:100px;">
+														<option value=""></option>
+														</select>														
+													</td>
+													
+													<td style="width:100px;" id="sample_irSetId_{{forloop.counter}}" name="bcIrSetId">
+														<input id="sample_irSetId_select_{{forloop.counter}}" name="irSetId_select" class="irSetId_select input-spinner" type="text" value=0 style="width:40px;"></p>
+													</td>													
+												</tr>
+											{% endfor %}
+											</tbody>
+
+										</table>
+										</span>
+									</div>
+								</td>
+								</tr>
+								</table>	
+								<br>
+								</div>
+									
+								<!--need separate divs for show/hide sections based on barcoded or not -->
+								<div id="ws-8_nonBarcodedSamples" class="ws-8_nonBarcodedSamples" style="display: none;">		    				
+			    					<p class="form-label" rel="tooltip" title="Create one run plan for each sample entered">Enter sample name(s) (comma-separated) (required):</p>					
+			    						{% if selectedApplProductData %}
+			    							<textarea id="samples" name="samples" style="width:70%;height:40px;" value=""></textarea>
+				    					{% else %}				    						
+				    						{% if selectedPlanTemplate.sampleDisplayedName %}
+			    								<textarea id="samples" name="samples" style="width:70%;height:40px;" value="{{selectedPlanTemplate.sampleDisplayedName}}">{{selectedPlanTemplate.sampleDisplayedName}}</textarea>
+			    							{% else %}
+			    								<textarea id="samples" name="samples" style="width:70%;height:40px;" value=""></textarea>
+					    					{% endif %}			    							
+			    						{% endif %}
+			    						
+			    				</div>								
+			    				</td>
+			    			</tr>
+
+			    			<tr>
+			    				<td>
+			    					<p class="form-label">Add a note:</p>
+		    						{% if selectedApplProductData %}
+	    								<textarea id="notes" class="notes" style="width:70%;height:40px;" value=""></textarea>
+		    						{% else %}
+		    							{% if selectedPlanTemplate.notes %}
+		    								<textarea id="notes" class="notes" style="width:70%;height:40px;" value="{{selectedPlanTemplate.notes}}">{{selectedPlanTemplate.notes}}</textarea>
+		    							{% else %}
+		    								<textarea id="notes" class="notes" style="width:70%;height:40px;" value=""></textarea>
+		    							{% endif %}
+		    						{% endif %}
+			    				</td>
+			    			</tr>
+			    			<!--20120713-WIP tr>
+		    				<td>
+		    					<p class="form-label">Add meta data:</p>					
+		    					<textarea id="metadata" name="metadata" class="metadata" style="width:70%;height:40px;"></textarea>
+		    				</td>
+		    				</tr -->
+						</table>
+						</div>
+						{% elif intent == "Plan Barcoded Run" %}
+							TODO: Need to add form content for a planning barcoded run 
+						{% else %}
+				    	<div id="ws-8_plan">
+						<table class="plan-grid">
+							<tr>
+								<td>
+									<p class="form-label">{% if intent == "New" or intent == "Copy" or intent == "Edit"%}Template Name (required):{% else %}Template Name:{% endif %}
+									{% if intent == "New" %}
+										<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="" style="width:400px;"></p>
+									{% elif intent == "Copy" %}
+										<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="Copy of {{selectedPlanTemplate.planDisplayedName}}" style="width:400px;"></p>
+									{% else %}
+										<p><input type="text" id="planDisplayedName" name="planDisplayedName" class="required validateAlphaNumAndSpace" value="{{selectedPlanTemplate.planDisplayedName}}" style="width:400px;"></p>
+									{% endif %}
+								</td>
+								<td>		
+									{% if selectedApplProductData %}
+										<p><input type="checkbox" id="isFavorite" name="isFavorite" style="margin-top:5px;"><b>Set as Favorite</b></p>
+									{% else %}
+										{% if selectedPlanTemplate.isFavorite %}
+											<p><input type="checkbox" id="isFavorite" name="isFavorite" checked="checked" style="margin-top:5px;"><b>Set as Favorite</b></p>
+										{% else %}
+											<p><input type="checkbox" id="isFavorite" name="isFavorite" style="margin-top:5px;"><b>Set as Favorite</b></p>
+										{% endif %}
+									{% endif %}
+									<!--
+									<p class="form-label">Name this plan (required):</p>
+									<p><input id="planname" type="text" value="Ampliseq to IonReporter Cancer Template" style="width:400px;"></p>
+									<p style="margin-top:5px;"><input type="checkbox" checked>&nbsp;<span style="font-size:12px;">Set as Favorite</span></p>
+									-->
+								</td>
+							</tr>					    			
+						</table>
+						</div>
+						{% endif %}
+						
+					
+						
+						<!--20120709-old-review-section div id="review-workflow"></div -->
+
+						<div class="spacer clear"></div>
+						<div class="row-fluid">
+							<div class="span12">
+								{% if intent == "New" or intent == "Copy" or intent == "Edit" %}
+								<a href="#" class="btn review_plan_inline">Review Template &nbsp;+</a>
+								{% else %}
+								<a href="#" class="btn review_plan_inline">Review Run Plan &nbsp;+</a>
+								{% endif %}
+							</div>
+							
+							<div class="review_plan_info row-fluid" style="display: none;">
+								<div class="span4">
+									<br>
+									<h3>Application</h3>
+							
+									{% if selectedApplProductData %}
+										<p>
+										<table class="plan-grid">
+											<tr>
+												<td width="50%" style="line-height:100%; font-weight: bold;">Application:</td>
+												<td width="50%" id="review_application" style="line-height:100%;" >{{selectedApplProductData.runType.description}}</td>
+											</tr>
+											<tr>
+												<td width="50%" style="line-height:100%; font-weight: bold;">Run type:</td>
+												{% if selectedApplProductData.isDefaultPairedEnd %} 
+													<td width="50%"  id="review_runType" style="line-height:100%;">Paired-End</td>
+												{% else %}
+													<td width="50%"  id="review_runType" style="line-height:100%;">Fragment</td>
+												{% endif %}
+											</tr>											
+										</table>
+										</p>
+										<br>
+										
+										<h3>Kits</h3>
+										<p>
+										<p style="line-height:100%; font-weight: bold;">Sample Preparation Kit:</p>
+										<p style="line-height:100%; margin:10px;" id="review_samplePrepKitName"></p>
+										
+										{% if selectedApplProductData.isDefaultPairedEnd %}    									
+											<p style="line-height:100%; font-weight: bold;">Library Kit Type:</p>
+											<p style="line-height:100%; margin:10px;" id="review_libKit">{{selectedApplProductData.peLibKit.name}}</p>
+										{% else %}
+											<p style="line-height:100%; font-weight: bold;">Library Kit Type:</p>
+											<p style="line-height:100%; margin:10px;" id="review_libKit">{{selectedApplProductData.libKit.name}}</p>
+										{% endif %}
+									
+										<div class="review_extra_kit_info row-fluid" style="display: none;">
+											{% if selectedApplProductData %}
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_forwardLibKey"></p>
+											
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_forward3Adapter"></p> 	
+											{% else %}
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_forwardLibKey">{{selectedPlanTemplate.libraryKey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_forward3Adapter">{{selectedPlanTemplate.forward3primeadapter}}</p> 	
+											{% endif %}
+										</div>
+									
+										<div class="review_extra_pe_kit_info row-fluid" style="display: none;">
+											{% if selectedApplProductData %}
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peForwardLibKey"></p>
+											
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peForward3Adapter"></p> 
+												
+												<p style="line-height:100%; font-weight: bold;">Reverse Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peReverseLibKey"></p>
+											
+												<p style="line-height:100%; font-weight: bold;">Reverse 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peReverse3Adapter"></p> 
+												
+												<p style="line-height:100%; font-weight: bold;">Paired-End Library Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peLibAdapter"></p> 												
+											{% else %}
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peForwardLibKey">{{selectedPlanTemplate.libraryKey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peForward3Adapter">{{selectedPlanTemplate.forward3primeadapter}}</p> 
+											
+												<p style="line-height:100%; font-weight: bold;">Reverse Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peReverseLibKey">{{selectedPlanTemplate.reverselibrarykey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Reverse 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peReverse3Adapter">{{selectedPlanTemplate.reverse3primeadapter}}</p> 
+											
+												<p style="line-height:100%; font-weight: bold;">Paired-End Library Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peLibAdapter">{{selectedPlanTemplate.pairedEndLibraryAdapterName}}</p> 	
+											{% endif %}
+										</div>
+										
+										<p style="line-height:100%; font-weight: bold;">Templating Kit: </p> 	
+										<p style="line-height:100%; margin:10px;" id="review_templateKit"></p> 	
+										
+										{% if selectedApplProductData.isDefaultPairedEnd %}    									
+											<p style="line-height:100%; font-weight: bold;">Sequencing Kit:</p>
+											<p style="line-height:100%; margin:10px;" id="review_seqKit">{{selectedApplProductData.peSeqKit.name}}</p>
+										{% else %}
+											<p style="line-height:100%; font-weight: bold;">Sequencing Kit:</p>
+											<p style="line-height:100%; margin:10px;" id="review_seqKit">{{selectedApplProductData.seqKit.name}}</p>
+										{% endif %}
+										
+										{% if selectedApplProductData.isDefaultPairedEnd %}   
+											<p>
+											<table class="plan-grid">
+												<tr>
+													<td width="50%" style="line-height:100%; font-weight: bold;">Flows: </td>
+													<td width="50%" id="review_flowCount" style="line-height:100%;" >{{selectedApplProductData.peSeqKit.flowCount}}</td>
+												</tr>
+											</table>
+											</p>
+										{% else %}
+											<p>
+											<table class="plan-grid">
+												<tr>
+													<td width="50%" style="line-height:100%; font-weight: bold;">Flows: </td>
+													<td width="50%" id="review_flowCount" style="line-height:100%;" >{{selectedApplProductData.seqKit.flowCount}}</td>
+												</tr>
+											</table>
+											</p>											
+										{% endif %} 
+										<br>
+										
+										<p style="line-height:100%; font-weight: bold;">Barcode Set (optional): </p> 	
+										<p style="line-height:100%; margin:10px;" id="review_barcodeKit"></p> 	
+										
+										<p style="line-height:100%; font-weight: bold;">Control Sequence (optional): </p> 	
+										<p style="line-height:100%; margin:10px;" id="review_controlSeq"></p> 	
+										
+										<p>
+										<table class="plan-grid">
+											<tr>
+												<td width="50%" style="line-height:100%; font-weight: bold;">Chip Type: </td>
+												{% if selectedApplProductData.chipType %}
+													<td width="70%" id="review_chipType" style="line-height:100%;" >Ion {{selectedApplProductData.chipType}}&trade; Chip</td>									
+												{% else %}
+													{% if selectedChipTypeDetails %}
+														<td width="70%" id="review_chipType" style="line-height:100%;" >Ion {{selectedChipTypeDetails.getChipDisplayedName}}&trade; Chip</td>
+													{% else %}
+														<td width="70%" id="review_chipType" style="line-height:100%;" ></td>													
+													{% endif %}
+												{% endif %}
+											</tr>
+										</table>
+										</p>
+
+									{% else %}
+										<h3>Kits</h3>
+										<p>
+										<p style="line-height:100%; font-weight: bold;">Sample Preparation Kit:</p>
+										<p style="line-height:100%; margin:10px;" id="review_samplePrepKitName">{{selectedPlanTemplate.samplePrepKitName}}</p>
+										
+										<p style="line-height:100%; font-weight: bold;">Library Kit Type:</p> 
+										<p style="line-height:100%; margin:10px;" id="review_libKit">{{selectedPlanTemplate.librarykitname}}</p>
+									
+										<div class="review_extra_kit_info row-fluid" style="display: none;">
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_forwardLibKey">{{selectedPlanTemplate.libraryKey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_forward3Adapter">{{selectedPlanTemplate.forward3primeadapter}}</p> 	
+										</div>
+									
+										<div class="review_extra_pe_kit_info row-fluid" style="display: none;">
+												<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peForwardLibKey">{{selectedPlanTemplate.libraryKey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peForward3Adapter">{{selectedPlanTemplate.forward3primeadapter}}</p> 
+											
+												<p style="line-height:100%; font-weight: bold;">Reverse Library Key:</p> 
+												<p style="line-height:100%; margin:10px;" id="review_peReverseLibKey">{{selectedPlanTemplate.reverselibrarykey}}</p>
+										
+												<p style="line-height:100%; font-weight: bold;">Reverse 3' Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peReverse3Adapter">{{selectedPlanTemplate.reverse3primeadapter}}</p> 
+											
+												<p style="line-height:100%; font-weight: bold;">Paired-End Library Adapter:</p> 	
+												<p style="line-height:100%; margin:10px;" id="review_peLibAdapter">{{selectedPlanTemplate.pairedEndLibraryAdapterName}}</p> 	
+										</div>			
+										
+										<p style="line-height:100%; font-weight: bold;">Templating Kit: </p> 	
+										<p style="line-height:100%; margin:10px;" id="review_templateKit">{{selectedPlantemplate.templatingKitName}}</p> 	
+																	
+										<p style="line-height:100%; font-weight: bold;">Sequencing Kit:</p>
+										<p style="line-height:100%; margin:10px;" id="review_seqKit">{{selectedPlanTemplate.sequencekitname}}</p>
+										
+										<p>
+										<table class="plan-grid">
+											<tr>
+												<td width="50%" style="line-height:100%; font-weight: bold;">Flows: </td>
+												<td width="50%" id="review_flowCount" style="line-height:100%;" >{{selectedPlanTemplate.flows}}</td>
+											</tr>
+										</table>
+										</p>
+										
+										<p style="line-height:100%; font-weight: bold;" >Barcode Set (optional):</p>
+										<p style="line-height:100%; margin:10px;" id="review_barcodeKit">{{selectedPlanTemplate.barcodeId}} </p>
+										
+										<p style="line-height:100%; font-weight: bold;">Control Sequence (optional): </p> 	
+										<p style="line-height:100%; margin:10px;" id="review_controlSeq">{{selectedPlanTemplate.controlSequencekitname}}</p> 	
+										
+										<p>
+										<table class="plan-grid">
+											<tr>
+												<td width="50%" style="line-height:100%; font-weight: bold;">Chip Type: </td>
+												{% if selectedApplProductData.chipType %}
+													<td width="100%" id="review_chipType" style="line-height:100%;" >Ion {{selectedPlanTemplate.chipType}}&trade; Chip</td>									
+												{% else %}
+													{% if selectedChipTypeDetails %}
+														<td width="70%" id="review_chipType" style="line-height:100%;" >Ion {{selectedChipTypeDetails.getChipDisplayedName}}&trade; Chip</td>
+													{% else %}
+														<td width="70%" id="review_chipType" style="line-height:100%;" ></td>													
+													{% endif %}										
+												{% endif %}
+											</tr>
+										</table>
+										</p>							
+									{% endif %}	
+									<br>
+							</div>
+							
+							<div class="span4">
+								<br>
+    							<h3>Monitor</h3>
+								<p>
+								<table class="plan-grid">
+									{% if selectedApplProductData %}
+										{% for qcType in planTemplateData.qcTypes %}
+											<tr>
+												<td width="70%" style="line-height:100%; font-weight: bold;">{{qcType.qcName}}: <span>&le; </span></td>
+												<td width="30%" id="review_qcValues_{{forloop.counter}}" style="line-height:100%;">{{qcType.defaultThreshold}}</td>
+											</tr>
+										{% endfor %}
+									{% else %}
+										{% for qcType in planTemplateData.qcTypes %}
+											{% if selectedPlanTemplate.plannedexperimentqc_set.count > 0 %}
+												{% for qcValue in selectedPlanTemplate.plannedexperimentqc_set.all %}
+													{% ifequal qcType.qcName qcValue.qcType.qcName %}
+														<tr>
+															<td width="70%" style="line-height:100%; font-weight: bold;">{{qcType.qcName}}: <span>&le; </span></td>
+															<td width="30%" id="review_qcValues_{{forloop.counter}}" style="line-height:100%;">{{qcValue.threshold}}</td>
+														</tr>
+													{% endifequal %}
+												{% endfor %}
+											{% endif %}
+										{% endfor %}
+									{% endif %}
+								</table>
+								</p>
+								<br>
+
+								<h3>Reference</h3>
+								<p>
+									{% if selectedApplProductData %}		
+										<p style="line-height:50%; font-weight: bold;" >Reference Library:</p>
+										<p style="line-height:50%; margin:10px;" id="review_refLib">{{selectedApplProductData.reference}}</p>
+										<p style="line-height:50%; font-weight: bold;">Target Regions BED File:</p>
+										<p style="line-height:50%; margin:10px;" id="review_bedfile">{{selectedApplProductData.targetBedFile}}</p>
+										<p style="line-height:50%; font-weight: bold;">Hotspot Regions BED File:</p>
+										<p style="line-height:50%; margin:10px;" id="review_regionfile">{{selectedApplProductData.hotSpotBedFile}}</p>
+									{% else %}
+										<p style="line-height:50%; font-weight: bold;">Reference Library:</p>
+										<p style="line-height:50%; margin:10px;" id="review_refLib">{{selectedPlanTemplate.library}}</p>
+										<p style="line-height:50%; font-weight: bold;">Target Regions BED File:</p>
+										<p style="line-height:50%; margin:10px;" id="review_bedfile">{{selectedPlanTemplate.bedfile}}</p>
+										<p style="line-height:50%; font-weight: bold;">Hotspot Regions BED File:</p>
+										<p style="line-height:50%; margin:10px;" id="review_regionfile">{{selectedPlanTemplate.regionfile}}</p>
+									{% endif %}
+								</p>								
+    						</div>
+    						
+    						<div class="span4">		
+    							<br>
+    							<h3>Plugins</h3>
+    							<p>
+    							<p style="line-height:50%; font-weight: bold;" >Selected plugin(s): </p>   
+							 
+    							<p style="line-height:100%; margin:10px" id="review_selectedPlugins">
+    							<!--20120717-TODO-need selected plugins for the persisted plan/template>
+    							{% if not selectedApplProductData %}
+									{% for plugin in planTemplateData.plugins %}
+										{{plugin.name}} v{{plugin.version}}&#44
+									{% endfor %}
+								{% endif %}
+								-->
+								</p>
+
+								<h3>Projects</h3>
+								<p>
+    							<p style="line-height:100%; margin:10px" id="review_projects">
+    							{% if not selectedApplProductData %}
+									{% for project in selectedPlanTemplate.projects.all %}
+										{{project.name}}&#44
+									{% endfor %}
+								{% endif %}
+								</p>	
+    							<p style="line-height:100%; margin:10px" id="review_projects2">
+								</p>
+								
+								<h3>Export</h3>
+								<p>
+								<p style="line-height:100%; margin:10px" id="review_export">
+								<!-- 20120717-TODO-need selected uploaders for the persisted plan/template>
+								{% if not selectedApplProductData %}
+									{% for uploader in planTemplateData.uploader %}
+										{{uploader.name}} v{{uploader.version}}&#44
+									{% endfor %}
+								{% endif %}
+								-->
+								</p>
+							</div>
+						</div>						
+					</div><!-- row-fluid -->
+				</div>		
+				</div>
+			</div>
+		</div>
+		</form>
+	</div>
+	<div class="modal-footer hide" id="ws-1-footer">
+		<a href="#ws-2" class="btn btn-primary next-button">Next (Kits)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-2-footer">
+		<a href="#ws-1" class="btn prev-button" style="margin-right:10px;">Previous (Application)</a>
+		<a href="#ws-3" class="btn btn-primary next-button">Next (Monitor)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-3-footer">
+		<a href="#ws-2" class="btn prev-button" style="margin-right:10px;">Previous (Kits)</a>
+		<a href="#ws-4" class="btn btn-primary next-button">Next (Reference)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-4-footer">
+		<a href="#ws-3" class="btn prev-button" style="margin-right:10px;">Previous (Monitor)</a>
+		<a href="#ws-5" class="btn btn-primary next-button">Next (Plugins)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-5-footer">
+		<a href="#ws-4" class="btn prev-button" style="margin-right:10px;">Previous (Reference)</a>
+		<a href="#ws-6" class="btn btn-primary next-button">Next (Project)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-6-footer">
+		<a href="#ws-5" class="btn prev-button" style="margin-right:10px;">Previous (Plugins)</a>
+		<a href="#ws-7" class="btn btn-primary next-button">Next (Export)</a>
+	</div>
+	<div class="modal-footer hide" id="ws-7-footer">
+		<a href="#ws-6" class="btn prev-button" style="margin-right:10px;">Previous (Project)</a>
+		<a href="#ws-8" class="btn btn-primary next-button">Next ({%if intent == "Plan Run" or intent == "Plan Run New" %}Plan{% else %}Save{% endif %})</a>
+	</div>
+	<div class="modal-footer hide" id="ws-8-footer">
+		<a href="#ws-7" class="btn prev-button" style="margin-right:10px;">Previous (Export)</a>
+		{% if intent == "New" %}
+			<a href="#" class="btn btn-primary submitSaveTemplate" style="margin-right:10px;">Save &amp; Finish</a>
+			<!--20120709-wip a href="#" class="btn btn-primary goSaveAsPlanRun" style="margin-right:10px;">Save as Plan Run</a -->
+		{% elif intent == "Edit" %}
+			<a href="#" class="btn btn-primary submitUpdateTemplate" style="margin-right:10px;">Update &amp; Finish</a>
+		{% elif intent = "EditPlan" %}
+			<a href="#" class="btn btn-primary submitUpdatePlanRun" style="margin-right:10px;">Update &amp; Finish</a>			
+		{% elif intent == "Copy" %}
+			<a href="#" class="btn btn-primary submitSaveTemplate">Copy Plan</a>
+		{% elif intent == "Plan Run" or intent == "Plan Run New" %}
+			<a href="#" class="btn btn-primary submitPlanRun"  href="{% url save_plan_or_template %}">Plan Run</a>
+		{% endif %}		
+	</div>
+<script id="reviewWorkflowTemplate" type="text/x-kendo-template" src="/site_media/template/review_plan.kendo.template"></script>
+
+<script type="text/javascript">
+	$('#flows').spinner({ min: 0, max: 10000 });
+	$('#qcValues_1').spinner({ min: 0, max: 100 });
+	$('#qcValues_2').spinner({ min: 1, max: 100 });
+	$('#qcValues_3').spinner({ min: 0, max: 100 });
+
+	$('[name=bcIrSetId_select]').spinner({min: 0 });
+	$('[name=irSetId_select]').spinner({min: 0 });
+	
+	$('.ui-spinner-buttons').css({height: '27px', left: '-16px', width: '16px', top: '-10px'});
+	$('.ui-spinner-up').css({width: '14px', height: '13.5px'});
+	$('.ui-spinner-down').css({width: '14px', height: '13.5px'});
+	$('.ui-icon-triangle-1-n').css({marginLeft: '-1px', marginTop: '-1px'});
+	$('.ui-icon-triangle-1-s').css({marginLeft: '-1px', marginTop: '-1px'});
+
+	//$('#ws-8').bind('beforeShow', function(e){
+		
+		//formdata = $('#modal_plan_wizard #planTemplateWizard').serializeJSON();
+		//console.log($('#modal_plan_wizard #planTemplateWizard').serializeJSON());
+		//var encodingTemplate = kendo.template($("#reviewWorkflowTemplate").text());
+		//var presets = {}; //TODO: load the presets from {% url get_application_product_presets %}
+		//$('#modal_plan_wizard #planTemplateWizard #review-workflow').html(encodingTemplate({data:formdata, presets:presets}));
+	//});
+	
+	$('.workflow-menu li:first').next().addClass('next-tab');
+	$('.workflow-menu a').click(function(e){
+		e.preventDefault();
+		var $this = $(this), clicked = $this.attr('href');
+		setTab(clicked);
+		e.preventDefault();
+	});	
+	
+	$('.prev-button').click(function(e){
+		e.preventDefault();
+        var $this = $(this), clicked = $this.attr('href');
+        setTab(clicked);
+        e.preventDefault();
+    });
+	
+	$('.next-button').click(function(e){
+		e.preventDefault();
+        var $this = $(this), clicked = $this.attr('href');
+        setTab(clicked);
+        e.preventDefault();
+    });
+    
+	$(".submitPlanRun").click(function(e) {
+		e.preventDefault();
+		$("#submitIntent").val("savePlan")
+		$('#planTemplateWizard').submit()    		
+	});
+	$(".submitSaveTemplate").click(function(e) {
+		e.preventDefault();
+		$("#submitIntent").val("saveTemplate")
+		$('#planTemplateWizard').submit()    		
+	});
+	$(".submitUpdateTemplate").click(function(e) {
+		e.preventDefault();
+		$("#submitIntent").val("updateTemplate")
+		$('#modal_plan_wizard #planTemplateWizard').submit();    		
+	});	    
+	$(".submitUpdatePlanRun").click(function(e) {
+		e.preventDefault();
+		$("#submitIntent").val("updatePlan")
+		$('#planTemplateWizard').submit()    		
+	});
+	
+    $('#modal_plan_wizard #planTemplateWizard').submit(function () {
+		var that = this;
+    	//workaround: #samples and #notes are not picked up by toObject()
+    	var samples = $("#samples_workaround").val();
+    	var notes = $("#notes_workaround").val();
+    	
+    	// validate project names for bad characters and length
+    	var newProjects = $('#newProjects').val();
+    	if(newProjects){
+    	  var newProjects_error = "";
+    	  if (!newProjects.match(/^[a-zA-Z0-9-_\., ]+$/))
+             newProjects_error += 'Project names should contain only letters, numbers, dashes, and underscores.';
+        var projects = newProjects.split(',');
+        for (var i = 0 ; i < projects.length; i++) {
+            if (projects[i].replace(/^\s+|\s+$/g,'').length > 32)
+                newProjects_error += ' Project name length should be 32 characters maximum.';             
+        }
+        if (newProjects_error) {
+		         setTab('#ws-6');
+             $('#ws-6_addProjects').effect("highlight", {"color" : "#F20C18"}, 2000);
+             $('#newProjects-error').text(newProjects_error)
+             return false;
+        }
+      } 
+
+		if ($("#barcodeName option:selected").text()) {
+			var text = $("#barcodeName option:selected").text();
+			var rows = $('table.ws-8_barcodedSampleTable tr');
+			var bcSamples = [];
+				
+			$('table.ws-8_barcodedSampleTable tr.'+text+' input').each(function (index, input) {
+				if (input.value) {
+					bcSamples.push([input.name, input.value]);
+				}
+			});
+			$('input[name=bcSamples_workaround]').val(bcSamples);		
+		}
+
+		
+		var json = $('#modal_plan_wizard #planTemplateWizard').serializeJSON()
+			, url = $('#modal_plan_wizard #planTemplateWizard').attr('action')
+			, type = $('#modal_plan_wizard #planTemplateWizard').attr('method');
+		
+		// Get IR config values for IR_1 and higher IR versions		
+		var irConfigList = [];
+		selected_ir_name = "";
+		if ($('input:checkbox[name=uploaders]:checked').length > 0){
+		    selected_ir_name = $('input:checkbox[name=uploaders]:checked').val().split('|')[1]		
+		};
+		
+		if (selected_ir_name == "IonReporterUploader_V1_0")  {
+		    irConfigList.push({
+		        'Workflow': $('select[id="ir1_irWorkflow"]').val()		       
+		    });
+    }
+    else if (selected_ir_name.search("IonReporterUploader") >= 0)  {
+        var bcKit = $("#barcodeName option:selected").text();
+		    if (bcKit == ""){
+		        // non-barcoded + IR
+		        $('input[id^="sample_irSample_"]').each(function(i,elem){
+		            if (elem.value)
+		                irConfigList.push({		        
+		                      'sample': elem.value,
+		                      'Workflow': $('select[id="sample_irWorkflow_select_nn"]'.replace('nn',i+1)).val(),
+                          'Relation': $('select[id="sample_irRelation_select_nn"]'.replace('nn',i+1)).val(),
+                          'RelationRole': $('select[id="sample_irRelationRole_select_nn"]'.replace('nn',i+1)).val(),
+                          'setid': $('input[id="sample_irSetId_select_nn"]'.replace('nn',i+1)).val()		              
+		                });		
+		        });			
+		    }else{
+		        // barcoded + IR
+		        $('input[id^="bcSample_sample_BarcodeKit_"]'.replace('BarcodeKit',bcKit)).each(function(i,elem){
+		            if (elem.value)
+		                irConfigList.push({		        
+		                      'sample': elem.value,
+		                      'Workflow': $('select[id="bcSample_irWorkflow_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
+                          'Relation': $('select[id="bcSample_irRelation_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
+                          'RelationRole': $('select[id="bcSample_irRelationRole_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
+                          'setid': $('input[id="bcSample_irSetId_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
+                          'barcodeId': $('[id="bcSample_index_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).text()
+		                });
+		        });	
+		    }
+		}
+		json.irConfigList = irConfigList;
+		
+		// find selected plugins and TODO: add related inputs
+		var selectedPlugins = [];
+    $('input:checkbox[name=plugins]:checked').each(function() {
+          var tokens = $(this).val().split("|");          
+					selectedPlugins.push({
+					    "id": tokens[0],
+					    "name": tokens[1],
+					    "version": tokens[2]
+	//				    "parameters": [{ "testinput1": "test1",
+	//				        "testinput2" : "test2"
+	//				    }]
+          });
+	  });		 
+	  var selectedUploaders	=[];  
+	  $('input:checkbox[name=uploaders]:checked').each(function() {
+          var tokens = $(this).val().split("|");          
+					selectedUploaders.push({
+					    "id": tokens[0],
+					    "name": tokens[1],
+					    "version": tokens[2]
+          });
+	  });		 	  
+	  json.selectedPlugins = {"planplugins": selectedPlugins, "planuploaders": selectedUploaders};
+	  console.log(json);
+		
+		{% if selectedPlanTemplate and intent == "Edit" %}		
+			var url = "{% url save_edited_plan_or_template selectedPlanTemplate.id %}";			
+		{% endif %}
+		
+		{% if selectedPlanTemplate and intent == "EditPlan" %}		
+			var url = "{% url save_edited_plan_or_template selectedPlanTemplate.id %}";			
+		{% endif %}
+	
+		if ($('#modal_plan_wizard #planTemplateWizard').attr('method') == "POST") {
+		}
+		json = JSON.stringify(json);
+			
+		console.log('transmitting :', type, url, json );
+
+        $.ajax({
+			type: type,
+	        url: url,
+	        async: false,
+	        dataType: "json",
+	        contentType: "application/json",
+			data: json
+        }).done(function(msg) { 
+        	var json = $.parseJSON(msg);
+        	if (msg.error) {
+        		apprise(msg.error);
+
+		    	//$('#error-messages').empty();
+		    	//$('#error-messages').append('<p class="error">ERROR: ' + msg.error + '</p>'); 
+        	}
+        	else {
+        		if (("{{intent}}" == "Plan Run New") || ("{{intent}}" == "Plan Run")) {
+        			$('body #modal_plan_wizard').modal("hide"); 
+        			
+        			window.location = "{% url planned %}";
+        		}
+        		else {
+        			$('#modal_plan_wizard').trigger('modal_plan_wizard_done', {});
+        			$('body #modal_plan_wizard').modal("hide");
+        		}
+        	}
+    	})
+	    .fail(function(data) {
+	    	apprise('Error saving Plan!');
+	    	 
+	    })
+	    .always(function(data) { });
+        //always return false because the POSTing is done to the API.
+        return false;
+	});
+
+	//both click and change works
+	//radio button clicked for run mode
+	$("input:radio[name=runMode]").click(function() {		
+	    var runMode = $(this).val();
+    	var runType = $("input:radio[name=runType]:checked").val();
+    	var seqKitName, libKitName;
+    	var applFlowCount;
+
+    	console.log("runMode selection changed. runMode=",runMode, " runType=", runType);
+
+	    if (runMode == "pe" && runType == 'AMPS') {
+	        seqKitName = "{{planTemplateData.AMPS.peSeqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.AMPS.peLibKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.AMPS.flowCount}}";
+
+	        $('#librarykitname option:selected', 'select').removeAttr('selected');
+	    	$("#librarykitname option:[value='" + "{{planTemplateData.AMPS.peLibKit.name}}" + "']").attr('selected', 'selected');
+	    	$('#sequencekitname option:selected', 'select').removeAttr('selected');
+	    	$("#sequencekitname option:[value='" + "{{planTemplateData.AMPS.peSeqKit.name}}" + "']").attr('selected', 'selected');
+        } else if (runMode == "pe" && runType == 'GENS') {
+	        seqKitName = "{{planTemplateData.GENS.peSeqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.GENS.peLibKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.GENS.flowCount}}";
+	        	
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.GENS.peLibKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.GENS.peSeqKit.name}}" + "']").attr('selected', 'selected');	        	
+        } else if (runMode == "pe" && runType == 'TARS') { 
+	        seqKitName = "{{planTemplateData.TARS.peSeqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.TARS.peLibKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.TARS.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.TARS.peLibKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.TARS.peSeqKit.name}}" + "']").attr('selected', 'selected');	        		        
+        } else if (runMode == "pe" && runType == 'WGNM') {
+	        seqKitName = "{{planTemplateData.WGNM.peSeqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.WGNM.peLibKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.WGNM.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.WGNM.peLibKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.WGNM.peSeqKit.name}}" + "']").attr('selected', 'selected');	        		        	        	
+        } else if (runMode == "pe" && runType == 'RNA') {
+	        seqKitName = "{{planTemplateData.RNA.peSeqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.RNA.peLibKit.name}}";
+	        applFlowCount = "{{planTemplateData.RNA.flowCount}}";
+	        	
+			$('#librarykitname option:selected', 'select').removeAttr('selected');
+			$("#librarykitname option:[value='" + "{{planTemplateData.RNA.peLibKit.name}}" + "']").attr('selected', 'selected');
+			$('#sequencekitname option:selected', 'select').removeAttr('selected');
+			$("#sequencekitname option:[value='" + "{{planTemplateData.RNA.peSeqKit.name}}" + "']").attr('selected', 'selected');	        		        	        		        	
+	    } else if (runMode == "single" && runType == 'AMPS') { 
+	        seqKitName = "{{planTemplateData.AMPS.seqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.AMPS.libKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.AMPS.flowCount}}";
+        	
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.AMPS.libKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.AMPS.seqKit.name}}" + "']").attr('selected', 'selected');	        		        
+        } else if (runMode == "single" && runType == 'GENS') {
+	        seqKitName = "{{planTemplateData.GENS.seqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.GENS.libKit.name}}"; 
+	        applFlowCount = "{{planTemplateData.GENS.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.GENS.libKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.GENS.seqKit.name}}" + "']").attr('selected', 'selected');	        		        	        
+        } else if (runMode == "single" && runType == 'TARS') { 
+	        seqKitName = "{{planTemplateData.TARS.seqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.TARS.libKit.name}}";
+	        applFlowCount = "{{planTemplateData.TARS.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.TARS.libKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.TARS.seqKit.name}}" + "']").attr('selected', 'selected');	        		        	        
+        } else if (runMode == "single" && runType == 'WGNM') {
+	        seqKitName = "{{planTemplateData.WGNM.seqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.WGNM.libKit.name}}";
+	        applFlowCount = "{{planTemplateData.WGNM.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.WGNM.libKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.WGNM.seqKit.name}}" + "']").attr('selected', 'selected');	        		        	        	        
+        } else if (runMode == "single" && runType == 'RNA') {
+	        seqKitName = "{{planTemplateData.RNA.seqKit.name}}";        	    	
+	        libKitName = "{{planTemplateData.RNA.libKit.name}}";
+	        applFlowCount = "{{planTemplateData.RNA.flowCount}}";
+
+		    $('#librarykitname option:selected', 'select').removeAttr('selected');
+		    $("#librarykitname option:[value='" + "{{planTemplateData.RNA.libKit.name}}" + "']").attr('selected', 'selected');
+		    $('#sequencekitname option:selected', 'select').removeAttr('selected');
+		    $("#sequencekitname option:[value='" + "{{planTemplateData.RNA.seqKit.name}}" + "']").attr('selected', 'selected');	        		        	        
+	    }			                       
+
+		if (runMode == "pe") {
+			$("#review_runType").text("Paired-End");
+			
+			//PE libKey & adapter default selections		
+			$("#review_peForwardLibKey").text($("#peForwardLibraryKey").val());
+			$("#review_peForward3Adapter").text($("#peForward3primeAdapter").val());
+			$("#review_peReverseLibKey").text($("#reverselibrarykey").val());
+			$("#review_peReverse3Adapter").text($("#reverse3primeAdapter").val());
+			$("#review_peLibAdapter").text($("#pairedEndLibraryAdapterName").val());
+				
+				
+			$('.extra_kit_forward_info').slideUp('fast');
+			$('.extra_kit_pe_forward_info').slideDown('fast');
+			$('.extra_kit_pe_reverse_info').slideDown('fast');
+
+			
+			$(".review_extra_kit_info").slideUp('fast');
+			$(".review_extra_pe_kit_info").slideDown('fast');
+			
+			$('div.extra_kit_forward_info').hide();
+			$('div.review_extra_kit_info').hide();
+		}
+		else {
+			$("#review_runType").text("Fragment");
+
+			//single libKey & adapter default selections
+			$("#review_forwardLibKey").text($("#libraryKey").val());
+			$("#review_forward3Adapter").text($("#forward3primeAdapter").val());
+			
+			$('.extra_kit_pe_forward_info').slideUp('fast');
+			$('.extra_kit_pe_reverse_info').slideUp('fast');
+			$('.extra_kit_forward_info').slideDown('fast');
+
+			$(".review_extra_kit_info").slideDown('fast');
+			$(".review_extra_pe_kit_info").slideUp('fast');	
+			
+			$('div.extra_kit_pe_forward_info').hide();
+			$('div.extra_kit_pe_reverse_info').hide();			
+			$('div.review_extra_pe_kit_info').hide();			
+		}
+	    
+		console.log('libKitName:',libKitName, ' ', 'seqKitName:', seqKitName); 
+
+	    //if user changes the run mode, flowCount will come from application product default.
+	    //if user selects a specific sequencing kit, flowCount will come from seqKit default
+	    
+		//flowCount = $("input:hidden[name='"+seqKitName+"']").val();
+		//console.log("#flows", flowCount);
+		//$("#flows").val(flowCount);
+	    
+	    $("#flows").val(applFlowCount);
+		console.log("#flows", $("#flows").val());
+
+	    $("#review_seqKit").text(seqKitName);    	
+	    $("#review_libKit").text(libKitName);
+	    $("#review_flowCount").text($("#flows").val());
+
+	});
+
+	//dropdown list selection change for sequencing kit
+	$("#sequencekitname").change(function(){ 
+		var value = $(this).val();
+	    var flowCount = $("input:hidden[name='"+value+"']").val();
+	    
+	    $("#flows").val(flowCount);
+	    
+	    var selectedFlowCount = $("#flows").val();
+	    $("#review_flowCount").text(selectedFlowCount);
+
+	    $("#review_seqKit").text($('#sequencekitname option:selected').val());
+
+	});
+	
+	//flow count value change
+	$('input[name=flows]').change(function() {
+    //$("#flows").change(function() {
+    	var value = $(this).val();
+    	
+    	//console.log("flow count changed. value=", value);
+	    $("#review_flowCount").text(value);
+    });
+
+	//dropdown list selection change for chip type
+	$("#chipType").change(function(){     	    	
+		if ($("#chipType option:selected").text()) {
+			var value = $("#chipType option:selected").text();
+
+			//console.log("chip type changed. value=", value);
+
+	    	$("#review_chipType").text(value);
+	    }
+	    else {
+	    	$("#review_chipType").text("");
+	    }
+
+	});
+		
+	//dropdown list selection change for template kit
+	$("#templatekitname").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_templateKit").text($('#templatekitname option:selected').val());
+
+	});
+
+	//dropdown list selection change for control sequence kit
+	$("#controlsequence").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_controlSeq").text($('#controlsequence option:selected').val());
+	});
+	
+	//dropdown list selection change for forward library key
+	$("#libraryKey").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_forwardLibKey").text($('#libraryKey option:selected').val());
+
+	});
+
+	//dropdown list selection change for forward 3' adapter
+	$("#forward3primeAdapter").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_forward3Adapter").text($('#forward3primeAdapter option:selected').val());
+	});
+	
+	//dropdown list selection change for pairedEnd forward library key
+	$("#peForwardLibraryKey").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_peForwardLibKey").text($('#peForwardLibraryKey option:selected').val());
+
+	});
+
+	//dropdown list selection change for pairedEnd forward 3' adapter
+	$("#peForward3primeAdapter").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_peForward3Adapter").text($('#peForward3primeAdapter option:selected').val());
+	});
+	
+	//dropdown list selection change for pairedEnd reverse library key
+	$("#reverselibrarykey").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_peReverseLibKey").text($('#reverselibrarykey option:selected').val());
+
+	});
+
+	//dropdown list selection change for pairedEnd reverse 3' adapter 
+	$("#reverse3primeAdapter").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_peReverse3Adapter").text($('#reverse3primeAdapter option:selected').val());
+	});
+	
+	//dropdown list selection change for pairedEnd library adapter
+	$("#pairedEndLibraryAdapterName").change(function(){ 
+		var value = $(this).val(); 
+		
+	    $("#review_peLibAdapter").text($('#pairedEndLibraryAdapterName option:selected').val());
+
+	});
+
+	//dropdown list selection change for sample prep kit
+	$("#samplePrepKitName").change(function(){ 
+		var value = $(this).val();    	    	
+	    $("#review_samplePrepKitName").text($('#samplePrepKitName option:selected').val());
+
+	});
+
+	
+	//dropdown list selection change for barcode kit
+	$("#barcodeName").change(function() {
+		if ($("#barcodeName option:selected").text()) {
+			var text = $("#barcodeName option:selected").text();
+
+	    	$("#review_barcodeKit").text(text);  
+			$("#isBarcodedPlan").val("True");
+
+			var rows = $('table.ws-8_barcodedSampleTable tr');
+			
+			var rowsToShow = rows.filter("'."+text+"'");
+			var rowsToHide = rows.not("'."+text+"'");
+
+			rowsToShow.show();
+			rowsToHide.hide();
+			rows.filter('.barcodedSampleTableHeader').show();
+			
+			//console.log("barcode kit selection changed: barcode selected");
+
+			$.showAndHide_ws8();	
+	    }
+	    else {
+			//console.log("barcode kit selection changed: no barcode selected");
+
+	    	$("#review_barcodeKit").text("");
+			$("#isBarcodedPlan").val("False");
+
+			$.showAndHide_ws8();	
+			
+	    }
+	});
+
+	//user input change for qc values   	    	
+	$('#qcValues_1').change(function() {
+		var value = $(this).val();
+    	
+		//console.log("qc value changed 1. value=", value);
+
+		$("#review_qcValues_1").text(value);
+	});
+
+	//user input change for qc values    	    	
+	$('#qcValues_2').change(function() {
+		var value = $(this).val();
+    	
+		//console.log("qc value changed 2. value=", value);
+
+		$("#review_qcValues_2").text(value);
+	});
+
+	//user input change for qc values      	    	
+	$('#qcValues_3').change(function() {
+		var value = $(this).val();
+		
+		//console.log("qc value changed 3. value=", value);
+
+		$("#review_qcValues_3").text(value);
+	});
+
+
+	//dropdown list selection change for genome reference
+	$("#library").change(function(){ 
+		var value = $(this).val();    	    	
+		$("#review_refLib").text($('#library option:selected').val());
+
+	});
+
+	//dropdown list selection change for target regions bed file
+	$("#bedfile").change(function(){ 
+		var value = $(this).val();    	    	
+		$("#review_bedfile").text($('#bedfile option:selected').val());
+
+	});
+
+	//dropdown list selection change for hotspot regions bed file
+	$("#regionfile").change(function(){ 
+		var value = $(this).val();    	    	
+		$("#review_regionfile").text($('#regionfile option:selected').val());
+
+	});
+
+	//when plugin selection changes 
+	$('input:checkbox[name=plugins]').click(function() {
+	    if($(this).is(':checked')) {
+			var value = $(this).val();
+			
+			var tokens = value.split("|");
+			var pluginName = tokens[1];
+			
+			var currentReviewText = $("#review_selectedPlugins").text();
+
+			$("#review_selectedPlugins").append(pluginName);
+			$("#review_selectedPlugins").append(",");
+	    } else {
+			var value = $(this).val();
+			
+			var tokens = value.split("|");
+			var pluginName = tokens[1];
+			
+			var currentReviewText = $("#review_selectedPlugins").text();
+			var reviewText = "";
+			var reviewTextToRemove = pluginName + ",";
+			
+			reviewText = currentReviewText.replace(reviewTextToRemove, "");
+
+			reviewText = reviewText.replace(/,,/g, ",");
+			
+			$("#review_selectedPlugins").text(reviewText);
+	    }
+	});
+	
+
+	//when uploader selection changes 
+	$('input:checkbox[name=uploaders]').click(function() {
+	    if($(this).is(':checked')) {
+			var value = $(this).val();
+			//console.log(value);
+			
+			var tokens = value.split("|");
+			var uploaderName = tokens[1];
+			
+
+			if (uploaderName.toLowerCase() == "ionreporteruploader_v1_0") {			    		    
+				$('.uploader_input').each(function() {
+		            //var eachId = $("input", this).attr('id');
+					var eachId = $(this).attr('id');		            
+					var eachValue = $(this).val();
+					
+					var eachTokens = eachValue.split("|");
+					var eachUploaderName = eachTokens[1];
+					
+					if ((eachUploaderName.toLowerCase() != "ionreporteruploader_v1_0") &&
+						(eachUploaderName.toLowerCase().search('ionreporteruploader') >=  0)) {
+						$(this).removeAttr("checked");
+
+						var currentReviewText = $("#review_export").text();
+						var reviewTextToRemove = eachUploaderName + ","	
+						reviewText = currentReviewText.replace(reviewTextToRemove, "");
+						reviewText = reviewText.replace(/,,/g, ",");
+						$("#review_export").text(reviewText);						
+					}
+				});
+
+				$("#review_export").append(uploaderName);
+				$("#review_export").append(",");
+				
+				if ("{{intent}}" == "EditPlan" || "{{intent}}" == "Plan Run" || "{{intent}}" == "Plan Run New") {	
+				$('.ir1_hideable_IRConfig').slideDown();
+
+					$.showAndHide_ws8();
+				}
+			}
+			else {
+				if (uploaderName.toLowerCase().search('ionreporteruploader') >=  0) { 		    
+					$('.uploader_input').each(function() {
+			            var eachId = $("input", this).attr('id');			            
+						var eachValue = $(this).val();
+						
+						var eachTokens = eachValue.split("|");
+						var eachUploaderName = eachTokens[1];
+						
+						if ((eachUploaderName.toLowerCase().search('ionreporteruploader_v1_0') >=  0)) {							
+							$(this).removeAttr("checked");
+
+							var currentReviewText = $("#review_export").text();
+							var reviewTextToRemove = eachUploaderName + ","	
+							reviewText = currentReviewText.replace(reviewTextToRemove, "");
+							reviewText = reviewText.replace(/,,/g, ",");
+							$("#review_export").text(reviewText);
+
+						}
+					});
+
+					$("#review_export").append(uploaderName);
+					$("#review_export").append(",");
+
+					if ("{{intent}}" == "EditPlan" || "{{intent}}" == "Plan Run" || "{{intent}}" == "Plan Run New") {
+						$('.ir1_hideable_IRConfig').slideUp();
+
+						$.showAndHide_ws8();
+					}
+				}
+			}
+
+	    } else {
+			var value = $(this).val();
+			
+			var tokens = value.split("|");
+			var uploaderName = tokens[1];
+			
+			var currentReviewText = $("#review_export").text();
+			var reviewText = "";
+			var reviewTextToRemove = uploaderName + ","
+			
+			reviewText = currentReviewText.replace(reviewTextToRemove, "");
+
+			reviewText = reviewText.replace(/,,/g, ",");
+			
+			$("#review_export").text(reviewText);
+
+			//user unchecks IR v1.0
+			if (uploaderName.toLowerCase() == "ionreporteruploader_v1_0") {
+				$('.ir1_hideable_IRConfig').slideUp();
+			}
+			else {
+				if (uploaderName.toLowerCase().search('ionreporteruploader') >=  0) {
+					//if only barcode kit is selected
+					if ($("#barcodeName option:selected").text()) {
+						//console.log("uploader selection changed: only barcode kit is selected!!");
+						
+						$('#ws-8_nonBarcodedSamples').slideUp('fast');
+						$('#ws-8_nonBarcodedSamples_irConfig').slideUp('fast');
+						
+						$('div.ws-8_nonBarcodedSamples').hide();
+						$('div.ws-8_nonBarcodedSamples_irConfig').hide();	
+						$('.bcSample_hideable_IRConfig').hide();
+
+						$('#ws-8_barcodedSamples').children('.bcSample_hideable_basic').show();
+					}
+					else {
+						//if neither irUploader nor barcode kit is selected
+						$('#ws-8_nonBarcodedSamples').slideDown('fast');
+						$('#ws-8_nonBarcodedSamples_irConfig').slideUp('fast');
+						$('#ws-8_barcodedSamples').slideUp('fast');	
+						
+						//$('div.ws-8_nonBarcodedSamples').show();
+						$('div.ws-8_nonBarcodedSamples_irConfig').hide();				
+					}					
+				}
+
+			}
+			
+	    }
+	});
+	
+	//when project selection changes 
+	$('input:checkbox[name=projects]').click(function() {
+	    if($(this).is(':checked')) {
+			var value = $(this).val();
+			
+			var tokens = value.split("|");
+			var projectName = tokens[1];
+			
+			var currentReviewText = $("#review_projects").text();
+
+			$("#review_projects").append(projectName);
+			$("#review_projects").append(",");
+	    } else {
+			var value = $(this).val();
+			
+			var tokens = value.split("|");
+			var projectName = tokens[1];
+			
+			var currentReviewText = $("#review_projects").text();
+			var reviewText = "";
+			var reviewTextToRemove = projectName + ","
+			
+			reviewText = currentReviewText.replace(reviewTextToRemove, "");
+
+			reviewText = reviewText.replace(/,,/g, ",");
+			
+			$("#review_projects").text(reviewText);
+	    }
+	});
+
+	//user input change for manually entered projects    	    	
+	$('#newProjects').bind('input propertychange', function() {
+		
+		var value = $(this).val();
+		    	
+		//console.log("new projects changed. value=", value);
+		$("#review_projects2").text(value);
+	});
+
+  //projects filtering
+  $("#projects_search_text").change(function (e) {	    
+     $("input:[name=projects]").parent().each(function(i,elem){
+          elem.style.display = "";
+       });     
+     if ($(this).val()){
+       $("input:[name=projects]").parent().not(":contains("+$(this).val()+")").each(function(i,elem){
+          elem.style.display = "none";
+       });
+     }   
+  });
+
+	//both click and change works
+    //radio button clicked for application type
+	$("input:radio[name=runType]").click(function() {
+		//TODO: Replace using JSON version of planTemplateData
+		var runType = $(this).val();
+	    var modal_plan_wizard_title;
+	    var variantFrequency;
+	    var seqKitName, libKitName;
+	    var isDefaultPairedEnd;
+	    var chipType; 
+    	var templateKitName = "";
+    	var controlSeqName = "";	        
+    	var flowCount;
+    	var runTypeDescription = "";
+    	
+	    if (runType == "GENS") {   
+			runTypeDescription = '{{planTemplateData.GENS.runType.description}}'; 
+	        variantFrequency = "{{planTemplateData.GENS.defaultVariantFrequency}}";
+	    	isDefaultPairedEnd = "{{planTemplateData.GENS.isDefaultPairedEnd}}";
+			reference = '{{planTemplateData.GENS.reference}}';
+			targetBedFile = '{{planTemplateData.GENS.targetBedFile}}';
+			hotSpotBedFile = '{{planTemplateData.GENS.hotSpotBedFile}}';		    	
+	        if ("{{planTemplateData.GENS.isDefaultPairedEnd}}" == "True") {
+				seqKitName = "{{planTemplateData.GENS.peSeqKit.name}}";        	    	
+				libKitName = "{{planTemplateData.GENS.peLibKit.name}}";        	    	
+	        } else {
+				seqKitName = "{{planTemplateData.GENS.seqKit.name}}";        	    	
+				libKitName = "{{planTemplateData.GENS.libKit.name}}";        	    	
+	        }
+			chipType = '{{planTemplateData.GENS.chipType}}';
+	        if ("{{planTemplateData.GENS.templateKit}}") {
+	        	templateKitName = "{{planTemplateData.GENS.templateKit.name}}";
+	        }
+	        if ("{{planTemplateData.GENS.controlSeqKit}}") {
+	        	controlSeqName = "{{planTemplateData.GENS.controlSeqKit.name}}";
+	        }
+	        flowCount = "{{planTemplateData.GENS.flowCount}}";
+	        
+	    } else if (runType == "AMPS") {   	        
+			runTypeDescription = '{{planTemplateData.AMPS.runType.description}}'; 
+	        variantFrequency = "{{planTemplateData.AMPS.defaultVariantFrequency}}";
+			isDefaultPairedEnd = "{{planTemplateData.AMPS.isDefaultPairedEnd}}";
+			reference = '{{planTemplateData.AMPS.reference}}';
+			targetBedFile = '{{planTemplateData.AMPS.targetBedFile}}';
+			hotSpotBedFile = '{{planTemplateData.AMPS.hotSpotBedFile}}';			
+	        if ("{{planTemplateData.AMPS.isDefaultPairedEnd}}" == "True") {     	        		   	        		
+				libKitName = '{{planTemplateData.AMPS.peLibKit.name}}';
+				seqKitName = "{{planTemplateData.AMPS.peSeqKit.name}}";        	    	
+	        } else {  	        		
+				libKitName = '{{planTemplateData.AMPS.libKit.name}}';
+				seqKitName = "{{planTemplateData.AMPS.seqKit.name}}";        	    	
+	        }
+	        chipType ='{{planTemplateData.AMPS.chipType}}';
+	        if ("{{planTemplateData.AMPS.templateKit}}") {
+	        	templateKitName = "{{planTemplateData.AMPS.templateKit.name}}";
+	        }
+	        if ("{{planTemplateData.AMPS.controlSeqKit}}") {
+	        	controlSeqName = "{{planTemplateData.AMPS.controlSeqKit.name}}";
+	        }
+	        flowCount = "{{planTemplateData.AMPS.flowCount}}";
+	        
+	    } else if (runType == "TARS") {       	        
+			runTypeDescription = '{{planTemplateData.TARS.runType.description}}'; 
+	        variantFrequency = "{{planTemplateData.TARS.defaultVariantFrequency}}";
+			isDefaultPairedEnd = "{{planTemplateData.TARS.isDefaultPairedEnd}}";
+			reference = '{{planTemplateData.TARS.reference}}';
+			targetBedFile = '{{planTemplateData.TARS.targetBedFile}}';
+			hotSpotBedFile = '{{planTemplateData.TARS.hotSpotBedFile}}';			
+	        if (isDefaultPairedEnd == "True") {
+				libKitName = '{{planTemplateData.TARS.peLibKit.name}}';
+				seqKitName = '{{planTemplateData.TARS.peSeqKit.name}}';        	    	
+	        } else {  	        			        		
+				libKitName = '{{planTemplateData.TARS.libKit.name}}';
+				seqKitName = '{{planTemplateData.TARS.seqKit.name}}';        	    	
+	        }
+	        chipType = '{{planTemplateData.TARS.chipType}}';
+	        if ("{{planTemplateData.TARS.templateKit}}") {
+	        	templateKitName = "{{planTemplateData.TARS.templateKit.name}}";
+	        }
+	        if ("{{planTemplateData.TARS.controlSeqKit}}") {
+	        	controlSeqName = "{{planTemplateData.TARS.controlSeqKit.name}}";
+	        }
+	        flowCount = "{{planTemplateData.TARS.flowCount}}";	        
+	    } else if (runType == "WGNM") {
+			runTypeDescription = '{{planTemplateData.WGNM.runType.description}}'; 
+	        variantFrequency = "{{planTemplateData.WGNM.defaultVariantFrequency}}";
+	        isDefaultPairedEnd = "{{planTemplateData.WGNM.isDefaultPairedEnd}}";
+			reference = '{{planTemplateData.WGNM.reference}}';
+			targetBedFile = '{{planTemplateData.WGNM.targetBedFile}}';
+			hotSpotBedFile = '{{planTemplateData.WGNM.hotSpotBedFile}}';
+			if (isDefaultPairedEnd == "True") {
+				libKitName = '{{planTemplateData.WGNM.peLibKit.name}}';
+				seqKitName = '{{planTemplateData.WGNM.peSeqKit.name}}';        	    	
+	    	} else {  	        			        		
+				libKitName = '{{planTemplateData.WGNM.libKit.name}}';
+				seqKitName = '{{planTemplateData.WGNM.seqKit.name}}';        	    	
+	    	}        	
+        	chipType = '{{planTemplateData.WGNM.chipType}}';
+	        if ("{{planTemplateData.WGNM.templateKit}}") {
+	        	templateKitName = "{{planTemplateData.WGNM.templateKit.name}}";
+	        }
+	        if ("{{planTemplateData.WGNM.controlSeqKit}}") {
+	        	controlSeqName = "{{planTemplateData.WGNM.controlSeqKit.name}}";
+	        }
+	        flowCount = "{{planTemplateData.WGNM.flowCount}}";
+	    } else if (runType == "RNA") {
+	    	runTypeDescription = '{{planTemplateData.RNA.runType.description}}'; 
+	    	variantFrequency = "{{planTemplateData.RNA.defaultVariantFrequency}}";
+	    	isDefaultPairedEnd = "{{planTemplateData.RNA.isDefaultPairedEnd}}";
+	    	reference = '{{planTemplateData.RNA.reference}}';
+	    	targetBedFile = '{{planTemplateData.RNA.targetBedFile}}';
+	    	hotSpotBedFile = '{{planTemplateData.RNA.hotSpotBedFile}}';
+	    	if (isDefaultPairedEnd == "True") {
+	    		libKitName = '{{planTemplateData.RNA.peLibKit.name}}';
+	    		seqKitName = '{{planTemplateData.RNA.peSeqKit.name}}';        	    	
+	    	} else {  	        			        		
+	    		libKitName = '{{planTemplateData.RNA.libKit.name}}';
+	    		seqKitName = '{{planTemplateData.RNA.seqKit.name}}';        	    	
+	    	}        	
+	    	chipType = '{{planTemplateData.RNA.chipType}}';
+	    	if ("{{planTemplateData.RNA.templateKit}}") {
+	    		templateKitName = "{{planTemplateData.RNA.templateKit.name}}";
+	    	}
+	    	if ("{{planTemplateData.RNA.controlSeqKit}}") {
+	    		controlSeqName = "{{planTemplateData.RNA.controlSeqKit.name}}";
+	    	}
+	    	flowCount = "{{planTemplateData.RNA.flowCount}}";
+	    }	    
+	    if (runType == "GENS" || runType == "AMPS" || runType == "TARS" || runType == "WGNM" || runType == "RNA"){
+			if ("{{intent}}" == "New") {
+				$('#modal_plan_wizard-title').text("{{intent}} " + runTypeDescription + " Plan");
+			}
+
+			//The selector 'input[name=field]:eq(1)' means find all input elements with a name attribute equal to 'field' and 
+			//pick the second one (eq numbers from 0)
+			if (isDefaultPairedEnd == "True") {
+				$("input:radio[name=runMode]:eq(1)").attr("checked", "checked");
+			}
+			else {
+				$("input:radio[name=runMode]:eq(0)").attr("checked", "checked");
+			}
+
+			runMode = $("input:radio[name=runMode]").val();
+			console.log("at application selection change. runMode=", runMode);
+			
+			if (runMode == "pe") {
+				$("#review_runType").text("Paired-End");
+			}
+			else {
+				$("#review_runType").text("Fragment");
+			}
+			
+	    	if (variantFrequency == "None" || variantFrequency == "&quot;") {
+	    		//alert("no variant frequency to set");
+	    		$("input:radio[name='variantfrequency']:checked").val("");
+	    	} else {
+	    		$("input:radio[name='variantfrequency']:checked").val(variantFrequency);
+	    	}
+			$('#librarykitname option:selected', 'select').removeAttr('selected');
+			$("#librarykitname option:[value='" + libKitName + "']").attr('selected', 'selected');
+			$('#sequencekitname option:selected', 'select').removeAttr('selected');
+			$("#sequencekitname option:[value='" + seqKitName + "']").attr('selected', 'selected');
+			
+			//console.log("#flows", flowCount);
+			$("#flows").val(flowCount);
+			//console.log("#flows", $("#flows").val());
+			$('#library option:selected', 'select').removeAttr('selected');
+			$("#library option:[value=" + reference + "]").attr('selected', 'selected');
+			$('#bedfile option:selected', 'select').removeAttr('selected');
+			$("#bedfile option:[value=" + targetBedFile + "]").attr('selected', 'selected');
+			$('#regionfile option:selected', 'select').removeAttr('selected');
+			$("#regionfile option:[value=" + hotSpotBedFile + "]").attr('selected', 'selected');
+			$('#chipType option:selected', 'select').removeAttr('selected');
+			$("#chipType option:[value='" + chipType + "']").attr('selected', 'selected');
+			
+	    	$("#review_application").text(runTypeDescription);	
+	    	
+	    	console.log("application selection changed. libKit=", libKitName, " seqKit=", seqKitName);
+	    	
+	    	$("#review_libKit").text(libKitName);
+	    	$("#review_seqKit").text(seqKitName);
+		    $("#review_flowCount").text(flowCount);
+
+		    if (chipType == "None" || chipType == "&quot;") {
+		    	$("#review_chipType").text("");
+		    }
+		    else {
+		    	$("#review_chipType").text("Ion "+chipType+"&trade; Chip");
+		    }
+
+	    	$("#review_templateKit").text(templateKitName);
+	    	$("#review_controlSeq").text(controlSeqName);
+	    }
+	});
+
+	//workaround: plan sample input change
+	$("#samples").change(function(){     	    	
+		var value = $(this).val();
+	    $("#samples_workaround").val(value);
+	});
+
+	//workaround: plan template name input change
+	$("#notes").change(function(){     	    	
+		var value = $(this).val();
+	    $("#notes_workaround").val(value);
+	});
+
+	$('.review_plan_inline').toggle(
+		function(){
+			$('.review_plan_info').slideDown();
+			$(this).html('Review Run Plan &nbsp;&ndash;');
+		}, function(){
+			$('.review_plan_info').slideUp('fast');
+			$(this).html('Review Run Plan &nbsp;+');
+	});
+	
+	$('.add_project_inline').click(function(){ 
+			$('.ws-6_addProjects').slideDown();
+	});
+
+	$('.extra_kit_inline').toggle(
+		function(){
+			//alert("extra button toggled 1");
+			
+			var runMode = $("input:radio[name=runMode]:checked").val();
+
+			if (runMode == 'single') {		
+				$('.extra_kit_pe_forward_info').slideUp('fast');
+				$('.extra_kit_pe_reverse_info').slideUp('fast');
+				$('.extra_kit_forward_info').slideDown('fast');
+				
+			}
+			else {
+				$('.extra_kit_forward_info').slideUp('fast');
+				$('.extra_kit_pe_forward_info').slideDown('fast');
+				$('.extra_kit_pe_reverse_info').slideDown('fast');					
+			}
+							
+			$(this).html('Details &nbsp;&ndash;');
+			
+		}, function(){
+			//alert("extra button toggled 2");
+						
+			$('.extra_kit_forward_info').slideUp('fast');
+			$('.extra_kit_pe_forward_info').slideUp('fast');
+			$('.extra_kit_pe_reverse_info').slideUp('fast');		
+			
+			$(this).html('Details &nbsp;+');
+	});
+	
+	//201207109-wip
+	$(".goSaveAsPlanRun").click(function(){ 
+		console.log("I AM AT .goSaveAsPlanRun... TBC")
+	});
+	
+	$('#modal_plan_wizard').on('hidden', function () {
+    	$('body #modal_plan_wizard').remove();
+   	});
+
+	
+	//non-barcoded sample dropdown list selection change for ionReporter configuration
+	$(".irWorkflow_select").change(function(){ 
+		var value = $(this).val();
+  //  console.log(value);		
+		relationChoices = $.getIRConfigRelation(value);
+        
+        $(this).parent().next().find('select').find('option').remove();
+        if (value == null || value == "") {
+        	$(this).parent().next().find('select').attr('disabled', 'disabled');
+        	//alert($(this).parent().nextAll().find('select').attr('name'));
+        	
+        	$(this).parent().nextAll().find('select').find('option').remove(); 
+        	$(this).parent().nextAll().find('select').find('option').attr('disabled', 'disabled'); 
+        	$(this).parent().nextAll().find('input').val('');
+        	$(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        }
+        else {
+    		$(this).parent().next().find('select').removeAttr('disabled');
+	
+    		var nextId = $(this).parent().next().find('select').attr('id');
+    		//alert(nextId);
+
+    		var option = '<option value=""></option>';
+    		$(this).parent().next().find('select').append(option);
+
+    		if (relationChoices.length == 0) {
+    			$(this).parent().next().find('select').append($('[name=irRelation_defaults]').val());
+    		}
+    		for (var i = 0; i < relationChoices.length; ++i) {
+    			var relation = relationChoices[i];
+    			//alert(relation);
+    		
+    			var option = '<option value="'+relation+'">'+relation+'</option>';
+    			$(this).parent().next().find('select').append(option);
+    		}
+        }        
+	});
+
+
+	//non-barcoded sample dropdown list selection change for ionReporter configuration
+	$(".irRelation_select").change(function(){ 
+		var value = $(this).val();
+	//	console.log(value);
+		
+		relationRoleChoices = $.getIRConfigRelationRole(value);
+		
+		isToDisableRelationRole = $.isToDisableIRConfigRelationRole(value);
+		
+		isToDisableSetId = $.isToDisableIRConfigSetId(value);
+
+        if (isToDisableSetId == true) {
+        	$(this).parent().nextAll().find('input').val('');
+        	$(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        }
+        else {
+        	$(this).parent().next().nextAll().find('input').removeAttr('disabled');
+        }
+        
+    	$(this).parent().nextAll().find('select').find('option').remove();
+        if (isToDisableRelationRole == true) {
+        	$(this).parent().nextAll().find('select').attr('disabled', 'disabled');
+        }
+        else {
+        	$(this).parent().nextAll().find('select').removeAttr('disabled');
+            
+        	var option = '<option value=""></option>';
+        	$(this).parent().nextAll().find('select').append(option);
+
+    		if (relationRoleChoices.length == 0) {
+    			$(this).parent().next().find('select').append($('[name=irRelationRole_defaults]').val());
+    		}
+        	for (var i = 0; i < relationRoleChoices.length; ++i) {
+        		var relation = relationRoleChoices[i];
+        		//alert(relation);
+    		
+        		var option = '<option value="'+relation+'">'+relation+'</option>';
+        		$(this).parent().nextAll().find('select').append(option);;    		
+        	}
+        }
+        
+	});
+
+	//non-barcoded sample dropdown list selection change for ionReporter configuration
+	$(".irRelationRole_select").change(function(){ 
+		var value = $(this).val();
+  //  console.log(value);
+		isToDisable = $.isToDisableIRConfigSetId(value);
+        
+        if (isToDisable == true) {
+        	$(this).parent().nextAll().find('input').val('');
+        	$(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        }
+        else {
+        	$(this).parent().nextAll().find('input').removeAttr('disabled');
+        }
+	});
+	
+
+	(function($) {
+	     $.getIRConfigApplication = function(theSelectedWorkflow) {				
+	    	var selectedApplication = '';
+	    	if (theSelectedWorkflow == null || theSelectedWorkflow == '') {
+	    		return selectedApplication;
+	    	}
+	    	
+			var irConfigSelection = '{{planTemplateData.irConfigSelection|escapejs}}';
+      var obj  = jQuery.parseJSON(irConfigSelection);
+			
+		    var application = '';		    
+		    
+		    if (obj != null) {
+		    	//console.log("obj is NOT null at getIRConfigApplication...");
+
+		    	$.each(obj, function(key, value) {
+		    		//console.log(key + ' ' + value);
+		    		if (key == "column-map") {
+		    			var applCounter = 0;
+
+		    			var columnMapData = value;
+
+		    			$.each(columnMapData, function(key2, value2) {
+		    				$.each(value2, function(key3, value3) {
+		    					if (key3 == "ApplicationType") {
+		    						application = value3;
+		    					}
+		    					else if (key3 == "Workflow") {
+		    						//console.log("key3 is workflow..."+value3);
+		    						if (value3 == theSelectedWorkflow) {
+		    							//alert("found it!!");
+		    							//alert(application);
+		    							selectedApplication = application;
+		    						}
+		    					}
+		    					applCounter++;
+		    				});
+
+		    			});
+
+		    		}
+		    	});
+		    }
+		    else {
+		    	//console.log("obj is null at getIRConfigApplication...");
+		    }
+		    
+			return selectedApplication;
+	     }
+	})(jQuery);
+
+
+	
+	(function($) {
+		$.getIRConfigRelation = function(theSelectedWorkflow) {
+			var selectedApplication = $.getIRConfigApplication(theSelectedWorkflow);
+			
+			var selectedValidValues = [];			
+			if (selectedApplication == null || selectedApplication == '') {
+				return selectedValidValues;
+			}
+				
+			var irConfigSelection = '{{planTemplateData.irConfigSelection|escapejs}}';
+      var obj  = jQuery.parseJSON(irConfigSelection);
+				
+			var validValues = [];
+			var validCategoryName = '';
+			var forName = '';
+			var forValue = '';
+			
+			if (obj != null) {
+				//console.log("obj is NOT null at getIRConfigRelation...");
+
+				$.each(obj.restrictionRules, function() {
+					$.each(this, function(key, value) {
+						if (key == "Valid") {
+							//console.log("Valid here...");
+
+							$.each(value, function(key2, value2) {
+								//console.log("key2="+key2+"; value2="+ value2);
+
+								if (key2 == "Values") {
+									$.each(value2, function(key3, value3) {
+										//console.log("key3="+key3+"; value3="+ value3);
+										validValues.push(value3);
+									});
+								}
+							});
+						}
+
+						if (key == "For") {
+							//console.log("For here...");
+							//console.log(key+ '=' + value + ' ; ' + value[key]);
+
+							var isApplication = false;
+							for (var subKey in value) {
+								//console.log(subKey + '=' +value[subKey]);
+								if (subKey == 'Name' && value[subKey] == 'ApplicationType') {
+									isApplication = true;
+								}
+								if (subKey == "Value" && isApplication) {
+									forValue = value[subKey];
+									isApplication = false;
+
+									if (forValue == selectedApplication) {
+										//alert("found forValue it!");
+										//alert(forValue);
+
+										selectedValidValues = validValues;
+										//alert(selectedValidValues);
+										validValues = [];
+
+										return selectedValidValues;
+									}
+									else {
+										validValues = [];
+									}
+								}
+							}			        					        		
+						}
+					});
+				});
+			}
+			else {
+				//console.log("obj is null at getIRConfigRelation...");
+			}
+			
+			return selectedValidValues;
+		}
+	})(jQuery);
+
+
+	(function($) {
+		$.getIRConfigRelationRole = function(theSelectedRelation) {
+			var selectedValidValues = [];
+			if (theSelectedRelation == null || theSelectedRelation == '') {
+				return selectedValidValues;
+			}
+	    	 
+			var irConfigSelection = '{{planTemplateData.irConfigSelection|escapejs}}';
+      var obj  = jQuery.parseJSON(irConfigSelection);
+					
+			var validValues = [];
+			var validCategoryName = '';
+			var forName = '';
+			var forValue = '';
+				
+			if (obj != null) {
+				//console.log("obj is NOT null at getIRConfigRelationRole...");
+
+				$.each(obj.restrictionRules, function() {
+					$.each(this, function(key, value) {
+						if (key == "Valid") {
+							//console.log("Valid here...");
+
+							$.each(value, function(key2, value2) {
+								//console.log("key2="+key2+"; value2="+ value2);
+
+								if (key2 == "Values") {
+									$.each(value2, function(key3, value3) {
+										//console.log("key3="+key3+"; value3="+ value3);
+
+										validValues.push(value3);
+									});
+								}
+							});
+						}
+
+						if (key == "For") {
+							//console.log("For here...");
+							//console.log(key+ '=' + value + ' ; ' + value[key]);
+
+							var isRelation = false;
+							for (var subKey in value) {
+								//console.log(subKey + '=' +value[subKey]);
+								if (subKey == 'Name') {
+									if (value[subKey] == 'RelationshipType') {
+										isRelation = true;
+									}
+									else {
+										validValues = [];
+									}
+								}
+								if (subKey == "Value" && isRelation) {
+									forValue = value[subKey];
+									isRelation = false;
+
+									if (forValue == theSelectedRelation) {
+										//alert("found forValue it!");
+										//alert(forValue);
+
+										selectedValidValues = validValues;
+										//alert(selectedValidValues);
+										validValues = [];
+
+										return selectedValidValues;
+									}
+									else {
+										validValues = [];
+									}
+								}
+							}			        					        		
+						}
+					});
+				});
+			}
+			else {
+				//console.log("obj is null at getIRConfigRelationRole....");
+			}
+			
+			return selectedValidValues;	    	 
+	     }
+	})(jQuery);
+
+
+	(function($) {
+		$.isToDisableIRConfigRelationRole = function(theSelectedRelation) {
+	    	 return $.isToDisableIRConfigAttribute(theSelectedRelation, 'Relation');
+	   }
+	})(jQuery);
+	
+
+	(function($) {
+	     $.isToDisableIRConfigSetId = function(theSelectedRelation) {
+	    	 return $.isToDisableIRConfigAttribute(theSelectedRelation, 'SetID');
+	     }
+	})(jQuery);
+	
+
+
+	(function($) {
+		$.isToDisableIRConfigAttribute = function(theSelectedRelation, theDisabledName) {
+	    var isToDisable = false;	    
+		if (theSelectedRelation == null || theSelectedRelation == '' || theDisabledName == null || theDisabledName == '') {
+			isToDisable = true;
+			return isToDisable;
+		}
+		    	 
+		var irConfigSelection = '{{planTemplateData.irConfigSelection|escapejs}}';
+    var obj  = jQuery.parseJSON(irConfigSelection);
+						
+		var isToDisableName = '';
+		var forName = '';
+		var forValue = '';
+					
+		if (obj != null) {
+			//console.log("obj is NOT null at isToDisableIRConfigAttribute...");
+			
+			$.each(obj.restrictionRules, function() {
+				$.each(this, function(key, value) {
+
+					if (key == "Disabled") {
+						//console.log("Disabled here...");
+						//console.log(key + '=' + value + ' ; ' + value[key]);
+
+						for (var subKey in value) {
+							//console.log(subKey + '=' +value[subKey]);
+							isToDisableName = value[subKey];
+						}			        					        		
+					}
+
+					if (key == "For") {
+						//console.log("For here...");
+						//console.log(key+ '=' + value + ' ; ' + value[key]);
+
+						var isRelation = false;
+						for (var subKey in value) {
+							//console.log(subKey + '=' +value[subKey]);
+							if (subKey == 'Name') {
+								if (value[subKey] == 'RelationshipType') {
+									isRelation = true;
+								}
+								else {
+									isToDisableName = '';
+								}
+							}
+							if (subKey == "Value" && isRelation) {
+								forValue = value[subKey];
+								isRelation = false;
+
+								if (forValue == theSelectedRelation && isToDisableName.toLowerCase() == theDisabledName.toLowerCase()) {
+									isToDisable = true;						    				
+									return isToDisable;
+								}
+								else {
+									isToDisableName = '';
+								}
+							}
+						}			        					        		
+					}
+				});
+			});
+		}
+		else {
+			//console.log("obj is null at isToDisableIRConfigAttribute....");
+		}
+		
+		return isToDisable;	
+	   }
+	})(jQuery);
+	
+	
+	(function($) {
+		$.showAndHide_ws8 = function() {
+			if ($("#barcodeName option:selected").text()) {	
+
+				//if both barcode kit and IonReporter both selected
+				//var uploaders = $(“#review_export”).text().toLowerCase();
+				if (($('#review_export').text().toLowerCase().search('ionreporteruploader_v1_0') <  0) &&  
+						($('#review_export').text().toLowerCase().search('ionreporteruploader') >=  0)) {
+
+					//console.log("showAndHide_ws8: both barcodeKit and uploader are selected");
+
+					$('#ws-8_nonBarcodedSamples').slideUp('fast');
+					$('#ws-8_nonBarcodedSamples_irConfig').slideUp('fast');
+
+					$('#ws-8_barcodedSamples').children('.bcSample_hideable_IRConfig').slideDown('fast');
+
+					//need-this
+					$('#ws-8_barcodedSamples').slideDown('fast');
+					//cause recursion issue
+					//$('div.ws-8_barcodedSamples').show();	
+
+					$("#ws-8_barcodedSampleTable tr").each(function(){
+						$(this).find(".bcSample_hideable_IRConfig").css("display","");
+					});
+
+					$('div.ws-8_nonBarcodedSamples').hide();
+					$('div.ws-8_nonBarcodedSamples_irConfig').hide();				
+				}
+				else {
+					//console.log("showAndHide_ws8: only barcodeKit is selected AND NOT (IR v.10 not selected + IR v1.2 selected) ");
+
+					//if only barcode kit is selected
+					$('#ws-8_nonBarcodedSamples').slideUp('fast');
+					$('#ws-8_nonBarcodedSamples_irConfig').slideUp('fast');
+
+					//$('#ws-8_barcodedSamples').slideDown('fast');	
+
+					$('div.ws-8_nonBarcodedSamples').hide();
+					$('div.ws-8_nonBarcodedSamples_irConfig').hide();
+
+					$('#ws-8_barcodedSamples').slideDown('fast');
+
+					$("#ws-8_barcodedSampleTable tr").each(function(){
+						$(this).find(".bcSample_hideable_IRConfig").css("display","none");
+					});
+				}
+
+			} else {
+
+				//if only IonReporter is selected
+				if (($('#review_export').text().toLowerCase().search('ionreporteruploader_v1_0') <  0) &&  
+						($('#review_export').text().toLowerCase().search('ionreporteruploader') >=  0)) {
+					//console.log("showAndHide_ws8: only IR v1.0 not selected + IR v1.2 selected");
+
+					$('#ws-8_nonBarcodedSamples').slideUp('fast');
+					$('#ws-8_nonBarcodedSamples_irConfig').slideDown('fast');
+
+					$('#ws-8_barcodedSamples').slideUp('fast');	
+
+					$('div.ws-8_nonBarcodedSamples').hide();
+					$('div.#ws-8_barcodedSamples').hide();	
+				}
+				else {
+					//console.log("showAndHide_ws8: neither barcode kit nor IonReporter is selected");
+
+					//if neither barcode kit nor IonReporter is selected
+					$('#ws-8_nonBarcodedSamples').slideDown('fast');
+					$('#ws-8_nonBarcodedSamples_irConfig').slideUp('fast');
+					$('#ws-8_barcodedSamples').slideUp('fast');	
+
+					$('div.ws-8_barcodedSamples').hide();
+					$('div.ws-8_nonBarcodedSamples_irConfig').hide();
+					//$('div.ws-8_nonBarcodedSamples').show();
+				}
+			}
+		}
+	})(jQuery);
+	
+	
+	$(document).ready(function () {
+		
+		/** TS-4640: IE6,7,8 long text within fixed width <select> is clipped, set width:auto temporarily */
+		if ($.browser.msie && $.browser.version < 9)
+		{
+			$('select')
+			.bind('focus mouseover', function() { $(this).addClass('expand').removeClass('clicked'); })
+			.bind('click', function() { if ($(this).hasClass('clicked')) { $(this).blur(); } $(this).toggleClass('clicked'); })
+			.bind('mouseout', function() { if (!$(this).hasClass('clicked')) { $(this).removeClass('expand'); }})
+			.bind('blur', function() { $(this).removeClass('expand clicked'); });
+		}	
+		if ("{{intent}}" == "New" || "{{intent}}" == "Plan Run New") {
+			$(".review_extra_kit_info").slideDown('fast');
+			$(".review_extra_pe_kit_info").slideUp('fast');	
+			$('div.review_extra_pe_kit_info').hide();
+			
+			if ("{{selectedApplProductData}}") {				
+				if ("{{selectedApplProductData.isDefaultPairedEnd}}" == "True") {				
+					$("#review_peForwardLibKey").text($("#peForwardLibraryKey").val());
+					$("#review_peForward3Adapter").text($("#peForward3primeAdapter").val());
+					$("#review_peReverseLibKey").text($("#reverselibrarykey").val());
+					$("#review_peReverse3Adapter").text($("#reverse3primeAdapter").val());
+					$("#review_peLibAdapter").text($("#pairedEndLibraryAdapterName").val());
+					
+					$(".review_extra_kit_info").slideUp('fast');
+					$(".review_extra_pe_kit_info").slideDown('fast');
+					$('div.review_extra_kit_info').hide();
+				}
+				else {				
+					$("#review_forwardLibKey").text($("#libraryKey").val());
+					$("#review_forward3Adapter").text($("#forward3primeAdapter").val());
+					
+					$(".review_extra_kit_info").slideDown('fast');
+					$(".review_extra_pe_kit_info").slideUp('fast');
+					$('div.review_extra_pe_kit_info').hide();
+				}
+		
+			}
+			else {
+				//alert("NO selectedApplProductData at documentReady")
+			}
+		}
+		else {
+			if ("{{selectedPlanTemplate.runMode}}" == "pe") {
+				//if we no PE lib kits are active, peForwardLibKeys will be none and we'll hide the pe run mode				
+				if ("{{planTemplateData.peForwardLibKeys}}" == "None") {
+					apprise("Paired-end is not officially supported. Please activate paired-end kits in your database before proceeding with paired-end plan/template creation or edit.");
+				}
+
+				$(".review_extra_kit_info").slideUp('fast');
+				$(".review_extra_pe_kit_info").slideDown('fast');
+				$('div.review_extra_kit_info').hide();
+			}
+			else {
+				$(".review_extra_kit_info").slideDown('fast');
+				$(".review_extra_pe_kit_info").slideUp('fast');	
+				$('div.review_extra_pe_kit_info').hide();
+			}
+		}
+
+		if ("{{intent}}" == "EditPlan" || "{{intent}}" == "Plan Run") {				
+			//init with previous sample and notes info
+			if ("{{selectedPlanTemplate}}") {
+				$("#samples_workaround").val("{{selectedPlanTemplate.sampleDisplayedName}}");
+				$("#notes_workaround").val("{{selectedPlanTemplate.notes}}");
+			}
+			
+			if ("{{selectedPlanTemplate.barcodeId}}" != "") {
+				if (! jQuery.isEmptyObject("{{selectedPlanTemplate.barcodedSamples}}")) {
+
+					//console.log('{{selectedPlanTemplate.barcodedSamples|escapejs}}');
+
+					//workaround: for creating new plan/template, originally there was no selectedPlanTemplate in the data packet.
+					//however, this resulted in syntax error: "var bcSamples = ;"
+					//as a workaround, i now include a selectedPlanTemplate object for all intents
+					var	bcSamples = {{selectedPlanTemplate.barcodedSamples|safe}};
+					
+					for (var key in bcSamples) {
+						var sampleName = bcSamples[key]["sample"];
+						//console.log(sampleName);
+					
+						var fieldName = "bcKey|" + key;
+						$("input[name='"+fieldName+"']").val(sampleName); 					
+					}
+				}
+
+				var selectedBarcodeKit = "{{selectedPlanTemplate.barcodeId}}";
+				
+				var rows = $('table.ws-8_barcodedSampleTable tr');
+				
+				var rowsToShow = rows.filter("'."+selectedBarcodeKit+"'");
+				var rowsToHide = rows.not("'."+selectedBarcodeKit+"'");
+
+				rowsToShow.show();
+				rowsToHide.hide();
+				rows.filter('.barcodedSampleTableHeader').show();
+					
+				$('div.ws-8_nonBarcodedSamples').hide();
+			}
+			else {
+				$('div.ws-8_nonBarcodedSamples').show();
+			}
+		}
+		
+		// add selected plugins to review 
+		if ("{{intent}}" == "New" || "{{intent}}" == "Plan Run New") {
+			{% for plugin in planTemplateData.plugins %}	
+		    	{% if plugin.autorun %}
+		        	$("#review_selectedPlugins").append("{{plugin.name}}");
+		        	$("#review_selectedPlugins").append(", ");
+		        {% endif %}
+		    {% endfor %} 
+			{% for plugin in planTemplateData.IRuploads %}	
+    			{% if plugin.autorun %}
+    				$("#review_export").append("{{plugin.name}}");
+    				$("#review_export").append(", ");
+    			{% endif %}
+    		{% endfor %}
+    		{% for plugin in planTemplateData.uploaders %}	
+    			{% if plugin.autorun %}
+    				$("#review_export").append("{{plugin.name}}");
+    				$("#review_export").append(", ");
+    			{% endif %}
+    		{% endfor %}		    
+		}
+		else {					
+			{% for plugin in planTemplateData.plugins %}	
+		    	{% if plugin.selected %}
+		    		$("#review_selectedPlugins").append("{{plugin.name|escapejs}}");
+		    		$("#review_selectedPlugins").append(", ");
+		    	{% endif %}
+		    {% endfor %}
+			{% for plugin in planTemplateData.IRuploads %}	
+	    		{% if plugin.selected %}
+	    			$("#review_export").append("{{plugin.name|escapejs}}");
+	    			$("#review_export").append(", ");
+	    		{% endif %}
+	    	{% endfor %}
+	    	{% for plugin in planTemplateData.uploaders %}	
+	    		{% if plugin.selected %}
+	    			$("#review_export").append("{{plugin.name|escapejs}}");
+	    			$("#review_export").append(", ");
+	    		{% endif %}
+	    	{% endfor %}
+		}
+	  
+	  var isIR_v1_selected = false;
+	  var isIR_beyond_v1_selected = false;
+
+	  // add selected uploaders to review 
+	  {% for uploader in planTemplateData.IRuploads %}	
+	  	{% if uploader.autorun %}
+	  		if ("{{intent}}" == "New" || "{{intent}}" == "Plan Run New") {
+	  			if ("{{uploader.name|escapejs}}".toLowerCase().search('ionreporteruploader_v1_0') >=  0) {
+	  				isIR_v1_selected = true;
+	  			}
+	  			else {
+	  				if ("{{uploader.name|escapejs}}".toLowerCase().search('ionreporteruploader') >=  0) {
+	  					isIR_beyond_v1_selected = true;
+	  				}
+	  			}
+  			}			
+		{% endif %}
+		
+	  	{% if uploader.selected %}	
+  			if ("{{intent}}" != "New" && "{{intent}}" != "Plan Run New") {
+  				if ("{{uploader.name|escapejs}}".toLowerCase().search('ionreporteruploader_v1_0') >=  0) {
+  					isIR_v1_selected = true;
+  				}
+  				else {
+  					if ("{{uploader.name|escapejs}}".toLowerCase().search('ionreporteruploader') >=  0) {
+  						isIR_beyond_v1_selected = true;
+  					}
+  				}
+  			}			  	
+	  	{% endif %}
+	  {% endfor %}    
+     
+		if ("{{intent}}" == "EditPlan" || "{{intent}}" == "Plan Run" || "{{intent}}" == "Plan Run New") {	
+
+			//hide irConfig columns if irReporter is not pre-selected
+			if (isIR_v1_selected) {
+				//console.log("document.ready going to SHOW ws-7 ir1_hideable_IRConfig");
+				
+				$('.ir1_hideable_IRConfig').slideDown();
+			}
+			else {
+				//console.log("document.ready going to HIDE ws-7 ir1_hideable_IRConfig");
+				
+				$('.ir1_hideable_IRConfig').slideUp();				
+			}
+
+			$.showAndHide_ws8();
+			
+			if ("{{planTemplateData.irConfigSelection_1|escapejs}}" != null) {
+				
+				var irConfigSelection = '{{planTemplateData.irConfigSelection_1|escapejs}}';
+        var obj  = jQuery.parseJSON(irConfigSelection);
+				
+				var columnCounter = 0;
+				
+				if (obj != null) {
+			    //console.log("COLUMNS...");
+			    $.each(obj.columns, function() {
+			        $.each(this, function(key, value) {
+			        	//console.log(key);
+			        	
+			        	if (key == "Values") {
+			        		if (columnCounter == 0) {
+				            	for (var subKey in value) {
+				            		//console.log(value[subKey]);
+				            		
+				            		var option = '<option value="'+value[subKey]+'">'+value[subKey]+'</option>';
+				            	    $('[name=ir1_irWorkflow_select]').append(option);
+				            	    $('[name=ir1_irWorkflow_defaults]').val($('[name=ir1_irWorkflow_defaults]').val() + option);
+				            	}
+			        		}	        		
+			        	}
+			        	if (key == "Name") {
+			        		columnCounter++;
+			        		
+			        		/*
+			        		if (value == "Workflow") {
+			        			columnCounter++;
+			        		} 
+			        		else if (value == "RelationshipType") {
+			        			columnCounter++;
+			        		}
+			        		else if (value == "Relation") {
+			        			columnCounter++;
+			        		}			        		
+			        		*/
+			        	}			        	
+			        });
+			    });  
+				}
+			}
+			    
+			var irConfigSelection = '{{planTemplateData.irConfigSelection|escapejs}}';
+			if (irConfigSelection != null) {
+				var obj  = jQuery.parseJSON(irConfigSelection);
+				
+				var columnCounter = 0;
+				
+				if (obj != null) {
+			    //console.log("COLUMNS...");
+			    $.each(obj.columns, function() {
+			        $.each(this, function(key, value) {
+			        	//console.log(key);
+			        	
+			        	if (key == "Values") {
+			        		if (columnCounter == 0) {
+				            	for (var subKey in value) {
+				            		//console.log(value[subKey]);
+				            		
+				            		var option = '<option value="'+value[subKey]+'">'+value[subKey]+'</option>';
+				            	    $('[name=bcIrWorkflow_select]').append(option);
+				            	    $('[name=irWorkflow_select]').append(option);
+
+				            	    $('[name=irWorkflow_defaults]').val($('[name=irWorkflow_defaults]').val() + option);
+				            	}
+			        		}
+			        		else if (columnCounter == 1) {
+				            	for (var subKey in value) {
+				            		//console.log(value[subKey]);
+
+				            		var option = '<option value="'+value[subKey]+'">'+value[subKey]+'</option>';
+				            		//lazy drop down list construction
+				            		//$('[name=bcIrRelation_select]').append(option);	
+				            		//$('[name=irRelation_select]').append(option);	
+
+				            	    $('[name=irRelation_defaults]').val($('[name=irRelation_defaults]').val() + option);				            		
+				            	}
+			        		}
+			        		else if (columnCounter == 2) {
+				            	for (var subKey in value) {
+				            		//console.log(value[subKey]);
+			        			
+				            		var option = '<option value="'+value[subKey]+'">'+value[subKey]+'</option>';
+				            		//lazy drop down list construction
+				            		//$('[name=bcIrRelationRole_select]').append(option);		
+				            		//$('[name=irRelationRole_select]').append(option);	
+
+				            	    $('[name=irRelationRole_defaults]').val($('[name=irRelationRole_defaults]').val() + option);	
+				            	}
+			        		}			        		
+			        	}
+			        	if (key == "Name") {
+			        		if (value == "Workflow") {
+			        			//console.log("i am a workflow");
+			        			columnCounter++;
+			        		} 
+			        		else if (value == "RelationshipType") {
+			        			//console.log("i am a relationshipType");
+			        			columnCounter++;
+			        		}
+			        		else if (value == "Relation") {
+			        			//console.log("i am a relation");
+			        			columnCounter++;
+			        		}			        		
+			        		
+			        	}
+			        });
+			    });  
+				}
+		  }		
+
+			    // load previously saved IR selections
+          var irUserSelection = '{{planTemplateData.irConfigSaved|escapejs}}';
+          var irVersion = '{{planTemplateData.irConfigSaved_version|escapejs}}';
+          var obj = jQuery.parseJSON(irUserSelection);
+          if (obj == null)
+              return;
+          
+          // IR version 1.0    
+          if (irVersion < 1.2){              
+              $('select[id="ir1_irWorkflow"]').val(obj[0]['Workflow']);
+              return;          
+          }
+          
+          // IR version 1.2 or higher
+          function setIR_select(element, value, samples_count){
+        	  //fix: to handle when $(element) is empty
+        	  if ($(element) != null && $(element).length > 0) {
+                 for (var i = 0; i < $(element)[0].options.length; i++) {
+                      if ($(element)[0].options[i].text === value) {                            
+	 	                          $(element)[0].options[i].selected = true;
+	 	                          $(element).change();
+                      }
+                 } 
+          	}
+          }                                         
+          if ("{{selectedPlanTemplate.barcodeId}}" == ""){
+          // non-barcoded case
+               obj = obj[0];
+               $('input[id="sample_irSample_1"]').val(obj['sample']);
+               setIR_select('select[id="sample_irWorkflow_select_1"]', obj['Workflow']);
+               setIR_select('select[id="sample_irRelation_select_1"]', obj['Relation']);
+               setIR_select('select[id="sample_irRelationRole_select_1"]', obj['RelationRole']);
+               $('input[id="sample_irSetId_select_1"]').val(obj['setid'].split('__')[0]);  
+	       }else{
+	       //barcoded case	       
+	             var count = 0;     
+			         $('input[id^="bcSample_sample_BarcodeKit_"]'.replace('BarcodeKit',selectedBarcodeKit)).each(function(i,elem){			              
+			              if (elem.value){
+                        setIR_select('select[id="bcSample_irWorkflow_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',selectedBarcodeKit), obj[count]['Workflow']);
+                        setIR_select('select[id="bcSample_irRelation_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',selectedBarcodeKit), obj[count]['Relation']);
+                        setIR_select('select[id="bcSample_irRelationRole_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',selectedBarcodeKit), obj[count]['RelationRole']);
+                        $('input[id="bcSample_irSetId_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',selectedBarcodeKit)).val(obj[count]['setid'].split('__')[0]);
+                        count++;
+                    }
+			         });
+			   } 				
+		}
+	});
+  
+</script>	
+</div>

@@ -5,14 +5,12 @@
 
 (my $CMD = $0) =~ s{^(.*/)+}{};
 my $DESCR = "Create tsv of bed target regions coverage for given pileup file. (Output to STDOUT.)";
-my $USAGE = "Usage:\n\t$CMD [options] <SAM pileup/depth file> <BED file>";
+my $USAGE = "Usage:\n\t$CMD [options] <SAM depth file> <Annotated BED file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
-  -g Create GC coverage data for each covered target. Requires SAM pileup file as input, rather than SAM depth file.
-  -G <file> Genome data file (chromosomes+lengths) used to specify expected chromosome names";
+  -G <file> Genome/FASTA index (fai) data file (chromosomes+lengths) used to specify expected chromosome names.";
 
 my $genome="";
-my $addGCdata = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -20,7 +18,6 @@ while( scalar(@ARGV) > 0 )
     last if($ARGV[0] !~ /^-/);
     my $opt = shift;
     if($opt eq '-G') {$genome = shift;}
-    elsif($opt eq '-g') {$addGCdata = 1;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
     {
@@ -43,7 +40,7 @@ elsif( scalar @ARGV != 2 )
     exit 1;
 }
 
-my $pileupfile = shift(@ARGV);
+my $depthfile = shift(@ARGV);
 my $bedfile = shift(@ARGV);
 
 my $haveGenome = ($genome ne "");
@@ -55,6 +52,8 @@ my %corder;
 my %chrom_num_target;
 my $num_chroms = 0;
 
+# if supplied, use genome/fai file to specify contigs and contig order
+# - otherwise order is defined by bed file
 if( $haveGenome )
 {
     open( GENOME, $genome ) || die "Cannot read genome info. from $genome.\n";
@@ -72,6 +71,9 @@ if( $haveGenome )
 # create hash arrays of target starts and ends
 my %chrom_starts;
 my %chrom_ends;
+my %chrom_genes;
+my %chrom_regions;
+my %chrom_target_gc;
 
 my $numTracks = 0;
 my $numTargets = 0;
@@ -113,6 +115,9 @@ while( <BEDFILE> )
     ++$numTargets;
     push( @{$chrom_starts{$chrid}}, $fields[1]+1 );
     push( @{$chrom_ends{$chrid}}, $fields[2] );
+    push( @{$chrom_genes{$chrid}}, $fields[3] );
+    push( @{$chrom_regions{$chrid}}, $fields[4] );
+    push( @{$chrom_chrom_gc_count{$chrid}}, $fields[5] );
 }
 close( BEDFILE );
 for( my $i = 1; $i <= $num_chroms; $i++ )
@@ -123,14 +128,15 @@ for( my $i = 1; $i <= $num_chroms; $i++ )
 
 my @chrom_target_cov;
 my @chrom_target_reads;
-my @chrom_target_gc;
+my @chrom_target_first_cov;
+my @chrom_target_last_cov;
 
-open( PILEUP, "$pileupfile" ) || die "Cannot read base coverage from $pileupfile.\n";
+open( PILEUP, "$depthfile" ) || die "Cannot read base coverage from $depthfile.\n";
 
 while( <PILEUP> )
 {
     my ($chrid,$pos,$refb,$cnt) = split;
-    $cnt = $refb if( $cnt eq "" ); # only 3 fields for samtools depth output
+    $cnt = $refb if( $cnt eq "" ); # optional field to allow mpileup input
     if( !defined($chrom_num_target{$chrid}) )
     {
         if( $haveGenome )
@@ -149,16 +155,24 @@ while( <PILEUP> )
         my $flid = floor_bsearch($pos,\@{$chrom_starts{$chrid}});
         if( $flid >= 0 && $pos <= $chrom_ends{$chrid}[$flid] )
         {
+	    if( !defined($chrom_target_cov{$chrid}[$flid]) )
+	    {
+		$chrom_target_first_cov{$chrid}[$flid] = $pos - $chrom_starts{$chrid}[$flid];
+	    }
+	    $chrom_target_last_cov{$chrid}[$flid] = $chrom_ends{$chrid}[$flid] - $pos;
             ++$chrom_target_cov{$chrid}[$flid];
 	    $chrom_target_reads{$chrid}[$flid] += $cnt;
-	    ++$chrom_target_gc{$chrid}[$flid] if( $refb eq "G" || $refb eq "C" );
         }
     }
 }
 close( PILEUP );
 
-print "chrom_id\tstart_pos\tend_pos\tcoverage\tpc_coverage\tbase_reads\tnorm_reads";
-$addGCdata ? print("\tpc_gc_reads\n") : print("\n");
+# this for when Genes/regions/GC for targets are provided via BED file and when f/r reads present in depth file
+#print "contig_id\tcontig_srt\tcontig_end\tgene_id\tregion_id\tgc\tcoverage\tfwd_reads\trev_reads\tuncov_5p\tuncov_3p\n";
+
+# this is for modified 2.3 output (does have uncov for download)
+print "chrom_id\tstart_pos\tend_pos\tcoverage\tpc_coverage\tbase_reads\tnorm_reads\tuncov_5p\tuncov_3p\n";
+
 for( my $i = 1; $i <= $num_chroms; $i++ )
 {
     my $chrid = $corder{$i};
@@ -177,9 +191,10 @@ for( my $i = 1; $i <= $num_chroms; $i++ )
         my $nhit = $chrom_target_reads{$chrid}[$j]+0;
 	my $pcgc = 100 * $chrom_target_gc{$chrid}[$j] / $tlen;
         my $covp = 100 * $ncov / $tlen;
-        printf "%s\t%d\t%d\t%d\t%.2f\t%d\t%.3f",
-            $chrid, $chrom_starts{$chrid}[$j], $chrom_ends{$chrid}[$j], $ncov, $covp, $nhit, $norm[$j];
-	$addGCdata ? printf("\t%.1f\n",$pcgc) : print("\n");
+	my $uncov_5p = $ncov > 0 ? $chrom_target_first_cov{$chrid}[$j] : $tlen;
+	my $uncov_3p = $ncov > 0 ? $chrom_target_last_cov{$chrid}[$j] : $tlen;
+        printf "%s\t%d\t%d\t%d\t%.2f\t%d\t%.3f\t%d\t%d\n",
+            $chrid, $chrom_starts{$chrid}[$j], $chrom_ends{$chrid}[$j], $ncov, $covp, $nhit, $norm[$j], $uncov_5p, $uncov_3p;
     }
 }
 

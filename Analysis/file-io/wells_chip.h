@@ -21,15 +21,30 @@ extern "C" {
 
     /*! 
       @param  fp        the file pointer
+      @return           an initialized WELLS structure with the header only read-in data, NULL if unsuccessful 
+      @details          assumes all wells are present, which is used to calculate the dimensions
+      */
+    wells_chip_t *
+      wells_chip_read1(FILE *fp);
+
+    /*! 
+      @param  fp        the file pointer
       @param  min_row   the 0-based minimum row to read in, -1 will use the lowest row 
       @param  max_row   the 0-based maximum row to read in, -1 will use the highest row 
       @param  min_col   the 0-based minimum col to read in, -1 will use the lowest col 
       @param  max_col   the 0-based maximum col to read in, -1 will use the highest col 
-      @return           an inialized WELLS structure with the read-in data, NULL if unsuccessful 
+      @return           an initialized WELLS structure with the read-in data, NULL if unsuccessful 
       @details          assumes all wells are present, which is used to calculate the dimensions
       */
     wells_chip_t *
       wells_chip_read(FILE *fp, int32_t min_row, int32_t max_row, int32_t min_col, int32_t max_col);
+
+    /*! 
+      @param  fp        the file pointer
+      @return           1 if successful, 0 otherwise
+      */
+    int32_t
+      wells_chip_write(FILE *fp, wells_chip_t *chip);
 
     /*! 
       @param  fp       the file pointer

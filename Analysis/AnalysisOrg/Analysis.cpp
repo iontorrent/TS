@@ -3,8 +3,8 @@
 // Ion Torrent Systems, Inc.
 // Analysis Pipeline
 // (c) 2009
-// $Rev: 28059 $
-//  $Date: 2012-03-28 09:16:40 -0700 (Wed, 28 Mar 2012) $
+// $Rev: 43200 $
+//  $Date: 2012-09-24 10:33:48 -0700 (Mon, 24 Sep 2012) $
 //
 
 #include <stdio.h>
@@ -29,45 +29,36 @@
 #include <iomanip>
 #include <armadillo>
 
-//#include "gsl/gsl_fit.h"
 
-//#include "cudaWrapper.h"
 #include "Image.h"
 #include "Region.h"
 #include "Mask.h"
-#include "Filter.h"
+
 
 #include "RawWells.h"
 
-#include "fstrcmp.h"
+//#include "fstrcmp.h"
 #include "LinuxCompat.h"
 #include "Utils.h"
 #include "SeqList.h"
-//#include "WorkerInfoQueue.h"
+
 #include "SampleStats.h"
 #include "Stats.h"
 #include "CommandLineOpts.h"
-//#include "file-io/ion_util.h"
+
 #include "ReservoirSample.h"
 #include "IonErr.h"
 #include "RegionAnalysis.h"
 #include "ChipIdDecoder.h"
-#include "PinnedWellReporter.h"
+#include "SetUpForProcessing.h"
 #include "TrackProgress.h"
 #include "ImageSpecClass.h"
 #include "ProcessImageToWell.h"
-//#include "BaseCaller.h"
+#include "StackUnwind.h"
+
 #include "MaskFunctions.h"
 
 #include "dbgmem.h"
-
-// Uncomment below to enable Train-on-Live but process all beads
-#define ALLBEADS
-
-
-// un-comment the following line to output RawWells files that contain some of the fitted parameters
-// of the background model
-//#define BKG_DEBUG_PARAMETER_OUTPUT
 
 
 void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progress)
@@ -97,17 +88,13 @@ void memstatus (void)
 #endif /* _DEBUG */
 
 
-
-
-
-void InitPinnedWellReporterSystem (ImageControlOpts &img_control)
+void TheSilenceOfTheArmadillos(ofstream &null_ostream)
 {
-  // Enable or disable the PinnedWellReporter system.
-  bool bEnablePWR = false;
-  if (0 != img_control.outputPinnedWells)
-    bEnablePWR = true;
-  PWR::PinnedWellReporter::Instance (bEnablePWR);
+    // Disable armadillo warning messages.
+  arma::set_stream_err1(null_ostream);
+  arma::set_stream_err2(null_ostream);
 }
+
 
 /*************************************************************************************************
  *************************************************************************************************
@@ -118,106 +105,40 @@ void InitPinnedWellReporterSystem (ImageControlOpts &img_control)
  ************************************************************************************************/
 int main (int argc, char *argv[])
 {
-
   init_salute();
 #ifdef _DEBUG
   atexit (memstatus);
   dbgmemInit();
 #endif /* _DEBUG */
-  // Disable armadillo warning messages.
-  ofstream null_ostream("/dev/null");
-  arma::set_stream_err1(null_ostream);
-  arma::set_stream_err2(null_ostream);
-  TrackProgress my_progress;
+  ofstream null_ostream("/dev/null"); // must stay live for entire scope, or crash when writing
+  TheSilenceOfTheArmadillos(null_ostream);
+  
+  TrackProgress my_progress;  
   DumpStartingStateOfProgram (argc,argv,my_progress);
 
-  CommandLineOpts clo (argc, argv);
-
-  InitPinnedWellReporterSystem (clo.img_control);
-
-  // Directory to which results files will be written
-  char *experimentName = NULL;
-  experimentName = strdup (clo.GetExperimentName());
-
-  CreateResultsFolder (experimentName);
-  CreateResultsFolder (clo.sys_context.basecaller_output_directory);
-
-  string analysisLocation;
-  clo.sys_context.SetUpAnalysisLocation (experimentName,analysisLocation);
-
-  // Start logging process parameters & timing now that we have somewhere to log to
-  my_progress.fpLog = clo.InitFPLog();
-
-  // create a raw wells file object
-  // for new analysis, this is a file to be created; for reprocessing, this is the wells file to be read.
-  // create the new wells file on a local partition.
-  ClearStaleWellsFile();
-  clo.sys_context.MakeNewTmpWellsFile (experimentName);
-
-  RawWells rawWells (clo.sys_context.wellsFilePath, clo.sys_context.wellsFileName);
-
-  int well_rows, well_cols; // dimension of wells file - found out from images if we use them - why is this separate from the rawWells object?
-
-  // structure our flows & special key sequences we look for
-  int numFlows = clo.GetNumFlows();
-
+  CommandLineOpts inception_state (argc, argv);
   SeqListClass my_keys;
-  my_keys.StdInitialize (clo.flow_context.flowOrder,clo.key_context.libKey, clo.key_context.tfKey,my_progress.fpLog); // 8th duplicated flow processing code
-  //@TODO: these parameters are just for reporting purposes???
-  // they appear to be ignored everywhere
-  my_keys.UpdateMinFlows (clo.key_context.minNumKeyFlows);
-  my_keys.UpdateMaxFlows (clo.key_context.maxNumKeyFlows);
+  ImageSpecClass my_image_spec;
+  SlicedPrequel my_prequel_setup;
 
-  // GENERATE FUNCTIONAL WELLS FILE & BEADFIND FROM IMAGES OR PREVIOUS PROCESS
+  InitStackUnwind(inception_state.sys_context.stackDumpFile);
 
-  Region wholeChip;
+  SetUpOrLoadInitialState(inception_state, my_keys, my_progress, my_image_spec, my_prequel_setup);
+  
+  // Start logging process parameters & timing now that we have somewhere to log
+  my_progress.InitFPLog(inception_state);
 
-  //Create empty Mask object
-  ExportSubRegionSpecsToMask (clo.loc_context);
+  // Write processParameters.parse file now that processing is about to begin
+  my_progress.WriteProcessParameters(inception_state);
 
-  Mask bfmask (1, 1);
-  Mask *maskPtr = &bfmask;
+  // Do background model
+  RealImagesToWells ( inception_state, my_keys, my_progress, my_image_spec,
+		      my_prequel_setup);
 
-  GetFromImagesToWells (rawWells, maskPtr, clo, experimentName, analysisLocation, numFlows, my_keys,my_progress, wholeChip, well_rows,well_cols);
+  my_progress.ReportState ("Analysis (wells file only) Complete");
 
-  if (!clo.mod_control.USE_RAWWELLS & clo.mod_control.WELLS_FILE_ONLY)
-  {
-    // stop after generating the functional wells file
-    UpdateBeadFindOutcomes (maskPtr, wholeChip, experimentName, !clo.bfd_control.SINGLEBF, clo.mod_control.USE_RAWWELLS);
-    my_progress.ReportState ("Analysis (wells file only) Complete");
-
-  }
-  else
-  {
-
-    fprintf (stderr, "\n");
-    fprintf (stderr, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
-    fprintf (stderr, "ERROR: Analysis has reached removed BaseCalling code section\n");
-    fprintf (stderr, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
-    fprintf (stderr, "\n");
-    exit (EXIT_FAILURE);
-
-/*
-    // Update progress bar status file: img proc complete/sig proc started
-    updateProgress (IMAGE_TO_SIGNAL);
-
-    // ==============================================
-    //                BASE CALLING
-    // ==============================================
-    // no images below this point
-
-    // operating from a wells file generated above
-    GenerateBasesFromWells (clo, rawWells, maskPtr, my_keys.seqList, well_rows, well_cols, experimentName, my_progress);
-
-    UpdateBeadFindOutcomes (maskPtr, wholeChip, experimentName, !clo.bfd_control.SINGLEBF, clo.mod_control.USE_RAWWELLS);
-    my_progress.ReportState ("Analysis Complete");
-*/
-  }
-
-  clo.sys_context.CleanupTmpWellsFile (clo.mod_control.USE_RAWWELLS);
-
-  free (experimentName);
   exit (EXIT_SUCCESS);
 }
+
 
 

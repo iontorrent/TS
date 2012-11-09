@@ -22,7 +22,7 @@ struct TimingFitWorkOrder{
  void FillOneRegionTimingParameters(RegionTiming *region_time, Region *regions, int r, AvgKeyIncorporation *kic);
  void FillRegionalTimingParameters(RegionTiming *region_time, Region *regions, int numRegions, AvgKeyIncorporation *kic);
  extern void *TimingFitWorker(void *arg);
- void threadedFillRegionalTimingParameters(RegionTiming *region_time, Region *regions, int numRegions, AvgKeyIncorporation *kic);
+void threadedFillRegionalTimingParameters(std::vector<RegionTiming>& region_time, std::vector<Region>& regions, AvgKeyIncorporation *kic, int numThreads);
  
 
 #endif // REGIONTIMINGCALC_H

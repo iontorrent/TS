@@ -22,23 +22,32 @@ case "$1" in
 		invoke-rc.d celeryd stop
 	fi
 
-    if [ ! -e /opt/ion/.computenode ]; then
+    if [ ! -e @ION_INSTALL_PREFIX@/.computenode ]; then
 	    #--- Remove symbolic links	---#
 	    rm -f /var/www/output
-        rm -f /var/www/media
+        rm -rf /var/www/media
         rm -f /var/www/site_media
         rm -f /results/analysis/output/tmap-*
         rm -f /results/analysis/output/disabled/tmap-*
     fi
 
 	if [ "$1" = "remove" ]; then
-		if [ -d /opt/ion/iondb ]; then
-			find "@ION_INSTALL_PREFIX@/iondb" -name "*.pyc" -exec rm -f {} \;
+		if [ -d @ION_INSTALL_PREFIX@/iondb ]; then
 			find "@ION_INSTALL_PREFIX@/iondb" -name "*.log" -exec rm -f {} \;
 			rm -f "@ION_INSTALL_PREFIX@/iondb/bin/install_script.py"
 		fi
 	fi
-    
+	if [ -d @ION_INSTALL_PREFIX@/iondb ]; then
+		find "@ION_INSTALL_PREFIX@/iondb" -name "*.pyc" -exec rm -f {} \;
+	fi
+
+	# Remove torrent-server vhost
+	/usr/sbin/a2dissite torrent-server
+	rm -f /etc/apache2/sites-enabled/torrent-server
+
+	/usr/sbin/a2ensite default
+	invoke-rc.d apache2 reload
+
 	#---	Remove crontab nightly email	---#
 	# command to remove
 	COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"

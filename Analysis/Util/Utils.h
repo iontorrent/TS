@@ -11,28 +11,28 @@
 #include <math.h>
 #include <unistd.h>
 #include <vector>
+#include <map>
 #include <sstream>
 #include <sys/time.h>
+#ifndef ALIGNSTATS_IGNORE
 #include "Image.h"
 #include "SpecialDataTypes.h"
 #include "LinuxCompat.h"
-
+#endif
 // Transition states used in Analysis main function for progress tracking
 #define WELL_TO_IMAGE 1
 #define IMAGE_TO_SIGNAL 2
 #define MAX_PATH_LENGTH 2048
+
 // Marco to determine size of static array on stack
 #define ArraySize(x) (sizeof(x)/sizeof((x)[0]))
 
-char    *GetExpLogParameter (const char *filename, const char *paramName);
-void GetExpLogParameters (const char *filename, const char *paramName,
-                          std::vector<std::string> &values);
-char * getExpLogPath (const char *dir);
+//void CreateResultsFolder(char *experimentName);
+void CreateResultsFolder(const char *experimentName);
 bool    isDir (const char *path);
 bool    isFile (const char *path);
 bool    IsValid (const double *vals, int numVals);
 bool    isNumeric (char const* input, int numberBase = 10);
-int     HasWashFlow (char *datapath);
 short   GetPinHigh();
 short   GetPinLow();
 bool    validIn (char *inStr, long *value);
@@ -43,26 +43,32 @@ double  ToDouble (char const* str);
 void  get_exe_name (char * buffer);
 char  *GetIonConfigFile (const char filename[]);
 bool  CopyFile (char *, char *);
-
-int   GetCycles (char *dir);
-int   GetTotalFlows (char *dir);
-char  *GetChipId (const char *dir);
 int   GetNumLines (char *filename);
+
+std::string get_time_iso_string(time_t time);
+
 char  *GetProcessParam (const char *, const char *);
+#ifndef ALIGNSTATS_IGNORE
 void  defineSubRegion (int rows, int cols, int runIndex, int regionIdx, Region *cropRegions);
+#endif
 // Break a path to an indiviual file into the usual directory and file used for Analysis and libraries
 void FillInDirName (const std::string &path, std::string &dir, std::string &file);
 void  init_salute();
-bool  updateProgress (int transition);
-char  *GetPGMFlowOrder (char *path);
+
 
 int seqToFlow (const char *seq, int seqLen, int *ionogram, int ionogramLen, char *flowOrder, int flowOrderLen);
+#ifndef ALIGNSTATS_IGNORE
 void flowToSeq (std::string &seq, hpLen_vec_t &hpLen, std::string &flowOrder);
+#endif
 void GetChipDim (const char *type, int dims[2], const char *);
 std::string GetMemUsage();
 void MemoryUsage (const std::string &s);
 void MemUsage (const std::string &s);
 int totalMemOnTorrentServer();
+int GetAbsoluteFreeSystemMemoryInKB();
+int GetFreeSystemMem();
+int GetCachedSystemMem();
+int GetSystemMemInBuffers();
 
 //string utils
 int     count_char (std::string s, char c);
@@ -72,7 +78,6 @@ void uintVectorToString (std::vector<unsigned int> &v, std::string &s, std::stri
 /** Trim off any whitespace from either end of string. */
 void TrimString (std::string &str);
 bool isInternalServer();
-
 template <class T>
 std::vector<T> char2Vec (const char *s, char delim='*')
 {
@@ -186,5 +191,38 @@ class ClockTimer
     struct timeval st;
 };
 
+/**
+ * Utility class for storing key value pairs. 
+ */ 
+class Info {
+
+public:
+
+  /** Get the value associated with a particular key, return false if key not present. */
+  bool GetValue(const std::string &key, std::string &value) const;
+  
+  /** 
+   * Set the value associated with a particular key. Newer values for
+   * same key overwrite previos values. */
+  bool SetValue(const std::string &key, const std::string &value);
+
+  /** Get the key and the value associated at index. */
+  bool GetEntry(int index, std::string &key, std::string &value) const;
+
+  /** Get the total count of key value pairs valid for GetEntry() */
+  int GetCount() const;
+
+  /** Entry exists. */
+  bool KeyExists(const std::string &key) const;
+    
+  
+  /** Empty out the keys, value pairs. */
+  void Clear();
+
+private:   
+  std::vector<std::string> mKeys;
+  std::vector<std::string> mValues;
+  std::map<std::string, size_t> mMap;
+};
 
 #endif // UTILS_H

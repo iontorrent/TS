@@ -63,8 +63,12 @@ public:
   SigmaEst() {
     mTMidNuc = 0.0f;
     mSigma = 0.0f;
+    mT0 = 0.0f;
+    mRate = 0.0f;
   }
 
+  float mRate;
+  float mT0;
   float mTMidNuc;
   float mSigma;
 };

@@ -6,8 +6,11 @@
 #include "Image.h"
 #include "IonErr.h"
 #include "Traces.h"
-#include "Stats.h"
+#include "SynchDatSerialize.h"
+
 using namespace std;
+using namespace arma;
+
 #define FRAMEZERO 0
 #define FRAMELAST 150
 #define FIRSTDCFRAME 3
@@ -21,8 +24,9 @@ BFReference::BFReference() {
   mDcEnd = 15;
   mRegionXSize = 50;
   mRegionYSize = 50;
-  mNumEmptiesPerRegion = -1;
   mIqrOutlierMult = 2.5;
+  mNumEmptiesPerRegion = 0;
+  doSdat = false;
 }
 
 void BFReference::Init(int nRow, int nCol, 
@@ -83,54 +87,6 @@ void BFReference::DebugTraces(const std::string &fileName,  Mask &mask, Image &b
     }
   }
   out.close();
-}
-
-void BFReference::CalcReference(const std::string &datFile, Mask &mask) {
-  CalcReference(datFile, mask, mBfMetric);
-  for (size_t i = 0; i < mBfMetric.size(); i++) {
-    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
-      mWells[i] = Exclude;
-    }
-    else {
-      mask[i] = MaskIgnore;
-    }
-  }
-  cout << "Filling reference. " << endl;
-  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile, mNumEmptiesPerRegion);
-  for (size_t i = 0; i < mBfMetric.size(); i++) {
-    if (mWells[i] == Reference) {
-      mask[i] = MaskEmpty;
-    }
-  }
-}
-
-void BFReference::CalcDualReference(const std::string &datFile1, const std::string &datFile2, Mask &mask) {
-  vector<float> metric1, metric2;
-  CalcReference(datFile1, mask, metric1);
-  CalcReference(datFile2, mask, metric2);
-  mBfMetric.resize(metric1.size(), 0);
-  for (size_t i = 0; i < metric1.size(); i++) {
-    mBfMetric[i] = (metric1[i] + metric2[i])/2.0f;
-  }
-  for (size_t i = 0; i < mBfMetric.size(); i++) {
-    if (mask[i] & MaskExclude || mask[i] & MaskPinned || mask[i] & MaskIgnore) {
-      mWells[i] = Exclude;
-    }
-    else {
-      mask[i] = MaskIgnore;
-    }
-  }
-  cout << "Filling reference. " << endl;
-  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile, mNumEmptiesPerRegion);
-  for (size_t i = 0; i < mWells.size(); i++) {
-    if (mWells[i] == Reference) {
-      mask[i] = MaskEmpty;
-    }
-  }
-  // ofstream out("bfreference.txt");
-  // for (size_t i = 0; i < mWells.size(); i++) {
-  //   out << i << "\t" << (int)mWells[i] << endl;
-  // }
 }
 
 void BFReference::FilterRegionOutliers(Image &bfImg, Mask &mask, float iqrThreshold, 
@@ -216,14 +172,73 @@ void BFReference::FilterForOutliers(Image &bfImg, Mask &mask, float iqrThreshold
   }
 }
 
+void BFReference::CalcReference(const std::string &datFile, Mask &mask) {
+  CalcReference(datFile, mask, mBfMetric);
+  for (size_t i = 0; i < mBfMetric.size(); i++) {
+    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
+      mWells[i] = Exclude;
+    }
+    // else {
+    //   mask[i] = MaskIgnore;
+    // }
+  }
+  cout << "Filling reference. " << endl;
+  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
+  for (size_t i = 0; i < mBfMetric.size(); i++) {
+    if (mWells[i] == Reference) {
+      mask[i] |= MaskReference;
+    }
+  }
+}
+
+void BFReference::CalcDualReference(const std::string &datFile1, const std::string &datFile2, Mask &mask) {
+  vector<float> metric1, metric2;
+  CalcReference(datFile1, mask, metric1);
+  CalcReference(datFile2, mask, metric2);
+  mBfMetric.resize(metric1.size(), 0);
+  for (size_t i = 0; i < metric1.size(); i++) {
+    mBfMetric[i] = (metric1[i] + metric2[i])/2.0f;
+  }
+  for (size_t i = 0; i < mBfMetric.size(); i++) {
+    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
+      mWells[i] = Exclude;
+    }
+    // else {
+    //   mask[i] = MaskEmpty;
+    // }
+  }
+  cout << "Filling reference. " << endl;
+  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
+  for (size_t i = 0; i < mWells.size(); i++) {
+    if (mWells[i] == Reference) {
+      mask[i] |= MaskReference;
+    }
+  }
+}
+
+bool BFReference::LoadImage(Image &img, const std::string &fileName) {
+  bool loaded = false;
+  if (doSdat) {
+    SynchDat sdat;
+    TraceChunkSerializer readSerializer;
+    readSerializer.Read(fileName.c_str(), sdat);
+    img.InitFromSdat(&sdat);
+    loaded = true;
+  }
+  else {
+    loaded = img.LoadRaw(fileName.c_str());
+  }
+  return loaded;
+}
+
 void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vector<float> &metric) {
   Image bfImg;
   bfImg.SetImgLoadImmediate (false);
-  bool loaded = bfImg.LoadRaw(datFile.c_str());
+  //  bool loaded = bfImg.LoadRaw(datFile.c_str());
+  bool loaded = LoadImage(bfImg, datFile);
   if (!loaded) {
     ION_ABORT("*Error* - No beadfind file found, did beadfind run? are files transferred?  (" + datFile + ")");
   }
-
   const RawImage *raw = bfImg.GetImage();
   
   assert(raw->cols == GetNumCol());
@@ -239,11 +254,10 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vec
   int StartFrame = bfImg.GetFrame(-663); //5
   int EndFrame = bfImg.GetFrame(350); //20
   cout << "DC start frame: " << StartFrame << " end frame: " << EndFrame << endl;
-  bfImg.XTChannelCorrect();
-  FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
-  bfImg.Normalize(StartFrame, EndFrame);
+  bfImg.SetMeanOfFramesToZero(StartFrame, EndFrame);
   // bfImg.XTChannelCorrect(&mask);
-
+  ImageTransformer::XTChannelCorrect(bfImg.raw, bfImg.results_folder);
+  FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
   int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
   if (mDoRegionalBgSub) {
     GridMesh<float> grid;
@@ -257,11 +271,11 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vec
       reg.h = rowEnd - rowStart;
       reg.col = colStart;
       reg.w = colEnd - colStart;
-      bfImg.BackgroundCorrectRegion(&mask, reg, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery, NULL);
+      bfImg.SubtractLocalReferenceTraceInRegion(reg, &mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
     }
   }
   else {
-    bfImg.BackgroundCorrect(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery, NULL);
+    bfImg.SubtractLocalReferenceTrace(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
   }
   Region region;
   region.col = 0;
@@ -306,11 +320,11 @@ void BFReference::CalcSignalReference2(const std::string &datFile, const std::st
   int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
   cout << "DC start frame: " << StartFrame << " end frame: " << EndFrame << endl;
   bfImg.FilterForPinned(&mask, MaskEmpty, false);
-  bfImg.XTChannelCorrect();
+  ImageTransformer::XTChannelCorrect(bfImg.raw,bfImg.results_folder);
   // bfImg.XTChannelCorrect(&mask);
   Traces trace;  
   trace.Init(&bfImg, &mask, FRAMEZERO, FRAMELAST, FIRSTDCFRAME,LASTDCFRAME);
-  bfImg.Normalize(StartFrame, EndFrame);
+  bfImg.SetMeanOfFramesToZero(StartFrame, EndFrame);
   if (mDoRegionalBgSub) {
      trace.SetMeshDist(0);
   }
@@ -328,11 +342,11 @@ void BFReference::CalcSignalReference2(const std::string &datFile, const std::st
       reg.h = rowEnd - rowStart;
       reg.col = colStart;
       reg.w = colEnd - colStart;
-      bfImg.BackgroundCorrectRegion(&mask, reg, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery, NULL);
+      bfImg.SubtractLocalReferenceTraceInRegion( reg,&mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
     }
   }
   else {
-    bfImg.BackgroundCorrect(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery, NULL);
+    bfImg.SubtractLocalReferenceTrace(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
   }
   int length = GetNumRow() * GetNumCol();
   mBfMetric.resize(length, std::numeric_limits<double>::signaling_NaN());
@@ -353,18 +367,15 @@ void BFReference::CalcSignalReference2(const std::string &datFile, const std::st
   }
   bfImg.Close();
   for (int i = 0; i < length; i++) {
-    if (mask[i] & MaskExclude || mWells[i] == Exclude) {
+    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
       mWells[i] = Exclude;
-    }
-    else {
-      mask[i] = MaskIgnore;
     }
   }
   cout << "Filling reference. " << endl;
-  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile, mNumEmptiesPerRegion);
+  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
   for (int i = 0; i < length; i++) {
     if (mWells[i] == Reference) {
-      mask[i] = MaskEmpty;
+      mask[i] |= MaskReference;
     }
   }
 }
@@ -393,9 +404,10 @@ void BFReference::CalcSignalReference(const std::string &datFile, const std::str
   bfBkgImg.FilterForPinned(&mask, MaskEmpty, false);
 
   // bfImg.XTChannelCorrect(&mask);
-  bfImg.XTChannelCorrect();
+  ImageTransformer::XTChannelCorrect(bfImg.raw,bfImg.results_folder);
   // bfBkgImg.XTChannelCorrect(&mask);
-  bfBkgImg.XTChannelCorrect();
+  //bfBkgImg.XTChannelCorrect();
+  ImageTransformer::XTChannelCorrect(bfBkgImg.raw,bfImg.results_folder);
 
   Traces trace;  
   trace.Init(&bfImg, &mask, FRAMEZERO, FRAMELAST, FIRSTDCFRAME,LASTDCFRAME);
@@ -446,18 +458,18 @@ void BFReference::CalcSignalReference(const std::string &datFile, const std::str
   }
   cout << "Pinned: " << pinned << " excluded: " << excluded << endl;
   for (int i = 0; i < length; i++) {
-    if (mask[i] & MaskExclude || mask[i] & MaskPinned || mask[i] & MaskIgnore) {
+    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
       mWells[i] = Exclude;
     }
-    else {
-      mask[i] = MaskIgnore;
-    }
+    // else {
+    //   mask[i] = MaskIgnore;
+    // }
   }
   cout << "Filling reference. " << endl;
-  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile, mNumEmptiesPerRegion);
+  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
   for (int i = 0; i < length; i++) {
     if (mWells[i] == Reference) {
-      mask[i] = MaskEmpty;
+      mask[i] |= MaskReference;
     }
   }
   bfImg.Close();
@@ -466,32 +478,21 @@ void BFReference::CalcSignalReference(const std::string &datFile, const std::str
 void BFReference::FillInRegionRef(int rStart, int rEnd, int cStart, int cEnd,
 				  std::vector<float> &metric, 
 				  double minQuantile, double maxQuantile,
-                                  int numWells,
 				  std::vector<char> &wells) {
   std::vector<std::pair<float,int> > wellMetric;
   for (int rIx = rStart; rIx < rEnd; rIx++) {
     for (int cIx = cStart; cIx < cEnd; cIx++) {
       int idx = RowColIdx(rIx,cIx);
-      if (wells[idx] != Exclude && wells[idx] != Filtered && isfinite(metric[idx])) {
+      if (wells[idx] != Exclude && isfinite(metric[idx])) {
 	wellMetric.push_back(std::pair<float,int>(metric[idx],idx));
       }
     }
   }
-
-  if (numWells <= 0) {
-    std::sort(wellMetric.rbegin(), wellMetric.rend());
-    int minQIx = Round(minQuantile * wellMetric.size());
-    int maxQIx = Round(maxQuantile * wellMetric.size());
-    for (int qIx = minQIx; qIx < maxQIx; qIx++) {
-      wells[wellMetric[qIx].second] = Reference;
-    }
-  }
-  else {
-    std::sort(wellMetric.begin(), wellMetric.end());
-    int nWells =  min((size_t)numWells, wellMetric.size());
-    for (int i = 0; i < nWells; i++) {
-      wells[wellMetric[i].second] = Reference;
-    }
+  std::sort(wellMetric.rbegin(), wellMetric.rend());
+  int minQIx = Round(minQuantile * wellMetric.size());
+  int maxQIx = Round(maxQuantile * wellMetric.size());
+  for (int qIx = minQIx; qIx < maxQIx; qIx++) {
+    wells[wellMetric[qIx].second] = Reference;
   }
 }
 
@@ -499,13 +500,12 @@ void BFReference::FillInReference(std::vector<char> &wells,
 				  std::vector<float> &metric,
 				  GridMesh<int> &grid,
 				  double minQuantile,
-				  double maxQuantile,
-                                  int numWells) {
+				  double maxQuantile) {
   int rStart = -1, rEnd = -1, cStart = -1, cEnd = -1;
   for (size_t bIx = 0; bIx < grid.GetNumBin(); bIx++) {
     grid.GetBinCoords(bIx, rStart, rEnd, cStart, cEnd);
     FillInRegionRef(rStart, rEnd, cStart, cEnd,
-		    metric, minQuantile, maxQuantile,numWells, wells);
+		    metric, minQuantile, maxQuantile, wells);
   }
 } 
  

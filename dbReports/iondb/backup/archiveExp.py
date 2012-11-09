@@ -4,7 +4,7 @@ import os
 
 # Definition of archiveExperiment object used by archive tool
 class Experiment:
-    def __init__(self, exp, name, date, star, storage_options, user_ack, dir, location, pk):
+    def __init__(self, exp, name, date, star, storage_options, user_ack, dir, pk, rawdatastyle):
         self.prettyname = exp.pretty_print()
         self.name = name
         self.date = date
@@ -12,8 +12,8 @@ class Experiment:
         self.store_opt = storage_options
         self.user_ack = user_ack
         self.dir = dir
-        self.location = location
         self.pk = pk
+        self.rawdatastyle = rawdatastyle
 
     def get_exp_path(self):
         return self.dir
@@ -25,9 +25,6 @@ class Experiment:
             else:
                 return False
         return to_bool(self.star)
-
-    def get_location(self):
-        return self.location
 
     def get_folder_size(self):
         dir = self.dir

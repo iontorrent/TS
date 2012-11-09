@@ -286,19 +286,19 @@
     <h3>Description and Usage Notes</h3>
     <p>
      This plugin analyzes mapped reads coverage over each individual reference base to deduce whether there is sufficient
-     variation to call a SNP or INDEL at that position. If a target region and/or hotspot region is defined then this
-     analysis is restricted to just those regions and more detailed information will be presented on the report pages.</p>
+     variation to call a SNP or INDEL at that position. If a target region and/or hotspot region is defined, then this
+     analysis is restricted to just those regions and more detailed information is presented on the report pages.</p>
     <p>
      The target regions selected should correspond to your reference and enriched fragment library. You may also select
-     'Whole reference' to analyze coverage against the full reference but this is only recommended if your library (type)
-     was not enriched and for a small genome.</p> 
+     'Whole genome' to analyze coverage against the full reference, but this option is only recommended if your library (type)
+     is for a small genome and is not enriched.</p> 
     <p>
-     A run will fail almost immediately (after queuing) if your selected targeted regions do not appear to match
+     A run fails almost immediately (after queuing) if your selected targeted regions do not appear to match
      the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
     <p>
      NOTE: This plugin is designed to work with alignment files containing Ion Torrent flowspace information and will fail
-     to call variants for older alignments without flow order information or combined alignments that generated from runs
-     using differrent same flow sequences.</p>
+     to call variants for older alignments without flow order information or for combined alignments generated from runs
+     that use differrent flow sequences.</p>
    </div>
   </form>
   </div>

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <limits>
 #include <assert.h>
 #include <math.h>
 
@@ -12,8 +13,8 @@ using namespace std;
 namespace ionStats
 {
 
-float  median(vector<float> &v);
-double median(vector<double> &v);
+  float  median(std::vector<float> &v);
+  double median(std::vector<double> &v);
 double median(double *x, unsigned int n);
 float  median(float  *x, unsigned int n);
 double sd(double *x, unsigned int n);
@@ -48,6 +49,40 @@ double quantile_in_place(T *x, size_t size, float quantile) {
   std::sort(&x[0], &x[0] + size);
   return quantile_sorted(x, size, quantile);
 }
+
+/** median of part of a numeric sequence, returns a double.
+ * Example:
+ * vector<int> myvector;
+ *  // set some values:
+ * for (int i=1; i<10; i++) myvector.push_back(i);   // 1 2 3 4 5 6 7 8 9 10
+ * cout << "==> " << median (myvector.begin(), myvector.end()) << endl;
+ *
+ * ==> 5.5
+ *
+ * Side effect: data sequence myvector will be changed!
+ */
+template <class T>
+  double median(T first, T last)
+  {
+    size_t cnt = std::distance(first,last);
+    if (cnt > 0)
+    {
+      T mid = first;
+      std::advance(mid, (cnt/2));
+      std::nth_element(first, mid, last);
+
+      double median = double(*mid);
+
+      if (cnt % 2 == 0){  // get the average of the 2 middle elements
+	std::advance(mid,1);
+	T nextVal = std::min_element(mid, last);
+	median = (median + double(*nextVal))/2;
+      }
+      return (median);
+    }
+    else
+      return(numeric_limits<double>::quiet_NaN());
+  }
 
 }
 #endif // STATS_H

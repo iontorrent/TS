@@ -25,16 +25,19 @@ title <- "Target Coverage"
 if( bcov$counts[1] == ymax )
 {
     ymax = max(bcov$counts[2:ndata])
-    title <- sprintf("Target Coverage\n(Bases covered at 0 read depth = %d)",bcov$counts[1])
+    title <- sprintf("Target Coverage\n(Bases covered at 0 read depth = %.0f)",bcov$counts[1])
 }
 b = 10^(as.integer(log10(ymax))-1)
 ymax = b * as.integer(1.5+ymax/b)
 
-# limit display range to 99.5% coverage
+# limit display range to 99.9% coverage or upto x10
 np = length(bcov$pc_cum_counts)
-while( bcov$pc_cum_counts[np] < 0.5 && np > 2 )
-{
+if( np > 11 ) {
+  while( bcov$pc_cum_counts[np] < 0.1 && np > 2 )
+  {
     np <- np - 1
+  }
+  if( np < 11 ) { np = 11 }
 }
 xmax = bcov$read_depth[np]
 

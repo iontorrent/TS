@@ -64,6 +64,8 @@ function analysis_liveness(url, domid) {
 }
 
 function analysis_live_ready_cb() {
+	_TRIES = 0;
+	_FOUND_STATUS = false;
     var domid = "analysis_liveness_display";
     var a = $("#analysis_liveness_info > a");
     var url = a.attr("href");

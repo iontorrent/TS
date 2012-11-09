@@ -6,6 +6,7 @@ from django.conf import settings
 import os
 
 import emailtools
+from django.template.base import TemplateSyntaxError, Node, Variable
 
 register = template.Library()
 
@@ -79,3 +80,66 @@ register.filter("blankIfNone", blankIfNone)
 register.filter("boxChecked", boxChecked)
 register.filter("fileName", fileName)
 
+# raw tag parser function copyright 2009, EveryBlock
+# This code is released under the GPL.
+@register.tag
+def raw(parser, token):
+    # Whatever is between {% raw %} and {% endraw %} will be preserved as
+    # raw, unrendered template code.
+    text = []
+    parse_until = 'endraw'
+    tag_mapping = {
+        template.TOKEN_TEXT: ('', ''),
+        template.TOKEN_VAR: ('{{', '}}'),
+        template.TOKEN_BLOCK: ('{%', '%}'),
+        template.TOKEN_COMMENT: ('{#', '#}'),
+    }
+    # By the time this template tag is called, the template system has already
+    # lexed the template into tokens. Here, we loop over the tokens until
+    # {% endraw %} and parse them to TextNodes. We have to add the start and
+    # end bits (e.g. "{{" for variables) because those have already been
+    # stripped off in a previous part of the template-parsing process.
+    while parser.tokens:
+        token = parser.next_token()
+        if token.token_type == template.TOKEN_BLOCK and token.contents == parse_until:
+            return template.TextNode(u''.join(text))
+        start, end = tag_mapping[token.token_type]
+        text.append(u'%s%s%s' % (start, token.contents, end))
+    parser.unclosed_block_tag(parse_until)
+
+@register.filter(name='bracket')
+def bracket(value, arg):
+    arg = arg.lower()
+    try:
+        return value[arg]
+    except:
+        return None
+    
+# settings value
+@register.tag
+def value_from_settings(parser, token):
+    bits = token.split_contents()
+    if len(bits) < 2:
+        raise TemplateSyntaxError("'%s' takes at least one argument (settings constant to retrieve)" % bits[0])
+    settingsvar = bits[1]
+    settingsvar = settingsvar[1:-1] if settingsvar[0] == '"' else settingsvar
+    asvar = None
+    bits = bits[2:]
+    if len(bits) >= 2 and bits[-2] == 'as':
+        asvar = bits[-1]
+        bits = bits[:-2]
+    if len(bits):
+        raise TemplateSyntaxError("'value_from_settings' didn't recognise the arguments '%s'" % ", ".join(bits))
+    return ValueFromSettings(settingsvar, asvar)
+
+class ValueFromSettings(Node):
+    def __init__(self, settingsvar, asvar):
+        self.arg = Variable(settingsvar)
+        self.asvar = asvar
+    def render(self, context):
+        ret_val = getattr(settings, str(self.arg))
+        if self.asvar:
+            context[self.asvar] = ret_val
+            return ''
+        else:
+            return ret_val    

@@ -5,6 +5,7 @@
 #include "../Analysis/file-io/sff.h"
 #include "../Analysis/file-io/ion_util.h"
 #include "ReservoirSample.h"
+#include <iostream>
 #include <sstream>
 
 RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEXP RnSample, SEXP RrandomSeed) {
@@ -25,8 +26,11 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 		int thisCol,thisRow;
 
 		// Check if we're sampling
-		std::map<std::string, unsigned int> wellIndex;
+		std::map<std::string, int> wellIndex;
+		bool filterByCoord = false;
+		bool filterById    = false;
 		if(col.size() > 0 || row.size() > 0) {
+			filterByCoord = true;
 			// A subset of rows and columns is specified
 			if(col.size() != row.size()) {
 				exceptionMesg = copyMessageToR("col and row should have the same number of entries, ignoring\n");
@@ -38,28 +42,27 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 				}
 			}
 		} else if(nSample > 0) {
+			filterById = true;
 			// A random set of a given size is requested
 			sff_file_t *sff_file = NULL;
 			sff_file = sff_fopen(sffFile, "rb", NULL, NULL);
 			sff_t *sff = NULL;
-			ReservoirSample<std::pair<int,int> > sample;
+			ReservoirSample< std::string > sample;
 			sample.Init(nSample,randomSeed);
 			while(NULL != (sff =sff_read(sff_file))) {
 				// Extract the row and column position
 				if(1 != ion_readname_to_rowcol(sff_name(sff), &thisRow, &thisCol)) {
 					fprintf (stderr, "Error parsing read name: '%s'\n", sff_name(sff));
 				}
-				sample.Add(std::pair<int,int>(thisCol,thisRow));
+				sample.Add(std::string(sff_name(sff)));
 				sff_destroy(sff);
 			}
 			sff_fclose(sff_file);
 			sample.Finished();
 			// Then make a map from the sampled reads
-			std::vector<std::pair<int,int> > sampleCoords = sample.GetData();
-			for(unsigned int iSample=0; iSample < sampleCoords.size(); iSample++) {
-				std::stringstream wellIdStream;
-				wellIdStream << sampleCoords[iSample].first << ":" << sampleCoords[iSample].second;
-				wellIndex[wellIdStream.str()] = iSample;
+			std::vector<std::string > sampleId = sample.GetData();
+			for(unsigned int iSample=0; iSample < sampleId.size(); iSample++) {
+				wellIndex[sampleId[iSample]] = iSample;
 			}
 		}
 
@@ -69,6 +72,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 		int nFlow = sff_file->header->flow_length;
 
 		// Initialize things to return
+		std::vector< std::string > out_id(nReadOut);
 		RcppVector<int>    out_col(nReadOut);
 		RcppVector<int>    out_row(nReadOut);
 		RcppVector<int>    out_length(nReadOut);
@@ -93,12 +97,26 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 
 			bool storeRead = true;
 			if(filter) {
-				std::map<std::string, unsigned int>::iterator wellIndexIter;
-				std::stringstream wellIdStream;
-				wellIdStream << thisCol << ":" << thisRow;
-				wellIndexIter = wellIndex.find(wellIdStream.str());
-				if(wellIndexIter == wellIndex.end())
-					storeRead=false;
+				storeRead=false;
+				std::map<std::string, int>::iterator wellIndexIter;
+				std::string id;
+				if(filterByCoord) {
+					std::stringstream wellIdStream;
+					wellIdStream << thisCol << ":" << thisRow;
+					id = wellIdStream.str();
+				} else {
+					id = std::string(sff_name(sff));
+				}
+				wellIndexIter = wellIndex.find(id);
+				if(wellIndexIter != wellIndex.end()) {
+					// If the read ID matches one we should keep, keep it unless its a duplicate
+					if(wellIndexIter->second >= 0) {
+						storeRead=true;
+						wellIndexIter->second=-1;
+					} else {
+						std::cerr << "WARNING: found extra instance of readID " << id << ", keeping only first\n";
+					}
+				}
 			}
 
 			if(storeRead) {
@@ -106,6 +124,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 				int trimLength = std::min(maxBases, nBases);
 
 				// Store values that will be returned
+				out_id[nReadsFromSFF]               = std::string(sff_name(sff));
 				out_col(nReadsFromSFF)              = thisCol;
 				out_row(nReadsFromSFF)              = thisRow;
 				out_clipQualLeft(nReadsFromSFF)     = sff_clip_qual_left(sff);
@@ -141,6 +160,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 			fprintf(stderr,"Expected to find %d reads but got %d in %s\n",nReadOut,nReadsFromSFF,sffFile);
 			if(filter)
 				fprintf(stderr,"Some of the requested reads are missing from the SFF.\n");
+			std::vector< std::string > out2_id(nReadsFromSFF);
 			RcppVector<int>    out2_col(nReadsFromSFF);
 			RcppVector<int>    out2_row(nReadsFromSFF);
 			RcppVector<int>    out2_length(nReadsFromSFF);
@@ -154,6 +174,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 			RcppMatrix<int>    out2_qual(nReadsFromSFF,maxBases);
 			RcppMatrix<int>    out2_flowIndex(nReadsFromSFF,maxBases);
 			for(int i=0; i<nReadsFromSFF; i++) {
+				out2_id[i]               = out_id[i];
 				out2_col(i)              = out_col(i);
 				out2_row(i)              = out_row(i);
 				out2_clipQualLeft(i)     = out_clipQualLeft(i);
@@ -171,6 +192,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 				}
 			}
 			rs.add("nFlow",            nFlow);
+			rs.add("id",               out2_id);
 			rs.add("col",              out2_col);
 			rs.add("row",              out2_row);
 			rs.add("length",           out2_length);
@@ -184,6 +206,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 			rs.add("qual",             out2_qual);
 		} else {
 			rs.add("nFlow",            nFlow);
+			rs.add("id",               out_id);
 			rs.add("col",              out_col);
 			rs.add("row",              out_row);
 			rs.add("length",           out_length);

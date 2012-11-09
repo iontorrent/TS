@@ -23,17 +23,19 @@ void SeqListClass::Delete()
 
 SeqListClass::~SeqListClass()
 {
+  if (seqList!=NULL) delete[] seqList;
+  numSeqListItems = 0;
 }
 
-void SeqListClass::StdInitialize(char *flowOrder, char *libKey, char *tfKey, FILE *fpLog)
+void SeqListClass::StdInitialize(char *flowOrder, char *libKey, char *tfKey)
 {
+  Delete();
   Allocate(2);
-  InitializeSeqList(seqList, numSeqListItems, flowOrder,libKey,tfKey,fpLog);
+  InitializeSeqList(seqList, numSeqListItems, flowOrder,libKey,tfKey);
 }
 
 void NullSeqItem(SequenceItem &my_item)
 {
-  my_item.len = 0;
   my_item.numKeyFlows = 0;
   my_item.usableKeyFlows =0;
   memset(my_item.Ionogram, 0, sizeof(int[64]));
@@ -41,15 +43,19 @@ void NullSeqItem(SequenceItem &my_item)
   memset(my_item.onemers, 0, sizeof(int[64]));
 }
 
-void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_flowOrder, char *libKey, char *tfKey, FILE *fpLog)
+void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_flowOrder, char *libKey, char *tfKey)
 {
   int flowOrderLength = strlen(letter_flowOrder);
-
+  
   seqList[0].type = MaskTF;
-  seqList[0].seq = strdup(tfKey);
+  //seqList[0].seq = strdup(tfKey);
+  //strcpy((char *)seqList[0].seq,tfKey);
+  seqList[0].seq.assign(tfKey);
   
   seqList[1].type = MaskLib;
-  seqList[1].seq = strdup(libKey);  // may release these objects sometime
+  //seqList[1].seq = strdup(libKey);  // may release these objects sometime
+  //strcpy((char *)seqList[1].seq,libKey);
+  seqList[1].seq.assign(libKey);
 
   NullSeqItem(seqList[0]);
   NullSeqItem(seqList[1]);
@@ -60,9 +66,8 @@ void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_
   {
     int zeroMerCount = 0;
     int oneMerCount = 0;
-    seqList[i].len = strlen(seqList[i].seq);
 
-    seqList[i].numKeyFlows = seqToFlow(seqList[i].seq, seqList[i].len,
+    seqList[i].numKeyFlows = seqToFlow(seqList[i].seq.c_str(), seqList[i].seq.length(),
                                        seqList[i].Ionogram, 64, letter_flowOrder, flowOrderLength);
 
     seqList[i].usableKeyFlows = seqList[i].numKeyFlows - 1;
@@ -106,13 +111,9 @@ void InitializeSeqList(SequenceItem *seqList, int numSeqListItems, char *letter_
     if (oneMerCount <= 1 || zeroMerCount <= 1)
     {
       fprintf(
-        fpLog,
-        "Key: '%s' with flow order: '%s' does not have at least 2 0mers and 2 1mers.\n",
-        seqList[i].seq, letter_flowOrder);
-      fprintf(
         stderr,
         "Key: '%s' with flow order: '%s' does not have at least 2 0mers and 2 1mers.\n",
-        seqList[i].seq, letter_flowOrder);
+        seqList[i].seq.c_str(), letter_flowOrder);
       exit(EXIT_FAILURE);
     }
   }

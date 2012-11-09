@@ -1,0 +1,64 @@
+			<div id="pruning_groups" class="control-group {%spaceless%}{%if form.pruneLevel.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+    			<label class="control-label" for="id_pruneLevel">Pruning groups</label>
+    			<div class="controls">
+    				<div class="row-fluid">
+    					<div class="span10">
+    						<table class="table">
+								<colgroup>
+								<col >
+								<col >
+								<col width="10%">
+								</colgroup>
+								<thead>
+									<tr>
+										<th>Group ID</th>
+										<th>Group Name</th>
+										<th>Action</th>
+									</tr>
+								</thead>
+								<tbody>
+									
+		    				{% for pruneLevelField in form.pruneLevel %}
+								<tr>
+									<td>{{pruneLevelField}}</td>
+									<td>{% for rule in ruleList %}{% if rule.0 == pruneLevelField.choice_value %}{{ rule.0 }}{% endif %}{% endfor %}</td>
+									<td>{% for rule in ruleList %}{% if rule.0 == pruneLevelField.choice_value %}{% ifequal rule.1 "T" %}<a href='{% url configure_report_data_mgmt_remove_prune_group rule.3 %}' class="btn btn-danger delete_prune_group">Delete</a>{% endifequal %}{%endif%}{% endfor %}</td>
+								</tr>
+		    				{% endfor %}
+								</tbody>
+							</table>
+    					</div>
+    					<div class="span2">
+					    <div class="btn-group-stacked">
+							<a class="btn btn-primary " href="{% url configure_report_data_mgmt_prune_detail %}" id="add_prune_group" rel="tooltip" title="Add a new pruning group.">Add Prune Group</a>
+							<a class="btn btn-primary " href="{% url configure_report_data_mgmt_edit_prune_groups %}" id="edit_prune_groups" rel="tooltip" title="Edit existing groups.">Edit Prune Groups</a>
+						</div>
+    					</div>
+    				</div>
+					
+    				{%if form.pruneLevel.errors%}
+    				<div class="help-block">
+						{{form.pruneLevel.errors}}
+					</div>
+					{% endif %}
+    				<div class="help-block">
+    					<p>Specify the level at which files will be pruned. Different levels will prune different files.</p>
+    					<!-- Current pruning levels:<br />{% for s in choices %}<li>{{ s }}</li>{% endfor %}-->
+    					<p class="alert alert-error">
+    					WARNING: Be careful which files you mark for deletion. Pruning acts as a 'blanket statement', and is designed to save space; some files that will be deleted at various levels may be important. Ensure that you do not need files of the type that you check off using the above list.
+    					</p>
+    					<p class="alert alert-info">
+						Use a '*' to indicate a wildcard, and a '!' at a word's beginning to exclude a file or group of files from pruning.
+    					</p>
+						<a href="#" class="btn btn-info" data-toggle-content="toggle_show_more_content">Examples <i class="icon-plus"></i></a>
+						<div id='toggle_show_more_content' class='hide well'>
+						<p><b>*.txt</b>: Prune all .txt files.</p>
+						<b>!*.bam</b>: Don't prune any .bam files.</p>
+						<p><b>*.bam + !rawlib.bam</b>: (Separate rules) Prune all .bam files except for rawlib.bam.</p>
+						<p><b>/basecaller_results/*.txt</b>: Prune all .txt files in the basecaller_results directory.</p>
+						<p class="alert alert-info">(Note that pruning can only access directories 'below' the report directory.)</p>
+						</div>
+						</p>
+    				</div>
+    			</div>
+    		</div>

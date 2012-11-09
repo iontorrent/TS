@@ -71,7 +71,8 @@ class SampleKeyReporter : public KeyReporter<T> {
       mSignal << fit.wellIdx << '\t' << (int)fit.keyIndex;
       for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
 	double sig = 0;
-	for (size_t frameIx = 0; frameIx < FRAME_SIGNAL; frameIx++) {
+        //	for (size_t frameIx = 0; frameIx < FRAME_SIGNAL; frameIx++) {
+	for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
 	  sig += wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
 	}
 	mSignal << '\t' << sig;

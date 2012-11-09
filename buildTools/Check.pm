@@ -11,7 +11,8 @@ sub DosEndings {
     my $err = 0;
     my $file = shift;
     my $type = `file '$file'`;
-    if($type =~ /CRLF/ || $type =~ /[^a-zA-Z]CR[^a-zA-Z]/) {
+#    if($type =~ /CRLF/ || $type =~ /[^a-zA-Z]CR[^a-zA-Z]/) { Omitting as carriage returns or ok as long as no linefeed
+    if($type =~ /CRLF/) {
         warn "$file: has DOS line endings\n";
         $err = 1;
     }

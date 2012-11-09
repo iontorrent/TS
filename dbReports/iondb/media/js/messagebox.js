@@ -71,7 +71,7 @@ MessageBox = Backbone.View.extend({
         this.collection.bind('add', this.addOne, this);
         this.collection.bind('reset', this.addAll, this);
         this.render();
-        this.poll_interval = 1000;
+        this.poll_interval = 10000;
         this.poll_clock = setTimeout(this.update, this.poll_interval);
     },
 

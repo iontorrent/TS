@@ -26,14 +26,14 @@ set(PLUGINS
 Alignment
 RunRecognitION
 coverageAnalysis
-combineAlignments
-sampleIdentifier
+sampleID
 variantCaller
-IonReporterUploader
+IonReporterUploader_V1_0
+ERCC_Analysis
 )
 
 foreach(PLUGIN ${PLUGINS})
-    if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}/launch.sh")
+    if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}")
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN}/CMakeLists.txt")
             message(STATUS "Plugin ${PLUGIN} has custom build script.")
             add_subdirectory(${PLUGIN})
@@ -49,14 +49,18 @@ foreach(PLUGIN ${PLUGINS})
 endforeach(PLUGIN)
 
 
-
-
 install(FILES "${PROJECT_SOURCE_DIR}/plugin_functions" DESTINATION "plugins")
 
+# ZeroInstall alternate application root - set systemwide store to
+# /results/plugins/implementations (or whatever is top of implementation-dirs)
+file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/implementations)
+install(DIRECTORY "${PROJECT_BINARY_DIR}/implementations" DESTINATION "plugins" 
+        DIRECTORY_PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE SETGID WORLD_READ WORLD_EXECUTE)
+install(FILES "${PROJECT_SOURCE_DIR}/implementation-dirs" DESTINATION "/etc/xdg/0install.net/injector/")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita, ion-pipeline, ion-dbreports")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita, ion-pipeline, ion-dbreports, ion-igv")
 set(CPACK_PACKAGE_DESCRIPTION "Plugins for the Torrent Browser. These plugins, when present will be executed, post analysis pipeline run, to generate additional results.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

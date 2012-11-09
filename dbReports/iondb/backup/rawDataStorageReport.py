@@ -5,12 +5,15 @@ from os import path
 import sys
 import time
 import datetime
+import statvfs
 from socket import gethostname
 from django.core.exceptions import ObjectDoesNotExist
 
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+import iondb.bin.djangoinit
 from iondb.rundb import models
+
+enable_progress_update = False
+enable_long_report = False
 
 def server_and_location(experiment):
     try:
@@ -41,6 +44,71 @@ def disk_space(path):
     available = available / 1024 / 1024
     
     return used, available
+
+def get_size(start, progress):
+    total_size = 0
+    i = 0
+    #faster algorithm?
+    for dirpath, dirnames, filenames in os.walk(start):
+        for f in filenames:
+            try:
+                fp = os.path.join(dirpath, f)
+                total_size += os.path.getsize(fp)
+                if i >= 10000 and progress:
+                    print "\n    Progress update: ~%s Gb" %(total_size/(1024*1024*1024)) + "\n    Current directory: %s" %dirpath
+                    i = 0
+                i+=1
+            except:
+                pass
+    if progress:
+        print "\n    Finished %s" %start + ", total size: %s bytes" %total_size + " = ~%s Gb\n" %(total_size/(1024*1024*1024))
+    return total_size
+
+def write_simple_report():
+    rigSpace = 0
+    freeSpace = 0
+    totalSpace = 0
+    
+    allServers = models.FileServer.objects.all()
+    validServers = []
+    for server in allServers:
+        if (os.path.isdir(server.filesPrefix)):
+            validServers.append(server)
+            #the following 3 lines may not be needed, since df calculates free/total space elsewhere.
+            f = os.statvfs(server.filesPrefix)
+            freeSpace += f[statvfs.F_BAVAIL]*f[statvfs.F_BSIZE]
+            totalSpace += f[statvfs.F_BLOCKS]*f[statvfs.F_BSIZE]
+    validServerPGMCombos = []
+    allPGM = models.Rig.objects.all()
+    for PGM in allPGM:
+        for server in validServers:
+            testpath = os.path.join(server.filesPrefix,PGM.name)
+            if os.path.isdir(testpath):
+                space = get_size(testpath, enable_progress_update)
+                rigSpace += space
+                if enable_progress_update:
+                    print "\nPGM %s " %PGM.name + "on server %s " %server.filesPrefix + "contains %s bytes" %space + " = ~%sGb" %(space/(1024*1024*1024))
+    
+    analysisSpace = 0
+    #(this is 'other space' without analysis or rig space removed)
+    storageList = models.ReportStorage.objects.all()
+    for storage in storageList:
+        analysisSpace += get_size(storage.dirPath, enable_progress_update)
+    
+    
+    #otherSpace = get_size('/results', True) - rigSpace - analysisSpace
+    otherSpace = totalSpace - analysisSpace - rigSpace - freeSpace
+    
+    '''
+    print "\nanalysis space: %s " %analysisSpace + " = %sGb" %(analysisSpace/(1024*1024*1024))
+    print "\ntotal rig space: %s " %rigSpace + " = %sGb" %(rigSpace/(1024*1024*1024))
+    print "\nother space: %s " %otherSpace + " = %sGb" %(otherSpace/(1024*1024*1024))
+    print "\ntotal space used: %s " %(rigSpace+analysisSpace+otherSpace) + " = %sGb" %((rigSpace+analysisSpace+otherSpace)/(1024*1024*1024))
+    print "\nfree space: %s" %freeSpace + " = %sGb" %(freeSpace/(1024*1024*1024))
+    print "\ntotal space on disk: %s" %(totalSpace) + " = %sGb" %((totalSpace)/(1024*1024*1024))
+    '''
+    importantValues = [rigSpace, analysisSpace, otherSpace, freeSpace, totalSpace]
+    return importantValues
 
 def used_disk_space(path):
     '''
@@ -104,12 +172,14 @@ def raw_data_storage_report(exps):
     
     # Filter list to include only experiments not yet backed-up or archived
     # This might take a while on large dbase?
+    expDoesNotExist = False
     experiments = []
     for experiment in exps:
         try:
             bk = models.Backup.objects.get(backupName=experiment.expName)
         except ObjectDoesNotExist:
             experiments.append(experiment)
+            expDoesNotExist = True
     
     # Get all backup objects to get number of runs already backed-up or archived
     backups = models.Backup.objects.all()
@@ -120,8 +190,9 @@ def raw_data_storage_report(exps):
     
     # Make sublists based on storageOption (defined experiment.STORAGE_CHOICES)
     storageOptionsList = []
-    for crap in experiments[0].STORAGE_CHOICES:
-        storageOptionsList.append(crap)
+    if expDoesNotExist:
+        for crap in experiments[0].STORAGE_CHOICES:
+            storageOptionsList.append(crap)
     
     # Make a dictionary containing three dictionaries, 1 for each storage option
     list = []
@@ -201,14 +272,23 @@ def file_server_storage_report(exps):
         #        uds_reports += used_disk_space ([testpath])
         #uds_rawdata = used_disk_space (pgm_list)
         #uds_other = tds - fds - uds_reports - uds_rawdata
+        
+        if enable_long_report:
+            #vals will be a 5-element array containing the calculated disk usage values.
+            vals = write_simple_report()
+            uds_rawdata = vals[0]
+            uds_reports = vals[1]
+            uds_other = vals[2]
+            #it looks like free/total space are already calculated by df, but freeSpace = vals[3] and totalSpace = vals[4] if they're needed. 
     
         # Print Report
         report.append("\n")
         report.append("Disk Space Allocation Report: %s (%s)\n" % (fileserver.filesPrefix, remotesrv))
         report.append("")
-        #print "Disk Usage by Datasets:      %12d KBytes" % uds_rawdata
-        #print "Disk Usage by Reports :      %12d KBytes" % uds_reports
-        #print "Disk Usage by Other   :      %12d KBytes" % uds_other
+        if enable_long_report:
+            print "Disk Usage by Datasets:      %12d GBytes" % (uds_rawdata/(1024*1024*1024))
+            print "Disk Usage by Reports :      %12d GBytes" % (uds_reports/(1024*1024*1024))
+            print "Disk Usage by Other   :      %12d GBytes" % (uds_other/(1024*1024*1024))
         report.append("Total Disk Space         :      %6d GBytes\n" % tds)
         report.append("Used Disk Space          :      %6d GBytes %.1f%%\n" % (uds, percentuds))
         report.append("Free Disk Space          :      %6d GBytes %.1f%%\n" % (fds, percentfds))
@@ -416,6 +496,20 @@ if __name__ == '__main__':
     fileservers - locations where raw data are stored
     reportstorages - locations where Reports are stored
     '''
-    for line in storage_report():
-        sys.stdout.write(line)
+    
+    run = True
+    
+    if(len(sys.argv) > 1):
+        for arg in sys.argv:
+            if arg == "--prog-update":
+                enable_progress_update = True
+            elif arg == "--long-report":
+                enable_long_report = True
+            elif arg == "--help" or arg == "-h":
+                print "\nCommands:\n\n    --prog-update:    Show progress updates. Useful for large file systems, only applies if --long-report is also sent." \
+                +"\n\n    --long-report:    Enable long report. This will show how much used space is taken up by raw data, reports, and other data. It will take a long time on large file systems."
+                run = False
+    if run:
+        for line in storage_report():
+            sys.stdout.write(line)
 

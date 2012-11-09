@@ -1,363 +1,199 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "ImageLoader.h"
 #include "Utils.h"
+#include "SynchDatSerialize.h"
 
-
-void *FileLoadWorker (void *arg)
+void ImageTracker::WaitForFlowToLoad ( int flow ) // absolute flow value
 {
-  WorkerInfoQueue *q = static_cast<WorkerInfoQueue *> (arg);
-  assert (q);
-
-  bool done = false;
-
-  while (!done)
-  {
-    WorkerInfoQueueItem item = q->GetItem();
-
-    if (item.finished == true)
-    {
-      // we are no longer needed...go away!
-      done = true;
-      q->DecrementDone();
-      continue;
-    }
-    ImageLoadWorkInfo *info = (ImageLoadWorkInfo *) item.private_data;
-
-    time_t start;
-    time_t end;
-    time (&start);
-
-    // dump dc offset information before we do any normalization
-    DumpDcOffset (info);
-
-    info->img[info->flow].Normalize(info->normStart, info->normEnd);
-
-    // correct in-channel electrical cross-talk
-    info->img[info->flow].XTChannelCorrect();
-
-    // dump pH step debug info to file (its really fast, don't worry)
-    DumpStep (info);
-
-    if (info->doRawBkgSubtract)
-    {
-      info->img[info->flow].BackgroundCorrect (info->mask, MaskBead, MaskEmpty, info->NNinnerx,
-          info->NNinnery,info->NNouterx,info->NNoutery, NULL, false, true, true);
-      if (info->flow==0)
-        printf ("Notify user: NN empty subtraction in effect.  No further warnings will be given. %d \n",info->flow);
-    }
-
-    // Calculate average background for each well
-    info->emptyTraceTracker->SetEmptyTracesFromImage (info->img[info->flow], *(info->pinnedInFlow), info->flow, info->mask);
-
-    // just a note: no guarantee that prior flows have finished yet
-    ( (int volatile *) info->CurRead) [info->flow] = 1;
-    time (&end);
-
-    fprintf (stdout, "FileLoadWorker: ImageProcessing time for flow %d: %0.1lf sec\n", info->flow, difftime (end,start));
-
-    q->DecrementDone();
-  }
-
-  return (NULL);
-}
-
-void *FileLoader (void *arg)
-{
-  ImageLoadWorkInfo *info = (ImageLoadWorkInfo *) arg;
-  int flow = 0;
-
-  WorkerInfoQueue *loadWorkQ = new WorkerInfoQueue (info->flow);
-  ImageLoadWorkInfo *ninfo = new ImageLoadWorkInfo[info->flow];
-
-  for (flow = 0; flow < info->flow; flow++)
-  {
-    memcpy (&ninfo[flow], info, sizeof (*info));
-    ninfo[flow].flow = flow;
-  }
-  WorkerInfoQueueItem item;
-  int numWorkers = numCores() /2; // @TODO - this should be subject to clo options
-  // int numWorkers = 1;
-  numWorkers = (numWorkers < 1 ? 1:numWorkers);
-  fprintf (stdout, "FileLoader: numWorkers threads = %d\n", numWorkers);
-  {
-    int cworker;
-    pthread_t work_thread;
-    // spawn threads for doing background correction/fitting work
-    for (cworker = 0; cworker < numWorkers; cworker++)
-    {
-      int t = pthread_create (&work_thread, NULL, FileLoadWorker,
-                              loadWorkQ);
-      if (t)
-        fprintf (stderr, "Error starting thread\n");
-    }
-  }
-
-  time_t start, end;
-  int numFlows = info->flow;
-  for (flow = 0; flow < numFlows; flow++)
-  {
-    if (flow%NUMFB == 0)
-      time (&start);
-
-    sprintf (info->name, "%s/%s%04d.dat", info->dat_source_directory, info->acqPrefix,
-             (flow + (flow / info->numFlowsPerCycle) * info->hasWashFlow));
-
-    // don't read ahead too far of BkgModel regional fitter threads
-    while (flow > info->lead &&
-           ! ( (int volatile *) info->CurProcessed) [flow - info->lead])
-      sleep (1);
-
-    if (!info->img[flow].LoadRaw (info->name))
-    {
-      exit (EXIT_FAILURE);
-    }
-    // pinning updates only need to be complete to remove indeterminacy
-    // in values dumped in DumpStep in FileLoadWorker
-    info->pinnedInFlow->Update (flow, &info->img[flow]);
-
-    item.finished = false;
-    item.private_data = &ninfo[flow];
-    loadWorkQ->PutItem (item);
-
-    // wait for the the BkgModel regional fitter threads to finish this block
-    while ( ( (flow+1) %NUMFB == 0) && ! ( (int volatile *) info->CurProcessed[flow]))
-      sleep (1);
-
-    if ( (flow+1) %NUMFB == 0)
-    {
-      time (&end);
-      fprintf (stdout, "FileLoader: Total time taken from flow %d to %d: %0.1lf sec\n", ( (flow+1) - NUMFB),
-               flow, difftime (end, start));
-    }
-  }
-
-  // wait for all of the images to be processed
-  loadWorkQ->WaitTillDone();
-
-  for (int cworker = 0; cworker < numWorkers; cworker++)
-  {
-    item.private_data = NULL;
-    item.finished = true;
-    loadWorkQ->PutItem (item);
-  }
-  // wait for all workers to exit
-  loadWorkQ->WaitTillDone();
-  delete loadWorkQ;
-  delete[] ninfo;
-
-  info->finished = true;
-
-  return NULL;
-}
-
-void ImageTracker::WaitForFlowToLoad (int flow)
-{
-  // disable compiler optimizing this loop away
-  while (! ( (int volatile *) CurRead) [flow])
-  {
-    sleep (1); // wait for the load worker to load the current image
+   int flow_buffer_for_flow = FlowBufferFromFlow(flow);  // temporary while we resolve the confusion of buffers and flows
+ // disable compiler optimizing this loop away
+  while ( ! ( ( int volatile * ) CurRead ) [flow_buffer_for_flow] ) {
+    sleep ( 1 ); // wait for the load worker to load the current image
   }
 }
 
-ImageTracker::ImageTracker (int _numFlows, int ignoreChecksumErrors, Mask *maskPtr)
+void ImageTracker::FireUpThreads()
 {
-  numFlows = _numFlows;
-  img = new Image[numFlows];
-
-  for (int n = 0; n < numFlows; n++)
+  if (doingSdat)
   {
-    img[n].SetImgLoadImmediate (false);
-    img[n].SetNumAcqFiles (numFlows);
-    img[n].SetIgnoreChecksumErrors (ignoreChecksumErrors);
+    cout <<  "Doing sdats" << endl;
+    pthread_create (&loaderThread, NULL, FileSDatLoader, &master_img_loader);
   }
-  CurRead = new unsigned int [numFlows];
-  CurProcessed = new unsigned int [numFlows];
-  memset (CurRead, 0, numFlows*sizeof (unsigned int));
-  memset (CurProcessed, 0, numFlows*sizeof (unsigned int));
-
-  // this class tracks pinned wells in each flow as we load it
-  pinnedInFlow = NULL;
+  else
+  {
+    cout <<  "Doing regular dats" << endl;
+    pthread_create (&loaderThread, NULL, FileLoader, &master_img_loader);
+  }
 }
 
-void ImageTracker::FinishFlow (int flow)
+void ImageTracker::AllocateImageBuffers(int ignoreChecksumErrors, int total_timeout)
 {
-  img[flow].Close();
-  ( (int volatile *) CurProcessed) [flow] = 1;
+  img = new Image[flow_buffer_size];
+  for ( int n = 0; n < flow_buffer_size; n++ ) {
+    img[n].SetImgLoadImmediate ( false );
+    img[n].SetNumAcqFiles ( flow_buffer_size );
+    img[n].SetIgnoreChecksumErrors ( ignoreChecksumErrors );
+    if (total_timeout > 0)
+      img[n].SetTimeout(img[n].GetRetryInterval(), total_timeout);
+  }
+}
+
+void ImageTracker::AllocateReadAndProcessFlags()
+{
+    CurRead = new unsigned int [flow_buffer_size];
+  CurProcessed = new unsigned int [flow_buffer_size];
+
+  memset ( CurRead, 0, flow_buffer_size*sizeof ( unsigned int ) );
+  memset ( CurProcessed, 0, flow_buffer_size*sizeof ( unsigned int ) );
+}
+
+void ImageTracker::AllocateSdatBuffers()
+{
+    sdat = new SynchDat[flow_buffer_size];
+}
+
+void ImageTracker::NothingInit()
+{
+  img = NULL;
+  sdat = NULL;
+  CurRead = NULL;
+  CurProcessed=NULL;
+  doingSdat = false;
+}
+
+ImageTracker::ImageTracker ( int _flow_buffer_size, int ignoreChecksumErrors, bool _doingSdat, int total_timeout )
+{
+  flow_buffer_size = _flow_buffer_size;
+
+  NothingInit();
+  doingSdat = _doingSdat;
+  
+  AllocateImageBuffers(ignoreChecksumErrors, total_timeout);
+  
+  AllocateReadAndProcessFlags();
+
+  AllocateSdatBuffers();
+
+}
+
+int ImageTracker::FlowBufferFromFlow(int flow)
+{
+  return(flow-master_img_loader.startingFlow);
+}
+
+void ImageTracker::FinishFlow ( int flow )
+{
+  int flow_buffer_for_flow = FlowBufferFromFlow(flow);
+  
+  img[flow_buffer_for_flow].Close();
+  sdat[flow_buffer_for_flow].Close();
+   ( ( int volatile * ) CurProcessed ) [flow_buffer_for_flow] = 1;
+}
+
+void ImageTracker::DeleteFlags()
+{
+    if ( CurRead !=NULL ) delete[] CurRead;
+  if ( CurProcessed!=NULL ) delete[] CurProcessed;
+  CurRead = NULL;
+  CurProcessed = NULL;
+}
+
+void ImageTracker::DeleteImageBuffers()
+{
+
+  if ( img!=NULL ) delete[] img;
+  img=NULL;
+}
+
+void ImageTracker::DeleteSdatBuffers()
+{
+  if ( sdat != NULL ) delete [] sdat;
+  sdat = NULL;
 }
 
 ImageTracker::~ImageTracker()
 {
-  if (img!=NULL) delete[] img;
-  if (CurRead !=NULL) delete[] CurRead;
-  if (CurProcessed!=NULL) delete[] CurProcessed;
-  if (pinnedInFlow != NULL) delete pinnedInFlow;
+  // spin down our threads when we go out of scope
+  pthread_join (loaderThread, NULL);
 
+  DeleteImageBuffers();
+  
+  DeleteFlags();
+  DeleteSdatBuffers();
 }
 
-void ImageTracker::InitPinnedInFlow(int numFlows, Mask *maskPtr, CommandLineOpts& clo)
-{
-  assert(pinnedInFlow == NULL);  // there is only one, just in case called again...
-  if (pinnedInFlow == NULL)
-  {
-    if (clo.bkg_control.replayBkgModelData)
-      pinnedInFlow = new PinnedInFlowReader(maskPtr, numFlows, clo);
-    else if (clo.bkg_control.recordBkgModelData)
-      pinnedInFlow = new PinnedInFlowRecorder(maskPtr, numFlows, clo);
-    else
-      pinnedInFlow = new PinnedInFlow(maskPtr, numFlows);
-    
-    pinnedInFlow->Initialize(maskPtr);
-  }
-}
 
-void SetUpImageLoaderInfo (ImageLoadWorkInfo &glinfo, CommandLineOpts &clo,
-                           Mask *maskPtr, ImageTracker &my_img_set,
-                           ImageSpecClass &my_image_spec,
-                           EmptyTraceTracker &emptytracetracker,
-                           int numFlows)
+
+void ImageTracker::SetUpImageLoaderInfo (CommandLineOpts &inception_state,
+                            ComplexMask &a_complex_mask, 
+                            ImageSpecClass &my_image_spec)
 {
 
   int normStart = 5;
   int normEnd = 20;
+  int standard_smooth_span = 15;
 
-  // do this here as my_img_set is split into pieces
-  my_img_set.InitPinnedInFlow(numFlows, maskPtr, clo);
 
-  glinfo.type = imageLoadAllE;
-  glinfo.flow = numFlows;
-  glinfo.img = my_img_set.img;  // just use ImageTracker object instead?
-  glinfo.pinnedInFlow = my_img_set.pinnedInFlow;
-  glinfo.mask = maskPtr;
-  glinfo.normStart = normStart;
-  glinfo.normEnd = normEnd;
-  glinfo.NNinnerx = clo.img_control.NNinnerx;
-  glinfo.NNinnery = clo.img_control.NNinnery;
-  glinfo.NNouterx = clo.img_control.NNouterx;
-  glinfo.NNoutery = clo.img_control.NNoutery;
-  glinfo.CurRead = & (my_img_set.CurRead[0]);
-  glinfo.CurProcessed = & (my_img_set.CurProcessed[0]);
-  glinfo.dat_source_directory = clo.sys_context.dat_source_directory;
-  glinfo.acqPrefix = my_image_spec.acqPrefix;
-  glinfo.numFlowsPerCycle = clo.flow_context.numFlowsPerCycle; // @TODO: really?  is this even used correctly
-  glinfo.hasWashFlow = clo.GetWashFlow();
-  glinfo.finished = false;
-  glinfo.lead = (clo.bkg_control.readaheadDat != 0) ? clo.bkg_control.readaheadDat : my_image_spec.LeadTimeForChipSize();
-  glinfo.emptyTraceTracker = &emptytracetracker;
-  glinfo.clo = &clo;
-  printf("Subtract Empties: %d\n", clo.img_control.nn_subtract_empties);
-  glinfo.doRawBkgSubtract = (clo.img_control.nn_subtract_empties>0);
+  master_img_loader.type = imageLoadAllE;
+  master_img_loader.flow = -1;  // nonsense currently, used in individual loading
+  master_img_loader.cur_buffer = -1; //nonsense currently, used in individual loading
+  master_img_loader.flow_buffer_size = flow_buffer_size; // not the same!!!!!!!
+  master_img_loader.startingFlow = inception_state.flow_context.startingFlow;
+  
+  master_img_loader.img = img;  // just use ImageTracker object instead?
+  master_img_loader.sdat = sdat;
+  master_img_loader.doingSdat = doingSdat;
+  
+  master_img_loader.pinnedInFlow = a_complex_mask.pinnedInFlow;
+  master_img_loader.mask = a_complex_mask.my_mask;
+
+  master_img_loader.normStart = normStart;
+  master_img_loader.normEnd = normEnd;
+  master_img_loader.NNinnerx = inception_state.img_control.NNinnerx;
+  master_img_loader.NNinnery = inception_state.img_control.NNinnery;
+  master_img_loader.NNouterx = inception_state.img_control.NNouterx;
+  master_img_loader.NNoutery = inception_state.img_control.NNoutery;
+  master_img_loader.smooth_span = standard_smooth_span;
+  
+  master_img_loader.CurRead = & ( CurRead[0] );
+  master_img_loader.CurProcessed = & ( CurProcessed[0] );
+  
+  master_img_loader.dat_source_directory = inception_state.sys_context.dat_source_directory;
+  master_img_loader.acqPrefix = inception_state.img_control.acqPrefix;
+  
+  master_img_loader.numFlowsPerCycle = inception_state.flow_context.numFlowsPerCycle; // @TODO: really?  is this even used correctly
+  master_img_loader.hasWashFlow = inception_state.img_control.has_wash_flow;  
+  
+  master_img_loader.finished = false;
+  master_img_loader.lead = ( inception_state.bkg_control.readaheadDat != 0 ) ? inception_state.bkg_control.readaheadDat : my_image_spec.LeadTimeForChipSize();
+  master_img_loader.inception_state = &inception_state;  // why must we pass globals around everywhere?
+  
+  printf ( "Subtract Empties: %d\n", inception_state.img_control.nn_subtract_empties );
+  master_img_loader.doRawBkgSubtract = ( inception_state.img_control.nn_subtract_empties>0 );
+  master_img_loader.doEmptyWellNormalization = inception_state.bkg_control.empty_well_normalization;
 }
 
-
-//@TODO: why is this not a method of info?
-void DumpStep (ImageLoadWorkInfo *info)
+void ImageTracker::DecideOnRawDatsToBufferForThisFlowBlock()
 {
-//@TODO:  if only there were some object, say a flow context, that had already converted the flowOrder into the string of nucleotides to the length of all the flows
-// we wouldn't need to write code like this...but that would be crazy talk.
-  char nucChar = info->clo->flow_context.flowOrder[info->flow % strlen (info->clo->flow_context.flowOrder) ];  // @TODO: 12th time this is done independently in the code(!!!!!)
-  string nucStepDir = string (info->clo->GetExperimentName()) + string ("/NucStep");
+  // need dynamic read ahead every 20 block of flows for 318 chips
+  if (ChipIdDecoder::GetGlobalChipId() == ChipId318) {
+    static int readahead = master_img_loader.lead;
+    const double allowedFreeRatio = 0.2;
+    double freeSystemMemory = GetAbsoluteFreeSystemMemoryInKB() / (1024.0*1024.0);
+    double totalSystemMemory = (double)(totalMemOnTorrentServer()) / (1024.0*1024.0);
 
-  // Make output directory or quit
-  if (mkdir (nucStepDir.c_str(), 0777) && (errno != EEXIST))
-  {
-    perror (nucStepDir.c_str());
-    return;
+    double freeRatio = freeSystemMemory / totalSystemMemory; 
+
+    if (freeRatio < allowedFreeRatio)
+      master_img_loader.lead = 1;
+    else if (freeRatio < 0.3)
+      master_img_loader.lead = 2;
+    else if (freeRatio < 0.6)
+      master_img_loader.lead = 4;
+    else 
+      master_img_loader.lead = readahead;
+    printf("TotalMem: %f FreeMem: %f Free/total Ratio: %f Allowed Free/total Ratio: %f readahead: %d\n", 
+        totalSystemMemory, freeSystemMemory, freeRatio, allowedFreeRatio, master_img_loader.lead);
+    fflush(stdout);
   }
-
-  // Set region width & height
-  int rWidth=50;
-  int rHeight=50;
-
-  // Lower left corner of the region should equal 0 modulus xModulus or yModulus
-  int xModulus=50;
-  int yModulus=50;
-
-  vector<string> regionName;
-  vector<int> regionStartCol;
-  vector<int> regionStartRow;
-  vector<int> regionWidth;
-  vector<int> regionHeight;
-
-  const RawImage *rawImg = info->img[info->flow].GetImage();
-
-  ChipIdEnum chipId = ChipIdDecoder::GetGlobalChipId();
-  if (chipId == ChipId900)
-  {
-    // Proton chips
-    regionName.push_back ("inlet");
-    regionStartCol.push_back ( xModulus * floor(0.1 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.5 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-
-    regionName.push_back ("middle");
-    regionStartCol.push_back ( xModulus * floor(0.5 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.5 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-
-    regionName.push_back ("outlet");
-    regionStartCol.push_back ( xModulus * floor(0.9 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.5 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-  }
-  else
-  {
-    // PGM chips
-    regionName.push_back ("inlet");
-    regionStartCol.push_back ( xModulus * floor(0.9 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.9 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-
-    regionName.push_back ("middle");
-    regionStartCol.push_back ( xModulus * floor(0.5 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.5 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-
-    regionName.push_back ("outlet");
-    regionStartCol.push_back ( xModulus * floor(0.1 * (float) rawImg->cols / (float) xModulus) );
-    regionStartRow.push_back ( yModulus * floor(0.1 * (float) rawImg->rows / (float) yModulus) );
-    regionWidth.push_back (rWidth);
-    regionHeight.push_back(rHeight);
-  }
-
-  for (unsigned int iRegion=0; iRegion<regionStartRow.size(); iRegion++)
-  {
-    info->img[info->flow].DumpStep (
-      regionStartCol[iRegion],
-      regionStartRow[iRegion],
-      regionWidth[iRegion],
-      regionHeight[iRegion],
-      regionName[iRegion],
-      nucChar,
-      nucStepDir,
-      info->mask,
-      info->pinnedInFlow,
-      info->flow
-    );
-  }
-}
-
-void DumpDcOffset (ImageLoadWorkInfo *info)
-{
-  char nucChar = info->clo->flow_context.flowOrder[info->flow % strlen (info->clo->flow_context.flowOrder) ];  // @TODO: 13th time this is done independently in the code(!!!!!)
-  string dcOffsetDir = string (info->clo->GetExperimentName()) + string ("/dcOffset");
-
-  // Make output directory or quit
-  if (mkdir (dcOffsetDir.c_str(), 0777) && (errno != EEXIST))
-  {
-    perror (dcOffsetDir.c_str());
-    return;
-  }
-
-  int nSample=100000;
-  info->img[info->flow].DumpDcOffset (
-    nSample,
-    dcOffsetDir,
-    nucChar,
-    info->flow
-  );
 }

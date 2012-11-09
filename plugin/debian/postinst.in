@@ -14,21 +14,33 @@ case "$1" in
     # Create scratch space directory, writeable by plugin user for storing
     # files
     if [ ! -d /results/plugins/scratch ]; then
-    	mkdir -p /results/plugins/scratch
-        chmod a+rw /results/plugins/scratch
+        mkdir -m a=rwx -p /results/plugins/scratch
+        chmod a+rwx /results/plugins/scratch
     fi
-    
-    # Special link for a plugin
-    rm -f /var/www/site_media/RunRecognitION
-    if [ -e /results/plugins/RunRecognitION/static ]; then
-        ln -s /results/plugins/RunRecognitION/static /var/www/site_media/RunRecognitION
+
+    if [ ! -d /results/plugins/implementations ]; then
+        mkdir -m a=rx -p /results/plugins/implementations
+    fi
+    # Perms were wrong in cmake script
+    chmod -c a+rx /results/plugins/implementations
+
+    # Remove after 2.0 release.    
+    # Ensure that renamed variantCalling plugin has not left any traces
+    if [ -d /results/plugins/variantCalling ]; then
+        rm -rf /results/plugins/variantCalling
     fi
     
     # Set common owner, if ionadmin user exists
     if getent passwd | grep -q "^ionadmin:"; then
     	chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins
     fi
+
+    # Force a plugin rescan after installation
+    #(wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
+    #    echo "Loading plugin config page failed."
+    # Removed: TS-5154 - doing this here causes install to fail.
     ;;
+
 esac
 
 exit 0

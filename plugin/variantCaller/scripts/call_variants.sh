@@ -51,7 +51,7 @@ vc_main ()
                 echo "Trimming reads to targets..." >&2
                 BAM_UNTRIM="$BAMFILE"
                 BAMFILE="${OUTDIR}/$PLUGIN_OUT_TRIMPBAM"
-                run "java -cp ${DIRNAME}/TRIMP_lib -jar ${DIRNAME}/TRIMP.jar $BAM_UNTRIM $BAMFILE $REFERENCE $INPUT_BED_FILE"
+                run "java -Xmx8G -cp ${DIRNAME}/TRIMP_lib -jar ${DIRNAME}/TRIMP.jar $BAM_UNTRIM $BAMFILE $REFERENCE $INPUT_BED_FILE"
 		run "samtools index $BAMFILE"
                 if [ -f "$BAMFILE" ]; then
                     if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
@@ -65,9 +65,17 @@ vc_main ()
         fi
         echo "Calling variants on mapped reads..." >&2
         if [ -n "$INPUT_BED_FILE" ]; then
-            run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -o $TSP_FLOWORDER -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" -b \"$INPUT_BED_MERGE\" \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           if [ -n "$PLUGIN_HS_ALIGN_BED" ]; then
+               run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" -b \"$INPUT_BED_MERGE\" -s \"$PLUGIN_HS_ALIGN_BED\"  \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           else    
+               run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" -b \"$INPUT_BED_MERGE\" \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           fi    
         else
-            run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -o $TSP_FLOWORDER -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           if [ -n "$PLUGIN_HS_ALIGN_BED" ]; then
+               run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" -s \"$PLUGIN_HS_ALIGN_BED\" \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           else
+               run "${DIRNAME}/variantCaller.py $LOGOPT $VCWRNOUT -p \"$INPUT_VC_PARAMFILE\" -r \"$DIRNAME\" \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\" $VCLOGOUT" 
+           fi
         fi
         if [ ! -f "${OUTDIR}/$PLUGIN_OUT_INDELS_VCF" ]; then
             touch "${OUTDIR}/$PLUGIN_OUT_INDELS_VCF"
@@ -134,7 +142,7 @@ vc_main ()
     if [ -n "$INPUT_SNP_BED_FILE" ]; then
         echo "Generating base pileup for hotspot alleles..." >&2
         run "samtools mpileup -BQ0 -d1000000 -f \"$REFERENCE\" -l ${INPUT_SNP_BED_MERGE} ${BAMFILE} $ERROUT | ${DIRNAME}/allele_count_mpileup_stdin.py > ${OUTDIR}/$PLUGIN_OUT_COV_RAW";
-        run "\"${DIRNAME}/print_allele_counts.py\" \"${OUTDIR}/$PLUGIN_OUT_COV_RAW\" \"${OUTDIR}/$PLUGIN_OUT_COV\" \"$PLUGIN_HS_ALIGN_BED\"";
+        run "\"${DIRNAME}/print_allele_counts.py\" \"${OUTDIR}/$PLUGIN_OUT_COV_RAW\" \"${OUTDIR}/$PLUGIN_OUT_COV\" \"$PLUGIN_HS_ALIGN_BED\" \"$INPUT_SNP_BED_FILE\"";
     fi
 
     # Generate coverage statistics
@@ -146,8 +154,10 @@ vc_main ()
     local COVERAGE_HTML="${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML"
     if [ -n "$INPUT_SNP_BED_MERGE" ]; then
         run "${SCRIPTSDIR}/coverage_analysis_report.pl -t \"$RUNID\" -R \"${OUTDIR}/$PLUGIN_OUT_READ_STATS\" -S \"${OUTDIR}/$PLUGIN_OUT_LOCI_STATS\" -T \"${OUTDIR}/$HTML_ROWSUMS\" \"$COVERAGE_HTML\" \"${OUTDIR}/$PLUGIN_OUT_TARGET_STATS\""
+        run "${SCRIPTSDIR}/coverage_analysis_report.pl -t \"$RUNID\" -R \"${OUTDIR}/$PLUGIN_OUT_READ_STATS\" -S \"${OUTDIR}/$PLUGIN_OUT_LOCI_STATS\" -T \"${OUTDIR}/$HTML_ROWSUMS\" -b 1 \"$HTML_BLOCK\" \"${OUTDIR}/$PLUGIN_OUT_TARGET_STATS\""
     else
         run "${SCRIPTSDIR}/coverage_analysis_report.pl -t \"$RUNID\" -R \"${OUTDIR}/$PLUGIN_OUT_READ_STATS\" -T \"${OUTDIR}/$HTML_ROWSUMS\" \"$COVERAGE_HTML\" \"${OUTDIR}/$PLUGIN_OUT_TARGET_STATS\""
+        run "${SCRIPTSDIR}/coverage_analysis_report.pl -t \"$RUNID\" -R \"${OUTDIR}/$PLUGIN_OUT_READ_STATS\" -T \"${OUTDIR}/$HTML_ROWSUMS\" -b 1 \"$HTML_BLOCK\" \"${OUTDIR}/$PLUGIN_OUT_TARGET_STATS\""
     fi
 
     if [ "$PLUGIN_DEV_KEEP_INTERMEDIATE_FILES" -eq 0 ]; then

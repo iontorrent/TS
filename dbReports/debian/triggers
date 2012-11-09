@@ -1,0 +1,3 @@
+# Make sure python dependencies are available at postinst time
+activate pysupport
+activate cleanup-pkgprepare-updates

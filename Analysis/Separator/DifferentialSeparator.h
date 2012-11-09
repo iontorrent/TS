@@ -12,6 +12,7 @@
 #include "RegionAvgKeyReporter.h"
 #include "Traces.h"
 #include "TraceStore.h"
+#include "H5File.h"
 
 #define FRAMEZERO 0
 #define FRAMELAST 100
@@ -33,11 +34,11 @@ class DifSepOpt
       minSnr = 3;
       minBfGoodWells = 80;
       bfMeshStep = 100;
-      t0MeshStep = 64;
+      t0MeshStep = 50;
       useMeshNeighbors = 1;
       tauEEstimateStep = 100;
       nCores = -1;
-      minTauESnr = 12;
+      minTauESnr = 20;
       sigSdMult = 6;
       doMeanFilter = true;
       doSigVarFilter = true;
@@ -49,8 +50,8 @@ class DifSepOpt
       regionYSize = 100;
       mask = NULL;
       justBeadfind = false;
-      clusterTrim = 0.0;
-      bfNeighbors = 2;
+      clusterTrim = .01;
+      bfNeighbors = 3;
       samplingStep = 10;
       signalBased = true;
       help = false;
@@ -61,10 +62,15 @@ class DifSepOpt
       iqrMult = 3;
       tfFilterQuantile = .5;
       libFilterQuantile = .5;
+      minTfPeakMax = 20.0f;
+      minLibPeakMax = 20.0f;
       useProjectedCurve = true;
       outputDebug = false;
       percentReference = .005;
       useSignalReference = true;
+      doSdat = false;
+      sdatSuffix = "sdat";
+      useSeparatorRef = false;
     }
 
     Mask *mask;
@@ -116,6 +122,10 @@ class DifSepOpt
     bool outputDebug;
     float percentReference;
     bool useSignalReference;
+    bool doSdat;
+    float minTfPeakMax,minLibPeakMax;
+    std::string sdatSuffix;
+    bool useSeparatorRef;
 };
 
 /**
@@ -212,12 +222,18 @@ class DifferentialSeparator : public AvgKeyIncorporation
     /** Don't do separation just clustering from beadfind statistic */
     void DoJustBeadfind (DifSepOpt &opts, BFReference &reference);
 
-  void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
-
+    void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
+    
+    void CalcRegionEmptyStat(H5File &h5File, GridMesh<MixModel> &mesh, TraceStore<double> &store, 
+                             const string &fileName, 
+                             vector<int> &flows, Mask &mask);
+    static void PrintVec(Col<double> &vec);
+    static void PrintWell(TraceStore<double> &store, int well, int flow);    
   /** Do a beadfind/bead classification based on options passed in. */
   int Run(DifSepOpt opts);
-
-  void LoadKeyDats (TraceStore<double> &traceStore, BFReference &reference,  DifSepOpt &opts);
+  void CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame); 
+  void LoadKeySDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
+  void LoadKeyDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
 
     void SetReportSet (int rows, int cols,
                        const std::string &wellsReportFile,
@@ -322,6 +338,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
                        vector<char> &filter,
                        vector<char> &refWells);
 
+
     float LowerQuantile (SampleQuantiles<float> &s);
 
     float IQR (SampleQuantiles<float> &s);
@@ -356,6 +373,8 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void PinHighLagOneSd (Traces &traces, float iqrMult);
 
     void CheckFirstAcqLagOne (DifSepOpt &opts);
+    void CheckT0VFC(std::vector<float> &t, std::vector<int> &stamps);
+    void CalcNumFrames(int tx, std::vector<int> &stamps, int &before_last, int &after_last, int maxStep);
 
     /**
      * Return the fit from the ZeromerModelBulk for a particular well. NULL if
@@ -404,6 +423,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
     Col<double> mTime;
     vector<char> mFilteredWells;
     vector<char> mRefWells;
+    vector<int> mBFTimePoints;
 };
 
 #endif // DIFFERENTIALSEPARATOR_H

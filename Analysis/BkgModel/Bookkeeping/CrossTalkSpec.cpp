@@ -1,62 +1,27 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#include <cstdio>
+#include <cstring>
+#include <sys/stat.h>
 #include "CrossTalkSpec.h"
+
+using namespace std;
 
 // set up cross-talk information in a clean way
 
 void CrossTalkSpecification::Allocate(int size)
 {
-    DeAllocate();  // in case we had something here before
     nei_affected = size;
-    cx = new int[size];
-    cy = new int[size];
-    mix = new float[size];
-    delay = new float[size];
-    //my new goofy parameters
-    tau_top = new float[size];
-    tau_fluid = new float[size];
-    multiplier = new float[size];
-}
-
-void CrossTalkSpecification::DeAllocate()
-{
-    if (cx!=NULL)
-        delete[] cx;
-    if (cy!=NULL)
-        delete[] cy;
-    if (mix !=NULL)
-        delete[] mix;
-    if (delay !=NULL)
-        delete[] delay;
-    if (tau_top!=NULL)
-        delete[] tau_top;
-    if (tau_fluid!=NULL)
-        delete[] tau_fluid;
-    if (multiplier!=NULL)
-        delete[] multiplier;
-
-    cx=NULL;
-    cy= NULL;
-    mix = NULL;
-    delay = NULL;
-
-    tau_top = NULL;
-    tau_fluid = NULL;
-    multiplier = NULL;
-
+    cx.resize(size);
+    cy.resize(size);
+    mix.resize(size);
+    delay.resize(size);
+    tau_top.resize(size);
+    tau_fluid.resize(size);
+    multiplier.resize(size);
 }
 
 CrossTalkSpecification::CrossTalkSpecification()
 {
-    cx = NULL;
-    cy = NULL;
-    mix = NULL;
-    delay = NULL;
-
-    tau_top = NULL;
-    tau_fluid = NULL;
-    multiplier = NULL;
-
-
     nei_affected = 0;
     tau_bulk = -1.0;
     cbulk = 1;
@@ -64,11 +29,8 @@ CrossTalkSpecification::CrossTalkSpecification()
     hex_packed = false;
     three_series = true;
     do_xtalk_correction = true;
-}
-
-CrossTalkSpecification::~CrossTalkSpecification()
-{
-    DeAllocate();
+    simple_model = false;
+    rescale_flag = false;
 }
 
 // this is of unknown utility
@@ -306,7 +268,7 @@ float CrossTalkSpecification::ClawBackBuffering(int nei_total)
 }
 
 #define MAX_LINE_LEN    512
-void CrossTalkSpecification::ReadCrossTalkFromFile(char *fname)
+void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
 {
     struct stat fstatus;
     int         status;
@@ -359,7 +321,26 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(char *fname)
                         three_series= false;
                     //printf("three_series: %d\n", three_tmp);
                 }
-                
+                if (strncmp("simple_model",line,12)==0)
+                {
+                  int simple_tmp;
+                    sscanf(line,"three_series: %d", &simple_tmp);
+                    if (simple_tmp>0)
+                        simple_model = true;
+                    else
+                        simple_model= false;
+                    //printf("three_series: %d\n", three_tmp);
+                }                
+               if (strncmp("rescale_flag",line,12)==0)
+                {
+                  int rescale_tmp;
+                    sscanf(line,"rescale_flag: %d", &rescale_tmp);
+                    if (rescale_tmp>0)
+                        rescale_flag = true;
+                    else
+                        rescale_flag= false;
+                    //printf("three_series: %d\n", three_tmp);
+                }         
                 if (strncmp("num_neighbor",line,12)==0)
                 {
                     sscanf(line, "num_neighbor: %d", &num_neighbor);
@@ -415,20 +396,10 @@ void CrossTalkSpecification::NeighborByGridPhase(int &ncx, int &ncy, int cx, int
 
 void CrossTalkSpecification::NeighborByGridPhaseBB(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
 {
-    if (phase==0)
-    {
-        ncx = cx+cxd;
-        ncy = cy+cyd;
-    } else
-    {
         ncx = cx+cxd; // neighbor columns are always correct
-        if (cxd!=0)
-            ncy = cy+cyd-phase; // up/down levels are offset alternately on cols
-        else
-            ncy = cy+cyd;
-    }
-    // unless we're in a hex grid and need to know our offset before deciding
-    // however those variables need to be passed
+        ncy = cy+cyd; // map is correct
+        if ((phase!=0) & (((cxd+16) %2)!=0)) //neighbors may be more than one away!!!!
+            ncy -= phase; // up/down levels are offset alternately on cols
 }
 
 void CrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx, int bead_ry, int nei_idx, int region_x, int region_y)
@@ -449,7 +420,7 @@ void CrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx,
 
 
 
-void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, char *chipType, char *xtalk_name)
+void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const char *chipType, const char *xtalk_name)
 {
     if (can_do_xtalk_correction)
     {

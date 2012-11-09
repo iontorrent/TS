@@ -1,0 +1,26 @@
+{% extends "rundb/common/base.html" %}
+{% block nav %}
+<ul class="nav nav-tabs pull-left">
+    <li><a href="{% url plans %}">Plan</a></li>
+    <li><a href="{% url monitor %}">Monitor</a></li>
+    <li class="active"><a href="{% url data %}">Data</a></li>
+</ul>
+<ul class="nav nav-tabs pull-right" id="configureNav">
+    <li class="dropdown">
+        <a id="configure" class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="{% url configure_about %}">
+        <div id="gear" class="gear-inactive"><b class="caret"></b></div>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a href="{% url configure_about %}">About</a></li>          
+            <li><a href="{% url configure_references %}">References</a></li>
+            <li><a href="{% url configure_services %}">Services</a></li>
+            <li><a href="{% url configure_plugins %}">Plugins</a></li>          
+            <li><a href="{% url configure_configure %}">Configure</a></li>  
+        </ul>
+    </li>
+</ul>
+{% endblock nav %}
+{% block sub-nav %}
+    <li><a href="{% url data %}">Completed Runs & Results</a></li>
+    <li class="active"><a href="{% url projects %}">Projects</a></li>               
+{% endblock sub-nav %}

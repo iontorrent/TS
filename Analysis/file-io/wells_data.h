@@ -39,6 +39,16 @@ extern "C" {
       */
     wells_data_t *
       wells_data_read1(FILE *fp, wells_header_t *header, wells_data_t *data);
+    
+    /*! 
+      write out a wells-worth of data
+      @param  fp      the file pointer
+      @param  header  the header 
+      @param  data    the data to write
+      @return         1 if successful, 0 otherwise
+      */
+    int32_t
+      wells_data_write(FILE *fp, wells_header_t *header, wells_data_t *data);
 
     /*! 
       print a wells-worth of data

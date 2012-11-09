@@ -4,12 +4,6 @@
 __version__ = filter(str.isdigit, "$Revision: 17459 $")
 
 import os
-import tempfile
-
-# matplotlib/numpy compatibility
-os.environ['HOME'] = tempfile.mkdtemp()
-from matplotlib import use
-use("Agg")
 
 # import /etc/torrentserver/cluster_settings.py, provides PLUGINSERVER_HOST, PLUGINSERVER_PORT
 import sys
@@ -23,34 +17,20 @@ import shutil
 import socket
 import xmlrpclib
 import subprocess
-import sys
 import time
 from collections import deque
 
 from ion.utils.plugin_json import *
-
-# Import analysis-specific packages. We try to follow the from A import B
-# convention when B is a module in package A, or import A when
-# A is a module.
-#from ion.analysis import cafie,sigproc
-#from ion.fileformats import sff
-#from ion.reports import tfGraphs, parseTFstats
-from ion.reports import blast_to_ionogram, plotKey, \
-    parseBeadfind, parseProcessParams, beadDensityPlot, \
-    libGraphs, beadHistogram, plotRawRegions, trimmedReadLenHisto
-
+from ion.plugin.remote import runPlugin
 
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
 
 sys.path.append('/opt/ion/')
 
-import math
-from scipy import cluster, signal, linalg
 import traceback
 import json
 
-import dateutil.parser
 
 class MyConfigParser(ConfigParser.RawConfigParser):
     def read(self, filename):
@@ -66,7 +46,6 @@ def add_status(process, status, message=""):
     f = open("blockstatus.txt", 'a')
     f.write(process+"="+str(status)+" "+str(message)+"\n")
     f.close()
-
 
 def printtime(message, *args):
     if args:
@@ -99,49 +78,11 @@ def parse_metrics(fileIn):
         ret[key]=value
     return ret
 
-def initreports(SIGPROC_RESULTS, BASECALLER_RESULTS, ALIGNMENT_RESULTS):
-    """Performs initialization for both report writing and background
-    report generation."""
-    printtime("INIT REPORTS")
-    #
-    # Begin report writing
-    #
-
-    basefolder = 'plugin_out'
+def initTLReport(basefolder):
     if not os.path.isdir(basefolder):
         oldmask = os.umask(0000)   #grant write permission to plugin user
         os.mkdir(basefolder)
         os.umask(oldmask)
-
-    if not os.path.isdir(SIGPROC_RESULTS):
-        try:
-            os.mkdir(SIGPROC_RESULTS)
-        except:
-            traceback.print_exc()
-
-    if not os.path.isdir(BASECALLER_RESULTS):
-        try:
-            os.mkdir(BASECALLER_RESULTS)
-        except:
-            traceback.print_exc()
-
-    if not os.path.isdir(ALIGNMENT_RESULTS):
-        try:
-            os.mkdir(ALIGNMENT_RESULTS)
-        except:
-            traceback.print_exc()
-
-    # create symbolic links for merge process
-    mycwd=os.path.basename(os.getcwd())
-    if "block_" in mycwd:
-
-        _SIGPROC_RESULTS = os.path.join('..', SIGPROC_RESULTS, mycwd)
-        _BASECALLER_RESULTS = os.path.join('..', BASECALLER_RESULTS, mycwd)
-        _ALIGNMENT_RESULTS = os.path.join('..', ALIGNMENT_RESULTS, mycwd)
-
-        r = subprocess.call(["ln", "-s", os.path.join('..', mycwd, SIGPROC_RESULTS), _SIGPROC_RESULTS])
-        r = subprocess.call(["ln", "-s", os.path.join('..', mycwd, BASECALLER_RESULTS), _BASECALLER_RESULTS])
-        r = subprocess.call(["ln", "-s", os.path.join('..', mycwd, ALIGNMENT_RESULTS), _ALIGNMENT_RESULTS])
 
     # Begin report writing
     os.umask(0002)
@@ -152,8 +93,7 @@ def initreports(SIGPROC_RESULTS, BASECALLER_RESULTS, ALIGNMENT_RESULTS):
         (TMPL_DIR, "report_layout.json", None),
         (TMPL_DIR, "parsefiles.php", None),
         (TMPL_DIR, "log.html", None),
-        (TMPL_DIR, "alignment_summary.html", os.path.join(ALIGNMENT_RESULTS,"alignment_summary.html")),
-        (TMPL_DIR, "csa.php", None),
+        (TMPL_DIR, "alignment_summary.html", None),
         (TMPL_DIR, "format_whole.php", "Default_Report.php",), ## Renamed during copy
         #(os.path.join(distutils.sysconfig.get_python_lib(), 'ion', 'reports',  "BlockTLScript.py", None)
     ]
@@ -163,6 +103,87 @@ def initreports(SIGPROC_RESULTS, BASECALLER_RESULTS, ALIGNMENT_RESULTS):
         if os.access(f, os.F_OK):
             os.remove(f)
         shutil.copy(os.path.join(d,s), f)
+
+def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULTS,oninstranalysis=False):
+    """Performs initialization for both report writing and background report generation."""
+
+    printtime("INIT BLOCK REPORT")
+    
+    if blockObj['id_str'] == "wholechip":
+        resultDir = "."
+    elif blockObj['id_str'] == "thumbnail":
+        resultDir = "."
+    else:
+        resultDir = '%s%s' % ('block_', blockObj['id_str'])
+
+        if not os.path.exists(resultDir):
+            os.mkdir(resultDir)
+
+        _SIGPROC_RESULTS = os.path.join(SIGPROC_RESULTS, resultDir)
+        _BASECALLER_RESULTS = os.path.join(BASECALLER_RESULTS, resultDir)
+        _ALIGNMENT_RESULTS = os.path.join(ALIGNMENT_RESULTS, resultDir)
+
+        if not oninstranalysis:
+            if not os.path.isdir(_SIGPROC_RESULTS):
+                try:
+                    os.mkdir(_SIGPROC_RESULTS)
+                except:
+                    traceback.print_exc()
+
+        if not os.path.isdir(_BASECALLER_RESULTS):
+            try:
+                os.mkdir(_BASECALLER_RESULTS)
+            except:
+                traceback.print_exc()
+
+        
+        try:
+          os.symlink(os.path.join("..",_SIGPROC_RESULTS), os.path.join(resultDir,SIGPROC_RESULTS))
+          os.symlink(os.path.join("..",_BASECALLER_RESULTS), os.path.join(resultDir,BASECALLER_RESULTS))
+#        os.symlink(os.path.join("..",_ALIGNMENT_RESULTS), os.path.join(resultDir,ALIGNMENT_RESULTS))
+        except:
+          printtime("couldn't create symbolic link")
+
+        file_in = open("ion_params_00.json", 'r')
+        TMP_PARAMS = json.loads(file_in.read())
+        file_in.close()
+
+        # update path to data
+        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['id_str'])
+        TMP_PARAMS["mark_duplicates"] = False
+
+        #write block specific ion_params_00.json
+        file_out = open("%s/ion_params_00.json" % resultDir, 'w')
+        json.dump(TMP_PARAMS, file_out)
+        file_out.close()
+
+        cwd = os.getcwd()
+        try:
+            os.symlink(os.path.join(cwd,"Default_Report.php"), os.path.join(resultDir,"Default_Report.php"))
+        except:
+            printtime("couldn't create symbolic link")
+
+        try:
+            os.symlink(os.path.join(cwd,"parsefiles.php"), os.path.join(resultDir,"parsefiles.php"))
+        except:
+            printtime("couldn't create symbolic link")
+
+        try:
+            os.symlink(os.path.join(cwd,"log.html"), os.path.join(resultDir,"log.html"))
+        except:
+            printtime("couldn't create symbolic link")
+
+        try:
+            os.symlink(os.path.join(cwd,"DefaultTFs.conf"), os.path.join(resultDir,"DefaultTFs.conf"))
+        except:
+            printtime("couldn't create symbolic link")
+
+        try:
+            os.symlink(os.path.join(cwd,"barcodeList.txt"), os.path.join(resultDir,"barcodeList.txt"))
+        except:
+            printtime("couldn't create symbolic link")
+
+    return resultDir
 
 def isbadblock(blockdir, message):
     if os.path.exists(os.path.join(blockdir,'badblock.txt')):
@@ -196,261 +217,93 @@ def printheader():
     sys.stdout.flush()
     sys.stderr.flush()
 
+def get_plugins_to_run(plugins, report_type):
+  """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
+  printtime("Gettings plugins to run, report type = %s" % report_type)
+  plugin_list=[]
+  for plugin in sorted(plugins, key=lambda plugin: plugin["name"],reverse=True):  
 
-def getparameter(parameterfile=None):
+    runPlug = True
+ #   printtime("Plugin %s is enabled, AutoRun is %s" % (plugin['name'], plugin['autorun']))
+    if not plugin['autorun']:
+      continue    #skip to next plugin
 
-    #####################################################################
-    # Load the analysis parameters and metadata from a json file passed in on the
-    # command line with --params=<json file name>
-    # we expect this loop to iterate only once. This is more elegant than
-    # trying to index into ARGUMENTS.
-    #####################################################################
-    EXTERNAL_PARAMS = {}
-    env = {}
-    if parameterfile:
-        env["params_file"] = parameterfile
+    # Exclude this plugin if non-blank entry does not match run info:
+    for label in ['project','sample','libraryName','chipType']:
+      if plugin[label] != None and plugin[label] != "":
+        runPlug = False
+        for i in plugin[label].split(','):
+            i = i.strip()
+            if i in env[label]:
+                runPlug = True
+                break
+            if not runPlug:              
+              continue    #skip to next plugin
+  
+  
+    # check if this plugin was selected to run for this run type
+    if report_type == 'wholechip' or report_type == 'thumbnail':
+      selected = True
     else:
-        env["params_file"] = 'ion_params_00.json'
-    afile = open(env["params_file"], 'r')
-    EXTERNAL_PARAMS = json.loads(afile.read())
-    afile.close()
-    for k,v in EXTERNAL_PARAMS.iteritems():
-        if isinstance(v, unicode):
-            EXTERNAL_PARAMS[k] = str(v)
+      selected = False  
+      
+    if ('runtype' in plugin.keys()) and plugin['runtype']:
+      selected = (report_type in plugin['runtype'])
 
-    # Where the raw data lives (generally some path on the network)
-    pathprefix = str(EXTERNAL_PARAMS['pathToData'])
-    env['prefix'] = pathprefix
+    # TODO hardcoded specials
+    if (report_type == 'composite') and (plugin['name'] in ['torrentscout','contourPlots','seq_dependent_errors']):
+      selected = True
+    if (report_type == 'thumbnail') and (plugin['name'] in ['rawPlots', 'separator', 'chipNoise']):
+      plugin['runlevel'] = 'separator, default'          
+    
+    if selected:                  
+      printtime("Plugin %s is enabled" % plugin['name'])
+      if not ( ('runlevel' in plugin.keys()) and plugin['runlevel'] ):
+      # fill in default value if runlevel is missing 
+        plugin['runlevel'] = 'default'      
+      plugin['hold_jid'] = []
+      plugin_list.append(plugin)
 
-    #get the experiment json data
-    env['exp_json'] = EXTERNAL_PARAMS.get('exp_json')
-
-    env['pgmName'] = EXTERNAL_PARAMS.get('pgmName','unknownPGM')
-
-    #this will get the exp data from the database
-    exp_json = json.loads(env['exp_json'])
-    exp_log_json = json.loads(exp_json['log'])
-
-    env['flows'] = EXTERNAL_PARAMS.get('flows')
-    env['notes'] = exp_json['notes']
-    env['start_time'] = exp_log_json['start_time']
-
-    env['blockArgs'] = EXTERNAL_PARAMS.get('blockArgs')
-
-    # get command line args
-    env['analysisArgs'] = EXTERNAL_PARAMS.get("analysisArgs")
-
-    env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs","")
-
-    #previousReports
-    env['previousReport'] = EXTERNAL_PARAMS.get("previousReport","")
-
-    # this is the library name for the run taken from the library field in the database
-    env["libraryName"] = EXTERNAL_PARAMS.get("libraryName", "none")
-    if env["libraryName"]=="":
-        env["libraryName"] = "none"
-    dtnow = datetime.datetime.now()
-    # the time at which the analysis was started, mostly for debugging purposes
-    env["report_start_time"] = dtnow.strftime("%c")
-    # name of current analysis
-    env['resultsName'] = EXTERNAL_PARAMS.get("resultsName")
-    # name of current experiment
-    env['expName'] = EXTERNAL_PARAMS.get("expName")
-    #library key input
-    env['libraryKey'] = EXTERNAL_PARAMS.get("libraryKey")
-    #path to the raw data
-    env['pathToRaw'] = EXTERNAL_PARAMS.get("pathToData")
-    #plugins
-    env['plugins'] = EXTERNAL_PARAMS.get("plugins")
-    #plan
-    env['plan'] = EXTERNAL_PARAMS.get('plan', {})
-    # skipChecksum?
-    env['skipchecksum'] = EXTERNAL_PARAMS.get('skipchecksum',False)
-    # Do Full Align?
-    env['align_full'] = EXTERNAL_PARAMS.get('align_full')
-    # Check to see if a SFFTrim should be done
-    env['sfftrim'] = EXTERNAL_PARAMS.get('sfftrim')
-    # Get SFFTrim args
-    env['sfftrim_args'] = EXTERNAL_PARAMS.get('sfftrim_args')
-
-    env['flowOrder'] = EXTERNAL_PARAMS.get('flowOrder',"0").strip()
-    # If flow order is missing, assume classic flow order:
-    if env['flowOrder'] == "0":
-        env['flowOrder'] = "TACG"
-        printtime("ERROR: floworder redefine required.  set to TACG")
-
-    env['project'] = EXTERNAL_PARAMS.get('project')
-    env['sample'] = EXTERNAL_PARAMS.get('sample')
-    env['chipType'] = EXTERNAL_PARAMS.get('chiptype')
-    env['barcodeId'] = EXTERNAL_PARAMS.get('barcodeId','')
-    env['reverse_primer_dict'] = EXTERNAL_PARAMS.get('reverse_primer_dict')
-    env['rawdatastyle'] = EXTERNAL_PARAMS.get('rawdatastyle', 'single')
-
-    #extra JSON
-    env['extra'] = EXTERNAL_PARAMS.get('extra', '{}')
-    # Aligner options
-    env['aligner_opts_extra'] = EXTERNAL_PARAMS.get('aligner_opts_extra', '{}')
-
-    #get the name of the site
-    env['site_name'] = EXTERNAL_PARAMS.get('site_name')
-
-    env['pe_forward'] = EXTERNAL_PARAMS.get('pe_forward','')
-    env['pe_reverse'] = EXTERNAL_PARAMS.get('pe_reverse','')
-    env['isReverseRun'] = EXTERNAL_PARAMS.get('isReverseRun',False)
-
-    env['runID'] = EXTERNAL_PARAMS.get('runid','ABCDE')
+  return plugin_list
 
 
-    env['tfKey'] = EXTERNAL_PARAMS.get('tfKey','')
-    if env['tfKey'] == "":
-        env['tfKey'] = "ATCG"
-
-    SIGPROC_RESULTS = "sigproc_results"
-    BASECALLER_RESULTS = "basecaller_results"
-    ALIGNMENT_RESULTS = "alignment_results"
-    SIGPROC_RESULTS = "./"
-    BASECALLER_RESULTS = "./"
-    ALIGNMENT_RESULTS = "./"
-    env['SIGPROC_RESULTS'] = SIGPROC_RESULTS
-    env['BASECALLER_RESULTS'] = BASECALLER_RESULTS
-    env['ALIGNMENT_RESULTS'] = ALIGNMENT_RESULTS
-
-    # Sub directory to contain fastq files for barcode enabled runs
-    env['DIR_BC_FILES'] = 'bc_files'
-    env['sam_parsed'] = EXTERNAL_PARAMS.get('sam_parsed')
-
-    # Parse barcode_args (originates from GlobalConfig.barcode_args json)
-    barcode_args = EXTERNAL_PARAMS.get('barcode_args',"")
-    barcode_args = json.loads(barcode_args)
-    for key in barcode_args:
-        env['barcodesplit_'+key] = str(barcode_args[key])
-    env['tmap_version'] = EXTERNAL_PARAMS.get('tmap_version')
-    env['url_path'] = EXTERNAL_PARAMS.get('url_path')
-    env['net_location'] = EXTERNAL_PARAMS.get('net_location')
-    # net_location is set on masternode (in views.py) with "http://" + str(socket.getfqdn())
-    env['master_node'] = env['net_location'].replace('http://','')
-
-    sys.stdout.flush()
-    sys.stderr.flush()
-
-    return env
-
-def getThumbnailSize(explog):
-    # expLog.txt
-    exp_json = json.loads(explog)
-    log = json.loads(exp_json['log'])
-    blockstatus = log.get('blocks', [])
-    if not blockstatus:
-        print >>sys.stderr, "ERROR: No blocks found in explog"
-    W = 0
-    H = 0
-    for line in blockstatus:
-        # Remove keyword; divide argument by comma delimiter into an array
-        args = line.strip().replace('BlockStatus:','').split(',')
-        datasubdir = "%s_%s" % (args[0].strip(),args[1].strip())
-        if datasubdir == 'thumbnail':
-            W = int(args[2].strip('W '))
-            H = int(args[3].strip('H '))
-
-    return [W,H]
-
-def getBlocksFromExpLog(explog, excludeThumbnail=False):
-    '''Returns array of block dictionary objects defined in explog.txt'''
-    blocks = []
-    # expLog.txt contents from Experiment.log field
-    exp_json = json.loads(explog)
-    log = json.loads(exp_json['log'])
-    # contains regular blocks and a thumbnail block
-    blockstatus = log.get('blocks', [])
-    if not blockstatus:
-        print >>sys.stderr, "ERROR: No blocks found in explog"
-    for line in blockstatus:
-        # Remove keyword; divide argument by comma delimiter into an array
-        args = line.strip().replace('BlockStatus:','').split(',')
-
-        # Remove leading space
-        args = [entry.strip() for entry in args]
-
-        # Define Block dictionary object
-        #   id_str contains a unique id string
-        #   datasubdir contains name of block directory (i.e. 'X0_Y128')
-        #   jobcmd contains array of Analysis command line arguments
-        #   jobid contains job id returned when job is queued
-        #   status contains job status string
-        block = {'id_str':'',
-                'datasubdir':'',
-                'jobcmd':[],
-                'jobid':None,
-                'autoanalyze':False,
-                'analyzeearly':False,
-                'status':None}
-
-        if args[0] =='thumbnail':
-            block['datasubdir'] = 'thumbnail'
-            if excludeThumbnail:
-                continue
-        else:
-            block['datasubdir'] = "%s_%s" % (args[0].strip(),args[1].strip())
-        block['autoanalyze'] = int(args[4].split(':')[1].strip()) == 1
-        block['analyzeearly'] = int(args[5].split(':')[1].strip()) == 1
-        block['id_str'] = block['datasubdir']
-        print "explog: " + str(block)
-        blocks.append(block)
-
-    return blocks
-
-
-def runplugins(env, basefolder, url_root):
-    printtime('Running Plugins')
-
+def runplugins(plugins, env, basefolder, url_root, level = 'default'): 
     try:
         pluginserver = xmlrpclib.ServerProxy("http://%s:%d" % (PLUGINSERVER_HOST, PLUGINSERVER_PORT), allow_none=True)
     except (socket.error, xmlrpclib.Fault):
         traceback.print_exc()
-
-    #Plugins will run in reverse alphabetical order order.
-    for plugin in sorted(env['plugins'], key=lambda plugin: plugin["name"],reverse=True):
-        if plugin != '':
-            runPlug = True
-            printtime("Plugin %s is enabled" % plugin['name'])
-
-            if not plugin['autorun']:
-                printtime("     Auto Run is disabled for this plugin.  Skipping")
-                continue    #skip to next plugin
-
-            # Blank fields indicate execute in all cases.
-            # Exclude this plugin if non-blank entry does not match run info:
-            for label in ['project','sample','libraryName','chipType']:
-                if plugin[label] != None and plugin[label] != "":
-                    runPlug = False
-                    #print "     needs to match something in: %s" % plugin[label]
-                    for i in plugin[label].split(','):
-                        i = i.strip()
-                        #print "env[%s] = %s" % (label,env[label])
-                        if i in env[label]:
-                            # Okay to run plugin
-                            runPlug = True
-                            #print "     match found %s equals %s" % (i,env[label])
-                            break
-
-            if not runPlug:
-                printtime("     did not run after all.")
-                continue    #skip to next plugin
-
-            try:
-                #https://iontorrent.jira.com/wiki/display/TS/Plugin+json+file+format
-                env['report_root_dir'] = os.getcwd()
-                env['analysis_dir'] = os.getcwd()
-                env['sigproc_dir'] = os.path.join(env['report_root_dir'],env['SIGPROC_RESULTS'])
-                env['basecaller_dir'] = os.path.join(env['report_root_dir'],env['BASECALLER_RESULTS'])
-                env['alignment_dir'] = os.path.join(env['report_root_dir'],env['ALIGNMENT_RESULTS'])
-                env['testfrag_key'] = 'ATCG'
-                printtime("RAWDATA: %s" % env['pathToRaw'])
-                start_json = make_plugin_json(env,plugin,env['primary_key'],basefolder,url_root)
-                ret = pluginserver.pluginStart(start_json)
-            except:
-                printtime('plugin %s failed...' % plugin['name'])
-                traceback.print_exc()
+        
+    env['runlevel'] = level
+    
+    # 'last' plugin level waits for ALL previously launched plugins
+    hold_last = []
+    if 'last' in level:
+      for plugin in plugins:
+          hold_last+= plugin['hold_jid']
+    
+    retries = 1 # pipeline doesn't retry plugins: retries = 1    
+    once = True
+    nrun = 0
+    for i,plugin in enumerate(plugins):      
+      if level in plugin['runlevel'] and plugin['name'] != '':                    
+          if once:
+              printtime("Starting plugins runlevel=%s in basefolder= %s" % (level,basefolder) )
+              once = False
+          if 'last' in level:
+              plugin['hold_jid'] = hold_last          
+          
+          start_json = make_plugin_json(env,plugin,env['primary_key'],basefolder,url_root) 
+                   
+          plugin, msg = runPlugin(plugin, start_json, level, pluginserver, retries)
+          printtime(msg)           
+          # save needed info for multilevel plugins
+          plugins[i] = plugin          
+          nrun += 1              
+                  
+    if nrun > 0:      
+      printtime('Launched %i Plugins runlevel = %s' % (nrun,level))
+      
+    return plugins  
 
 
 def run_selective_plugins(plugin_set,env,basefolder,url_root):
@@ -464,17 +317,59 @@ def run_selective_plugins(plugin_set,env,basefolder,url_root):
             printtime("Plugin %s is enabled" % plugin['name'])
 
             try:
-                #https://iontorrent.jira.com/wiki/display/TS/Plugin+json+file+format
                 env['report_root_dir'] = os.getcwd()
-                env['analysis_dir'] = os.getcwd()
-                env['sigproc_dir'] = os.path.join(env['report_root_dir'],env['SIGPROC_RESULTS'])
-                env['basecaller_dir'] = os.path.join(env['report_root_dir'],env['BASECALLER_RESULTS'])
-                env['alignment_dir'] = os.path.join(env['report_root_dir'],env['ALIGNMENT_RESULTS'])
-                env['testfrag_key'] = 'ATCG'
-                printtime("RAWDATA: %s" % env['pathToRaw'])
                 start_json = make_plugin_json(env,plugin,env['primary_key'],basefolder,url_root)
-                ret = pluginserver.pluginStart(start_json)
+                pluginserver.pluginStart(start_json)
                 printtime('plugin %s started ...' % plugin['name'])
             except:
                 printtime('plugin %s failed...' % plugin['name'])
                 traceback.print_exc()
+
+
+
+def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
+
+    try:
+#        cmd = 'picard-tools MergeSamFiles'
+        if mark_duplicates:
+            cmd = 'java -Xmx8g -jar /usr/local/bin/MarkDuplicates.jar M=%s.markduplicates.metrics.txt' % composite_bam_filepath
+        else:
+            cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+
+        for bamfile in bamfilelist:
+            cmd = cmd + ' I=%s' % bamfile
+        cmd = cmd + ' O=%s' % (composite_bam_filepath)
+        cmd = cmd + ' ASSUME_SORTED=true'
+        cmd = cmd + ' CREATE_INDEX=true'
+        cmd = cmd + ' USE_THREADING=true'
+        cmd = cmd + ' VALIDATION_STRINGENCY=SILENT'
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+    except:
+        printtime("bam file merge failed")
+        traceback.print_exc()
+        return 1
+
+    try:
+        # picard is using .bai , we want .bam.bai
+        srcbaifilepath = composite_bam_filepath.replace(".bam",".bai")
+        if os.path.exists(srcbaifilepath):
+            os.rename(srcbaifilepath, composite_bai_filepath)
+        else:
+            printtime("ERROR: %s doesn't exists" % srcbaifilepath)
+    except:
+        traceback.print_exc()
+        return 1
+
+def merge_sff_files(sfffilelist,composite_sff_filepath):
+    try:
+        cmd = 'SFFMerge'
+        cmd += ' -o %s ' % composite_sff_filepath
+        for sfffile in sfffilelist:
+            cmd += ' %s' % sfffile
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+    except:
+        printtime("SFFMerge failed")
+
+    return 0

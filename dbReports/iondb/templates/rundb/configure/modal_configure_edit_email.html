@@ -1,0 +1,50 @@
+<div id="modal_configure_edit_email" title="" class="modal modal-750 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h3>{{ name }}</h3>	
+	</div>
+	<div class="modal-body">  
+	    <form id="modal_configure_edit_email_form" class="form-horizontal">
+    		<div id="email_group" class="control-group">
+    			<label class="control-label">{{ form.email.label }}</label>
+    			<div class="controls">
+    				{{ form.email }}
+    				<span id="email_help" class="help-inline"></span>
+    			</div>
+    		</div>
+    		<div class="control-group">
+    			<label class="control-label">{{ form.selected.label }}</label>
+    			<div class="controls">{{ form.selected }}</div>
+    		</div>
+	    </form>
+    </div>
+    <div class="modal-footer">
+	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+		<a id="submit_email" class="btn btn-primary" href="#">Save</a>    
+	</div>
+<script type="text/javascript">
+	$('#submit_email').click(function(){
+		$.ajax({
+			type: "{{method}}",
+			url: "{{url}}",
+  			dataType: 'json',
+  			contentType: 'application/json',
+  			data: JSON.stringify({
+				"email": $("#id_email").val(),
+				"selected": $("#id_selected:checked").exists()
+			}),
+			success: function (data) {
+				console.log("Success");
+				$("#modal_configure_edit_email").modal("hide");
+				window.location.reload();
+			},
+			error: function (data) {
+				$("#email_group").addClass("error");
+				$("#email_help").html("Invalid email");
+			}
+		});
+		return false;
+	});
+</script>
+</div>
+

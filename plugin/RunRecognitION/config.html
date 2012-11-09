@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+    <link type="text/css" href="/pluginMedia/RunRecognitION/styles/config.css" rel="Stylesheet" />
+    <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/RunRecognitION/scripts/runrecognition.js"></script>
+    <script type='text/javascript'>
+    var pluginGET = null;
+    
+    function inflateWithData(data){
+        pluginGET = data;
+        delete pluginGET.resource_uri;
+        $.each(pluginGET.config, function(key, val) {
+            if (key == "ts_url") {
+                $("#tsUrl").val(val);
+            } else if (key == "ts_username") {
+                $("#tsUsername").val(val);
+            } else if (key == "ts_password") {
+                $("#tsPassword").val(val);
+            }
+        });
+        $("#submitTsInfo").removeAttr("disabled");
+    }
+    
+    function inflateWithDefaultInfo(data){
+        var url = $("#tsUrl").val();
+        var username = $("#tsUsername").val();
+        var password = $("#tsPassword").val();
+        
+        if (url == null || url.length == 0) {
+            $("#tsUrl").val(data.ts_url);
+        }
+        if(username == null || username.length == 0) {
+            $("#tsUsername").val(data.ts_username);
+        }
+        if (password == null || password.length == 0) {
+            $("#tsPassword").val(data.ts_password);
+        }
+    }
+    
+    $(document).ready(function() {
+        getPluginConfigFromDb(inflateWithData);
+        getDefaultTsInfo(inflateWithDefaultInfo);
+    });
+    
+    function validateSubmitConfig() {
+        var url = $("#tsUrl").val();
+        var username = $("#tsUsername").val();
+        var password = $("#tsPassword").val();
+        var successMethod = function(data){
+            saveValidTsInfo(url, username, password);
+        };
+        var failMethod = function(data) {
+            $("#rrcErrorText").text("Invalid Torrent Server connection information supplied. Please correct the data and try again.");
+        };
+        if (url != null && url.length > 0 && username != null && username.length > 0 && password != null && password.length > 0){
+            successMethod(url, username, password);
+        } else {
+            failMethod(null);
+        }
+    }
+    
+    function saveValidTsInfo(url, username, password){
+        var dataMap = {"ts_url": url, "ts_username": username, "ts_password": password};
+        pluginGET.config = dataMap;
+        pluginAPIJSON = JSON.stringify(pluginGET);
+        pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
+        $.ajax({
+            type: 'PUT',
+            url: pluginURL,
+            contentType: "application/json; charset=utf-8",
+            success: function () {parent.$.fn.colorbox.close();},
+            data: pluginAPIJSON,
+            dataType: "json"
+        });
+    }
+    
+    </script>
+</head>
+<body>
+    <div id="formwrap">
+        <h1>RunRecognitION Plugin Configuration</h1>
+        <div>
+            <label for="tsUrl">
+                Torrent Server Url:
+            </label>
+            <input id="tsUrl" type="text">
+        </div>
+        <div>
+            <label for="tsUsername">
+                Torrent Server Username:
+            </label>
+            <input id="tsUsername" type="text">
+        </div>
+        <div>
+            <label for="tsPassword">
+                Torrent Server password:
+            </label>
+            <input id="tsPassword" type="password">
+        </div>
+        <div>
+            <div id="rrcErrorText"></div>
+        </div>
+        <div>
+            <button id="submitTsInfo" disabled="disabled" onclick="validateSubmitConfig()">Submit</button>
+        </div>
+    </div>
+</body>
+</html>

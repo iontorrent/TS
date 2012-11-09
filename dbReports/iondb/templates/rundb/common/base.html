@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load pagetools %}
+<head>
+    {% block head %}
+
+        {% block title %}
+            <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
+        {% endblock title %}
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    	
+    <script type="text/javascript">
+	if (!window.console) {
+		(function() {
+		  var names = ["log", "debug", "info", "warn", "error", "assert", "dir", "dirxml",
+		  "group", "groupEnd", "time", "timeEnd", "count", "trace", "profile", "profileEnd"];
+		      window.console = {};
+		      for (var i = 0; i < names.length; ++i) {
+		        window.console[names[i]] = function() {};
+		      }
+		    }());
+	}
+    </script>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+    
+    {% block responsive %}
+        <link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
+    {% endblock responsive %}
+
+    <!--In the header of your page, paste the following for Kendo UI Web styles-->
+    <link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+    <link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+    {% block extra_head_styles %}{% endblock extra_head_styles %}   
+    
+    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.7.2.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/tb.jquery.min.js"></script> 
+    <script type="text/javascript" src="/site_media/js/json2.min.js"></script> <!-- include in cases browser doesn't natively support JSON.stringify -->
+    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/kendo.grid.override.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/mockup.min.js"></script> 
+    <script type="text/javascript" src="/site_media/resources/scripts/tb.min.js"></script> 
+    <script src="/site_media/js/underscore.min.js"></script>
+    <script src="/site_media/js/backbone.min.js"></script>
+    <script src="/site_media/js/messagebox.min.js"></script>  
+
+    {% block extra_head_js %}{% endblock extra_head_js %}
+        
+    {% endblock head %}
+    
+    {% block extra_head %}{% endblock extra_head %}
+    <script type="text/javascript" src="/site_media/resources/scripts/tb-bootstrap-modal.min.js"></script> <!-- Must be last to override the bootstrap modal default behavior -->
+	<!--[if (gte IE 6)&(lte IE 8)]>
+	<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/IE7.min.css" />
+    <script type="text/javascript" src="/site_media/resources/scripts/IE7.min.js"></script>   
+	<![endif]-->
+</head>
+<body>
+<div class="header">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="span12">
+                <h1 class="logo pull-left">{{base_site_name}}</h1>
+                <ul class="nav nav-pills utility-menu pull-right">
+                {% if user.is_authenticated %} 
+                    <li><span>Hi, {{ user.get_full_name|default:user.username }}</span></li>
+                {% endif %}
+                    <li class="dropdown">
+                        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                        Help
+                        <b class="caret"></b>
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a href="http://ioncommunity.iontorrent.com/">IonCommunity</a></li>
+                            <li><a href="http://iontorrent.com/support">Support</a></li>
+                            <li><a href="/ion-docs/Home.html">Local Documentation</a></li>
+                            <li><a href="/configure/info">System Support Diagnostics</a></li>
+							<li><a href="/configure/chips">Instrument Diagnostics</a></li>
+                        </ul>
+                    </li>               
+                {% if user.is_authenticated %} 
+                    <li><a href="{% url logout %}">Sign Out</a></li>
+                {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="span12">
+                {% block nav %}
+                {% endblock nav %}
+            </div>
+        </div>
+    </div>
+</div>  
+<div class="sub-nav">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div class="span12">
+                <ul class="nav">
+                    {% block sub-nav %}
+                    {% endblock sub-nav %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>  
+
+{% block report-header %}
+{% endblock report-header %}    
+<div class="main {%spaceless%} {%block extra-main-class%}{%endblock extra-main-class%} {%endspaceless%}">
+    <div class="container-fluid">
+        <div id="global_messages"></div>
+        {% block content %}{% endblock content %}
+    </div>
+    <div class="main-push"></div>
+</div>
+<div class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="span12">
+                <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+                <div class="pull-right">
+                    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+                    <p><span class="copyright">&copy; 2012 Life Technologies Corporation. All Rights Reserved.</span> <a href="http://iontorrent.com/support">Technical Support</a> | <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% block post-raw %}
+{% endblock post-raw %}
+
+<script>
+  $(function(){
+    inbox = new MessageBox({models: {{global_messages|safe}} });
+  });
+</script>
+</body> 
+</html> 

@@ -1,0 +1,75 @@
+<p>The Kendo mobile <strong>Application</strong> provides the necessary tools for building native-looking web based mobile applications.</p>
+
+<h3>Getting Started</h3>
+<p>The simplest mobile <strong>Application</strong> consists of a single mobile <strong>View</strong>. </p><div class="code-sample"><h4 class="code-title">Hello World mobile Application</h4><pre class="code prettyprint"><code>&lt;body&gt;
+   &lt;div data-role="view"&gt;
+     &lt;div data-role="header"&gt;Header&lt;/div&gt;
+     Hello world!
+     &lt;div data-role="footer"&gt;Footer&lt;/div&gt;
+   &lt;/div&gt;
+
+   &lt;script&gt;
+   var app = new kendo.mobile.Application(); //document.body is used by default
+   &lt;/script&gt;
+&lt;/body&gt;</code></pre></div><h3>Mobile Views</h3>
+
+<p>The mobile <strong>Application</strong> consists of a single HTML page with one or more mobile Views, linked with navigational widgets (Buttons, TabStrip, etc.).
+A mobile <strong>View</strong> is considered each child of the application element (<code>&lt;body&gt;</code> by default) that is decorated with <code>data-role="view"</code>.<h3>Navigation</h3>
+<p>When initialized, the mobile <strong>Application</strong> modifies the kendo mobile widgets' behavior so that they navigate between <strong>Views</strong> when pressed.
+The navigation <strong>Widget</strong>'s <code>href</code> attribute specifies the <strong>View</strong> id to navigate to.</p><div class="code-sample"><h4 class="code-title">Views linked with mobile Buttons</h4><pre class="code prettyprint"><code>&lt;div data-role="view" id="foo"&gt;Foo &lt;a href="#bar" data-role="button"&gt;Go to Bar&lt;/a&gt;&lt;/div&gt;
+&lt;div data-role="view" id="bar"&gt;Bar &lt;a href="#foo" data-role="button"&gt;Go to Foo&lt;/a&gt;&lt;/div&gt;</code></pre></div><p>By default, all navigational widgets treat the links' hrefs as mobile views. This behavior can be overriden by setting <code>data-rel="external"</code> attribute to the link element.  </p><div class="code-sample"><h4 class="code-title">External links</h4><pre class="code prettyprint"><code>&lt;a href="http://kendoui.com/" data-rel="external"&gt;Visit KendoUI&lt;/a&gt;</code></pre></div><h3>View Transitions</h3>
+<p><strong>View</strong> transitions are defined by setting a <code>data-transition</code> attribute to the <strong>View</strong> DOM element.
+A default <strong>View</strong> transition may be set using the <code>transition</code> parameter in the options parameter of the <strong>Application</strong> constructor.
+The following transitions are supported:</p>
+
+<h4>slide</h4>
+<p> This is the default iOS <strong>View</strong> transition. Old <strong>View</strong> content slides to the left and the new <strong>View</strong> content slides in its place.
+Headers and footers (if present) use the <strong>fade</strong> transition. </p>
+
+<h4>zoom</h4>
+<p>The new <strong>View</strong> (along with its header and footer) content zooms over the previous <strong>View</strong>. The old <strong>View</strong> content fades out. Suitable for displaying dialogs.</p>
+
+<h4>fade</h4>
+<p>The new <strong>View</strong> (along with its header and footer) content fades from the center of the screen, on top of the previous <strong>View</strong> content.</p>
+
+<h4>overlay</h4>
+<p>The new <strong>View</strong> content slides on top of the previous <strong>View</strong>. Unlike the <code>slide</code> transition,
+the previous <strong>View</strong> stays "under" the new one, and the headers / footers do not transition separately. </p>
+<p>The transition direction can be specified by using <code>overlay:(direction)</code>.
+Supported directions are <code>down</code>, <code>left</code>, <code>up</code> and <code>right</code>. By default, the direction is <code>left</code>.</p><div class="code-sample"><h4 class="code-title">Views with Transitions</h4><pre class="code prettyprint"><code>&lt;div data-role="view" id="foo" data-transition="slide"&gt;Foo &lt;a href="#bar" data-role="button"&gt;Go to Bar&lt;/a&gt;&lt;/div&gt;
+&lt;div data-role="view" id="bar" data-transition="overlay:up"&gt;Bar &lt;a href="#foo" data-role="button"&gt;Go to Foo&lt;/a&gt;&lt;/div&gt;</code></pre></div><p>When a <strong>View</strong> transitions to the <strong>View</strong> displayed before it (foo → bar → foo), this is considered a <strong>back</strong> navigation.
+In this case, the animation of the current <strong>View</strong> is applied in reverse.
+For instance, navigating with slide animation from <code>foo</code> to <code>bar</code>, then back to <code>foo</code>
+would cause the <code>foo</code> <strong>View</strong> to slide from the right side of the screen. </p><h3>Remote Views</h3>
+
+<p>The Kendo mobile <strong>Application</strong> can load <strong>Views</strong> remotely by using AJAX. If the navigational widget URL does not start with a hash (#),
+the application considers the <strong>View</strong> to be remote, and issues an AJAX request to the provided URL.
+The <strong>View</strong> content (the first element with <code>data-role="view"</code>) are extracted from the AJAX response and appended into the <strong>Application</strong> element.
+Once the remote <strong>View</strong> is fetched, no additional roundtrips to the server occur when the <strong>View</strong> is displayed. </p><div class="code-sample"><h4 class="code-title">Remote View</h4><pre class="code prettyprint"><code>&lt;!-- foo.html --&gt;
+&lt;div data-role="view"&gt;Foo &lt;a href="bar.html" data-role="button"&gt;Go to Bar&lt;/a&gt;&lt;/div&gt;
+
+&lt;!-- bar.html --&gt;
+&lt;div data-role="view"&gt;Bar&lt;/div&gt;</code></pre></div><h3>View Parameters</h3>
+
+<p>Navigational widgets can pass additional URL parameters when navigating to <strong>Views</strong>. The parameters will be available in the <code>show</code> <strong>View</strong> event.</p><div class="code-sample"><h4 class="code-title">Button with additional URL parameters</h4><pre class="code prettyprint"><code>&lt;a data-role="button" href="#foo?bar=baz"&gt;Link to FOO &lt;strong&gt;View&lt;/strong&gt; with bar parameter set to baz&lt;/a&gt;</code></pre></div><h3> Initial View</h3>
+
+<p> The <strong>Application</strong> provides a way to specify the initial view to show. The initial view can be set by
+passing the view id in the options parameter of the Application's constructor:<div class="code-sample"><h4 class="code-title">Define initial view</h4><pre class="code prettyprint"><code>&lt;script&gt;
+     new kendo.mobile.Application($(document.body), {
+         initial: "ViewID"
+     });
+&lt;/script&gt;</code></pre></div><h3>Web Clip Icons</h3>
+
+<p>The mobile devices can create a bookmark with a custom icon, placed on the Home screen. Users can use the shortcut to open that web page later.</p><div class="code-sample"><h4 class="code-title">Define web clip icon</h4><pre class="code prettyprint"><code>&lt;script&gt;
+     new kendo.mobile.Application($(document.body), {
+         icon: "URL to a web clip icon"
+     });
+&lt;/script&gt;</code></pre></div><p>You can also define web clip icons with different sizes. Check this <a href="https://developer.apple.com/library/ios/#documentation/userexperience/conceptual/mobilehig/IconsImages/IconsImages.html#//apple_ref/doc/uid/TP40006556-CH14-SW11">link</a>
+for more information.</p><div class="code-sample"><h4 class="code-title">Define multiple web clip icons</h4><pre class="code prettyprint"><code>&lt;script&gt;
+     new kendo.mobile.Application($(document.body), {
+         icon: {
+           "72x72" : "URL to a 72 x 72 pixels web clip icon",
+           "114x114" : "URL to a 114 x 114 pixels web clip icon"
+         }
+     });
+&lt;/script&gt;</code></pre></div>

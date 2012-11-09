@@ -1,0 +1,20 @@
+{%if report_status %}
+<div id="progress" class="modal fade in">
+	<div class="modal-header">
+		<button id="close_progress" type="button" class="close" data-dismiss="modal">×</button>
+		<h3>Report is being generated</h3>
+	</div>
+	<div class="modal-body">
+		<div id="analysis_started_content">
+			<img src="/site_media/resources/img/dna-loader-64.gif"> <span id="progress_message">{{report_status}}</span>
+		</div>
+	</div>
+</div>
+<div id="backdrop_progress" class="modal-backdrop in"></div>
+<script>
+  $(function(){
+      var refreshIntervalId = setInterval(function(){progress_load()}, 1000);
+      $(document).data('report_progress', refreshIntervalId);
+  });
+</script>
+{% endif %}

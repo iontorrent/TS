@@ -1,0 +1,74 @@
+table
+{
+	font-family:"Trebuchet MS", Arial, Helvetica, sans-serif;
+	border-collapse:collapse;
+}
+td, th 
+{
+	font-size:1em;
+	border:1px solid #6666ff;
+	padding:3px 7px 2px 7px;
+}
+td
+{
+	color:#000000;
+	background-color:#FFFFEE;
+	white-space: nowrap;
+}
+th 
+{
+	font-size:1.1em;
+	text-align:left;
+	padding-top:5px;
+	padding-bottom:4px;
+	background-color:#FFFFEE;
+	white-space: nowrap;
+}
+tr.alt td, tr.alt th 
+{
+	color:#000000;
+	background-color:#D3EAF2;
+}
+img.coverage_plot
+{
+	float:right;
+}
+#ercc_chart
+{
+	height:450px;
+	width:728px;
+}
+
+#trendline_parms
+{
+	position:absolute;
+	top:100px;
+	left:800px;
+	width:200px;
+	z-index: -1;
+}
+#main_content
+{
+	margin: 20px;
+}
+.transcript
+{
+	background-color: #eeeeee;
+}
+.transcript table
+{
+	margin: 20px;
+}
+.transcript h2
+{
+	background-color: #ffffff;
+}
+div.transcript_image
+{
+	width: 60%;
+	float: right;
+}
+div.transcript_table
+{
+	width: 30%;
+}

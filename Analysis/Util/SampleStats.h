@@ -2,6 +2,7 @@
 #ifndef SAMPLESTATS_H
 #define SAMPLESTATS_H
 
+#include <stdlib.h>
 #include <vector>
 #include <math.h>
 

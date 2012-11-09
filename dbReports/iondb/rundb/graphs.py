@@ -90,6 +90,8 @@ def archive_graph(request):
     fig = Figure(figsize=(figwidth,figheight))
     ax = fig.add_subplot(1,1,1)
     runs = models.Experiment.objects.all()
+    # Get only Experiments that are still on fileserver: not deleted or archived.
+    runs = runs.exclude(expName__in = models.Backup.objects.all().values('backupName'))
     num_arch = len(runs.filter(storage_options='A'))
     num_del = len(runs.filter(storage_options='D'))
     num_keep = len(runs.filter(storage_options='KI'))

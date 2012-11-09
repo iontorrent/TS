@@ -14,7 +14,10 @@ fi
 local OUTFILE="${OUTDIR}/${FILENAME}"
 
 echo -e "Text\tLink" > "$OUTFILE"
-echo -e "Open IGV to import genome.\thttp://www.broadinstitute.org/igv/projects/current/igv.php" >> "$OUTFILE"
+# Link to Broad IGV
+#echo -e "Open IGV to import genome.\thttp://www.broadinstitute.org/igv/projects/current/igv.php" >> "$OUTFILE"
+# Link to internal IGV
+echo -e "Open internal IGV to import genome.\t"+ ${RUNINFO__NET_LOCATION}+":8080/IgvServlet/igv" >> "$OUTFILE"
 if [ -f "${OUTDIR}/$PLUGIN_OUT_ALLVARS" ]; then
   echo -e "Download all variant calls as a table file. (textfile.xls)\t${PLUGIN_OUT_ALLVARS}" >> "$OUTFILE"
 fi
@@ -54,14 +57,14 @@ if [ -f "${OUTDIR}/$PLUGIN_OUT_USTARTSBAM" ]; then
   echo -e "Download the unique starts filtered reads file. (binaryfile.bam)\t${PLUGIN_OUT_USTARTSBAM}" >> "$OUTFILE"
   PROCESS="filtered"
 fi
-if [ -f "${OUTDIR}/$PLUGIN_OUT_USTARTSBAM" ]; then
-  echo -e "Download the unique starts filtered reads index file. (binaryfile.bam)\t${PLUGIN_OUT_USTARTSBAM}" >> "$OUTFILE"
+if [ -f "${OUTDIR}/$PLUGIN_OUT_USTARTSBAI" ]; then
+  echo -e "Download the unique starts filtered reads index file. (binaryfile.bam)\t${PLUGIN_OUT_USTARTSBAI}" >> "$OUTFILE"
   PROCESS="filtered"
 fi
 if [ -f "${OUTDIR}/$PLUGIN_OUT_TRIMPBAM" ]; then
   echo -e "Download the primer-trimmed $PROCESS reads file. (binaryfile.bam)\t${PLUGIN_OUT_TRIMPBAM}" >> "$OUTFILE"
 fi
 if [ -f "${OUTDIR}/$PLUGIN_OUT_TRIMPBAI" ]; then
-  echo -e "Download the primer-trimmed $PROCESS reads index file. (binaryfile.bam)\t${PLUGIN_OUT_TRIMPBAM}" >> "$OUTFILE"
+  echo -e "Download the primer-trimmed $PROCESS reads index file. (binaryfile.bai)\t${PLUGIN_OUT_TRIMPBAI}" >> "$OUTFILE"
 fi
 }

@@ -7,6 +7,7 @@
 # cmake build system
 
 MODULES=${MODULES-"
+        gpu
 	Analysis
 	alignTools
 	dbReports

@@ -19,7 +19,7 @@
 
 
 <style type='text/css'>
-   #formwrap {
+   #formwrap{
       line-height: 2em;
       margin: 10px;
       padding: 10px;
@@ -27,9 +27,18 @@
       text-align: center;
    }
 
+   #next{
+      line-height: 2em;
+      margin: 40px;
+      padding: 40px;
+      text-align: right;
+   }
+
+
    body {
       font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
       font-size: 14px;
+      height: 350px;
    }
 </style>
 
@@ -42,7 +51,7 @@ $(document).ready(function(){
 
     //setup the jQuery UI
     $("#formwrap").tabs();
-    $(".postbutton").button();
+    //$(".postbutton").button();
 
   $.ajax({
     url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json",
@@ -101,10 +110,12 @@ $(function() {
 
 $(function() {
    $('.postbutton').click(function() {
+      if (testAllFields()){
       obj =  $('#pluginconfig').serializeObject();
       //use the data retreived from the GET and modify it only the config key is changed
       pluginGET.config = obj;
       pluginAPIJSON = JSON.stringify(pluginGET);
+      console.log(pluginAPIJSON);
       pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
       $.ajax({
          type: 'PUT',
@@ -115,11 +126,37 @@ $(function() {
          success : function(data) {
              $("#formwrap").hide();
              $('#loading-div').show();
-             //setTimeout("parent.$.fn.colorbox.close()", 2000);
-             parent.$.fn.colorbox.close();
+             setTimeout("parent.$.fn.colorbox.close()", 2000);
+             //parent.$.fn.colorbox.close();
          }
       });
+       }
    });
+
+   $('#version_button').click(function() {
+      if (testAllFields()){
+        obj =  $('#pluginconfig').serializeObject();
+        //use the data retreived from the GET and modify it only the config key is changed
+        pluginURL = "/rundb/api/v1/ionreporter/version/?format=json";
+        $.ajax({
+           type: 'GET',
+           url: pluginURL,
+           contentType: "application/json; charset=utf-8",
+           dataType: "json",
+           success : function(data) {
+              console.log(data);
+              $.each(data, function(i,v){
+                $("#version").append("<option>" + v + "</option>");
+              });
+               //setTimeout("parent.$.fn.colorbox.close()", 2000);
+               //parent.$.fn.colorbox.close();
+           }
+        });
+      }
+   });
+
+
+
 })
 
 });                          
@@ -129,8 +166,23 @@ $(function() {
 
     function testFieldNonBlank(field) {
        if ('' == field.value) {
-          apprise("This field must not be blank");
-       }
+          apprise("This field must not be blank");  
+      }
+    }
+    
+    function testAllFields(){
+       if (document.getElementById("server").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else if (document.getElementById("port").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else if (document.getElementById("token").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else {
+          return true;
+       } 
     }
 
     function testFieldStrictlyPositive(field) {
@@ -186,29 +238,39 @@ $(function() {
 
 
         <table align="center">
-            <tr><td>Ion Reporter Authentication Token</td><td><input id="token" size="80" name="token" value="" onblur="testFieldNonBlank(this);"/></td></tr>
+            <tr><td valign="top">Ion Reporter Authentication Token</td><td>
+              <textarea id="token" rows="4" cols="60" name="token" value="" onblur="testFieldNonBlank(this);">
+              </textarea>
+            </td></tr>
         </table>
 
-        <input class="postbutton" type="button" value="Save">
 
 	</div>
 
 	<div id="adv">
 
         <table align="center">
-            <tr><td>Protocol</td><td><select id="protocol" name="protocol">
+            <tr><td align="left">Protocol</td><td><select id="protocol" name="protocol">
                 <option value="http">HTTP</option>
                 <option value="https">HTTPS</option>
             </select></td></tr>
-            <tr><td>Ion Reporter Server Address</td><td><input type="text" id="server" size="55" name="server" value="" onblur="testFieldNonBlank(this);"/></td></tr>
-            <tr><td>Ion Reporter WebService TCP/IP Port</td><td><input type="text" size="55" id="port" name="port" value="" onblur="testFieldNonBlank(this);"/></td></tr>
+            <tr><td align="left">Ion Reporter Server Address</td><td><input type="text" id="server" size="55" name="server" value="" onblur="testFieldNonBlank(this);"/></td></tr>
+            <tr><td align="left">Ion Reporter WebService TCP/IP Port</td><td><input type="text" size="55" id="port" name="port" value="" onblur="testFieldNonBlank(this);"/></td></tr>
         </table>
-
-        <input class="postbutton" type="button" value="Save">
 
 	</div>
 
+
 </div>
+
+<div id="next">
+
+  <select id="version" name="version"></select>
+  <input id="version_button" type="button" value="Get IR Version"></input>
+  <input class="postbutton" type="button" value="Save">
+
+</div>
+  
 
 </form>
 

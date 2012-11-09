@@ -20,60 +20,68 @@
               font-size: 14px;
            }
 
-           #workflow{
-               display: none;
-           }
-
+           #upload{display: none; }
+           #seltitle{display: none;}
+ 	   #postbutton{display: none;}
         </style>
-
 
 <script type='text/javascript'>
 
-
 $(document).ready(function(){
-
   $.ajax({
     url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json",
     dataType:"json",
     type: "GET",
     success:function(data){
+	var counter = 0;
       $.each(data.config, function(key,val){
         if(key == "protocol"){
           document.getElementById("protocol").value = val;
+	  counter++;
         } else if(key == "server"){
           document.getElementById("server").value = val;
+	  counter++;
         } else if(key == "port"){
           document.getElementById("port").value = val;
+	  counter++;
         } else if(key == "token"){
           document.getElementById("token").value = val;
-        }
+	  counter++;
+        } else if (key == "version"){
+	  document.getElementById("version").value = val;
+	  counter++;
+	}
       });
+	if (counter == 5){
+              $("#upload").show();
+              $("#seltitle").show();
+              $("#loading").hide();
+              $("#postbutton").show();
+        } else {
+              $("#postbutton").hide();
+              $("#loading").html("Could Not Initialize: Incorrect Server Configuration");
+        }
+
+	pluginURL = "/rundb/api/v1/ionreporter/version/?format=json";
+        $.ajax({
+           type: 'GET',
+           url: pluginURL,
+           contentType: "application/json; charset=utf-8",
+           dataType: "json",
+           success : function(data) {	
+           },
+	   error : function(data) {
+		$("#loading").show();
+		$("#upload").hide();
+		$("#seltitle").hide();
+		$("#postbutton").hide();
+		$("#loading").html("Could Not Initialize: Network Connection Error");
+	   }
+        });
+
     }
   });
 });
-
-
-$(function() {
-
-
-$.ajax({
-    type: 'GET',
-    url: '/rundb/api/v1/ionreporter/?format=json',
-    contentType: "application/json; charset=utf-8",
-    dataType: "json",
-    success: function(result){
-        $.each(result, function(i,workflow) {
-            $("#workflow").append($("<option />").val(workflow).text(workflow));
-        });
-        $("#workflow").show();
-        $("#loading").hide();
-    },
-    error: function(data){
-        $("#loading").html(data.responseText);
-        $("#postbutton").attr("disabled", "true");
-    }
-});
-
 
 $.fn.serializeObject = function()
 {
@@ -117,9 +125,9 @@ $(function() {
         });
 
         if (alreadyGoing){
-            uploadMsg = "WARNING   Are you sure you would upload this, there is already an upload in progress?";
+            uploadMsg = "WARNING   Are you sure you want to upload this, there is already an upload in progress?";
         }else{
-            uploadMsg = "Are you sure you would upload this?";
+            uploadMsg = "Are you sure you want to upload this?";
         }
 
 
@@ -147,7 +155,6 @@ $(function() {
 
 })
 
-});                          
 </script>
 
 <script type='text/javascript'>
@@ -188,8 +195,28 @@ function testFieldInteger(field) {
       apprise("This field must bean integer, defaulting to: " + field.value);
    }
 }
-</script>
 
+function move(from, to){
+        var text = new Array();
+        var values = new Array();
+        var count = 0;
+        var i;
+        for(i=from.length-1; i>=0; i--){
+                if(from.options[i].selected){
+                        text[count] = from.options[i].text;
+                        values[count] = from.options[i].value;
+                        if(from.length>0){
+                                from.options[i] = null;
+                        }
+                        count++;
+                }
+        }
+        for(i=count-1; i>=0; i--){
+                var newOpt = new Option(text[i], values[i]);
+                to.options[to.length] = newOpt;
+        }       
+}       
+</script>
 
 
 </head>
@@ -207,26 +234,30 @@ function testFieldInteger(field) {
       <tr><td>Ion Reporter Server Address</td><td><input type="text" id="server" name="server" readonly="readonly" value="" /></td></tr>
       <tr><td>Ion Reporter WebService TCP/IP Port</td><td><input type="text" id="port" name="port" readonly="readonly" value="" /></td></tr>
       <tr><td>Ion Reporter Authentication Token</td><td><input id="token" name="token" value="" readonly="readonly" /></td></tr>
+      <tr><td>Ion Reporter Version</td><td><input type="text" id="version" value="version" readonly="readonly" /></td><tr>
 
-      <tr><td><span style="font-size:22px; font-weight:bold"><p></span></td><td></td></tr>
+      <tr><td><span style="font-size:22px; font-weight:bold"></span></td><td></td></tr>
 
       <tr><td><span style="font-size:22px; font-weight:bold">Launch Ion Reporter Analysis :</span></td><td></td></tr>
+
       <tr>
-          <td>Ion Reporter Workflow</td>
-          <td>
-              <select id="workflow" name="workflow">
-                   <option value="no_workflow">No Workflow</option>
-              </select>
-              <class id="loading">Loading Workflows
-                  <img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center">
-              </class>
-          </td>
+        <td id = "seltitle" name ="seltitle"> Upload Options </br>  </td>
+        <td valign="top">
+              	<select id="upload" name="upload" align="center" style="width:170px;">
+                	<option value="bam_only">Upload .bam only</option>
+	                <option value="vcf_only">Upload .vcf only</option>
+	                <option value="both" selected="selected">Upload .bam and .vcf</option>
+               </select>
+		<span id="loading">
+                  <!--<img id="ldimg" src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"> -->
+              </span>
+         </td>
       </tr>
 
    </table>
 
    </form>
-   <input id="postbutton" type="submit" value="Submit"></input>
+   <input id="postbutton" type="submit" value="Submit" align="right"></input>
 </div>
 
 </body>

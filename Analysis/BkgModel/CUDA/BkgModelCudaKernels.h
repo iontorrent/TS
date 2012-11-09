@@ -9,39 +9,220 @@
 //
 // Constant Memory Symbols
 //
-
-#define USE_CUDA_ERF
-#define USE_CUDA_EXP
-
-//#define USE_NEW_FLUX_PULSE_BASE
-
-
-
-#ifndef USE_CUDA_ERF
-__constant__ static float ERF_APPROX_TABLE_CUDA[sizeof (ERF_APPROX_TABLE) ];
-#endif
-
-__constant__ static float POISS_0_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_1_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_2_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_3_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_4_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_5_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_6_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_7_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_8_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_9_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_10_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-__constant__ static float POISS_11_APPROX_TABLE_CUDA[MAX_POISSON_TABLE_ROW];
-
-
-__constant__ float SBG_CONST_CUDA[20*30]; 
-__constant__ float DELTAFRAME_CONST_CUDA[30]; 
-
+#include "CudaConstDeclare.h" 
 
 //
 // Device Functions
 //
+
+
+
+
+__device__
+float erf_approx (float x)
+{
+
+#ifdef USE_CUDA_ERF
+  return erf (x);
+#else
+
+  int left, right;
+  float sign = 1.0;
+  float frac;
+  float ret;
+
+  if (x < 0.0)
+  {
+    x = -x;
+    sign = -1.0;
+  }
+
+  left = (int) (x * 100.0f); // left-most point in the lookup table
+  right = left + 1; // right-most point in the lookup table
+
+  // both left and right points are inside the table...interpolate between them
+  if ( (left >= 0) && (right < (int) (sizeof (ERF_APPROX_TABLE) / sizeof (float))))
+  {
+    frac = (x * 100.0f - left);
+    ret = (1 - frac) * ERF_APPROX_TABLE_CUDA[left] + frac * ERF_APPROX_TABLE_CUDA[right];
+  }
+  else
+  {
+    if (left < 0)
+      ret = ERF_APPROX_TABLE_CUDA[0];
+    else
+      ret = 1.0;
+  }
+
+  return (ret * sign);
+
+#endif
+
+}
+
+__device__
+float exp_approx (float x, float* ExpApproxArray, int nElements)
+{
+
+#ifdef USE_CUDA_EXP
+  return exp (x);
+#else
+
+  int left, right;
+  float frac;
+  float ret;
+
+  if (x > 0)
+  {
+    return exp (x);
+  }
+
+  x = -x; // make the index positive
+
+  left = (int) (x * 100.0); // left-most point in the lookup table
+  right = left + 1; // right-most point in the lookup table
+
+  // both left and right points are inside the table...interpolate between them
+  if ( (left >= 0) && (right < nElements))
+  {
+    frac = (x * 100.0 - left);
+    ret = (1 - frac) * ExpApproxArray[left] + frac * ExpApproxArray[right];
+  }
+  else
+  {
+    if (left < 0)
+      ret = ExpApproxArray[0];
+    else
+      ret = 0.0;
+  }
+
+  return (ret);
+
+#endif
+
+}
+
+
+__device__
+float poiss_cdf_approx (int n, float x, const float* ptr)
+{
+  int left, right;
+  float frac;
+  float ret;
+
+  if (ptr != NULL)
+  {
+    x *= 20.0f;
+    left = (int) x; // left-most point in the lookup table
+    right = left + 1; // right-most point in the lookup table
+
+    // both left and right points are inside the table...interpolate between them
+    if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
+    {
+      frac = (float) (x - left);
+      ret = (float) ( (1 - frac) * ptr[left] + frac * ptr[right]);
+    }
+    else
+    {
+      if (left < 0)
+        ret = (float) ptr[0];
+      else
+        ret = (float) (ptr[MAX_POISSON_TABLE_ROW - 1]);
+    }
+  }
+  else
+  {
+    ret = x < 0 ? 0.0f : (1.0f - (erf_approx ( (x - n - 1) / (sqrt (2.0f * (n + 1) * 0.88f))) + 1) / 2);
+  }
+  return ret;
+}
+
+
+
+#ifndef USE_GLOBAL_POISSTABLE 
+__device__
+const float*  precompute_pois_params(int n)
+{
+
+  const float* ptr = NULL;
+  switch (n)
+  {
+        case 0:
+            ptr = POISS_0_APPROX_TABLE_CUDA;
+            break;
+        case 1:
+            ptr = POISS_1_APPROX_TABLE_CUDA;
+            break;
+        case 2:
+            ptr = POISS_2_APPROX_TABLE_CUDA;
+            break;
+        case 3:
+            ptr = POISS_3_APPROX_TABLE_CUDA;
+            break;
+        case 4:
+            ptr = POISS_4_APPROX_TABLE_CUDA;
+            break;
+        case 5:
+            ptr = POISS_5_APPROX_TABLE_CUDA;
+            break;
+        case 6:
+            ptr = POISS_6_APPROX_TABLE_CUDA;
+            break;
+        case 7:
+            ptr = POISS_7_APPROX_TABLE_CUDA;
+            break;
+        case 8:
+            ptr = POISS_8_APPROX_TABLE_CUDA;
+            break;
+        case 9:
+            ptr = POISS_9_APPROX_TABLE_CUDA;
+            break;
+        case 10:
+            ptr = POISS_10_APPROX_TABLE_CUDA;
+            break;
+        case 11:
+            ptr = POISS_11_APPROX_TABLE_CUDA;
+            break;
+        default:
+            ;
+    }
+    return ptr;
+
+}
+#else
+__device__
+const float*  precompute_pois_params(int n)
+{
+
+  const float* ptr = POISS_APPROX_TABLE_CUDA_BASE + n * MAX_POISSON_TABLE_ROW;
+  return ptr;  
+}
+#endif
+
+
+
+__device__
+void clamp ( int &x, int a, int b)
+{
+  // Clamps x between a and b
+  x = (x < a ? a : (x > b ? b : x));
+}
+
+
+__device__
+void clamp ( double &x, double a, double b)
+{
+  // Clamps x between a and b
+  x = (x < a ? a : (x > b ? b : x));
+}
+
+
+__device__
+void clamp ( float &x, float a, float b)
+{
+  // Clamps x between a and b
+  x = (x < a ? a : (x > b ? b : x));
+}
 
 template<int block_size, int mat_dim>
 __device__
@@ -207,183 +388,6 @@ void dposv (int n, double* a, double* x)
   // Solve
   dtrsv_lnn<block_size, mat_dim> (n, a, x);
   dtrsv_ltn<block_size, mat_dim> (n, a, x);
-}
-
-template<typename T>
-__device__
-void clamp (T& x, T a, T b)
-{
-  // Clamps x between a and b
-  x = (x < a ? a : (x > b ? b : x));
-}
-
-__device__
-float poiss_cdf_approx (int n, float x, const float* ptr)
-{
-  int left, right;
-  float frac;
-  float ret;
-
-  if (ptr != NULL)
-  {
-    x *= 20.0f;
-    left = (int) x; // left-most point in the lookup table
-    right = left + 1; // right-most point in the lookup table
-
-    // both left and right points are inside the table...interpolate between them
-    if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
-    {
-      frac = (float) (x - left);
-      ret = (float) ( (1 - frac) * ptr[left] + frac * ptr[right]);
-    }
-    else
-    {
-      if (left < 0)
-        ret = (float) ptr[0];
-      else
-        ret = (float) (ptr[MAX_POISSON_TABLE_ROW - 1]);
-    }
-  }
-  else
-  {
-    ret = x < 0 ? 0.0f : (1.0f - (erf_approx ( (x - n - 1) / (sqrt (2.0f * (n + 1) * 0.88f))) + 1) / 2);
-  }
-  return ret;
-}
-
-
-__device__
-const float*  precompute_pois_params (int n)
-{
-
-  const float* ptr = NULL;
-  switch (n)
-  {
-        case 0:
-            ptr = POISS_0_APPROX_TABLE_CUDA;
-            break;
-        case 1:
-            ptr = POISS_1_APPROX_TABLE_CUDA;
-            break;
-        case 2:
-            ptr = POISS_2_APPROX_TABLE_CUDA;
-            break;
-        case 3:
-            ptr = POISS_3_APPROX_TABLE_CUDA;
-            break;
-        case 4:
-            ptr = POISS_4_APPROX_TABLE_CUDA;
-            break;
-        case 5:
-            ptr = POISS_5_APPROX_TABLE_CUDA;
-            break;
-        case 6:
-            ptr = POISS_6_APPROX_TABLE_CUDA;
-            break;
-        case 7:
-            ptr = POISS_7_APPROX_TABLE_CUDA;
-            break;
-        case 8:
-            ptr = POISS_8_APPROX_TABLE_CUDA;
-            break;
-        case 9:
-            ptr = POISS_9_APPROX_TABLE_CUDA;
-            break;
-        case 10:
-            ptr = POISS_10_APPROX_TABLE_CUDA;
-            break;
-        case 11:
-            ptr = POISS_11_APPROX_TABLE_CUDA;
-            break;
-        default:
-            ;
-    }
-    return ptr;
-
-}
-
-__device__
-float erf_approx (float x)
-{
-
-#ifdef USE_CUDA_ERF
-  return erf (x);
-#else
-
-  int left, right;
-  float sign = 1.0;
-  float frac;
-  float ret;
-
-  if (x < 0.0)
-  {
-    x = -x;
-    sign = -1.0;
-  }
-
-  left = (int) (x * 100.0f); // left-most point in the lookup table
-  right = left + 1; // right-most point in the lookup table
-
-  // both left and right points are inside the table...interpolate between them
-  if ( (left >= 0) && (right < (int) (sizeof (ERF_APPROX_TABLE) / sizeof (float))))
-  {
-    frac = (x * 100.0f - left);
-    ret = (1 - frac) * ERF_APPROX_TABLE_CUDA[left] + frac * ERF_APPROX_TABLE_CUDA[right];
-  }
-  else
-  {
-    if (left < 0)
-      ret = ERF_APPROX_TABLE_CUDA[0];
-    else
-      ret = 1.0;
-  }
-
-  return (ret * sign);
-
-#endif
-
-}
-
-__device__
-float exp_approx (float x, float* ExpApproxArray, int nElements)
-{
-
-#ifdef USE_CUDA_EXP
-  return exp (x);
-#else
-
-  int left, right;
-  float frac;
-  float ret;
-
-  if (x > 0)
-  {
-    return exp (x);
-  }
-
-  x = -x; // make the index positive
-
-  left = (int) (x * 100.0); // left-most point in the lookup table
-  right = left + 1; // right-most point in the lookup table
-
-  // both left and right points are inside the table...interpolate between them
-  if ( (left >= 0) && (right < nElements))
-  {
-    frac = (x * 100.0 - left);
-    ret = (1 - frac) * ExpApproxArray[left] + frac * ExpApproxArray[right];
-  }
-  else
-  {
-    if (left < 0)
-      ret = ExpApproxArray[0];
-    else
-      ret = 0.0;
-  }
-
-  return (ret);
-
-#endif
-
 }
 
 //
@@ -632,8 +636,10 @@ void CopyMatrices_k (int* active_bead_list, double* jtj, double* rhs, double* jt
   rhs += matOffset;
   jtj_lambda += matOffset * mat_dim;
   jtj += matOffset * mat_dim;
-  float* params_ptr = (float*) &eval_params[ibd];
-  float* params_nn_ptr = (float*) &params_nn[ibd];
+  //float* params_ptr = (float*) &eval_params[ibd];
+  //float* params_nn_ptr = (float*) &params_nn[ibd];
+  bead_params* params_ptr = &eval_params[ibd];
+  bead_params* params_nn_ptr = &params_nn[ibd];
 
   // Rhs --> Delta
   delta[threadIdx.x] = rhs[threadIdx.x];
@@ -644,9 +650,24 @@ void CopyMatrices_k (int* active_bead_list, double* jtj, double* rhs, double* jt
     jtj_lambda[threadIdx.x + i * mat_dim] = jtj[threadIdx.x + i * mat_dim];
 
   // Params NN --> Params (this only works because the params structure is only floats!)
-  for (int i = 0; i < sizeof (bead_params) / sizeof (float); i += mat_dim)
+  /*for (int i = 0; i < sizeof (bead_params) / sizeof (float); i += mat_dim)
     if (threadIdx.x + i < sizeof (bead_params) / sizeof (float))
-      params_ptr[threadIdx.x + i] = params_nn_ptr[threadIdx.x + i];
+      params_ptr[threadIdx.x + i] = params_nn_ptr[threadIdx.x + i];*/
+    if (threadIdx.x < NUMFB) {
+      params_ptr->Ampl[threadIdx.x] = params_nn_ptr->Ampl[threadIdx.x];
+      params_ptr->kmult[threadIdx.x] = params_nn_ptr->kmult[threadIdx.x];
+    }
+    if (threadIdx.x == 0) {
+      params_ptr->Copies = params_nn_ptr->Copies;
+      params_ptr->R = params_nn_ptr->R;
+      params_ptr->dmult = params_nn_ptr->dmult;
+      params_ptr->gain = params_nn_ptr->gain;
+      params_ptr->my_state = params_nn_ptr->my_state;
+      params_ptr->trace_ndx = params_nn_ptr->trace_ndx;
+      params_ptr->x = params_nn_ptr->x;
+      params_ptr->y = params_nn_ptr->y;
+    }
+   
 }
 
 template<int mat_dim>
@@ -913,36 +934,11 @@ void CalculateRegionalResidual_k (float* fval, bead_params* eval_params, float* 
 
 
 
-__global__ void transposeData(float *dest, float *source, int width, int height)
-{
-  __shared__ float tile[16][16+1];
-
-  int xIndexIn = blockIdx.x * 16 + threadIdx.x;
-  int yIndexIn = blockIdx.y * 16 + threadIdx.y;
-  
-    
-  int Iindex = xIndexIn + (yIndexIn)*width;
-
-  int xIndexOut = blockIdx.y * 16 + threadIdx.x;
-  int yIndexOut = blockIdx.x * 16 + threadIdx.y;
-  
-  int Oindex = xIndexOut + (yIndexOut)*height;
-
-  if(xIndexIn < width && yIndexIn < height) tile[threadIdx.y][threadIdx.x] = source[Iindex];
-
-  
-   __syncthreads();
-  
-  if(xIndexOut < height && yIndexOut < width) dest[Oindex] = tile[threadIdx.x][threadIdx.y];
-}
-
-
-
 #ifdef USE_NEW_FLUX_PULSE_BASE
 
 template<int num_fb, int flows_per_block>
 __global__
-void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clonal_call_scale, float* fval, bead_params* p, reg_params* reg_p, float* ival, float* sbg, int* flow_ndx_map, float* delta_frame, float* dark_matter_compensator, int* buff_flow, int num_pts, int* active_bead_list, int step, int num_steps, int num_active_beads, int num_beads)
+void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clonal_call_scale, float* fval, bead_params* p, bead_state* state, reg_params* reg_p, float* ival, float* sbg, int* flow_ndx_map, float* delta_frame, float* dark_matter_compensator, int* buff_flow, int num_pts, int* active_bead_list, int step, int num_steps, int num_active_beads, int num_beads)
 {
 
 
@@ -973,6 +969,7 @@ void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clona
   //one step now is num_beads*frames*flows  no need for num_steps anymore
   fval += step*beadFrameProduct*num_fb+ ibd + fnum * beadFrameProduct;
   p += ibd;
+  state += ibd;
   ival += ibd + fnum*beadFrameProduct;
 
   // Offset shared memory to this block's bead
@@ -1003,10 +1000,10 @@ void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clona
     // @TODO -trying to get this annoying clonal thing >out< of the model evaluation and >into< the optimization routine.
     // I don't know how this should work on the GPU
 
-    /*float clonal_error_term = 0.0f;
-    if ( (Ampl < restrict_clonal) && p->my_state.clonal_read && (fnum > KEY_LEN))
+    float clonal_error_term = 0.0f;
+    if ( (Ampl < restrict_clonal) && state.clonal_read && (fnum > KEY_LEN))
       clonal_error_term = fabs (Ampl - intcall) * clonal_call_scale[intcall];
-    */
+    
     int nnum = flow_ndx_map[fnum];
 
   
@@ -1070,7 +1067,7 @@ void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clona
 
 template<int num_fb, int beads_per_block>
 __global__
-void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clonal_call_scale, float* fval, bead_params* p, reg_params* reg_p, float* ival, float* sbg, int* flow_ndx_map, float* delta_frame, float* dark_matter_compensator, int* buff_flow, int num_pts, int* active_bead_list, int step, int num_steps, int num_active_beads)
+void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clonal_call_scale, float* fval, bead_params* p, bead_state* state, reg_params* reg_p, float* ival, float* sbg, int* flow_ndx_map, float* delta_frame, float* dark_matter_compensator, int* buff_flow, int num_pts, int* active_bead_list, int step, int num_steps, int num_active_beads)
 {
   extern __shared__ float smem_buffer[];
 
@@ -1087,6 +1084,7 @@ void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clona
   int flowFrameProduct = num_fb * num_pts;
   fval += ibd * (flowFrameProduct * num_steps) + (step * flowFrameProduct);
   p += ibd;
+  state += ibd;
   ival += ibd * flowFrameProduct;
 
   // Offset shared memory to this block's bead
@@ -1112,9 +1110,9 @@ void MultiCycleNNModelFluxPulse_base_CUDA_k (float restrict_clonal, float* clona
   // I don't know how this should work on the GPU
 
   float clonal_error_term = 0.0f;
-  if ( (Ampl < restrict_clonal) && p->my_state.clonal_read && (fnum > KEY_LEN))
+  if ( (Ampl < restrict_clonal) && state->clonal_read && (fnum > KEY_LEN))
     clonal_error_term = fabs (Ampl - intcall) * clonal_call_scale[intcall];
-
+  
   int nnum = flow_ndx_map[fnum];
 
   // calculate some constants used for this flow
@@ -2545,7 +2543,7 @@ __global__ void CalcCDntpTop_k (float* nucRise, int* i_start, bead_params* p,
   float tlast = 0;
   float last_nuc_value = 0.0;
   int start = -1;
-  float C = rp->nuc_shape.C;
+  float C = rp->nuc_shape.C[nnum];
   float t_mid_nuc = rp->nuc_shape.t_mid_nuc[0] + rp->nuc_shape.t_mid_nuc_delay[nnum]* (rp->nuc_shape.t_mid_nuc[0]-rp->nuc_shape.valve_open) /rp->nuc_shape.magic_divisor_for_timing;
   float sigma = rp->nuc_shape.sigma * rp->nuc_shape.sigma_mult[nnum];
   float CProduct = C*0.999;
@@ -2925,7 +2923,7 @@ void ComputeCumulativeIncorporationHydrogensForProjection_k (bead_params* p, reg
   c_dntp_bot = 0.0; // concentration of dNTP in the well
   c_dntp_top = 0.0;
   c_dntp_sum = 0.0;
-  float C = reg_p->nuc_shape.C;
+  float C = reg_p->nuc_shape.C[nnum];
 
   // some pre-computed things
   float c_dntp_bot_plus_kmax = 1.0/kmax;
@@ -3527,7 +3525,7 @@ __global__ void SplineFitDntpTop_k (float* nucRise, int* i_start, bead_params* p
   float last_nuc_value = 0.0;
   int start = -1;
   float scaled_dt = -1.0;
-  float C = rp->nuc_shape.C;
+  float C = rp->nuc_shape.C[nnum];
   float t_mid_nuc = rp->nuc_shape.t_mid_nuc[0]+ rp->nuc_shape.t_mid_nuc_delay[nnum]* (rp->nuc_shape.t_mid_nuc[0]-rp->nuc_shape.valve_open) /rp->nuc_shape.magic_divisor_for_timing;
   float sigma = rp->nuc_shape.sigma * rp->nuc_shape.sigma_mult[nnum] * 3;
   float t, tnew;

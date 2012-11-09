@@ -2,33 +2,17 @@
 #ifndef BEADTRACKER_H
 #define BEADTRACKER_H
 
-#include "BkgMagicDefines.h"
-#include <stdio.h>
-#include <iostream>
-#include <string.h>
-#include <float.h>
-#include <stdlib.h>
-#include <math.h>
-#include <assert.h>
 #include <set>
-#include <ostream>
 #include <vector>
+#include "BkgMagicDefines.h"
 #include "BeadParams.h"
-#include "DiffEqModel.h"
 #include "Mask.h"
-#include "PinnedInFlow.h"
 #include "Region.h"
 #include "SpecialDataTypes.h"
 #include "GlobalDefaultsForBkgModel.h"  //to get the flow order 
-#include "MaskSample.h"
+#include "PinnedInFlow.h"
 
-// @TODO unfortunately this structure cannot be used at this time
-// CUDA code is incompatible with this structure and difficult to change.
-struct bead_box{
-    bead_params nn;
-    bead_params low;
-    bead_params hi;
-};
+class LevMarBeadAssistant;
 
 float ComputeNormalizerKeyFlows(const float *observed, const int *keyval, int len);
 
@@ -38,11 +22,10 @@ public:
     // bead parameters
     int  numLBeads;
     int  numLBadKey;
-    bound_params *params_high;
-    bound_params *params_low;
-    bead_params  *params_nn;
-
-    SequenceItem *seqList;
+    bound_params params_high;
+    bound_params params_low;
+    std::vector<bead_params>  params_nn;
+    std::vector<SequenceItem> seqList;
     int numSeqListItems;
 
     int DEBUG_BEAD;
@@ -52,35 +35,50 @@ public:
     // spatially oriented bead data
     // not ideally located
     // only used for xtalk
-    int *ndx_map;
-    int *key_id; // index into key map for beads
+    std::vector<int> ndx_map;
+    std::vector<int> key_id; // index into key map for beads
 
     // track quality for use in regional parameter fitting
     // aggregate 'clonal', 'corrupt', 'high copy number' states
-    bool *high_quality;
-    float my_mean_copy_count;
+    float                   my_mean_copy_count;
+    std::vector<bool>       high_quality;
+    std::vector<bead_state> all_status;
+
+    // track beads sampled for use in regional parameter fitting
+    std::vector<bool>  sampled;
+    bool isSampled;
 
     int regionindex; // for debugging
     
     BeadTracker();
-    ~BeadTracker();
-    void Delete();
 
-    void  InitBeadList(Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample);
-    void  InitBeadParams();
+    void  InitBeadList(Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit);
+    void  InitBeadParams(float AmplLowerLimit);
     void  InitBeadParamR(Mask *bfMask, Region *region, std::vector<float> *tauB,std::vector<float> *tauE);
-    void  InitQualityTracker();
     void  InitRandomSample(Mask& bf, Region& region, const std::set<int>& sample);
+    // Two use cases in the code when sampling is set
+    // use only beads that are marked as Sampled
+    // use only beads that are marked as StillSampled
+    // which use in the same code is determined by skip_beads
+    void  SetSampled();
+    void  SystematicSampling();
+    void  UpdateSampled( bool *well_completed);  
+    void  ExcludeFromSampled( int ibd );
+    bool  StillSampled(int ibd) { return( sampled[ibd] && high_quality[ibd] ); }
+    bool  Sampled(int ibd) { return( sampled[ibd] ); }
+    bool  BeadIncluded (int ibd, bool skip_beads) { return ( high_quality[ibd] || !skip_beads );} // if not skipping beads, ignore the high_quality flag
+
     void  InitModelBeadParams();
 
-    void  InitLowBeadParams();
+    void  InitLowBeadParams(float AmplLowerLimit);
     void  InitHighBeadParams();
-    void  SelectDebugBead();
+    void  SelectDebugBead(int seed);
     void  DefineKeySequence(SequenceItem *seq_list, int number_Keys);
     // utilities for optimization
     void  AssignEmphasisForAllBeads(int max_emphasis);
-    void  LimitBeadEvolution(bool first_block, float R_change_max, float copy_change_max);
-    float KeyNormalizeReads(bool overwrite_key);
+
+    float KeyNormalizeReads(bool overwrite_key, bool sampled_only=false);
+    float KeyNormalizeSampledReads(bool overwrite_key);
     float KeyNormalizeOneBead(int ibd, bool overwrite_key);
     float ComputeSSQRatioOneBead(int ibd);
     void  SelectKeyFlowValuesFromBeadIdentity(int *keyval, float *observed, int my_key_id, int &keyLen);
@@ -96,6 +94,9 @@ public:
     float FindMeanDmult(bool skip_beads);
     void  RescaleDmult(float scale);
     float CenterDmult(bool skip_beads);
+    float FindMeanDmultFromSample(bool skip_beads);
+    float CenterDmultFromSample(bool skip_beads);
+
     void  RescaleRatio(float scale);
 
     // likely not the right place for this, but does iterate over beads
@@ -120,6 +121,35 @@ private:
     void ComputeKeyNorm(const std::vector<int>& keyIonogram, const std::vector<float>& copy_multiplier);
     void AdjustForCopyNumber(std::vector<float>& ampl, const bead_params& p, const std::vector<float>& copy_multiplier);
     void UpdatePPFSSQ(int flow, const std::vector<float>& copy_multiplier);
+
+ private:
+    // Boost serialization support:
+    friend class boost::serialization::access;
+    template<class Archive>
+      void serialize(Archive& ar, const unsigned int version)
+      {
+	// fprintf(stdout, "Serialize BeadTracker...");
+	ar & numLBeads;
+	ar & numLBadKey;
+	ar & params_high;
+	ar & params_low;
+	ar & all_status; // serialize all_status before params_nn
+	ar & params_nn;  // params_nn points at bead_state objects in all_status
+	ar & seqList;
+	ar & numSeqListItems;
+	ar & DEBUG_BEAD;
+	ar & max_emphasis;
+	ar & ndx_map;
+	ar & key_id;
+	ar & high_quality;
+	ar & sampled;
+	ar & isSampled;
+	ar & my_mean_copy_count;
+	ar & regionindex;
+	// fprintf(stdout, "done with BeadTracker\n");
+      }
+
 };
+
 
 #endif // BEADTRACKER_H

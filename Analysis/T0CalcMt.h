@@ -122,6 +122,7 @@ class T0CalcMt {
     /* Init our grids. */
     mRegionSum.Init(mRow, mCol, mRowStep, mColStep);
     mT0.Init(mRow, mCol, mRowStep, mColStep);
+    mSlope.Init(mRow, mCol, mRowStep, mColStep);
     mT0Prior.resize(mRegionSum.GetNumBin());
 
     /* Set some default values. */
@@ -148,12 +149,13 @@ class T0CalcMt {
   /** Algorithm to fit t0 for this trace using a two piece linear model. */
   static void CalcT0(T0Finder &finder, std::vector<float> &trace, 
                      std::vector<float> &timestamps,
-                     T0Prior &prior, float &t0) {
+                     T0Prior &prior, float &t0, float &slope) {
     int frameEnd = min( prior.mFrameEnd, trace.size());
     int frameStart = max( prior.mFrameStart, 0ul);
     finder.SetSearchRange(frameStart, frameEnd);
     bool ok = finder.FindT0Time(&trace[0], &timestamps[0], trace.size());
     t0 = finder.GetT0Est();
+    slope = finder.GetSlope();
     if (ok) {
       t0 = (prior.mT0Weight * prior.mT0Prior) + t0;
       t0 = t0 / (prior.mT0Weight + 1);
@@ -272,7 +274,14 @@ class T0CalcMt {
       int t0Frame = GetFrameForTime(t0);
       mRegionSum.GetBinCoords(bIx, rowStart, rowEnd, colStart, colEnd);
       std::pair<size_t, std::vector<float> > &vec = mRegionSum.GetItem(bIx);
-      out << rowStart << '\t' << rowEnd << '\t' << colStart << '\t' << colEnd << '\t' << vec.first << '\t' << t0 << '\t' << t0Frame;
+      std::vector<float> &v = vec.second;
+      int first = t0Frame + 1;
+      int second = t0Frame + 10;
+      first = min(first, (int) v.size());
+      second = min(second, (int) v.size());
+      float slope = (v[second] - v[first])/(mTimeStamps[second] - mTimeStamps[first]);
+      float fitSlope = mSlope.GetItem(bIx);
+      out << rowStart << '\t' << rowEnd << '\t' << colStart << '\t' << colEnd << '\t' << vec.first << '\t' << t0 << '\t' << t0Frame << '\t' << fitSlope << '\t' << slope;
       for (size_t i = 0; i < vec.second.size(); i++) {
         out << '\t' << vec.second.at(i);
       }
@@ -314,6 +323,8 @@ class T0CalcMt {
   size_t mRowStep, mColStep;
   /** Actual t0 as calculated. */
   GridMesh<float> mT0;
+  /** Actual t0 as calculated. */
+  GridMesh<float> mSlope;
   /** Prior for t0 */
   std::vector<T0Prior>  mT0Prior;
   /** Pair of number of wells seen and vector average of the region. */

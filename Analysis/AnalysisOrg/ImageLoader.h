@@ -24,11 +24,12 @@
 #include <iomanip>
 #include <armadillo>
 
-#include "cudaWrapper.h"
+
 #include "Image.h"
 #include "Region.h"
 #include "Mask.h"
-#include "Separator.h"
+#include "ComplexMask.h"
+
 #include "WorkerInfoQueue.h"
 #include "Stats.h"
 #include "SampleStats.h"
@@ -39,76 +40,55 @@
 #include "SpecialDataTypes.h"
 #include "RawWells.h"
 #include "EmptyTraceTracker.h"
-
+#include "TikhonovSmoother.h"
 #include "PinnedInFlow.h"
 #include "PinnedInFlowReplay.h"
+#include "SynchDat.h"
 
-// comment out the line below if the background model is configured to use a per-well
-// background trace
-#define SINGLE_BKG_TRACE
+#include "ImageLoaderQueue.h"
 
-struct ImageLoadWorkInfo
-{
-  int type;
-  int flow;
-  char name[512];
-  // array of Image objects shared with ImageTracker object
-  Image *img;  // shared across ImageLoader worker threads
-  Mask *mask; // shared across  all ImageLoader and BkgModelFitter threads
-// pinnedInFlow shared across all ImageLoader and BkgModelFitter threads
-  PinnedInFlow *pinnedInFlow; // handled by ImageTracker object and shared
-  int normStart;
-  int normEnd;
-  int NNinnerx, NNinnery, NNouterx, NNoutery;
-  // the following two arrays also are shared with the ImageTracker object
-  // these arrays are used to coordinate ongoing flow status across threads
-  unsigned int *CurRead;      // CurRead[flow] is the image read in?
-  unsigned int *CurProcessed; // CurReadProcessed[flow], bkg model done?
-  char *dat_source_directory;
-  char *acqPrefix;
-  Region *regions;
-  Separator *separator;
-  int numRegions;
-  int numFlowsPerCycle;
-  int hasWashFlow;
-  int lead;
-  bool finished;
-  bool doRawBkgSubtract;
-
-  CommandLineOpts *clo;
-  EmptyTraceTracker *emptyTraceTracker;
-};
-
-
-void *FileLoadWorker (void *arg);
-void *FileLoader (void *arg);
 
 class ImageTracker
 {
   public:
+    // scope of threads doing the work is identical to scope of this object
+    pthread_t loaderThread;
+
+    int flow_buffer_size;
+    
     Image *img;
+    SynchDat *sdat;
     unsigned int *CurRead;
     unsigned int *CurProcessed;
-    int numFlows;
 
-    ImageTracker (int _numFlows, int ignoreChecksumErrors, Mask *maskPtr);
+    bool doingSdat;
+    ImageLoadWorkInfo master_img_loader;
+
+    ImageTracker (int _flow_buffer_size, int ignoreChecksumErrors, bool _doingSdat, int total_timeout);
     void FinishFlow (int flow);
     void WaitForFlowToLoad (int flow);
-    void InitPinnedInFlow(int numFlows, Mask *maskPtr, CommandLineOpts& clo);
+    void FireUpThreads();
+    void SetUpImageLoaderInfo (CommandLineOpts &inception_state,
+                           ComplexMask &a_complex_mask,
+                           ImageSpecClass &my_image_spec);
+                           
+    int FlowBufferFromFlow(int flow);  // which buffer contains this flow
 
-    PinnedInFlow *pinnedInFlow;
+    void DecideOnRawDatsToBufferForThisFlowBlock();
 
     ~ImageTracker();
+  private:
+    void NothingInit();
+    void DeleteImageBuffers();
+    void DeleteSdatBuffers();
+    void DeleteFlags();
+    void AllocateReadAndProcessFlags();
+    void AllocateImageBuffers(int ignoreChecksumErrors, int total_timeout);
+    void AllocateSdatBuffers();
 };
 
 
-void DumpStep (ImageLoadWorkInfo *info);
-void DumpDcOffset (ImageLoadWorkInfo *info);
 
-void SetUpImageLoaderInfo(ImageLoadWorkInfo &glinfo, CommandLineOpts &clo,
-        Mask *maskPtr, ImageTracker &my_img_set,
-        ImageSpecClass &my_image_spec,
-        EmptyTraceTracker &emptytracetracker, 
-        int numFlows);
+
 
 #endif // IMAGELOADER_H

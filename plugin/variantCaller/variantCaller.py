@@ -13,9 +13,9 @@ def usage():
     sys.stderr.write("Usage: %s [options] <outputdir> <reference> <bamfile>\n" % progName)
     sys.stderr.write("Options:\n")
     sys.stderr.write("  -b, --bedfile    =>  BED file specifing regions over which variant calls will be limited or filtered to\n")
+    sys.stderr.write("  -s, --hotspotsfile    =>  BED file specifying exact hotspot positions\n")
     sys.stderr.write("  -f, --fsbam      =>  Flowspace BAM if required in addition to non-flowspace BAM file\n")
     sys.stderr.write("  -g, --genome     =>  Genome file. Defaults to <reference>.fai\n")
-    sys.stderr.write("  -o, --floworder  =>  PGM base flow Order used (per cycle). Defaults to SAMBA\n")
     sys.stderr.write("  -p, --paramfile  =>  Parameters file for all variant programs used (simple json)\n")
     sys.stderr.write("  -r, --rundir     =>  Directory path to location of variant caller programs. Defaults to the directory this script is located\n")
     sys.stderr.write("  -k, --keepdir    =>  Keep variant mapping to individual contigs (dibayes). (No genome file required.)\n")
@@ -25,6 +25,9 @@ def usage():
     sys.stderr.write("  -h, --help       =>  Ignore command and output this Help message to STDERR\n")
     
 paradict = defaultdict(lambda: defaultdict(defaultdict))
+
+# set to 0/1 to exclude/include SNP calling    
+callSNPs = 1
 
 def ReadParamsFile( paramfile ):
     # defaults for expected dictionary elements
@@ -86,9 +89,8 @@ def RunCommand( command ):
             warnout.close()
         sys.exit(errorExit)
 
-def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, flowseq, outDir ):
-    # flowseq not currently employed
-    fixedprms = "--AllSeq=1 -b 1 --platform=2 -d 1 -C 0 -W 0 -n diBayes_run -g %s/log/ -w %s/temp/ -o %s" % (outDir,outDir,outDir)
+def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, hotspotsfile, outDir ):
+    fixedprms = "--AllSeq=1 -b 1 --platform=2 -d 1 -C 0 -W 0 -S 1 -n diBayes_run -g %s/log/ -w %s/temp/ -o %s" % (outDir,outDir,outDir)
     if paramstr == "":
         paramstr  = "--call-stringency medium --het-skip-high-coverage 0 --reads-min-mapping-qv 2 --het-min-lca-start-pos 0 --het-min-lca-base-qv 14 " + \
             "--het-lca-both-strands 0 --het-min-allele-ratio 0.15 --het-max-coverage-bayesian 60 --het-min-nonref-base-qv 14 --snps-min-base-qv 14 " + \
@@ -97,28 +99,29 @@ def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, flowse
             "--reads-min-alignlength-readlength-ratio 0.2 --hom-min-nonref-base-qv 14 --hom-min-nonref-start-pos 0"
     if bedfile != "":
         bedfile = '-R ' + bedfile
-    commandLineDiBayes = "%s/diBayes %s %s %s -f %s %s" % (
-        binDir, fixedprms, paramstr, bedfile, reference, bamfile )
+    if hotspotsfile != "":
+	hotspotsfile = '-H ' + hotspotsfile
+    commandLineDiBayes = "%s/diBayes %s %s %s %s -f %s %s" % (
+        binDir, fixedprms, paramstr, bedfile, hotspotsfile, reference, bamfile )
     return "export LD_LIBRARY_PATH=%s/diBayes_lib;mkdir -p %s/temp;mkdir -p %s/log;export LOG4CXX_CONFIGURATION;%s" % (binDir,outDir,outDir,commandLineDiBayes)
 
-def IndelCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, flowseq, outDir ):
-    # bedfile and flowseq not currently employed
+def IndelCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, outDir ):
     if bedfile != "":
         bedfile = '-L ' + bedfile
-    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s %s -o %s/%s --flow_debug_file %s --flow_align_context_file %s --bypassFlowAlign --ignoreFlowIntensities -S SILENT -U ALL -filterMBQ " % (
-        binDir, binDir, binDir, reference, bamfile, bedfile, outDir, "bayesian_scorer.vcf", "/dev/null", "/dev/null")
+    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s %s -o %s/%s -glm INDEL --bypassFlowAlign --ignoreFlowIntensities -S SILENT -U ALL -filterMBQ  --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 " % (
+        binDir, binDir, binDir, reference, bamfile, bedfile, outDir, "bayesian_scorer.vcf")
     if paramstr == "":
-       paramstr = " -glm INDEL -nt 8 -minIndelCnt 10 -dcov 500 "
+       paramstr = " -glm INDEL -minIndelCnt 5 -dcov 500 --bypassFlowAlign --ignoreFlowIntensities -S SILENT -U ALL -filterMBQ  --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5  "
     else:
        paramstr = paramstr.replace('=',' ')
     annotation = " -A IndelType -A AlleleBalance -A BaseCounts -A ReadDepthAndAllelicFractionBySample -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample "   
     return "%s %s %s > %s/%s " % (fixedprms, annotation, paramstr, outDir, "indel_caller.log")
 
-def IndelReCallerCommandLine( binDir, paramstr, bamfile, reference, flowseq, outDir ):
-    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s -L %s/%s -o %s/%s --flow_debug_file %s --flow_align_context_file %s -S SILENT -U ALL -filterMBQ " % (
-        binDir, binDir, binDir, reference, bamfile, outDir,"downsampled.vcf", outDir, "bayesian_scorer.vcf", "/dev/null", "/dev/null")
+def IndelReCallerCommandLine( binDir, paramstr, bamfile, reference, outDir ):
+    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s -L %s/%s -o %s/%s -glm INDEL -S SILENT -U ALL -filterMBQ --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 " % (
+        binDir, binDir, binDir, reference, bamfile, outDir, "downsampled.vcf", outDir, "bayesian_scorer.vcf")
     if paramstr == "":
-       paramstr = " -glm INDEL -nt 1 -minIndelCnt 10 -dcov 100000 "
+       paramstr = " -glm INDEL -minIndelCnt 5 -dcov 2000 -S SILENT -U ALL -filterMBQ --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 "
     else:
        paramstr = paramstr.replace('=',' ')
     annotation = " -A IndelType -A AlleleBalance -A BaseCounts -A ReadDepthAndAllelicFractionBySample -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample "   
@@ -150,7 +153,7 @@ def BedFilterIndelsCommandLine( binDir, bedfile, outDir ):
     return "%s/vcftools --vcf %s/indels.merged.vcf %s --out %s/indels --recode --keep-INFO-all > /dev/null %s" % ( binDir, outDir, bedfile, outDir, rmbed )
 
 def VCFSortFilterCommandLine( binDir, outDir ):
-    return "java -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.FixQUALRun %s/variantCalls.filtered.vcf %s/indels.gatk-qual-rescored.vcf;java -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.SortVcfRun %s/indels.gatk-qual-rescored.vcf %s/indels.merged.vcf" % ( binDir, binDir, binDir, outDir, outDir, binDir, binDir, binDir, outDir, outDir )
+    return "java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.FixQUALRun %s/variantCalls.filtered.vcf %s/indels.gatk-qual-rescored.vcf;java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.SortVcfRun %s/indels.gatk-qual-rescored.vcf %s/indels.merged.vcf" % ( binDir, binDir, binDir, outDir, outDir, binDir, binDir, binDir, outDir, outDir )
 
     
 def RunRecalculation(binDir, paramstr, outDir):
@@ -164,7 +167,7 @@ def RunRecalculation(binDir, paramstr, outDir):
        return False
 
 def MergeSNPandIndelVCF( binDir, outDir ):
-    return "java -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.MergeVcfRun %s/SNP_variants.vcf %s/indel_variants.vcf %s/TSVC_variants.vcf" % ( binDir, binDir, binDir, outDir, outDir, outDir )
+    return "java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.MergeVcfRun %s/SNP_variants.vcf %s/indel_variants.vcf %s/TSVC_variants.vcf" % ( binDir, binDir, binDir, outDir, outDir, outDir )
 
     
 def OutputSnpVCF( binDir, inDir, faifile, outDir ):
@@ -186,6 +189,7 @@ def OutputSnpVCF( binDir, inDir, faifile, outDir ):
     contigs.close()
     if countout == 0:
         CreateEmptyVcf(snpsout)
+    keepdir = 1
     if keepdir == 0:
         RunCommand('rm -rf "%s"' % inDir)
         WriteLog(" (%s removed)\n" % inDir)
@@ -197,6 +201,8 @@ def OutputIndelVCF( binDir, outDir ):
     os.system('rm -f "%s"' % indelsout)
     if os.path.exists("%s/indels.recode.vcf" % outDir):
         RunCommand( 'cat "%s/indels.recode.vcf" > "%s"' % (outDir,indelsout) )
+    else:
+        RunCommand( 'cat "%s/indels.merged.vcf" > "%s"' % (outDir, indelsout) )
     if not os.path.exists(indelsout):
         CreateEmptyVcf(indelsout)
     WriteLog(" > %s\n" % indelsout)
@@ -246,13 +252,13 @@ def main(argv):
     logfile=""
     paramfile=""
     bedfile=""
+    hotspotsfile=""
     faifile=""
     fsbam = ""
     noerrWarnFile = ""
-    floworder = "TACGTACGTCTGAGCATCGATCGATGTACAGC"
     try:
-        opts, args = getopt.getopt( argv, "hlkp:r:b:f:g:o:W:L:",
-            ["help", "log", "keepdir", "paramfile=", "rundir=", "bedfile=", "fsbam=", "genome=", "floworder=", "warnto=", "logfile="] )
+        opts, args = getopt.getopt( argv, "hlkp:r:b:s:f:g:o:W:L:",
+            ["help", "log", "keepdir", "paramfile=", "rundir=", "bedfile=", "hotspotsfile=", "fsbam=", "genome=", "warnto=", "logfile="] )
     except getopt.GetoptError, msg:
         sys.stderr.write(msg)
         usage()
@@ -271,6 +277,11 @@ def main(argv):
             if not os.path.exists(bedfile):
                 sys.stderr.write("No bed file found at: %s\n" % bedfile)
                 sys.exit(1)
+        elif opt in ("-s", "--hotspotsfile"):
+            hotspotsfile = arg
+            if not os.path.exists(hotspotsfile):
+                sys.stderr.write("No hotspots file found at: %s\n" % hotspotsfile)
+                sys.exit(1)
         elif opt in ("-r", "--rundir"):
             rundir = arg
             if not os.path.isdir(rundir):
@@ -280,8 +291,6 @@ def main(argv):
             fsbam = arg
         elif opt in ("-g", "--genome"):
             faifile = arg
-        elif opt in ("-o", "--floworder"):
-            floworder = arg
         elif opt in ("-k", "--keepdir"):
             keepdir = 1
         elif opt in ("-W", "--warnto"):
@@ -337,29 +346,33 @@ def main(argv):
         os.makedirs(snp_dir)
     if not os.path.exists(indel_dir):
         os.makedirs(indel_dir)
-        
+    
+    if callSNPs == 1:
     # create command for SNP caller and run
-    WriteLog(" Finding SNPs using diBayes...\n",1)
-    cmdoptions = paradict['dibayes']
-    RunCommand( SNPsCallerCommandLine( rundir, cmdoptions, bamfile, reference, bedfile, floworder, snp_dir ) )
-    WriteLog(" > %s/\n" % snp_dir)
+       WriteLog(" Finding SNPs using diBayes...\n",1)
+       cmdoptions = paradict['dibayes']
+       RunCommand( SNPsCallerCommandLine( rundir, cmdoptions, bamfile, reference, bedfile, hotspotsfile, snp_dir ) )
+       WriteLog(" > %s/\n" % snp_dir)
 
     # disable fatal errors from this point if option given
-    if noerrWarnFile != "": errorExit = 0
+       if noerrWarnFile != "": errorExit = 0
 
     # merge diBayes outputs (per contig) into one file in reference index order
-    noerrWarn = "No SNP call indexing performed"
-    WriteLog(" Merging SNP calls and indexing VCF...\n",1)
-    OutputSnpVCF( rundir, snp_dir, faifile, outdir )
+       noerrWarn = "No SNP call indexing performed"
+       WriteLog(" Merging SNP calls and indexing VCF...\n",1)
+       OutputSnpVCF( rundir, snp_dir, faifile, outdir )
 
     # ensure no filtering is tracked as issue if no error exit status returned
-    if bedfile != "": haveBed = 1
-    noerrWarn = "No INDEL calls made"
+       if bedfile != "": haveBed = 1
+       noerrWarn = "No INDEL calls made"
+    else: 
+       snpsout = "%s/SNP_variants.vcf" % outdir
+       CreateEmptyVcf(snpsout)
 
     # create command for indel caller and run
     WriteLog(" Finding INDELs using torrent-variant-caller...\n",1)
     cmdoptions = paradict['torrent-variant-caller']
-    RunCommand( IndelCallerCommandLine( rundir, cmdoptions, fsbam, reference, bedfile, floworder, indel_dir ) )
+    RunCommand( IndelCallerCommandLine( rundir, cmdoptions, fsbam, reference, bedfile, indel_dir ) )
     WriteLog(" > %s/bayesian_scorer.vcf\n" % indel_dir)
 
     #remove after debug
@@ -372,10 +385,11 @@ def main(argv):
     if RunRecalculation( rundir, cmdoptions, indel_dir ):
         WriteLog(" Recalculating downsampled variants...\n",1)
         cmdoptions = paradict['torrent-variant-caller-highcov']
-        RunCommand( IndelReCallerCommandLine( rundir, cmdoptions, fsbam, reference, floworder, indel_dir ) )
+        RunCommand( IndelReCallerCommandLine( rundir, cmdoptions, fsbam, reference, indel_dir ) )
         WriteLog(" > %s/bayesian_scorer.vcf\n" % indel_dir)
     else:
         WriteLog(" None of variant calls are downsampled.\n",1)      
+    # RunCommand("cp -p %s/bayesian_scorer.vcf %s/.bayesian_scorer.vcf \n" % (indel_dir,indel_dir))
     
     # create command for long indel assembly and run
     noerrWarn = "No long INDEL calls made"

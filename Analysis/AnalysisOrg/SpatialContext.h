@@ -16,10 +16,8 @@
 class SpatialContext{
   public:
     int numRegions;
-      int cols;
+    int cols;
     int rows;
-    int regionXOrigin;
-    int regionYOrigin;
     int regionXSize;
     int regionYSize;
     int regionsX;
@@ -32,17 +30,27 @@ class SpatialContext{
     int chip_offset_y;
     int chip_len_x;
     int chip_len_y;
+    
     struct Region chipRegion;
+    
     double percentEmptiesToKeep;
      // do we have regions that are known to be excluded
    bool exclusionMaskSet;
     struct Region GetChipRegion() {
         return chipRegion;
     }
-   void FindDimensionsByType(char *dat_source_directory);
-     void DefaultSpatialContext();
-     ~SpatialContext();
+    void FindDimensionsByType(char *explog_path);
+    void DefaultSpatialContext();
+
+    inline void SetRegionXYSize(int xsize, int ysize) {
+      regionXSize = xsize;
+      regionYSize = ysize;
+    }
+    inline bool IsSetRegionXYSize(){  return ( regionXSize != 0 );}
+
+    ~SpatialContext();
 };
+
 
 //@TODO: actually methods, but why are they passed _rows and _cols?
 
@@ -51,7 +59,7 @@ void SetUpRegionDivisions(SpatialContext &loc_context, int _rows, int _cols);
 
 void FixCroppedRegions(SpatialContext &loc_context, int _rows, int _cols);
 
-void ExportSubRegionSpecsToImage(SpatialContext &loc_context);
-void SetUpRegionsForAnalysis (int _rows, int _cols, SpatialContext &loc_context, Region &wholeChip);
+
+void SetUpRegionsForAnalysis (int _rows, int _cols, SpatialContext &loc_context);
 
 #endif // SPATIALCONTEXT_H

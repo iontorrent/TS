@@ -100,6 +100,12 @@
         <div class="sortheading">Date {#{% tooltip rpt_date %}#}</div>
         <div class="sortkey">timestamp</div>
       </th>
+      <th>
+        <div class="heading">Actions</div>
+      </th>
+      <th>
+        <div class="heading">Action Status</div>
+      </th>
     </tr>
     </thead>
     <tbody>
@@ -120,9 +126,9 @@
           <td>
             {#only provide links to the report if they exist#}
             {% if r.report_exist %}
-              <span class="left right_margin"
+              <span class="left right_margin" style="text-align: left;"
                     title="Open report in this window.">
-                <a href="{{r.reportLink}}">{{ r.resultsName }}</a>
+                <a href='{{r.reportLink}}'>{{ r.resultsName }}</a>
               </span>
               <span class="left icon_link ui-icon ui-icon-extlink
 		     ui-state-default ui-corner-all"
@@ -224,6 +230,79 @@
             <td>{{ r.timeStamp|date:"M d Y" }}</td>
 
           {% endwith %}
+          <td class='report_td'>
+	    <form id='{{r.pk}}_{{r.resultsName}}'>
+	      <select name="report_options" id="id_report_options">
+		{% ifnotequal r.reportStatus "Archived" %}
+		{% ifequal bkL "True" %}
+		{% ifequal bkLE "True" %}
+		<option value="N" selected="selected">
+		  Select option...
+		</option>
+		<option value="E">
+		  Export...
+		</option>
+		<option value="A">
+		  Archive...
+		</option>
+		{% endifequal %}
+		{% ifnotequal bkLE "True" %}
+		<option value="N">
+		  Please select backup media to archive/export.
+		</option>
+		{% endifnotequal %}
+		<option value="P">
+		  Prune...
+		</option>
+		{% endifequal %}
+		{% ifnotequal bkL "True" %}
+		<option value = "N" selected="selected">
+		  Please configure report options in the services tab.
+		</option>
+		{% endifnotequal %}
+		<option value="D">
+		  Delete
+		</option>
+		<option value="Z">
+		  {% if r.autoExempt %}Remove exemption{% else %}Make exempt{% endif %}
+		</option>
+		{% endifnotequal %}
+		{% ifequal r.reportStatus "Archived" %}
+		<option value="N">
+		  (Report archived.)
+		</option>
+		<option value="D">
+		  Delete
+		</option>
+		{% endifequal %}
+	      </select>
+	    </form>
+	  </td>
+	  <td><a href="{% url rundb.views.viewLog pkR=r.pk %}">
+	    {% ifequal r.reportStatus "Nothing" %}
+		<img src="/site_media/images/Nothing.png" alt="Nothing" />
+	    {% else %}{% ifequal r.reportStatus "N" %}
+		<img src="/site_media/images/Nothing.png" alt="Nothing" />
+	    {% else %}{% ifequal r.reportStatus "Archived" %}
+		<img src="/site_media/images/Archived.png" alt="Archived" />
+	    {% else %}{% ifequal r.reportStatus "Archiving" %}
+		<img src="/site_media/images/Archiving.png" alt="Archiving" />
+	    {% else %}{% ifequal r.reportStatus "Exported" %}
+		<img src="/site_media/images/Exported.png" alt="Exported" />
+	    {% else %}{% ifequal r.reportStatus "Exporting" %}
+		<img src="/site_media/images/Exporting.png" alt="Exporting" />
+	    {% else %}{% ifequal r.reportStatus "Deleting" %}
+		<img src="/site_media/images/Deleting.png" alt="Deleting" />
+	    {% else %}{% ifequal r.reportStatus "Pruned" %}
+		<img src="/site_media/images/Pruned.png" alt="Pruned" />
+	    {% else %}{% ifequal r.reportStatus "Pruning" %}
+		<img src="/site_media/images/Pruning.png" alt="Pruning" />
+	    {% else %}{% ifequal r.reportStatus "Failure" %}
+		<img src="/site_media/images/Failure.png" alt="Failure" />
+	    {% else %}
+		<img src="/site_media/images/Nothing.png" alt="Deleting" />
+	    {% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}{% endifequal %}
+	  </a></td>
         </tr>
         <tr class="{% cycle 'row1' 'row2' %}" id="{{r.pk}}">
           <td colspan="12">

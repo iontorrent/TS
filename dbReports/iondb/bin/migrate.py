@@ -9,17 +9,18 @@ This script will do PostgreSQL database migrations, when they are needed.
 from djangoinit import *
 from django import db
 from django.db import transaction, IntegrityError, DatabaseError
+from django.db.models import fields
+from django.core import management
 import traceback
 import re
 import sys
 import os
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-#from django.db import models
 from iondb.rundb import models
 from datetime import datetime
 from iondb.rundb import json_field
-
+from django.core import management
+from optparse import NO_DEFAULT
+from south.exceptions import NoMigrations
 
 def q(s):
     cursor = db.connection.cursor()
@@ -797,16 +798,6 @@ def add_foreign_key (log, tableName, colName, referenceName, fieldType):
           """ALTER TABLE %s ADD FOREIGN KEY ("%s_id") REFERENCES %s (id);""" % (tableName, colName, fieldType, tableName, colName, referenceName))
         log.write("Added '%s_id' to %s table\n" % (colName, tableName))
 
-def add_table_dnabarcode(log):
-    try:
-        cursor = db.connection.cursor()
-        cursor.execute("SELECT * FROM rundb_dnabarcode limit 1")
-    except: #TODO: Need specific error that indicates table does not exist
-        # Add non existent table
-        q("""CREATE TABLE "rundb_dnabarcode () WITH ( OIDS + FALSE ) TABLESPACE pg_default; ALTER TABLE dnabarcode OWNER TO ion;""")
-        log.write("Added table rundb_dnabarcode\n")
-        
-
 def modify_chip_slot(log):
     chips = models.Chip.objects.all()
     for chip in chips:
@@ -828,12 +819,12 @@ def add_results_indexes(log):
             q(idx)
             log.write("Created index: '%s'\n" % idx)
         except (IntegrityError, DatabaseError):
+            # Already exists
             try:
                 transaction.rollback()
             except transaction.TransactionManagementError:
                 pass
             log.write("Index: '%s' already exists\n" % idx)
-            # Already exists
         except:
             log.write("Failed to create index:\n")
             log.write(traceback.format_exc())
@@ -995,14 +986,20 @@ def move_plugin_reports(log):
                     state = 'Error'
                 elif re_complete.search(state):
                     state = 'Complete'
-                else:
+                elif state == '':
                     """ Unknown is now a valid state """
                     state = 'Unknown'
+                else:
                     log.write("Unknown State: '%s' = '%s'\n" % (pluginName, state))
+                    # Truncate long strings to fit in 20 char field
+                    if len(state) > 20:
+                        state = (string[:18] + "+")
 
             if pluginName not in plugins:
                 log.write("No plugin record found for: '" + str(pluginName) + "' Creating placeholder.\n")
-                new_plugin = models.Plugin(name=pluginName,version='0',path='',active=False,selected=False,autorun=False)
+                new_plugin = models.Plugin(name=pluginName,version='0',
+                                           path='',date=datetime.now(),
+                                           active=False,selected=False,autorun=False)
                 new_plugin.save()
                 plugins[pluginName] = new_plugin
 
@@ -1010,15 +1007,15 @@ def move_plugin_reports(log):
 
             # Update existing records
             with transaction.commit_on_success():
-                #pluginreport = models.PluginResult.objects.get_or_create(plugin=plugin, result=result)
-                try:
-                    pluginreport = models.PluginResult.objects.get(plugin=plugin, result=result)
-                    pluginreport.state = state
-                    pluginreport.store = store
-                    count_update += 1
-                except models.PluginResult.DoesNotExist:
-                    pluginreport = models.PluginResult(plugin=plugin, result=result, state=state, store=store)
+                (pluginreport,created) = models.PluginResult.objects.get_or_create(plugin=plugin,result=result)
+                if created:
                     count_new += 1
+                else:
+                    count_update += 1
+
+                pluginreport.state = state
+                pluginreport.store = store
+
                 try:
                     pluginreport.save()
                 except:
@@ -1029,13 +1026,96 @@ def move_plugin_reports(log):
     if count_new or count_update:
         log.write('Migrated %d plugin results from Results to PluginReport. (%d new, %d updated)\n' % (count_new + count_update, count_new, count_update))
 
+    if count_errors:
+        log.write('ERROR: Found %d invalid records. Original values recorded in migrate.log.' % count_errors)
+
     ## Remove columns!
-    if count_errors == 0:
-        q("""ALTER TABLE rundb_results DROP COLUMN "pluginState", DROP COLUMN "pluginStore";""")
-    else:
-        ## NOTE: Leaving behind these columns will end up clobbering results from any plugins which are re-run since the original migration
-        log.write('ERROR: Found %d invalid records. Preserving existing pluginState/pluginStore.' % count_errors)
-        raise Exception('Invalid Plugin Records found. Migration failed')
+    q("""ALTER TABLE rundb_results DROP COLUMN "pluginState", DROP COLUMN "pluginStore";""")
+
+def has_south_init():
+    try:
+        cursor = db.connection.cursor()
+        cursor.execute("""SELECT * FROM south_migrationhistory WHERE app_name='rundb' AND migration='0001_initial' LIMIT 1""")
+        found_init = (cursor.rowcount == 1)
+        cursor.close()
+        return found_init
+    except (IntegrityError, DatabaseError):
+        try:
+            transaction.rollback() # restore django db to usable state
+        except transaction.TransactionManagementError:
+            pass
+    return False
+
+def call_legacy_syncdb(log):
+    log.write("Performing schema22 sync\n")
+    import migrate_schema22 as legacymigrate
+    legacymigrate.install_missing_tables()
+    log.write("Schema 22 Tables Created\n")
+
+def convert_to_south(log):
+    # syncdb runs for non south apps, and creates any missing tables
+    # it does nothing for south apps or existing tables (does not alter)
+    log.write("Taking database from 2.2 schema to current, using django south.\n")
+    management.call_command('syncdb', interactive=False, verbosity=0)
+
+    # Fix south issues in other (non rundb) tables
+    fix_south_issues(log)
+
+    try:
+        management.call_command('migrate', 'rundb', verbosity=1)
+    except DatabaseError,e:
+        if "already exists" in str(e) and "rundb_experiment" in str(e):
+            log.write("Marking database as Ion rundb schema 2.2 - 0001_initial\n")
+            management.call_command('migrate', 'rundb', '0001', fake=True)
+        else:
+            raise
+
+    # And bring anything else up to latest version
+    log.write("Running full south migration and syncdb\n")
+    management.call_command('migrate', all_apps=True, ignore_ghosts=True, verbosity=1)
+    management.call_command('syncdb', interactive=False, migrate_all=True, verbosity=0)
+
+    return
+
+def fix_south_issues(log):
+    # Torrent Server Version 2.2 is hereby declared as db schema version 0001
+    # This legacy migration script is still used to get to initial 2.2 schema
+    # We must fake inject existing db structures, or South will try to do it too
+    ## Note initial non-fake attempt for initial installs.
+    log.write("Fixing common south issues with djcelery and tastypie\n")
+
+    try:
+        management.call_command('migrate', 'djcelery', verbosity=0, ignore_ghosts=True)
+    except DatabaseError, e:
+        if "already exists" in str(e):
+            management.call_command('migrate', 'djcelery', '0001_initial', fake=True)
+        else:
+            raise
+
+        # python-celery 2.5 adds migration 0002
+        # depends on if south was initialized before djcelery was, so faking to make sure
+        try:
+            management.call_command('migrate', 'djcelery', verbosity=0)
+        except DatabaseError, e:
+            if "already exists" in str(e):
+                log.write("WARN: djcelery needed 0002 migration\n")
+                management.call_command('migrate', 'djcelery', '0002', fake=True)
+            else:
+                raise
+
+    # tastypie started using migrations in 0.9.11
+    # So we may have the initial tables already
+    try:
+        management.call_command('migrate', 'tastypie', verbosity=0, ignore_ghosts=True)
+    except DatabaseError, e:
+        if "already exists" in str(e):
+            management.call_command('migrate', 'tastypie', '0001', fake=True)
+        else:
+            raise
+    except NoMigrations:
+        log.write("ERROR: tastypie should have been upgraded to 0.9.11 before now...\n")
+
+    return
 
 
 def add_field_constraint_unique(log,tableName,columnName,constraintKey):
@@ -1137,21 +1217,32 @@ def remove_dbEntries_byPredicates(log, tableName, column1, value1, column2, valu
         
 
 if __name__ == '__main__':
-    hasdb = False
+
+    if has_south_init():
+        # south handles this from now on.
+        # Ensure south is sane and let it handle the rest.
+        fix_south_issues(sys.stdout)
+        print >> sys.stdout, "The rundb database now uses south. Run: python ./manage.py migrate rundb"
+        sys.exit(0)
+
     try:
         cursor = db.connection.cursor()
-        hasdb = True
         cursor.close()
     except:
-        hasdb=False
         print 'No database found'
-    if hasdb:
-        print "There is a database, trying to do the migration"
+        # Silent exit. Avoids failure during postinst.
+        sys.exit(0)
 
-        try:
-            f = open('/var/log/ion/migrate.log', 'w')
-        except:
-            f = open('migrate.log', 'w')
+    print "There is a database, trying to do the migration"
+    try:
+        f = open('/var/log/ion/migrate.log', 'w')
+    except:
+        f = open('migrate.log', 'w')
+
+    with f:
+        # Always runs, inserts any missing tables, at 2.2 schema
+        call_legacy_syncdb(f)
+
         #add default location check box
         add_bool_field(f, "rundb_location", ["defaultlocation"], False)
         add_ftp_status(f)
@@ -1178,7 +1269,6 @@ if __name__ == '__main__':
         add_plugin_char(f)
         add_plugin_bool(f)
         add_plugin_config(f)
-        add_table_dnabarcode(f)
         add_dnabarcode_char(f)
         experimentFlowOrder(f)
         add_content_file(f)
@@ -1259,7 +1349,9 @@ if __name__ == '__main__':
         #add runtype meta
         add_text_field(f,"rundb_runtype", "meta")
 
-        modify_chip_slot(f)
+        ##20120906-do-we-still need this?
+        ##also serves as workaround to bamboo build DatabaseError: column rundb_chip.description does not exist
+        ##modify_chip_slot(f)
 
         # Plugin inactivation and feed url
         add_char_field(f, "rundb_plugin", "url", 256)
@@ -1299,6 +1391,10 @@ if __name__ == '__main__':
         add_char_field(f,"rundb_globalconfig","ts_update_status",256)
         add_bool_field(f, "rundb_globalconfig", ["enable_auto_pkg_dl"], True)
         add_char_field(f,"rundb_globalconfig","basecallerargs",512)
+       
+        # Post 2.2 change - handled in South 0002
+        #add_char_field(f,"rundb_globalconfig","basecallerthumbnailargs",5000)
+        #add_char_field(f,"rundb_globalconfig","analysisthumbnailargs",5000)
 
         add_field_constraint_unique(f,"rundb_threeprimeadapter","name", "rundb_threeprimeadapter_name_key")
         add_char_field(f, "rundb_threeprimeadapter", "direction", 20)
@@ -1328,14 +1424,25 @@ if __name__ == '__main__':
         remove_dbEntries_byPredicates(f, 'rundb_librarykey', 'name', 'Finnzyme','sequence', 'TCAGTTCA')
         remove_dbEntries_byPredicates(f, 'rundb_threeprimeadapter', 'name', 'Finnzyme','sequence', 'TGAACTGACGCACGAAATCACCGACTGCCC')
 
-        ## These commands MUST be LAST.
+        # ************************************************************
+        #
+        # NOTE: Looking to make a schema change?  NOT HERE!
+        # This is the legacy migration script for old schemas up to 2.2
+        # Post 2.2, run:
+        # python ./manage.py schemamigration rundb --auto
+        #
+        # ************************************************************
+
         # Call ./manage.py syncdb
-        # temporarily undoing r29959 that broke dbreports build - RB
-        from django.core import management
-        management.call_command('syncdb')
+        management.call_command('syncdb', interactive=False)
 
         move_plugin_reports(f)
         add_results_indexes(f)
 
-    f.close()
+        # Finally - do initial south migration
+        convert_to_south(f)
+
+        ## Any further changes are done by south.
+
     sys.exit(0)
+

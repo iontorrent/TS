@@ -59,7 +59,7 @@ case "$1" in
         # Extract Device Driver Package
         echo "Extract Device Driver Package"
         rm -rf @ION_INSTALL_PREFIX@/devdriver
-        bash @ION_INSTALL_PREFIX@/devdriver_4.0_linux_64_270.27.run \
+        bash @ION_INSTALL_PREFIX@/devdriver_*.run \
             --extract-only \
             --target @ION_INSTALL_PREFIX@/devdriver > /tmp/nvidiadriver_install.log
         

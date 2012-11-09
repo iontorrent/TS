@@ -111,7 +111,6 @@ class ReportHelper:
         bf_info = self.beadfind_info
         if not bf_info:
             return None
-        bead_summary = self._from_tsv("beadSummary.filtered.txt")
 
         library_isp = int(bf_info["Library Beads"])
         tf_isp = int(bf_info["Test Fragment Beads"])
@@ -119,8 +118,8 @@ class ReportHelper:
         too_short = int(bf_info["Lib Filtered Beads (read too short)"])
         keypass_fail = int(bf_info["Lib Filtered Beads (fail keypass)"])
         polyclonal = int(bf_info["Lib Filtered Beads (too many positive flows)"])
-        poor_3prime_quality = int(bead_summary[0]["clipQual"])
-        short_trail_adapter = int(bead_summary[0]["clipAdapter"])
+        poor_3prime_quality = 0 #TODO int(bead_summary[0]["clipQual"])
+        short_trail_adapter = 0 #TODO int(bead_summary[0]["clipAdapter"])
         not_expected_signal = int(bf_info["Lib Filtered Beads (poor signal fit)"])
         final_reads = int(bf_info["Lib Validated Beads"])
 

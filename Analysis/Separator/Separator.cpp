@@ -272,11 +272,11 @@ void Separator::AddGlobalSample (int nRow, int nCol, int size, Region *region,
   for (size_t i = 0; i < breaks.size(); i++)
   {
     int row1 = 0, col1 = 0;
-    double previous = 0;
+
     if (i > 0)
     {
       FindCoords (breaks[i - 1], theta, row1, col1);
-      previous = breaks[i - 1];
+
     }
     int row2 = 0, col2 = 0;
     FindCoords (breaks[i], theta, row2, col2);
@@ -875,7 +875,7 @@ void Separator::Categorize (SequenceItem *seqList, int numSeqListItems,
   //debug
   for (i = 0; i < numSeqListItems; i++)
   {
-    fprintf (stdout, "%s\n", seqList[i].seq);
+    fprintf (stdout, "%s\n", seqList[i].seq.c_str());
     int flow;
     for (flow = 0; flow < seqList[i].numKeyFlows; flow++)
     {
@@ -1038,7 +1038,7 @@ void Separator::Categorize (SequenceItem *seqList, int numSeqListItems,
             //Unset MaskDud
             (*mask) [x + y * w] &= (~MaskDud);
             //Set MaskAmbiguous
-            (*mask) [x + y * w] |= MaskAmbiguous;
+            //(*mask) [x + y * w] |= MaskAmbiguous;
           }
         }
       }
@@ -1138,7 +1138,7 @@ void Separator::Categorize (SequenceItem *seqList, int numSeqListItems,
     FILE *afp = NULL;
     char fileName[512] = { 0 };
     snprintf (fileName, 512, "%s/avgNukeTrace_%s.txt", experimentDir,
-              seqList[i].seq);
+              seqList[i].seq.c_str());
     fopen_s (&afp, fileName, "wb");
 
     for (int flow = 0; flow < numKeyFlows; flow++)

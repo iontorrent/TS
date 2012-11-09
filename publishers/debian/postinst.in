@@ -1,0 +1,17 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+#set -x
+#echo "preinst $@"
+
+case "$1" in
+    configure)
+    echo "Restarting publisher dependent services..."
+    service celeryd restart && service apache2 restart
+
+    ;;
+esac
+
+exit 0
+
+

@@ -2,8 +2,8 @@
 
 import os
 import sys
-import mimeparse
-import tastypie
+#import mimeparse
+#import tastypie
 
 # put two directories up on the path to allow "from iondb." imports
 if os.path.dirname(__file__) == '':
@@ -26,5 +26,4 @@ global_settings.LOGGING_CONFIG=None
 
 from django.conf import settings
 
-sys.path.pop()
 sys.path.append(os.path.dirname(settings.LOCALPATH))

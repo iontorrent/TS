@@ -1,23 +1,156 @@
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-  <title>Ion Torrent Systems, Inc.</title>
-  <style type="text/css">
-    <!--
-
-    body {
-      text-align: center;
-      background-repeat: no-repeat;
-      background-position: top center;
-      background-color: #000000;
-    }
-
-    -->
-  </style>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />	
+	<title>Torrent Browser | Life Technologies</title>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.css" />
+	<link rel="stylesheet" href="/site_media/resources/bootstrap/css//bootstrap-responsive.css" >
+    <script type="text/javascript">
+	if (!window.console) {
+		(function() {
+		  var names = ["log", "debug", "info", "warn", "error", "assert", "dir", "dirxml",
+		  "group", "groupEnd", "time", "timeEnd", "count", "trace", "profile", "profileEnd"];
+		      window.console = {};
+		      for (var i = 0; i < names.length; ++i) {
+		        window.console[names[i]] = function() {};
+		      }
+		    }());
+	}
+    </script>
+    <!--Generate the Torrent Browser CSS using less js-->
+    
+    <link type="text/css" rel="stylesheet/less" href="/site_media/resources/styles/tb-layout.min.css" />    
+    <script type="text/javascript" src="/site_media/resources/less/less-1.3.0.min.js"></script>
+    <link type="text/css" rel="stylesheet/less" href="/site_media/resources/styles/tb-styles.min.css" />    
+    <script type="text/javascript" src="/site_media/resources/less/less-1.3.0.min.js"></script>
+        
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.7.2.min.js"></script> 
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>
+	<style>
+		.nav-pills > li > span {
+			margin-bottom: 4px;
+			margin-top: 4px;
+			padding-bottom: 6px;
+			padding-top: 6px;
+			border-radius: 5px 5px 5px 5px;
+			margin-bottom: 2px;
+			margin-top: 2px;
+			padding-bottom: 8px;
+			padding-top: 8px;
+			line-height: 14px;
+			margin-right: 2px;
+			padding-left: 12px;
+			padding-right: 12px;
+			font-style: bold;
+			font-size: 12px;
+			font-weight: bold;
+			text-decoration: none;
+			color: #333333;
+		}
+		.nav-pills > li > span:hover {
+	      background-color: #FFFFFF;
+	      text-decoration: none;
+	      outline: 0 none;
+	    }
+		.nav > li > span {
+			display: block;
+		}
+	</style>
 </head>
-<body onclick="javascript:window.location.href='/rundb'"
-      title="Click to continue to Torrent Browser.">
-<a href="/rundb">
-  <img style="border-style:none" src="TorrentServerSplash.jpg">
-</a>
+<body>
+	<div class="login">
+		<div class="container">
+			<div class="row login-form">
+				<div class="span4 logo"><img src="/site_media/resources/img/tb-logo3.png" border="0"></div>
+		
+				<div class="span8" id="login_html">
+				</div>
+			</div><!-- row -->
+			
+			<div class="splash-workflow">
+				<div class="login-sample" data-select="#plan" data-href="/plan/"></div>
+				<div class="login-sequence" data-select="#monitor" data-href="/monitor/"></div>
+				<div class="login-report" data-select="#data" data-href="/data/"></div>
+				<div class="login-plugin" data-select="#export" data-href="/data/"></div>
+			</div>
+		</div><!-- container -->
+		
+		<div class="main-push"></div>
+	</div>
+	
+	
+	<div class="footer">
+		<div class="container">
+			<div class="span2">
+				<img src="/site_media/resources/img/ion-logo2.png" border="0">
+			</div>
+			<div class="span8 pull-left">
+				<p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
+				<p><span class="copyright">&copy; 2012 Life Technologies Corporation. All Rights Reserved.</span> <a href="#">Technical Support</a> | <a href="#">Terms &amp; Conditions</a></p>
+			</div>
+		</div>
+	</div>
+<script type="text/javascript">
+$(document).ready(function(){
+	submitHandler = function(e){
+		e.preventDefault();
+		url = $(this).attr('action');
+		u = $(this).find('#id_username').val();
+		p = $(this).find('#id_password').val();
+		var jqxhr = $.post(url, $(this).serializeArray(), function(data,status,xhr) {
+	    	console.log("successs");
+	    })
+	    .success(function(data,status,xhr) {
+	    	if(data.redirect) {
+    		/** TS-4676: After login, user is required to authenticate again 
+    		 * if the same home page URL is entered in a new browser window 
+    		 * while the session is active
+			$.ajax({
+			    url: '{% url logout %}',
+			    type: 'POST',
+			    username: 'logout',
+			    password: '',
+			    async: false,
+			    success: function () {
+			    }
+			});
+    		 */
+    		//login info is correct so, automatically handle basic auth via ajax
+			$.ajax ({ url: "/data/", 
+				type: 'GET',
+				username: u,
+				password: p,
+				async: false, 
+				success: function () {
+			}
+			});    						
+    		window.location.href = data.redirect;
+	    	} else {
+	    		$('#login_html').empty();
+	    		$('#login_html').append(data.form);
+	    		$('#login-form').submit(submitHandler);
+	    	}
+	    	console.log("second success");
+	     })
+	    .error(function(data,status,xhr) { 
+	    	console.log("error"); 
+	    }).complete(function(data,status,xhr) { 
+	    	console.log("complete"); 
+	    });
+		
+	};
+	$.getJSON('/login/ajax/?next=/data/', function(data,status,xhr){
+		$('#login_html').append(data.form);
+		$('#login-form').submit(submitHandler);
+	});
+	
+	$('.splash-workflow div').hover(function(e){
+		$($(this).data('select')).fadeIn();
+	}, 
+	function(e){
+		$($(this).data('select')).hide();
+	});
+});
+</script>
 </body>
 </html>

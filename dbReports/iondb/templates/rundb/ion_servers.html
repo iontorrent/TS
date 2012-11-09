@@ -111,7 +111,7 @@
       <p class="centered_message">No active jobs.</p>
     {% else %}
       <div class="clear">
-        <div class="left_heading">Active Jobs</div>
+        <div class="left_heading"><table><tr><td width="90%">Active Jobs</td><td><a href = '/rundb/jobDetails'>Details</a></td></tr></table></div>
       </div>
       <div class="clear"></div>
       <table>
@@ -232,10 +232,33 @@
 {% endblock content2 %}
 
 {% block content3 %}
+<a name="ReportOpts"></a><div class="left_heading left"><b>Report Options</b></div>
+<div class="bounded_container clear">
+<table>
+<thead>
+  <tr>
+    <td></td>
+    <td><b>Location</b></td>
+    <td><b>Pruning Level</b></td>
+    <td><b>AutoPrune Enabled</b></td>
+  </tr>
+</thead>
+<tbody>
+  <tr class='row1'>
+    <td>
+      <a href="{% url rundb.views.edit_reportBackup bk.pk %}">Edit</a>
+    </td>
+    <td>{{ bk.location }}</td>
+    <td>Prune level {{ bk.pruneLevel }}.</td>
+    <td>{{ bk.autoPrune }}</td>
+  </tr>
+<tbody>
+</table>
+</div>
   <div>
   <div class="clear">
     <a name="archive"></a>
-    <div class="left_heading left"><b>Archive</b></div>
+    <div class="left_heading left"><b>Raw Data Archive</b></div>
     <div class="right_heading">
       {% if archive.backups %}
       {% else %}
@@ -251,10 +274,8 @@
         <tr>
           <th></th>
           <th>Enabled</th>
-          <th>Archive Directory</th>
-          <th>Mounted</th>
-          <th>Status</th>
-          <th>Activity Status</th>
+          <th>ionArchive Status</th>
+          <th>Current Activity</th>
         </tr>
         </thead>
         <tbody>
@@ -267,6 +288,29 @@
               <input {% if bu.online %}checked{% endif %} type='checkbox'
                      id='enableArchive_{{bu.pk}}'/>
             </td>
+
+            {% if archive.status %}
+              <td>Running</td>
+              <td>{{ bu.status }}</td>
+            {% else %}
+              <td>Down</td>
+              <td>-</td>
+            {% endif %}
+          </tr>
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th>Archive Location</th>
+            <th>Mounted</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for bu in archive.backups %}{% spaceless %}
+          <tr class="{% cycle 'row1' 'row2' %}">
             <td>{{ bu.backup_directory }}</td>
 
             {% if bu.check_if_online %}
@@ -274,16 +318,20 @@
             {% else %}
               <td>Not Mounted</td>
             {% endif %}
-            {% if archive.status %}
-              <td>Online</td>
-              <td>{{ bu.status }}</td>
-            {% else %}
-              <td>Offline</td>
-              <td>-</td>
-            {% endif %}
           </tr>
         {% endspaceless %}
+      {% endfor %}
+        <tr>
+          <th>Filesystem</th>
+          <th>Used Space</th>
+        </tr>
+        {% for key,value in archive.fs_stats.items %}
+          <tr>
+            <td>{{ key }}</td>
+            <td>{{ value|floatformat:1 }}%</td>
+          </tr>
         {% endfor %}
+          <tr><td> </td></tr>
         </tbody>
       </table>
       <div id="advancedSec">

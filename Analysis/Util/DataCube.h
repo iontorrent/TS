@@ -5,6 +5,8 @@
 #include <vector>
 #include <algorithm>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
 #include "IonErr.h"
 /**
@@ -33,6 +35,14 @@ public:
   }
 
   I ToIndex(C x, C y, C z) const { 
+    
+    // provide a useful error message and a place to trap
+    if (!(x >= mXStart && x < mXEnd && 
+              y >= mYStart && y < mYEnd && 
+                z >= mZStart && z < mZEnd)){
+      printf("%ld %ld %ld : %ld %ld %ld : %ld %ld %ld \n", mXStart,x,mXEnd,mYStart,y,mYEnd,mZStart,z,mZEnd);
+    }
+    // assert nearly useless as the error message doesn't give any hint as to the problem
     ION_ASSERT( x >= mXStart && x < mXEnd && 
               y >= mYStart && y < mYEnd && 
                 z >= mZStart && z < mZEnd,
@@ -115,5 +125,26 @@ private:
   /// Maximum value of dimensions possible
   C mNumX, mNumY, mNumZ;
 };
+
+//#ifndef __CUDACC__
+//#ifndef __CUDA_ARCH__
+// Boost serialization support:
+// Note: restricting index types to size_t to get around complaint from cuda compiler.
+template<class Archive, class T>
+void serialize(Archive& ar, DataCube<T,std::size_t,std::size_t>& c, const unsigned int version)
+{
+  ar
+  & c.mData
+  & c.mXStart
+  & c.mXEnd
+  & c.mYStart
+  & c.mYEnd
+  & c.mZStart
+  & c.mZEnd
+  & c.mNumX
+  & c.mNumY
+  & c.mNumZ;
+}
+//#endif
 
 #endif // DATACUBE_H

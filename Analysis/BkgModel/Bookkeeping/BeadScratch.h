@@ -9,6 +9,7 @@
 #include <float.h>
 #include <stdlib.h>
 #include <math.h>
+#include <vector>
 #include "FlowBuffer.h"
 #include "BeadParams.h"
 #include "DiffEqModel.h"
@@ -50,16 +51,46 @@ class BeadScratchSpace{
     
     BeadScratchSpace();
     ~BeadScratchSpace();
-    void Allocate(int npts,int num_derivatives);
-    void ResetXtalkToZero();
-    void FillEmphasis(int *my_emphasis, float *source_emphasis[],float *source_emphasis_scale);
-    void SetEmphasis(float *Ampl, int max_emphasis);
-    void CreateEmphasis(float *source_emphasis[], float *source_emphasis_scale);
-    void FillObserved(BkgTrace &my_trace,int ibd);
-    void FillShiftedBkg(EmptyTrace &emptytrace, float tshift, TimeCompression &time_c, bool force_fill);
+
+    void  Allocate(int npts,int num_derivatives);
+    void  ResetXtalkToZero();
+    void  FillEmphasis(int *my_emphasis, float *source_emphasis[], const std::vector<float>& source_emphasis_scale);
+    void  SetEmphasis(float *Ampl, int max_emphasis);
+    void  CreateEmphasis(float *source_emphasis[], const std::vector<float>& source_emphasis_scale);
+    void  FillObserved(BkgTrace &my_trace,int ibd);
+    void  FillShiftedBkg(EmptyTrace &emptytrace, float tshift, TimeCompression &time_c, bool force_fill);
     float CalculateFitError(float *per_flow_output, int numfb);
-    void MultiFlowReturnResiduals(float *y_minus_f);
-    void MultiFlowReturnFval(float *out, int numfb);
+    void  MultiFlowReturnResiduals(float *y_minus_f);
+    void  MultiFlowReturnFval(float *out, int numfb);
+
+ private:
+    int num_derivatives;
+    void AllocateScratch();
+
+    // Serialization section
+    friend class boost::serialization::access;
+    template<typename Archive>
+      void save(Archive& ar, const unsigned version) const {
+      ar &
+	custom_emphasis_scale &
+	WhichEmphasis &
+	bead_flow_t &
+	npts &
+	num_derivatives;
+    }
+    template<typename Archive>
+      void load(Archive& ar, const unsigned version) {
+      ar & 
+	custom_emphasis_scale &
+	WhichEmphasis &
+	bead_flow_t &
+	npts &
+	num_derivatives;
+      
+      AllocateScratch();
+    }
+
+    BOOST_SERIALIZATION_SPLIT_MEMBER()
 };
 
 

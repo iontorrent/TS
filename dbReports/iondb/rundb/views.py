@@ -1,5 +1,4 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-
 """
 Views
 =====
@@ -37,18 +36,24 @@ import xmlrpclib
 import stat
 import logging
 import traceback
+import forms
+import string
 from django.core.exceptions import ObjectDoesNotExist
-from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import logout, authenticate, login
 from django.db.models import Q
 from ion.utils.TSversion import findVersions
+from tastypie.bundle import Bundle
 
 import json
-import decimal
+from django.utils import simplejson
+from django.core import serializers
+# Handles serialization of decimal and datetime objects
+from django.core.serializers.json import DjangoJSONEncoder
+
 #for sorting a list of lists by a key
 from operator import itemgetter
-
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 
 from iondb.rundb.ajax import render_to_json
 from iondb.backup import rawDataStorageReport
@@ -57,28 +62,30 @@ from django.conf import settings
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.core import urlresolvers
 from django import http
-from django.core import serializers
+from django.forms.models import model_to_dict
+from django.db import transaction
+from django.http import HttpResponsePermanentRedirect
+from django.template.context import RequestContext
 
 os.environ['MPLCONFIGDIR'] = '/tmp'
-import matplotlib
 
 from iondb.anaserve import client
-from iondb.rundb import forms
-from iondb.rundb import models
+from iondb.rundb import forms, models
 from iondb.utils import tables
 from iondb.backup import devices
 from iondb.backup.archiveExp import Experiment
 from twisted.internet import reactor
 from twisted.web import xmlrpc, server
 
-from iondb.rundb import publishers
-from iondb.rundb import tasks
-
+from iondb.rundb import publishers, tasks
 from iondb.plugins.manager import PluginManager
 
 FILTERED = None # contains the last filter for the reports page for csv export
 
 logger = logging.getLogger(__name__)
+
+def flattenString(string):
+    return string.replace("\n"," ").replace("\r"," ").strip()
 
 def toBoolean(val, default=True):
     """convert strings from CSV to Python bool
@@ -88,7 +95,7 @@ def toBoolean(val, default=True):
         trueItems = ["true", "t", "yes", "y", "1", "" ]
         falseItems = ["false", "f", "no", "n", "none", "0" ]
     else:
-        trueItems = ["true", "t", "yes", "y", "1" ]
+        trueItems = ["true", "t", "yes", "y", "1", "on"]
         falseItems = ["false", "f", "no", "n", "none", "0", "" ]
 
     if str(val).strip().lower() in trueItems:
@@ -124,7 +131,7 @@ def base_context_processor(request):
         Q(status="unread", expires="read") | ~Q(expires="read"))
     from iondb.rundb.api import MessageResource
     resource = MessageResource()
-    msg_list = [resource.full_dehydrate(message) for message in messages]
+    msg_list = [resource.full_dehydrate(Bundle(message)) for message in messages]
     serialized_messages = resource.serialize(None, msg_list, "application/json")
     if msg_list: logger.debug("Found %d global messages" % len(msg_list))
     logger.debug("Global messages are %s" % serialized_messages)
@@ -163,7 +170,7 @@ def bind_messages(*bindings):
         return bound_view
     return bind_view
 
-
+@login_required
 def tf_csv(request):
     """Return a comma separated values list of all test fragment metrics."""
     #tbl = models.Results.to_pretty_table(models.Results.objects.all())
@@ -181,6 +188,7 @@ def remove_experiment(request, page=None):
     """TODO: Blocked on modifying the database schema"""
     pass
 
+@login_required
 def crawler_status(request):
     """Determine the crawler's status by attempting to query it over
     XMLRPC. If the ``crawler_status`` is unable to contact the crawler
@@ -215,6 +223,7 @@ def crawler_status(request):
     ctx = template.RequestContext(request, {"result_dict":dict(result_pairs)})
     return ctx
 
+@login_required
 def single_experiment(request, pk):
     """Present the user with information about a single experiment."""
     try:
@@ -287,6 +296,7 @@ def search_and_sort(qset, getURL, search, sort, model, default_sort, namefield):
         qset = qset.order_by(default_sort)
     return qset, getURL
 
+@login_required
 def experiment(request, page=None):
     """Display experiments, with filters, sorting, searching, and pagination
     applied."""
@@ -306,7 +316,7 @@ def experiment(request, page=None):
         getURL = urllib.urlencode(d)
         project = filter.cleaned_data['project']
         if project != 'None':
-            exp = exp.filter(project=project)
+            exp = exp.filter(results__projects__name=project).distinct()
         sample = filter.cleaned_data['sample']
         if sample != 'None':
             exp = exp.filter(sample=sample)
@@ -349,11 +359,14 @@ def experiment(request, page=None):
     #only return current indexes
     refgenomes = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION,enabled=True)
 
-    storages = models.ReportStorage.objects.all().order_by('id')
-    storage = storages[len(storages) - 1]
+    storages = models.ReportStorage.objects.all()
+    storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
 
+    '''if storage.dirPath[:len(storage.dirPath)-1] != '/':
+        disk = os.statvfs(storage.dirPath+'/')
+    else:'''
     disk = os.statvfs(storage.dirPath)
-
+        
     #values in bytes
     teraBytes  = 1099511627776
     gigaBytes  = 1073741824
@@ -379,6 +392,7 @@ def experiment(request, page=None):
     return shortcuts.render_to_response("rundb/ion_experiment.html",
                                         context_instance=context)
 
+@login_required
 def reports(request, page=None):
     """Display reports, with sorting, filtering, searching, and pagination
     applied."""
@@ -406,7 +420,7 @@ def reports(request, page=None):
 
         project = filter.cleaned_data['project']
         if project != 'None':
-            rep = rep.filter(experiment__project=project)
+            rep = rep.filter(projects__name=project)
         sample = filter.cleaned_data['sample']
         if sample != 'None':
             rep = rep.filter(experiment__sample=sample)
@@ -464,9 +478,20 @@ def reports(request, page=None):
         ctx = paginator.page(page)
     except (EmptyPage, InvalidPage):
         ctx = paginator.page(paginator.num_pages)
-
+        
+    rets = models.Results.objects.all()
+    bkL = models.dm_reports.objects.all().order_by('pk').reverse()
+    if len(bkL) > 0:
+        bkExist = "True"
+        if bkL[len(bkL)-1].location != (None or ''):
+            bkLocExist = "True"
+        else:
+            bkLocExist = "False"
+    else:
+        bkExist = "False"
+        bkLocExist = "False"
     ctxd = {"rep":ctx, "paginator":ctx, "filterform":filter, "getURL":getURL,
-            "searchform":search, "sortform":sort, "use_content2" : True }
+            "searchform":search, "sortform":sort, "use_content2" : True, "bkL": bkExist, "bkLE": bkLocExist}
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_report.html",
                                         context_instance=context)
@@ -512,13 +537,14 @@ def build_result(experiment, name, server, location):
     # reportLink is used in calls to dirname, which would otherwise resolve to parent dir
     link = path.join(server.webServerPath, location.name, "%s_%%03d" % name, "")
     j = lambda l: path.join(link, l)
-    storages = models.ReportStorage.objects.all().order_by('id')
-    storage = storages[len(storages) - 1]
+    storages = models.ReportStorage.objects.all()
+    storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
+        
     kwargs = {
         "experiment":experiment,
         "resultsName":name,
         "sffLink":j("%s_%s.sff" % (experiment, name)),
-        "fastqLink":j("%s_%s.fastq" % (experiment, name)),
+        "fastqLink":path.join(link,"basecaller_results", "%s_%s.fastq" % (experiment, name)),
         "reportLink": link, # Default_Report.php is implicit via Apache DirectoryIndex
         "status":"Pending", # Used to be "Started"
         "tfSffLink":j("%s_%s.tf.sff" % (experiment, name)),
@@ -540,24 +566,29 @@ def build_result(experiment, name, server, location):
     ret.save()
     return ret
 
-def create_meta(experiment, resultsName, unique_id):
+def create_meta(experiment, result):
+
     """Build the contents of a report metadata file (``expMeta.dat``)."""
     lines = ("Run Name = %s" % experiment.expName,
              "Run Date = %s" % experiment.date,
-             "Analysis Name = %s" % resultsName,
-             "Analysis Date = %s" % datetime.date.today(),
-             "Analysis Cycles = %s" % experiment.cycles, #TODO: change this to flows
-             "Analysis Flows = %s" % experiment.flows,
-             "Project = %s" % experiment.project,
+             "Run Cycles = %s" % experiment.cycles,
+             "Run Flows = %s" % experiment.flows,
+             "Project = %s" % ','.join(p.name for p in result.projects.all()),
              "Sample = %s" % experiment.sample,
-             "Library = %s" % experiment.library,
+             "Library = %s" % result.reference,
              "PGM = %s" % experiment.pgmName,
+             "Flow Order = %s" % (experiment.flowsInOrder.strip() if experiment.flowsInOrder.strip() != '0' else 'TACG'),
+             "Library Key = %s" % (experiment.libraryKey if experiment.libraryKey != "" else experiment.reverselibrarykey),
+             "TF Key = %s" % "ATCG", # TODO, is it really unique?
              "Chip Check = %s" % get_chipcheck_status(experiment),
              "Chip Type = %s" % experiment.chipType,
              "Chip Data = %s" % experiment.rawdatastyle,
              "Notes = %s" % experiment.notes,
              "Barcode Set = %s" % experiment.barcodeId,
-             "runID = %s" % unique_id,
+             "Analysis Name = %s" % result.resultsName,
+             "Analysis Date = %s" % datetime.date.today(),
+             "Analysis Flows = %s" % result.processedflows,
+             "runID = %s" % result.runid,
              )
     return ('expMeta.dat', '\n'.join(lines))
     
@@ -572,7 +603,7 @@ def create_bc_conf(barcodeId,fname):
     See C source code BarCode.h for list of valid keywords
     """
     # Retrieve the list of barcodes associated with the given barcodeId
-    db_barcodes = models.dnaBarcode.objects.filter(name=barcodeId)
+    db_barcodes = models.dnaBarcode.objects.filter(name=barcodeId).order_by("index")
     lines = []
     for db_barcode in db_barcodes:
         lines.append('barcode %d,%s,%s,%s,%s,%s,%d,%s' % (db_barcode.index,db_barcode.id_str,db_barcode.sequence,db_barcode.adapter,db_barcode.annotation,db_barcode.type,db_barcode.length,db_barcode.floworder))
@@ -640,7 +671,14 @@ class BailException(Exception):
         super(BailException, self).__init__()
         self.msg = msg
 
-def createReport(request, pk, reportpk):
+@login_required
+@csrf_exempt
+def displayReport(request, pk):
+    ctx = {}
+    ctx = template.RequestContext(request, ctx)
+    return shortcuts.render_to_response("rundb/reports/report.html", context_instance=ctx)
+
+def _createReport(request, pk, reportpk):
     """
     Send a report to the job server.
     
@@ -687,41 +725,63 @@ def createReport(request, pk, reportpk):
         loc = models.Location.objects.filter(defaultlocation=True)
         if not loc:
             #if there is not a default, just take the first one
-            loc = models.Location.objects.all()
+            loc = models.Location.objects.all().order_by('pk')
         if loc:
             loc = loc[0]
         else:
             logger.critical("There are no Location objects, at all")
             raise ObjectDoesNotExist("There are no Location objects, at all.")
 
-    # Always use the last, latest ReportStorage object
-    storages = models.ReportStorage.objects.all().order_by('id')
-    storage = storages[len(storages) - 1]
+    # Always use the default ReportStorage object
+    storages = models.ReportStorage.objects.all()
+    storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
     start_error = None
     
     # Get list of Reports associated with the ChipBarCode of this experiment
     # This is the link between Reports of Paired-End experiments
-    pe_experiments = models.Experiment.objects.filter(chipBarcode=exp.chipBarcode)
-    logger.debug("chipBarcode: %s" % exp.chipBarcode)
-    javascript = ""
+
     rev_report_list = [("None","None")]
     fwd_report_list = [("None","None")]
-    for pe_exp in pe_experiments:
-        results = pe_exp.sorted_results_with_reports()
-        for result in results:
-            # skip Paired-End Reports
-            if result.metaData.get('paired','') == '':
-                if result.experiment.isReverseRun:
-                    rev_report_list.append((result.get_report_dir(),result.resultsName))
-                else:
-                    fwd_report_list.append((result.get_report_dir(),result.resultsName))
-            
+    javascript = ""
+    
+    # alignment reference
+    references = [("none","none")]
+    for r in models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION,enabled=True):
+      references.append((r.short_name, r.short_name+" ("+r.name+")"))        
+
+    if exp.chipBarcode:
+        #fix-TS-3900 pe_experiments = models.Experiment.objects.filter(chipBarcode=exp.chipBarcode)        
+        pe_experiments = models.Experiment.objects.filter(chipBarcode__iexact=exp.chipBarcode)
+        
+        logger.debug("chipBarcode: %s" % exp.chipBarcode)
+        for pe_exp in pe_experiments:
+            results = pe_exp.sorted_results_with_reports()
+            for result in results:
+                # skip Paired-End Reports
+                if result.metaData.get('paired','') == '':
+                    if result.experiment.isReverseRun:
+                        rev_report_list.append((result.get_report_dir(),result.resultsName))
+                    else:
+                        fwd_report_list.append((result.get_report_dir(),result.resultsName))
+
+    isProton = True if exp.chipType == "900" else False
 
     #get the list of report addresses
     resultList = models.Results.objects.filter(experiment=exp).order_by("timeStamp")
     previousReports = []
-    for result in resultList:
-        previousReports.append( (result.get_report_dir(), result.resultsName + " [" + str(result.get_report_dir()) + "]") )
+    simple_version = re.compile(r"^(\d+\.?\d*)")
+    for r in resultList:
+        #try to get the version the major version the report was generated with
+        try:
+            versions = dict(v.split(':') for v in r.analysisVersion.split(",") if v)
+            version = simple_version.match(versions['db']).group(1)
+        except Exception:
+            #just fail to 2.2
+            version = "2.2"
+        previousReports.append(( r.get_report_dir(), 
+                        r.resultsName + " [" + str(r.get_report_dir()) + "]", 
+                        version
+        ))
 
     if request.method == 'POST':
         rpf = forms.RunParamsForm(request.POST, request.FILES)
@@ -729,12 +789,12 @@ def createReport(request, pk, reportpk):
         rpf.fields['previousReport'].widget.choices = previousReports
         rpf.fields['forward_list'].widget.choices = fwd_report_list
         rpf.fields['reverse_list'].widget.choices = rev_report_list
+        rpf.fields['reference'].widget.choices = references
 
         #send some js to the page
         previousReportDir = get_initial_arg(reportpk)
         if previousReportDir:
             rpf.fields['blockArgs'].initial = "fromWells"
-            #should thi s be outise the post?
             javascript = """
             $("#fromWells").click();
             """
@@ -752,30 +812,50 @@ def createReport(request, pk, reportpk):
             tfConfig = rpf.cleaned_data['tf_config']
             tfKey = rpf.cleaned_data['tfKey']
             blockArgs = rpf.cleaned_data['blockArgs']
-            doThumbnail = False
+            doThumbnail = rpf.cleaned_data['do_thumbnail']
+            doBaseRecal = rpf.cleaned_data['do_base_recal']
             ts_job_type = ""
+            if doThumbnail and exp.chipType == "900":
+                ts_job_type = 'thumbnail'
+                result.metaData["thumb"] = 1
 
-            args = rpf.cleaned_data['args']
-            basecallerArgs= rpf.cleaned_data['basecallerArgs']
+            args = flattenString(rpf.cleaned_data['args'])
+            basecallerArgs= flattenString(rpf.cleaned_data['basecallerArgs'])
+            thumbnailBasecallerArgs= flattenString(rpf.cleaned_data['thumbnailBasecallerArgs'])
+            thumbnailAnalysisArgs= flattenString(rpf.cleaned_data['thumbnailAnalysisArgs'])
 
-            #replace newlines with spaces
-            args = args.replace("\n"," ")
-            args = args.replace("\r"," ")
-            basecallerArgs = basecallerArgs.replace("\n"," ")
-            basecallerArgs = basecallerArgs.replace("\r"," ")
-
-            #do a full alignment? hardcode to false for now
-
-            align_full = False
-
+            #do a full alignment?
+            align_full = rpf.cleaned_data['align_full']
             #If libraryKey was set, then override the value taken from the explog.txt on the PGM
             libraryKey = rpf.cleaned_data['libraryKey']
             #ionCrawler may modify the path to raw data in the path variable passed thru URL
             exp.expDir = rpf.cleaned_data['path']
             aligner_opts_extra = rpf.cleaned_data['aligner_opts_extra']
+            mark_duplicates = rpf.cleaned_data['mark_duplicates']
             result.runid = create_runid(resultsName + "_" + str(result.pk))
             previousReport = rpf.cleaned_data['previousReport']
-
+            
+            if rpf.cleaned_data['reference']:
+              result.reference = rpf.cleaned_data['reference']
+            else:
+              result.reference = exp.library
+            
+            #attach project(s)
+            projectNames = get_project_names(rpf, exp)                    
+            username = request.user.username
+            for name in projectNames.split(','):
+              if name:                                  
+                try:
+                  p = models.Project.objects.get(name = name)            
+                except models.Project.DoesNotExist:              
+                  p = models.Project()
+                  p.name = name    
+                  p.creator = models.User.objects.get(username = username) 
+                  p.save()
+                  models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, request.user.username)  
+                result.projects.add(p)
+                models.EventLog.objects.add_entry(p, "Add result (%s) during report creation." % result.pk, request.user.username)  
+            
             result.save()
             try:
                 # Set the select fields here for the case when Bail exception is caught and form is reloaded.
@@ -816,20 +896,26 @@ def createReport(request, pk, reportpk):
                 #------------------------------------------------
                 # Data directory is located on this server
                 logger.debug("Start Analysis on %s" % exp.expDir)
-                if bk and (rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF"):
-                    if str(bk.backupPath) == 'DELETED':
-                        bail(result, "The analysis cannot start because the raw data has been deleted.")
-                        logger.warn("The analysis cannot start because the raw data has been deleted.")
-                    else:
-                        try:
-                            datfiles = os.listdir(exp.expDir)
-                            logger.debug("Got a list of files")
-                        except:
-                            logger.debug(traceback.format_exc())
-                            bail(result,
-                                 "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available." % (str(bk.backupPath),))
-                if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not path.exists(exp.expDir):
-                    bail(result, "No path to raw data")
+                if ts_job_type == "thumbnail":
+                    # thumbnail raw data is special in that despite there being a backup object for the dataset, thumbnail data is not deleted.
+                    if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not path.exists(os.path.join(exp.expDir,'thumbnail')):
+                        bail(result, "No path to raw data")
+                else:
+                    if bk and (rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF"):
+                        if str(bk.backupPath) == 'DELETED':
+                            bail(result, "The analysis cannot start because the raw data has been deleted.")
+                            logger.warn("The analysis cannot start because the raw data has been deleted.")
+                        else:
+                            try:
+                                datfiles = os.listdir(exp.expDir)
+                                logger.debug("Got a list of files")
+                            except:
+                                logger.debug(traceback.format_exc())
+                                bail(result,
+                                     "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available." % (str(bk.backupPath),))
+                    if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not path.exists(exp.expDir):
+                        bail(result, "No path to raw data")
+                
                 try:
                     host = "127.0.0.1"
                     conn = client.connect(host, settings.JOBSERVER_PORT)
@@ -844,17 +930,19 @@ def createReport(request, pk, reportpk):
                 except ValueError as ve:
                     bail(result, str(ve))
                 # write meta data to folder for report
-                files.append(create_meta(exp, resultsName,result.runid))
+                files.append(create_meta(exp, result))
                 files.append(create_pk_conf(result.pk))
                 # write barcodes file to folder
                 if exp.barcodeId and exp.barcodeId is not '':
                     files.append(create_bc_conf(exp.barcodeId,"barcodeList.txt"))
                 # tell the analysis server to start the job
                 params = makeParams(exp, args, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
-                                                        os.path.join(storage.webServerPath, loc.name),aligner_opts_extra,
+                                                        os.path.join(storage.webServerPath, loc.name), aligner_opts_extra,
+                                                        mark_duplicates,
                                                         select_forward, select_reverse,
                                                         basecallerArgs, result.runid,
-                                                        previousReport, tfKey)
+                                                        previousReport, tfKey,
+                                                        thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal)
                 chip_dict = {}
                 try:
                     chips = models.Chip.objects.all()
@@ -867,10 +955,10 @@ def createReport(request, pk, reportpk):
                 except (socket.error, xmlrpclib.Fault):
                     bail(result, "Failed to contact job server.")
                 # redirect the user to the report started page
-                url = urlresolvers.reverse('report-started', args=(result.pk,))
-                return http.HttpResponsePermanentRedirect(url)
+                return result
             except BailException as be:
                 start_error = be.msg
+                logger.exception("Aborted createReport for result %d: '%s'", result.pk, start_error)
                 result.delete()
     # fall through if not valid...
 
@@ -878,6 +966,8 @@ def createReport(request, pk, reportpk):
 
         rpf = forms.RunParamsForm()
         rpf.fields['path'].initial = path.join(exp.expDir)
+        rpf.fields['align_full'].initial = False
+        #rpf.fields['mark_duplicates'].initial = False
 
         #if there is a library Key for the exp use that instead of the default
         if exp.isReverseRun:
@@ -896,7 +986,10 @@ def createReport(request, pk, reportpk):
         rpf.fields['forward_list'].widget.choices = fwd_report_list
         rpf.fields['reverse_list'].widget.choices = rev_report_list
         rpf.fields['previousReport'].widget.choices = previousReports
-
+        rpf.fields['reference'].widget.choices = references        
+        rpf.fields['reference'].initial = exp.library        
+        rpf.fields['project_names'].initial = get_project_names(rpf, exp)
+        
         #send some js to the page
         previousReportDir = get_initial_arg(reportpk)
         if previousReportDir:
@@ -907,10 +1000,56 @@ def createReport(request, pk, reportpk):
             javascript += '$("#id_previousReport").val("'+previousReportDir +'");'
 
 
-    ctx = {"rpf": rpf, "expName":exp.pretty_print_no_space, "start_error":start_error, "javascript" : javascript}
+    ctx = {"rpf": rpf, "expName":exp.pretty_print_no_space, "start_error":start_error, "javascript" : javascript,
+           "isProton":isProton, "pk":pk, "reportpk":reportpk, "isexpDir": os.path.exists(exp.expDir)}
     ctx = template.RequestContext(request, ctx)
-    return shortcuts.render_to_response("rundb/ion_run.html",
-                                        context_instance=ctx)
+    return ctx
+@login_required
+@csrf_exempt
+def createReport(request, pk, reportpk):
+    """
+    Send a report to the job server.
+    
+    If ``createReport`` receives a `GET` request, it displays a form
+    to the user.
+
+    If ``createReport`` receives a `POST` request, it will attempt
+    to validate a ``RunParamsForm``. If the form fails to validate, it
+    re-displays the form to the user, with error messages explaining why
+    the form did not validate (using standard Django form error messages).
+
+    If the ``RunParamsForm`` is valid, ``createReport`` will go through
+    the following process. If at any step the process fails, ``createReport``
+    raises and then catches ``BailException``, which causes an error message
+    to be displayed to the user.
+
+    * Attempt to contact the job server. If this does not raise a socket
+      error or an ``xmlrpclib.Fault`` exception, then ``createReport`` will
+      check with job server to make sure the job server can write to the
+      report's intended working directory.
+    * If the user uploaded a template file (for use as ``DefaultTFs.conf``),
+      then ``createReport`` will check that the file is under 1MB in size.
+      If the file is too big, ``createReport`` bails.
+    * Finally, ``createReport`` contacts the job server and instructs it
+      to run the report.
+
+    When contacting the job server, ``createReport`` will attempt to
+    figure out where the appropriate job server is listening. First,
+    ``createReport`` checks to see if these is an entry in
+    ``settings.JOB_SERVERS`` for the report's location. If it doesn't
+    find an entry in ``settings.JOB_SERVERS``, it attempts to connect
+    to `127.0.0.1` on the port given by ``settings.JOBSERVER_PORT``.
+    """
+    templateName = "rundb/ion_run.html"
+        
+    result = _createReport(request, pk, reportpk)
+    if isinstance(result, RequestContext):
+        return shortcuts.render_to_response(templateName,
+                                        context_instance=result)
+    if (request.method == 'POST'):
+        url = urlresolvers.reverse('report-started', args=(result.pk,))
+        return HttpResponsePermanentRedirect(url)    
+    
 def get_chip_args(chipType):
     """Get the chip specific arguments to use when launching a run"""
     chips = models.Chip.objects.all()
@@ -932,8 +1071,36 @@ def get_initial_arg(pk):
             return ""
     else:
         return ""
+        
+def get_project_names(rpf, exp):
+    names = ''
+    # get projects from form
+    try:
+      names = rpf.cleaned_data['project_names']
+    except:
+      pass  
+    if len(names) > 1: return names
+    # get projects from previous report
+    if len(exp.sorted_results()) > 0: 
+      names = exp.sorted_results()[0].projectNames()
+    if len(names) > 1: return names           
+    # get projects from Plan
+    if exp.selectedPlanGUID:
+      try:
+        planObj = models.PlannedExperiment.objects.get(planGUID=exp.selectedPlanGUID)
+        names = [p.name for p in planObj.projects.all()]  
+        names = ','.join(names)  
+      except:
+        pass
+    if len(names) > 1: return names    
+    # last try: get from explog  
+    try:
+      names = exp.log['project']  
+    except:
+      pass
+    return names    
 
-def report_started(request, pk):
+def _report_started(request, pk):
     """
     Inform the user if a report sent to the job server was successfully
     started.
@@ -949,54 +1116,80 @@ def report_started(request, pk):
             "link":report, "log":log,
             "status":result.status}
     ctx = template.RequestContext(request, ctxd)
+    return ctx
+
+@login_required
+def report_started(request, pk):
+    """
+    Inform the user if a report sent to the job server was successfully
+    started.
+    """
+    ctx = _report_started(request, pk)
     tmplname = "rundb/ion_successful_start_analysis.html"
     return shortcuts.render_to_response(tmplname, context_instance=ctx)
 
-def get_selected_plugins():
+def get_plugins_dict(pg, plan={}, plan_selected_only = False):
     """
     Build a list containing dictionaries of plugin information.
     will only put the plugins in the list that are selected in the 
     interface
     """
-    try:
-        pg = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
-    except:
-        return ""
     ret = []
     if len(pg) > 0:
-        ret = [{'name':p.name,
+        selected = []           
+        selectedInput = {}
+        if plan and 'selectedPlugins' in plan.keys():
+          selectedPlugins = json.loads(plan['selectedPlugins'])
+          selectedNames = []
+          if 'planplugins' in selectedPlugins.keys():
+              selected += selectedPlugins['planplugins']
+          if 'planuploaders' in selectedPlugins.keys():
+              selected += selectedPlugins['planuploaders']
+          for planplugin in selected:
+              selectedNames.append(planplugin['name'])            
+              if 'userInput' in planplugin.keys():
+                  selectedInput[planplugin['name']] = planplugin['userInput']
+              else:
+                  selectedInput[planplugin['name']] = {}
+        
+        for p in pg:
+          # Exclude plugins based on Plan selection if any
+          if plan_selected_only and (len(selected) > 0) and (p.name not in selectedNames):
+              continue            
+        
+          params = {'name':p.name,
                 'path':p.path,
                 'version':p.version,
+                'id':p.id,
                 'project':p.project,
                 'sample':p.sample,
                 'libraryName':p.libraryName,
                 'chipType':p.chipType,
-                'autorun':p.autorun} for p in pg]
-        return ret
-    else:
-        return ""
+                'autorun':p.autorun,
+                'pluginconfig': json.dumps(p.config),
+                'userInput':  selectedInput.get(p.name, '')
+                } 
+                
+          for key in p.pluginsettings.keys():
+              params[key] = p.pluginsettings[key]
+          
+          ret.append(params)   
+    return ret    
 
 
-class DecimalEncoder(json.JSONEncoder):
-    """This extension of JSONEncoder correctly serializes Decimal objects"""
-    def _iterencode(self, o, markers=None):
-        if isinstance(o, decimal.Decimal):
-           return (str(o) for o in [o])
-        return super(DecimalEncoder, self)._iterencode(o, markers)
-
-
-def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
-                                url_path, aligner_opts_extra,
+def makeParams(exp, args, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
+                                url_path, aligner_opts_extra, mark_duplicates,
                                 select_forward, select_reverse, basecallerArgs, runid,
-                                previousReport,tfKey):
+                                previousReport,tfKey,
+                                thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
     will need to be run must be constructed here and included inside the return.  
     This includes any special instructions for flow control in the top level script."""
-    gc = models.GlobalConfig.objects.all().order_by('id')[0]
-    plugins = get_selected_plugins()
-    exp = expOb
+    gc = models.GlobalConfig.objects.all().order_by('id')[0]    
     pathToData = path.join(exp.expDir)
+    if doThumbnail and exp.chipType == "900":
+        pathToData = path.join(pathToData,'thumbnail')
     defaultLibKey = gc.default_library_key
 
     ##logger.debug("...views.makeParams() gc.default_library_key=%s;" % defaultLibKey)
@@ -1009,38 +1202,46 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
     exp_json = exp_json[0]["fields"]
 
     #now get the plan and return that
-    plan = exp.log.get("pending_run_short_id",{})
+    try:
+        if exp.plan:
+            planObj = [exp.plan]
+        elif exp.selectedPlanGUID:
+            # Why isn't the FK set?
+            planObj = models.PlannedExperiment.objects.filter(planGUID=exp.selectedPlanGUID)
+        else:
+            # Fallback to explog data... crawler should be setting this up
+            planId = exp.log.get("pending_run_short_id",exp.log.get("planned_run_short_id", {}))
+            if planId:
+                planObj = models.PlannedExperiment.objects.filter(planShortID=planId)
+                # Broken - ShortID is not unique once plan is used, may get wrong plan here.
+            else:
+                planObj = []
+    except: ## (KeyError, ValueError, TypeError):
+        logger.exception("Failed to extract plan data from exp '%s'", exp.expName)
+        planObj = []
 
-    #fix [PGM-3190] - starting from v2.2, key for the plan has been renamed to planned_run_short_id 
-    if not plan:
-        plan = exp.log.get("planned_run_short_id", {})
-            
-    if plan:
-        plan_filter = models.PlannedExperiment.objects.filter(planShortID=plan)
-        plan_json = serializers.serialize("json", plan_filter)
+    if planObj:
+        plan_json = serializers.serialize("json", planObj)
         plan_json = json.loads(plan_json)
-        try:
-            plan = plan_json[0]["fields"]
-        except IndexError:
-            plan = {}
+        plan = plan_json[0]["fields"]
+    else:
+        plan = {}
+
+    try:
+        pg = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
+        plugins = get_plugins_dict(pg, plan, True)
+    except:
+        logger.exception("Failed to get list of active plugins")
+        plugins = ""
 
     site_name = gc.site_name
     barcode_args = gc.barcode_args
 
-    try:
-        libraryName = models.ReferenceGenomes.objects.get(short_name=exp.library).name
-    except:
-        libraryName = exp.library
+    libraryName = result.reference
 
     skipchecksum = False
     fastqpath = result.fastqLink.strip().split('/')[-1]
 
-    #logger.debug("... views.makeParams() exp.name=%s;" % exp.expName)
-    #logger.debug("... views.makeParams() exp.libraryKey=%s; " % exp.libraryKey)
-    #logger.debug("... views.makeParams() exp.forward 3' adapter=%s; " % exp.forward3primeadapter)
-    #logger.debug("... views.makeParams() exp.reverseLibraryKey=%s; " % exp.reverselibrarykey)
-    #logger.debug("... views.makeParams() exp.reverse3primeadapter=%s; " % exp.reverse3primeadapter)
-    
     #TODO: remove the libKey from the analysis args, assign this in the TLScript. To make this more fluid
 
     #if the librayKey was set by createReport use that value. If not use the value from the PGM
@@ -1053,13 +1254,6 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
     if libraryKey == None or len(libraryKey) < 1:
         libraryKey = defaultLibKey
 
-        
-    #TODO: SEE IF WE CAN TAKE OFF -C off
-    if len(args.strip()) != 0:
-        analysisArgs = args.strip() + " %s" % (pathToData)
-    else:
-        analysisArgs = "%s" % (pathToData)
-
     # floworder field sometimes has whitespace appended (?)  So strip it off
     flowOrder = exp.flowsInOrder.strip()
     # Set the default flow order if its not stored in the dbase.  Legacy support
@@ -1071,7 +1265,7 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
         barcodeId = exp.barcodeId
     else:
         barcodeId = ''
-    project = exp.project
+    project = ','.join(p.name for p in result.projects.all())
     sample = exp.sample
     chipType = exp.chipType
     #net_location = gc.web_root
@@ -1125,12 +1319,28 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
     else:
         adapter_primer_dict = adapter_primer_dicts[0]
 
-    logger.debug("... views.makeParams() exp.name=%s;" % exp.expName)
-    logger.debug("...about to exit views.makeParams() libraryKey=%s;" % libraryKey)
-    logger.debug("...about to exit views.makeParams() adapter_primer=%s;" % adapter_primer_dict.sequence)    
-    
+
     rawdatastyle = exp.rawdatastyle
-    
+
+    #if args are passed use them, if not default to the global config default
+    #TODO, do chip stuff here too
+    if args:
+        analysisArgs = args
+    else:
+        analysisArgs = flattenString(gc.default_command_line)
+
+    #if basecallerArgs are not provied, default to the global config defauly
+    if not basecallerArgs:
+        basecallerargs = flattenString(gc.basecallerargs)
+
+    #get the thumbnail analysis args
+    if not thumbnailAnalysisArgs:
+        thumbnailAnalysisArgs = flattenString(gc.analysisthumbnailargs)
+
+    #get the thumbnail basecaller args
+    if not thumbnailBasecallerArgs:
+        thumbnailBasecallerArgs = flattenString(gc.basecallerthumbnailargs)
+
     ret = {'pathToData':pathToData,
            'analysisArgs':analysisArgs,
            'basecallerArgs' : basecallerArgs,
@@ -1149,27 +1359,34 @@ def makeParams(expOb, args, blockArgs, doThumbnail, resultsName, result, align_f
            'chiptype':chipType,
            'barcodeId':barcodeId,
            'net_location':net_location,
-           'exp_json': json.dumps(exp_json),
+           'exp_json': json.dumps(exp_json,cls=DjangoJSONEncoder),
            'site_name': site_name,
            'url_path':url_path,
            'reverse_primer_dict':adapter_primer_dict,
            'rawdatastyle':rawdatastyle,
            'aligner_opts_extra':aligner_opts_extra,
+           'mark_duplicates' : mark_duplicates,
            'plan': plan,
            'flows':exp.flows,
            'pgmName':exp.pgmName,
            'pe_forward':select_forward,
            'pe_reverse':select_reverse,
            'isReverseRun':exp.isReverseRun,
-           'barcode_args':json.dumps(barcode_args,cls=DecimalEncoder),
+           'barcode_args':json.dumps(barcode_args,cls=DjangoJSONEncoder),
            'tmap_version':settings.TMAP_VERSION,
            'runid':runid,
            'previousReport':previousReport,
-           'tfKey': tfKey
+           'tfKey': tfKey,
+           'thumbnailAnalysisArgs': thumbnailAnalysisArgs,
+           'thumbnailBasecallerArgs' : thumbnailBasecallerArgs,
+           'doThumbnail' : doThumbnail,
+           'sam_parsed' : True if os.path.isfile('/opt/ion/.ion-internal-server') else False,
+           'doBaseRecal':doBaseRecal,
     }
     
     return ret
 
+@login_required
 def current_jobs(request):
     """
     Display status information about any job servers listed in
@@ -1205,12 +1422,15 @@ def current_jobs(request):
     ctx = template.RequestContext(request, ctxd)
     return ctx
 
+@login_required
 def blank(request, **kwargs):
     """
     just render a blank template
     """
-    return shortcuts.render_to_response("rundb/ion_blank.html", {'tab':kwargs['tab']})
+    return shortcuts.render_to_response("rundb/reports/30_default_report.html", 
+        {'tab':kwargs['tab']})
 
+@login_required
 def edit_template(request, pk):
     """
     Make changes to an existing test fragment template database record,
@@ -1259,6 +1479,7 @@ def edit_template(request, pk):
             return shortcuts.render_to_response("rundb/ion_edit_template.html",
                                                 context_instance=ctx)
 
+@login_required
 def db_backup(request):
     
     def get_servers():
@@ -1284,6 +1505,17 @@ def db_backup(request):
             daemon_status = False
         return daemon_status
     
+    def removeOnly():
+        '''Makes xmlrpc call to the ionArchive daemon to get the remove_only flag'''
+        try:
+            astat = xmlrpclib.ServerProxy("http://127.0.0.1:%d" % settings.IARCHIVE_PORT)
+            logger.debug ("Sending xmplrpc remove_only_mode")
+            remove_only_status = astat.remove_only_mode()
+        except:
+            logger.exception(traceback.format_exc())
+            remove_only_status = True
+        return remove_only_status
+    
     # Determine if ionArchive service is running
     daemon_status = areyourunning()
     
@@ -1292,37 +1524,50 @@ def db_backup(request):
     # populate dictionary with experiments ready to be archived
     # Get all experiments in database sorted by date
     experiments = models.Experiment.objects.all().order_by('date')
-    # Filter out all experiments marked Keep
-    experiments = experiments.exclude(storage_options='KI').exclude(expName__in = models.Backup.objects.all().values('backupName'))
-    # Filter out experiments marked 'U' or 'D'
-    experiments = experiments.exclude(user_ack='U').exclude(user_ack='D')
+    # Ignore experiments already archived/deleted
+    experiments = experiments.exclude(expName__in = models.Backup.objects.all().values('backupName'))
+    # Ignore all experiments marked Keep
+    #experiments = experiments.exclude(storage_options='KI')
+    # Filter out experiments already (deleted or archived)
+    # This will include Runs that are not yet slated to be processed
+    #experiments = experiments.exclude(user_ack='D')
+    # This will exclude Runs that are not yet slated to be processed
+    #experiments = experiments.exclude(user_ack='U').exclude(user_ack='D')
     
+#    if removeOnly():
+#        # Filter out experiments marked Archive
+#        experiments = experiments.exclude(storage_options='A')
+        
     # make dictionary, one array per file server of archiveExperiment objects
     to_archive = {}
-    servers = get_servers()
-    for fs in servers:
-        explist = []
-        for exp in experiments:
-            if fs.filesPrefix in exp.expDir:
-                #TODO: remove this dependency on the rig object (pgmName)
-                #if the rig no longer exists, the experiment cannot be deleted
-                location = models.Rig.objects.get(name=exp.pgmName).location
-                E = Experiment(exp,
-                               str(exp.expName),
-                               str(exp.date),
-                               str(exp.star),
-                               str(exp.storage_options),
-                               str(exp.user_ack),
-                               str(exp.expDir),
-                               location,
-                               exp.pk)
-                explist.append(E)
-            # limit number in list to configured limit
-            if len(explist) >= bk[0].number_to_backup:
-                break
-        to_archive[fs.filesPrefix] = explist
+    fs_stats = {}
+    # only generate list of experiments if Archiving is enabled
+    if bk[0].online:
+        servers = get_servers()
+        for fs in servers:
+            # Statistics for this server
+            fs_stats[fs.filesPrefix] = fs.percentfull
+            
+            # Experiments for this server
+            explist = []
+            for exp in experiments:
+                if exp.expDir.startswith(fs.filesPrefix):
+                    E = Experiment(exp,
+                                   str(exp.expName),
+                                   str(exp.date),
+                                   str(exp.star),
+                                   str(exp.storage_options),
+                                   str(exp.user_ack),
+                                   str(exp.expDir),
+                                   exp.pk,
+                                   str(exp.rawdatastyle))
+                    explist.append(E)
+                # limit number in list to configured limit
+                #if len(explist) >= bk[0].number_to_backup:
+                #    break
+            to_archive[fs.filesPrefix] = explist
         
-    ctx = template.RequestContext(request, {"backups":bk, "to_archive":to_archive, "status":daemon_status})
+    ctx = template.RequestContext(request, {"backups":bk, "to_archive":to_archive, "status":daemon_status,"fs_stats":fs_stats})
     return ctx
 
 #def backup(request):
@@ -1404,6 +1649,228 @@ def edit_backup(request, pk):
             ctx = template.RequestContext(request, ctxd)
             return shortcuts.render_to_response("rundb/ion_edit_backup.html",
                                                 context_instance=ctx)
+            
+
+
+def getChipZip(request, path):
+    from django.core.servers.basehttp import FileWrapper
+    import tarfile
+    import zipfile
+    
+    try:
+        name = os.path.basename(path)
+        name = name.split(".")[0]
+        
+        # initialize zip archive file
+        zipfilename = os.path.join("/tmp","%s.zip" % name)
+        zipobj = zipfile.ZipFile(zipfilename, mode='w', allowZip64=True)
+        
+        # open tar.bz2 file, extract all members and write to zip archive
+        tf = tarfile.open(os.path.join(path))
+        for tarobj in tf.getmembers():
+            contents = tf.extractfile(tarobj)
+            zipobj.writestr(tarobj.name, contents.read())
+        zipobj.close()
+        
+        response = http.HttpResponse(FileWrapper(open(zipfilename)), mimetype='application/zip')
+        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(zipfilename)
+        os.unlink(zipfilename)
+        return response
+    except Exception as inst:
+        logger.exception(traceback.format_exc())
+        ctxd = {
+        "error_state":1,
+        "error":[['Error','%s'%inst],['Error type','%s'%type(inst)]],
+        "locations_list":[],
+        "base_site_name":'Error',
+        "files":[],
+        }
+        ctx = template.RequestContext(request, ctxd)
+        return shortcuts.render_to_response("rundb/ion_chips.html", context_instance=ctx)
+
+def getChipLog(request, path):
+    import tarfile
+    import shutil
+    try:
+        tf = tarfile.open('%s'%path)
+        ti = tf.extractfile('InitLog.txt')
+        logLines = []
+        for line in ti.readlines():
+            logLines.append(line)
+        tf.close()
+    except:
+        logger.exception(traceback.format_exc())
+        
+    ctxd = {"lineList":logLines}
+    ctx = template.RequestContext(request, ctxd)
+    return shortcuts.render_to_response('rundb/ion_chipLog.html', context_instance=ctx)
+
+def getChipPdf(request, path):
+    import tarfile
+    import re
+    from django.core.servers.basehttp import FileWrapper
+    
+    def runFromShell(cmd1):
+        p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p1.communicate()
+        return p1
+    
+    # File I/O setup
+    tmpstem = os.path.basename(path).split('.')[0]
+    tmphtml = os.path.join('/tmp',tmpstem+'.html')
+    tmppdf = os.path.join('/tmp',tmpstem+'.pdf')
+    tf = tarfile.open(path)
+    ti = tf.extractfile('InitLog.txt')
+    
+    # regular expressions for the string parsing
+    ph = re.compile('\d*\)\sW2\spH=\d*.\d*')
+    phpass = re.compile('(W2\sCalibrate\sPassed\sPH=)(\d*.\d*)')
+    adding = re.compile('(\d*\)\sAdding\s)(\d*.\d*)(\sml)')
+    datefilter = re.compile('Sun|Mon|Tue|Wed|Thu|Fri|Sat') #Simple filter for the line with the date on it.
+    namefilter = re.compile('(Name:\s*)([a-z][a-z0-9_]*)',re.IGNORECASE)
+    serialfilter = re.compile('(Serial)(.*?)(:)(\s*)([a-z][a-z0-9_]*)',re.IGNORECASE)
+    surfacefilter = re.compile('(surface)(=)((?:[a-z][a-z]+))(\\s+)',re.IGNORECASE)
+    rawtracefilter = re.compile('(RawTraces)(\s+)((?:[a-z][a-z]*[0-9]+[a-z0-9]*))(:)(\s+)([+-]?\d*\.\d+)(?![-+0-9\.])',re.IGNORECASE)
+    
+    # initialize variables
+    initialph = ''
+    finalph = ''
+    totalAdded = 0.0
+    iterationBuffer = ''
+    rawtraceBuffer = ''
+    totalIterations = 0
+    startdate = ''
+    enddate = ''
+    pgmname = ''
+    serialnumber = ''
+    calstatus = ''
+    rawtracestartdate = ''
+    
+    # Log file parsing
+    for line in ti.readlines():
+        test = namefilter.match(line)
+        if test:
+            pgmname = test.group(2)
+            
+        test = serialfilter.match(line)
+        if test:
+            serialnumber = test.group(5)
+
+        test = ph.match(line)
+        if test:
+            if initialph == '': initialph = test.group().split('=')[1]
+            iterationBuffer += "<tr><td>%s</td></tr>\n" % test.group()
+            totalIterations += 1
+        
+        test = adding.match(line)
+        if test:
+            iterationBuffer += "<tr><td>%s</td></tr>\n" % test.group()
+            totalAdded += float(test.group(2))
+            
+        test = phpass.match(line)
+        if test:
+            finalph = test.group(2)
+            calstatus = 'PASSED'
+            
+        if datefilter.match(line):
+            if startdate == '': startdate = line.strip()
+            
+        test = surfacefilter.match(line)
+        if test:
+            surface = test.group(3) 
+        
+        test = rawtracefilter.match(line)
+        if test:
+            rawtraceBuffer += "<tr><td>%s %s: %s</td></tr>\n" % (test.group(1),test.group(3),test.group(6))
+            
+    # Find the end date of the Chip Calibration - we need multilines to identify the end date entry
+    #TODO: fix assumption that line endings are always newline char.
+    ti.seek(0)
+    contents = ti.read()
+    enddatefilter = re.compile('^(W2 Calibrate Passed.*$\n)(Added.*$\n)([Sun|Mon|Tue|Wed|Thu|Fri|Sat].*$)',re.MULTILINE)
+    m = enddatefilter.search(contents,re.MULTILINE)
+    if m:
+        enddate = m.group(3)
+    
+    startrawfilter = re.compile('([Sun|Mon|Tue|Wed|Thu|Fri|Sat].*$\n)(RawTraces.*$)',re.MULTILINE)
+    m = startrawfilter.search(contents,re.MULTILINE)
+    if m:
+        rawtracestartdate = m.group(1)
+        rawtraceBuffer = ('<tr><td>Raw Traces</td><td></td><td>%s</td></tr>' % rawtracestartdate) + rawtraceBuffer
+        
+    tf.close()
+    
+    f = open(tmphtml, 'w')
+    f.write('<html>\n')
+    f.write("<img src='/var/www/site_media/images/logo_top_right_banner.png' alt='lifetechnologies, inc.'/>")
+    # If there are sufficient errors in parsing, display an error banner
+    if calstatus == '' and finalph == '':
+        f.write('<table width="100%">')
+        f.write('<tr><td></td></tr>')
+        f.write('<tr><td align=center><hr /><font color=red><i><h2>* * * Error parsing InitLog.txt * * *</h2></i></font><hr /></td></tr>')
+        f.write('<tr><td></td></tr>')
+        f.write("</table>")
+    else:
+        f.write('<table width="100%">')
+        f.write('<tr><td></td></tr>')
+        f.write('<tr><td align=center><hr /><i><h2>Instrument Installation Report</h2></i><hr /></td></tr>')
+        f.write('<tr><td></td></tr>')
+        f.write("</table>")
+        
+    f.write('<table width="100%">')
+    f.write('<tr><td>Instrument Name</td><td>%s</td></tr>\n' % (pgmname))
+    f.write('<tr><td>Serial Number</td><td>%s</td></tr>\n' % (serialnumber))
+    f.write('<tr><td>Chip Surface</td><td>%s</td></tr>\n' % (surface))
+    f.write("<tr><td>Initial pH:</td><td>%s</td><td>%s</td></tr>\n" % (initialph,startdate))
+    f.write("<tr><td></td></tr>\n") # puts a small line space
+    f.write(iterationBuffer)
+    f.write("<tr><td></td></tr>\n") # puts a small line space
+    f.write('<tr><td>Total Hydroxide Added:</td><td>%0.2f ml</td></tr>\n' % totalAdded)
+    f.write('<tr><td>Total Iterations:</td><td>%d</td></tr>\n' % totalIterations)
+    f.write("<tr><td>Final pH:</td><td>%s</td><td>%s</td></tr>\n" % (finalph,enddate))
+    f.write("<tr><td></td></tr>\n") # puts a small line space
+    f.write(rawtraceBuffer)
+    f.write("<tr><td></td></tr>\n") # puts a small line space
+    f.write('<tr><td>Instrument Installation Status:</td><td><i><font color="#00aa00">%s</font></i></td></tr>\n' % calstatus)
+    f.write("</table>")
+        
+    f.write('<br /><br />\n')
+    f.write('<table frame="box">\n')
+    f.write('<tr><th align="left">Acknowledged by:</th></tr>')
+    f.write('<tr><td align="left"><br />\n')
+    f.write('__________________________________________________________<br />Customer Signature</td>')
+    f.write('<td align="left"><br />___________________<br />Date\n')
+    f.write('</td></tr>')
+    f.write('<tr><td align="left"><br />\n')
+    f.write('__________________________________________________________<br />Life Tech FSE Signature</td>')
+    f.write('<td align="left"><br />___________________<br />Date\n')
+    f.write('</td></tr></table></html>\n')
+    f.close()
+    pdf_cmd = ['/opt/ion/iondb/bin/wkhtmltopdf-amd64',str(tmphtml),str(tmppdf)]
+    p1 = runFromShell(pdf_cmd)
+    os.unlink(tmphtml)
+    response = http.HttpResponse(FileWrapper(open(tmppdf)), mimetype='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename=%s' % (os.path.basename(tmppdf))
+    # Can we delete the pdf file now?  Yes,on my dev box...
+    os.unlink(tmppdf)
+    
+    return response
+
+def getCSV(request):
+    CSVstr = ""
+    try:
+        table = models.Results.to_pretty_table(models.Results.objects.all())
+        for k in table:
+            for val in k:
+                CSVstr += '%s,'%val
+            CSVstr = CSVstr[:(len(CSVstr)-1)] + '\n'
+    except Exception as inst:
+        pass
+    ret = http.HttpResponse(CSVstr, mimetype='text/csv')
+    now = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    ret['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % now
+    return ret
+
 def get_dir_choices():
     """
     Return the list of directories in the /media directory
@@ -1422,12 +1889,13 @@ def get_loc_choices():
         basicChoice.append((loc, loc))
     return tuple(basicChoice)
 
+@login_required
 def about(request):
     """
     Generates the information on the `About` tab
     """
-    ret, meta_version = findVersions()
-    ctxd = {"about":ret, "meta": meta_version, "user": request.user}
+    versions, meta_version = findVersions()
+    ctxd = {"about":versions, "meta": meta_version, "user": request.user}
     ctx = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_about.html",
                                         context_instance=ctx, mimetype="text/html")
@@ -1470,6 +1938,7 @@ def config_site_name(request, context, config):
 
 
 @bind_messages("config")
+@login_required
 def global_config(request):
     """
     Renders the Config tab.
@@ -1494,6 +1963,7 @@ def global_config(request):
     # Refresh pubs and plugs, as some may have been added or removed
     plugs = models.Plugin.objects.filter(active=True).order_by('-date').exclude(path='')
     pubs = models.Publisher.objects.all().order_by('name')
+
     ctx.update({"config":globalconfig,
                 "email":emails,
                 "plugin":plugs,
@@ -1506,6 +1976,7 @@ def global_config(request):
                                         context_instance=ctx)
 
 
+@login_required
 def edit_email(request, pk):
     """
     Simple view for adding email addresses for nightly email
@@ -1560,6 +2031,7 @@ def get_best_results(sortfield, timeframe, ret_num):
         res = sorted(res, key=lambda r: getattr(r.best_lib_by_value(sortfield), sortfield), reverse=True)[:ret_num]
     return res
 
+@login_required
 def best_runs(request):
     """
     Generates the `best_runs` page.  Gets the best results for all experiments
@@ -1596,6 +2068,7 @@ def best_runs(request):
     return shortcuts.render_to_response("rundb/ion_best.html",
                                         context_instance=context)
 
+@login_required
 def stats_sys(request):
     """
     Generates the stats page on system configuration
@@ -1666,6 +2139,7 @@ def run_tracker(request):
     return shortcuts.render_to_response("rundb/ion_run_tracker.html",
                                         context_instance=context)
 
+@login_required
 def servers(request):
     """
     Renders the `Servers` tab by calling the view for each section
@@ -1687,7 +2161,7 @@ def servers(request):
     for name, proc in proc_set.items():
         stdout, stderr = proc.communicate()
         proc_set[name] = proc.returncode == 0
-        logger.debug("%s out = '%s' err = %s''" % (name, stdout.strip(), stderr.strip()))
+        logger.info("%s out = '%s' err = %s''" % (name, stdout, stderr))
     # tomcat specific status code so that we don't need root privilege
     def complicated_status(filename, parse):
         try:
@@ -1713,12 +2187,258 @@ def servers(request):
             "processes": sorted(proc_set.items()),
             "jobs":job,
             "archive":archive,
+            "bk":reportOpt,
             "use_precontent":True,
             "use_content2":True,
             "use_content3":True
             }
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_servers.html",
+                                        context_instance=context)
+    
+@login_required
+def PDFGen(request, pkR):
+    from iondb.backup import makePDF
+    pkR = pkR[:len(pkR)-4]
+    return http.HttpResponse(makePDF.getPDF(pkR), mimetype="application/pdf")
+
+def PDFGenOld(request, pkR):
+    from iondb.backup import makePDF
+    pkR = pkR[:len(pkR)-4]
+    return http.HttpResponse(makePDF.getOldPDF(pkR), mimetype="application/pdf")
+
+def getCSA(request, pk):
+    '''Python replacement for the pipeline/web/db/writers/csa.php script'''
+    try:
+        from django.core.servers.basehttp import FileWrapper
+        from iondb.backup import makePDF
+        from ion.utils import makeCSA
+        
+        # From the database record, get the report information
+        result = models.Results.objects.get(pk=pk)
+        reportDir = result.get_report_dir()
+        rawDataDir = result.experiment.expDir
+        
+        # Generate report PDF file.
+        # This will create a file named backupPDF.pdf in results directory
+        makePDF.makePDFdir(pk, reportDir)
+        
+        csaFullPath = makeCSA.makeCSA(reportDir,rawDataDir)
+        csaFileName = os.path.basename(csaFullPath)
+        
+        response = http.HttpResponse(FileWrapper (open(csaFullPath)), mimetype='application/zip')
+        response['Content-Disposition'] = 'attachment; filename=%s' % csaFileName
+        
+    except:
+        logger.error(traceback.format_exc())
+        response = http.HttpResponse(status=500)
+        
+    return response
+
+def jobDetails(request):
+    import commands
+    file3 = open('/tmp/jobDetailLog.txt', 'w')
+    file3.write('log opened...')
+    
+    if request.method == 'GET':
+        file = open('/tmp/testLog3.txt', 'w')
+        output = commands.getstatusoutput('qstat -f')[1]
+        file.write(output)
+        file.close()
+        file = open('/tmp/testLog3.txt', 'r')
+        jID = []
+        qList = []
+        currentQ = ''
+        i = 0
+        pendingCheck = False
+        #Note: in order to only display only the queue name (no node name), just switch the first "string.split(line, ' ')"...
+        #...into "string.split(line, '@')" below.
+        for line in file.readlines():
+            if '@' in line:
+                qList.append([string.split(line, ' ')[0], 0, int(string.split(line, '/')[1]), int(string.split(line, '/')[2][:3]),
+                              (100*int(string.split(line, '/')[1]))/int(string.split(line, '/')[2][:4])])
+            if '#' in line:
+                pendingCheck = True
+            tempjID = 0
+            line = string.strip(line, ' ')
+            i = 1
+            while i > 0:
+                try:
+                    tempjID = int(line[:i])
+                    i += 1
+                except:
+                    jID.append(tempjID)
+                    try:
+                        if pendingCheck:
+                            tempStat = string.split(commands.getstatusoutput('qstat -j %s'%tempjID)[1], '\n')
+                            for stat in tempStat:
+                                if 'hard_queue_list' in stat:
+                                    for q in qList:
+                                        if q[0] in stat:
+                                            q[1] += 1
+                    except:
+                        pass
+                        
+                    i = 0
+        file2 = open('/tmp/testLog4.txt', 'w')
+        for ID in jID:
+            if ID != 0:
+                try:
+                    file2.write(commands.getstatusoutput('qstat -j %s'%ID)[1])
+                    file2.write('\nNEW\n')
+                except:
+                    file2.write('problem with job #%s'%ID)
+                    file2.write('\nNEW\n')
+        file2.close()
+        file2 = open('/tmp/testLog4.txt', 'r')
+        jobInfoList = []
+        infoList = []
+        keyList = []
+        tempKey = []
+        tempInfo = []
+        tempList = []
+        go = True
+        for line in file2.readlines():
+            #file3.write('%s\n'%tempList[len(tempList)-1])
+            if go:
+                if not 'NEW' in line:
+                    if line[:5] == 'sched':
+                        go = False
+                    if go:
+                        tempList.append('%s'%line)
+                        line = string.replace(line, ' ', '')
+                        #don't use rfind; some values contain ':', while the keys don't.
+                        div = string.find(line, ':')
+                        if div != -1:
+                            tempKey.append('%s'%line[:div])
+                            tempInfo.append('%s'%line[(div+1):])
+                        else:
+                            tempKey.append('')
+                            tempInfo.append('')
+                else:
+                    jobInfoList.append({"JList":tempList, "KList":tempKey, "IList":tempInfo})
+                    infoList.append(tempInfo)
+                    keyList.append(tempKey)
+                    tempKey = []
+                    tempInfo = []
+                    tempList = []
+            elif 'NEW' in line:
+                go = True
+                jobInfoList.append({"JList":tempList, "KList":tempKey, "IList":tempInfo})
+                infoList.append(tempInfo)
+                keyList.append(tempKey)
+                tempKey = []
+                tempInfo = []
+                tempList = []
+        
+        file3.write('\n\nJList: \n\n%s\n'%jobInfoList)
+        tlJobs = []
+        blocks = []
+        qListParent = []
+        for job in jobInfoList:
+            tempIndex = 0
+            for line in job['JList']:
+                if line[:10] == 'hard_queue':
+                    qListParent.append([])
+                    qListParent[len(qListParent)-1].append(job['IList'][tempIndex][:(len(job['IList'][tempIndex])-1)])
+                    qListParent[len(qListParent)-1].append(0)
+                    qListParent[len(qListParent)-1].append(0)
+                    qListParent[len(qListParent)-1].append(0)
+                tempIndex += 1
+            if 'tl.q\n' in job['IList']:
+                file3.write('\n\n%s is tl.q job for result #%s.\n\n'%(job['IList'][1], '?'))
+                for j in job['JList']:
+                    if 'cwd' in j:
+                        str = string.replace(j, ' ', '')
+                        str = string.replace(str, '\n', '')
+                        str = string.split(str, ':')[1]
+                        pk = str[(string.rfind(str, '_')+1):]
+                        pk = pk[:3]
+                try:
+                    #file = open('/tmp/jobInfoTestLog_%s.txt'%pk, 'a+')
+                    file = open('%s/job_list.txt'%(shortcuts.get_object_or_404(models.Results, pk=pk).get_report_dir()))
+                    tempSubJobList = []
+                    jid = 0
+                    arg = ''
+                    numDone = 0
+                    contents = file.readlines()
+                    numJobs = len(contents)
+                    for line in contents:
+                        try:
+                            jid = int(line)
+                        except:
+                            pass
+                        if '%s'%256 != '%s'%commands.getstatusoutput('qstat -j %s'%jid)[0]:
+                            for j in jobInfoList:
+                                try:
+                                    if int(j['IList'][1]) == jid:
+                                        blockArg = string.split(j['IList'][15], '/')
+                                        if len(blockArg[len(blockArg)-1]) > 2:
+                                            blockArg = blockArg[len(blockArg)-1]
+                                        else:
+                                            blockArg = 'No associated block.'
+                                        '''if not blockArg in blocks:
+                                            blocks.append(bloackArg)'''
+                                        lineArg = string.split(j['IList'][24], ',')[1]
+                                        if lineArg == '--do-sigproc\n':
+                                            arg = 'Signal Processing'
+                                        elif lineArg == '--do-basecalling\n':
+                                            arg = 'Basecalling'
+                                        elif lineArg == '--do-alignment\n':
+                                            arg = 'Alignment'
+                                        elif lineArg == '--do-zipping\n':
+                                            arg = 'Zipping'
+                                        else:
+                                            arg = 'Other (arg: %s)'%lineArg
+                                except Exception as inst:
+                                    pass
+                        else:
+                            arg = 'Done'
+                        if jid != 0 and arg != '':
+                            done = 'N'
+                            if '%s'%256 == '%s'%commands.getstatusoutput('qstat -j %s'%jid)[0]:
+                                done = 'Y'
+                                numDone += 1
+                            try:
+                                if done != 'Y':
+                                    tempSubJobList.append([jid, arg, done, blockArg])
+                                    if not blockArg in blocks:
+                                        blocks.append('%s'%blockArg)
+                                else:
+                                    tempSubJobList.append([jid, arg, done, 'Done'])
+                                    if not 'Done' in blocks:
+                                        blocks.append('Done')
+                            except:
+                                tempSubJobList.append([jid, arg, done, 'No associated block.'])
+                            jid = 0
+                            arg = ''
+                    tlJobs.append({"job":job, "pk":pk, "jid":job["IList"][1], "Results":shortcuts.get_object_or_404(models.Results, pk=pk), "subJobs":tempSubJobList,
+                                   "finished":'%s'%((numDone*100)/numJobs), "blocks":blocks})
+                    blocks = []
+                except:
+                    pass
+        ctxd = {"JList":jobInfoList, "KList":keyList, "IList":infoList, 'tlJobs':tlJobs, "qList":qList}
+        context = template.RequestContext(request, ctxd)
+        return shortcuts.render_to_response("rundb/ion_jobDetails.html", context_instance=context)
+    
+    elif request.method == 'POST':
+        url = '/rundb/servers'
+        return http.HttpResponsePermanentRedirect(url)
+
+def viewLog(request, pkR):
+    ret = shortcuts.get_object_or_404(models.Results, pk=pkR)
+    try:
+        log = []
+        for datum in ret.metaData["Log"]:
+            logList = []
+            for dat in datum:
+                logList.append("%s: %s"%(dat, datum[dat]))
+            log.append(logList)
+    except:
+        log = [["no actions have been taken on this report."]]
+    ctxd = {"log":log}
+    context = template.RequestContext(request, ctxd)
+    return shortcuts.render_to_response("rundb/ion_reportLog.html",
                                         context_instance=context)
 
 def validate_barcode(barCodeDict):
@@ -1905,6 +2625,7 @@ def add_barcode(request):
                                             context_instance=ctx)
 
 
+@login_required
 def save_barcode(request):
     """save barcode is still used by the edit barcode page"""
 
@@ -1936,6 +2657,7 @@ def save_barcode(request):
 
         return http.HttpResponse(json.dumps({}) , mimetype="text/html")
 
+@login_required
 def edit_barcode(request, name):
     """
     Simple view to display the edit barcode page
@@ -2009,6 +2731,7 @@ def barcodeData(filename,metric=None):
 
     return dictList
 
+@login_required
 def graph_iframe(request,pk):
     """
     Make a Protovis graph from the requested metric
@@ -2025,48 +2748,57 @@ def graph_iframe(request,pk):
 
     return shortcuts.render_to_response("rundb/ion_graph_iframe.html", context_instance=context)
 
+@login_required
 def plugin_iframe(request,pk):
     """
     load files into iframes
-     """
+    """
 
     def openfile(fname):
         """strip lines """
         try:
-            f = open(fname, 'r')
+            with open(fname, 'r') as f:
+                content = f.read()
         except:
             logger.exception("Failed to open '%s'", fname)
             return False
-        content = f.read()
-        f.close()
         return content
 
+    # Used in javascript, must serialize to json
     plugin = shortcuts.get_object_or_404(models.Plugin, pk=pk)
     #make json to send to the template
-    plugin_json = models.Plugin.objects.filter(pk=pk) ## needs to return queryset, use filter instead of get
-    plugin_json = serializers.serialize("json", plugin_json)
-    plugin_json = json.loads(plugin_json)[0]
-    plugin_json = json.dumps(plugin_json)
+    plugin_json = json.dumps({'pk':pk,'model':str(plugin._meta), 'fields': model_to_dict(plugin)},cls=DjangoJSONEncoder)
 
-    report = request.GET.get('report', False)
-    config = request.GET.get('config', False)
-    about  = request.GET.get('about', False)
+    # If you set more than one of these, 
+    # behavior is undefined. (one returned randomly)
+    dispatch_table = {
+        'report': 'instance.html',
+        'config': 'config.html',
+        'about': 'about.html',
+    }
+    for (k,v) in dispatch_table.items():
+        if request.GET.get(k, False):
+            fname = os.path.join(plugin.path, v)
+            break
+    else:
+        logger.error("plugin iframe requires report, config or about")
+        raise http.Http404()
 
-    if report:
-        file = openfile(os.path.join(plugin.path, "instance.html"))
-    if config:
-        file = openfile(os.path.join(plugin.path, "config.html"))
-    if about:
-        file = openfile(os.path.join(plugin.path, "about.html"))
+    content = openfile(fname)
+    if not content:
+        raise http.Http404()
 
     index_version = settings.TMAP_VERSION
 
-    ctxd = {"plugin":plugin_json , "file" : file, "report" : report ,"tmap" : str(index_version) }
+    report = request.GET.get('report', False)
+
+    ctxd = {"plugin":plugin_json , "file" : content, "report" : report ,"tmap" : str(index_version) }
     context = template.RequestContext(request, ctxd)
 
     return shortcuts.render_to_response("rundb/ion_plugin_iframe.html",
                                             context_instance=context)
 
+@login_required
 def planning(request):
     """
     Run registation planning page
@@ -2155,6 +2887,7 @@ def validate_plan(plan):
 
     return failed
 
+@login_required
 def add_plans(request):
     """Take care of adding plans.  The POST method will do the CSV parsing and database additions"""
 
@@ -2294,23 +3027,23 @@ def get_plan_data():
     data["libKits"] = models.KitInfo.objects.filter(kitType='LibraryKit')
     
     data["variantfrequencies"] = models.VariantFrequencies.objects.all().order_by("name")
-
+    
     #is the ion reporter upload plugin installed?
     try:
         IRupload = models.Plugin.objects.get(name="IonReporterUploader",selected=True,active=True,autorun=True)
-        status, IRworkflows = tasks.IonReporterWorkflows()
+    ##    status, IRworkflows = tasks.IonReporterWorkflows()
     except models.Plugin.DoesNotExist:
         IRupload = False
-        status = False
-        IRworkflows = "Plugin Does Not Exist"
+     ##   status = False
+     ##   IRworkflows = "Plugin Does Not Exist"
     except models.Plugin.MultipleObjectsReturned:
         IRupload = False
-        status = False
-        IRworkflows = "Multiple active versions of IonReporterUploader installed. Please uninstall all but one."
+     ##  status = False
+     ##  IRworkflows = "Multiple active versions of IonReporterUploader installed. Please uninstall all but one."
 
     data["IRupload"] = IRupload
-    data["status"] = status
-    data["IRworkflows"] = IRworkflows
+    ##data["status"] = status
+    ##data["IRworkflows"] = IRworkflows
 
     #the entry marked as the default will be on top of the list
     data["forwardLibKeys"] = models.LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
@@ -2320,6 +3053,109 @@ def get_plan_data():
 
     return data
 
+
+def get_allApplProduct_data():    
+    data = get_base_planTemplate_data()
+    
+    for appl in models.RunType.objects.all():
+        
+        applType = appl.runType
+
+        try:
+            #we should only have 1 default per application. TODO: add logic to ApplProduct to ensure that
+            defaultApplProduct = models.ApplProduct.objects.filter(isActive = True, isDefault = True, applType = appl)
+            if defaultApplProduct[0]:
+                
+                applData = {}
+
+                applData["runType"] = defaultApplProduct[0].applType
+                applData["reference"] = defaultApplProduct[0].defaultGenomeRefName
+                applData["targetBedFile"] = defaultApplProduct[0].defaultTargetRegionBedFileName
+                applData["hotSpotBedFile"] = defaultApplProduct[0].defaultHotSpotRegionBedFileName
+                applData["seqKit"] = defaultApplProduct[0].defaultSequencingKit
+                applData["libKit"] = defaultApplProduct[0].defaultLibraryKit
+                applData["peSeqKit"] = defaultApplProduct[0].defaultPairedEndSequencingKit
+                applData["peLibKit"] = defaultApplProduct[0].defaultPairedEndLibraryKit
+                applData["chipType"] = defaultApplProduct[0].defaultChipType
+                applData["isPairedEndSupported"] = defaultApplProduct[0].isPairedEndSupported
+                applData["isDefaultPairedEnd"] = defaultApplProduct[0].isDefaultPairedEnd
+                applData['defaultVariantFrequency'] = defaultApplProduct[0].defaultVariantFrequency
+                    
+                #20120619-TODO-add compatible plugins, default plugins
+            
+                data[applType] = applData
+                
+                ##if applType == 'AMPS':
+                  ##  pretty(data[applType])
+            else:
+                data[applType] = 'none'
+        except:
+            data[applType] = 'none'
+
+    
+    return data
+
+def get_base_planTemplate_data():
+    data = {}
+    
+    data["runTypes"] = models.RunType.objects.all().order_by("id")
+    data["barcodes"] = models.dnaBarcode.objects.values('name').distinct().order_by('name')
+    data["references"] = models.ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION)
+
+    allFiles = models.Content.objects.filter(publisher__name="BED",path__contains="/unmerged/detail/")
+    bedFiles, hotspotFiles = [], []
+    for file in allFiles:
+        if file.meta.get("hotspot", False):
+            hotspotFiles.append(file)
+        else:
+            bedFiles.append(file)
+
+    data["bedFiles"] = bedFiles
+    data["hotspotFiles"] = hotspotFiles
+
+    data["seqKits"] = models.KitInfo.objects.filter(kitType='SequencingKit')
+    data["libKits"] = models.KitInfo.objects.filter(kitType='LibraryKit')
+    
+    data["variantfrequencies"] = models.VariantFrequencies.objects.all().order_by("name")
+
+    #is the ion reporter upload plugin installed?
+    try:
+        IRupload = models.Plugin.objects.get(name="IonReporterUploader",selected=True,active=True,autorun=True)
+        ##status, IRworkflows = tasks.IonReporterWorkflows()
+    except models.Plugin.DoesNotExist:
+        IRupload = False
+        ##status = False
+        ##IRworkflows = "Plugin Does Not Exist"
+    except models.Plugin.MultipleObjectsReturned:
+        IRupload = False
+        ##status = False
+        ##IRworkflows = "Multiple active versions of IonReporterUploader installed. Please uninstall all but one."
+
+    data["IRupload"] = IRupload
+    ##data["status"] = status
+    ##data["IRworkflows"] = IRworkflows
+
+    #the entry marked as the default will be on top of the list
+    data["forwardLibKeys"] = models.LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    data["forward3Adapters"] = models.ThreePrimeadapter.objects.filter(direction='Forward').order_by('-isDefault', 'name')
+    data["reverseLibKeys"] = models.LibraryKey.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+    data["reverse3Adapters"] = models.ThreePrimeadapter.objects.filter(direction='Reverse').order_by('-isDefault', 'name')
+
+    #chip types
+    data['chipTypes'] = models.Chip.objects.all().order_by('name')
+    #QC
+    data['qcTypes'] = models.QCType.objects.all().order_by('qcName')
+    #plugins
+    data['plugins'] = models.Plugin.objects.filter(active=True).exclude(name__contains="Uploader").order_by('name', '-version')
+    #project
+    data['projects'] = models.Project.objects.filter(public=True).order_by('name')
+    #uploader plugins
+    data['uploaders'] = models.Plugin.objects.filter(active=True, name__contains="Uploader").order_by('name', '-version')
+    
+    return data
+
+
+@login_required
 def add_plan(request):
     """add one plan"""
 
@@ -2329,6 +3165,17 @@ def add_plan(request):
     return shortcuts.render_to_response("rundb/ion_addeditplan.html",
                                         context_instance=context)
 
+ 
+def pretty(d, indent=0):
+    if d:
+        for key, value in d.iteritems():
+            logger.debug('\t' * indent + str(key))
+            if isinstance(value, dict):
+                pretty(value, indent+1)
+            else:
+                logger.debug('\t' * (indent+1) + str(value))
+        
+@login_required
 def edit_plan(request, id):
     """
     Simple view to display the edit barcode page
@@ -2341,7 +3188,7 @@ def edit_plan(request, id):
     context = template.RequestContext(request, ctxd)
     return shortcuts.render_to_response("rundb/ion_addeditplan.html",
                                         context_instance=context)
-def edit_experiment(request, id):
+def _edit_experiment(request, id):
     """
     Simple view to display the edit barcode page
     """
@@ -2391,9 +3238,17 @@ def edit_experiment(request, id):
              }
 
     context = template.RequestContext(request, ctxd)
-    return shortcuts.render_to_response("rundb/ion_editexp.html",
-                                        context_instance=context)
+    return context
 
+@login_required
+def edit_experiment(request, id):
+    """
+    Simple view to display the edit barcode page
+    """
+    context = _edit_experiment(request, id)
+    return shortcuts.render_to_response("rundb/ion_editexp.html", context_instance=context)
+
+@login_required
 def exp_ack(request):
     if request.method == 'POST':
 
@@ -2426,6 +3281,7 @@ def exp_ack(request):
 
         return http.HttpResponse(json.dumps({"runState": runState, "user_ack" : exp.user_ack , "runPK" : runPK, "user_ack": user_ack }) , mimetype="application/json")
 
+@login_required
 def add_edit_barcode(request, barCodeSet):
     """
     Simple view to display the edit barcode page
@@ -2464,6 +3320,7 @@ def add_edit_barcode(request, barCodeSet):
     return shortcuts.render_to_response("rundb/ion_barcode_addedit.html",
                                         context_instance=context)
 
+@login_required
 def pluginZipUpload(request):
     """file upload for plupload"""
     if request.method == 'POST':
@@ -2500,5 +3357,65 @@ def pluginZipUpload(request):
 
     else:
         return render_to_json({"method":"only post here"})
+
+
+@login_required
+def account(request):
+    (userprofile, created) = models.UserProfile.objects.get_or_create(user=request.user)
+    if request.method == "POST":
+        form = forms.UserProfileForm(data=request.POST, instance=userprofile)
+        if form.is_valid():
+            form.save()
+            updated = True
+    else:
+        form = forms.UserProfileForm(instance=userprofile)
+
+    context = template.RequestContext(request, {'form': form,})
+    return shortcuts.render_to_response("rundb/ion_account.html",
+                                        context_instance=context)
+
+# NO login_required - new users
+def registration(request):
+    if request.method == 'POST': # If the form has been submitted...
+        form = forms.UserRegistrationForm(request.POST)
+        if form.is_valid(): # All validation rules pass
+            # create user from cleaned_data
+            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
+            password = form.cleaned_data['password1']
+
+            new_user = models.User.objects.create_user(username, email, password)
+            new_user.is_active = True # WARNING: Self-register active user!
+            try:
+                group = models.Group.objects.get(name='ionusers')
+                new_user.groups.add(group)
+            except models.Group.DoesNotExist:
+                log.warn("Group ionusers not found. " + \
+                         "New user %s will lack permission to do anything beyond look!", username)
+            new_user.save()
+
+
+            # Log user in.
+            # Note: TODO More secure - deactivate user account and require approval before login.
+            user = authenticate(username=username, password=password)
+            if user is not None and user.is_active:
+                login(request, user)
+                # Redirect to home when login successful
+                return shortcuts.redirect(urlresolvers.reverse('homepage'))
+
+            # Otherwise redirect to a success page. Sending to login for now...
+            return shortcuts.redirect(urlresolvers.reverse('login'))
+    else:
+        # Blank Form
+        form = forms.UserRegistrationForm()
+
+    context = template.RequestContext(request, {'form': form,})
+    return shortcuts.render_to_response("rundb/ion_account_reg.html",
+                                        context_instance=context)
+
+
+
+
+
 
 

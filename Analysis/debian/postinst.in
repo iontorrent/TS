@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 set -e
 
@@ -7,42 +7,17 @@ TFFILE=@ION_INSTALL_PREFIX@/config/DefaultTFs.conf
 
 case "$1" in
     configure)
-    
+
 	# Install TF file
 	if [ -e "$TFFILE" ]; then
 		echo "Not overwriting existing TF file '$TFFILE'."
 	else
 		cp $TFFILE.dist $TFFILE
 	fi
-    
-    # Perl module installation
-    # tarballs are copied to /tmp/pModIn - Is this the way to do this?
 
-    # To add a Perl module, do 3 steps: add the *.tar.gz file itself
-    # to external/perl directory, add *.tar.gz file name to
-    # Analysis/debian/postinst.in (this file), and add *.tar.gz file
-    # name to Analysis/CMakeLists.txt
-    
-    # Keep this order to staisfy prerequesites:
-    # IPC-System-Simple-1.21.tar.gz autodie-2.10.tar.gz
-    staging="/tmp/pModIn"
-    cd $staging
-    moduleList=( common-sense-3.4.tar.gz Carp-Assert-0.20.tar.gz IO-All-0.44.tar.gz IPC-System-Simple-1.21.tar.gz JSON-2.53.tar.gz JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Log-Log4perl-1.35.tar.gz Perl6-Slurp-0.050000.tar.gz Readonly-1.03.tar.gz Regexp-Common-2011121001.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz autodie-2.10.tar.gz )
-    for module in ${moduleList[@]}; do
-        instLog=/tmp/${module%.tar.gz}_install.log
-        echo "Installing ${module%.tar.gz}.  See $instLog"
-        tar zxf $module
-        cd ${module%.tar.gz}
-        perl Makefile.PL > $instLog 2>&1
-        make >> $instLog 2>&1
-        make install >> $instLog 2>&1
-        cd $staging
-        rm -rf $module ${module%.tar.gz}
-    done
-    ldconfig 
+        #configure dynamic linker run-time bindings after library installation under /usr/local/lib
+        ldconfig
     ;;
 esac
 
 exit 0
-
-

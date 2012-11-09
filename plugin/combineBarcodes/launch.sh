@@ -3,18 +3,75 @@
 VERSION="2.2.0.0"
 
 PLUGIN_DEV_FULL_LOG=0;
-PLUGIN_CREATE_USTARTS=1;
 
-REFERENCE="$TSP_FILEPATH_GENOME_FASTA"
-REFERENCE_FAI="${REFERENCE}.fai"
+# User inputs (default for autorun)
+INPUT_GROUPING=0
+INPUT_SPACING=1
+INPUT_MIN_MAP=5000
+INPUT_COL_GRP='-c'
+INPUT_USTARTS='-u'
+INPUT_DUP_LENVAR=0
+INPUT_GRP_USTARTS='-g'
+INPUT_COMBINE_ALL=''
+if [ -n "$PLUGINCONFIG__GROUPING" ]; then
+  INPUT_GROUPING=$PLUGINCONFIG__GROUPING
+  INPUT_SPACING=$PLUGINCONFIG__SPACING
+  INPUT_MIN_MAP=$PLUGINCONFIG__READSTHRESHOLD
+  if [ "$PLUGINCONFIG__COLLAPSE" != "Yes" ]; then
+    INPUT_COL_GRP=''
+    PLUGINCONFIG__COLLAPSE="No"
+  fi
+  if [ "$PLUGINCONFIG__UNIQUESTARTS" != "Yes" ]; then
+    INPUT_USTARTS=''
+    PLUGINCONFIG__UNIQUESTARTS="No"
+    PLUGINCONFIG__GROUPUNIQUESTARTS="No"
+    PLUGINCONFIG__LENGTHVAR=0
+  fi
+  INPUT_DUP_LENVAR=$PLUGINCONFIG__LENGTHVAR
+  if [ "$PLUGINCONFIG__GROUPUNIQUESTARTS" != "Yes" ]; then
+    INPUT_GRP_USTARTS=''
+    PLUGINCONFIG__GROUPUNIQUESTARTS="No"
+  fi
+  if [ "$PLUGINCONFIG__COMBINEGROUPS" == "Yes" ]; then
+    INPUT_COMBINE_ALL='-a'
+  else
+    PLUGINCONFIG__COMBINEGROUPS="No"
+  fi
+else
+  PLUGINCONFIG__GROUPING=$INPUT_GROUPING
+  PLUGINCONFIG__SPACING=$INPUT_SPACING
+  PLUGINCONFIG__READSTHRESHOLD=$INPUT_MIN_MAP
+  PLUGINCONFIG__COLLAPSE="Yes"
+  PLUGINCONFIG__LENGTHVAR=0
+  PLUGINCONFIG__UNIQUESTARTS="Yes"
+  PLUGINCONFIG__GROUPUNIQUESTARTS="Yes"
+  PLUGINCONFIG__COMBINEGROUPS="No"
+fi
+
+echo "Selected run options:" >&2
+echo "  Barcode Grouping:       $PLUGINCONFIG__GROUPING" >&2
+echo "  Barcode Spacing:        $PLUGINCONFIG__SPACING" >&2
+echo "  Mapped Reads Threshold: $PLUGINCONFIG__READSTHRESHOLD" >&2
+echo "  Collapse Grouping:      $PLUGINCONFIG__COLLAPSE" >&2
+echo "  Create Unique Starts:   $PLUGINCONFIG__UNIQUESTARTS" >&2
+if [ "$PLUGINCONFIG__UNIQUESTARTS" = "Yes" ]; then
+  echo "  Read End Resolution:    $PLUGINCONFIG__LENGTHVAR" >&2
+  echo "  Group Unique Starts:    $PLUGINCONFIG__GROUPUNIQUESTARTS" >&2
+fi
+echo "  Combine Groups:         $PLUGINCONFIG__COMBINEGROUPS" >&2
 
 PLUGIN_BAM_FILE=`echo "$TSP_FILEPATH_BAM" | sed -e 's/^.*\///'`
 PLUGIN_BAM_NAME=`echo $PLUGIN_BAM_FILE | sed -e 's/\.[^.]*$//'`
+
+PLUGIN_OUT_BAMDIR="${TSP_FILEPATH_PLUGIN_DIR}/barcodeGroups"
 
 PLUGIN_OUT_BAMFILE="combineBarcodes.bam"
 PLUGIN_OUT_BAIFILE="${PLUGIN_OUT_BAMFILE}.bai"
 PLUGIN_OUT_USTARTS_BAMFILE="combineBarcodes.ustarts.bam"
 PLUGIN_OUT_USTARTS_BAIFILE="${PLUGIN_OUT_USTARTS_BAMFILE}.bai"
+PLUGIN_OUT_BARCODES="combineBarcodes.bclist.bam"
+
+PLUGIN_OUT_STATS_HTML="${TSP_FILEPATH_PLUGIN_DIR}/bcgroup_stats_html"
 
 # Definition of file names, locations, etc., used by plugin
 BARCODES_LIST="${TSP_FILEPATH_PLUGIN_DIR}/barcodeList.txt"
@@ -64,18 +121,24 @@ write_html_results ()
   fi
   echo "<h3 style=\"text-align:center\">${RUNID}</h3><br/>" >> "$HTMLOUT"
   if [ -n "$BAMFILE" ]; then
-    echo '<style> td.inleft {width:75% !important;text-align:left;border:0;padding:1px} </style>' >> "$HTMLOUT"
-    echo '<style> td.inright {width:25% !important;text-align:right;border:0;padding:1px} </style>' >> "$HTMLOUT"
-    echo '<table style="width:330px;margin-left:auto;margin-right:auto;background:transparent">' >> "$HTMLOUT"
-    echo "$MERGE_REPORT" >> "$HTMLOUT"
-    echo "<tr><td class='inleft'>Total reads</td><td class='inright'>${STATS1[0]}</td></tr>" >> "$HTMLOUT"
-    echo "<tr><td class='inleft'>Total mapped reads</td><td class='inright'>${STATS1[1]}</td></tr>" >> "$HTMLOUT"
-    if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-      echo "<tr><td class='inleft'>Total unique starts</td><td class='inright'>$STATS2</td></tr>" >> "$HTMLOUT"
+    if [ -n "$INPUT_USTARTS" ]; then
+      echo '<table style="width:100%;text-align:center;margin-left:auto;margin-right:auto;background:white">' >> "$HTMLOUT"
+      echo "<tr><th style='text-align:center;width:240px !important'>Combined Barcodes</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>Mapped Reads</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>Unique Starts</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>All Reads</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>Filtered Reads</th></tr>" >> "$HTMLOUT"
+    else
+      echo '<table style="width:100%;text-align:center;margin-left:auto;margin-right:auto;background:white">' >> "$HTMLOUT"
+      echo "<tr><th style='text-align:center;width:340px !important'>Combine Barcodes</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>Mapped Reads</th>" >> "$HTMLOUT"
+      echo "<th style='text-align:center;width:100px !important'>All Reads</th></tr>" >> "$HTMLOUT"
     fi
-    echo "<tr><td class='inleft'></td><td class='inright'>${STATS2[1]}</td></tr>" >> "$HTMLOUT"
+    cat "$PLUGIN_OUT_STATS_HTML" >> "$HTMLOUT"
     echo '</table><br/>' >> "$HTMLOUT"
-    write_html_file_links "$OUTURL" "$OUTDIR" >> "$HTMLOUT";
+    #if [ -n "$INPUT_COMBINE_ALL" ]; then
+    #  write_html_file_links "$OUTURL" "$OUTDIR" >> "$HTMLOUT";
+    #fi
   else
     display_static_progress "$HTMLOUT";
   fi
@@ -86,6 +149,14 @@ write_html_results ()
 # Remove previous results to avoid displaying old before ready (or to support hard links from other plugins)
 rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
 rm -f ${TSP_FILEPATH_PLUGIN_DIR}/*.bam ${TSP_FILEPATH_PLUGIN_DIR}/*.bam.bai
+rm -rf "$PLUGIN_OUT_BAMDIR"
+
+# create a new folder to hold the new groups of barcodes
+if [ "$INPUT_GROUPING" -gt 0 ]; then
+  run "mkdir \"$PLUGIN_OUT_BAMDIR\""
+else
+  PLUGIN_OUT_BAMDIR="$TSP_FILEPATH_PLUGIN_DIR"
+fi
 
 # Make link to css folder
 run "ln -sf ${DIRNAME}/css ${TSP_FILEPATH_PLUGIN_DIR}/.";
@@ -94,75 +165,30 @@ run "ln -sf ${DIRNAME}/css ${TSP_FILEPATH_PLUGIN_DIR}/.";
 write_html_results "$PLUGIN_RUN_NAME" "$TSP_FILEPATH_PLUGIN_DIR" "." "";
 
 # Check if running on a barcoded run
-# NOTE: Following code is complicated because no .BAM files must be seen until completely created
 if [ -f $TSP_FILEPATH_BARCODE_TXT ]; then
   # Local copy of sorted barcode list file
   run "sort -t ' ' -k 2n,2 \"$TSP_FILEPATH_BARCODE_TXT\" > \"$BARCODES_LIST\"";
-  # Loop over (effective) barcodes
-  BCN=0
-  UBCN=0
-  for BARCODE_LINE in `cat ${BARCODES_LIST} | grep "^barcode"`
-  do
-    BARCODE=`echo ${BARCODE_LINE} | awk 'BEGIN{FS=","} {print $2}'`
-    BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE}_${PLUGIN_BAM_FILE}"
-    LOCALBC_BAM="${TSP_FILEPATH_PLUGIN_DIR}/${BARCODE}.all.bamx"
-    if [ -f "$BARCODE_BAM" ]; then
-      echo "Processing barcode ${BARCODE}..." >&2
-      UBCN=`expr ${UBCN} + 1`
-      run "ln -sf \"$BARCODE_BAM\" \"$LOCALBC_BAM\""
-      if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-        run "${DIRNAME}/create_unique_starts.sh $LOGOPT -D \"${TSP_FILEPATH_PLUGIN_DIR}\" \"$LOCALBC_BAM\""
-      fi
-      echo "" >&2
-    else
-      echo -e "Skipping barcode ${BARCODE}...\n" >&2
+  # Run grouped barcode generater
+  run "${DIRNAME}/combineBarcodes.sh -i -B \"$BARCODES_LIST\" $LOGOPT -L $INPUT_DUP_LENVAR $INPUT_COL_GRP $INPUT_USTARTS $INPUT_GRP_USTARTS $INPUT_COMBINE_ALL -G $INPUT_GROUPING -E $INPUT_SPACING -T $INPUT_MIN_MAP -D \"${PLUGIN_OUT_BAMDIR}\" -S \"$PLUGIN_OUT_STATS_HTML\" \"$TSP_FILEPATH_BAM\""
+  # Optional complete merge of resulting groups
+  if [ -n "$INPUT_COMBINE_ALL" -a "$INPUT_GROUPING" -gt 0 ]; then
+    echo "Relocating combined barcode group files..." >&2
+    run "mv \"${PLUGIN_OUT_BAMDIR}/combineBarcodes.bam\" \"${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.bam\""
+    run "mv \"${PLUGIN_OUT_BAMDIR}/combineBarcodes.bam.bai\" \"${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.bam.bai\""
+    if [ -n "$INPUT_USTARTS" ]; then
+      run "mv \"${PLUGIN_OUT_BAMDIR}/combineBarcodes.ustarts.bam\" \"${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.ustarts.bam\""
+      run "mv \"${PLUGIN_OUT_BAMDIR}/combineBarcodes.ustarts.bam.bai\" \"${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.ustarts.bam.bai\""
     fi
-    BCN=`expr ${BCN} + 1`
-  done
-  echo "Merging $UBCN barcoded alignments..." >&2
-  LOCALBC_BAM="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAMFILE}"
-  run "samtools merge \"${LOCALBC_BAM}.tmp\" ${TSP_FILEPATH_PLUGIN_DIR}/*.all.bamx >&2" 
-  run "mv \"${LOCALBC_BAM}.tmp\" \"${LOCALBC_BAM}\" "
-  run "samtools index \"${PLUGIN_OUT_BAMFILE}\"" 
-  MERGE_REPORT="<tr><td class='inleft'>Barcode alignments combined</td><td class='inright'>$UBCN of $BCN</td></tr>"
-  if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-    echo "Merging $UBCN barcoded unique starts alignments..." >&2
-    LOCALBC_BAM="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_USTARTS_BAMFILE}"
-    run "samtools merge \"${LOCALBC_BAM}.tmp\" ${TSP_FILEPATH_PLUGIN_DIR}/*.ustarts.bamx >&2" 
-    run "mv \"${LOCALBC_BAM}.tmp\" \"${LOCALBC_BAM}\" "
-    run "samtools index \"${LOCALBC_BAM}\"" 
+  else
+    # Create empty files for user plugins to pick up
+    touch "${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAMFILE}"
+    if [ -n "$INPUT_USTARTS" ]; then
+      touch "${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_USTARTS_BAMFILE}"
+    fi
   fi
 else
-  MERGE_REPORT="<tr class='inleft'><td>Original reads were not barcoded.</td><td></td></tr>"
-  if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-    echo "Filtering reads to unique starts..." >&2
-    LOCALBC_BAM="${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.bamx"
-    run "ln -sf \"$TSP_FILEPATH_BAM\" \"${LOCALBC_BAM}\""
-    run "${DIRNAME}/create_unique_starts.sh $LOGOPT -D \"${TSP_FILEPATH_PLUGIN_DIR}\" \"${LOCALBC_BAM}\""
-    run "mv \"${LOCALBC_BAM}\" \"${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAMFILE}\" "
-    run "mv \"${TSP_FILEPATH_PLUGIN_DIR}/combineBarcodes.ustarts.bamx\" \"${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_USTARTS_BAMFILE}\" "
-    run "samtools index \"${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_USTARTS_BAMFILE}\"" 
-  else
-    run "ln -sf \"$TSP_FILEPATH_BAM\" \"${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAMFILE}\""
-  fi
-fi
-
-echo "Created merged barcode alignment files:" >&2
-echo "> ${PLUGIN_OUT_BAMFILE}" >&2
-echo "> ${PLUGIN_OUT_BAIFILE}" >&2
-if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-  echo "> ${PLUGIN_OUT_USTARTS_BAMFILE}" >&2
-  echo "> ${PLUGIN_OUT_USTARTS_BAIFILE}" >&2
-fi
-
-echo "Collecting mapping statistics..." >&2
-
-OLD_IFS="$IFS"
-IFS=";"
-STATS1=(`samtools flagstat "${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAMFILE}" | awk '{++c;a[c]=$1} END {print a[1]";"a[3]}'`)
-IFS="$OLD_IFS"
-if [ $PLUGIN_CREATE_USTARTS -eq 1 ]; then
-  STATS2=`samtools flagstat "${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_USTARTS_BAMFILE}" | awk '{++c;if(c==3){print $1}}'`
+  # Run barcode generater just to get unique starts
+  run "${DIRNAME}/combineBarcodes.sh -i $LOGOPT -L $INPUT_DUP_LENVAR $INPUT_USTARTS -D \"${TSP_FILEPATH_PLUGIN_DIR}\" -S \"$PLUGIN_OUT_STATS_HTML\" \"$TSP_FILEPATH_BAM\""
 fi
 
 # Write JSON output
@@ -173,4 +199,5 @@ write_html_results "$PLUGIN_RUN_NAME" "$TSP_FILEPATH_PLUGIN_DIR" "." "$PLUGIN_OU
 # Remove temporary files after successful completion
 rm -f "$BARCODES_LIST" "${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json"
 rm -f ${TSP_FILEPATH_PLUGIN_DIR}/*.bamx
+rm -f "$PLUGIN_OUT_STATS_HTML"
 

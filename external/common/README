@@ -1,0 +1,9 @@
+Common C/C++ source code modules and 3rd party libraries
+
+Code layout:
+   c++/src   Contains the source and header files for common C++ modules.  
+   
+Running tests:
+   No tests exist yet but they will.   
+  
+   

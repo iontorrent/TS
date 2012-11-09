@@ -250,9 +250,10 @@ void H5Replay::SetReplayBkgModelDataFile(CommandLineOpts &clo)
   // set the file to record/replay hdf5 using CommandLineOpts
   // right now hardcoded and placed in the analysis directory
   if (ToStr(clo.sys_context.wells_output_directory)=="")
-    mFilePath = clo.sys_context.experimentName;
+    mFilePath = clo.sys_context.results_folder;
   else
     mFilePath = ToStr(clo.sys_context.wells_output_directory);
+  
   if (mFilePath[mFilePath.length()-1] != '/')
     mFilePath += '/';
   mFilePath += "replayBkgModelData.h5";

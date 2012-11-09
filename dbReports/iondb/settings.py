@@ -25,9 +25,6 @@ DATABASES = {
     }
 }
 
-QMASTERHOST = 'localhost'
-SGEQUEUENAME = 'all.q'
-
 # Django Celery config
 CELERYD_LOG_FILE = "/var/log/ion/celery.log"
 BROKER_HOST = "localhost"
@@ -41,7 +38,13 @@ BROKER_VHOST = "ion"
 # although not all choices may be available on all operating systems.
 # If running in a Windows environment this must be set to the same as your
 # system time zone.
-TIME_ZONE = 'America/New_York'
+TIME_ZONE = None
+
+# When support for time zones is enabled, Django stores date and time
+# information in UTC in the database, uses time-zone-aware datetime
+# objects internally, and translates them to the end user's time zone
+# in templates and forms.
+USE_TZ = True
 
 # Language code for this installation. All choices can be found here:
 # http://www.i18nguy.com/unicode/language-identifiers.html
@@ -66,21 +69,30 @@ MEDIA_URL = ''
 # URL prefix for admin media -- CSS, JavaScript and images. Make sure to use a
 # trailing slash.
 # Examples: "http://foo.com/media/", "/media/".
-ADMIN_MEDIA_PREFIX = '/media/'
+#ADMIN_MEDIA_PREFIX = '/media/'
+STATIC_URL = '/media/'
+STATIC_ROOT = '/var/www/media'
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = 'mlnpl3nkj5(iu!517y%pr=gbcyi=d$^la)px-u_&i#u8hn0o@$'
 
 # List of callables that know how to import templates from various sources.
 TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.load_template_source',
+    ('django.template.loaders.cached.Loader', (
+        'django.template.loaders.filesystem.Loader',
+        'django.template.loaders.app_directories.Loader',
+    )),
 )
 
 MIDDLEWARE_CLASSES = (
+    'iondb.rundb.middleware.ChangeRequestMethodMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'iondb.rundb.middleware.DeleteSessionOnLogoutMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.auth.middleware.RemoteUserMiddleware',
+    'iondb.rundb.middleware.LocalhostAuthMiddleware',
     'iondb.bin.startup_housekeeping.StartupHousekeeping'
 )
 
@@ -94,8 +106,13 @@ TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")) or
 
 TEMPLATE_CONTEXT_PROCESSORS = (
     'django.contrib.auth.context_processors.auth',
+    'django.core.context_processors.request',
+    'django.core.context_processors.media',
+    'django.core.context_processors.static',
+    'django.contrib.messages.context_processors.messages',
     'iondb.rundb.views.base_context_processor',
     'iondb.rundb.views.message_binding_processor',
+    'django.contrib.messages.context_processors.messages',
 )
 
 INSTALLED_APPS = (
@@ -103,25 +120,43 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
+    'django.contrib.messages',
     'django.contrib.admindocs',
     'django.contrib.sites',
+    'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'django.contrib.messages',
     'iondb.rundb',
     'tastypie',
-    'djkombu',
     'djcelery',
+    'south',
 )
 
 # This is not to be the full path to the module, just project.model_name
 AUTH_PROFILE_MODULE = 'rundb.UserProfile'
 
+# Allow internal or apache based authentication
+AUTHENTICATION_BACKENDS = (
+        'django.contrib.auth.backends.RemoteUserBackend',
+        'django.contrib.auth.backends.ModelBackend',
+)
+
+LOGIN_URL="/login/"
+LOGIN_REDIRECT_URL="/data/"
+# Whether to expire the session when the user closes his or her browser. 
+# See "Browser-length sessions vs. persistent sessions", https://docs.djangoproject.com/en/dev/topics/http/sessions/#browser-length-sessions-vs-persistent-sessions
+SESSION_EXPIRE_AT_BROWSER_CLOSE=True
+
 CELERY_IMPORTS = (
     "iondb.rundb.tasks",
     "iondb.rundb.publishers",
+    "iondb.plugins.tasks",
 )
 
 # Allow tasks the generous run-time of six hours before they're killed.
 CELERYD_TASK_TIME_LIMIT=21600
+# Plugin tasks drop privileges to ionian, so need to start new worker each time
+CELERYD_MAX_TASKS_PER_CHILD=1
 
 if path.exists("/opt/ion/.computenode"):
     # This is the standard way to disable logging in Django.
@@ -149,6 +184,16 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'standard',
         },
+        #'mail_admins': {
+        #    'level': 'ERROR',
+        #         'filters': ['require_debug_false'],
+        #         'class': 'django.utils.log.AdminEmailHandler'
+        #}
+    },
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse'
+        }
     },
     'loggers': {
         # The logger name '' indicates the root of all loggers in Django, so
@@ -185,6 +230,7 @@ ANALYSIS_ROOT = "/opt/ion/iondb/anaserve"
 JOBSERVER_HOST = HOSTNAME
 JOBSERVER_PORT = 10000
 IARCHIVE_PORT = 10002
+DM_LOGGER_PORT = 10003
 IPLUGIN_HOST = HOSTNAME
 IPLUGIN_PORT = 9191
 
@@ -203,6 +249,25 @@ TEMP_PATH = "/results/referenceLibrary/temp/"
 PLUGIN_PATH = "/results/plugins/"
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 114857600
+
+# Define Plugin Warehouse URLs as tuples of (Name, User URL, API URL)
+PLUGIN_WAREHOUSE = [
+    (
+     'Torrent Browser Plugin Store',
+     'http://lifetech-it.hosted.jivesoftware.com/community/products/torrent_browser_plugin_store',
+     'http://torrentcircuit.iontorrent.com/warehouse/'
+    )
+]
+
+try:
+    # this file is generated and placed into /opt/ion/iondb/ion_dbreports_version.py by the CMake process and .deb pkg installation
+    import version #@UnresolvedImport
+    SVNREVISION = version.IonVersionGetSvnRev()
+    VERSION = 'v' + '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor(), version.IonVersionGetRelease(), version.IonVersionGetSvnRev()]) 
+except:
+    SVNREVISION=''
+    VERSION=''
+    pass
 
 # import from the local settings file
 try:

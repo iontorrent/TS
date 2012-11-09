@@ -4,6 +4,18 @@ All reads mapped to the reference.
 @Unique Starts
 Uniquely mapped reads sampled for one starting alignment to each reference base in both read orientations.
 
+@Filtered Reads
+Uniquely mapped and/or sampled non-duplicate.
+
+@Uniquely Mapped Non-duplicate Reads
+Reads that are not equivalently mapped to two places on the genome.
+
+@Non-duplicate Reads
+Reads that are not marked as a (pcr) duplicate after alignment.
+
+@Uniquely Mapped Non-duplicate Reads
+Reads that are not equivalently mapped to two places on the genome nor marked as a (pcr) duplicate after alignment.
+
 @Number of mapped reads
 Total number of reads mapped to the reference.
 
@@ -69,6 +81,15 @@ The percentage of target bases covered by at least fifty reads.
 
 @Target coverage at 100x
 The percentage of target bases covered by at least one hundred reads.
+
+@Target coverage at 500x
+The percentage of target bases covered by at least five hundred reads.
+
+@Coverage Overview
+Base coverage is shown across the whole reference (genome).
+The effective reference is created from a concatenation of the chromosomes or individual target regions
+(in the relative position they appear in the reference sequence).
+Each point plotted is the base 10 logorithm value of the total aligned base read count within an equal length (1/600) of the effective reference.
 
 @Target Coverage
 Target base coverage is plotted against read depth, where read depth is the number of times

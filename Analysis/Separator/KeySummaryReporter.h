@@ -32,7 +32,7 @@ public:
               const Mat<T> &refFlows,
               const Mat<T> &predicted) {
     for (size_t flowIx = 0; flowIx < mGlobalTraces.size() && flowIx < wellFlows.n_cols; flowIx++) {
-      if (mGlobalTraces[flowIx].size() < wellFlows.n_rows) {
+      if (mGlobalTraces[flowIx].size() == 0 && wellFlows.n_rows > 0) {
         if (mGlobalTraces[flowIx].size() > 0) {
           ION_ABORT("Shouldn't have different sizes.");
         }
@@ -41,7 +41,8 @@ public:
           mGlobalTraces[flowIx][i].Init(mSampleSize);
         }
       }
-      for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
+      size_t size = min(mGlobalTraces[flowIx].size(), (size_t)wellFlows.n_rows);
+      for (size_t frameIx = 0; frameIx < size; frameIx++) {
         float d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
         mGlobalTraces[flowIx][frameIx].AddValue(d);
       }
@@ -52,9 +53,15 @@ public:
     mGlobalAvg.resize(mGlobalTraces.size());
     for (size_t flowIx = 0; flowIx < mGlobalTraces.size(); flowIx++) {
       if (mGlobalAvg[flowIx].empty()) {
-        mGlobalAvg[flowIx].resize(mGlobalTraces[flowIx].size());
+        size_t maxSize = 0;
+        for (size_t i = 0; i < mGlobalTraces.size(); i++) {
+          maxSize = max(mGlobalTraces[i].size(),maxSize);
+        }
+        mGlobalAvg[flowIx].resize(maxSize);
         for (size_t frameIx = 0; frameIx < mGlobalAvg[flowIx].size(); frameIx++) {
-          mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx].GetMedian());
+          if (mGlobalTraces[flowIx][frameIx].GetNumSeen() > 10) {
+            mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx].GetMedian());
+          }
         }
       }
     }

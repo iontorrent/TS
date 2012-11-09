@@ -1,0 +1,18 @@
+{% extends "rundb/ion_base_template.html" %}
+{% block pagination_holder %}{% endblock %}
+{% block current_tab %}about{% endblock %}
+
+{% block full_page_content %}
+
+<h3>New User Registration</h3>
+{% for error in form.errors %}
+<p>{{ error }}</p>
+{% endfor %}
+
+<form method="post" action="">
+{% csrf_token %}
+{{ form.as_p }}
+<input type="submit" value="Submit"/>
+</form>
+
+{% endblock full_page_content %}

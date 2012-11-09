@@ -3,6 +3,9 @@
 #include "KeyClassifier.h"
 
 #define SDFUDGE .01
+#define FRAME_START 3u
+#define FRAME_END 20u
+//#define FRAME_END 25u
 
 void KeyClassifier::Classify(std::vector<KeySeq> &keys, 
                              ZeromerDiff<double> &bg,
@@ -14,16 +17,19 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
                              Mat<double> &predicted) {
   param.set_size(2);
   param << 0 << 0;
+  assert(wellFlows.n_rows > 5 && wellFlows.n_rows == refFlows.n_rows);
+  size_t frameStart = min(FRAME_START,wellFlows.n_rows);
+  size_t frameEnd = min(FRAME_END,wellFlows.n_rows);
   for (size_t keyIx = 0; keyIx < keys.size(); keyIx++) {
-    int ok = bg.FitZeromer(wellFlows, refFlows,
-                           keys[keyIx].zeroFlows, time,
-                           param);
+    int bad = bg.FitZeromer(wellFlows, refFlows,
+                            keys[keyIx].zeroFlows, time,
+                            param);
     double keyMinSnr = std::max(minSnr, keys[keyIx].minSnr);
     onemerSig.Clear();
     zeromerSig.Clear();
     zeroStats.Clear();
     traceSd.Clear();
-      
+    
     for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
       for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
         traceSd.AddValue(wellFlows.at(frameIx,flowIx));
@@ -37,11 +43,12 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
       // }
       //zeroSum = zeroSum / 2;
       diff = wellFlows.unsafe_col(flowIx) - p;
-      for (size_t frameIx = 3; frameIx < FRAME_SIGNAL; frameIx++) {
+      for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
         sig += diff.at(frameIx);
       }
       if (keys[keyIx].flows[flowIx] == 0) {
-        for (size_t frameIx = FRAME_SIGNAL; frameIx < wellFlows.n_rows; frameIx++) {
+        for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
+          //          for (size_t frameIx = frameEnd; frameIx < wellFlows.n_rows; frameIx++) {
           mad.AddValue(fabs(diff.at(frameIx)));
         }
         zeroStats.AddValue(mad.GetMean());
@@ -61,7 +68,7 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
       fit.traceSd = traceSd.GetSD();
       fit.snr = snr;
       fit.param = param;
-      fit.ok = (ok == 0);
+      fit.ok = (bad == 0);
       for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
         bg.PredictZeromer(refFlows.unsafe_col(flowIx), time, fit.param, p);
         copy(p.begin(), p.end(), predicted.begin_col(flowIx));
@@ -73,7 +80,7 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
       fit.traceMean = traceSd.GetMean();
       fit.traceSd = traceSd.GetSD();
       fit.param = param;
-      fit.ok = (ok == 0);
+      fit.ok = (bad == 0);
       for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
         bg.PredictZeromer(refFlows.unsafe_col(flowIx), time, fit.param, p);
         copy(p.begin(), p.end(), predicted.begin_col(flowIx));
@@ -98,7 +105,9 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
                                       TraceStore<double> &store,
                                       Mat<double> &predicted) {
 
-  param << 0 << 0;
+  param.set_size(2);// << 0 << 0;
+  param[0] = 0;
+  param[1] = 0;
   fit.keyIndex = -1;
   fit.snr = 0;
   fit.sd = 0;
@@ -110,6 +119,8 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
     fit.bestKey = -1;
   }
   fit.ok = -1;
+  size_t frameStart = min(FRAME_START,wellFlows.n_rows);
+  size_t frameEnd = min(FRAME_END,wellFlows.n_rows);
   for (size_t keyIx = 0; keyIx < keys.size(); keyIx++) {
     double keyMinSnr = std::max(minSnr, keys[keyIx].minSnr);
     double tauB = 0;
@@ -131,7 +142,7 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       SampleStats<double> mad;
       //      double zeroSum = 0;
       diff = wellFlows.unsafe_col(flowIx) - p;
-      for (size_t frameIx = 3; frameIx < FRAME_SIGNAL; frameIx++) {
+      for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
         sig += diff.at(frameIx);
       }
 
@@ -141,12 +152,14 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       if (incorp.n_rows == diff.n_rows) {
         pSig =  GetProjection(diff, incorp);
       }
+      // else {
+      //   cout << "why not?" << endl;
+      // }
       projSignal.at(flowIx) = pSig;
-      Col<double> projIncorporation = pSig * incorp;
       sigVar.AddValue(sig);
 
       if (keys[keyIx].flows[flowIx] == 0) {
-        for (size_t frameIx = 0; frameIx < FRAME_SIGNAL; frameIx++) {
+        for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
           mad.AddValue(fabs(diff.at(frameIx)));
         }
         zeroStats.AddValue(mad.GetMean());
@@ -154,10 +167,10 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       }
       else if (keys[keyIx].flows[flowIx] == 1 && flowIx < keys[keyIx].usableKeyFlows) {
         onemerSig.AddValue(sig);
-        if (isfinite(pSig)) {
+        if (isfinite(pSig) && incorp.n_rows == p.n_rows) {
           onemerProj.AddValue(pSig);
           double maxSig = 0;
-          for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
+          for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
             double projVal =  pSig * incorp.at(frameIx);
             maxSig = max(maxSig, projVal);
             onemerIncorpMad.AddValue(fabs(projVal - (wellFlows.at(frameIx,flowIx) - p.at(frameIx))));

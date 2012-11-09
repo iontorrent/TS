@@ -5,8 +5,8 @@ import os
 import datetime
 from os import path
 import urllib, urllib2
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
+import djangoinit
 from django.db import models
 from iondb.rundb import models
 
@@ -96,8 +96,8 @@ def generateReport():
     reportName = 'Weekly_Summary_%s_%s_%s.html' % (today.month, today.day, today.year)
     location = models.Location.objects.all()[0]
     # Always use the last, latest ReportStorage location
-    reportStorages = models.ReportStorage.objects.all().order_by('id')
-    reportStorage = reportStorages[len(reportStorages)-1]
+    reportStorages = models.ReportStorage.objects.all()
+    reportStorage = reportStorages.filter(default=True)[0]
     path = '/var/www%s/%s/reports' % (reportStorage.webServerPath, location.name)
     if not os.path.isdir(path):
         os.mkdir(path,0775)

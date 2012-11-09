@@ -56,7 +56,7 @@ void PinnedInFlowReader::InitializePinnedInFlow(Mask *maskPtr)
   vector<hsize_t> count_out(1);
   count_out[0] = h * w;
 
-  reader_1->Read(offset, count,  offset_out, count_out, mPinnedInFlow);
+  reader_1->Read(offset, count,  offset_out, count_out, &mPinnedInFlow[0]);
   fprintf(stdout, "PinnedInFlowReader: Width %d, Height %d: %d, %d, ...\n", w, h, mPinnedInFlow[0], mPinnedInFlow[1]);
 }
 
@@ -78,7 +78,7 @@ void PinnedInFlowReader::InitializePinsPerFlow()
   vector<hsize_t> count_out(1);
   count_out[0] = mNumFlows;
 
-  reader_2->Read(offset, count,  offset_out, count_out, mPinsPerFlow);
+  reader_2->Read(offset, count,  offset_out, count_out, &mPinsPerFlow[0]);
 }
 
 int PinnedInFlowReader::Update (int flow, Image *img)
@@ -154,7 +154,7 @@ void PinnedInFlowRecorder::WriteBuffer_1()
 
   fprintf(stdout, "PinnedInWellRecorder: Width %d, Height %d: %d, %d, ...\n", mW, mH, mPinnedInFlow[0], mPinnedInFlow[1]);
 
-  recorder_1->Write(offset, count, offset_in, count_in, mPinnedInFlow);
+  recorder_1->Write(offset, count, offset_in, count_in, &mPinnedInFlow[0]);
 }
 
 // create the dataset for mPinsPerFlow
@@ -191,6 +191,6 @@ void PinnedInFlowRecorder::WriteBuffer_2()
 
   fprintf(stdout, "PinnedInFlowRecorder: numFlows %d: %d, %d, ...\n", mNumFlows, mPinsPerFlow[0], mPinsPerFlow[1]);
 
-  recorder_2->Write(offset, count, offset_in, count_in, mPinsPerFlow);
+  recorder_2->Write(offset, count, offset_in, count_in, &mPinsPerFlow[0]);
 }
 

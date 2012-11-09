@@ -66,20 +66,12 @@ function devPrint(str) {
 function populateProject() {
 	var html = "<select id='proj' style='width:100%'><option value=''>-</option></select>";
 	$("div#projdiv").html(html);
-	$.get("/rundb/api/v1/experiment/projects/?format=json",function(data) { 
-		// Sort projects
-		data.sort(function(a,b) {
-			a = a.toLowerCase();
-			b = b.toLowerCase();
-			if( a < b ) return -1;
-			if( a > b ) return 1;
-			return 0;
-		});
-		for( var project in data ) {
-			html = "<option value='"+data[project]+"'>"+data[project]+"</option>";
-			$("select#proj").append(html);
-		}
-	});
+	var projData = queryTS("/rundb/api/v1/project/?format=json&limit=0&order_by=name");
+	for( var i = 0; i < projData.meta.total_count; ++i ) {
+		var projArr = projData.objects[i];
+		html = "<option value='"+projArr.name+"'>"+projArr.name+"</option>";
+		$("select#proj").append(html);
+	}
 }
 
 function changeDays(calendar) {
@@ -168,16 +160,18 @@ function findRuns() {
 			_nextUrl += "&timeStamp__startswith="+startDate;
 		}
 		else {
-			_nextUrl += "&timeStamp__range="+startDate+","+endDate;
+			// Commented out because range filter does not work on blackbird servers
+			//_nextUrl += "&timeStamp__range="+startDate+","+endDate;
+			_nextUrl += "&timeStamp__gte="+startDate+"&timeStamp__lte="+endDate;
 		}
 		_nextUrl += "&resultsName__icontains="+searchfield;
 		_nextUrl += "&status=Completed";
 		_nextUrl += "&order_by=-id";
 		_nextUrl += "&noplugin=1";
+		_nextUrl += "&reference="+_reference;
 		_nextUrl += "&experiment__barcodeId=";
-		_nextUrl += "&experiment__library="+_reference;
 		if( projFilt != "-" ) {
-			_nextUrl += "&experiment__project="+projFilt;
+			_nextUrl += "&projects__name="+projFilt;
 		}
 	}
 	else if( _nextUrl == null ) {
@@ -189,8 +183,9 @@ function findRuns() {
 	$("button#searchbutton").attr("disabled","disabled");
 	$("img#loadimg").show();
 	$("td#numfound").html($("td#numfound").html()+" <i>searching</i>");
-	$("td#nodata").html("<button id='morebutton' onclick='findRuns();' type='button'>More</button>");
+	$("td#nodata").html("<button id='morebutton' onclick='findRuns();' type='button'>Load More</button>");
 	var unsorted = [];
+	var total;
 	do {
 		var limit = 20 - unsorted.length;
 		var currUrl = _nextUrl;
@@ -199,19 +194,15 @@ function findRuns() {
 		if( resData == null ) {
 			return noData();
 		}
+		total = resData.meta.total_count;
 		// Parse out runs
 		for( var i = 0; i < resData.objects.length; i++ ) {
 			var runArr = resData.objects[i];
 			//if( grabReference(runArr.log) == _reference ) {
-				var runInfo = {}
-				if( projFilt != "-" ) {
-					runInfo = grabData(runArr,null);
-					runInfo["project"] = projFilt;
-				}
-				else {
-					expData = queryTS(runArr.experiment);
-					runInfo = grabData(runArr,expData);
-				}
+				var runInfo = {};
+				var getProj = projFilt == "-";
+				runInfo = grabData(runArr,getProj);
+				if( ! getProj ) { runInfo["project"] = projFilt; }
 				unsorted.push(runInfo);
 				_queryRuns[runInfo["id"]] = runInfo;
 				_numQuery++;
@@ -228,7 +219,7 @@ function findRuns() {
 	if( unsorted.length == 0 ) {
 		return noData();
 	}
-	// Sort out reads by analysis date
+	// Sort out runs by analysis date
 	var sorted = unsorted.sort(function(x,y) {
 		xDate = Date.parse(x["aDate"]);
 		yDate = Date.parse(y["aDate"]);
@@ -241,11 +232,8 @@ function findRuns() {
 	}
 	$("table#querytable tbody tr:odd").css("background-color", "#E1EFFA");
 	
-	var html = "Found "+_numQuery;
-	if( _nextUrl != null ) {
-		html += " out of...";
-	}
-	else {
+	var html = "Showing "+_numQuery+" out of "+total;
+	if( _nextUrl == null ) {
 		$("button#morebutton").hide();
 	}
 	$("td#numfound").html(html);
@@ -274,6 +262,9 @@ function getRemoveObject(id) {
 
 function selectRun(id) {
 	// First check if run has proper reference
+	// Update: No longer needed as reference listed in results table
+	// correctly specifies the reference used for that particular report
+	/*
 	if( grabReference(_queryRuns[id]["logfile"]) != _reference ) {
 		var ref = grabReference(_queryRuns[id]["logfile"]);
 		alert("The report chosen does not have a compatible reference: '"+ref+"'.\n"+
@@ -282,6 +273,7 @@ function selectRun(id) {
 		$("button#qb"+id).attr("disabled","disabled");
 		return;
 	}
+	*/
 	// Add to selected list
 	_selectedRuns[id] = _queryRuns[id];
 	addRow(_queryRuns[id],"selectedtable");
@@ -408,15 +400,21 @@ function isSelected(id) {
 	return -1;
 }
 
-function grabData(resData,expData) {
+function grabData(resData,getProj) {
 	var toRet = [];
 	toRet["id"] = resData.id;
 	toRet["name"] = resData.resultsName;
-	if( expData != null ) {
-		toRet["project"] = expData.project;
+	if( getProj ) {
+		if( resData.projects[0] == null ) {
+			toRet["project"] = "";
+		}
+		else {
+			var projData = queryTS(resData.projects[0]);
+			toRet["project"] = projData.name;
+		}
 	}
 	if( resData.libmetrics.length != 0 ) {
-		var libData = queryTS(resData.libmetrics);
+		var libData = queryTS(resData.libmetrics[0]);
 		toRet["aq17reads"] = (libData != null) ? libData.q17_alignments : 0;
 	}
 	else {
@@ -528,7 +526,8 @@ var resData = queryTS(resultsUrl);
 var expData = queryTS(resData.experiment);
 
 // Set global reference for later filter
-_reference = grabReference(resData.log);;
+//_reference = grabReference(resData.log);
+_reference = resData.reference;
 $("span#referenceid").html("<b>"+_reference+"</b>");
 
 // Set the correct current date
@@ -740,7 +739,7 @@ $("div#outer").scroll(function(){
 	<table id="querytablefoot" align="center" style="border:1px solid black;">
 		<body><tr><td id="numfound" colspan="3" style="text-align:left;"></td>
 		<td colspan="2" style="text-align:left;">
-			<button id="morebutton" onclick="findRuns();" type="button" style="display:none;">More</button>
+			<button id="morebutton" onclick="findRuns();" type="button" style="display:none;">Load More</button>
 		</td>
 		<td id="nodata" style="text-align:right;font-style:italic"></td></tr></tbody>
 	</table><br/><br/><br/>
@@ -782,11 +781,7 @@ $("div#outer").scroll(function(){
 	combined alignment files generated.</p>
 	<p>
 	Note that the Report Locator will only include reports that are completed and for reports not using barcoded libraries.
-	Also, the Report Locator will only list reports for runs associated with the selected reference. In case a run has been reanalyzed 
-	using multiple references, the reference of an individual report is checked against the selected reference when the 
-	'Add' button is clicked.</p>
-	<!-- Also, the Report Locator automatically filters for reports aligned to specified reference. If you do not see your report but expect to, 
-	be sure to check that your filters are correctly selected and that the reference is chosen correctly in the Torrent Browser.</p> -->
+	Also, the Report Locator will only list reports for runs associated with the selected reference.</p>
 	<p>
 	An error may occur or warnings issued if the selected alignment files are not compatible. In this case more details may
 	be given in the plugin Log File.</p>

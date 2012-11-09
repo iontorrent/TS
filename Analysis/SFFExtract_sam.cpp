@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 	// load up our mask file
 	Mask mask(1,1);
 	char maskPath[MAX_PATH_LENGTH];
-	sprintf(maskPath, "%s/bfmask.bin", resultsPath);
+	sprintf(maskPath, "%s/sigproc_results/bfmask.bin", resultsPath);
 	mask.SetMask(maskPath);
 
 	// load up our SFF file

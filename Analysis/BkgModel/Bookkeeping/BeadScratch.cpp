@@ -2,6 +2,7 @@
 
 #include "BeadScratch.h"
 
+using namespace std;
 
 BeadScratchSpace::BeadScratchSpace()
 {
@@ -40,11 +41,17 @@ BeadScratchSpace::~BeadScratchSpace()
 
 }
 
-void BeadScratchSpace::Allocate (int _npts,int num_derivatives)
+void BeadScratchSpace::Allocate (int _npts,int _num_derivatives)
 {
   npts = _npts;
+  num_derivatives = _num_derivatives;
   // now that I know how many points we have
   bead_flow_t = NUMFB*npts; // the universal unit of currency flows by time
+  AllocateScratch();
+}
+
+void BeadScratchSpace::AllocateScratch()
+{
   int scratchSpace_nElem = bead_flow_t*num_derivatives;
   int scratchSpace_len = sizeof (float) * scratchSpace_nElem;
   scratchSpace = new float[scratchSpace_nElem];
@@ -81,14 +88,14 @@ void MAKE_CUSTOM_EMPHASIS_VECT (float *output,float *SourceEmphasisVector[],int 
     memcpy (&output[fnum*npts],SourceEmphasisVector[MyEmphasis[fnum]],sizeof (float[npts]));
 }
 
-void BeadScratchSpace::FillEmphasis (int *my_emphasis, float *source_emphasis[],float *source_emphasis_scale)
+void BeadScratchSpace::FillEmphasis (int *my_emphasis, float *source_emphasis[], const vector<float>& source_emphasis_scale)
 {
   MAKE_CUSTOM_EMPHASIS_VECT (custom_emphasis,source_emphasis,my_emphasis,npts);
   for (int fnum =0; fnum<NUMFB; fnum++)
     custom_emphasis_scale[fnum] = source_emphasis_scale[my_emphasis[fnum]];
 }
 
-void BeadScratchSpace::CreateEmphasis(float *source_emphasis[], float *source_emphasis_scale)
+void BeadScratchSpace::CreateEmphasis(float *source_emphasis[], const vector<float>& source_emphasis_scale)
 {
   FillEmphasis(WhichEmphasis,source_emphasis,source_emphasis_scale);
 }

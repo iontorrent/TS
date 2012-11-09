@@ -10,17 +10,13 @@ The name of this text file must be provided as the first arg.
 
 import datetime
 import json
-import logging
-from logging import handlers as loghandlers
 import os
 from os import path
 import re
 import sys
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django import db
 
 from djangoinit import *
+from django import db
 from iondb.rundb import models, views
 import gc
 import httplib, urllib

@@ -2,11 +2,13 @@
 #ifndef REGIONANALYSIS_H
 #define REGIONANALYSIS_H
 
+//! @file     RegionAnalysis.h
+//! @ingroup  BaseCaller
+//! @brief    RegionAnalysis. Older Nelder-Mead phasing estimator superseded by PhaseEstimator. Delete soon.
+
 #include "Mask.h"
-//#include "Separator.h"
 #include "IonErr.h"
 #include "DPTreephaser.h"
-#include "CommandLineOpts.h"
 #include "RegionWellsReader.h"
 #include "BaseCallerUtils.h"
 
@@ -22,25 +24,21 @@ public:
   RegionAnalysis();
 
   void analyze(vector<float> *_cf, vector<float> *_ie, vector<float> *_dr, RawWells *_wells, Mask *_mask,
-      const vector<KeySequence>& _keys, const string& _flowOrder, int _numFlows, int numWorkers,
-      int cfiedrRegionsX, int cfiedrRegionsY, const string& _phaseEstimator);
+      const vector<KeySequence>& _keys, const ion::FlowOrder& _flowOrder, int numWorkers,
+      int cfiedrRegionsX, int cfiedrRegionsY);
 
 private:
   friend void * RegionAnalysisWorker(void *);
   void worker_Treephaser();
-  void worker_AdaptiveTreephaser();
 
   void NelderMeadOptimization(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters, int numEvaluations, int numParameters);
   float evaluateParameters(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters);
 
   // Command Line Options
-  string phaseEstimator;
-
   RegionWellsReader   wellsReader;
   Mask *              mask;
   vector<KeySequence> keys;
-  string              flowOrder;
-  int                 numFlows;
+  ion::FlowOrder      flowOrder;
 
   vector<float> *     cf;
   vector<float> *     ie;

@@ -68,28 +68,22 @@ void BAMReader::open(const std::string& BAM_file) {
 	//might as well grab it here
 	bam_file = BAM_file;
 	_open();
-	
-	
 }
 
 void BAMReader::open(const std::string& mode_stdin, const std::string& type_of_stdin) {
 		
 	file_p = samopen(mode_stdin.c_str(), type_of_stdin.c_str(), 0);
 	if (file_p == NULL) {
-		std::cout << "[BAMReader] file:"<< bam_file << " doesn't appear to exist" << std::endl;
+		std::cerr << "[BAMReader] file:"<< bam_file << " doesn't appear to exist" << std::endl;
 		file_open = false;
 	} else {
 		if (file_p->header) {
-			std::cerr << "[BAMReader] file opened" << std::endl;
+			std::cout << "[BAMReader] file opened" << std::endl;
 			_init();
-
 		} else {
 			std::cerr << "[BAMReader] invalid input." << std::endl;
 		}
-
-		
 	}
-	
 }
 
 void BAMReader::_open() {
@@ -118,10 +112,10 @@ void BAMReader::_open() {
 	
 	//error handling
 	if (file_p == NULL) {
-		std::cout << "[BAMReader] file:"<< bam_file << " doesn't appear to exist" << std::endl;
+		std::cerr << "[BAMReader] file:"<< bam_file << " doesn't appear to exist" << std::endl;
 		file_open = false;
 	} else {
-                std::cerr << "[BAMReader] file opened" << std::endl;
+                std::cout << "[BAMReader] file opened" << std::endl;
 		_init();
 	}
 

@@ -3,21 +3,22 @@
 <html>
 <head>
     <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
-    <link type="text/css" href="/site_media/RunRecognitION/styles/runrecognition.css" rel="Stylesheet" />
+    <link type="text/css" href="/pluginMedia/RunRecognitION/styles/runrecognition.css" rel="Stylesheet" />
     <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
     <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-    <script type="text/javascript" src="/site_media/RunRecognitION/scripts/runrecognition.js"></script>
+    <script type="text/javascript" src="/pluginMedia/RunRecognitION/scripts/runrecognition.js"></script>
+    <script type="text/javascript" src="/pluginMedia/RunRecognitION/scripts/rrLeaderboardBuilder.js"></script>
     
     <script type='text/javascript'>
         $(document).ready(function() {
-            chipType = '@chip_type'
-            initializeLeaderboard(chipType.replace(/[^0-9]/g, ''), '#leaderboard_wrapper');
+	    		var chipType = '@chip_type';
+	        initializeLeaderboard(chipType.replace(/[^0-9]/g, ''), '#leaderboard_wrapper');
         });
     </script>
 </head>
 
 <!--build the html page for what the user sees-->
-<body id="framePage">
+<body>
     <h3>Run RecognitION Leaderboard</h3>
     <div class="hpad15">
         <div class="border">
@@ -29,7 +30,7 @@
                 <div class="left" style="font-size: 90%">
                     <a href="http://lifetech-it.hosted.jivesoftware.com/community/pgm_users/run_recognition" target="_blank">All Leaderboards</a> | <a href="http://www.iontorrent.com/support" target="_blank">Support</a>
                 </div>
-                <div class="right"><a href="http://www.5amsolutions.com" target="_blank" style="color: #FFFFFF;"><img src="/site_media/RunRecognitION/images/powered-by-5am-solutions.gif" style="color: #FFFFFF;"></img></a></div>
+                <div class="right"><a href="http://www.5amsolutions.com" target="_blank" style="color: #FFFFFF;"><img src="/pluginMedia/RunRecognitION/images/powered-by-5am-solutions.gif" style="color: #FFFFFF;"></img></a></div>
                 <div class="clear"></div>
             </div>
         </div>

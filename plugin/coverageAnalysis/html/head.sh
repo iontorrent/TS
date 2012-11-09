@@ -7,6 +7,7 @@ local JS;
 local CSS;
 echo "
 <head>
+<base target="_parent"/>
 <script type=\"text/javascript\" src=\"/site_media/jquery/js/jquery-1.6.1.min.js\"></script>
 <script type=\"text/javascript\" src=\"/site_media/jquery/js/jquery-ui-1.8.13.min.js\"></script>
 <script type=\"text/javascript\" src=\"/site_media/jquery/js/tipTipX/jquery.tipTipX.js\"></script>";

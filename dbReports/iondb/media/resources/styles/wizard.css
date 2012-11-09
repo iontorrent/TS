@@ -1,0 +1,162 @@
+.workflow {
+}
+.workflow-content {
+}
+.workflow-menu {
+    line-height: 1.3em;
+    margin-bottom: 20px !important;
+    margin-left: 0 !important;
+}
+.workflow-menu a:link, .workflow-menu a:visited {
+    display: block;
+    font-size: 12px;
+    overflow: hidden;
+    text-decoration: none;
+    width: 100%;
+}
+.workflow-menu a:hover, .workflow-menu a:hover strong, .workflow-menu a:hover b {
+    color: #1A2155;
+    text-decoration: none !important;
+}
+.workflow-menu b, .workflow-menu span {
+    background: url("../img/workflow.png") no-repeat scroll 0 0 transparent;
+}
+.workflow-menu .dark-tab b, .workflow-menu .dark-tab span {
+    background: url("../img/workflow-dark.png") no-repeat scroll 0 0 transparent;
+}
+.workflow-menu .dark-tab-last span span {
+    background-position: bottom right !important;
+}
+.workflow-menu .dark-tab-last.prev-tab span span {
+	background-position: right -216px !important;
+}
+.workflow-menu .first-light-tab b > span {
+	background: url("../img/workflow-dark.png") no-repeat scroll left -288px transparent;
+}
+.workflow-menu .dark-tab-last.active-tab span span {
+	background-image: url("../img/workflow.png");
+}
+.workflow-menu .first-light-tab.next-tab b > span {
+	background: url("../img/workflow.png") no-repeat left -144px transparent;
+}
+.workflow-menu .first-light-tab.active-tab b > span {
+	background: url("../img/workflow-dark.png") no-repeat left -108px transparent;
+}
+.workflow-menu b, .workflow-menu .dark-tab b {
+    background-color: #F6F6F6;
+    background-repeat: repeat-x;
+    color: #0981d2;
+    font-weight: bold;
+    height: 36px;
+    line-height: 36px;
+}
+.workflow-menu .active-tab b, .workflow-menu .active-tab a:hover b {
+    background-color: #04549D;
+    background-position: 0 -36px;
+    color: #FFFFFF;
+}
+.workflow-menu strong, .workflow-menu b, .workflow-menu span {
+    display: block;
+}
+.workflow-menu strong {
+    font-weight: normal;
+    padding: 10px;
+}
+.workflow-menu .active-tab strong, .workflow-menu .active-tab a:hover strong {
+    color: #333333;
+    font-weight: bold;
+}
+.workflow-menu span, .workflow-menu .first-wf-tab span {
+    background-position: 0 -72px;
+}
+.workflow-menu .dark-tab span {
+    background-position: 0 -72px;
+}
+.workflow-menu span span, .workflow-menu .first-wf-tab span span, .workflow-menu .next-tab span span {
+    background-position: 100% -180px;
+}
+.workflow-menu .dark-tab span span, .workflow-menu .dark-tab.next-tab span span {
+    background-position: 100% -180px;
+}
+.workflow-menu .prev-tab span span {
+    background-position: 100% -216px;
+}
+.workflow-menu .active-tab span {
+    background-position: 0 -108px;
+}
+.workflow-menu .active-tab span span {
+    background-position: 100% -252px;
+}
+.workflow-menu .next-tab span {
+    background-position: 0 -144px;
+}
+.workflow-menu .first-wf-tab span {
+    background-position: -8px 0;
+}
+.workflow-menu .last-wf-tab span span {
+    background-position: -8px 0;
+}
+.workflow-menu li {
+    float: left;
+    list-style-type: none;
+    text-align: center;
+    width: 12.5%;
+}
+.workflow-menu .active-tab a:link, .workflow-menu .active-tab a:visited, .workflow-menu .active-tab a:active, .workflow-menu .active-tab a:hover {
+    background: url("../img/workflow-active.png") repeat-x scroll 0 100% #FFFFFF;
+    border-bottom-color: #026AC9;
+    color: #333333;
+    text-decoration: none !important;
+}
+.workflow-menu .active-tab.dark-tab a:link, .workflow-menu .active-tab.dark-tab a:visited, .workflow-menu .active-tab.dark-tab a:active, .workflow-menu .active-tab.dark-tab a:hover {
+    background: url("../img/workflow-active-dark.png") repeat-x scroll 0 100% #FFFFFF;
+}
+.workflow-step-content { padding: 20px }
+.workflow-step-content p span {
+	margin-right: 6px;
+	font-size: 16px;
+}
+.workflow-steps {
+    clear: both;
+}
+
+.review-workflow h3 {
+	font-size: 13px;
+	text-decoration: underline;
+	margin: 15px 0 2px;
+}
+
+.review-workflow p {
+	font-size: 12px;
+	margin: 2px 0;
+}
+
+.option-group p {
+	line-height: 19px;
+	vertical-align: bottom;
+}
+
+.input-spinner {
+	border-right: none !important;
+	-webkit-background-clip: padding-box;
+	-webkit-border-radius: 4px 0 0 4px !important;
+	   -moz-border-radius: 4px 0 0 4px !important;
+	        border-radius: 4px 0 0 4px !important;
+	height: 20px !important;
+	margin-right: 0;
+	float: left;
+}
+
+.ui-spinner {
+	float: left;
+	top: 0 !important;
+}
+
+.ui-spinner-buttons {
+	top: 0 !important;
+}
+
+.less-than {
+	float: left;
+	line-height: 34px;
+}

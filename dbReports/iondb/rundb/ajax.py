@@ -1,4 +1,4 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
 """
 AJAX Views And API
@@ -16,17 +16,25 @@ remote procedure call framework.
 # python standard lib
 import json
 from os import path
+import sys
+import traceback
 import re
 import socket
 import traceback
 import urlparse
 import logging
-import logging.handlers
+import tasks
+from twisted.web.xmlrpc import Proxy
+import xmlrpclib
+import time
 
 # django
 from django import http,template,shortcuts
 from django.conf import settings
 from django.core import serializers
+from django.core.serializers.json import DjangoJSONEncoder
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.cache import never_cache
 
 # local
 import models
@@ -39,6 +47,10 @@ _http404 = http.HttpResponseNotFound
 _charset = 'utf-8'
 
 _API_METHODS = {}
+
+
+logger = logging.getLogger(__name__)
+
 
 def jsonapi(fn):
     """Decorator to convert a normal Python function into a function
@@ -68,13 +80,14 @@ def render_to_json(data,is_json=False):
     """Create a JSON response from a data dictionary and return a
     Django response object."""
     if not is_json:
-        js = json.dumps(data)
+        js = json.dumps(data, cls=DjangoJSONEncoder)
     else:
         js = data
     mime = mimetype="application/json;charset=utf-8"
     response = http.HttpResponse(enc(js), content_type=mime)
     return response
 
+@login_required
 def analysis_liveness(request, pk):
     """Determine if an analysis has been successfully started.
     """
@@ -93,7 +106,8 @@ def analysis_liveness(request, pk):
     loc = result.server_and_location()
 
     web_path = result.web_path(loc)
-    report = result.reportLink
+#    report = result.reportLink
+    report = "/report/%s" % pk
     save_path = result.web_root_path(loc)
 
     if web_path:
@@ -113,6 +127,7 @@ def analysis_liveness(request, pk):
     return render_to_json({"success":success, "log":log, "report":report, "exists" : report_exists,
                            "status":status})
 
+@login_required
 def starRun(request, pk, set):
     """Allow user to 'star' a run thus making it magic"""
     try:
@@ -125,6 +140,7 @@ def starRun(request, pk, set):
     exp.save()
     return http.HttpResponse()
 
+@login_required
 def change_storage(request, pk, value):
     """changes the storage option for run raw data"""
     if request.method == 'POST':
@@ -144,6 +160,7 @@ def change_storage(request, pk, value):
         exp.save()
         return http.HttpResponse()
 
+@login_required
 def change_library(request, pk):
     """changes the library for a run """
     if request.method == 'POST':
@@ -166,12 +183,40 @@ def change_library(request, pk):
     elif request.method == 'GET':
         return http.HttpResponse()
 
+@login_required
+def reportAction(request, pk, option):
+    logger.info("reportAction: request '%s' on report: %s" % (option, pk))
+
+    comment = request.POST.get("comment", "No Comment")
+    
+    try:
+        proxy = xmlrpclib.ServerProxy('http://127.0.0.1:%d' % settings.IARCHIVE_PORT, allow_none=True)
+        if option == 'A':
+            proxy.archive_report(pk, comment)
+        elif option == 'E':
+            proxy.export_report(pk, comment)
+        elif option == "P":
+            proxy.prune_report(pk, comment)
+        elif option == "D":
+            proxy.delete_report(pk, comment)
+        elif option == 'Z':
+            ret = shortcuts.get_object_or_404(models.Results, pk=pk)
+            if ret.autoExempt:
+                ret.autoExempt = False
+            else:
+                ret.autoExempt = True
+            ret.save()
+    except:
+        logger.exception(traceback.format_exc())
+        
+    return http.HttpResponse()
+
+@login_required
 def autorunPlugin(request, pk):
     """
     toogle autorun for a plugin
     """
     if request.method == 'POST':
-        
         try:
             pk = int(pk)
         except (TypeError, ValueError):
@@ -179,7 +224,15 @@ def autorunPlugin(request, pk):
 
         p = shortcuts.get_object_or_404(models.Plugin, pk=pk)
 
-        checked = request.POST.get('checked',False)
+        # Ignore request if marked AUTORUNDISABLE
+        if not p.autorunMutable:
+            # aka autorun disable, so make sure it is off
+            if p.autorun:
+                p.autorun = False
+                p.save()
+            return http.HttpResponse() # NotModified, Invalid, Conflict?
+
+        checked = request.POST.get('checked',"false").lower()
 
         if checked == "false":
             p.autorun = False
@@ -189,10 +242,10 @@ def autorunPlugin(request, pk):
         p.save()
 
         return http.HttpResponse()
+    else:
+        return http.HttpResponseNotAllowed(['POST'])
 
-    elif request.method == 'GET':
-        return http.HttpResponse()
-
+@login_required
 def delete_barcode(request, pk):
     """delete a barcode"""
     if request.method == 'POST':
@@ -209,6 +262,7 @@ def delete_barcode(request, pk):
     elif request.method == 'GET':
         return http.HttpResponse()
 
+@login_required
 def delete_barcode_set(request, name):
     """delete a set of barcodes"""
     if request.method == 'POST':
@@ -222,6 +276,8 @@ def delete_barcode_set(request, name):
     elif request.method == 'GET':
         return http.HttpResponse()
 
+@never_cache
+@login_required
 def progress_bar(request,pk):
     '''gets the current status from the current experiment table
     based on the experiment pk and updates the ftpStatus progress bar'''
@@ -230,9 +286,17 @@ def progress_bar(request,pk):
     except (TypeError,ValueError):
         return http.HttpResponseNotFound
     exp = shortcuts.get_object_or_404(models.Experiment, pk=pk)
-    value = int(exp.ftpStatus)
+    try:
+        value = int(exp.ftpStatus)
+    except ValueError:
+        if exp.ftpStatus == "Complete":
+            value = 100
+        else:
+            value = 0
     return render_to_json({"value":value})
 
+@never_cache
+@login_required
 def progressbox(request,pk):
     '''reads in the progress.txt file inside a running analysis
     and returns the colors of the boxes for the faux progress bar
@@ -264,6 +328,7 @@ def progressbox(request,pk):
 
     return render_to_json({"value":ret, "status": res.status})
 
+@login_required
 def control_job(request, pk, signal):
     """Send ``signal`` to the job denoted by ``pk``, where ``signal``
     is one of
@@ -283,6 +348,7 @@ def control_job(request, pk, signal):
     result.save()
     return render_to_json(conn.control_job(pk,signal))
 
+@login_required
 def tooltip(request,tipname):
     """Return the tooltip with key ``tipname``, or an error message
     if no such tooltip as found."""
@@ -290,7 +356,7 @@ def tooltip(request,tipname):
     return render_to_json(raw,encoded)
 
 # JSON API stuff
-
+@login_required
 def apibase(request):
     """Make a call to the JSON API.
 
@@ -361,6 +427,7 @@ def last_report():
         ret = None
     return render_to_json(ret)
 
+@login_required
 def enablePlugin(request, pk, set):
     """Allow user to enable a plugin for use in the analysis"""
     try:
@@ -373,6 +440,7 @@ def enablePlugin(request, pk, set):
     plugin.save()
     return http.HttpResponse()
 
+@login_required
 def enableTestFrag(request, pk, set):
     """Allow user to enable test fragment for use in the analysis"""
     try:
@@ -385,6 +453,7 @@ def enableTestFrag(request, pk, set):
     temp.save()
     return http.HttpResponse()
 
+@login_required
 def enableEmail(request, pk, set):
     """Allow user to enable a email"""
     try:
@@ -397,6 +466,7 @@ def enableEmail(request, pk, set):
     email.save()
     return http.HttpResponse()
 
+@login_required
 def enableArchive(request, pk, set):
     """Allow user to enable the archive tool"""
     try:

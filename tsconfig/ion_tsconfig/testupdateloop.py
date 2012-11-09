@@ -13,7 +13,8 @@
 
 import time
 import iondb.bin.djangoinit
-from ion_tsconfig.TSconfig import *
+#from ion_tsconfig.TSconfig import *
+from TSconfig import *
 
 ################################################################################
 #
@@ -32,7 +33,8 @@ def software_update_loop(TSconfig):
         new_files = TSconfig.TSpoll_pkgs()
         
         #if new_files:
-        if True:
+        #if True:
+        if False:
             #================================
             # Check for auto-download enabled
             #================================
@@ -73,9 +75,9 @@ if __name__ == '__main__':
     # TODO:Check for root permission
 
     newclass = TSconfig()
-    newclass.set_testrun(False)
-    newclass.set_autodownloadflag(True)
-    newclass.set_userackinstall(True)
+    newclass.set_testrun(True)
+    newclass.set_autodownloadflag(False)
+    newclass.set_userackinstall(False)
     software_update_loop(newclass)
     print "Status at exit %s" % newclass.get_state_msg() 
     

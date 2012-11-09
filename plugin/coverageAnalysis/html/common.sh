@@ -35,8 +35,11 @@ write_page_title ()
     if [ "$PLUGIN_PADSIZE" -gt 0 ]; then
         OPTIONS="$OPTIONS   Target Padding: $PLUGIN_PADSIZE"
     fi
-    if [ "$PLUGIN_USTARTS" = "Yes" ]; then
-        OPTIONS="$OPTIONS   Unique Starts"
+    if [ "$PLUGIN_UMAPS" = "Yes" ]; then
+        OPTIONS="$OPTIONS   Uniquely Mapped"
+    fi
+    if [ "$PLUGIN_NONDUPS" = "Yes" ]; then
+        OPTIONS="$OPTIONS   Non-duplicates"
     fi
     echo "<h1><center><span style=\"cursor:help\" title=\"${ALIGNEDREADS}Library Type='${PLUGINCONFIG__LIBRARYTYPE_ID}'   Target Regions='${PLUGINCONFIG__TARGETREGIONS_ID}'${OPTIONS}\">Coverage Analysis Report</span></center></h1>" >> "$1"
 }
@@ -53,18 +56,26 @@ write_html_header ()
 	    REFRESHRATE=$2
         fi
     fi
-    echo '<html>' > "$HTML"
+    echo '<?xml version="1.0" encoding="iso-8859-1"?>' > "$HTML"
+    echo '<!DOCTYPE html>' >> "$HTML"
+    echo '<html>' >> "$HTML"
     print_html_head $REFRESHRATE >> "$HTML"
-    echo '<title>Torrent Coverage Analysis Report</title>' >> "$HTML"
-    echo '<body>' >> "$HTML"
-    print_html_logo >> "$HTML";
+    if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
+      echo '<title>Torrent Coverage Analysis Report</title>' >> "$HTML"
+      echo '<body>' >> "$HTML"
+      print_html_logo >> "$HTML";
+    else
+      echo '<body>' >> "$HTML"
+    fi
 
     if [ -z "$COV_PAGE_WIDTH" ];then
 	echo '<div id="inner">' >> "$HTML"
     else
-	echo "<div style=\"width:${COV_PAGE_WIDTH}px;margin-left:auto;margin-right:auto;height:100%\">" >> "$HTML"
+	echo "<div style=\"width:${COV_PAGE_WIDTH};margin-left:auto;margin-right:auto;\">" >> "$HTML"
     fi
-    write_page_title "$HTML";
+    if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
+      write_page_title "$HTML";
+    fi
 }
 
 write_html_footer ()
@@ -74,9 +85,11 @@ write_html_footer ()
         HTML="$1"
     fi
     print_html_end_javascript >> "$HTML"
-    print_html_footer >> "$HTML"
-    echo '<br/><br/></div>' >> "$HTML"
-    echo '</body></html>' >> "$HTML"
+    if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
+      print_html_footer >> "$HTML"
+      echo '<br/><br/>' >> "$HTML"
+    fi
+    echo '</div></body></html>' >> "$HTML"
 }
 
 display_static_progress ()
@@ -85,9 +98,9 @@ display_static_progress ()
     if [ -n "$1" ]; then
         HTML="$1"
     fi
-    echo "<br/><h3 style=\"text-align:center;color:red\">*** Analysis is not complete ***</h3>" >> "$HTML"
+    echo "<br/><h3 style=\"text-align:center;color:red;margin:0\">*** Analysis is not complete ***</h3><br/>" >> "$HTML"
     echo "<a href=\"javascript:document.location.reload();\" ONMOUSEOVER=\"window.status='Refresh'; return true\">" >> "$HTML"
-    echo "<div style=\"text-align:center\">Click here to refresh</div></a>" >> "$HTML"
+    echo "<div style=\"text-align:center\">Click here to refresh</div></a><br/>" >> "$HTML"
 }
 
 write_json_header ()
@@ -103,7 +116,8 @@ write_json_header ()
     echo "{" > "$JSON_RESULTS"
     echo "  \"Targetted regions\" : \"$PLUGIN_TARGETS\"," >> "$JSON_RESULTS"
     echo "  \"Target padding\" : \"$PLUGIN_PADSIZE\"," >> "$JSON_RESULTS"
-    echo "  \"Examine unique starts\" : \"$PLUGIN_USTARTS\"," >> "$JSON_RESULTS"
+    echo "  \"Uniquely mapped\" : \"$PLUGIN_UMAPS\"," >> "$JSON_RESULTS"
+    echo "  \"Non-duplicate\" : \"$PLUGIN_NONDUPS\"," >> "$JSON_RESULTS"
     echo "  \"barcoded\" : \"$haveBC\"," >> "$JSON_RESULTS"
     if [ "$haveBC" = "true" ]; then
         echo "  \"barcodes\" : {" >> "$JSON_RESULTS"
@@ -145,7 +159,10 @@ append_to_json_results ()
   if [ -z $INDENTLEV ]; then
     INDENTLEV=2
   fi
-  local JSONCMD="perl ${SCRIPTSDIR}/coverage_analysis_json.pl -a -I $INDENTLEV -B \"$DATASET\" \"$DATAFILE\" \"$JSONFILE\""
+  if [ -n $DATASET ]; then
+    DATASET="-B \"$DATASET\""
+  fi
+  local JSONCMD="perl ${SCRIPTSDIR}/coverage_analysis_json.pl -a -I $INDENTLEV $DATASET \"$DATAFILE\" \"$JSONFILE\""
   eval "$JSONCMD || echo \"WARNING: Failed to write to JSON from $DATAFILE\"" >&2
 }
 

@@ -15,6 +15,8 @@ import sys
 sys.path.append('/etc')
 from torrentserver.cluster_settings import *
 
+import logging
+LOG = logging.getLogger('ion-plugin-status')
 
 def UpdatePluginStatus(pk, plugin, version, msg, host="127.0.0.1", port = PLUGINSERVER_PORT, method="update"):
     """
@@ -26,25 +28,29 @@ def UpdatePluginStatus(pk, plugin, version, msg, host="127.0.0.1", port = PLUGIN
     # Total timeout = 60*5 == 300 == 5min
     attempts = 0
 
+    ret = ''
     while attempts < retries:
         try:
             conn = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), verbose=False, allow_none=True)
             methodAttach = getattr(conn,method)
             ret = methodAttach(pk,plugin,msg)
-            print "Plugin Update returns: '%s'" % ret
+            LOG.debug("Plugin Update returns: '%s'", ret)
             break
         except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
-            print "XMLRPC Error: %s" % f
+            LOG.error("XMLRPC Error: %s",f)
             if attempts < retries:
-                print "Error connecting to plugin daemon at %s:%d. Retrying in %d" % (host, port, delay)
-                if attempts % 5:
-                    print "Error connecting to plugin daemon at %s:%d. Retrying in %d" % (host, port, delay)
-                    time.sleep(delay)
+                LOG.warn("Error connecting to plugin daemon at %s:%d. Retrying in %d", host, port, delay)
+                time.sleep(delay)
                 attempts += 1
             else:
                 raise "Unable to connect to plugin daemon after multiple attempts"
 
-    print "Plugin '%s' Successfully Updated" % plugin
+    if ret:
+        LOG.debug("Plugin '%s' Successfully Updated", plugin)
+    else:
+        LOG.error("Failed to update plugin status '%s' '%s'", plugin, ret)
+    return ret
+
 
 if __name__ == '__main__':
 
@@ -53,6 +59,7 @@ if __name__ == '__main__':
     options.add_option('-i', '--pk'     , dest = 'pk'     , action = 'store', default = "")
     options.add_option('-p', '--plugin' , dest = 'plugin' , action = 'store', default = "") ## Plugin Name
     options.add_option('-v', '--version' , dest = 'pluginversion' , action = 'store', default = "") ## Plugin Version
+    options.add_option('-d', '--debug' , dest = 'debug' , action = 'store_true', default = False)
 
     # More precise identifiers
     #options.add_option('-k', '--pluginkey' , dest = 'pluginkey' , action = 'store', default = "") ## Plugin DB Key
@@ -73,6 +80,13 @@ if __name__ == '__main__':
 
     (options, argv) = options.parse_args(sys.argv)
 
+    if options.debug:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.INFO
+
+    logging.basicConfig(level=loglevel)
+
     # Provide a placeholder value for unspecified version
     if not options.pluginversion: options.pluginversion = '0'
 
@@ -82,14 +96,10 @@ if __name__ == '__main__':
     goodArgs = True
     for key, value in opts.iteritems():
         if not value:
-            print "You must give the value for",
-            print key
+            LOG.error("You must give the value for %s", key)
             goodArgs = False
-        else:
-            print key,
-            print value
     if not goodArgs:
-        print "Bad args"
+        LOG.fatal("Bad command line arguments '%s'", sys.argv)
         sys.exit(1)
 
     # Set a status using 'update' method.
@@ -97,14 +107,11 @@ if __name__ == '__main__':
         updateMessage = options.msg
 
         if options.convert:
-           if updateMessage == "1":
-               updateMessage = "Error"
-           elif updateMessage == "0":
-               updateMessage = "Completed"
-           else:
-               updateMessage = "Error"
-
-        # TODO Ensure message is in allowed values
+            if updateMessage == "0":
+                updateMessage = "Completed"
+            else:
+                # Any non-zero exit status is Error
+                updateMessage = "Error"
 
         updater = UpdatePluginStatus(options.pk,
                                      options.plugin, options.pluginversion,
@@ -113,26 +120,24 @@ if __name__ == '__main__':
                                      PLUGINSERVER_PORT,
                                      'update'
                                      )
-        print "Set the Status of the plugin '%s' on report '%s' to %s" % (options.plugin, options.pk,options.msg)
-
+        LOG.info("Updated plugin '%s--%s' on report '%s' to status '%s'", 
+                 options.plugin, options.pluginversion, options.pk, updateMessage)
 
     if options.jsonpath:
         jsonfname = os.path.join(options.jsonpath,"results.json")
         try:
             with open(jsonfname, 'r') as f:
                 updateJSON = f.read()
-        except:
-            print "Error could not read the json file ", jsonfname
-            traceback.print_exc()
-            sys.exit(1)
+        except (OSError, IOError) as e:
+            LOG.error("Unable to read the json file '%s': %s", jsonfname, e)
+            updateJSON="{}"
 
         try:
             updateJSONloaded = json.loads(updateJSON)
         except:
-            print "Error could not parse the json syntax in file ", jsonfname
-            print updateJSON
-            traceback.print_exc()
-            sys.exit(1)
+            LOG.error("Invalid json syntax in file '%s'", jsonfname)
+            LOG.exception(updateJSON)
+            updateJSONloaded = {}
 
         updater = UpdatePluginStatus(options.pk,
                                      options.plugin, options.pluginversion,
@@ -141,6 +146,5 @@ if __name__ == '__main__':
                                      PLUGINSERVER_PORT,
                                      'resultsjson'
                                      )
-
-        print "Posted results store for plugin '%s'" % options.plugin
+        LOG.debug("Posted results.json for plugin '%s'", options.plugin)
 

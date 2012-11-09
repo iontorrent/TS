@@ -249,7 +249,7 @@ sff_clipped_read_right(sff_t *sff)
 }
 
 static int
-usage()
+sff_view_usage()
 {
   fprintf(stderr, "Usage: %s sffview [options] <in.sff>\n", PACKAGE_NAME);
   fprintf(stderr, "\n");
@@ -257,6 +257,8 @@ usage()
   fprintf(stderr, "         -r STRING   the minimum/maximum row range (ex. 0-20)\n");
   fprintf(stderr, "         -c STRING   the minimum/maximum col range (ex. 0-20)\n");
   fprintf(stderr, "         -R FILE     a file with each line being a read name to print\n");
+  fprintf(stderr, "         -F STRING   replace the flow order in the header with this\n");
+  fprintf(stderr, "         -K STRING   replace the key sequence in the header with this\n");
   fprintf(stderr, "         -q          print in FASTQ format\n");
   fprintf(stderr, "         -b          print in SFF binary format\n");
   fprintf(stderr, "         -h          print this message\n");
@@ -275,13 +277,15 @@ sff_view_main(int argc, char *argv[])
   sff_t *sff = NULL;
   char *fn_names = NULL;
   char **names = NULL;
+  char *flow = NULL;
+  char *key = NULL;
   int32_t names_num = 0, names_mem = 0;
   int32_t out_mode, min_row, max_row, min_col, max_col;
 
   out_mode = 0;
   min_row = max_row = min_col = max_col = -1;
 
-  while((c = getopt(argc, argv, "r:c:R:bqh")) >= 0) {
+  while((c = getopt(argc, argv, "r:c:R:F:K:bqh")) >= 0) {
       switch(c) {
         case 'r':
           if(ion_parse_range(optarg, &min_row, &max_row) < 0) {
@@ -302,13 +306,19 @@ sff_view_main(int argc, char *argv[])
         case 'b':
           out_mode |= 2;
           break;
+        case 'F':
+          flow = strdup(optarg);
+          break;
+        case 'K':
+          key = strdup(optarg);
+          break;
         case 'h': 
         default: 
-          return usage();
+          return sff_view_usage();
       }
   }
   if(argc != 1+optind) {
-      return usage();
+      return sff_view_usage();
   }
   else {
       sff_header_t *header = NULL;
@@ -325,6 +335,13 @@ sff_view_main(int argc, char *argv[])
       }
 
       header = sff_header_clone(sff_file_in->header); /* copy header, but update n_reads if using index or names */
+
+      if(NULL != flow) { // replace the flow order
+          ion_string_copy1(header->flow, flow);
+      }
+      if(NULL != key) { // replace the key
+          ion_string_copy1(header->key, key);
+      }
 
       // read in the names
       if(NULL != fn_names) {
@@ -438,6 +455,9 @@ sff_view_main(int argc, char *argv[])
               }
           }
           sff_destroy(sff);
+          if(0 < names_mem && 0 == names_num) {
+              break;
+          }
       }
 
       sff_fclose(sff_file_in);
@@ -460,5 +480,136 @@ sff_view_main(int argc, char *argv[])
       free(names);
   }
   free(fn_names);
+  free(flow);
+  free(key);
+  return 0;
+}
+
+static sff_header_t*
+sff_cat_merge_headers(sff_file_t **fps, int32_t n)
+{
+  sff_header_t *header = NULL;
+  int32_t i, n_reads = 0;
+
+  if(n < 1) return NULL;
+  header = sff_header_clone(fps[0]->header); /* clone the first header */
+  if(n == 1) return header;
+
+
+  // get the total number of reads and do some error checking
+  n_reads = header->n_reads;
+  for(i=1;i<n;i++) {
+      sff_header_t *alt = NULL;
+      alt = fps[i]->header;
+
+      // check the other headers against this one
+      if(alt->magic != header->magic) {
+          ion_error(__func__, "Header value did not match: magic", Exit, OutOfRange);
+      }
+      if(alt->version != header->version) {
+          ion_error(__func__, "Header value did not match: version", Exit, OutOfRange);
+      }
+      if(alt->index_offset != header->index_offset) {
+          ion_error(__func__, "Header value did not match: index_offset", Exit, OutOfRange);
+      }
+      if(alt->index_length != header->index_length) {
+          ion_error(__func__, "Header value did not match: index_length", Exit, OutOfRange);
+      }
+      if(alt->gheader_length != header->gheader_length) {
+          ion_error(__func__, "Header value did not match: gheader_length", Exit, OutOfRange);
+      }
+      if(alt->key_length != header->key_length) {
+          ion_error(__func__, "Header value did not match: key_length", Exit, OutOfRange);
+      }
+      if(alt->flow_length != header->flow_length) {
+          ion_error(__func__, "Header value did not match: flow_length", Exit, OutOfRange);
+      }
+      if(alt->flowgram_format != header->flowgram_format) {
+          ion_error(__func__, "Header value did not match: flowgram_format", Exit, OutOfRange);
+      }
+      if(0 != strcmp(alt->flow->s, header->flow->s)) {
+          ion_error(__func__, "Header value did not match: flow", Exit, OutOfRange);
+      }
+      if(0 != strcmp(alt->key->s, header->key->s)) {
+          ion_error(__func__, "Header value did not match: key", Exit, OutOfRange);
+      }
+
+      // update the number of reads
+      n_reads += alt->n_reads; 
+  }
+
+  // update the number of reads
+  header->n_reads = n_reads;
+
+  return header;
+}
+
+static int
+sff_cat_usage()
+{
+  fprintf(stderr, "Usage: %s sffcat [options] <in1.sff <in2.sff> [...]\n", PACKAGE_NAME);
+  fprintf(stderr, "\n");
+  fprintf(stderr, "Options:\n");
+  fprintf(stderr, "         -h          print this message\n");
+  fprintf(stderr, "\n");
+  fprintf(stderr, "\n");
+  return 1;
+
+}
+
+int
+sff_cat_main(int argc, char *argv[])
+{
+  int i, c;
+  sff_file_t **sff_files_in=NULL, *sff_file_out=NULL;
+  int32_t sff_files_in_num=0;
+  sff_t *sff = NULL;
+
+  while((c = getopt(argc, argv, "h")) >= 0) {
+      switch(c) {
+        case 'h': 
+        default: 
+          return sff_cat_usage();
+      }
+  }
+  if(argc <= optind) {
+      return sff_cat_usage();
+  }
+  else {
+      sff_header_t *header = NULL;
+
+      // open input files
+      sff_files_in_num = argc - optind;
+      sff_files_in = ion_calloc(sff_files_in_num, sizeof(sff_file_t*), __func__, "sff_file_in");
+      for(i=0;i<sff_files_in_num;i++) {
+          sff_files_in[i] = sff_fopen(argv[optind+i], "rb", NULL, NULL);
+      }
+
+      // merge the headers
+      header = sff_cat_merge_headers(sff_files_in, sff_files_in_num);
+
+      // open the output file
+      sff_file_out = sff_fdopen(fileno(stdout), "wb", header, NULL);
+
+      // concatenate the records
+      for(i=0;i<sff_files_in_num;i++) {
+          while(NULL != (sff = sff_read(sff_files_in[i]))) {
+              sff_write(sff_file_out, sff);
+              sff_destroy(sff);
+          }
+      }
+
+      // close the output file
+      sff_fclose(sff_file_out);
+
+      // close input files
+      for(i=0;i<sff_files_in_num;i++) {
+          sff_fclose(sff_files_in[i]);
+      }
+      free(sff_files_in);
+
+      // destroy the header
+      sff_header_destroy(header);
+  }
   return 0;
 }

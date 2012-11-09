@@ -91,6 +91,7 @@ while( scalar @ARGV )
     }
     close( INFILE );
 }
+
 if( $headerline eq "" )
 {
     print STDERR "\nERROR: $CMD: No fields header line in input TSV file(s).\n";
@@ -116,6 +117,7 @@ if( $genomefile ne "" )
         print STDERR "WARNING: $CMD: Could not open genome file $genomefile\n";
     }
 }
+
 open( OUTFILE, ">$outfile" ) || die "$CMD: Cannot open output file $outfile.\n";
 
 $headerline = "View\t" . $headerline if( $addviewer );
@@ -123,14 +125,16 @@ $headerline = "View\t" . $headerline if( $addviewer );
 my %hotspot_starts;
 my %hotspot_ends;
 my %hotspot_ids;
+my %hotspot_infos;
 my $vart = 0; # position must be first field (after chromosome)
 if( $havehotspots )
 {
     # check for VarType field
     my @fields = split(/\t/,$headerline);
+    my @j = 1;
     for( my $i = 1; $i < scalar(@fields); ++$i )
     {
-        if( $fields[$i] =~ m/^VarType$/i )
+	if( $fields[$i] =~ m/^Type$/i )
         {
             $vart = $i-1;
             last;
@@ -164,9 +168,12 @@ if( $havehotspots )
             next;
         }
         ++$numTargets;
-        push( @{$hotspot_starts{$chrid}}, $fields[1]+1 );
+	push( @{$hotspot_starts{$chrid}}, $fields[1]+1 );
         #push( @{$hotspot_ends{$chrid}}, $fields[2] );
         push( @{$hotspot_ids{$chrid}}, $fields[3] );
+	if(scalar(@fields) > 6) {
+		push( @{$hotspot_infos{$chrid}}, $fields[6] );
+	}
     }
     close( BEDFILE );
     print STDERR " - $numTargets HotSpot sites read from bed file.\n" if( $logprogress );
@@ -195,23 +202,35 @@ for( my $i = 0; $i < $nchr; ++$i )
             next;
         }
         # list ALL hotspot IDs that START at the found variant location, adjusting for deletions
-        ++$spos if( $fields[$vart] eq "DEL" );
+        
+	++$spos if( $fields[$vart] eq "DEL" );
         my $hotspot = "---";
         if( $num_hotspots > 0 )
         {
             my $hs = floor_bstart( $spos, \@{$hotspot_starts{$c}} );
             if( $hs >= 0 )
             {
-                $hotspot = $hotspot_ids{$c}[$hs];
-                while( ++$hs < $num_hotspots )
+                $hotspot = "";
+                while( $hs < $num_hotspots )
                 {
                     last if( $hotspot_starts{$c}[$hs] != $spos );
-                    $hotspot .= ";".$hotspot_ids{$c}[$hs];
+		    if(($hotspot_infos ne " ") & ($hotspot_infos{$c} ne " ") & ($hotspot_infos{$c}[$hs] ne " ")){
+			my $hotSpotInfo = $hotspot_infos{$c}[$hs];
+		    	if(exact_match($hotSpotInfo, @fields)) {
+				$hotspot .= $hotspot_ids{$c}[$hs] .";";
+		    	}
+		    }
+		    else {
+                    		print STDERR "WARNING: No HotSpotAlleles information found for the hotspot id:" .$hotspot_ids{$c}[$hs]. ". So matching will be done using Start position only.";
+				$hotspot .= $hotspot_ids{$c}[$hs].";";
+		    }
+		    $hs++;
                 }
             }
         }
-        printf OUTFILE "<a class='igvTable' data-locus='%s:%s'>IGV</a>\t",$c,$spos if( $addviewer );
-        $fields[0] = $spos;
+        $spos = $fields[0];
+	printf OUTFILE "<a class='igvTable' data-locus='%s:%s'>IGV</a>\t",$c,$spos if( $addviewer );
+        #$fields[0] = $spos;
         printf OUTFILE "%s\t%s\t%s\n", $c, join("\t",@fields), $hotspot;
     }
 }
@@ -219,6 +238,67 @@ close( OUTFILE );
 print STDERR " - $writeLines variants reported of $readLines variant lines read.\n" if( $logprogress );
 
 # ----------------END-------------------
+
+sub exact_match
+{
+    #return true if the types and alleles match exactly
+    #1st argument is the info field for the hotspot
+    #2nd argument is variant record tokens
+    my ($hotspotInfo, @variantFields) = @_;
+    my $refAllele = "NONE";
+    my $obsAllele = "NONE";
+    my @hotspotAlleles = split(/;/, $hotspotInfo);
+    my @refAlleleInfo = (split(/=/, $hotspotAlleles[0]));
+    if($refAlleleInfo[0] eq "REF") {
+    	$refAllele = $refAlleleInfo[1];
+    }
+    my @obsAlleleInfo = (split(/=/, $hotspotAlleles[1]));
+    if($obsAlleleInfo[0] eq "OBS") {
+ 	$obsAllele = $obsAlleleInfo[1];
+    }
+    if($refAlleleInfo eq "NONE" || $obsAllele eq "NONE") {
+	return 1; #return true 
+    }
+    my $hotspotType = "";
+    if((length($refAllele) == 1) & (length($obsAllele) == 1)) {
+	$hotspotType = "SNP";
+    }
+    elsif(length($refAllele) > length($obsAllele)) {
+    	$hotspotType = "DEL";
+    }
+    elsif(length($refAllele) < length($obsAllele)) {
+	$hotspotType = "INS";
+    }
+    my $variantType = $variantFields[$vart];
+    if (($variantType eq "SNP") && ($hotspotType eq "SNP") ){
+	my $variantAltAllele =  $variantFields[6];
+	if($variantAltAllele eq $obsAllele) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+    }
+    if($variantType eq "DEL") {
+	my $variantAllele = substr($variantFields[5], 1);
+	if($variantAllele eq $refAllele) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+    }
+    if($variantType eq "INS") {
+	my $variantAllele = substr($variantFields[6], 1);
+	if($variantAllele eq $obsAllele) {
+		return 1;
+	}
+	else {
+		return 0;
+	}
+    }
+    return 0;
+}
 
 sub floor_bstart
 {

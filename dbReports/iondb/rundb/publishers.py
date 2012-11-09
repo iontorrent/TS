@@ -20,11 +20,14 @@ import traceback
 import os
 import os.path
 
+from tastypie.bundle import Bundle
+
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render_to_response
 from django.http import HttpResponse
 from django.http import HttpResponseRedirect
 from django import forms
+from django.contrib.auth.decorators import login_required
 
 from iondb.rundb import models
 from celery.task import task
@@ -129,7 +132,7 @@ def write_file(file_data, destination):
         out.write(chunk)
     out.close()
 
-
+@login_required
 def write_plupload(request, pub_name):
     """file upload for plupload"""
     logger.info("Starting write plupload")
@@ -286,8 +289,7 @@ def run_pub_scripts(pub, upload):
         upload.status = "Error: processing failed."
         upload.save()
 
-
-
+@login_required
 def edit_upload(pub, upload, meta=None):
     """Editing is the process which converts an uploaded file into one or more
     files of published content.
@@ -296,14 +298,14 @@ def edit_upload(pub, upload, meta=None):
     async_upload = run_pub_scripts.delay(pub, upload)
     return upload, async_upload
 
-
+@login_required
 def upload_view(request):
     """Display a list of available publishers to upload files.
     """
     pubs = models.Publisher.objects.all()
     return render_to_response('rundb/ion_publisher_upload.html', {'pubs': pubs})
 
-
+@login_required
 def publisher_upload(request, pub_name, frame=False):
     """Display the publishers upload.html template on a GET of the page.
     If the view is POSTed to, the pass the uploaded data to the publisher.
@@ -324,7 +326,7 @@ def publisher_upload(request, pub_name, frame=False):
             return render_to_response(uploader, {"genome": genome})
     return render_to_response("rundb/ion_publisher_frame.html", {"pub":pub})
 
-
+@login_required
 def publisher_api_upload(request, pub_name):
     """TastyPie does not support file uploads, so for now, this is handled
     outside of the normal API space.
@@ -337,8 +339,9 @@ def publisher_api_upload(request, pub_name):
                                         form.cleaned_data['meta'])
             from iondb.rundb.api import ContentUploadResource
             resource = ContentUploadResource()
+            bundle = Bundle(upload)
             serialized_upload = resource.serialize(None,
-                                            resource.full_dehydrate(upload),
+                                            resource.full_dehydrate(bundle),
                                            "application/json")
             return HttpResponse(serialized_upload,
                                 mimetype="application/json")
@@ -347,7 +350,7 @@ def publisher_api_upload(request, pub_name):
     else:
         return HttpResponseRedirect("/rundb/publish/%s/" % pub_name)
 
-
+@login_required
 def upload_status(request, contentupload_id, frame=False):
     """If we're in an iframe, we can skip basically everything, and tell the
     template to redirect the parent window to the normal page.
@@ -363,7 +366,7 @@ def upload_status(request, contentupload_id, frame=False):
     return render_to_response('rundb/ion_publisher_upload_status.html',
                 {"contentupload": upload, "logs": logs, "filename": filename})
 
-
+@login_required
 def list_content(request):
     publishers = models.Publisher.objects.all()
     pubs = dict((p.name, list(p.contents.all())) for p in publishers)

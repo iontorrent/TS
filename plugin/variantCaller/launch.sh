@@ -1,11 +1,13 @@
 #!/bin/bash
-# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved 
+
+#MAJOR_BLOCK 
 
 #as of 6/21 the stack size being set on SGE nodes is too large, setting manually to the default
 #ulimit -s 8192
 #$ -l mem_free=22G,h_vmem=22G,s_vmem=22G
 #normal plugin script
-VERSION="2.2.3-31149"
+VERSION="3.2.45211"
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should all be set to 0 in production mode
@@ -29,20 +31,7 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     PLUGINCONFIG__VARIATIONTYPE=${PLAN_INFO[1]}
     PLUGINCONFIG__TARGETREGIONS=${PLAN_INFO[2]}
     PLUGINCONFIG__TARGETLOCI=${PLAN_INFO[3]}
-    if [ -z "$PLUGINCONFIG__LIBRARYTYPE" ]; then
-        rm -f "${TSP_FILEPATH_PLUGIN_DIR}/results.json"
-        HTML="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGINNAME}.html"
-        echo '<html><body>' > "$HTML"
-        if [ -f "${DIRNAME}/html/logo.sh" ]; then
-            source "${DIRNAME}/html/logo.sh"
-            print_html_logo >> "$HTML";
-        fi
-        echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
-        echo "<br/><h2 style=\"text-align:center;color:red\">*** Automatic analysis was not performed for PGM run. ***</h2>" >> "$HTML"
-        echo "<br/><h3 style=\"text-align:center\">(To run automatically select the Runtype in the PLAN page, e.g., AmpliSeq or TargetSeq.)</h3></br>" >> "$HTML"
-        echo '</body></html>' >> "$HTML"
-        exit
-    elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "ampliseq" ]; then
+    if [ "$PLUGINCONFIG__LIBRARYTYPE" = "ampliseq" ]; then
         PLUGINCONFIG__LIBRARYTYPE_ID="Ion AmpliSeq"
         PLUGINCONFIG__TRIMREADS="Yes"
         PLUGINCONFIG__UNIQUESTARTS="No"
@@ -58,8 +47,18 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
         PLUGINCONFIG__UNIQUESTARTS="No"
         PLUGINCONFIG__PADTARGETS=0
     else
-        echo "ERROR: Unexpected Library Type: $PLUGINCONFIG__LIBRARYTYPE" >&2
-        exit 1
+        rm -f "${TSP_FILEPATH_PLUGIN_DIR}/results.json"
+        HTML="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGINNAME}.html"
+        echo '<html><body>' > "$HTML"
+        if [ -f "${DIRNAME}/html/logo.sh" ]; then
+            source "${DIRNAME}/html/logo.sh"
+            print_html_logo >> "$HTML";
+        fi
+        echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
+        echo "<br/><h2 style=\"text-align:center;color:red\">*** Automatic analysis was not performed for PGM run. ***</h2>" >> "$HTML"
+        echo "<br/><h3 style=\"text-align:center\">(Runtype '$PLUGINCONFIG__LIBRARYTYPE' is not supported.)</h3></br>" >> "$HTML"
+        echo '</body></html>' >> "$HTML"
+        exit
     fi
     if [ "$PLUGINCONFIG__VARIATIONTYPE" = "Germ_Line" ]; then
         PLUGINCONFIG__VARIATIONTYPE_ID="Germ Line"
@@ -68,6 +67,13 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     else
         echo "ERROR: Unexpected Variation Frequency: $PLUGINCONFIG__VARIATIONTYPE" >&2
         exit 1
+    fi
+    # Correct for changes to default regions values
+    if [ "$PLUGINCONFIG__TARGETREGIONS" = "none" ]; then
+        PLUGINCONFIG__TARGETREGIONS=""
+    fi
+    if [ "$PLUGINCONFIG__TARGETLOCI" = "none" ]; then
+        PLUGINCONFIG__TARGETLOCI=""
     fi
     if [ -z "$PLUGINCONFIG__TARGETREGIONS" ]; then
         PLUGINCONFIG__TARGETREGIONS_ID=""
@@ -164,7 +170,6 @@ export REFERENCE_FAI="${REFERENCE}.fai"
 echo "Employed run options:" >&2
 echo "  Reference Genome:  $REFERENCE" >&2
 echo "  Aligned Reads:     $TSP_FILEPATH_BAM" >&2
-echo "  PGM Flow Order:    $TSP_FLOWORDER" >&2
 echo "  Library Type:      $PLUGINCONFIG__LIBRARYTYPE" >&2
 echo "  Variant Detection: $INPUT_VC_PARAMFILE" >&2
 echo "  Target Regions:    $INPUT_BED_FILE" >&2
@@ -216,6 +221,7 @@ export PLUGIN_OUT_LOCI_INDELS_VCF="hotspot_indel_variants.vcf"
 export PLUGIN_OUT_LOCI_CHRVARS="hotspot_variants_per_chromosome.xls"
 
 export PLUGIN_OUT_COVERAGE_HTML="COVERAGE_html"
+export HTML_BLOCK="variantCaller_block.html";
 
 export PLUGIN_OUT_VCTRACE="variantCaller.log"
 export PLUGIN_OUT_VCWARN="variantCaller.warn"
@@ -333,7 +339,7 @@ write_html_results ()
     write_page_footer "$HTMLOUT";
 
     # Remove temporary files
-    rm -f "${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML"
+    # rm -f "${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML"
     if [ "$KEEP_TMP_FILES" -eq 0 ]; then
         rm -f "${OUTDIR}/${PLUGIN_OUT_LOCI_CHRVARS}" "${OUTDIR}/bayesian_scorer.vcf"
         rm -f "${OUTDIR}/downsampled.vcf" "${OUTDIR}/gatk_prefiltered.vcf" "${OUTDIR}/filtered.non-downsampled.vcf"
@@ -378,16 +384,16 @@ if [ -n "$INPUT_SNP_BED_FILE" -a "$ENABLE_HOTSPOT_LEFT_ALIGNMENT" -eq 1 ]; then
     echo "Ensuring left-alignment of HotSpot regions..." >&2
     run "mkdir -p ${PLUGIN_HS_ALIGN_DIR}"
     run "ln -sf ${TSP_FILEPATH_PLUGIN_DIR}/$PLUGIN_OUT_LOCI_BEDFILE ${PLUGIN_HS_ALIGN_DIR}/$PLUGIN_OUT_LOCI_BEDFILE"
-    ALBCMD="java -jar -Xmx1500m ${DIRNAME}/LeftAlignBed.jar ${PLUGIN_HS_ALIGN_DIR}/${PLUGIN_OUT_LOCI_BEDFILE} ${PLUGIN_HS_ALIGN_BED} ${DIRNAME}/TVC/jar/GenomeAnalysisTK.jar ${REFERENCE}"
+    ALBCMD="java -Xmx1500m -jar ${DIRNAME}/LeftAlignBed.jar ${PLUGIN_HS_ALIGN_DIR}/${PLUGIN_OUT_LOCI_BEDFILE} ${PLUGIN_HS_ALIGN_BED} ${DIRNAME}/TVC/jar/GenomeAnalysisTK.jar ${REFERENCE}"
     if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
-        echo "\$ $ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&1" >&2
+        echo "\$ $ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&2" >&2
     fi
     # NOTE: if java fails due to lack of virtual memory, this error is not trapped by eval
-    eval "$ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&1" >&2
+    eval "$ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&2" >&2
     grep "Skipped (invalid) records:" ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log >&2
     if [ $? -ne 0 -o ! -f "$PLUGIN_HS_ALIGN_BED" ]; then
         echo "WARNING: Left alignment of HotSpot BED file failed:" >&2
-        echo "\$ $ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&1" >&2
+        echo "\$ $ALBCMD > ${PLUGIN_HS_ALIGN_DIR}/LeftAlignBed.log 2>&2" >&2
         echo " - Continuing with original HotSpot BED file..." >&2
         PLUGIN_HS_ALIGN_BED="${TSP_FILEPATH_PLUGIN_DIR}/$PLUGIN_OUT_LOCI_BEDFILE"
     fi
@@ -413,6 +419,7 @@ else
     # Perform the analysis
     RT=0
     eval "${SCRIPTSDIR}/call_variants.sh \"${PLUGIN_RUN_NAME}\" \"$TSP_FILEPATH_PLUGIN_DIR\" . \"$TSP_FILEPATH_BAM\"" >&2 || RT=$?
+    
     if [ $RT -ne 0 ]; then
         write_html_header "$HTML";
         echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"

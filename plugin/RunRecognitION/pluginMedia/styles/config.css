@@ -1,0 +1,21 @@
+#formwrap {
+    height: 130px;
+    line-height: 2em;
+    margin: 10px;
+    padding: 10px;
+    text-align: left;
+}
+
+body {
+    font-family: "Lucida Grande","Lucida Sans Unicode",Verdana,Arial,Helvetica,sans-serif;
+    font-size: 16px;
+}
+
+label {
+    min-width: 15em;
+    display: inline-block;
+}
+
+#rrcErrorText {
+    color: red;
+}

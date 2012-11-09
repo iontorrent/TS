@@ -20,17 +20,15 @@ def get_ids(filtfile):
   return filterBC
   
   
-def filter_barcodes(DIR_BC_FILES):
+def filter_barcodes(DIR_BC_FILES,DIR_BC_FILTERED,filtfile):
   
-  filtfile = 'barcodeFilter.txt'  
   if os.path.exists(filtfile):
     printtime ("filter_barcodes: found barcodeFilter.txt")
     filterBC = get_ids(filtfile)      
     
-    if len(filterBC) > 0:      
-      filtered = 'bc_filtered'
-      if not os.path.exists(filtered):
-            os.mkdir(filtered)
+    if len(filterBC) > 0:
+      if not os.path.exists(DIR_BC_FILTERED):
+            os.mkdir(DIR_BC_FILTERED)
     
       # move all sff and fastq files output by barcodeSplit to filtered dir
       for bc_id in filterBC:
@@ -39,7 +37,7 @@ def filter_barcodes(DIR_BC_FILES):
           if os.path.exists(bcfile):
             printtime ("filter_barcodes: removing %s" % bcfile)
             try:
-              move(bcfile, filtered)
+              move(bcfile, DIR_BC_FILTERED)
             except:
               traceback.print_exc()
         

@@ -1,8 +1,35 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "KClass.h"
 
-void KClass::InitialClassifyWell
-(Mask &mask,
+void KClass::FillInData(TraceStore<double> &traceStore,
+                        int nFlows,
+                        KeyFit &fit) {
+  Col<double> trace;
+  int minFrame = 0;
+  int maxFrame = traceStore.GetNumFrames();
+  // int minFrame = max(traceStore.GetT0(fit.wellIdx)-4, 0.0f);
+  // int maxFrame = min(minFrame + 25.0f, (float)traceStore.GetNumFrames());
+  int nFrames = maxFrame - minFrame;
+  if (wellFlows.n_rows != (size_t)nFrames || wellFlows.n_cols != (size_t)nFlows) {
+    wellFlows.set_size(nFrames, nFlows);
+    refFlows.set_size(nFrames, nFlows);
+    predicted.set_size(nFrames, nFlows);
+  }
+
+  trace.resize(traceStore.GetNumFrames());
+  fill(refFlows.begin(), refFlows.end(), 0);
+  fill(wellFlows.begin(), wellFlows.end(), 0);
+
+  for (size_t flowIx = 0; flowIx < (size_t)nFlows; flowIx++) {
+    traceStore.GetTrace(fit.wellIdx, flowIx, trace.begin());
+    copy(trace.begin() + minFrame, trace.begin() + maxFrame, wellFlows.begin_col(flowIx));
+    traceStore.GetReferenceTrace(fit.wellIdx, flowIx, trace.begin());
+    copy(trace.begin() + minFrame, trace.begin() + maxFrame, refFlows.begin_col(flowIx));
+  }
+  signal.resize(nFlows);
+}
+
+void KClass::InitialClassifyWell(Mask &mask,
                                  ZeromerDiff<double> &bg,
                                  std::vector<KeySeq> &keys, 
                                  //               std::vector<Traces> &traces,
@@ -18,31 +45,9 @@ void KClass::InitialClassifyWell
     fit.ok = false;
     return;
   }
-  int nFrames = traceStore.GetNumFrames();
-  if (wellFlows.n_rows != (size_t)nFrames || wellFlows.n_cols != (size_t)nFlows) {
-    wellFlows.set_size(nFrames, nFlows);
-    refFlows.set_size(nFrames, nFlows);
-    predicted.set_size(nFrames, nFlows);
-  }
-  reference.resize(nFrames);
-  signal.resize(nFlows);
-
-  for (size_t flowIx = 0; flowIx < (size_t)nFlows; flowIx++) {
-    traceStore.GetTrace(fit.wellIdx, flowIx, wellFlows.begin_col(flowIx));
-    //@todo - does this have to be thread safe?
-    traceStore.GetReferenceTrace(fit.wellIdx, flowIx, refFlows.begin_col(flowIx));
-    //traces[flowIx].CalcMedianReference(fit.wellIdx, traces[flowIx].mGridMedian, dist, distValues, reference);
-    //    copy(reference.begin(), reference.end(), refFlows.begin_col(flowIx));
-  }
-  mKClass.Classify(keys, bg,
-                   wellFlows, refFlows,
+  FillInData(traceStore, nFlows, fit);
+  mKClass.Classify(keys, bg, wellFlows, refFlows,
                    time, minSnr, fit, predicted);
-  // if (fit.wellIdx == 0) {
-  //   KeyClassifier::PrintVec(fit.param);
-  //   KeyClassifier::PrintVec(wellFlows);
-  //   KeyClassifier::PrintVec(refFlows);
-  //   KeyClassifier::PrintVec(predicted);
-  // }
   for (size_t rIx = 0; rIx < report.size(); rIx++) {
     report[rIx]->Report(fit, wellFlows, refFlows, predicted);
   }
@@ -69,29 +74,20 @@ void KClass::ClassifyWellKnownTau(Mask &mask,
     fit.ok = false;
     return;
   }
-  int nFrames = traceStore.GetNumFrames();
-  if (wellFlows.n_rows != (size_t)nFrames || wellFlows.n_cols != (size_t)nFlows) {
-    wellFlows.set_size(nFrames, nFlows);
-    refFlows.set_size(nFrames, nFlows);
-    predicted.set_size(nFrames, nFlows);
-  }
-  reference.resize(nFrames);
-  signal.resize(nFlows);
+  FillInData(traceStore, nFlows, fit);
 
-  fill(refFlows.begin(), refFlows.end(), 0);
-  fill(wellFlows.begin(), wellFlows.end(), 0);
-  for (size_t flowIx = 0; flowIx < (size_t)nFlows; flowIx++) {
-    traceStore.GetTrace(fit.wellIdx, flowIx, wellFlows.begin_col(flowIx));
-    //@todo - does this have to be thread safe?
-    traceStore.GetReferenceTrace(fit.wellIdx, flowIx, refFlows.begin_col(flowIx));
-    //traces[flowIx].CalcMedianReference(fit.wellIdx, traces[flowIx].mGridMedian, dist, distValues, reference);
-    //    copy(reference.begin(), reference.end(), refFlows.begin_col(flowIx));
+  incRef.set_size(wellFlows.n_rows); 
+  if (incRef.n_rows > incorp.n_rows) {
+    incRef.set_size(incorp.n_rows);
   }
+  fill(incRef.begin(), incRef.end(), 0.0);
+  copy(incorp.begin(), incorp.begin() + incRef.n_rows, incRef.begin());
+
   size_t row, col;
   traceStore.WellRowCol(fit.wellIdx, row, col);
   mKClass.ClassifyKnownTauE(keys, bg,
                             wellFlows, refFlows, time,
-                            incorp, minSnr, 
+                            incRef, minSnr, 
                             tauEEst,fit, traceStore, predicted);
   for (size_t rIx = 0; rIx < report.size(); rIx++) {
     report[rIx]->Report(fit, wellFlows, refFlows, predicted);

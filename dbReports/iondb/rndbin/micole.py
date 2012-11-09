@@ -60,9 +60,9 @@ except locale.Error:
 def micole(db, daterange, timeStart, timeEnd):
     """get exps with that look that they are for project micole"""
     #results = models.Experiment.objects.using(db).filter(library='e_coli_dh10b')
-    #results = models.Experiment.objects.using(db).filter(project__istartswith='mi')
+    #results = models.Results.objects.using(db).filter(projects__name__istartswith='mi')
     #results = models.Experiment.objects.using(db).filter(library='hg19')
-    #results = models.Experiment.objects.using(db).filter(project__iexact='micol') | models.Experiment.objects.using(db).filter(project__iexact='micole') | models.Experiment.objects.using(db).filter(project__iexact='mikol')
+    #results = models.Results.objects.using(db).filter(projects__name__iexact='micol') | results = models.Results.objects.using(db).filter(projects__name__iexact='micole') | results = models.Results.objects.using(db).filter(projects__name__iexact='mikol')
     results = models.Experiment.objects.using(db).filter(library='hg19')
     results = results.exclude(expName__contains='exome')
     if daterange:

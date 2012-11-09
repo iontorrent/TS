@@ -299,10 +299,10 @@ button.fg-button {
 }
 
 #sitename {
-    float: left;
     margin: 0;
     padding-left: 4px;
     color: #000000;
+    text-align: left;
 }
 
 .centered {
@@ -853,4 +853,10 @@ table {
 }
 #bound_messages div:first-child{
     margin-top: 18px;
+}
+
+#underconstruction{
+    position: absolute;
+    right: 200px;
+    top: 10px;
 }

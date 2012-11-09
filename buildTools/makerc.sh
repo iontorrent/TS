@@ -3,6 +3,11 @@
 # Automates the building of a Release Candidate deb file for a given directory
 TEST=0  # Set to 1 to go into debug and not make changes to svn or apt
 
+USER=ion
+SERVER=rnd1.ite
+PUBDIR=${PUBDIR-"lucid-alpha"}
+PUBPATH=public_html/updates_server_root/updates/software/$PUBDIR
+
 for arg in "$@"; do
 
     pkg_name=$arg
@@ -56,8 +61,16 @@ for arg in "$@"; do
     echo "Change Log:" >> ${pkg_name}/mailmessagebody
     
     # Do the build
-    rm -rf build/${pkg_name}
-    MODULES=$pkg_name ./buildTools/build.sh -DBUILDTAG=TSRC
+    rm -rf build/${pkg_name}    # Remove existing build directory
+    # If its Analysis, force a rebuild of external libraries
+    if [ "${pkg_name:0:8}" == "Analysis" ]; then
+        rm -rf external/
+        svn update external >/dev/null
+        # We need to manually kick off cuda building
+        MODULES="gpu Analysis" ./buildTools/build.sh -DBUILDTAG=TSRC
+    else
+        MODULES=$pkg_name ./buildTools/build.sh -DBUILDTAG=TSRC
+    fi
     
     if [ $? -ne 0 ]; then
         echo "Error during build.sh."
@@ -75,17 +88,17 @@ for arg in "$@"; do
         if [ $TEST -eq 1 ]; then
             echo "TESTING: Published ./build/${pkg_name}/ion-*.deb"
         else
-            ./buildTools/publish --no-pkgfile ./build/${pkg_name}/ion-*.deb
+        	# If its Analysis, upload gpu package as well
+    		if [ "${pkg_name:0:8}" == "Analysis" ]; then
+            	./buildTools/publish --no-pkgfile --$PUBDIR./build/gpu/ion-*.deb
+            fi
+            ./buildTools/publish --no-pkgfile --$PUBDIR ./build/${pkg_name}/ion-*.deb
         fi
     fi
 
 done
 
 # Update the Packages.gz file
-USER=ion
-SERVER=rnd1.ite
-PUBDIR=${PUBDIR-"lucid-alpha"}
-PUBPATH=public_html/updates_server_root/updates/software/$PUBDIR
 echo "Writing new Packages.gz file"
 if [ $TEST -eq 1 ]; then
     echo "TESTING: file would have been uploaded and Packages.gz would have been updated"

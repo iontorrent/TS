@@ -2,133 +2,151 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 import os
-import sys
 import subprocess
 import traceback
 import shutil
+import time
 
-from ion.reports import processParametersMerge
-from ion.reports import beadDensityPlot, MaskMerge, StatsMerge
+from ion.reports import beadDensityPlot, StatsMerge
 from ion.utils.blockprocessing import printtime, isbadblock
 from ion.utils import blockprocessing
 
-def sigproc(analysisArgs, pathtorawblock, SIGPROC_RESULTS):
-    printtime("RUNNING SINGLE BLOCK ANALYSIS")
 
-    command = "%s >> ReportLog.html 2>&1" % (analysisArgs)
-    printtime("Analysis command: " + command)
-    sys.stdout.flush()
-    sys.stderr.flush()
-    status = subprocess.call(command,shell=True)
-    blockprocessing.add_status("Analysis", status)
-
-    # write return code into file
+def update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title):
+    import xmlrpclib
+    from torrentserver import cluster_settings
+    print("Starting Upload Analysis Metrics")
+    cwd = os.getcwd()
+    bfmaskstatspath = os.path.join(cwd, bfmaskstatspath)
+    print(bfmaskPath)
+    print(bfmaskstatspath)
     try:
-        os.umask(0002)
-        f = open(os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt"), 'w')
-        f.write(str(status))
-        f.close()
-    except:
+        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % 
+            (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT), 
+            verbose=False, allow_none=True)
+        primary_key_file = os.path.join(cwd,'primary.key')
+
+        result = jobserver.uploadanalysismetrics(bfmaskstatspath, primary_key_file)
+        print(result)
+        print("Compelted Upload Analysis Metrics")
+    except Exception as err:
+        print("Error during analysis metrics upload %s" % err)
         traceback.print_exc()
 
-    if status == 2:
-        printtime("Analysis finished with status '%s'" % status)
+    printtime("Make Bead Density Plots")
+    try:
+        beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
+    except IOError as err:
+        printtime("Bead Density Plot file error: %s" % err)
+    except Exception as err:
+        printtime("Bead Density Plot generation failure: %s" % err)
+        traceback.print_exc()
+
+
+
+def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS, plot_title, oninstrumentanalysis):
+    printtime("RUNNING SINGLE BLOCK ANALYSIS")
+
+    if not oninstrumentanalysis:
+        if analysisArgs:
+            cmd = analysisArgs  # e.g /home/user/Analysis --flowlimit 80
+        else:
+            cmd = "Analysis"
+            printtime("ERROR: Analysis command not specified, using default: 'Analysis'")
+
+        sigproc_log_path = os.path.join(SIGPROC_RESULTS, 'sigproc.log')
+        open(sigproc_log_path, 'w').close()
+        
+        sigproc_log = open(sigproc_log_path)
+
+        cmd += " --librarykey=%s" % (libKey)
+        cmd += " --tfkey=%s" % (tfKey)
+        cmd += " --no-subdir"
+        cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
+        cmd += " %s" % pathtorawblock
+        cmd += " >> %s 2>&1" % sigproc_log_path
+
+        printtime("Analysis command: " + cmd)
+        proc = subprocess.Popen(cmd, shell=True)
+        while proc.poll() is None:  
+            where = sigproc_log.tell()
+            lines = sigproc_log.readlines()
+            if lines:
+                if any(l.startswith("Beadfind Complete") for l in lines):
+                    printtime("Beadfind is complete.")
+                    bfmaskPath = os.path.join(SIGPROC_RESULTS,"bfmask.bin")
+                    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,"bfmask.stats")
+                    update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
+            else:
+                sigproc_log.seek(where)
+                time.sleep(1)
+        sigproc_log.close()
+        status = proc.wait()
+
+        blockprocessing.add_status("Analysis", status)
+
+        # write return code into file
         try:
-            com = "ChkDat"
-            com += " -r %s" % (pathtorawblock)
-#            printtime("DEBUG: Calling '%s':" % com)
-#            ret = subprocess.call(com,shell=True)
+            os.umask(0002)
+            f = open(os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt"), 'w')
+            f.write(str(status))
+            f.close()
         except:
             traceback.print_exc()
+
+        if status == 2:
+            printtime("Analysis finished with status '%s'" % status)
+            try:
+                com = "ChkDat"
+                com += " -r %s" % (pathtorawblock)
+#                printtime("DEBUG: Calling '%s':" % com)
+#                ret = subprocess.call(com,shell=True)
+            except:
+                traceback.print_exc()
 
     ########################################################
     #Make Bead Density Plots                               #
     ########################################################
-    printtime("Make Bead Density Plots")
     bfmaskPath = os.path.join(SIGPROC_RESULTS,"analysis.bfmask.bin")
-    maskpath = os.path.join(SIGPROC_RESULTS,"MaskBead.mask")
-
-    if os.path.isfile(bfmaskPath):
-        com = "BeadmaskParse"
-        com += " -m MaskBead"
-        com += " %s" % bfmaskPath
-        ret = subprocess.call(com,shell=True)
-        blockprocessing.add_status("BeadmaskParse", ret)
-        try:
-            shutil.move('MaskBead.mask', maskpath)
-        except:
-            printtime("ERROR: MaskBead.mask already moved")
-    else:
-        printtime("Warning: no analysis.bfmask.bin file exists.")
-
-    if os.path.exists(maskpath):
-        try:
-            # Makes Bead_density_contour.png
-            beadDensityPlot.genHeatmap(maskpath, SIGPROC_RESULTS)
-#            os.remove(maskpath)
-        except:
-            traceback.print_exc()
-    else:
-        printtime("Warning: no MaskBead.mask file exists.")
-
+    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,"analysis.bfmask.stats")
+    update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
     printtime("Finished single block analysis")
 
 
-def mergeSigProcResults(dirs, pathToRaw, skipchecksum, SIGPROC_RESULTS):
-    #####################################################
-    # Grab one of the processParameters.txt files       #
-    #####################################################
-    printtime("Merging processParameters.txt")
 
-    for subdir in dirs:
-        subdir = os.path.join(SIGPROC_RESULTS,subdir)
-        ppfile = os.path.join(subdir,'processParameters.txt')
-        printtime(ppfile)
-        if os.path.isfile(ppfile):
-            processParametersMerge.processParametersMerge(ppfile,True)
-            break
+def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
 
-
+    bfmaskPath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.bin')
+    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.stats')
 
     ########################################################
     # write composite return code                          #
     ########################################################
-    composite_return_code=0
 
-    for subdir in dirs:
-        if subdir == "block_X0_Y9331":
-            continue
-        if subdir == "block_X14168_Y9331":
-            continue
-        if subdir == "block_X0_Y0":
-            continue
-        if subdir == "block_X14168_Y0":
-            continue
+    try:
+        if len(dirs)==96:
+            composite_return_code=96
+            for subdir in dirs:
 
-        try:
-            f = open(os.path.join(SIGPROC_RESULTS,subdir,"analysis_return_code.txt"), 'r')
-            analysis_return_code = int(f.read(1))
-            f.close()
-            if analysis_return_code!=0:
-                printtime("DEBUG: errors in %s " % subdir)
-                composite_return_code=1
-                break
-        except:
-            traceback.print_exc()
+                blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
+                if os.path.exists(blockstatus_return_code_file):
 
-    csp = os.path.join(pathToRaw,'checksum_status.txt')
-    if not os.path.exists(csp) and not skipchecksum and len(dirs)==96:
-        printtime("DEBUG: create checksum_status.txt")
-        try:
-            os.umask(0002)
-            f = open(csp, 'w')
-            f.write(str(composite_return_code))
-            f.close()
-        except:
-            traceback.print_exc()
-    else:
-        printtime("DEBUG: skip generation of checksum_status.txt")
+                    with open(blockstatus_return_code_file, 'r') as f:
+                        text = f.read()
+                        if 'Analysis=0' in text:
+                            composite_return_code-=1
 
+            composite_return_code_file = os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt")
+            if not os.path.exists(composite_return_code_file):
+                printtime("DEBUG: create %s" % composite_return_code_file)
+                os.umask(0002)
+                f = open(composite_return_code_file, 'a')
+                f.write(str(composite_return_code))
+                f.close()
+            else:
+                printtime("DEBUG: skip generation of %s" % composite_return_code_file)
+    except:
+        traceback.print_exc()
 
     #################################################
     # Merge individual block bead metrics files     #
@@ -136,13 +154,12 @@ def mergeSigProcResults(dirs, pathToRaw, skipchecksum, SIGPROC_RESULTS):
     printtime("Merging individual block bead metrics files")
 
     try:
-        _tmpfile = os.path.join(SIGPROC_RESULTS,'bfmask.bin')
-        cmd = 'BeadmaskMerge -i bfmask.bin -o ' + _tmpfile
+        cmd = 'BeadmaskMerge -i analysis.bfmask.bin -o ' + bfmaskPath
         for subdir in dirs:
             subdir = os.path.join(SIGPROC_RESULTS,subdir)
             if isbadblock(subdir, "Merging individual block bead metrics files"):
                 continue
-            bfmaskbin = os.path.join(subdir,'bfmask.bin')
+            bfmaskbin = os.path.join(subdir,'analysis.bfmask.bin')
             if os.path.exists(bfmaskbin):
                 cmd = cmd + ' %s' % subdir
             else:
@@ -150,58 +167,31 @@ def mergeSigProcResults(dirs, pathToRaw, skipchecksum, SIGPROC_RESULTS):
         printtime("DEBUG: Calling '%s'" % cmd)
         subprocess.call(cmd,shell=True)
     except:
-        printtime("BeadmaskMerge failed (test fragments)")
+        printtime("BeadmaskMerge failed")
 
 
 
     ###############################################
     # Merge individual block bead stats files     #
     ###############################################
-    printtime("Merging bfmask.stats files")
+    printtime("Merging analysis.bfmask.stats files")
 
     try:
         bfmaskstatsfiles = []
         for subdir in dirs:
             subdir = os.path.join(SIGPROC_RESULTS,subdir)
-            if isbadblock(subdir, "Merging bfmask.stats files"):
+            if isbadblock(subdir, "Merging analysis.bfmask.stats files"):
                 continue
-            bfmaskstats = os.path.join(subdir,'bfmask.stats')
+            bfmaskstats = os.path.join(subdir,'analysis.bfmask.stats')
             if os.path.exists(bfmaskstats):
-                bfmaskstatsfiles.append(subdir)
+                bfmaskstatsfiles.append(bfmaskstats)
             else:
                 printtime("ERROR: Merging bfmask.stats files: skipped %s" % bfmaskstats)
 
-        StatsMerge.main_merge(bfmaskstatsfiles, True)
-        #TODO
-        shutil.move('bfmask.stats', SIGPROC_RESULTS)
+        StatsMerge.main_merge(bfmaskstatsfiles, bfmaskstatspath, True)
     except:
-        printtime("No bfmask.stats files were found to merge")
-
-    ###############################################
-    # Merge individual block MaskBead files       #
-    ###############################################
-#    printtime("Merging MaskBead.mask files")
-#
-#    try:
-#        bfmaskfolders = []
-#        for subdir in dirs:
-#            subdir = os.path.join(SIGPROC_RESULTS,subdir)
-#            printtime("DEBUG: %s:" % subdir)
-#
-#            if isbadblock(subdir, "Merging MaskBead.mask files"):
-#                continue
-#
-#            bfmaskbead = os.path.join(subdir,'MaskBead.mask')
-#            if not os.path.exists(bfmaskbead):
-#                printtime("ERROR: Merging MaskBead.mask files: skipped %s" % bfmaskbead)
-#                continue
-#
-#            bfmaskfolders.append(subdir)
-#
-#        offset_str = "use_blocks"
-#        MaskMerge.main_merge('MaskBead.mask', bfmaskfolders, merged_bead_mask_path, True, offset_str)
-#    except:
-#        printtime("Merging MaskBead.mask files failed")
+        printtime("ERROR: No analysis.bfmask.stats files were found to merge")
+        traceback.print_exc()
 
 
     ########################################################
@@ -209,30 +199,14 @@ def mergeSigProcResults(dirs, pathToRaw, skipchecksum, SIGPROC_RESULTS):
     ########################################################
     printtime("Make Bead Density Plots (composite report)")
 
-    bfmaskPath = os.path.join(SIGPROC_RESULTS,'bfmask.bin')
-    maskpath = os.path.join(SIGPROC_RESULTS,'MaskBead.mask')
-
-    # skip if merged MaskBead.mask exists TODO
-    printtime("generate MaskBead.mask")
-    if os.path.isfile(bfmaskPath):
-        com = "BeadmaskParse -m MaskBead %s" % bfmaskPath
-        os.system(com)
-        #TODO
+    printtime("DEBUG: generate composite heatmap")
+    if os.path.exists(bfmaskPath):
         try:
-            shutil.move('MaskBead.mask', maskpath)
-        except:
-            printtime("ERROR: MaskBead.mask already moved")
-    else:
-        printtime("Warning: %s doesn't exists." % bfmaskPath)
-
-    printtime("generate graph")
-    if os.path.exists(maskpath):
-        try:
-            # Makes Bead_density_contour.png
-            beadDensityPlot.genHeatmap(maskpath, SIGPROC_RESULTS) # todo, takes too much time
-  #          os.remove(maskpath)
+            # Makes Bead_density_contour.png, TODO have to read multiple blocks
+            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
         except:
             traceback.print_exc()
     else:
-        printtime("Warning: no MaskBead.mask file exists.")
+        printtime("Warning: no heatmap generated.")
 
+    printtime("Finished sigproc merging")

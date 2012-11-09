@@ -15,11 +15,13 @@ from __future__ import division
 
 from celery.task import task
 from celery.task import periodic_task
+from celery.schedules import crontab
 import urllib2
 import os
 import string
 import random
 import subprocess
+import datetime
 import shutil
 from django.conf import settings
 import zipfile
@@ -27,10 +29,9 @@ import os.path
 import sys
 import re
 import json
-import models
 import logging
 from datetime import timedelta
-from iondb.plugins.manager import PluginManager
+import pytz
 
 import urlparse
 
@@ -86,24 +87,9 @@ def run_as_daemon(callback, *args, **kwargs):
     sys.exit()
 
 
-def unzip(dir, file):
-    extractDir = os.path.join(settings.PLUGIN_PATH, os.path.splitext(file)[0])
-    if not os.path.exists(extractDir):
-        os.mkdir( extractDir, 0777)
-    zfobj = zipfile.ZipFile(os.path.join(dir,file))
-    for name in zfobj.namelist():
-        if name.endswith('/'):
-            #make dirs
-            if not os.path.exists(os.path.join(extractDir, name)):
-                os.mkdir(os.path.join(extractDir, name))
-        else:
-            outfile = open(os.path.join(extractDir, name), 'wb')
-            outfile.write(zfobj.read(name))
-            outfile.close()
-    return True
-
 def unzipPlugin(file):
     """Unzip a file and return the common prefix name, which should be the plugin name"""
+    logger = logging.getLogger(__name__)
     zfobj = zipfile.ZipFile(file)
     namelist = zfobj.namelist()
     prefix, files = get_common_prefix(namelist)
@@ -114,25 +100,67 @@ def unzipPlugin(file):
     if not os.path.exists(scratch_path):
         os.mkdir(scratch_path, 0755)
 
-    for name in zfobj.namelist():
-        if name.endswith('/'):
-            #make dirs
-            if not os.path.exists(os.path.join(scratch_path,name)):
-                os.mkdir(os.path.join(scratch_path,name))
+    # Force plugin owner and group to ionadmin, fallback to current user
+    try:
+        import pwd, grp
+        uid = pwd.getpwnam('ionadmin')[2]
+        gid = grp.getgrnam('ionadmin')[2]
+    except OSError:
+        uid = os.getuid()
+        gid = os.getgid()
+
+    for member in zfobj.infolist():
+        if member.filename[0] == '/':
+            name = member.filename[1:]
         else:
-            outfile = open(os.path.join( scratch_path, name), 'wb')
-            outfile.write(zfobj.read(name))
-            outfile.close()
+            name = member.filename
+
+        targetpath = os.path.join(scratch_path, name)
+        targetpath = os.path.normpath(targetpath)
+
+        if name.endswith('/'):
+            if '__MACOSX' in name:
+                # Skip, we have no use for these
+                continue
+            if not os.path.exists(targetpath):
+                os.makedirs(targetpath, 0755)
+            continue
+        else:
+            parent_dir = os.path.dirname(targetpath)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_path, 0755)
+
+        perm = ((member.external_attr >> 16L) & 0777 ) or 0755
+        try:
+            with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm), 'w') as targetfh:
+                zipfh = zfobj.open(member)
+                shutil.copyfileobj(zipfh, targetfh)
+                zipfh.close()
+        except (OSError, IOError):
+            logger.exception("For zip's '%s', could not open '%s'" % (name, targetpath))
+            continue
+        try:
+            #os.utime(targetpath, (member.date_time, member.date_time))
+            os.chown(targetpath, uid, gid)
+        except (OSError, IOError):
+            logger.warn("Unable to set owner/perm on '%s'",targetpath)
 
     #move to the plugin dir
-    shutil.move(os.path.join(scratch_path,file_name,prefix), os.path.join(settings.PLUGIN_PATH ) )
+    final_name = os.path.split(prefix)[-1] or file_name
+    assert(final_name)
+    final_install_dir =  os.path.join(settings.PLUGIN_PATH, final_name)
+    if os.path.exists(final_install_dir) and (final_install_dir != settings.PLUGIN_PATH):
+        delete_that_folder(final_install_dir, "Deleting old copy of plugin at '%s'" % final_install_dir)
 
-    # Plugin folders are owned by root and not writable by plugin user.
-    # zip extraction may not preserve executable permissions
+    shutil.move(os.path.join(scratch_path,file_name,prefix), final_install_dir )
+
+    # ZIP extraction now sets owner to ionadmin:ionadmin
+    # And preserves permissions and timestamps stored in zip archive
     return prefix
 
 
 def unzip_archive(root, data):
+    logger = logging.getLogger(__name__)
     if not os.path.exists(root):
         os.mkdir( root, 0777)
     zip_file = zipfile.ZipFile(data, 'r', allowZip64=True)
@@ -142,16 +170,34 @@ def unzip_archive(root, data):
     make_relative_directories(root, files)
     out_names = [(n, f) for n, f in zip(namelist, files) if
                         os.path.basename(f) != '']
+    try:
+        import pwd, grp
+        uid = pwd.getpwnam('ionadmin')[2]
+        gid = grp.getgrnam('ionadmin')[2]
+    except OSError:
+        uid = os.getuid()
+        gid = os.getgid()
+
     for key, out_name in out_names:
-        if os.path.basename(out_name) != "":
-            full_path = os.path.join(root, out_name)
-            contents = zip_file.open(key, 'r')
-            try:
-                output_file = open(full_path, 'wb')
-                output_file.write(contents.read())
-                output_file.close()
-            except IOError as err:
-                print("For zip's '%s', could not open '%s'" % (key, full_path))
+        if os.path.basename(out_name) == "":
+            continue
+        targetpath = os.path.join(root, out_name)
+        member = zip_file.getinfo(key)
+        perm = ((member.external_attr >> 16L) & 0777 ) or 0755
+        try:
+            with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm), 'w') as targetfh:
+                zipfh = zip_file.open(member)
+                shutil.copyfileobj(zipfh, targetfh)
+                zipfh.close()
+        except (OSError, IOError):
+            logger.exception("For zip's '%s', could not write '%s'" % (member.filename, targetpath))
+            continue
+        try:
+            os.ctime(targetpath, member.date_time)
+            os.chown(targetpath, uid, gid)
+        except (OSError, IOError):
+            logger.warn("Unable to set owner/perm on '%s'",targetpath)
+
     return [f for n, f in out_names]
 
 
@@ -198,8 +244,8 @@ def make_relative_directories(root, files):
 def delete_that_folder(directory, message):
     logger = delete_that_folder.get_logger()
     def delete_error(func, path, info):
-        logger.error("Failed to delete %s: %s" %  (path, message))
-    logger.info("Deleting %s" % directory)
+        logger.error("Failed to delete %s: %s", path, message)
+    logger.info("Deleting %s", directory)
     shutil.rmtree(directory, onerror=delete_error)
 
 def downloadChunks(url):
@@ -226,20 +272,21 @@ def downloadChunks(url):
         CHUNK = 256 * 10240
         with open(file, 'wb') as fp:
             shutil.copyfileobj(req, fp, CHUNK)
+        url = req.geturl()
     except urllib2.HTTPError, e:
-        print "HTTP Error:",e.code , url
+        logger.error("HTTP Error: %d '%s'",e.code , url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
     except urllib2.URLError, e:
-        print "URL Error:",e.reason , url
+        logger.error("URL Error: %s '%s'",e.reason , url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
     except:
-        print "Other Error"
+        logger.exception("Other error downloading from '%s'", url)
         delete_that_folder(temp_path_uniq, "after download error")
         return False
 
-    return file
+    return file, url
 
 @task
 def downloadGenome(url, genomeID):
@@ -298,17 +345,19 @@ def downloadPluginZeroInstall(url, plugin):
 
 # Helper for downloadPlugin task
 def downloadPluginArchive(url, plugin):
-    downloaded = downloadChunks(url)
-    if not downloaded:
+    ret = downloadChunks(url)
+    if not ret:
         plugin.status["installStatus"] = "failed"
         plugin.status["result"] = "failed to download '%s'" % url
         return False
+    downloaded, url = ret
 
     # ZIP file must named with plugin name - fragile
     # FIXME - handle (1) additions (common for multiple downloads via browser)
     # FIXME - handle version string in ZIP archive name
     #     Suggested fix - extract to temporary directory, find plugin name,
     #     rename to final location
+
     plugin.name = os.path.splitext(os.path.basename(url))[0]
     plugin.path = os.path.join(settings.PLUGIN_PATH, plugin.name )
 
@@ -328,8 +377,12 @@ def downloadPluginArchive(url, plugin):
     return True
 
 @task
-def downloadPlugin(url, plugin, zipFile=None):
+def downloadPlugin(url, plugin=None, zipFile=None):
     """download a plugin, extract and install it"""
+    if not plugin:
+        from iondb.rundb import models
+        plugin = models.Plugin.objects.create(name='Unknown', version='Unknown', status={})
+    plugin.status["installStatus"] = "downloading"
 
     logger = downloadPlugin.get_logger()
 
@@ -337,8 +390,6 @@ def downloadPlugin(url, plugin, zipFile=None):
     url = urlparse.urlsplit(url).geturl()
 
     if not zipFile:
-        plugin.status["installStatus"] = "downloading"
-
         if url.endswith(".xml"):
             status = downloadPluginZeroInstall(url, plugin)
             logger.error("xml") # logfile
@@ -353,6 +404,7 @@ def downloadPlugin(url, plugin, zipFile=None):
             msg = "Plugin install '%s', Result: '%s'" % (installStatus, result)
 
             logger.error(msg) # logfile
+            from iondb.rundb import models
             models.Message.error(msg) # UI message
             return False
     else:
@@ -367,12 +419,16 @@ def downloadPlugin(url, plugin, zipFile=None):
         plugin.status["installStatus"] = "installing from zip"
 
         #remove the zip file
-        os.unlink(zipFile)
+        os.unlink(zip_file)
 
     # Now that it has been downloaded,
     # convert pre-plugin into real db plugin object
-    pm = PluginManager()
-    (new_plugin, updated) = pm.install(plugin.name, plugin.path)
+    try:
+        from iondb.plugins.manager import pluginmanager
+        (new_plugin, updated) = pluginmanager.install(plugin.name, plugin.path)
+    except ValueError:
+        logger.exception("Plugin rejected by installer. Check syntax and content.")
+        return None
 
     # Copy over download status messages and url
     new_plugin.status = plugin.status
@@ -574,15 +630,16 @@ def build_tmap_index(reference, read_sample_size=None):
 def IonReporterWorkflows(autorun=True):
 
     try:
+        from iondb.rundb import models
         if autorun:
-            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader",selected=True,active=True,autorun=True)
+            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader_V1_0",selected=True,active=True,autorun=True)
         else:
-            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader",selected=True,active=True)
+            IonReporterUploader= models.Plugin.objects.get(name="IonReporterUploader_V1_0",selected=True,active=True)
 
         logging.error(IonReporterUploader.config)
         config = IonReporterUploader.config
     except models.Plugin.DoesNotExist:
-        error = "IonReporterUploader Plugin Not Found."
+        error = "IonReporterUploader V1.0 Plugin Not Found."
         logging.error(error)
         return False, error
 
@@ -591,7 +648,7 @@ def IonReporterWorkflows(autorun=True):
         url = config["protocol"] + "://" + config["server"] + ":" + config["port"] +"/grws/analysis/wflist"
         logging.info(url)
     except KeyError:
-        error = "IonReporterUploader Plugin Config is missing needed data."
+        error = "IonReporterUploader V1.0 Plugin Config is missing needed data."
         logging.error(error)
         return False, error
 
@@ -604,10 +661,52 @@ def IonReporterWorkflows(autorun=True):
         workflows = content["workflows"]
         return True, workflows
     except:
-        error = "IonReporterUploader could not contact the server."
+        error = "IonReporterUploader V1.0 could not contact the server."
         logging.error(error)
         return False, error
 
+def IonReporterVersion(plugin):
+    """
+    This is a temp thing for 3.0. We need a way for IRU to get the versions
+    this will do that for us.
+    """
+
+    #if version is pased in use that plugin name instead
+    if not plugin:
+        plugin = "IonReporterUploader"
+
+    try:
+        from iondb.rundb import models
+        IonReporterUploader= models.Plugin.objects.get(name=plugin,selected=True,active=True)
+        logging.error(IonReporterUploader.config)
+        config = IonReporterUploader.config
+    except models.Plugin.DoesNotExist:
+        error = plugin + " Plugin Not Found."
+        logging.error(error)
+        return False, error
+
+    try:
+        headers = {"Authorization" : config["token"] }
+        url = config["protocol"] + "://" + config["server"] + ":" + config["port"] + "/grws_1_2/data/versionList"
+        logging.info(url)
+    except KeyError:
+        error = plugin + " Plugin Config is missing needed data."
+        logging.debug(plugin +" config: " + config)
+        logging.error(error)
+        return False, error
+
+    try:
+        #using urllib2 right now because it does NOT verify SSL certs
+        req = urllib2.Request(url = url, headers = headers)
+        response = urllib2.urlopen(req)
+        content = response.read()
+        content = json.loads(content)
+        versions = content["Version List"]
+        return True, versions
+    except:
+        error = plugin + " could not contact the server. No versions will be returned"
+        logging.error(error)
+        return False, error
 
 @periodic_task(run_every=timedelta(days=1))
 def scheduled_update_check():
@@ -616,12 +715,74 @@ def scheduled_update_check():
         check_updates.delay()
     except Exception as err:
         logger.error("TSconfig raised '%s' during a scheduled update check." % err)
-        gconfig = models.GlobalConfig.get()
-        gconfig.ts_update_status = "Update failure"
-        gconfig.save()
+        from iondb.rundb import models
+        models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
-
-
+    
+@periodic_task(run_every=crontab(hour="5", minute="4", day_of_week="*"))
+def autoAction_report():
+    # This implementation fixes the lack of logging to reportsLog.log by sending messages to
+    # ionArchive daemon to do the actions (which implements the logger)
+    from iondb.rundb import models
+    import traceback
+    import xmlrpclib
+    logger = autoAction_report.get_logger()
+    logger.info("Checking for Auto-action Report Data Management")
+    try:
+        #TODO: would be good to be able to filter this list somehow
+        retList = models.Results.objects.all()
+        bkL = models.dm_reports.objects.all().order_by('pk').reverse()
+        bk = bkL[0]
+    except:
+        logger.exception(traceback.format_exc())
+        raise
+        
+    if bk.autoPrune:
+        logger.info("Auto-action enabled")
+        proxy = xmlrpclib.ServerProxy('http://127.0.0.1:%d' % settings.IARCHIVE_PORT, allow_none=True)
+        for ret in retList:
+            date1 = ret.timeStamp
+            date2 = datetime.datetime.now(pytz.UTC)
+            try:
+                #Fix for TS-4983
+                if ret.reportStatus == "Archived":
+                    # Report has been archived so ignore any actions
+                    logger.info("%s has been previously archived.  Skipping." % ret.resultsName)
+                    continue
+                
+                timesUp = True if (date2 - date1) > timedelta(days=bk.autoAge) else False
+                if not ret.autoExempt and timesUp:
+                    if bk.autoType == 'P':
+                        comment = '%s Pruned via auto-action' % ret.resultsName
+                        proxy.prune_report(ret.pk, comment)
+                        logger.info(comment)
+                    elif bk.autoType == 'A':
+                        comment = '%s Archived via auto-action' % ret.resultsName
+                        proxy.archive_report(ret.pk, comment)
+                        logger.info(comment)
+                    elif bk.autoType == 'E':
+                        comment = '%s Exported via auto-action' % ret.resultsName
+                        proxy.export_report(ret.pk, comment)
+                        logger.info(comment)
+                    #elif bk.autoType == 'D':
+                    #    comment = '%s Deleted via auto-action' % ret.resultsName
+                    #    proxy.delete_report(ret.pk, comment)
+                    #    logger.info(comment)
+                else:
+                    if ret.autoExempt:
+                        logger.info("%s is marked Exempt" % ret.resultsName)
+                    else:
+                        logger.info("%s is not marked Exempt" % ret.resultsName)
+                        
+                    if timesUp:
+                        logger.info("%s exceeds time threshold" % ret.resultsName)
+                    else:
+                        logger.info("%s has not reached time threshold" % ret.resultsName)
+            except:
+                logger.exception(traceback.format_exc())
+    else:
+        logger.info("Auto-action disabled")
+        
 @task
 def check_updates():
     """Currently this is passed a TSConfig object; however, there might be a
@@ -634,9 +795,8 @@ def check_updates():
         packages = tsconfig.TSpoll_pkgs()
     except Exception as err:
         logger.error("TSConfig raised '%s' during update check." % err)
-        gconfig = models.GlobalConfig.get()
-        gconfig.ts_update_status = "Update failure"
-        gconfig.save()
+        from iondb.rundb import models
+        models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
     async = None
     if packages and tsconfig.get_autodownloadflag():
@@ -655,20 +815,22 @@ def download_updates(auto_install=False):
         downloaded = tsconfig.TSexec_download()
     except Exception as err:
         logger.error("TSConfig raised '%s' during a download" % err)
-        gconfig = models.GlobalConfig.get()
-        gconfig.ts_update_status = "Download failure"
-        gconfig.save()
+        from iondb.rundb import models
+        models.GlobalConfig.objects.update(ts_update_status="Download failure")
         raise
     async = None
     if downloaded and auto_install:
         async = install_updates.delay()
         logger.debug("Auto starting install of %d packages in task %s" %
                      (len(downloaded), async.task_id))
+    else:
+        logger.debug("Finished downloading %d packages" % len(downloaded))
     return downloaded, async
 
 
 def _do_the_install():
     """This function is expected to be run from a daemonized process"""
+    from iondb.rundb import models
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
@@ -680,18 +842,62 @@ def _do_the_install():
             tsconfig.set_state('IF')
             models.Message.error("Upgrade failed during installation.")
     except Exception as err:
-        gconfig = models.GlobalConfig.get()
-        gconfig.ts_update_status = "Install failure"
-        gconfig.save()
+        models.GlobalConfig.objects.update(ts_update_status="Install failure")
         raise
+    finally:
+        # This will start celeryd if it is not running for any reason after
+        # attempting installation.
+        call('service', 'celeryd', 'start')
 
 
 @task
 def install_updates():
+    logging.shutdown()
+    logger = install_updates.get_logger()
     try:
         run_as_daemon(_do_the_install)
     except Exception as err:
-        gconfig = models.GlobalConfig.get()
-        gconfig.ts_update_status = "Install failure"
-        gconfig.save()
+        logger.error("The daemonization of the TSconfig installer failed: %s" % err)
+        from iondb.rundb import models
+        models.GlobalConfig.objects.update(ts_update_status="Install failure")
         raise
+
+def free_percent(path):
+    resDir = os.statvfs(path)
+    totalSpace = resDir.f_blocks
+    freeSpace = resDir.f_bavail
+    if not (totalSpace > 0):
+        logging.error("Path: %s : Zero TotalSpace? %d / %d", path, freeSpace, totalSpace)
+        #print "Path: %s : Zero TotalSpace? %d / %d" % (path, freeSpace, totalSpace)
+        return 0
+    return 100-(float(freeSpace)/float(totalSpace)*100)
+
+@periodic_task(run_every=timedelta(minutes=10))
+def check_disk_space():
+    '''For every FileServer object, get percentage of used disk space'''
+    logger = check_disk_space.get_logger()
+    from iondb.rundb import models
+    try:
+        fileservers = models.FileServer.objects.all()
+        #logger.info("Num fileservers: %d" % len(fileservers))
+    except:
+        logger.error(traceback.print_exc())
+        return
+
+    for fs in fileservers:
+        #logger.info("Checking '%s'" % fs.filesPrefix)
+        #prod automounter
+        if os.path.exists(fs.filesPrefix):
+            try:
+                fs.percentfull = free_percent(fs.filesPrefix)
+            except:
+                logger.exception("Failed to compute free_percent")
+                fs.percentfull = None
+            if fs.percentfull is not None:
+                fs.save()
+                logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
+            else:
+                logger.warning ("could not determine size of %s" % fs.filesPrefix)
+        else:
+            logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
+

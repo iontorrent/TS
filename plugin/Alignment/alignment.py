@@ -26,6 +26,7 @@ class Alignment(object):
         self.fastq_link = None
         self.sff = None
         self.analysis_dir = None
+        self.basecaller_dir = None
         self.analysis_params = None
         self.cmd = None
         
@@ -123,7 +124,7 @@ class Alignment(object):
             os.symlink(alignment.fastq, self.fastq_link)
         
         sam_meta_args = self.get_sam_meta()
-        self.sff = "%s/%s_%s.sff" % (self.analysis_dir, self.analysis_params['expName'], self.analysis_params['resultsName'])
+        self.sff = "%s/%s_%s.sff" % (self.basecaller_dir, self.analysis_params['expName'], self.analysis_params['resultsName'])
         if self.sampling:
             self.program_params = "--out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.sff, sam_meta_args, self.log_file)
         else:
@@ -145,8 +146,8 @@ def check_output(alignment):
                 os.system("echo [alignment.py] file of format: %s was not produced >> %s" % file_format, alignment.log_file)
                 
     
-    if "fastq" not in alignment.output_format:
-        os.remove(alignment.fastq_link)
+    #if "fastq" not in alignment.output_format:
+    #    os.remove(alignment.fastq_link)
     if "bam" not in alignment.output_format:
         bam_file = alignment.file_prefix + ".bam"
         bam_file_index = bam_file + ".bai"
@@ -257,11 +258,15 @@ def check_stale_files(dir):
 if __name__ == '__main__':
     
     json_file = open(sys.argv[1], "r")
+    genome_library = sys.argv[2]
     params = json.load(json_file)
     pluginconfig = params['pluginconfig']
     
     alignment = Alignment()
-    alignment.genome = pluginconfig['genome']
+    if 'genome' in pluginconfig:
+      alignment.genome = pluginconfig['genome']
+    else:
+      alignment.genome = genome_library
     
     if 'choice' in pluginconfig:
         if pluginconfig['choice'] == "true":
@@ -280,16 +285,17 @@ if __name__ == '__main__':
                 alignment.output_format[format] = True
     
     alignment.analysis_dir = params['runinfo']['analysis_dir']
+    alignment.basecaller_dir = params['runinfo']['basecaller_dir']
     alignment.analysis_params = json.load(open(alignment.analysis_dir + "/ion_params_00.json", "r"))
     alignment.output_dir = params['runinfo']['results_dir']
     #check for existing files
     check_stale_files(alignment.output_dir)
     #sys.exit()
     #get fastq file
-    list = os.listdir(alignment.analysis_dir)
+    list = os.listdir(alignment.basecaller_dir)
     list = fnmatch.filter(list, "*.fastq")[0]
     if len(list) > 0:
-        alignment.fastq = "%s/%s" % (alignment.analysis_dir, str(list))
+        alignment.fastq = "%s/%s" % (alignment.basecaller_dir, str(list))
         print "[alignment.py] alignment.fastq: ", alignment.fastq
     else:
         print "[alignment.py] fastq doesn't exist.  exiting.."

@@ -31,19 +31,8 @@ RcppExport SEXP CalculateEmphasisVectorR(
 
     int my_frame_len = time_frame.size();
 
-    float  *old_time_frame;
-
-    old_time_frame = new float [my_frame_len];
-
-    for (int i=0; i<my_frame_len; i++){
-      old_time_frame[i] = time_frame[i];
-    }
-
-    int *old_frames_per_point;
-    old_frames_per_point = new int [my_frame_len];
-    for (int i=0; i<my_frame_len; i++){
-      old_frames_per_point[i] = frames_per_point[i];
-    }
+    vector<float> old_time_frame       = time_frame;
+    vector<int>   old_frames_per_point = frames_per_point;
   
     float *old_emphasis_params;
     int emphasis_len = emphasis_params.size();
@@ -69,12 +58,7 @@ RcppExport SEXP CalculateEmphasisVectorR(
       ret = rs.getReturnList();
 
     delete[] vect_out;
-
-
-    delete[] old_time_frame;
-    delete[] old_frames_per_point;
     delete[] old_emphasis_params;
-    
 
   } catch(...) {
     exceptionMesg = copyMessageToR("unknown reason");

@@ -598,7 +598,7 @@ void Traces::CalcReference(int rowStep, int colStep, GridMesh<std::vector<float>
   for (int binIx = 0; binIx < numBin; binIx++) {
     gridReference.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
     vector<float> &trace = gridReference.GetItem(binIx);
-    CalcRegionReference(MaskEmpty, rowStart, rowEnd, colStart, colEnd, trace);
+    CalcRegionReference(MaskReference, rowStart, rowEnd, colStart, colEnd, trace);
   }
 }
 
@@ -681,7 +681,7 @@ void Traces::SetTraces(int idx, const std::vector<float> &trace, int8_t *outData
     if (tmp >= std::numeric_limits<int8_t>::max()) {
       outData[index+i] = std::numeric_limits<int8_t>::max();
     }
-    if (tmp <= (-1 * std::numeric_limits<int8_t>::max())) {
+    else if (tmp <= (-1 * std::numeric_limits<int8_t>::max())) {
       outData[index+i] = -1 * std::numeric_limits<int8_t>::max();
     }
     else {

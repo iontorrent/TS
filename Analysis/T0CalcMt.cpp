@@ -12,7 +12,8 @@ void T0RegionJob::Run() {
     }
     T0Prior &prior = mCalc->mT0Prior[bIx];
     float &t0 = mCalc->mT0.GetItem(bIx);
-    T0CalcMt::CalcT0(mFinder, bin.second, *mTimeStamps, prior, t0);
+    float &slope =  mCalc->mSlope.GetItem(bIx);
+    T0CalcMt::CalcT0(mFinder, bin.second, *mTimeStamps, prior, t0, slope);
   }
 }
 

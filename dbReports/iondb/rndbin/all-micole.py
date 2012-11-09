@@ -63,7 +63,7 @@ def micole(db, daterange, timeStart, timeEnd):
 
     report_storage = models.ReportStorage.objects.using(db).all().order_by('id')[0]
 
-    results = models.Experiment.objects.using(db).filter(project__istartswith='mi')
+    results = models.Results.objects.using(db).filter(projects__name__istartswith='mi')
     if daterange:
         results = results.filter(date__range=(timeStart,timeEnd))
 

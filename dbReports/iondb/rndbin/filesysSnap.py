@@ -7,8 +7,7 @@ import datetime
 from socket import gethostname
 from django.core.exceptions import ObjectDoesNotExist
 
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+import iondb.bin.djangoinit
 from iondb.rundb import models, views
 
 def disk_space(path):

@@ -130,7 +130,6 @@ public:
 	
 	typedef	std::tr1::unordered_map<int, coord_t>					q_lens;  //example key, value (17, 100)
 	typedef std::tr1::unordered_map<int, coord_t>					q_lens_itr;
-	typedef std::tr1::unordered_map<int, int>::const_iterator		error_table_iterator;
 	
 	//Default.sam.parsed field accessors
 	/**
@@ -365,33 +364,22 @@ public:
 	
 	bool	pass_filtering(int length, double accuracy) {
 		
-		int errors = error_table[length];
+		int errors = error_table_mis[length] + error_table_ins[length] + error_table_del[length];
 		
 		if (length > get_q_length()) {
-
 			return false;
-		} 
-		else if ( length < errors || length <= 0) {
+		} else if (length < errors || length <= 0) {
 			return false;
-        }
-		else {
-			
-
+		} else {
 			double acc = (double)(length - errors) / (double)length;
-			
 			if (acc >= accuracy) {
-
 				return true;
 			} else {
-
 				return false;
 			}
 		}
-
-		
-
-		
 	}
+
 	/**
 	 returns cumulative error at this length
 	 */
@@ -399,10 +387,15 @@ public:
 		std::tr1::unordered_map<int, int>::iterator itr;
 		int total_errors = 0;
 		for(int i = 1; i <= length; i++){ //length is 1 based
-			itr = error_table.find(i);
-			if (itr != error_table.end()) {
+			itr = error_table_mis.find(i);
+			if (itr != error_table_mis.end())
 				total_errors += itr->second;
-			}
+			itr = error_table_ins.find(i);
+			if (itr != error_table_ins.end())
+				total_errors += itr->second;
+			itr = error_table_del.find(i);
+			if (itr != error_table_del.end())
+				total_errors += itr->second;
 		}
 		return total_errors;
 
@@ -427,22 +420,45 @@ public:
 		
 			
 	}
+
+	/**
+	 *takes 1 based position in read.
+	 *@param position_in_read	1-based position in read
+	 *@return	total mismatches at that position
+	 */
+	inline
+	int	get_total_position_errors_mis(unsigned int position_in_read) {
+		return( (position_in_read < pad_match.length()) ? error_table_mis[position_in_read] : 0);
+	}
+	
+	/**
+	 *takes 1 based position in read.
+	 *@param position_in_read	1-based position in read
+	 *@return	total insertions at that position
+	 */
+	inline
+	int	get_total_position_errors_ins(unsigned int position_in_read) {
+		return( (position_in_read < pad_match.length()) ? error_table_ins[position_in_read] : 0);
+	}
+	
+	/**
+	 *takes 1 based position in read.
+	 *@param position_in_read	1-based position in read
+	 *@return	total deletions at that position
+	 */
+	inline
+	int	get_total_position_errors_del(unsigned int position_in_read) {
+		return( (position_in_read < pad_match.length()) ? error_table_del[position_in_read] : 0);
+	}
+	
 	/**
 	 *takes 1 based position in read.
 	 *@param position_in_read	1-based position in read
 	 *@return	total errors at that position
 	 */
 	inline
-	int	get_total_position_errors(int position_in_read) {
-		//using namespace std;
-		unsigned int adjusted_pos = position_in_read;
-		if (adjusted_pos < ( pad_match.length() ) ) {
-
-			return error_table[  adjusted_pos  ];
-		} else {
-			return 0;
-		}
-
+	int	get_total_position_errors(unsigned int position_in_read) {
+		return(get_total_position_errors_mis(position_in_read) + get_total_position_errors_ins(position_in_read) + get_total_position_errors_del(position_in_read));
 	}
 	
 	/**
@@ -495,21 +511,14 @@ public:
 	
 	
 	
-	error_table_iterator error_table_begin() {
-		return error_table.begin();
-	}
-	
-	error_table_iterator error_table_end() {
-		return error_table.end();
-	}
-
-	void get_region_errors(int *region_homo_err, int *region_mm_err, int *region_indel_err, int *region_ins_err, int *region_del_err, bool *region_clipped){		
+	void get_region_errors(int *region_homo_err, int *region_mm_err, int *region_indel_err, int *region_ins_err, int *region_del_err, bool *region_clipped, std::vector<std::pair<long,int> >  *region_error_positions){
 		*region_homo_err = _region_homo_err;
 		*region_mm_err = _region_mm_err; 		
 		*region_indel_err = _region_indel_err;
 		*region_ins_err = _region_ins_err;
 		*region_del_err = _region_del_err; 
 		*region_clipped = _region_clipped; 
+		*region_error_positions = _region_error_positions;	
 		return;	
 	}
 
@@ -519,7 +528,7 @@ private:
 	
 	
 	
-	void		init_error_table(int min_len, int max_len, int step_size);
+	void		init_error_lens(int min_len, int max_len, int step_size);
 	void		_crunch_data();
 	void		dna(); 
 	void		padded_alignment();
@@ -587,7 +596,9 @@ private:
         bool    five_prime_justify; //whether or not to justify indels in the 5'
 	//error table data members
 						 //len,  errors
-	std::tr1::unordered_map<int, int> error_table;
+	std::tr1::unordered_map<int, int> error_table_mis;
+	std::tr1::unordered_map<int, int> error_table_ins;
+	std::tr1::unordered_map<int, int> error_table_del;
 	std::vector<int>				  error_lens;
 
 	inline
@@ -613,8 +624,9 @@ private:
 	int		_region_ins_err;
 	int		_region_del_err;	
 	bool		_region_clipped;
-	
+	std::vector<std::pair<long,int> >  _region_error_positions;
 	void adjust_region_base_positions(int* startBase, int* stopBase, std::string padTarget, bool *region_clipped);
+	void save_region_error_positions(std::string my_pad_match, std::vector<std::pair<long,int> >  &region_error_positions, int start_base, int stop_base);	
 	//void calc_region_errors(int startBase, int stopBase);
 
 };

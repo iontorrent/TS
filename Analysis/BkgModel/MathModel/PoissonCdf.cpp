@@ -1,5 +1,6 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "PoissonCdf.h"
+#include <cstring>
 
 
 
@@ -9,6 +10,7 @@ PoissonCDFApproxMemo::PoissonCDFApproxMemo()
   poiss_cdf = NULL;
   dpoiss_cdf = NULL;
   ipoiss_cdf = NULL;
+  poissLUT = NULL;
   max_events = MAX_HPLEN;
   max_dim = 0;
   scale = 0.05f;
@@ -33,6 +35,11 @@ void PoissonCDFApproxMemo::Allocate(int _max_events, int _max_dim, float _scale)
    for (int i=0; i<max_events; i++){
       ipoiss_cdf[i] = new float [max_dim];
    }
+   poissLUT = new __m128 *[max_events+1];
+   for (int i=0; i<max_events+1; i++){
+      poissLUT[i] = new __m128 [max_dim];
+   }
+
    t = new float [max_dim];
 }
 
@@ -78,6 +85,26 @@ void PoissonCDFApproxMemo::GenerateValues()
       ipoiss_cdf[ei][i] = tmp_sum; // total generated hydrogens per molecule at this intensity
     }
   }
+
+  //pack poisson values for optimized 2D interpolation in function GetStep
+  for( int i=0; i<max_dim-1; ++i ){
+      poissLUT[0][i] = _mm_set_ps( poiss_cdf[0][i], poiss_cdf[0][i], poiss_cdf[0][i+1], poiss_cdf[0][i+1] );
+  }
+  poissLUT[0][max_dim-1] = _mm_set_ps( poiss_cdf[0][max_dim-1], poiss_cdf[0][max_dim-1], poiss_cdf[0][max_dim-1], poiss_cdf[0][max_dim-1] );
+
+  for( int ei=0; ei<max_events-2; ++ei ){
+      for( int i=0; i<max_dim-1; ++i ){
+          poissLUT[ei+1][i] = _mm_set_ps( poiss_cdf[ei][i], poiss_cdf[ei+1][i], poiss_cdf[ei][i+1], poiss_cdf[ei+1][i+1] );
+      }
+      poissLUT[ei+1][max_dim-1] = _mm_set_ps( poiss_cdf[ei][max_dim-1], poiss_cdf[ei+1][max_dim-1], poiss_cdf[ei][max_dim-1], poiss_cdf[ei+1][max_dim-1] );
+  }
+
+  for( int i=0; i<max_dim-1; ++i ){
+      poissLUT[max_events-1][i] = _mm_set_ps( poiss_cdf[max_events-2][i], poiss_cdf[max_events-2][i], poiss_cdf[max_events-2][i+1], poiss_cdf[max_events-2][i+1] );
+      poissLUT[max_events][i] = _mm_set_ps( poiss_cdf[max_events-1][i], poiss_cdf[max_events-1][i], poiss_cdf[max_events-1][i+1], poiss_cdf[max_events-1][i+1] );
+  }
+  poissLUT[max_events-1][max_dim-1] = _mm_set_ps( poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1], poiss_cdf[max_events-2][max_dim-1] );
+  poissLUT[max_events][max_dim-1] = _mm_set_ps( poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1], poiss_cdf[max_events-1][max_dim-1] );
 }
 
 void PoissonCDFApproxMemo::DumpValues()
@@ -105,7 +132,11 @@ void PoissonCDFApproxMemo::Delete()
   delete[] dpoiss_cdf;
   for (int i=0; i<max_events; i++)
       delete[] ipoiss_cdf[i];
-  delete[] ipoiss_cdf;}
+  delete[] ipoiss_cdf;
+  for(int i=0;i<max_events+1;i++)
+    delete[] poissLUT[i];
+  delete[] poissLUT;
+}
 
 PoissonCDFApproxMemo::~PoissonCDFApproxMemo()
 {

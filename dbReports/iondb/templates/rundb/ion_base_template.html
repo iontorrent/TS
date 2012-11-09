@@ -1,5 +1,6 @@
-{% load pagetools %}<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
+{% load pagetools %}
 <head>
   <!--[if IE]>
     <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
@@ -18,6 +19,9 @@
           src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
   <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet"
         type="text/css"/>
+
+  <link href="/site_media/css/bootstrap.css" rel="stylesheet" type="text/css" />
+
   <script type="text/javascript" src="/site_media/scripts.js"></script>
   <script type="text/javascript"
           src="/site_media/detectmobilebrowser.js"></script>
@@ -29,9 +33,13 @@
   {% endblock extra_head %}
   <script>
     $(document).ready(function () {
+
+      $().tipTipDefaults({ delay: 0 });
+      $('#underconstruction').tipTip({ position: 'bottom' });
+
       var CURRENT_TAB = "{% block current_tab %}{% endblock %}";
       if (CURRENT_TAB != "") {
-        $("#" + CURRENT_TAB + " .tabtext").addClass("selected");
+        $("#" + CURRENT_TAB).addClass("active");
       }
       {% block extra-plugin %}
       {% endblock extra-plugin %}
@@ -44,19 +52,7 @@
 <body>
 <div class="all all_width">
   {% block topbar %}
-    <div class="topbar">
-      {% block site-title %}
-        <h1 id="sitename">{{ base_site_name }}</h1>
-      {% endblock site-title %}
-      <div class="logoholder">
-        <a href="http://www.iontorrent.com/">
-          <img src="/site_media/images/logo_top_right_banner.png"
-               alt="IonTorrent Systems, Inc." style="border:none;"/>
-        </a>
-      </div>
-      {% include "rundb/tabs.html" %}
-    </div>
-    <div class="darkline">&nbsp;</div>
+		{% if user.is_authenticated %}<div style="text-align:right">Welcome, {{ user.get_full_name|default:user.username }}! <!--Logout Disabled - broken. Close your browser to clear the session... [ <a href="{% url logout %}">Logout</a> ] --> </div>{% endif %}
     <div id="global_messages"></div>
     <script>
       $(function(){

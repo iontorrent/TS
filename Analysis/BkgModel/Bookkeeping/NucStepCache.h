@@ -20,14 +20,18 @@ class NucStep{
     float *per_flow_fine_step[NUMFB];
 
     int all_flow_t;
+    bool precomputed_step;
 
     NucStep();
+    ~NucStep();
     void Alloc(int npts);
     void Delete();
     float *NucFineStep(int NucID);
     float *NucCoarseStep(int NucID);
     void CalculateNucRiseFineStep(reg_params* a_region, TimeCompression& time_c, flow_buffer_info& my_flow);
     void CalculateNucRiseCoarseStep(reg_params *a_region, TimeCompression &time_c, flow_buffer_info &my_flow);
+    void ForceLockCalculateNucRiseCoarseStep(reg_params *a_region, TimeCompression &time_c, flow_buffer_info &my_flow);
+    void Unlock();
 };
 
 

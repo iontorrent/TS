@@ -1,5 +1,11 @@
 /* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved */
 
+//! @file     RegionAnalysis.cpp
+//! @ingroup  BaseCaller
+//! @brief    RegionAnalysis. Older Nelder-Mead phasing estimator superseded by PhaseEstimator. Delete soon.
+
+#include "RegionAnalysis.h"
+
 #include <string>
 #include <cassert>
 #include <unistd.h>
@@ -7,8 +13,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <math.h>
 
-#include "RegionAnalysis.h"
 #include "DPTreephaser.h"
 
 #define	MAX_CAFIE_READS_PER_REGION		5000
@@ -21,13 +27,12 @@ RegionAnalysis::RegionAnalysis()
   ie = NULL;
   dr = NULL;
   common_output_mutex = NULL;
-  numFlows = 0;
 }
 
 void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<float> *_dr,
     RawWells *_wells, Mask *_mask, const vector<KeySequence>& _keys,
-    const string& _flowOrder, int _numFlows, int numWorkers,
-    int cfiedrRegionsX, int cfiedrRegionsY, const string& _phaseEstimator)
+    const ion::FlowOrder& _flowOrder, int numWorkers,
+    int cfiedrRegionsX, int cfiedrRegionsY)
 {
   printf("RegionAnalysis::analyze start (with %d threads)\n", numWorkers);
 
@@ -38,10 +43,7 @@ void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<floa
   mask = _mask;
   keys = _keys;
 
-  phaseEstimator = _phaseEstimator;
-
   flowOrder = _flowOrder;
-  numFlows = _numFlows;
 
   // Initialize region wells reader
 
@@ -69,13 +71,7 @@ void RegionAnalysis::analyze(vector<float> *_cf, vector<float> *_ie, vector<floa
 void *RegionAnalysisWorker(void *arg)
 {
   RegionAnalysis *analysis = static_cast<RegionAnalysis*> (arg);
-
-  if (analysis->phaseEstimator == "nel-mead-treephaser")
-    analysis->worker_Treephaser();
-  else if (analysis->phaseEstimator == "nel-mead-adaptive-treephaser")
-    analysis->worker_AdaptiveTreephaser();
-
-
+  analysis->worker_Treephaser();
   return NULL;
 }
 
@@ -86,10 +82,7 @@ void RegionAnalysis::worker_Treephaser()
 
   // Worker method: load regions one by one and process them until done
 
-//  int numFlows = wells->NumFlows();
-
-//  DPTreephaser dpTreephaser(wells->FlowOrder(), numFlows, 8);
-  DPTreephaser dpTreephaser(flowOrder.c_str(), numFlows, 8);
+  DPTreephaser dpTreephaser(flowOrder);
 
   std::deque<int> wellX;
   std::deque<int> wellY;
@@ -135,13 +128,14 @@ void RegionAnalysis::worker_Treephaser()
 
         data.push_back(BasecallerRead());
 
-        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, keys[beadClass].flows(), keys[beadClass].flows_length()-1);
+        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), flowOrder.num_flows(),
+            keys[beadClass].flows(), keys[beadClass].flows_length()-1);
 
         bool keypass = true;
         for (int iFlow = 0; iFlow < (keys[beadClass].flows_length() - 1); iFlow++) {
-          if ((int) (data.back().measurements[iFlow] + 0.5) != keys[beadClass][iFlow])
+          if ((int) (data.back().raw_measurements[iFlow] + 0.5) != keys[beadClass][iFlow])
             keypass = false;
-          if (isnan(data.back().measurements[iFlow]))
+          if (isnan(data.back().raw_measurements[iFlow]))
             keypass = false;
         }
 
@@ -150,18 +144,18 @@ void RegionAnalysis::worker_Treephaser()
           continue;
         }
 
-        dpTreephaser.Solve(data.back(), std::min(100, numFlows));
-        data.back().Normalize(11, std::min(80, numFlows));
-        dpTreephaser.Solve(data.back(), std::min(120, numFlows));
-        data.back().Normalize(11, std::min(100, numFlows));
-        dpTreephaser.Solve(data.back(), std::min(120, numFlows));
+        dpTreephaser.Solve(data.back(), std::min(100, flowOrder.num_flows()));
+        dpTreephaser.Normalize(data.back(), 11, 80);
+        dpTreephaser.Solve(data.back(), std::min(120, flowOrder.num_flows()));
+        dpTreephaser.Normalize(data.back(), 11, 100);
+        dpTreephaser.Solve(data.back(), std::min(120, flowOrder.num_flows()));
 
 
         float metric = 0;
-        for (int iFlow = 20; (iFlow < 100) && (iFlow < numFlows); iFlow++) {
-          if (data.back().normalizedMeasurements[iFlow] > 1.2)
+        for (int iFlow = 20; (iFlow < 100) && (iFlow < flowOrder.num_flows()); iFlow++) {
+          if (data.back().normalized_measurements[iFlow] > 1.2)
             continue;
-          float delta = data.back().normalizedMeasurements[iFlow] - data.back().prediction[iFlow];
+          float delta = data.back().normalized_measurements[iFlow] - data.back().prediction[iFlow];
           if (!isnan(delta))
             metric += delta * delta;
           else
@@ -203,207 +197,42 @@ void RegionAnalysis::worker_Treephaser()
 
 
 
-
-void RegionAnalysis::worker_AdaptiveTreephaser()
-{
-
-  // Worker method: load regions one by one and process them until done
-
-//  int numFlows = wells->NumFlows();
-
-//  DPTreephaser dpTreephaser(wells->FlowOrder(), numFlows, 8);
-  DPTreephaser dpTreephaser(flowOrder.c_str(), numFlows, 8);
-
-  std::deque<int> wellX;
-  std::deque<int> wellY;
-  std::deque<std::vector<float> > wellMeasurements;
-  int iRegion;
-
-  std::vector<BasecallerRead> data;
-  data.reserve(MAX_CAFIE_READS_PER_REGION2);
-
-  while (wellsReader.loadNextRegion(wellX, wellY, wellMeasurements, iRegion)) {
-
-    float parameters[3];
-    parameters[0] = 0.00; // CF - initial guess
-    parameters[1] = 0.00; // IE - initial guess
-    parameters[2] = 0.000; // DR - initial guess
-
-
-    for (int globalIteration = 0; globalIteration < 5; globalIteration++) {
-
-      dpTreephaser.SetModelParameters(parameters[0], parameters[1], parameters[2]);
-
-      data.clear();
-
-      // Iterate over live library wells and consider them as a part of the phase training set
-
-      std::deque<int>::iterator x = wellX.begin();
-      std::deque<int>::iterator y = wellY.begin();
-      std::deque<std::vector<float> >::iterator measurements = wellMeasurements.begin();
-
-      for (; (x != wellX.end()) && (data.size() < MAX_CAFIE_READS_PER_REGION2); x++, y++, measurements++) {
-
-        if (!mask->Match(*x, *y, MaskLive))
-          continue;
-        if (!mask->Match(*x, *y, MaskBead))
-          continue;
-
-        int beadClass = 0; // 0 - library, 1 - TF
-
-        if (!mask->Match(*x, *y, MaskLib)) {  // Is it a library bead?
-          if (!mask->Match(*x, *y, MaskTF))   // OK, is it at least a TF?
-            continue;
-          beadClass = 1;
-        }
-
-        data.push_back(BasecallerRead());
-
-        data.back().SetDataAndKeyNormalize(&(measurements->at(0)), numFlows, keys[beadClass].flows(), keys[beadClass].flows_length()-1);
-
-        bool keypass = true;
-        for (int iFlow = 0; iFlow < (keys[beadClass].flows_length() - 1); iFlow++) {
-          if ((int) (data.back().measurements[iFlow] + 0.5) != keys[beadClass][iFlow])
-            keypass = false;
-          if (isnan(data.back().measurements[iFlow]))
-            keypass = false;
-        }
-
-        if (!keypass) {
-          data.pop_back();
-          continue;
-        }
-
-//        dpTreephaser.NormalizeAndSolve3(data.back(),std::min(150, numFlows));
-        dpTreephaser.NormalizeAndSolve3(data.back(),std::min(200, numFlows));
-
-        float ppf_numerator = 0;
-        float ppf_denominator = 0;
-        for (int iFlow = 11; (iFlow < 100) && (iFlow < numFlows); iFlow++) {
-          ppf_denominator += 1.0;
-          if (data.back().solution[iFlow] > 0)
-            ppf_numerator += 1.0;
-        }
-        ppf_numerator /= ppf_denominator;
-
-        if (ppf_numerator > 0.6) {
-          data.pop_back();
-          continue;
-        }
-
-
-        float metric = 0;
-        for (int iFlow = 20; (iFlow < 100) && (iFlow < numFlows); iFlow++) {
-          if (data.back().normalizedMeasurements[iFlow] > 1.2)
-            continue;
-          float delta = data.back().normalizedMeasurements[iFlow] - data.back().prediction[iFlow];
-          metric += delta * delta;
-        }
-
-        if ((metric > 2) || isnan(metric)) {
-          data.pop_back();
-          continue;
-        }
-
-      }
-
-      if (data.size() < 10)
-        break;
-
-      // Perform parameter estimation
-
-      NelderMeadOptimization(data, dpTreephaser, parameters, 50, 2);
-    }
-
-    pthread_mutex_lock(common_output_mutex);
-    if (data.size() < 10)
-      printf("Region % 3d: Using default phase parameters, %d reads insufficient for training\n", iRegion + 1, (int) data.size());
-    else
-      printf("Region % 3d: Using %d reads for phase parameter training\n", iRegion + 1, (int) data.size());
-    //      printf("o");
-    fflush(stdout);
-    pthread_mutex_unlock(common_output_mutex);
-
-    (*cf)[iRegion] = parameters[0];
-    (*ie)[iRegion] = parameters[1];
-    (*dr)[iRegion] = parameters[2];
-
-  }
-
-}
-
-
-
-
-
 float RegionAnalysis::evaluateParameters(std::vector<BasecallerRead> &dataAll, DPTreephaser& treephaser, float *parameters)
 {
   float metric = 0;
-  if (phaseEstimator == "nel-mead-treephaser") {
 
-    if (parameters[0] < 0) // cf
-      metric = 1e10;
-    if (parameters[1] < 0) // ie
-      metric = 1e10;
-    if (parameters[2] < 0) // dr
-      metric = 1e10;
+  if (parameters[0] < 0) // cf
+    metric = 1e10;
+  if (parameters[1] < 0) // ie
+    metric = 1e10;
+  if (parameters[2] < 0) // dr
+    metric = 1e10;
 
-    if (parameters[0] > 0.04) // cf
-      metric = 1e10;
-    if (parameters[1] > 0.04) // ie
-      metric = 1e10;
-    if (parameters[2] > 0.01) // dr
-      metric = 1e10;
+  if (parameters[0] > 0.04) // cf
+    metric = 1e10;
+  if (parameters[1] > 0.04) // ie
+    metric = 1e10;
+  if (parameters[2] > 0.01) // dr
+    metric = 1e10;
 
-    if (metric == 0) {
+  if (metric == 0) {
 
-      treephaser.SetModelParameters(parameters[0], parameters[1], parameters[2]);
-      for (std::vector<BasecallerRead>::iterator data = dataAll.begin(); data != dataAll.end(); data++) {
+    treephaser.SetModelParameters(parameters[0], parameters[1], parameters[2]);
+    for (std::vector<BasecallerRead>::iterator data = dataAll.begin(); data != dataAll.end(); data++) {
 
-        treephaser.Simulate3(*data, 120);
-        data->Normalize(20, 100);
+      treephaser.Simulate(*data, 120);
+      float normalizer = treephaser.Normalize(*data, 20, 100);
 
-        for (int iFlow = 20; iFlow < std::min(100, data->numFlows); iFlow++) {
-          if (data->measurements[iFlow] > 1.2)
-            continue;
-          float delta = data->measurements[iFlow] - data->prediction[iFlow] * data->miscNormalizer;
-          metric += delta * delta;
-        }
-      }
-
-    }
-
-  } else if (phaseEstimator == "nel-mead-adaptive-treephaser") {
-
-    if (parameters[0] < 0) // cf
-      metric = 1e10;
-    if (parameters[1] < 0) // ie
-      metric = 1e10;
-
-    if (parameters[0] > 0.04) // cf
-      metric = 1e10;
-    if (parameters[1] > 0.04) // ie
-      metric = 1e10;
-
-    if (metric == 0) {
-
-      treephaser.SetModelParameters(parameters[0], parameters[1], 0);
-      for (std::vector<BasecallerRead>::iterator data = dataAll.begin(); data != dataAll.end(); data++) {
-
-//        treephaser.Simulate3(*data, 150);
-//        data->AdaptiveNormalizationOfPredictions(3, 50);
-        treephaser.Simulate3(*data, 200);
-        data->AdaptiveNormalizationOfPredictions(4, 50);
-
-        for (int iFlow = 25; iFlow < std::min(175, data->numFlows); iFlow++) {
-          if (data->measurements[iFlow] > 1.2)
-            continue;
-          float delta = data->measurements[iFlow] - data->prediction[iFlow];
-          metric += delta * delta;
-        }
+      for (int iFlow = 20; iFlow < 100 and iFlow < flowOrder.num_flows(); iFlow++) {
+        if (data->raw_measurements[iFlow] > 1.2)
+          continue;
+        float delta = data->raw_measurements[iFlow] - data->prediction[iFlow] * normalizer;
+        metric += delta * delta;
       }
     }
+
   }
+
   //  printf("CF = %1.2f%%  IE = %1.2f%%  DR = %1.2f%%  V = %1.6f\n",
   //      100*parameters[0], 100*parameters[1], 100*parameters[2], metric);
   if (isnan(metric))

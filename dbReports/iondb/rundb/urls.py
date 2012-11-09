@@ -11,6 +11,7 @@ v1_api.register(api.GlobalConfigResource())
 v1_api.register(api.ExperimentResource())
 v1_api.register(api.ResultsResource())
 v1_api.register(api.ReferenceGenomeResource())
+v1_api.register(api.ObsoleteReferenceGenomeResource())
 v1_api.register(api.LocationResource())
 v1_api.register(api.RigResource())
 v1_api.register(api.PluginResource())
@@ -32,24 +33,59 @@ v1_api.register(api.KitInfoResource())
 v1_api.register(api.KitPartResource())
 v1_api.register(api.SequencingKitInfoResource())
 v1_api.register(api.SequencingKitPartResource())
+v1_api.register(api.ActiveSequencingKitInfoResource())
+v1_api.register(api.ActivePGMSequencingKitInfoResource())
+v1_api.register(api.ActiveProtonSequencingKitInfoResource())
 v1_api.register(api.LibraryKitInfoResource())
 v1_api.register(api.LibraryKitPartResource())
+v1_api.register(api.ActiveLibraryKitInfoResource())
+v1_api.register(api.ActivePGMLibraryKitInfoResource())
+v1_api.register(api.ActiveProtonLibraryKitInfoResource())
 v1_api.register(api.LibraryKeyResource())
 v1_api.register(api.ThreePrimeadapterResource())
+v1_api.register(api.TemplateResource())
 
 v1_api.register(api.MessageResource())
 
 v1_api.register(api.TorrentSuite())
 v1_api.register(api.IonReporter())
 
+v1_api.register(api.ProjectResource())
+v1_api.register(api.UserResource())
+
+v1_api.register(api.CompositeResultResource())
+v1_api.register(api.CompositeExperimentResource())
+v1_api.register(api.MonitorExperimentResource())
+
+v1_api.register(api.ApplProductResource())
+v1_api.register(api.QCTypeResource())
+v1_api.register(api.PEMetricsResource())
+v1_api.register(api.PlannedExperimentQCResource())
+v1_api.register(api.EventLogResource())
+v1_api.register(api.EmailAddressResource())
+
+v1_api.register(api.ChipResource())
+
 urlpatterns = patterns(
     'iondb.rundb',
     url(r'^newanalysis/(\d+)/(\d+)$', 'views.createReport', name='createReport'),
-    (r'^$', 'views.experiment'),
+    url(r'^$', 'data.views.rundb_redirect'),
+    url(r'^old_runs$', 'views.experiment', name='old_homepage'),
     (r'^reports/$', 'views.reports'),
-    (r'^blank/$', 'views.blank', {'tab': False}),
+    (r'^report/(\d+)/([\w.,/_\-]+)$', 'ajax.reportAction'),
+    (r'^metaDataLog/(?P<pkR>.*)/$', 'views.viewLog'),
+    (r'^getCSA/(\d+).zip/$', 'views.getCSA'),
+    (r'^getCSV.csv$', 'views.getCSV'),
+    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
+    (r'^getOldPDF/(?P<pkR>.*)/$', 'views.PDFGenOld'),
+    (r'^jobDetails/$', 'views.jobDetails'),
+    (r'^getZip/(.+)$', 'views.getChipZip'),
+    (r'^getChipLog/(.+)$', 'views.getChipLog'),
+    (r'^getChipPdf/(.+)$', 'views.getChipPdf'),
+    #(r'^blank/$', 'views.blank', {'tab': False}),
     (r'^tfcsv/$', 'views.tf_csv'),
     (r'^crawler/$', 'views.crawler_status'),
+    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
     (r'^experiment/(\d+)/$', 'views.single_experiment'),
     (r'^islive/(\d+)$', 'ajax.analysis_liveness'),
     url(r'^started/(\d+)$', 'views.report_started', name='report-started'),
@@ -63,7 +99,7 @@ urlpatterns = patterns(
     url(r'^archive/$', 'views.db_backup', name='ion-archive'),
     (r'^editarchive/(\d+)$', 'views.edit_backup'),
     (r'^about/$', 'views.about'),
-    (r'^planning/$', 'views.planning'),
+    url(r'^planning/$', 'views.planning', name='planning'),
     (r'^storage/(\d+)/([\w.,/_\-]+)$', 'ajax.change_storage'),
     (r'^changelibrary/(\d+)$', 'ajax.change_library'),
     (r'^autorunplugin/(\d+)$', 'ajax.autorunPlugin'),
@@ -74,6 +110,7 @@ urlpatterns = patterns(
     (r'^enabletestfrag/(\d+)/(\d)$', 'ajax.enableTestFrag'),
     (r'^bestruns/$', 'views.best_runs'),
     (r'^info/$', 'views.stats_sys'),
+    (r'^configure/info/$', 'views.stats_sys'),
     (r'^enablearchive/(\d+)/(\d)$', 'ajax.enableArchive'),
     url(r'^servers/$', 'views.servers', name='ion-daemon'),
     (r'^servers/arch_gone.png$', 'graphs.archive_graph'),
@@ -99,11 +136,13 @@ urlpatterns = patterns(
     (r'^deletebarcode/(\d+)$', 'ajax.delete_barcode'),
     (r'^deletebarcodeset/([\w.,/_\-]+)$', 'ajax.delete_barcode_set'),
     (r'^addeditbarcode/([\w.,/_\-]+)$', 'views.add_edit_barcode'),
-    (r'^plugininput/(\d+)/$', 'views.plugin_iframe'),
+    url(r'^plugininput/(\d+)/$', 'views.plugin_iframe', name="plugin_iframe"),
     (r'^graphiframe/(\d+)/$', 'views.graph_iframe'),
     (r'^addplan/$', 'views.add_plan'),
     (r'^addplans/$', 'views.add_plans'),
     (r'^editplan/(\d+)/$', 'views.edit_plan'),
+    (r'^report/(\d+)$', 'views.displayReport'),
+
     (r'^editexperiment/(\d+)/$', 'views.edit_experiment'),
     (r'^expack/$', 'views.exp_ack'),
     (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),
@@ -114,6 +153,10 @@ urlpatterns = patterns(
     (r'^published/$', 'publishers.list_content'),
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),
+
+    url(r'^account/$', 'views.account', name="account"),
+    #url(r'^register/', 'views.registration', name="register"),
+    (r'^chips/$', 'chips.showpage'),
     )
 
 urlpatterns.extend(patterns(

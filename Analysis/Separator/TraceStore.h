@@ -121,6 +121,7 @@ class TraceStore {
   virtual size_t GetFlowBuff() = 0;
   virtual double GetTime(size_t frame) = 0;
   virtual void SetTime(Col<double> &time)  = 0;
+  virtual void SetSize(int frames) = 0;
   virtual void SetFlowIndex(size_t flowIx, size_t index) = 0;
   virtual bool HaveWell(size_t wellIx) = 0;
   virtual void SetHaveWellFalse(size_t wellIx) = 0;
@@ -128,6 +129,7 @@ class TraceStore {
   virtual bool IsReference(size_t wellIx) = 0;
   virtual bool HaveFlow(size_t flowIx) = 0;
   virtual size_t WellIndex(size_t row, size_t col) {return row * GetNumCols() + col; }
+  virtual void Dump(ofstream &out) = 0;
   static void WellRowCol(size_t idx, size_t nCols, size_t &row, size_t &col) { 
     row = idx / nCols;
     col = idx % nCols;
@@ -156,9 +158,27 @@ class TraceStore {
   virtual float GetT0(int idx) = 0;
   virtual void SetMeshDist(int size) = 0;
   virtual int GetMeshDist() = 0;
+  virtual void SetTemp(Col<double> &col) { mTemp = col; }
+  virtual void SetFirst() {
+    Col<double> trace(GetNumFrames());
+    GetTrace(0, 0, trace.begin());
+    SetTemp(trace);
+  }
+  virtual void CheckFirst() {
+    Col<double> trace(GetNumFrames());
+    GetTrace(0, 0, trace.begin());
+    assert(trace.size() == mTemp.size());
+    for (size_t f = 0; f < GetNumFrames(); f++) {
+      if (mTemp[f] != trace[f]) {
+        assert(0);
+      }
+    }
+             
+  }
  private: 
   std::vector<char> mKeyAssign;
   std::vector<KeySeq> mKeys;
+  arma::Col<double> mTemp;
 };
 
 #endif // TRACESTORE_H

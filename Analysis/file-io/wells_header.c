@@ -28,6 +28,17 @@ wells_header_read(FILE *fp)
 
   return h;
 }
+    
+int32_t
+wells_header_write(FILE *fp, wells_header_t *header)
+{
+  if(fwrite(&header->num_wells, sizeof(uint32_t), 1, fp) != 1
+     || fwrite(&header->num_flows, sizeof(uint16_t), 1, fp) != 1
+     || fwrite(header->flow_order, sizeof(char), header->num_flows, fp) != header->num_flows) {
+      return 0;
+  }
+  return 1;
+}
 
 void
 wells_header_print(FILE *fp, wells_header_t *h)

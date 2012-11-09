@@ -3,12 +3,12 @@
 #define GLOBALDEFAULTSFROMBKGCONTROL_H
 
 #include "BkgControlOpts.h"
-#include "BkgModel.h"
+#include "SignalProcessingMasterFitter.h"
 
 // Bad coding style, but it is what we do
 // set global defaults (static, effectively a global variable) for the bkg model
 // from the control options
-void SetBkgModelGlobalDefaults(BkgModelControlOpts &bkg_control, char *chipType,char *experimentName);
+void SetBkgModelGlobalDefaults(GlobalDefaultsForBkgModel &global_defaults, BkgModelControlOpts &bkg_control, char *chipType,char *results_folder);
 
 
 #endif // GLOBALDEFAULTSFROMBKGCONTROL_H

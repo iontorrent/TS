@@ -1,0 +1,36 @@
+{% load humanize %}
+<div id="TestFragments" data-title="Test Fragments" class="tab-pane">
+
+{% if testfragments %}
+
+  <table id="test_fragments">
+    <thead>
+      <tr>
+        <th>Test Fragment</th>
+        <th>Reads</th>
+        <th>Percent 50AQ17</th>
+        <th>Read length histogram</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for tf_name,tf_data in testfragments.items %}
+      <tr>
+        <td><h3>{{tf_name}}</h3></td>
+        <td><h3>{{tf_data.num_reads|intcomma}}</h3></td>
+        <td><h3>{{tf_data.conversion_50AQ17}}%</h3></td>
+        <td class="tf_image" data-img="{{report.reportWebLink}}/{{tf_data.histogram_filename}}">
+                <img height="100" width="800" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"></img>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  
+{%else%}
+
+  <h2>No Test Fragments found</h2>
+  
+{% endif %}
+
+      
+</div>

@@ -14,17 +14,20 @@ USAGE="USAGE:
  $CMD [options] <reference.fasta> <BAM file>"
 OPTIONS="OPTIONS:
   -h --help Report usage and help
-  -l Log progress to STDERR. A few primary progress messages will still be output.
+  -d Filter to reomove Duplicate reads removed.
+  -u Filter to Uniquely mapped reads (SAM MAPQ>0).
+  -B <file> Limit coverage to targets specified in this BED file
   -D <dirpath> Path to root Directory where results are written. Default: ./
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -H <dirpath> Path to directory containing files 'header' and 'footer', used to wrap HTML results file.
   -O <file> Output file name for text data (per analysis). Use '-' for STDOUT. Default: 'summary.txt'
-  -B <file> Limit coverage to targets specified in this BED file
   -P <file> Padded targets BED file for padded target coverage analysis
+  -Q <file> Name for BLOCK HTML results file (in output directory). Default: '' (=> none created)
   -R <file> Name for HTML Results file (in output directory). Default: 'results.html'
   -T <file> Name for HTML Table row summary file (in output directory). Default: '' (=> none created)
-  -H <dirpath> Path to directory containing files 'header' and 'footer', used to wrap HTML results file.
-  -s Do not produce and analyze the filtered reads file
-  -x Do not create the HTML file linking to all results created"
+  -l Log progress to STDERR. (A few primary progress messages will always be output.)
+  -s Single run only. Otherwise unfiltered and filtered (for -d or -u) run passes are made, producing paired sets of reports.
+  -x Do not create the HTML file linking to all results created."
 
 # should scan all args first for --X options
 if [ "$1" = "--help" ]; then
@@ -38,27 +41,36 @@ BEDFILE=""
 GENOME=""
 WORKDIR="."
 OUTFILE=""
-USTARTS=1
 MAKEHML=1
 RESHTML=""
 ROWHTML=""
 HAFHTML=""
 PADBED=""
+BLOCKFILE=""
+DEDUP=0
+UNIQUE=0
+TWORUNS=1
 
-while getopts "hlsxB:M:G:D:X:O:R:T:H:P:" opt
+# enables old strategy of pre-filtering BAM
+PREFILTER_BAM=0
+
+while getopts "hlsduxB:M:G:D:X:O:R:T:H:P:Q:" opt
 do
   case $opt in
     B) BEDFILE=$OPTARG;;
-    M) MAXCOV=$OPTARG;;
-    G) GENOME=$OPTARG;;
     D) WORKDIR=$OPTARG;;
+    G) GENOME=$OPTARG;;
+    H) HAFHTML=$OPTARG;;
+    M) MAXCOV=$OPTARG;;
     O) OUTFILE=$OPTARG;;
+    P) PADBED=$OPTARG;;
+    Q) BLOCKFILE=$OPTARG;;
     R) RESHTML=$OPTARG;;
     T) ROWHTML=$OPTARG;;
-    H) HAFHTML=$OPTARG;;
-    P) PADBED=$OPTARG;;
+    d) DEDUP=1;;
     l) SHOWLOG=1;;
-    s) USTARTS=0;;
+    s) TWORUNS=0;;
+    u) UNIQUE=1;;
     x) MAKEHML=0;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
        exit 0;;
@@ -85,6 +97,14 @@ if [ -z "$OUTFILE" ]; then
 fi
 if [ -z "$RESHTML" ]; then
   RESHTML="results.html"
+fi
+
+FILTERRUN=0
+UNFILTRUN=$TWORUNS
+if [ $DEDUP -eq 1 -o $UNIQUE -eq 1 ]; then
+  FILTERRUN=1
+else
+  UNFILTRUN=1
 fi
 
 #--------- End command arg parsing ---------
@@ -139,14 +159,18 @@ RESDIR2="filtered_reads"
 WORKDIR1="$WORKDIR/$RESDIR1"
 WORKDIR2="$WORKDIR/$RESDIR2"
 
-if ! [ -d "$WORKDIR1" ]; then
-  mkdir "$WORKDIR1"
-  if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to create work directory $WORKDIR1" >&2
-    exit 1;
+if [ $UNFILTRUN -eq 1 ]; then
+  if ! [ -d "$WORKDIR1" ]; then
+    mkdir "$WORKDIR1"
+    if [ $? -ne 0 ]; then
+      echo "ERROR: Failed to create work directory $WORKDIR1" >&2
+      exit 1;
+    fi
   fi
+else
+  rm -rf "$WORKDIR1"
 fi
-if [ $USTARTS -eq 1 ]; then
+if [ $FILTERRUN -eq 1 ]; then
   if ! [ -d "$WORKDIR2" ]; then
     mkdir "$WORKDIR2"
     if [ $? -ne 0 ]; then
@@ -163,94 +187,89 @@ BAMNAME=`echo $BAMROOT | sed -e 's/\.[^.]*$//'`
 
 ############
 
-echo "Processing unfiltered reads..." >&2
+if [ $UNFILTRUN -eq 1 ]; then
 
-if [ $SHOWLOG -eq 1 ]; then
-  echo "" >&2
-fi
-COVER="$RUNDIR/coverage_analysis.sh $LOGOPT -H $MAXCOV -O \"$OUTFILE\" -B \"$BEDFILE\" -P \"$PADBED\" -D \"$WORKDIR1\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
-eval "$COVER" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nFailed to run coverage analysis for unfiltered reads." >&2
-  echo "\$ $COVER" >&2
-  exit 1;
-fi
+  echo "Processing unfiltered reads..." >&2
+  if [ $SHOWLOG -eq 1 ]; then
+    echo "" >&2
+  fi
+  COVER="$RUNDIR/coverage_analysis.sh $LOGOPT -H $MAXCOV -O \"$OUTFILE\" -B \"$BEDFILE\" -P \"$PADBED\" -D \"$WORKDIR1\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
+  eval "$COVER" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nFailed to run coverage analysis for unfiltered reads." >&2
+    echo "\$ $COVER" >&2
+    exit 1;
+  fi
+
+fi;   # Filtered run condition
 
 ############
 
-if [ $USTARTS -eq 1 ]; then
+if [ $FILTERRUN -eq 1 ]; then
 
   if [ $SHOWLOG -eq 1 ]; then
     echo "" >&2
   fi
-  echo "Filtering reads to unique starts..." >&2
-  if [ $SHOWLOG -eq 1 ]; then
-    echo "" >&2
-  fi
-
-  TSAMFILE="$WORKDIR/$BAMNAME.ustarts.sam"
-  TBAMSORT="$WORKDIR/$BAMNAME.ustarts.sort"
-  BAMFILE2="$WORKDIR/$BAMNAME.ustarts.bam"
-
-  REMDUP="perl $RUNDIR/remove_pgm_duplicates.pl $LOGOPT -u \"$BAMFILE\" > \"$TSAMFILE\""
-  eval "$REMDUP" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: remove_pgm_duplicates.pl failed." >&2
-    echo "\$ $REMDUP" >&2
-    #exit 1;
-  fi
-
-  if [ $SHOWLOG -eq 1 ]; then
-    echo -e "\nCreating sorted BAM and BAI files..." >&2
-  fi
-
-  SAMCMD="samtools view -S -b -t \"$GENOME\" -o \"$BAMFILE2\" \"$TSAMFILE\" &> /dev/null"
-  eval "$SAMCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: SAMtools command failed." >&2
-    echo "\$ $SAMCMD" >&2
-    #exit 1;
+  BAMFILE2="$BAMFILE"
+  FILTEROPTS=""
+  if [ $DEDUP -eq 1 ]; then
+    if [ $UNIQUE -eq 1 ]; then
+      echo "Filtering BAM to uniquely mapped non-duplicate reads..." >&2
+      BAMFILTER="-F 0x400 -q 1"
+      FILTEROPTS="-d -u"
+    else
+      echo "Filtering BAM to non-duplicate reads..." >&2
+      BAMFILTER="-F 0x400"
+      FILTEROPTS="-d"
+    fi
   else
+    echo "Filtering BAM to uniquely mapped reads..." >&2
+    BAMFILTER="-q 1"
+    FILTEROPTS="-u"
+  fi
+  if [ $SHOWLOG -eq 1 ]; then
+    echo "" >&2
+  fi
+
+  if [ $PREFILTER_BAM -eq 1 ]; then
+    FILTEROPTS=""
+    BAMFILE2="$WORKDIR/$BAMNAME.filtered.bam"
+    REMDUP="samtools view -b -h $BAMFILTER \"$BAMFILE\" > \"$BAMFILE2\" 2> /dev/null"
+    eval "$REMDUP" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: BAM filter command failed:" >&2
+      echo "\$ $REMDUP" >&2
+      echo "Proceeding with unfiltered BAM file." >&2
+      BAMFILE2="$BAMFILE"
+    else
+      if [ $SHOWLOG -eq 1 ]; then
+        echo "> $BAMFILE2" >&2
+      fi
+      SAMCMD="samtools index \"$BAMFILE2\""
+      eval "$SAMCMD" >&2
+      if [ $? -ne 0 ]; then
+        echo -e "\nERROR: BAM indexing command failed:" >&2
+        echo "\$ $SAMCMD" >&2
+        echo "Proceeding with unfiltered BAM file." >&2
+        BAMFILE2="$BAMFILE"
+      else
+        if [ $SHOWLOG -eq 1 ]; then
+          echo "> ${BAMFILE2}.bai" >&2
+        fi
+      fi
+    fi
     if [ $SHOWLOG -eq 1 ]; then
-      echo "> $BAMFILE2" >&2
+      echo "Filtering complete:" `date` >&2
+      echo "" >&2
     fi
   fi
-
-  #SAMCMD="samtools sort \"$BAMFILE2\" \"$TBAMSORT\""
-  #eval "$SAMCMD" >&2
-  #if [ $? -ne 0 ]; then
-  #  echo -e "\nERROR: SAMtools command failed." >&2
-  #  echo "\$ $SAMCMD" >&2
-  #  #exit 1;
-  #else
-  #  mv "$TBAMSORT.bam" "$BAMFILE2"
-  #fi
-  rm -f "$TSAMFILE"
-
-  SAMCMD="samtools index \"$BAMFILE2\""
-  eval "$SAMCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: SAMtools command failed." >&2
-    echo "\$ $SAMCMD" >&2
-    #exit 1;
-  else
-    if [ $SHOWLOG -eq 1 ]; then
-      echo "> ${BAMFILE2}.bai" >&2
-    fi
-  fi
-
-  if [ $SHOWLOG -eq 1 ]; then
-    echo "Filtering to unique starts complete:" `date` >&2
-    echo "" >&2
-  fi
-
   ############
 
   echo "Processing filtered reads..." >&2
   if [ $SHOWLOG -eq 1 ]; then
     echo "" >&2
   fi
-  COVER="$RUNDIR/coverage_analysis.sh $LOGOPT -H $MAXCOV -O \"$OUTFILE\" -B \"$BEDFILE\" -P \"$PADBED\" -D \"$WORKDIR2\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE2\""
+  COVER="$RUNDIR/coverage_analysis.sh $LOGOPT $FILTEROPTS -H $MAXCOV -O \"$OUTFILE\" -B \"$BEDFILE\" -P \"$PADBED\" -D \"$WORKDIR2\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE2\""
   eval "$COVER" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nFailed to run coverage analysis for filtered reads."
@@ -267,8 +286,20 @@ if [ $MAKEHML -eq 1 ]; then
     echo "" >&2
   fi
   echo -e "Creating HTML report..." >&2
-  if [ $USTARTS -eq 1 ]; then
+  if [ $TWORUNS -eq 1 ]; then
     TWORES="-R \"$RESDIR2\" -B \"$BAMFILE2\""
+  elif [ $FILTERRUN -eq 1 ]; then
+    RESDIR1="$RESDIR2"
+    BAMFILE="$BAMFILE2"
+  fi
+  if [ $DEDUP -eq 1 ]; then
+    if [ $UNIQUE -eq 1 ]; then
+      TWORES="$TWORES -p \"Uniquely Mapped Non-duplicate Reads\""
+    else
+      TWORES="$TWORES -p \"Non-duplicate Reads\""
+    fi
+  elif [ $UNIQUE -eq 1 ]; then
+    TWORES="-p \"Uniquely Mapped Reads\""
   fi
   if [ -n "$ROWHTML" ]; then
     ROWHTML="-T \"$ROWHTML\""
@@ -284,7 +315,6 @@ if [ $MAKEHML -eq 1 ]; then
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: coverage_analysis_report.pl failed." >&2
     echo "\$ $HMLCMD" >&2
-    #exit 1;
   else
     if [ $SHOWLOG -eq 1 ]; then
       echo "> ${RESDIR1}/$RESHTML" >&2
@@ -293,6 +323,27 @@ if [ $MAKEHML -eq 1 ]; then
   if [ $SHOWLOG -eq 1 ]; then
     echo "HTML report complete: " `date` >&2
   fi
+
+  # Block Summary
+  if [ -n "$BLOCKFILE" ]; then
+    HMLCMD="perl $RUNDIR/coverage_analysis_block.pl -O \"$BLOCKFILE\" -D \"$WORKDIR\" -S \"$OUTFILE\" \"$RESDIR1\" \"$BAMFILE\""
+    if [ $SHOWLOG -eq 1 ]; then
+      echo "\$ $HMLCMD" >&2
+    fi
+    eval "$HMLCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: coverage_analysis_block.pl failed." >&2
+      echo "\$ $HMLCMD" >&2
+    else
+      if [ $SHOWLOG -eq 1 ]; then
+        echo "> ${WORKDIR}/${BLOCKFILE}" >&2
+      fi
+    fi
+    if [ $SHOWLOG -eq 1 ]; then
+      echo "HTML report complete: " `date` >&2
+    fi
+  fi
+
 fi
 
 if [ $SHOWLOG -eq 1 ]; then

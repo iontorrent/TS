@@ -747,6 +747,10 @@
       return this;
     },
 
+    update: function(models, options) {
+      return this.reset(models, options);
+    },
+
     // Fetch the default set of models for this collection, resetting the
     // collection when they arrive. If `add: true` is passed, appends the
     // models to the collection instead of resetting.
@@ -756,7 +760,13 @@
       var collection = this;
       var success = options.success;
       options.success = function(resp, status, xhr) {
-        collection[options.add ? 'add' : 'reset'](collection.parse(resp, xhr), options);
+        var target = 'reset';
+        if (options.update) {
+          target = 'update';
+        } else if (options.add) {
+          target = 'add';
+        }
+        collection[target](collection.parse(resp, xhr), options);
         if (success) success(collection, resp);
       };
       options.error = Backbone.wrapError(options.error, collection, options);

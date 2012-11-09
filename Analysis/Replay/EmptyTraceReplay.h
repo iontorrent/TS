@@ -5,6 +5,7 @@
 #include "EmptyTrace.h"
 #include "CommandLineOpts.h"
 #include "H5Replay.h"
+#include "IonErr.h"
 
 // *********************************************************************
 // reader specific class
@@ -15,6 +16,7 @@ class EmptyTraceReader : public EmptyTrace {
   EmptyTraceReader (CommandLineOpts &clo);
   ~EmptyTraceReader();
   void GenerateAverageEmptyTrace(Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, Image *img, int flow);
+  void GenerateAverageEmptyTrace (Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow) { ION_ABORT("Not supported");}
   void  Allocate(int numfb, int _imgFrames);
 
  private:
@@ -38,6 +40,7 @@ class EmptyTraceRecorder : public EmptyTrace {
   EmptyTraceRecorder(CommandLineOpts &clo);
   ~EmptyTraceRecorder();
   void GenerateAverageEmptyTrace(Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, Image *img, int flow);
+  void GenerateAverageEmptyTrace (Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow){ ION_ABORT("Not supported"); }
   void  Allocate(int numfb, int _imgFrames);
 
  private:

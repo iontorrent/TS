@@ -37,6 +37,41 @@ sff_check_cmp_flow_signal(int32_t base_call, int32_t flow_signal)
 }
 
 void
+sff_check_rheader(sff_t *sff, int32_t *n_err3, int32_t print){
+  uint32_t nBases = sff->rheader->n_bases;
+  uint16_t clipAdapterRight = sff->rheader->clip_adapter_right;
+  uint16_t clipQualRight = sff->rheader->clip_qual_right;
+  uint16_t clipAdapterLeft = sff->rheader->clip_adapter_left;
+  uint16_t clipQualLeft = sff->rheader->clip_qual_left;
+  *n_err3 = 0;
+
+  if(clipQualLeft > nBases){
+    (*n_err3)++;
+    if(print)
+        fprintf(stdout, "Type three: clip qual left(%d)  is larger than read length(%d)\n", clipQualLeft, nBases);
+  }
+
+  if(clipAdapterLeft > nBases){
+    (*n_err3)++;
+    if(print)
+        fprintf(stdout, "Type three: clip adapter left(%d)  is larger than read length(%d)\n", clipAdapterLeft, nBases);
+  }
+
+  if(clipQualRight > nBases){
+    (*n_err3)++;
+    if(print)
+        fprintf(stdout, "Type three: clip qual right(%d)  is larger than read length(%d)\n", clipQualRight, nBases);
+  }
+
+  if(clipAdapterRight > nBases){
+    (*n_err3)++;
+    if(print)
+        fprintf(stdout, "Type three: clip adapter right(%d)  is larger than read length(%d)\n", clipAdapterRight, nBases);
+  }
+
+}
+
+void
 sff_check(sff_t *sff, int32_t *n_err1, int32_t *n_err2, int32_t print)
 {
   int32_t i, j, l, fl;
@@ -54,7 +89,7 @@ sff_check(sff_t *sff, int32_t *n_err1, int32_t *n_err2, int32_t print)
   (*n_err1) = (*n_err2) = 0;
 
   i = j = 0;
-  while(i < bases->s[i]) {
+  while(i < bases->l) {
       // track the empty flows
       while(fo->s[j] != bases->s[i]) {
           if(prev_base == fo->s[j] && 0 == sff_check_cmp_flow_signal(0, fg[j])) {
@@ -122,9 +157,9 @@ sff_check_main(int argc, char *argv[])
   int32_t print = 0;
   int32_t min_row, max_row, min_col, max_col;
   int32_t n_reads = 0;
-  int32_t n_err1, n_err2;
-  int32_t n_err1_total, n_err2_total;
-  int32_t n_err1_reads, n_err2_reads;
+  int32_t n_err1, n_err2, n_err3;
+  int32_t n_err1_total, n_err2_total, n_err3_total;
+  int32_t n_err1_reads, n_err2_reads, n_err3_reads;
 
   min_row = max_row = min_col = max_col = -1;
 
@@ -164,8 +199,8 @@ sff_check_main(int argc, char *argv[])
           sff_header_print(stdout, sff_file_in->header);
       }
 
-      n_err1_total = n_err2_total = 0;
-      n_err1_reads = n_err2_reads = 0;
+      n_err1_total = n_err2_total = n_err3_total = 0;
+      n_err1_reads = n_err2_reads = n_err3_reads = 0;
       while(1) {
           if(-1 != min_row || -1 != max_row || -1 != min_col || -1 != max_col) {
               if(NULL == (sff = sff_iter_read(sff_file_in, sff_iter))) {
@@ -179,11 +214,14 @@ sff_check_main(int argc, char *argv[])
           }
 
           sff_check(sff, &n_err1, &n_err2, print);
-
           if(0 < n_err1) n_err1_reads++;
           if(0 < n_err2) n_err2_reads++;
           n_err1_total += n_err1;
           n_err2_total += n_err2;
+
+          sff_check_rheader(sff, &n_err3, print);
+          if(0 < n_err3) n_err3_reads++;
+          n_err3_total += n_err3;
 
           sff_destroy(sff);
           n_reads++;
@@ -197,8 +235,10 @@ sff_check_main(int argc, char *argv[])
       fprintf(stderr, "** Examined %d reads **\n", n_reads);
       fprintf(stderr, "** Found %d reads with type one errors **\n", n_err1_reads);
       fprintf(stderr, "** Found %d reads with type two errors **\n", n_err2_reads);
+      fprintf(stderr, "** Found %d reads with read header errors **\n", n_err3_reads);
       fprintf(stderr, "** Found %d type one errors across all reads **\n", n_err1_total);
       fprintf(stderr, "** Found %d type two errors across all reads **\n", n_err2_total);
+      fprintf(stderr, "** Found %d read header errors across all reads **\n", n_err3_total);
   }
   return 0;
 }

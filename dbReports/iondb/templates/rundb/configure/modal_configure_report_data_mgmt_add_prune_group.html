@@ -1,0 +1,113 @@
+<div id="modal_configure_report_data_mgmt_add_prune_group" title="" class="modal modal-750 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h3>Add Prune Group</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal-error-messages" class="alert alert-error hide">
+			{% comment %}
+			{% for choice_id, choice_label in ruleTemp.fields.checkField.widget.choices %}
+				{{choice_id}},{{choice_label}}
+				<br>
+			{% endfor%}
+			{% for choice_id, choice_label in ruleTemp.fields.checkField.widget.initial %}
+				{{choice_id}},{{choice_label}}
+				<br>
+			{% endfor%}
+			{% endcomment %}
+		</div>
+		<br />
+		<form id="modal_configure_report_data_mgmt_add_prune_group_form" class="form-horizontal" action="{% url configure_report_data_mgmt_prune_detail %}" method='post' enctype="multipart/form-data">
+			
+			<fieldset>
+				<div class="control-group">
+	    			<label class="control-label" for="">{{ temp.name.label }}</label>
+	    			<div class="controls">
+	    				{{ temp.name }}
+	    				<div class="help-block">
+	    					Provide a descriptive name for the new group. 
+	    				</div>
+	    			</div>
+    			</div>
+				<div class="control-group">
+					<label class="control-label" for="id_checkField">Rules</label>
+					<div class="controls">
+						<table class="table">
+							<thead>
+								<tr>
+									<th></th>
+									<th>Rule</th>
+								</tr>
+							</thead>
+							<tbody>
+								{% for choice_id, choice_label in ruleTemp.fields.checkField.widget.choices %}
+								<tr>
+									<td>
+									<input type="checkbox" id="id_checkField_{{forloop.counter0}}" value="{{choice_id}}" name="checkField" class="">
+									</td>
+									<td>{{choice_label}}</td>
+								</tr>
+								{% endfor %}
+							</tbody>
+						</table>						
+						<div class="help-block">
+							Choose the rules to compose the new prune group. 
+						</div>
+					</div>
+				</div>
+			</fieldset>
+		</form>
+	</div>
+	<div class="modal-footer" >
+		<a href="#" class="btn" data-dismiss="modal">Cancel</a>
+		<a id="save" class="btn btn-primary">Save</a>
+	</div>
+<script>
+$('#modal_configure_report_data_mgmt_add_prune_group').on('hidden', function() {
+	$('body #modal_configure_report_data_mgmt_add_prune_group').remove();
+});
+</script>
+<script type="text/javascript">
+$(document).ready(function () {
+	$('#modal_configure_report_data_mgmt_add_prune_group_form').uniform({
+		holder_class : 'control-group'
+		, msg_selector: 'div.help-block'
+		, error_class : 'alert alert-error'
+	});	
+	
+	$('#modal_configure_report_data_mgmt_add_prune_group_form').submit(function(){
+		if (!isValid()) {
+			$("#modal_configure_report_data_mgmt_add_prune_group .modal-body").animate({
+				scrollTop : 0
+			}, "slow");
+			$(".error").effect("highlight", {
+				"color" : "#F20C18"
+			}, 2000);
+			return false;
+		}
+		return true;
+	});
+	$('#save').click(function(e){
+		e.preventDefault();
+		var url = $('#modal_configure_report_data_mgmt_add_prune_group_form').attr("action");
+		var data = $('#modal_configure_report_data_mgmt_add_prune_group_form').serializeArray();
+		$.post(url, data, function(data) {
+			loadPruneGroups();
+			$("#modal_configure_report_data_mgmt_add_prune_group").modal("hide");			  			    
+		}).fail(function(data) {
+	    	$('#modal-error-messages').html('<p class="error">ERROR: ' + data.responseText + '</p>');
+	    	$('#modal-error-messages').show(); 
+	   });
+	});
+	
+	function isValid() {
+		var form = $('#modal_configure_report_data_mgmt_add_prune_group_form');
+		var settings = form.uniform.defaults;
+	    form.find(settings.field_selector).each(function () {
+	        $(this).blur();
+	    });
+		return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists();
+	}
+});
+</script>
+</div>

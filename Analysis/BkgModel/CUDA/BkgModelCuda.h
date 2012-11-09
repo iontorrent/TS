@@ -3,7 +3,7 @@
 #ifndef BKGMODELCUDA_H
 #define BKGMODELCUDA_H
 
-#include "BkgModel.h"
+#include "SignalProcessingMasterFitter.h"
 #include "ObsoleteCuda.h"
 #include "MultiLevMar.h"
 #include "MathOptim.h"
@@ -44,7 +44,7 @@ class BkgModelCuda
 public:
     // Constructor
     BkgModelCuda();
-    BkgModelCuda(BkgModel&, int, CpuStep_t*);
+    BkgModelCuda(SignalProcessingMasterFitter&, int, CpuStep_t*);
 
     // Destructor
     ~BkgModelCuda();
@@ -73,7 +73,7 @@ private:
     int num_fb, num_steps, num_beads, num_pts, num_ev;
 
     // Reference to parent model
-    BkgModel& bkg;
+    SignalProcessingMasterFitter& bkg;
 
     // Step list defined globally in BkgModel.cpp
     int current_step;
@@ -142,6 +142,7 @@ private:
     int* active_bead_list_cuda;
     bead_params* eval_params_cuda;
     bead_params* params_nn_cuda;
+    bead_state* params_state_cuda;
     bound_params* params_low_cuda;
     bound_params* params_high_cuda;
 
@@ -275,6 +276,8 @@ private:
     void ClearDotProductSetup(BkgFitMatrixPacker* well_fit, BkgFitMatrixPacker* reg_fit);
 
 private:
+
+    bool clearMultiFlowAllocs;
 
     // binary search amplitude
     float* ac_cuda;

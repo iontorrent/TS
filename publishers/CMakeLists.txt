@@ -22,6 +22,10 @@ configure_file (
         "${PROJECT_SOURCE_DIR}/debian/preinst.in"
        "${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
 )
+configure_file (
+    "${PROJECT_SOURCE_DIR}/debian/postinst.in"
+    "${PROJECT_BINARY_DIR}/debian/postinst" @ONLY
+)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
@@ -29,5 +33,6 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python")
 set(CPACK_PACKAGE_DESCRIPTION "Publishers for the Torrent Browser. These publishers, when present will allow users to upload files for automatic processing and access by plugins.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
         ${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
+        ${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 )
 include(CPack)

@@ -1,693 +1,426 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#include "PerBaseQual.h"
-#include <algorithm>
-#include <math.h>
-#include <limits.h>
-#include <iomanip>
-#include <stdio.h>
+//! @file     PerBaseQual.cpp
+//! @ingroup  BaseCaller
+//! @brief    PerBaseQual. Determination of base qualities from predictors
 
+#include "PerBaseQual.h"
+
+#include <math.h>
+#include <stdio.h>
+#include <algorithm>
+#include <iostream>
+
+#include "ChipIdDecoder.h"
+#include "Utils.h"
 #include "IonErr.h"
 
 using namespace std;
-#define BASE_SIZE 30000
-#define DEFAULT_PHRED_TABLE_NAME "phredTable.txt"
 
-//#define DUMP_PREDICTORS
 
-#ifdef DUMP_PREDICTORS
-class PredictorSaver{
-    ofstream predictor_dump;
-    pthread_spinlock_t spinlock;
-    bool isInitialized;
-public:
-    PredictorSaver() : isInitialized(false){
-        pthread_spin_init(&spinlock, 0);
-    }
-
-    void Init( char *runId , string baseCallerDir){
-        pthread_spin_lock(&spinlock);
-        if( !isInitialized ){
-            //string home = getenv("HOME");
-            //string cmd = "mkdir -v " + home + "/QvPredictors";
-            //int retcode = system (cmd.c_str());
-            //string fname = home;
-            //if (retcode != 0)
-            //     fname += "/QvPredictors";
-            string fname = baseCallerDir;
-            fname += "/Predictors.";
-            if (string(runId) != "")
-                    fname += string(runId) + ".";
-            fname += "txt";
-
-            cout << "\n\nDumping predictors from PerBaseQual..." << endl;
-            cout << "baseCallerDir: " << baseCallerDir << endl;
-            cout << "runId: " << runId << endl;
-            cout << "Predictor output: " << fname << endl;
-
-            predictor_dump.open(fname.c_str());
-            isInitialized = true;
-        }
-        pthread_spin_unlock(&spinlock);
-    }
-    
-    void Save( const std::stringstream & str ){
-        pthread_spin_lock(&spinlock);
-        predictor_dump << str.str();
-        pthread_spin_unlock(&spinlock);
-    }
-    
-    ~PredictorSaver(){
-        pthread_spin_destroy(&spinlock);
-    }
-};
-
-PredictorSaver predictorSaver;
-#endif 
-
-PerBasePredictors::PerBasePredictors( )
+PerBaseQual::PerBaseQual()
 {
-    baseflow = ( int* ) calloc( 1, sizeof( int ) * BASE_SIZE );
-    flowVal = ( float* ) calloc( 1, sizeof( float ) * BASE_SIZE );
-    cafieResidual = ( float* ) calloc( 1, sizeof( float ) * BASE_SIZE );
-    flowIdx = ( int* ) calloc( 1, sizeof( int ) * BASE_SIZE );
-    TreephaserUsed = false;
-}
-
-PerBasePredictors::~PerBasePredictors()
-{
-    if ( baseflow )
-        free( baseflow );
-
-    if ( flowVal )
-        free( flowVal );
-
-    if ( cafieResidual )
-        free( cafieResidual );
-
-    if ( flowIdx )
-        free( flowIdx );
-
-}
-
-//initialize quality calculator for the current well
-bool PerBasePredictors::InitWell( ChipIdEnum _phredVersion, int numBasesCalled, float* flowValues, float* _cafieResidual, int numFlows, int* flowIndex )
-{
-    phredVersion = _phredVersion;
-    numba = numBasesCalled;
-    numFlo = numFlows;
-
-    /* Go from float to 100-based integer accuracy and back to float (e.g. 1.16945 -> 1.17) */
-
-    for ( int flo = 0; flo < numFlo; ++flo ) {
-        cafieResidual[flo] = _cafieResidual[flo];
-        flowVal[flo] = ( rint( 100 * flowValues[flo] ) ) / 100.0;
-
-        if ( flowVal[flo] < 0 ) {
-            flowVal[flo] = 0.0;
-        }
-    }
-
-    /* convert flow intensity to base-intensity */
-
-    for ( int a = 0; a < NumBases(); a++ ) {
-        flowIdx[a] = flowIndex[a];
-    }
-
-    int sum = -1;
-
-    for ( int b = 0; b < NumBases();b++ ) {
-        sum += flowIdx[b];
-        baseflow[b] = sum;
-    }
-
-
-    /* create homopolymer, cafie arrays; use the flow index to identify how
-     *    many base per flow were called and which homopolymer value to assign
-     *    to how many bases */
-    homopols.clear();
-    homopols.resize(NumBases(), 1);
-    
-    // homopolymer count
-    number = 1;
-
-    int u = 0;
-
-    // process read
-    while ( u < NumBases() ) {
-        number = 1;
-        // recursive; homopolymer length
-        number = homcount( u );
-        // HP 333
-        //for(int g=0; g<number; g++){
-        // homopols[u+g]=number;
-        //}
-
-        // HP 1124
-        //for(int g=0; g<number/2; g++){
-        //  homopols[u+g]=1;
-        //}
-        //int rest = number - number/2;
-        //for(int g=(int)(number/2); g<number; g++){
-        //  homopols[u+g]=number/2;
-        //}
-        //homopols[u+number-1]=number;
-
-        // HP 1114
-
-        for ( int g = 0; g < number - 1; g++ ) {
-            homopols.at(u+g) = 1;
-        }
-
-        homopols.at(u+number-1) = number;
-
-        // go to next position in read after the homopolymer
-        u = u + number;
-    }
-
-    /* 0-mer and 1-mer overlap */
-    /* define 0-mer and 1-mer interval */
-    cutOff0 = 0.5;
-
-    cutOff1 = 1.5;
-
-    maxIter = 2;
-
-    /* adjust cutoffs once */
-    for ( int i = 0; i < maxIter; i++ ) {
-        CalculateCutoff( cutOff0, cutOff1 );
-    }
-
-    noiseValue = ( mean_one - mean_zero - stdev_one - stdev_zero ) / ( mean_one );
-
-    return true;
-}
-
-/*Map flow to the next base*/
-int PerBasePredictors::MapFlowToBase( int flow )
-{
-    for ( int i = 0; i < NumBases(); ++i ) {
-        if ( flow <= baseflow[ i ] )
-            return i;
-    }
-
-    return NumBases();
-}
-
-/* to calculate homopolymer count per base; use flow index to identify how many bases were called in each flow */
-int PerBasePredictors::homcount( int s )
-{
-    if ( ((s+1) < NumBases()) && (baseflow[s] == baseflow[s+1]) ) {
-        s++;
-        // homopolymer count
-        number++;
-        homcount( s );
-    }
-
-    return number;
-}
-
-float PerBasePredictors::GetPredictor1( int base ) const
-{
-   	return penaltyResidual.at(base);
-}
-
-/* Predictor 2 - Local noise/flowalign - 'noise' in the input base's measured val.  Noise is max[abs(val - round(val))] within a radius of 3 BASES; 12 bins */
-float PerBasePredictors::GetPredictor2( int base ) const
-{
-    float locnoise = 0;
-
-    /* protect at start/end of read */
-    int val1 = base - 1;
-    int val2 = base + 1;
-    if ( val1 < 0 ) {
-        val1 = 0;
-    }
-    if ( val2 >= NumBases() ) {
-        val2 = NumBases() - 1;
-    }
-
-    for ( int j = val1;j <= val2 && j < BASE_SIZE;j++ ) {
-        if ( fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) ) > locnoise ) {
-            locnoise = fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) );
-        }
-    }
-    return locnoise;
+  phred_thresholds_.resize(kNumPredictors);
+  phred_thresholds_max_.resize(kNumPredictors);
+  pthread_mutex_init(&predictor_mutex_, 0);
 }
 
 
-/* Predictor 3  - Read Noise/Overlap - mean & stdev of the 0-mers & 1-mers in the read
- * -(m_1 - m_0 - s_1 - s_0)/m_1; */
-float PerBasePredictors::GetPredictor3( void ) const
+PerBaseQual::~PerBaseQual()
 {
-    return -noiseValue;
-}
-
-/* Predictor 4 - Homopolymer count - # of consecutive bases equal to the input base, including itself; 6 bins */
-float PerBasePredictors::GetPredictor4( int base ) const
-{
-    return homopols.at(base);
+  if (save_predictors_)
+    predictor_dump_.close();
+  pthread_mutex_destroy(&predictor_mutex_);
 }
 
 
-/* Predictor 5 - CAFIE error - the number of bases identical to the current flow in the previous cycle; 7 bins */
-// For Treephaser: Penalty indicating deletion after the called base
-float PerBasePredictors::GetPredictor5( int base ) const
+void PerBaseQual::PrintHelp()
 {
-   	return penaltyMismatch.at(base);
+  printf ("Quality values generation options:\n");
+  printf ("     --phred-table-file      FILE       predictor / quality value file [chip default]\n");
+  printf ("     --save-predictors       on/off     dump predictors for every called base to Predictors.txt [off]\n");
+  printf ("\n");
 }
 
 
-/* Predictor 6 - Local noise - max of 'noise' 10 BASES FORWARD around a base.  Noise is max{abs(val - round(val))}; 20 bins */
-float PerBasePredictors::GetPredictor6( int base ) const
+void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &output_directory)
 {
-    float noise = 0;
-    int bandWidth = 5;
-    /* protect at start/end of read */
-    int val1 = base - bandWidth;
-    int val2 = base + bandWidth;
-    if ( val1 < 0 ) {
-        val1 = 0;
-    }
-    if ( val2 >= NumBases() ) {
-        val2 = NumBases() - 1;
-    }
+  string phred_table_file       = opts.GetFirstString ('-', "phred-table-file", "");
+  save_predictors_              = opts.GetFirstBoolean('-', "save-predictors", false);
 
-    int nCount = 0;
-    for ( int j = val1;j <= val2 && j < BASE_SIZE;j++ ) {
-		noise += fabsf( flowVal[baseflow[j]] - roundf( flowVal[baseflow[j]] ) );
-		nCount++;
-    }
-	if ( nCount > 0 )
-		noise /= nCount;
-    return noise;
-}
+  // Determine the correct phred table filename to use
 
+  if (phred_table_file.empty()) {
 
-float PerBasePredictors::GetPredictor( int pred, int base ) const
-{
-    switch ( pred ) {
-
-        case 0:
-            return GetPredictor1( base );
-
-        case 1:
-            return GetPredictor2( base );
-
-        case 2:
-            return GetPredictor3();
-
-        case 3:
-            return GetPredictor4( base );
-
-        case 4:
-            return GetPredictor5( base );
-
-        case 5:
-            return GetPredictor6( base );
-
-        default:
-            throw std::string( "Wrong predictor index" );
-    }
-}
-
-
-/* recalculate Offset for Predictor6
- * NewCutOff0 = (s_0 * m_1 + s_1 * m_0)/(s_1 + s_0)
- * NewCutoff1 = 2 * m_1 - NewCutOff0  */
-void PerBasePredictors::CalculateCutoff( float cutoff0, float cutoff1 )
-{
-    sum_one = 0.0;
-    sum_zero = 0.0;
-    one_counter = 0;
-    zero_counter = 0;
-    mean_zero = 0.0;
-    mean_one = 0.0;
-    stdev_zero = 0.0;
-    stdev_one = 0.0;
-    sumstd_zero = 0.0;
-    sumstd_one = 0.0;
-
-
-    int numFloPred = std::min( numFlo, 60 );
-
-    for ( int j = 8; j < numFloPred; j++ ) {
-        if (( flowVal[j] < 0 ) ) {
-            flowVal[j] = 0;
-            zero_counter++;
-        }
-
-        if ( flowVal[j] < cutoff0 ) {
-            sum_zero += flowVal[j];
-            zero_counter++;
-        }
-
-        if (( flowVal[j] >= cutoff0 ) && ( flowVal[j] < cutoff1 ) ) {
-            sum_one += flowVal[j];
-            one_counter++;
-        }
+    ChipIdDecoder::SetGlobalChipId(chip_type.c_str());
+    ChipIdEnum chip_id = ChipIdDecoder::GetGlobalChipId();
+    switch(chip_id){
+    case ChipId314:
+      phred_table_file = "phredTable.txt_314";
+      break;
+    case ChipId316:
+      phred_table_file = "phredTable.txt_316";
+      break;
+    case ChipId318:
+      phred_table_file = "phredTable.txt_318";
+      break;
+    case ChipId900: // Proton chip
+      phred_table_file = "phredTable.txt_900";
+      break;
+    default:
+      phred_table_file = "phredTable.txt_314";
+      fprintf(stderr, "PerBaseQual: No default phred table for chip_type=%s, trying %s instead\n",
+          chip_type.c_str(), phred_table_file.c_str());
+      break;
     }
 
-    /* if run has no 0-mers or 1-mers */
+    char* full_filename = GetIonConfigFile(phred_table_file.c_str());
+    if(!full_filename)
+      ION_ABORT("ERROR: Can't find phred table file " + phred_table_file);
+    phred_table_file = full_filename;
+    free(full_filename);
+  }
 
-    if ( zero_counter == 0 ) {
-        mean_zero = 0;
-    }
+  // Load the phred table
 
-    if ( zero_counter != 0 ) {
-        mean_zero = sum_zero / ( float )( zero_counter );
-    }
+  ifstream source;
+  source.open(phred_table_file.c_str());
+  if (!source.is_open())
+    ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
 
-    if ( one_counter == 0 ) {
-        mean_one = 1;
-    }
-
-    if ( one_counter != 0 ) {
-        mean_one = sum_one / ( float )( one_counter );
-    }
-
-
-    /* for reads with only 0-mers or 1-mers - throw exception */
-
-    for ( int n = 8; n < numFloPred; n++ ) {
-        if ( flowVal[n] < 0 ) {
-            flowVal[n] = 0;
-        }
-
-        if (( flowVal[n] >= 0 ) && ( flowVal[n] < cutoff0 ) ) {
-            sumstd_zero += ( flowVal[n] - mean_zero ) * ( flowVal[n] - mean_zero );
-        }
-
-        if (( flowVal[n] >= cutoff0 ) && ( flowVal[n] < cutoff1 ) ) {
-            sumstd_one += ( flowVal[n] - mean_one ) * ( flowVal[n] - mean_one );
-        }
-    }
-
-    /* if run has no 0-mers or 1-mers */
-
-    if ( zero_counter == 0 ) {
-        stdev_zero = 0;
-    }
-
-    if ( zero_counter != 0 ) {
-        stdev_zero = sqrt( sumstd_zero / ( float )( zero_counter ) );
-    }
-
-    if ( one_counter == 0 ) {
-        stdev_one = 0;
-    }
-
-    if ( one_counter != 0 ) {
-        stdev_one = sqrt( sumstd_one / ( float )( one_counter ) );
-    }
-
-    /* calculate new cutoffs */
-
-    if (( stdev_one > 0 ) || ( stdev_zero > 0 ) ) {
-        cutOff0 = ( mean_one * stdev_zero + mean_zero * stdev_one ) / ( stdev_one + stdev_zero );
-        cutOff1 = 2 * mean_one - cutOff0;
-    }
-
-    else {
-        cutOff0 = 0.5;
-        cutOff1 = 1.5;
-    }
-}
-
-
-std::vector<int> PerBasePredictors::calculateSameNucOffset( std::string flowOrder )
-{
-    
-    if( flowOrder.empty() ){
-        ION_WARN( "PerBaseQual: unknown flow order. Assuming TACG." );
-        flowOrder = string("TACG");
-    }
-    
-    std::vector< int > offset;
-    offset.resize( flowOrder.size() );
-
-    for( int k= flowOrder.size()-1; k >= 0; --k ){
-        char nuc = flowOrder.at(k);
-        
-        offset[k] = 0;
-        for( int n = k-1; n >= -(int)flowOrder.size(); --n ){
-            if( nuc == flowOrder.at((n>=0)?n:n+flowOrder.size()) ){
-                offset.at(k) = (k-n); 
-                break;
-            }
-        }
-    }
-    
-/*    for( int k = 0; k < (int)flowOrder.size(); ++k )
-        cout << setw( 3 ) << flowOrder.at(k);
-    cout << endl;
-    for( int k = 0; k < (int)offset.size(); ++k )
-        cout << setw( 3 ) << offset.at(k);
-    cout << endl << endl;*/
-    
-    return offset;
-}
-
-
-bool PerBaseQual::Init( ChipIdEnum _phredVersion, const string &basecallerOutputDirectory, const string& flowOrder, const string& _phredTableFile, char *runId)
-{
-    mBaseCallerDir = basecallerOutputDirectory;
-    ifstream source;
-    
-    pbq.setFlowOrder( flowOrder );
-
-    phredVersion = _phredVersion;
-    MinQScore = 5;
-
-    //cerr << "PerBaseQual::Init. PhredVersion: " << phredVersion << endl;
-
-    if( !_phredTableFile.empty() ){
-        phredFileName = _phredTableFile;
-    }
-    else{
-    	switch( phredVersion ){
-			case ChipId314:
-				phredFileName.assign( "_314" );
-				break;
-			case ChipId316:
-				phredFileName.assign( "_316" );
-				break;
-			case ChipId318:
-				phredFileName.assign( "_318" );
-				break;
-			default:
-                          //				cout << "phredVersion = " << phredVersion << ", use default "<< ChipId314 << endl;
-				//ION_ABORT( "ERROR: unexpected phred score version requested." );
-				phredFileName.assign( "_314" );
-				break;
-    	}
-        
-        char* fName = GetIonConfigFile(( string( DEFAULT_PHRED_TABLE_NAME ) + phredFileName ).c_str() );
-        if( fName == NULL )
-            ION_ABORT( "ERROR: Can't find phredTable file." );
-        
-        phredFileName.assign( fName );
-        
-	}
-    
-    source.open( phredFileName.c_str() );
-    if ( !source.is_open() ) {
-        char errorMsg[1024];
-        sprintf( errorMsg, "ERROR: Finding file: %s\n", phredFileName.c_str() );
-        ION_ABORT( errorMsg );
-    }
-
+  while (!source.eof()) {
     string line;
+    getline(source, line);
 
-    while ( !source.eof() ) {
-        std::getline( source, line );
+    if (line.empty())
+      break;
 
-        if ( line.empty() )
-            break;
+    if (line[0] == '#')
+      continue;
 
-        if ( line[0] == '#' )
-            continue;
-
-        std::stringstream strs( line );
-
-        float temp;
-
-        for ( int k = 0; k < nPredictors; ++k ) {
-            strs >> temp;
-            phredTableData[k].push_back( temp );
-        }
-
-        strs >> temp; //skip n entries per bins
-
-        strs >> temp;
-        phredTableData[nPredictors].push_back( temp );
+    stringstream strs(line);
+    float temp;
+    for (int k = 0; k < kNumPredictors; ++k) {
+      strs >> temp;
+      phred_thresholds_[k].push_back(temp);
     }
+    strs >> temp; //skip n-th entry
+    strs >> temp;
+    phred_quality_.push_back(temp);
+  }
 
-    for ( int k = 0; k < nPredictors; ++k ) {
-        phredTableMaxValues[k] = *( std::max_element( phredTableData[k].begin(), phredTableData[k].end() ) );
-    }
+  for (int k = 0; k < kNumPredictors; ++k)
+    phred_thresholds_max_[k] = *max_element(phred_thresholds_[k].begin(), phred_thresholds_[k].end());
 
-#ifdef DUMP_PREDICTORS
-    predictorSaver.Init(runId,mBaseCallerDir);
-#endif
-    isInitialized = true;
+  // Prepare for predictor dump here
 
-    return isInitialized;
-}
-
-int PerBaseQual::CalculatePerBaseScore( int base )
-{
-    if ( !isInitialized ) {
-        ION_ABORT( "ERROR: GenerateQualityPerBase called without being initialized." );
-    }
-    
-    if ( base > pbq.NumBases() )
-        return MinQScore;
-
-    //TODO: this is a temporary fix for very long sequences that are sometimes generated by the basecaller
-    if ( base > ( int )( .75*pbq.NumFlows() ) )
-        return MinQScore;
-
-    int nPhredCuts = phredTableData[0].size();
-
-    float pred[nPredictors];
-
-    for ( int k = 0; k < nPredictors; ++k ) {
-        pred[k] = pbq.GetPredictor( k, base );
-    }
-
-#ifdef DUMP_PREDICTORS
-    predictor_save << wellName << " " << base << " ";
-    for ( int k = 0; k < nPredictors; ++k ) {
-        predictor_save << pred[k] << " ";
-    }
-    // output flow number for matching with other predictors file generated somewhere else
-    predictor_save << pbq.getFlowNumber(base);
-    predictor_save << endl;
-#endif
-
-    for (int k = 0; k < nPredictors; k++)
-    	pred[k] = std::min(pred[k],phredTableMaxValues[k]);
-    
-    for ( int j = 0; j < nPhredCuts; ++j ) { // number of rows/lines in the table
-        bool ret = true;
-
-//        for ( int k = 0; k < nPredictors; ++k ) {
-//            ret = ret && ( pred[k] <= phredTableData[k][j] );
-//        }
-        for ( int k = 0; k < nPredictors; ++k ) {
-        	if (pred[k] > phredTableData[k][j]) {
-        		ret = false;
-        		break;
-        	}
-        }
-
-        if ( ret ) {
-            //cerr << j << " " << static_cast<int>( phredTableData[nPredictors][j] ) << endl;
-            return static_cast<int>( phredTableData[nPredictors][j] ); // last item in the line is the QV
-        }
-    }
-
-    return MinQScore; //minimal quality score
-}
-
-// Treephaser call to GenerateQualityPerBase
-int PerBaseQual::GenerateQualityPerBaseTreephaser( std::vector<float>& _penaltyResidual, std::vector<float>& _penaltyMismatch,  weight_vec_t& correctedFlowValue,
-		weight_vec_t& cafieResidual, std::vector< uint8_t >& baseFlowIndex, int _maxFlowLimit )
-{
-	pbq.penaltyResidual = _penaltyResidual;
-	pbq.penaltyMismatch  = _penaltyMismatch;
-
-	pbq.TreephaserUsed = true;
-	int returnValue = GenerateQualityPerBase(correctedFlowValue, cafieResidual, baseFlowIndex, _maxFlowLimit );
-	//pbq.TreephaserUsed = false;
-
-	return returnValue;
+  if (save_predictors_) {
+    string predictors_filename = output_directory + "/Predictors.txt";
+    cout << endl << "Saving PerBaseQual predictors to file " << predictors_filename << endl << endl;
+    predictor_dump_.open(predictors_filename.c_str());
+    if (!predictor_dump_.is_open())
+      ION_ABORT("ERROR: Cannot open file: " + predictors_filename);
+  }
 }
 
 
-// Overloaded call to GenerateQualityPerBase
-int PerBaseQual::GenerateQualityPerBase( weight_vec_t& correctedFlowValue, weight_vec_t& cafieResidual, std::vector< uint8_t >& baseFlowIndex, int _maxFlowLimit )
+uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
 {
+  int num_phred_cuts = phred_quality_.size(); // number of rows/lines in the table
 
-    int numFlows = correctedFlowValue.size();
-    float *flowValues = new float[numFlows];
-    float *cafieRes = new float[numFlows];
+  for (int k = 0; k < kNumPredictors; k++)
+    pred[k] = min(pred[k], phred_thresholds_max_[k]);
 
-    for ( int iFlow = 0; iFlow < numFlows; iFlow++ ) {
-        flowValues[iFlow] = correctedFlowValue[iFlow];
-        cafieRes[ iFlow ] = cafieResidual[ iFlow ];
+  for ( int j = 0; j < num_phred_cuts; ++j ) {
+    bool valid_cut = true;
+
+    for ( int k = 0; k < kNumPredictors; ++k ) {
+      if (pred[k] > phred_thresholds_[k][j]) {
+        valid_cut = false;
+        break;
+      }
     }
 
-    int numBasesCalled = baseFlowIndex.size();
+    if (valid_cut)
+      return phred_quality_[j];
+  }
 
-    int *flowIndex = new int[numBasesCalled];
-
-    for ( int iBase = 0; iBase < numBasesCalled; iBase++ )
-        flowIndex[iBase] = baseFlowIndex[iBase];
-
-    int returnVal = GenerateQualityPerBase( numBasesCalled, flowValues, cafieRes, numFlows, flowIndex, _maxFlowLimit );
-
-    delete [] flowValues;
-
-    delete [] cafieRes;
-
-    delete [] flowIndex;
-
-    return( returnVal );
+  return kMinQuality; //minimal quality score
 }
 
-int PerBaseQual::GenerateQualityPerBase( int numBasesCalled, float* flowValues, float* cafieResidual, int numFlows, int* flowIndex, int _maxFlowLimit )
+
+
+
+// Predictor 2 - Local noise/flowalign - 'noise' in the input base's measured val.  Noise is max[abs(val - round(val))] within +-1 BASE
+void PerBaseQual::PredictorLocalNoise(vector<float>& local_noise, int max_base, const vector<int>& base_to_flow, const vector<float>& corrected_ionogram)
 {
-    maxFlowLimit = _maxFlowLimit;
-#ifdef DUMP_PREDICTORS
-    predictor_save.str(string(""));
-#endif
-    return pbq.InitWell( phredVersion, numBasesCalled, flowValues, cafieResidual, numFlows, flowIndex );
+  int num_bases = base_to_flow.size();
+  for (int base = 0; base < max_base; ++base) {
+    int val1 = max(base - 1, 0);
+    int val2 = min(base + 1, num_bases - 1);
+    float noise = 0;
+    for (int j = val1; j <= val2; ++j) {
+      // Go from float to 100-based integer accuracy and back to float (e.g. 1.16945 -> 1.17)
+      float current_flow_val = 0.01 * rint(100 * corrected_ionogram[base_to_flow[j]]);
+      noise = max(noise, fabsf(current_flow_val - roundf(current_flow_val))); // This is just residual
+    }
+    local_noise[base] = noise;
+  }
 }
 
-int PerBaseQual::GetQuality( int baseIndex )
+
+// Predictor 3  - Read Noise/Overlap - mean & stdev of the 0-mers & 1-mers in the read
+// -(m_1 - m_0 - s_1 - s_0)/m_1
+void PerBaseQual::PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int max_base,
+    const vector<float>& corrected_ionogram)
+//float PerBaseQual::PredictorNoiseOverlap(const vector<float>& corrected_ionogram)
 {
-    return CalculatePerBaseScore( baseIndex );
+  // 0-mer and 1-mer overlap
+  // define 0-mer and 1-mer interval
+  float cutoff0 = 0.5;
+  float cutoff1 = 1.5;
+  int max_iter = 2; // adjust cutoffs once
+  int num_flows_to_use = min((int)corrected_ionogram.size(), 60);
+  float noise_overlap;
+
+  for (int i = 0; i < max_iter; i++) {
+    int one_counter = 0;
+    int zero_counter = 0;
+    float mean_zero = 0.0;
+    float mean_one = 0.0;
+    float stdev_zero = 0.0;
+    float stdev_one = 0.0;
+
+    for (int flow = 8; flow < num_flows_to_use; ++flow) {
+      float current_flow_val = 0.01 * rint(100 * corrected_ionogram[flow]);
+      if (current_flow_val < cutoff0) {
+        mean_zero += current_flow_val;
+        zero_counter++;
+
+      } else if (current_flow_val < cutoff1) {
+        mean_one += current_flow_val;
+        one_counter++;
+      }
+    }
+
+    if (zero_counter)
+      mean_zero /= zero_counter;
+
+    if (one_counter)
+      mean_one /= one_counter;
+    else
+      mean_one = 1;
+
+    for (int flow = 8; flow < num_flows_to_use; ++flow) {
+      // Go from float to 100-based integer accuracy and back to float (e.g. 1.16945 -> 1.17)
+      float current_flow_val = 0.01 * rint(100 * corrected_ionogram[flow]);
+      if (current_flow_val < cutoff0 )
+        stdev_zero += (current_flow_val - mean_zero) * (current_flow_val - mean_zero);
+      else if (current_flow_val < cutoff1)
+        stdev_one += (current_flow_val - mean_one) * (current_flow_val - mean_one);
+    }
+
+    if (zero_counter)
+      stdev_zero = sqrt(stdev_zero / zero_counter);
+
+    if (one_counter)
+      stdev_one = sqrt(stdev_one / one_counter);
+
+    noise_overlap = (mean_one - mean_zero - stdev_one - stdev_zero) / mean_one;
+
+    // calculate new cutoffs for next iteration
+    if (stdev_one or stdev_zero) {
+      cutoff0 = (mean_one * stdev_zero + mean_zero * stdev_one) / (stdev_one + stdev_zero);
+      cutoff1 = 2 * mean_one - cutoff0;
+    } else
+      break;
+  }
+
+
+  for (int base = 0; base < max_base; ++base)
+    minus_noise_overlap[base] = -noise_overlap;
+//  return -noise_overlap;
 }
 
-// MS: This function is potentially obsolete
-uint8_t *PerBaseQual::GetQualities()
+// Predictor 4 - Transformed homopolymer length
+void PerBaseQual::PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector< uint8_t >& flow_index)
 {
-    int i;
-    uint8_t *qualityScores;
+  int hp_length = 1;
+  for (int base = 0; base < max_base; base += hp_length) {
 
-    qualityScores = ( uint8_t * )calloc( pbq.NumBases(), sizeof( uint8_t ) );
+    for (hp_length = 1; base+hp_length < (int)flow_index.size(); ++hp_length)
+      if (flow_index[base+hp_length])
+        break;
 
-    int maxBase = pbq.MapFlowToBase( maxFlowLimit );
+    // other patterns tried in the past: HP 333, HP 1124
 
-    for ( i = 0;i < pbq.NumBases();i++ ) {
-        if ( i < maxBase )
-            qualityScores[i] = ( uint8_t )CalculatePerBaseScore( i );
+    // HP 1114
+    for (int hp = 0; hp < hp_length and base+hp < max_base; hp++) {
+      if (hp == hp_length-1)
+        homopolymer_rank[base+hp] = hp_length;
+      else
+        homopolymer_rank[base+hp] = 1;
+    }
+  }
+}
+
+
+// Predictor 6 - Neighborhood noise - mean of 'noise' +-5 BASES around a base.  Noise is mean{abs(val - round(val))}
+void PerBaseQual::PredictorNeighborhoodNoise(vector<float>& neighborhood_noise, int max_base, const vector<int>& base_to_flow,
+    const vector<float>& corrected_ionogram)
+{
+  int num_bases = base_to_flow.size();
+  for (int base = 0; base < max_base; ++base) {
+    int radius = 5;
+    // protect at start/end of read
+    int val1 = max(base-radius, 0);
+    int val2 = min(base+radius, num_bases-1);
+
+    float noise = 0;
+    int count = 0;
+    for (int j = val1; j <= val2; j++) {
+      // Go from float to 100-based integer accuracy and back to float (e.g. 1.16945 -> 1.17)
+      float current_flow_val = 0.01 * rint(100 * corrected_ionogram[base_to_flow[j]]);
+      noise += fabsf(current_flow_val - roundf(current_flow_val));
+      count++;
+    }
+    if (count)
+      noise /= count;
+    neighborhood_noise[base] = noise;
+  }
+}
+
+
+void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, int num_flows,
+    const vector<float> &predictor1, const vector<float> &predictor2,
+    const vector<float> &predictor3, const vector<float> &predictor4,
+    const vector<float> &predictor5, const vector<float> &predictor6,
+    const vector<int>& base_to_flow, vector<uint8_t> &quality,
+    const vector<float> &candidate1,
+    const vector<float> &candidate2,
+    const vector<float> &candidate3)
+{
+
+  if (num_bases == 0)
+    return;
+
+  //! \todo This is a temporary fix for very long sequences that are sometimes generated by the basecaller
+  int max_eligible_base = min(num_bases, (int)(0.75*num_flows) + 1);
+  quality.clear();
+
+  stringstream predictor_dump_block;
+
+  for (int base = 0; base < max_eligible_base; base++) {
+
+    float pred[kNumPredictors];
+    pred[0] = transform_P1(predictor1[base]);
+    pred[1] = predictor2[base];
+    pred[2] = predictor3[base];
+    pred[3] = predictor4[base];
+
+    if (save_predictors_) {
+      // pred[4] & pred[5] are not the same in new QvTables
+      // the following two lines are only for predictor_dump_block
+      pred[4] = transform_P5(predictor5[base]);
+      pred[5] = transform_P6(predictor6[base]);
+
+      predictor_dump_block << read_name << " " << base << " ";
+      for (int k = 0; k < kNumPredictors; ++k)
+        predictor_dump_block << pred[k] << " ";
+      predictor_dump_block << candidate1[base_to_flow[base]] << " ";
+      predictor_dump_block << candidate2[base_to_flow[base]] << " ";
+      predictor_dump_block << candidate3[base_to_flow[base]] << " ";
+      predictor_dump_block << base_to_flow[base] << endl;
+    }
+
+    // the real predictors used in the QvTable
+    pred[4] = transform_P6(predictor6[base]);
+    pred[5] = transform_P8(candidate2[base_to_flow[base]]);
+    quality.push_back(CalculatePerBaseScore(pred));
+  }
+
+  for (int base = max_eligible_base; base < num_bases; base++)
+    quality.push_back(kMinQuality);
+
+  if (save_predictors_) {
+    predictor_dump_block.flush();
+    pthread_mutex_lock(&predictor_mutex_);
+    predictor_dump_ << predictor_dump_block.str();
+    predictor_dump_.flush();
+    pthread_mutex_unlock(&predictor_mutex_);
+  }
+}
+
+
+
+float PerBaseQual::transform_P1(float p)
+{
+    float peak = 0.005;
+    if (p < peak)
+        p = peak + fabs(p-peak);
+    return p;
+}
+
+
+float PerBaseQual::transform_P5(float p)
+{
+    float peak = -0.6;
+    if (p < peak)
+    {
+    if (p < -0.96)
+        p = peak + fabs(p-peak) + fabs(p+0.96)*0.5;
+    else
+        p = peak + fabs(p-peak);
+    }
+    else if (p > -0.09)
+        {
+        if (p < 0.05)
+            p = -0.09 - fabs(p+0.09) * 2;
         else
-            qualityScores[i] = ( uint8_t )MinQScore;
+            p = -0.3+(p-0.05)*0.25;
     }
-
-    return qualityScores;
+    return p;
 }
 
-void PerBaseQual::GetQualities(std::vector<uint8_t> &qualityScores)
+
+float PerBaseQual::transform_P6(float p)
 {
-    int maxBase = pbq.MapFlowToBase( maxFlowLimit );
+    float peak = 0.06;
+    if (p < peak)
+        p = peak + fabs(p-peak);
+    peak = 0.4;
+    if (p > peak)
+        p = peak - fabs(p-peak);
 
-    qualityScores.clear();
-
-    for (int iBase = 0; iBase < pbq.NumBases(); iBase++) {
-        if ( iBase < maxBase )
-            qualityScores.push_back(( uint8_t )CalculatePerBaseScore(iBase));
-        else
-            qualityScores.push_back(( uint8_t )MinQScore);
-    }
-
-#ifdef DUMP_PREDICTORS
-    predictor_save.flush();
-    predictorSaver.Save( predictor_save );
-    predictor_save.str(string(""));
-#endif
-
+    return p;
 }
+
+
+float PerBaseQual::transform_P7(float p)
+{
+    float peak = -0.05;
+    if (p < peak)
+        p = peak + fabs(p-peak);
+
+    return p;
+}
+
+
+float PerBaseQual::transform_P8(float p)
+{
+    p = -p;
+    return p;
+}
+
+
+float PerBaseQual::transform_P9(float p)
+{
+    p = -p;
+    float peak = -0.9;
+    if (p < peak)
+        p = peak + abs(p - peak)*2;
+
+    return p;
+}
+
+

@@ -1,7 +1,7 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "BkgModelReplay.h"
-#include "BkgModel.h"
+#include "SignalProcessingMasterFitter.h"
 
 // *********************************************************************
 // calculation specific class
@@ -21,7 +21,7 @@ BkgModelReplay::~BkgModelReplay() {
 
 void BkgModelReplay::FitTimeVaryingRegion (int flow, double &elapsed_time, Timer &fit_timer)
 {
-  bkg->FitTimeVaryingRegion(elapsed_time, fit_timer);
+//  bkg->FitTimeVaryingRegion(elapsed_time, fit_timer);
 }
 
 // *********************************************************************
@@ -41,7 +41,7 @@ BkgModelReplayReader::~BkgModelReplayReader()
 
 void BkgModelReplayReader::FitTimeVaryingRegion (int flow, double &elapsed_time, Timer &fit_timer)
 {
-  bkg->my_beads.AssignEmphasisForAllBeads(bkg->emphasis_data.numEv-1);
+//  bkg->region_data->AdaptiveEmphasis();
   rrt->Read(flow);
 }
 
@@ -62,7 +62,7 @@ BkgModelReplayRecorder::~BkgModelReplayRecorder()
 
 void BkgModelReplayRecorder::FitTimeVaryingRegion (int flow, double &elapsed_time, Timer &fit_timer)
 {
-  bkg->FitTimeVaryingRegion (elapsed_time, fit_timer);
+ // bkg->FitTimeVaryingRegion (elapsed_time, fit_timer);
   rrt->Write(flow);
 }
 

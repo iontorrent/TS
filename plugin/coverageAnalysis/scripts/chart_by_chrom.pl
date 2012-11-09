@@ -8,6 +8,8 @@ my $DESCR = "Create tsv list of number of reads to choromosomes.";
 my $USAGE = "Usage:\n\t$CMD [options] <BAM | SAM file> <output file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
+  -d Ignore Duplicate reads.
+  -u Include only Uniquely mapped reads (MAPQ > 1).
   -s Reads file is in SAM format (default is BAM)
   -o Output summary statistics to STDOUT
   -p Output padded target summary statistics to STDOUT (overrides -o)
@@ -28,6 +30,9 @@ my $spacepeaks = 0;
 my $colorpeaks = 1;
 my $statsout = 0;
 my $padstats = 0;
+my $nondupreads=0;
+my $uniquereads=0;
+
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -39,6 +44,8 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-F') {$freqfile = shift;}
     elsif($opt eq '-S') {$binsize = shift;}
     elsif($opt eq '-C') {$minpcnt = shift;}
+    elsif($opt eq '-d') {$nondupreads = 1;}
+    elsif($opt eq '-u') {$uniquereads = 1;}
     elsif($opt eq '-s') {$readtype = 1;}
     elsif($opt eq '-o') {$statsout = 1;}
     elsif($opt eq '-p') {$padstats = 1;}
@@ -159,7 +166,9 @@ my $num_ontarg = 0;
 
 # make initial read of mappings to get all hits, i.e. including off-target hits
 my $xSam = $readtype == 1 ? "-S" : "";
-open( MAPPINGS, "samtools view -F 4 $xSam \"$mappings\" |" ) || die "Cannot read mapped reads from $mappings.\n";
+my $samopt= ($nondupreads ? "-F 0x404" : "-F 4").($uniquereads ? " -q 1" : "");
+
+open( MAPPINGS, "samtools view $samopt $xSam \"$mappings\" |" ) || die "Cannot read mapped reads from $mappings.\n";
 while( <MAPPINGS> )
 {
     next if(/^@/);
@@ -204,7 +213,7 @@ open( OUTPUT, ">$outfile" ) || die "Cannot open tsv output file $outfile.\n";
 # re-open for counting chromosome on-target hits
 if( $haveTargets )
 {
-    open( MAPPINGS, "samtools view -F 4 -L \"$bedfile\" $xSam \"$mappings\" |" ) || die "Cannot read mapped reads from $mappings.\n";
+    open( MAPPINGS, "samtools view $samopt -L \"$bedfile\" $xSam \"$mappings\" |" ) || die "Cannot read mapped reads from $mappings.\n";
     while( <MAPPINGS> )
     {
 	next if(/^@/);

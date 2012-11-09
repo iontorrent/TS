@@ -30,24 +30,48 @@ configure_file (
     "${PROJECT_BINARY_DIR}/debian/postrm" @ONLY
 )
 
-install(PROGRAMS devdriver_4.0_linux_64_270.27.run DESTINATION .)
+message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+
+# wget http://developer.download.nvidia.com/compute/cuda/4_2/rel/toolkit/cudatoolkit_4.2.9_linux_64_ubuntu11.04.run
+# MYCUDASDK=cudatoolkit_4.2.9_linux_64_ubuntu11.04
+# bash $MYCUDASDK.run --nox11 --noexec --target $MYCUDASDK
+# GZIP=--best tar czf $MYCUDASDK.tar.gz $MYCUDASDK
+ExternalProject_add(${cuda_proj_name}
+    PREFIX ${ION_TS_EXTERNAL}/${cuda_proj_name_version}
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_tar_file}"
+#    URL_MD5 ""
+    TIMEOUT "3600"
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+)
+
+if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
+    install(PROGRAMS devdriver_4.2_linux_64_295.41.run DESTINATION .)
+else()
+    install(PROGRAMS devdriver_4.2_linux_64_295.41.run DESTINATION .)
+endif()
+
+        install(DIRECTORY ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib DESTINATION /usr/local/cuda
+        	PATTERN .svn EXCLUDE)
+        install(DIRECTORY ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib64 DESTINATION /usr/local/cuda
+        	PATTERN .svn EXCLUDE)
+        install(PROGRAMS ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/bin/nvcc DESTINATION /usr/local/cuda/bin)
+
 install(PROGRAMS deviceQuery DESTINATION .)
 install(PROGRAMS bandwidthTest DESTINATION .)
 install(PROGRAMS create_nvidia_files DESTINATION .)
-install(PROGRAMS nvcc DESTINATION /usr/local/cuda/bin)
 
-install(DIRECTORY ../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib DESTINATION /usr/local/cuda
-	PATTERN .svn EXCLUDE)
-install(DIRECTORY ../external/cudatoolkit-4.0.0RC/src/cudatoolkit/lib64 DESTINATION /usr/local/cuda
-	PATTERN .svn EXCLUDE)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_GENERATOR "DEB")
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-analysis (<< 2.9)")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-analysis (<< 2.9)")
+
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "build-essential")
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst

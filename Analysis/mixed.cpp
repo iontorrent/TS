@@ -35,17 +35,17 @@ void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWe
     deque<float>  ppf;
     deque<float>  ssq;
     count_sample(counts, ppf, ssq, mask, wells, key_ionogram);
-    make_filter(filter, counts, ppf, ssq);
+    make_filter(filter, counts, ppf, ssq, false); // no verbosity
 }
 
-void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq)
+void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq, bool verbose)
 {
     // Make a clonality filter from ppf and ssq for a sample of reads.
     // Record number of putative clonal and mixed reads in the sample.
     vec  mean[2];
-    mat sigma[2];
-    vec alpha;
-    bool  converged = fit_normals(mean, sigma, alpha, ppf, ssq);
+    mat  sigma[2];
+    vec  alpha;
+    bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, verbose);
 
     if(converged){
         bivariate_gaussian clonal(mean[0], sigma[0]);
@@ -162,12 +162,27 @@ static bool test_convergence(const vec mean[2], const mat& sgma, const vec& alph
     return max_diff < eps;
 }
 
+static void print_dist(vec mean[2], mat sgma[2], vec& alpha, bool converged, int iter)
+{
+    cout << "Clonal Filter: fit_normals iteration" << setw(4) << iter << endl;
+    cout << "convergence status" << endl;
+    cout << boolalpha << converged << endl;
+    cout << "Mean of first cluster:" << endl;
+    cout << mean[0] << endl;
+    cout << "Mean of mixed cluster:"<< endl;
+    cout << mean[1] << endl;
+    cout << "Joint cluster covariance:" <<endl;
+    cout << sgma[0] << endl;
+    cout << endl;
+}
+
 static void init(vec mean[2], mat sgma[2], vec& alpha)
 {
-  for (int i = 0; i < 2; i++) {
-    mean[i].set_size(2);
-    sgma[i].set_size(2,2);
-  }
+    for (int i = 0; i < 2; i++) {
+        mean[i].set_size(2);
+        sgma[i].set_size(2,2);
+    }
+
     alpha.set_size(2);
     // Following intializations are based on average over largne number of runs.
     // Average parameters for clonal population:
@@ -183,16 +198,18 @@ static void init(vec mean[2], mat sgma[2], vec& alpha)
     alpha.fill(0.5);
 }
 
-bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq)
+bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq, bool verbose)
 {
     bool converged = false;
     
     try {
         // Initial guesses for two normal distributions:
         init(mean, sgma, alpha);
+        if (verbose)
+          print_dist(mean, sgma, alpha, converged, 0);
 
         int  max_iters = 20;
-        for(int i=0; i<max_iters and not converged; ++i){
+        for(int i=1; i<=max_iters and not converged; ++i){
             // Re-estimate parameters for each distribution:
             int nsamp = ppf.size();
             vec sumw(2);
@@ -269,20 +286,17 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
             mean[1] = new_mean[1];
             sgma[0] = new_sgma;
             sgma[1] = new_sgma;
-
-            // temp for debug:
-            cout << "fit_normals itertation" << setw(4) << i << endl;
-            cout << boolalpha << converged << endl;
-            cout << mean[0] << endl;
-            cout << mean[1] << endl;
-            cout << sgma[0] << endl;
-            cout << endl;
+            if (verbose)
+              print_dist(mean, sgma, alpha, converged, i);
         }
 
         // Fallback position if failed to converge:
         if(not converged){
+            cout << "failed to converge to an acceptable filter: default filtering used" << endl;
             init(mean, sgma, alpha);
             converged = true;
+        } else {
+          cout << "converged to acceptable filter: using adapted filter" << endl;
         }
     }catch(const exception& ex){
         converged = false;

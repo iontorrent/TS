@@ -101,6 +101,52 @@ function storage_option() {
     });
 }
 
+function report_option() {
+    var pk = this.id.split('_')[0];
+    var len1 = this.id.split('_')[0].length;
+    var name = this.id.substring(len1+1,this.id.length);
+    var setstr = this.report_options.value;
+    var message = null;
+    if (setstr == 'E') {
+	message = 'Export';
+    }
+    else if (setstr == 'A') {
+	message = 'Archive';
+    }
+    else if (setstr == 'D') {
+	message = 'Delete';
+    }
+    else if (setstr == 'P') {
+	message = 'Prune';
+    }
+    else if (setstr == 'Z') {
+	message = 'switch exempt status';
+    }
+    if (setstr != 'N') {
+	var url = "/rundb/report/" + pk + "/" + setstr;
+	var r = prompt("Report " + name + " will now " + message + ". Proceed?\nUpdate comment:", "");
+	if(r!=null)
+	{
+		var data = {};
+		data.comment = r;
+		$.ajax({
+		    type: 'POST',
+		    data: data,
+		    url: url,
+		    success: function(){window.location.reload(true);},
+		    error: function(){window.location.reload(true);}
+		});
+	}
+	else
+	{
+		location.reload(true);
+	}
+    }
+    else {
+	alert("Please select an option to perform an action on report " + name + ".")
+    }
+}
+
 function enablePlugin() {
     var pk = this.id.split("_")[1];
     var setstr = null;
@@ -711,6 +757,11 @@ function prep_controlform() {
     $(domstr + "select").change(submitControlForm);
 }
 
+//REPORT ACTION OPTION INITIALIZER
+function prep_report_option() {
+    $(".report_td > form").change(report_option);
+}
+
 /* TAB EFFECTS INITIALIZERS */
 function prep_tabs() {
     $(".tabtext").hover(function () {
@@ -899,6 +950,7 @@ $(document).ready(prep_controlform);
 $(document).ready(prep_tabs);
 $(document).ready(prep_star);
 $(document).ready(prep_storage_option);
+$(document).ready(prep_report_option);
 $(document).ready(prep_progress_bar);
 $(document).ready(function () {
     setInterval(function () {

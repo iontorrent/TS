@@ -9,9 +9,6 @@
 #include "DarkHalo.h"
 #include "GlobalDefaultsForBkgModel.h"
 
-
-
-
 class RegionTracker{
   public:
     // current per-region parameters
@@ -31,9 +28,46 @@ class RegionTracker{
     void Delete();
     void InitHighRegionParams(float t_mid_nuc_start);
     void InitLowRegionParams(float t_mid_nuc_start);
-    void InitModelRegionParams(float t_mid_nuc_start,float sigma_start, float dntp_concentration_in_uM,GlobalDefaultsForBkgModel &global_defaults);
-    void InitRegionParams(float t_mid_nuc_start,float sigma_start, float dntp_concentration_in_uM,GlobalDefaultsForBkgModel &global_defaults);
+    void InitModelRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults);
+    void InitRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults);
+
+ private:
+
+    // Boost serialization support:
+    bool restart;
+    friend class boost::serialization::access;
+    template<class Archive>
+      void save(Archive& ar, const unsigned int version) const
+      {
+	// fprintf(stdout, "Serialize: save RegionTracker ... ");
+	ar
+	   & rp
+	   & rp_high
+	   & rp_low
+	  // cache_step  // re-initted every time
+	  & missing_mass;
+	// fprintf(stdout, "done RegionTracker\n");
+      }
+    template<class Archive>
+      void load(Archive& ar, const unsigned int version)
+      {
+	// fprintf(stdout, "Serialize: load RegionTracker ... ");
+	ar
+	   & rp
+	   & rp_high
+	   & rp_low
+	  // cache_step  // rebuilt every time by AllocScratch()
+	  // AllocScratch() called in AllocFitBuffers()
+	  // by the RegionalizedData object that owns this RegionTracker
+	  & missing_mass;
+	
+	restart = true;
+	// fprintf(stdout, "done RegionTracker\n");
+      }
+      BOOST_SERIALIZATION_SPLIT_MEMBER()
+
 };
+
 
 #endif // REGIONTRACKER_H
 

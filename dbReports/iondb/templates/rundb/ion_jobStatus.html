@@ -1,0 +1,67 @@
+<div id="modal_jobstat" title="" class="modal hide">
+  <style>
+    table, th, tr {
+      border-collapse: collapse;
+    }
+
+    tr, th, td {
+      border-left: 0px;
+      border-right: 0px;
+      border-bottom: 1px solid black;
+      padding-top: 10px;
+      padding-bottom: 10px;
+      margin: 10px;
+      font-size: 10pt;
+      margin-left: 10px;
+
+    }
+
+    input {
+      margin-right: 15px;
+    }
+
+    #toolbar {
+      padding: .5em;
+      margin: 1px;
+      margin-top: 20px;
+      font-size: 12px;
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+
+    #save {
+      float: right;
+    }
+
+    #can {
+      float: right;
+    }
+  </style>
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h1>Report history log</h1>
+	</div>
+	<div class="modal-body">
+	<div id="modal-error-messages"></div>
+  <div class="margins">
+    <h3>Grid Engine Job: {{jid}} </h3> 
+    <br />
+    <h4>status = {{status}} </h4>
+    <form action="" method='post' enctype="multipart/form-data">
+      <table>
+        <tbody>
+	  {% for info in jInfo %}<tr><td>{{ info }}</td></tr>{% endfor %}
+	</tbody>
+      </table>
+    </form>
+  </div>
+</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Close</a>
+	</div>    
+	<script>
+		$('#modal_jobstat').on('hidden', function() {
+			$('body #modal_jobstat').remove();
+		});
+	</script>
+</div>

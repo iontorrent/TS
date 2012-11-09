@@ -1,0 +1,53 @@
+<div class="content clearfix">
+	<h1>System Diagnostics <small>Results from:&nbsp;{{ stats_network_cmd }}&nbsp;and&nbsp;{{ stats_cmd }}</small></h1>
+        
+    <p>
+      <a href="../../systemStatsZip.php">System Status Support Archive</a>
+    </p>
+
+    <div class="content clearfix">
+    	<div class="row-fluid">
+    	<h2>Network</h2>
+	
+		{% if stats_network %}
+<pre>
+{% for line in stats_network %}{% spaceless %}
+{{ line }}{% endspaceless %}
+{% endfor %}
+</pre>
+		{% else %}
+			<p><b>No network statistics available</b></p>
+		{% endif %}
+	    </div>
+    </div>
+
+    <div class="content clearfix">
+    	<div class="row-fluid">
+	    <h2>System</h2>
+	    {% if stats %}
+<pre>
+{% for line in stats %}{% spaceless %}
+{{ line }}{% endspaceless %}
+{% endfor %}
+</pre>
+    	{% else %}
+			<p><b>No system statistics available</b></p>
+    	{% endif %}
+	    </div>
+    </div>
+
+    <div class="content clearfix">
+    	<div class="row-fluid">
+	    <h2>Data</h2>
+    	{% if stats_dm %}
+<pre>
+{% for line in stats_dm %}{% spaceless %}
+{{ line }}{% endspaceless %}
+{% endfor %}
+</pre>
+    	{% else %}
+      		<p><b>No raw data management statistics available</b></p>
+    	{% endif %}
+	    </div>
+    </div>
+</div>

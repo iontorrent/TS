@@ -1,0 +1,295 @@
+{% load pagetools %}<!DOCTYPE html>
+<html>
+<head>
+  <title>
+    {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent
+    Browser{% block title %}{% endblock title %}
+  </title>
+  <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+  <link href="/site_media/css/bootstrap.css" rel="stylesheet"/>
+  <link href="/site_media/css/chosen.css" rel="stylesheet"/>
+  <link href="/site_media/css/jquery-ui.css" rel="stylesheet"/>
+  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+  <style type="text/css">
+    body {
+      padding-top: 60px;
+      background-color: #E4E4E4;
+    }
+
+    .topbar {
+      clear: both;
+      color: #FFFFFF;
+      height: 75px;
+      padding-left: 10px;
+      padding-right: 10px;
+      width: 100%;
+      position: absolute;
+      top: 0px;
+      background-color: white;
+    }
+
+    .tabholder {
+      float: left;
+      height: 75px;
+      left: 20px;
+      position: absolute;
+    }
+
+    .tab {
+      float: left;
+      font-size: 9pt;
+      font-variant: small-caps;
+      font-weight: bold;
+      height: 100%;
+      margin-right: 8px;
+      position: relative;
+      text-align: center;
+      width: 88px;
+    }
+
+    .tabtext {
+      background-color: #CCCCCC;
+      border: 2px solid black;
+      bottom: -2px;
+      height: 26px;
+      left: 0;
+      position: absolute;
+      text-align: center;
+      width: 100%;
+      z-index: 100;
+      border-radius: 3px 3px 0 0;
+    }
+
+    .tab span {
+      border-bottom: 1px dotted black;
+      color: #000000;
+      text-decoration: none;
+    }
+
+    .selected {
+      background-color: #FFFFFF;
+      border-bottom: 2px solid white;
+    }
+
+    .darkline {
+      background-color: #000000;
+      color: #000000;
+      font-size: 1px;
+      height: 2px;
+      position: absolute;
+      top: 75px;
+      width: 100%;
+      z-index: 1;
+    }
+
+    .subtle-label {
+      color: #888;
+    }
+
+    .run {
+      font-size: 18px;
+      line-height: 20px;
+      font-weight: bold;
+    }
+
+    .run > small {
+      line-height: 20px;
+    }
+
+    .report {
+      font-size: 14px;
+      margin-top: 9px;
+    }
+
+    #search_bar {
+      padding: 6px 0 6px 0;
+    }
+
+    #search_bar.navbar-fixed-top {
+      background-color: white;
+      padding: 6px 0 6px 20px;
+      box-shadow: 0 1px 0 #FFFFFF inset, 0 1px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .run-card {
+      margin-bottom: 24px;
+      background-color: white;
+      padding: 10px;
+      border-radius: 4px 0 0 0;
+      box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+<div class="all all_width">
+    {% block topbar %}
+        <div class="topbar">
+            <div class="logoholder">
+                <a href="http://www.iontorrent.com/">
+                    <img src="/site_media/images/logo_top_right_banner.png" alt="IonTorrent Systems, Inc."/>
+                </a>
+            </div>
+            {% block site-title %}
+                <h1 id="sitename">{{ base_site_name }}</h1>
+            {% endblock site-title %}
+            {% include "rundb/tabs.html" %}
+    </div>
+    <div id="global_messages"></div>
+  {% endblock topbar %}
+
+<div class="container-fluid" style="margin-top:30px;">
+  <div class="content">
+    
+    <!-- Search Bar -->
+    <div id="search_bar" class="navbar">
+      <div class="row">
+        <div class="span2">
+          <input class="span2" type="text" value="" id="rangeA"/>
+        </div>
+        <div class="input-append span3">
+            <input id="search_text" type="text" placeholder="Search names" style="width: 172px;" /><button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+        </div>
+        <div class="span3">
+          <select id="id_project" name="project"
+                  data-placeholder="Any project" class="chzn-select span3">
+            <option value=""></option>
+              {% for project in search.combined.projects %}
+                  <option value="{{ project }}">{{ project }}</option>
+              {% endfor %}
+          </select>
+        </div>
+          <div class="span3">
+              <select id="id_sample" name="sample" data-placeholder="Any Sample" class="chzn-select span3">
+                  <option value=""></option>
+                  {% for sample in search.experiment.sample %}
+                      <option value="{{ sample }}">{{ sample }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+        <div class="span3">
+            <select id="id_reference" name="reference" data-placeholder="Any Reference" class="chzn-select span3">
+                <option value=""></option>
+                {% for reference in search.experiment.library %}
+                    <option value="{{ reference }}">{{ reference }}</option>
+                {% endfor %}
+            </select>
+        </div>
+          <div class="span2">
+              <select id="id_flows" name="flows" data-placeholder="All Flows"
+                      class="chzn-select span2">
+                  <option value=""></option>
+                  {% for flows in search.combined.flows %}
+                      <option value="{{ flows }}">{{ flows }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+          <div class="span2">
+              <select id="id_chip" name="chipType" data-placeholder="Any Chip"
+                      class="chzn-select span2">
+                  <option value=""></option>
+                  {% for chip in search.experiment.chipType %}
+                      <option value="{{ chip }}">{{ chip }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+          <div class="span2">
+              <select id="id_pgm" name="pgmName" data-placeholder="Any PGM"
+                      class="chzn-select span2">
+                  <option value=""></option>
+                  {% for pgm in search.experiment.pgmName %}
+                      <option value="{{ pgm }}">{{ pgm }}</option>
+                  {% endfor %}
+              </select>
+          </div>
+      </div>
+    </div>
+
+    <div class="row-fluid"  style="margin-top: 16px;">
+    <div id="main_list">
+    </div>
+    </div>
+
+  </div>
+</div>
+
+  {% block footer %}
+    <div class="clear"></div>
+    <div class="footer">
+      <!--<a href="/admin/">Administer</a><br/>-->
+      <a href=http://www.iontorrent.com/support>Request Support</a>
+      &nbsp;|&nbsp;
+      <a href=/ion-docs/Home.html>Help/Documentation</a>
+      &nbsp;|&nbsp;
+      <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+      <br/>
+      Copyright&nbsp;&copy; 2012
+      <a href="http://www.iontorrent.com/">Life Technologies Corporation</a>
+      <br/>
+      This product should be used for research use only
+    </div>
+  {% endblock footer %}
+</div>
+<!-- end div-all -->
+	<script src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+	<script src="/site_media/js/underscore.js"></script>
+	<script src="/site_media/js/backbone.js"></script>
+	<script src="/site_media/js/chosen.jquery.js"></script>
+	<script src="/site_media/js/jquery-ui-1.8.17.custom.min.js"></script>
+	<script src="/site_media/js/date.js"></script>
+	<script src="/site_media/js/jquery.daterangepicker.js"></script>
+	<script src="/site_media/js/bootstrap.js"></script>
+	<script src="/site_media/js/template.js"></script>
+	<script src="/site_media/js/compiler.js"></script>
+	<script src="/site_media/js/messagebox.js"></script>
+	{% raw %}
+	<script type="text/template" id="experiment_template">
+	  <div class="">
+	    <h3 class="run span12">
+	      <small style="float: right;">
+	        {{ date_string }}
+	      </small>
+	      {{ exp.expName }}
+	    </h3>
+	  </div>
+	  <div class="">
+	    <div class="span2"><span class="subtle-label">Project</span> {{ exp.project }}</div>
+	    <div class="span2"><span class="subtle-label">Ref.</span> {{ exp.library }}</div>
+	    <div class="span3"><span class="subtle-label">Sample</span> {{ exp.sample }}</div>
+	    <div class="span2"><span class="subtle-label">PGM</span> {{ exp.pgmName }}</div>
+	    <div class="span2"><span class="subtle-label">Chip</span> {{ exp.chipType }}</div>
+	  </div>
+	</script>
+	<script type="text/template" id="report_template">
+	  {{#report}}
+	  <div class="report">
+	    <div class="span12">
+	      <strong>{{resultsName}}</strong>
+	      {{^is_completed}}<small>{{status}}</small>{{/is_completed}}
+	    </div>
+        {{#is_completed}}
+        <div>
+          <div class="span2">{{total_q20bp}} Kbp <span class="subtle-label">Q20 total</span></div>
+          <div class="span2">{{reads_q20}} K <span class="subtle-label">Q20 100+ bp reads</span></div>
+          <div class="span2">{{processedflows}} <span class="subtle-label">flows</span></div>
+          <div class="span2">{{libmetrics.aveKeyCounts}} <span class="subtle-label">Lib. key count</span></div>
+        </div>
+        {{/is_completed}}
+      </div>
+	  {{/report}}
+	</script>
+	{% endraw %}
+	<script src="/site_media/js/data_tab.js"></script>
+  <script>
+    $(function () {
+      var CURRENT_TAB = "{% block current_tab %}{% endblock %}";
+      if (CURRENT_TAB != "") {
+        $("#" + CURRENT_TAB + " .tabtext").addClass("selected");
+      }
+    });
+    $(function(){
+      //inbox = new MessageBox({models: {{global_messages|safe}} });
+      got_data({{ inital_query|safe }});
+    });
+  </script>
+</body>
+</html>

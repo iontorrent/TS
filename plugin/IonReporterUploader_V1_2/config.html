@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<head>
+<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+<link type="text/css"
+      href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css"
+      rel="Stylesheet"/>
+
+<script type="text/javascript"
+        src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+
+
+<script type="text/javascript"
+        src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+
+<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css"
+       type="text/css"/>
+
+
+<style type='text/css'>
+   #formwrap{
+      line-height: 2em;
+      margin: 10px;
+      padding: 10px;
+      height: 130px;
+      text-align: center;
+   }
+
+   #next{
+      line-height: 2em;
+      margin: 40px;
+      padding: 40px;
+      text-align: right;
+   }
+
+
+   body {
+      font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      height: 350px;
+   }
+</style>
+
+
+<script type='text/javascript'>
+
+pluginGET = "";
+
+$(document).ready(function(){
+
+    //setup the jQuery UI
+    $("#formwrap").tabs();
+    //$(".postbutton").button();
+
+  $.ajax({
+    url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json",
+    dataType:"json",
+    type: "GET",
+    success:function(data){
+
+      //get the plugin data
+      pluginGET = data;
+      //delete the resource_uri
+      delete pluginGET.resource_uri;
+
+      $.each(pluginGET.config, function(key,val){
+        if(key == "protocol"){
+          var foundOption = false;
+          for(var i=0; i<document.getElementById("protocol").options.length; i++)
+          {
+             if (document.getElementById("protocol").options[i].value == val )
+             {
+                document.getElementById("protocol").options[i].selected = 'selected';
+                foundOption = true;
+             } 
+          }
+        } else if(key == "server"){
+          document.getElementById("server").value = val;
+        } else if(key == "port"){
+          document.getElementById("port").value = val;
+        } else if(key == "token"){
+          document.getElementById("token").value = val;
+        }
+      });
+
+    }
+  });
+});
+
+
+$(function() {
+    $.fn.serializeObject = function(){
+           var o = {};
+           var a = this.serializeArray();
+           $.each(a,
+              function() {
+                 if (o[this.name] != null) {
+                    if (!o[this.name].push) {
+                       o[this.name] = [o[this.name]];
+                    }
+                    o[this.name].push(this.value || '');
+                 } else {
+                    o[this.name] = this.value || '';
+                 }
+              });
+           return o;
+    };
+
+
+$(function() {
+   $('.postbutton').click(function() {
+      if (testAllFields()){
+      obj =  $('#pluginconfig').serializeObject();
+      //use the data retreived from the GET and modify it only the config key is changed
+      pluginGET.config = obj;
+      pluginAPIJSON = JSON.stringify(pluginGET);
+      console.log(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
+      $.ajax({
+         type: 'PUT',
+         url: pluginURL,
+         contentType: "application/json; charset=utf-8",
+         data: pluginAPIJSON,
+         dataType: "json",
+         success : function(data) {
+             $("#formwrap").hide();
+             $('#loading-div').show();
+             setTimeout("parent.$.fn.colorbox.close()", 2000);
+             //parent.$.fn.colorbox.close();
+         }
+      });
+       }
+   });
+
+   $('#version_button').click(function() {
+      if (testAllFields()){
+		var busyDiv = '<div class="myBusyDiv"><p>Retrieving IR version. Please wait...</p></div>';
+		$('#next').append(busyDiv);
+  		
+        obj =  $('#pluginconfig').serializeObject();
+        //use the data retreived from the GET and modify it only the config key is changed
+        pluginURL = "/rundb/api/v1/ionreporter/version/?plugin=IonReporterUploader_V1_2&format=json";
+        $.ajax({
+           type: 'GET',
+           url: pluginURL,
+           contentType: "application/json; charset=utf-8",
+           dataType: "json",
+           success : function(data) {
+              console.log(data);
+              $.each(data, function(i,v){
+                $("#version").append("<option>" + v + "</option>");
+              });
+               //setTimeout("parent.$.fn.colorbox.close()", 2000);
+               //parent.$.fn.colorbox.close();
+           },
+           complete: function() {
+        	   $('.myBusyDiv').empty();
+  			   $('#next').remove('.myBusyDiv');
+           }           
+        });
+      }
+   });
+
+
+
+})
+
+});                          
+</script>
+
+<script type='text/javascript'>
+
+    function testFieldNonBlank(field) {
+       if ('' == field.value) {
+          apprise("This field must not be blank");  
+      }
+    }
+    
+    function testAllFields(){
+       if (document.getElementById("server").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else if (document.getElementById("port").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else if (document.getElementById("token").value == ""){
+          apprise("Cannot save - Please complete all fields");
+          return false;
+       } else {
+          return true;
+       } 
+    }
+
+    function testFieldStrictlyPositive(field) {
+       if ('default' == field.value) {
+          return;
+       }
+       var regExpr = new RegExp("^[1-9]\d+$");
+       if (!regExpr.test(field.value)) {
+          field.value="default";
+          apprise("This field must be greater than zero, defaulting to: " + field.value);
+       }
+    }
+
+    function testFieldNonNegative(field) {
+       if ('default' == field.value) {
+          return;
+       }
+       var regExpr = new RegExp("^\d+$");
+       if (!regExpr.test(field.value)) {
+          field.value="default";
+          apprise("This field must be greater than or equal to zero, defaulting to: " + field.value);
+       }
+    }
+
+    function testFieldInteger(field) {
+       if ('default' == field.value) {
+          return;
+       }
+       var regExpr = new RegExp("^-?\d+$");
+       if (!regExpr.test(field.value)) {
+          field.value="default";
+          apprise("This field must bean integer, defaulting to: " + field.value);
+       }
+    }
+
+</script>
+
+</head>
+
+<body>
+
+
+<form id="pluginconfig" align="center">
+
+<h1> Ion Reporter Uploader Configuration </h1>
+
+<div id="formwrap">
+	<ul>
+		<li><a href="#basic">Basic</a></li>
+		<li><a href="#adv">Advanced</a></li>
+	</ul>
+	<div id="basic">
+
+
+        <table align="center">
+            <tr><td valign="top">Ion Reporter Authentication Token</td><td>
+              <textarea id="token" rows="4" cols="60" name="token" value="" onblur="testFieldNonBlank(this);">
+              </textarea>
+            </td></tr>
+        </table>
+
+
+	</div>
+
+	<div id="adv">
+
+        <table align="center">
+            <tr><td align="left">Protocol</td><td><select id="protocol" name="protocol">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+            </select></td></tr>
+            <tr><td align="left">Ion Reporter Server Address</td><td><input type="text" id="server" size="55" name="server" value="" onblur="testFieldNonBlank(this);"/></td></tr>
+            <tr><td align="left">Ion Reporter WebService TCP/IP Port</td><td><input type="text" size="55" id="port" name="port" value="" onblur="testFieldNonBlank(this);"/></td></tr>
+        </table>
+
+	</div>
+
+
+</div>
+
+<div id="next">
+
+  <select id="version" name="version"></select>
+  <input id="version_button" type="button" value="Get IR Version"></input>
+  <input class="postbutton" type="button" value="Save">
+
+</div>
+  
+
+</form>
+
+
+
+
+</body>
+
+
+
+</html>
+

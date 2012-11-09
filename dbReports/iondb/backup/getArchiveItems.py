@@ -1,59 +1,65 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-
 #!/usr/bin/env python
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Prints list of Experiments not yet archived or deleted with storage usage and date.
 
 import os
 from os import path
 import sys
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
+import iondb.bin.djangoinit
 from iondb.rundb import models
 import commands
-from iondb.backup.archiveExp import Experiment
 
-def get_servers():
-        fileservers = models.FileServer.objects.all()
-        ret = []
-        for fs in fileservers:
-            if path.exists(fs.filesPrefix):
-                ret.append(fs)
-        return ret
+def get_size(start, progress):
+    total_size = 0
+    i = 0
+    #faster algorithm?
+    for dirpath, dirnames, filenames in os.walk(start):
+        for f in filenames:
+            try:
+                fp = os.path.join(dirpath, f)
+                total_size += os.path.getsize(fp)
+                if i >= 10000 and progress:
+                    print "\n    Progress update: ~%s Gb" %(total_size/(1024*1024*1024)) + "\n    Current directory: %s" %dirpath
+                    i = 0
+                i+=1
+            except:
+                pass
+    if progress:
+        print "\n    Finished %s" %start + ", total size: %s bytes" %total_size + " = ~%s Gb\n" %(total_size/(1024*1024*1024))
+    return total_size
     
 if __name__ == '__main__':
-    bk = models.BackupConfig.objects.all().order_by('pk')
-    #TODO: populate dictionary with experiments ready to be archived
     # Get all experiments in database sorted by date
     experiments = models.Experiment.objects.all().order_by('date')
-    print "Valid: %d" % experiments.count()
-    # Filter out all experiments marked Keep
-    experiments = experiments.exclude(storage_options='KI').exclude(expName__in = models.Backup.objects.all().values('backupName'))
-    print "Valid: %d" % experiments.count()
-    # Filter out experiments marked 'U' or 'D'
-    experiments = experiments.exclude(user_ack='U').exclude(user_ack='D')
-    print "Valid: %d" % experiments.count()
     
-    #TODO: make dictionary, one array per file server of archiveExperiment objects
-    status = False
-    to_archive = {}
-    servers =  get_servers()
-    for fs in servers:
-        print "For server %s" % fs.filesPrefix
-        print type(experiments)
-        explist = []
-        for exp in experiments:
-            print "\t%s" % exp.expName
-            if fs.filesPrefix in exp.expDir:
-                location = models.Rig.objects.get(name=exp.pgmName).location
-                E = Experiment(exp,
-                               str(exp.expName),
-                               str(exp.date),
-                               str(exp.star),
-                               str(exp.storage_options),
-                               str(exp.user_ack),
-                               str(exp.expDir),
-                               location,
-                               exp.pk)
-                explist.append(E)
-                #TODO: Set this based on whether there are runs to backup
-                status = True
-        to_archive[fs.filesPrefix] = explist
+    # Filter out all experiments already archived or deleted
+    experiments = experiments.exclude(expName__in = models.Backup.objects.all().values('backupName'))
+    
+    # List all experiments marked Keep
+    print "Experiments marked KEEP"
+    total = 0
+    for e in experiments.exclude(storage_options='A').exclude(storage_options='D'):
+        size = get_size(e.expDir, False)
+        total += size
+        print "%7.2f Gb - %s - %-80s" % (float(size)/1024/1024/1024,str(e.date).split()[0],e.expDir)
+    print "==========\n%7.2f Gb TOTAL KEEP\n" % (float(total)/1024/1024/1024)
+    
+    # List all experiments marked Archive
+    print "Experiments marked ARCHIVE"
+    total = 0
+    for e in experiments.exclude(storage_options='KI').exclude(storage_options='D'):
+        size = get_size(e.expDir, False)
+        total += size
+        print "%7.2f Gb - %s - %-80s" % (float(size)/1024/1024/1024,str(e.date).split()[0],e.expDir)
+    print "==========\n%7.2f Gb TOTAL ARCHIVE\n" % (float(total)/1024/1024/1024)
+        
+    # List all experiments marked Delete
+    print "Experiments marked DELETE"
+    total = 0
+    for e in experiments.exclude(storage_options='KI').exclude(storage_options='A'):
+        size = get_size(e.expDir, False)
+        total += size
+        print "%7.2f Gb - %s - %-80s" % (float(size)/1024/1024/1024,str(e.date).split()[0],e.expDir)
+    print "==========\n%7.2f Gb TOTAL DELETE\n" % (float(total)/1024/1024/1024)

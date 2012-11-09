@@ -190,15 +190,6 @@
                size="35" maxlength="64" type="text" class="textInput validateAlphaNumNoSpace"/>
         <p class="formHint">Descriptive name of the biological sample</p>
       </div>
-      <div class="ctrlHolder">
-        <label for="project">Project</label>
-        <input value="{{ exp.project|blankIfNone }}" name="project" id="project"
-               size="35" maxlength="64" type="text"
-               class="textInput validateAlphaNumNoSpace"/>
-        <p class="formHint">Name of the study that encompasses multiple
-          samples
-        </p>
-      </div>
       {# TODO: find a way to set the runtype using the API.  Extend the API or add a new field to the database for runtypes that can be PUT to #}
       <div class="ctrlHolder">
         <label for="runtype">Run Type</label>

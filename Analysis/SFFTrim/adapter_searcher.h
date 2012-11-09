@@ -121,13 +121,21 @@ Ran adapter_searcher::search_start(Ran first, int flow_off) const
 template <class Ran1, class Ran2>
 float adapter_searcher::distance(Ran1 abeg, Ran2 rbeg, int len) const
 {
-	// Ignore first flow:
-	++abeg;
-	++rbeg;
-	--len;
-	float diff[len];
-	std::transform(abeg, abeg+len, rbeg, diff, std::minus<float>());
-	return std::inner_product(diff, diff+len, diff, 0.0);
+	float dist2 = 0.0;
+	// Leading flow is special case. Observed signal on first flow might
+    // include library bases that happen to be the same as the first base
+    // of the adapter. So don't penalize distance if observed exceeds
+    // ideal adapter ionogram.
+    dist2 = min(*rbeg - *abeg, 0.0F);
+    dist2 *= dist2;
+
+    Ran1 aend = abeg + len;
+	for(++abeg, ++rbeg; abeg<aend; ++abeg, ++rbeg){
+        float diff = *rbeg - *abeg;
+        dist2 += diff * diff;
+    }
+	
+	return dist2;
 }
 
 template <class Ran>

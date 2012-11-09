@@ -41,6 +41,7 @@ public:
     mWorkers.resize(nThreads,0);
     for (int i = 0; i < nThreads; i++) {
       int t = pthread_create(&mWorkers[i], NULL, PJobQueue::PJobQueueWorker, mWorkQueue);
+      pthread_detach(mWorkers[i]);
       assert(t == 0);
     }
   }
@@ -104,7 +105,8 @@ public:
     }
     WaitUntilDone();
     for(size_t i = 0; i < mWorkers.size(); i++) {
-      pthread_join(mWorkers[i], NULL);
+      //pthread_join(mWorkers[i], NULL);
+      //pthread_detach(mWorkers[i]);
     }
     mWorkers.resize(0);
   }

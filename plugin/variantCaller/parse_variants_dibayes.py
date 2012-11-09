@@ -49,7 +49,7 @@ if( have_bed ):
 
 inf = open(sys.argv[1],'r')
 out = open(sys.argv[2],'w')
-out.write("Chrom\tPosition\tGene Sym\tTarget ID\tType\tPloidy\tRef\tVariant\tVar Freq\tP-value\tCoverage\tRef Cov\tVar Cov\n")
+out.write("Chrom\tPosition\tGene Sym\tTarget ID\tType\tZygosity\tRef\tVariant\tVar Freq\tP-value\tCoverage\tRef Cov\tVar Cov\n")
 for lines in inf:
     if lines[0]=='#':
         continue

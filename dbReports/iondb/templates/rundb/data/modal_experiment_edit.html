@@ -1,0 +1,435 @@
+{% load pagetools %}
+<div id="modal_experiment_edit" title="" class="modal modal-800 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h3>Edit Run</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal-error-messages" class="alert alert-danger hide"></div>
+		<form class="form-horizontal" id="modal_experiment_edit_form" method="GET" enctype="application/json">
+			<fieldset>
+				<div class="control-group">
+					<label for="sample" class="control-label">Sample</label>
+					<div class="controls">
+						<input value="{{ exp.sample|blankIfNone }}" name="sample" id="sample"
+						size="35" maxlength="64" type="text" class="textInput validateAlphaNumNoSpace"/>
+						<p class="help-block">
+							Descriptive name of the biological sample
+						</p>
+					</div>
+				</div>
+				{# TODO: find a way to set the runtype using the API.  Extend the API or add a new field to the database for runtypes that can be PUT to #}
+				<div class="control-group">
+					<label for="runtype" class="control-label">Application</label>
+					<div class="controls">
+						<select id="runtype" name="runtype">
+							{% for runType in runTypes %}
+							{% ifequal runType.runType exp.log.runtype %}
+							<option SELECTED value="{{ runType }}">{{ runType.description }}
+								({{ runType }}) </option>
+							{% else %}
+							<option value="{{ runType }}">{{ runType.description }}
+								({{ runType }}) </option>
+							{% endifequal %}
+							{% endfor %}
+						</select>
+						<p class="help-block">
+							Select a Run Type
+						</p>
+					</div>
+				</div>
+				<div class="control-group">
+					<label for="library" class="control-label">Reference</label>
+					<div class="controls">
+					<select data-placeholder="No Reference" id="library" name="library">
+						<option value=""></option>
+						{% for reference in references %}
+						{% ifequal reference.short_name exp.library %}
+						<option SELECTED
+						value="{{ reference.short_name }}">{{ reference.short_name }}
+							({{ reference.name }}) </option>
+						{% else %}
+						<option value="{{ reference.short_name }}">{{ reference.short_name }}
+							({{ reference.name }}) </option>
+						{% endifequal %}
+						{% endfor %}
+					</select>
+
+					<p class="help-block">
+						Select the reference library used for
+						alignment. </br> If none leave blank
+					</p>
+					</div>
+				</div>
+				<div class="control-group">
+					<label for="barcodeId" class="control-label">Barcode</label>
+					<div class="controls">
+					<select data-placeholder="No Barcode" id="barcodeId" name="barcodeId">
+						<option value=""></option>
+						{% for barcode in barcodes %}
+						{% ifequal barcode.name exp.barcodeId %}
+						<option SELECTED
+						value="{{ barcode.name }}">{{ barcode.name }}</option>
+						{% else %}
+						<option value="{{ barcode.name }}">{{ barcode.name }}</option>
+						{% endifequal %}
+						{% endfor %}
+					</select>
+
+					<p class="help-block">
+						Select the barcode set used for this sample. </br>
+						If not barcoded leave blank
+					</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="librarykitname" class="control-label">Library Kit</label>
+					<div class="controls">
+					<select id="librarykitname" name="librarykitname">
+						<option value=""></option>
+
+						{% if not exp.librarykitbarcode or exp.librarykitname %}
+						{% for libKit in libKits %}
+						{% ifequal libKit.name exp.librarykitname %}
+						<option SELECTED value="{{ libKit.name }}">{{ libKit }} </option>
+						{% else %}
+						<option value="{{ libKit.name }}">{{ libKit }} </option>
+						{% endifequal %}
+						{% endfor %}
+						{% else %}
+						{% for libKit in libKits %}
+						{% with libKit.kitpart_set.all|first as firstKitPart %}
+						{% for kitpart in libKit.kitpart_set.all %}
+						{% ifequal kitpart.barcode exp.librarykitbarcode %}
+						<option SELECTED value="{{ libKit.name }}">{{ libKit }} </option>
+						{% else %}
+						{% ifequal kitpart.barcode firstKitPart.barcode %}
+						<option value="{{ libKit.name }}">{{ libKit }} </option>
+						{% endifequal %}
+						{% endifequal %}
+						{% endfor %}
+						{% endwith %}
+						{% endfor %}
+						{% endif %}
+					</select>
+
+					<p class="help-block">
+						Can be entered during PGM setup
+					</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="sequencekitname" class="control-label">Sequencing Kit</label>
+					<div class="controls">
+						<select id="sequencekitname" name="sequencekitname">
+							<option value=""></option>
+							{% if not exp.sequencekitbarcode and not exp.seqKitBarcode %}
+							{% for seqKit in seqKits %}
+							{% ifequal seqKit.name exp.sequencekitname %}
+							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% else %}
+							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% endifequal %}
+							{% endfor %}
+							{% else %}
+							{% if exp.sequencekitname %}
+							{% for seqKit in seqKits %}
+							{% ifequal seqKit.name exp.sequencekitname %}
+							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% else %}
+							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% endifequal %}
+							{% endfor %}
+							{% else %}
+							{% for seqKit in seqKits %}
+							{% with seqKit.kitpart_set.all|first as firstKitPart %}
+							{% for kitpart in seqKit.kitpart_set.all %}
+	
+							{% ifequal kitpart.barcode exp.sequencekitbarcode %}
+							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% else %}
+							{% ifequal kitpart.barcode exp.seqKitBarcode %}
+							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% else %}
+							{% ifequal kitpart.barcode firstKitPart.barcode %}
+							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
+							{% endifequal %}
+							{% endifequal %}
+							{% endifequal %}
+							{% endfor %}
+							{% endwith %}
+							{% endfor %}
+							{% endif %}
+							{% endif %}
+						</select>
+	
+						<p class="help-block">
+							Can be entered during PGM setup
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="chipBarcode" class="control-label">ChipBarCode</label>
+					<div class="controls">
+						<input value="{{ exp.chipBarcode|blankIfNone }}" name="chipBarcode" id="chipBarcode"
+						size="35" maxlength="64" type="text"
+						class="textInput validateAlphaNumNoSpace"/>
+						<p class="help-block">
+							Barcode generated from run name
+						</p>
+					</div>
+				</div>
+				<div class="control-group"> 
+					<label for="isReverseRun" class="control-label">Reverse Run?</label>
+					<div class="controls">
+						<label class="checkbox">
+							<input type="checkbox" value="option1" id="isReverseRun" {{ exp.isReverseRun|boxChecked }}>
+							Is this a paired-end reverse run? </label>
+						<p class="help-block">
+							Check if this is a paired-end reverse run
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="libraryKey" class="control-label">Forward Library Key</label>
+					<div class="controls">
+						<select id="libraryKey" name="libraryKey">
+							<option value=""></option>
+							{% for forwardLibKey in forwardLibKeys %}
+	
+							{% ifequal forwardLibKey.sequence exp.libraryKey %}
+							{% if forwardLibKey.isDefault %}
+							<option SELECTED value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ forwardLibKey.sequence }}">{{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }})
+								{% endif %} </option>
+							{% else %}
+							{% if forwardLibKey.isDefault %}
+							{% if exp.libraryKey and exp.libraryKey.strip %}
+							<option value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key: {{ forwardLibKey.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }}) </option>
+							{% endif %}
+							{% else %}
+							<option value="{{ forwardLibKey.sequence }}">{{ forwardLibKey.name }}  (Key: {{ forwardLibKey.sequence }}) </option>
+							{% endif %}
+							{% endifequal %}
+	
+							{% endfor %}
+						</select>
+	
+						<p class="help-block">
+							Leave as blank if to use the current default. </br>Select specific forward library key otherwise
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="forward3primeadapter" class="control-label">Forward 3' Adapter</label>
+					<div class="controls">
+						<select id="forward3primeadapter" name="forward3primeadapter">
+							<option value=""></option>
+							{% for forwardAdapter in forward3Adapters %}
+	
+							{% ifequal forwardAdapter.sequence exp.forward3primeadapter %}
+							{% if forwardAdapter.isDefault %}
+							<option SELECTED value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ forwardAdapter.sequence }}">{{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }})
+								{% endif %} </option>
+							{% else %}
+							{% if forwardAdapter.isDefault %}
+							{% if exp.forward3primeadapter and exp.forward3primeadapter.strip %}
+							<option value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq: {{ forwardAdapter.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }}) </option>
+							{% endif %}
+							{% else %}
+							<option value="{{ forwardAdapter.sequence }}">{{ forwardAdapter.name }}  (Seq: {{ forwardAdapter.sequence }}) </option>
+							{% endif %}
+							{% endifequal %}
+	
+							{% endfor %}
+						</select>
+	
+						<p class="help-block">
+							Leave as blank if to use the current default. </br>Select specific forward 3' adapter otherwise
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="reverselibrarykey" class="control-label">Reverse Library Key</label>
+					<div class="controls">
+						<select id="reverselibrarykey" name="reverselibrarykey">
+							<option value=""></option>
+							{% for reverseLibKey in reverseLibKeys %}
+	
+							{% ifequal reverseLibKey.sequence exp.reverselibrarykey %}
+							{% if reverseLibKey.isDefault %}
+							<option SELECTED value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ reverseLibKey.sequence }}">{{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }})
+								{% endif %}
+								{% else %}
+								{% if reverseLibKey.isDefault %}
+								{% if exp.reverselibrarykey and exp.reverselibrarykey.strip %} <option value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key: {{ reverseLibKey.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }}) </option>
+							{% endif %}
+							{% else %}
+							<option value="{{ reverseLibKey.sequence }}">{{ reverseLibKey.name }}  (Key: {{ reverseLibKey.sequence }}) </option>
+							{% endif %}
+							{% endifequal %}
+	
+							{% endfor %}
+						</select>
+	
+						<p class="help-block">
+							Leave as blank if to use the current default. </br>Select specific reverse library key otherwise
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="reverse3primeadapter" class="control-label">Reverse 3' Adapter</label>
+					<div class="controls">
+						<select id="reverse3primeadapter" name="reverse3primeadapter">
+							<option value=""></option>
+							{% for reverseAdapter in reverse3Adapters %}
+	
+							{% ifequal reverseAdapter.sequence exp.reverse3primeadapter %}
+							{% if reverseAdapter.isDefault %}
+							<option SELECTED value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ reverseAdapter.sequence }}">{{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }})
+								{% endif %} </option>
+							{% else %}
+							{% if reverseAdapter.isDefault %}
+							{% if exp.reverse3primeadapter and exp.reverse3primeadapter.strip %}
+							<option value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }}) </option>
+							{% else %}
+							<option SELECTED value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq: {{ reverseAdapter.sequence }}) </option>
+							{% endif %}
+							{% else %}
+							<option value="{{ reverseAdapter.sequence }}">{{ reverseAdapter.name }}  (Seq: {{ reverseAdapter.sequence }}) </option>
+							{% endif %}
+							{% endifequal %}
+	
+							{% endfor %}
+						</select>
+	
+						<p class="help-block">
+							Leave as blank if to use the current default. </br>Select specific reverse 3' adapter otherwise
+						</p>
+					</div>
+				</div>
+
+				<div class="control-group">
+					<label for="notes" class="control-label">Notes</label>
+					<div class="controls">
+						<input value="{{ exp.notes|blankIfNone }}" name="notes" id="notes"
+						size="35" maxlength="128" type="text" class="textInput"/>
+						<p class="help-block">
+							Notes
+						</p>
+					</div>
+				</div>
+			</fieldset>
+		</form>				
+	</div>
+	<div class="modal-footer">
+	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+	    <a id="expButton" class="btn btn-primary" href="#">Save</a>
+	</div>
+<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+<script type="text/javascript">
+$('#modal_experiment_edit_form').uniform({
+	holder_class : 'control-group'
+	, msg_selector: 'p.help-block'
+	, error_class : 'alert alert-error'
+});
+function displayReverseRun(value) {
+	value = value 
+		|| $("#isReverseRun").attr('checked') == 'checked';
+	//hide when value == true
+	$("#libraryKey").parent().parent().toggle(!value);
+	$("#forward3primeadapter").parent().parent().toggle(!value);
+	//hide when value == false
+	$("#reverselibrarykey").parent().parent().toggle(value);
+	$("#reverse3primeadapter").parent().parent().toggle(value);
+}
+
+$("#isReverseRun").change(function() {
+	displayReverseRun();
+});
+
+$("#isReverseRun").attr('checked', '{{exp.isReverseRun}}'.toLowerCase() == 'true');
+displayReverseRun('{{exp.isReverseRun}}'.toLowerCase() == 'true');
+
+$.ajaxSetup({
+	async : false
+});
+
+$('#expButton').click(function(e){
+	e.preventDefault();
+	$('#modal_experiment_edit_form').submit();	
+});
+
+$('#modal_experiment_edit_form').submit(function(e) {
+	e.preventDefault();
+	$(".textInput").blur();
+	$('#modal-error-messages').hide();
+	if ($("#modal_experiment_edit_form *").hasClass("error")) {
+		$("#modal_experiment_edit .modal-body").animate({
+			scrollTop : 0
+		}, "slow");
+		$(".error").effect("highlight", {
+			"color" : "#F20C18"
+		}, 2000);
+		return false;
+	}
+	formData = $("#modal_experiment_edit_form").serializeJSON();
+	//we have to feed an empty results field
+	formData["results"] = [];
+
+	$.ajax({
+		type : "PATCH",
+		url : "/rundb/api/v1/experiment/{{ exp.id }}/",
+		async : false,
+		dataType : "json",
+		contentType : "application/json",
+		data : JSON.stringify(formData),
+		processData: false,
+		success : function(msg) {
+			$('#modal_experiment_edit').trigger('modal_experiment_edit_done', {});
+			$('#modal_experiment_edit').modal("hide");
+		},
+		error : function(msg) {
+			$('#modal-error-messages').empty();
+			$('#modal-error-messages').show();
+	    	$('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
+	    	$('#modal-error-messages').append('<p class="error">ERROR: ' + msg.status + '</p>');
+	    	$("#modal_experiment_edit .modal-body").animate({
+				scrollTop : 0
+				}, "slow"); 
+	    	console.error("error:", msg);
+		}
+	});
+	//always return false because the POSTing is done to the API.
+	return false;
+});
+$('#modal_experiment_edit').on('hidden', function () {
+	$('body #modal_experiment_edit').remove();
+});
+	
+</script>
+
+  
+
+</div>

@@ -9,9 +9,9 @@ import socket
 import sys
 import threading
 import time
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django import db
+
+import iondb.bin.djangoinit
+from django import db, shortcuts
 from django.conf import settings
 from twisted.internet import task
 from twisted.internet import reactor
@@ -25,16 +25,17 @@ from django.core import mail
 import traceback
 from django.db import connection
 from iondb.backup.archiveExp import Experiment
+from iondb.rundb import tasks
 
 settings.EMAIL_HOST = 'localhost'
 settings.EMAIL_PORT = 25
 settings.EMAIL_USE_TLS = False
+
+#Globals
+gl_experiments = {}
 last_exp_size = 0
 
-#Global
-gl_experiments = {}
-
-__version__ = filter(str.isdigit, "$Revision: 29400 $")
+__version__ = filter(str.isdigit, "$Revision: 42526 $")
 
 # TODO: these are defined in crawler.py as well.  Needs to be consolidated.
 RUN_STATUS_COMPLETE = "Complete"
@@ -98,7 +99,7 @@ The following experiments are selected for Deletion:"""
         mail.send_mail(subject_line,message,reply_to,[recipient])
         log.info("Notification email sent for user acknowledgement")
     
-def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, autoArchiveAck): #removeOnly needs to be implemented
+def build_exp_list(num, grace_period, serverPath, removeOnly, log, autoArchiveAck): #removeOnly needs to be implemented
     '''
     Build a list of experiments to archive or delete
     
@@ -129,26 +130,25 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
     for e in exp:
         log.debug('Experiment date %s' % str(e.date))
         if len(experiments) < num: # only want to loop until we have the correct number
-            
-            location = server_and_location(e)
-            if location == None:
-                continue
-            
+                        
             if not os.path.isdir(e.expDir):
-                #TODO: This is an error - this experiment no longer exists on filesystem and should be marked as such
-                # with a Backup object instance.
+                #Create an entry in the Backup db.
+                kwargs = {"experiment": e,
+                          "backupName": e.expName, 
+                          # This is True when the data has been archived.  Since its missing, it hasn't been archived
+                          "isBackedUp": False,
+                          "backupDate": datetime.datetime.now(),
+                          "backupPath": "DELETED"
+                }
+                ret = models.Backup(**kwargs)
+                ret.save()
+                log.info ("Raw Data missing: %s.  Creating Backup object" % e.expDir)
                 continue
                 
-            # TODO: instead of using the experiment date field, which is set to when the experiment was performed
+            # Instead of using the experiment date field, which is set to when the experiment was performed
             # use the file timestamp of the first (or last?) .dat file when calculating grace period
-            EXPERIMENTAL = True
-            if not EXPERIMENTAL:
-                diff = time.mktime(timenow) - time.mktime(datetime.datetime.timetuple(e.date))
-                log.debug ('Time since experiment was run %d' % diff)
-            else:
-                stat = os.stat(e.expDir)
-                diff = time.mktime(timenow) - stat.st_mtime
-                log.debug ('Time since folder created is %d' % diff)
+            diff = time.mktime(timenow) - time.mktime(datetime.datetime.timetuple(e.date))
+            log.debug ('Time since experiment was run %d' % diff)
             
             # grace_period units are hours
             if diff < (grace_period * 3600):    #convert hours to seconds
@@ -174,8 +174,8 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
                                     str(e.storage_options),
                                     str(e.user_ack),
                                     str(e.expDir),
-                                    location,
-                                    e.pk)
+                                    e.pk,
+                                    str(e.rawdatastyle))
                         
             try:
                 # don't add anything to the list if its already archived
@@ -186,9 +186,8 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
                 # check that the path exists, and double check that its not marked to 'Keep'
                 if not path.islink(experiment.get_exp_path()) and \
                         path.exists(experiment.get_exp_path()) and \
-                        experiment.location==cur_loc and \
                         experiment.get_storage_option() != 'KI' and \
-                        serverPath in experiment.dir:
+                        experiment.dir.startswith(serverPath):
                     # change user ack status from unset to Selected: triggers an email notification
                     if e.user_ack == 'U':
                         e.user_ack = 'S'
@@ -210,7 +209,6 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
                 log.debug("Path: %s" % experiment.get_exp_path())
                 log.debug("Does path exist? %s" % ('yes' if path.exists(experiment.get_exp_path()) else 'no'))
                 log.debug("Is path a link? %s" % ('yes' if path.islink(experiment.get_exp_path()) else 'no'))
-                log.debug("Is exp location same as loc? %s" % ('yes' if experiment.location==cur_loc else 'no'))
                 log.debug("Is storage option not Keep? %s" % ('yes' if  experiment.get_storage_option() != 'KI' else 'no'))
                 log.debug("Is %s in %s? %s" % (serverPath,experiment.dir,'yes' if serverPath in experiment.dir else 'no'))
                 log.debug("User Ack is set to %s" % experiment.user_ack)
@@ -220,47 +218,36 @@ def build_exp_list(cur_loc, num, grace_period, serverPath, removeOnly, log, auto
     log.debug("Number of experiments: %d" % len(experiments))
     return experiments
 
-def server_and_location(experiment):
+def get_server_full_space(log):
     try:
-        loc = models.Rig.objects.get(name=experiment.pgmName).location
-    except:
-        return None
-    #server = models.FileServer.objects.filter(location=loc)
-    return loc
-
-def get_server_full_space(cur_loc):
-    try:
-        fileservers = models.FileServer.objects.filter(location=cur_loc)
+        fileservers = models.FileServer.objects.all()
         num = len(fileservers)
     except:
         log.error(traceback.print_exc())
     ret = []
     for fs in fileservers:
         if path.exists(fs.filesPrefix):
-            ret.append(free_percent(fs.filesPrefix))
+            ret.append( (fs.filesPrefix, tasks.free_percent(fs.filesPrefix)))
     return ret
-
-def free_percent(path):
-    resDir = os.statvfs(path)
-    totalSpace = resDir.f_blocks
-    freeSpace = resDir.f_bavail
-    return (path,100-(float(freeSpace)/float(totalSpace)*100))
 
 def add_to_db(exp, path, archived):
     # Update dbase Experiment object's user_ack field
-    e = models.Experiment.objects.get(pk=exp.get_pk())
-    e.user_ack = 'D'
-    e.save()
-    # Create dbase Backup object for this Experiment
-    kwargs = {"experiment": e,
-              "backupName": exp.name, 
-              "isBackedUp": archived,
-              "backupDate": datetime.datetime.now(),
-              "backupPath": path
-              }
-    ret = models.Backup(**kwargs)
-    ret.save()
-    return ret
+    try:
+        e = models.Experiment.objects.get(pk=exp.get_pk())
+        e.user_ack = 'D'
+        e.save()
+        # Create dbase Backup object for this Experiment
+        kwargs = {"experiment": e,
+                  "backupName": exp.name, 
+                  "isBackedUp": archived,
+                  "backupDate": datetime.datetime.now(),
+                  "backupPath": path
+                  }
+        ret = models.Backup(**kwargs)
+        ret.save()
+    except:
+        raise
+    return
 
 def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupFreeSpace, bwLimit, backup_pk, email, ADMIN_EMAIL):
     global last_exp_size
@@ -275,11 +262,12 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
     experiments = []
     experiments.extend(deleteable)
     experiments.extend(archiveable)
-    log.info("Running Backup")
+    isConf, params = get_params(log)
+    log.info("Processing Datasets")
     for exp in experiments:
         expDir = exp.get_exp_path()
         pk = exp.get_pk()
-        log.info('Currently inspecting %s' % expDir)
+        log.info('Inspecting %s' % expDir)
         log.info('Storage option is %s' % exp.get_storage_option())
         log.info('Has user acknowledged? %s (%s)' % ("Yes" if str(exp.user_ack) == 'A' else "No", exp.user_ack))
         if str(exp.user_ack) != 'A':
@@ -293,6 +281,7 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
             exp_size = exp.get_folder_size()
         except:
             log.error(traceback.format_exc())
+            exp_size = 0
         last_exp_size = exp_size
         if backupDrive != None and backupFreeSpace != None:
             if exp.get_storage_option() == 'A' or exp.get_storage_option() == 'PROD':
@@ -308,24 +297,26 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
                     except:
                         log.error("Failed to copy directory %s" % expDir)
                 else:
-                    log.info("Backup Drive is full or missing, please replace")
-                    set_status(log, 'Backup drive is full or missing, please replace.')
+                    log.warn("Archive Drive is full or missing, please replace")
+                    set_status(log, 'Archive drive is full or missing, please replace.')
                     email.send_drive_warning(ADMIN_EMAIL)
         else:
-            log.info("No backup drive")
+            log.info("No Archive drive")
             
         if exp.get_storage_option() == 'D' or copycomplete:
             try:
                 set_status(log, 'Removing %s' % expDir)
                 log.info('Removing %s' % expDir)
                 if not JUST_TESTING:
-                    removecomplete = remove_dir(log,expDir)
+                    delThumb = False if (('tiled' in exp.rawdatastyle) and (params['keepTN'])) else True
+                    removecomplete = remove_raw_data(log,expDir, delThumb)
                 else:
                     log.info ("TESTING MODE is ON.  Directory was not actually removed")
                     removecomplete = True
                 #TODO: Update the user_ack flag for this experiment
             except:
                 log.error("Failed to remove directory %s" % expDir)
+                log.error(traceback.format_exc())
                 
         if copycomplete and removecomplete and not JUST_TESTING:
             linkPath = path.join(backupDrive, expDir.strip().split("/")[-1])
@@ -334,17 +325,19 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
             os.umask(0002)
             try:
                 os.symlink(linkPath, expDir)
+                add_to_db(exp, linkPath, True)
             except:
                 log.error(traceback.format_exc())
-            add_to_db(exp, linkPath, True)
+                
         elif removecomplete and not JUST_TESTING:
             add_to_db(exp, 'DELETED', False)
         else:
-            log.info("copycomplete returned: %s" % copycomplete)
-            log.info("removecomplete returned: %s" % removecomplete)
+            log.debug("copycomplete returned: %s" % copycomplete)
+            log.debug("removecomplete returned: %s" % removecomplete)
         # Record a return value that will trigger a FS check
         if removecomplete:
             updateNeeded = True
+            
     return updateNeeded
 
 def copy(log, expDir, backupDir, bwLimit):
@@ -359,13 +352,18 @@ def copy(log, expDir, backupDir, bwLimit):
     bwLimitS = "--bwlimit=%s" % bwLimit
     if path.exists(backup):
         try:
-            return to_bool(os.system("rsync -r %s %s %s" % (rawPath,backup,bwLimitS)))
+            status = os.system("rsync -rpt %s %s %s" % (rawPath,backup,bwLimitS))
+            if status:
+                log.error(sys.exc_info()[0])
+            
+            return to_bool(status)
+            
         except Exception, err:
             log.error(sys.exc_info()[0])
             log.error(err)
             return False
     else:
-        log.info("No path to Backup Drive")
+        log.warn("No path to Archive Drive")
         
 def remove_dir(log,expDir):
     try:
@@ -379,22 +377,46 @@ def remove_dir(log,expDir):
         log.error(exc)
         return False
     
-def get_params(cur_loc,log):
+def remove_raw_data(log,expDir,COMPLETE_REMOVAL):
+    '''For Proton, leave the thumbnail data.
+    COMPLETE_REMOVAL boolean will remove everthing, else it will spare the thumbnail data'''
+    if COMPLETE_REMOVAL:
+        log.debug("Deleting the entire folder")
+        return remove_dir(log,expDir)
+        
+    # Remove only the block subdirectories
+    log.debug("Deleting the block subdirectories only in %s" % expDir)
+    # Get list of subdirectories
+    dirsList = [name for name in os.listdir(expDir) if os.path.isdir(os.path.join(expDir,name))]
+    
+    # Delete each block subdirectory in the list; leave others alone (esp. thumbnail!)
+    success = True
+    for dir in dirsList:
+        #log.debug("Examining %s" % dir)
+        if dir.startswith('X') and '_Y' in dir:
+            dir = os.path.join(expDir,dir)
+            log.debug("Removing %s" % dir)
+            if remove_dir(log,dir) == False:
+                success = False
+        else:
+            log.debug("Ignoring %s" % dir)
+    return success
+    
+def get_params(log):
     try:
-        #Why do we need cur_loc?  Commenting out for now...
-        #bk = models.BackupConfig.objects.get(location=cur_loc)
         bk = models.BackupConfig.objects.all()[0]
-        return True,{'NUMBER_TO_BACKUP':bk.number_to_backup,
+        dict = {'NUMBER_TO_BACKUP':bk.number_to_backup,
                      'TIME_OUT':bk.timeout,
                      'BACKUP_DRIVE_PATH':bk.backup_directory,
                      'BACKUP_THRESHOLD':bk.backup_threshold,
-                     'LOCATION':bk.location,
                      'BANDWIDTH_LIMIT':bk.bandwidth_limit,
                      'GRACE_PERIOD':bk.grace_period,
                      'PK':bk.pk,
                      'EMAIL':bk.email,
-                     'enabled':bk.online
+                     'enabled':bk.online,
+                'keepTN':True,  # We'll want to create a boolean in backupconfig object.
                      }
+        return True, dict
     except:
         log.error(traceback.format_exc())
         return False, {'enabled':False}
@@ -413,17 +435,7 @@ def set_status(log,status):
         bk.status = status
         bk.save()
     except:
-        log.error('No configured backups found')
-
-def get_current_location(ip_address,log):
-    try:
-        cur_loc = models.Location.objects.all()[0]
-    except OperationalError:
-        log.error(traceback.format_exc())
-    except:
-        log.error('No locations configured, please configure at least one location')
-        return
-    return cur_loc
+        log.error('No configured backup objects found in database')
 
 def loopScheduler(log):
     global gl_experiments 
@@ -441,22 +453,19 @@ def loopScheduler(log):
             return True
         else:
             return False
-        
-    IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-    cur_loc = get_current_location(IP_ADDRESS,log)
+
     while True:
         connection.close()  # Close any db connection to force new one.
         try:
-            isConf, params = get_params(cur_loc,log)
+            isConf, params = get_params(log)
             if isConf:
                 DELAY = params['TIME_OUT']  # how often to check filesystem
-            #loop(log, cur_loc, isConf, params)
             # The FS check is run less frequently than loop to conserve system
             # resources.
             timeNow = time.mktime(time.localtime(time.time()))
             if checkFSTimer(DELAY,timeBefore,timeNow):
                 log.debug("Its been %d seconds since the last FS check" % (timeNow - timeBefore))
-                update_experiment_list(log, cur_loc, isConf, params)
+                update_experiment_list(log, isConf, params)
                 timeBefore = time.mktime(time.localtime(time.time()))
             else:
                 pass
@@ -464,22 +473,20 @@ def loopScheduler(log):
                 #gl_experiments = refreshVals(gl_experiments)
             # The backup code is called frequently in order to be responsive to
             # user's acknowledge action on the webpage.
-            updateNeeded = removeRuns(log, cur_loc, isConf, params)
+            updateNeeded = removeRuns(log, isConf, params)
             if updateNeeded:
-                update_experiment_list(log, cur_loc, isConf, params)
+                update_experiment_list(log, isConf, params)
                 timeBefore = time.mktime(time.localtime(time.time()))
         except:
             log.error(traceback.format_exc())
         #log.info ("Sleeping for %d seconds" % LOOP)
         time.sleep(LOOP)
         
-def update_experiment_list(log, cur_loc, isConf, params):
+def update_experiment_list(log, isConf, params):
     global gl_experiments
     pk = None
     gl_experiments = {} # clear the list of Runs to process
     try:
-        IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-        log.debug("Backup server running on %s" % IP_ADDRESS)
         autoArchiveAck = GetAutoArchiveAck_GC()
         if autoArchiveAck:
             log.info("User acknowledgement to archive is not required")
@@ -494,11 +501,11 @@ def update_experiment_list(log, cur_loc, isConf, params):
             pk = BACKUP_PK
             GRACE_PERIOD = params['GRACE_PERIOD']
             backupFreeSpace, bkpPerFree, removeOnly = get_archive_report(log,params)
-            serverFullSpace = get_server_full_space(cur_loc)
+            serverFullSpace = get_server_full_space(log)
                 
             if bkpPerFree:
                 # when bkpPerFree is undefined, there is no backup drive mounted
-                log.info("Backup Drive Free Space = %0.2f" % bkpPerFree)
+                log.info("Archive Drive Free Space = %0.2f" % bkpPerFree)
 
             log.info ("Backup trigger percentage: %0.2f %% full" % PERCENT_FULL_BEFORE_BACKUP)
             
@@ -507,7 +514,8 @@ def update_experiment_list(log, cur_loc, isConf, params):
                 log.info("Results Drive %s Used Space = %0.2f" % (serverPath,percentFull))
                 
                 if percentFull > PERCENT_FULL_BEFORE_BACKUP:
-                    experiments = build_exp_list(cur_loc, NUMBER_TO_BACKUP, GRACE_PERIOD, serverPath, removeOnly, log, autoArchiveAck)
+                    log.info("Building list of experiments")
+                    experiments = build_exp_list(NUMBER_TO_BACKUP, GRACE_PERIOD, serverPath, removeOnly, log, autoArchiveAck)
                     gl_experiments[serverPath] = experiments
                 
                     notify(log,experiments,ADMIN_EMAIL)
@@ -515,16 +523,16 @@ def update_experiment_list(log, cur_loc, isConf, params):
                     log.info("No experiments for processing because threshold not reached")
             
             if len(serverFullSpace) == 0:
-                log.debug ("No fileservers configured")
+                log.warn ("No fileservers configured")
                 
         else:
-            log.info("No backups configured, or they're disabled")
+            log.warn("Archiving is disabled or not configured")
     except:
         log.error(traceback.format_exc())
         set_status(log,"ERROR")
     return
 
-def removeRuns(log, cur_loc, isConf, params):
+def removeRuns(log, isConf, params):
     '''Delete or archive the experiments'''
     #
     # Classic design runs thru each file server in sequence, runs thru each experiment in sequence
@@ -550,14 +558,14 @@ def removeRuns(log, cur_loc, isConf, params):
         
         backupFreeSpace, bkpPerFree, removeOnly = get_archive_report(log,params)
         
-        serverFullSpace = get_server_full_space(cur_loc)
+        serverFullSpace = get_server_full_space(log)
         for serverPath, percentFull in serverFullSpace:
             
             if percentFull > PERCENT_FULL_BEFORE_BACKUP:
                 log.info("%s : %.2f %% full" % (serverPath, percentFull))
                 set_status(log, "Backing Up")
                 if len(gl_experiments) == 0:
-                    log.info("No datasets are valid to process")
+                    log.info("No datasets to process")
                 else:
                     updateNeeded = dispose_experiments(log, gl_experiments[serverPath], BACKUP_DRIVE_PATH, 
                            NUMBER_TO_BACKUP, backupFreeSpace, 
@@ -596,7 +604,7 @@ def get_archive_report(log,params):
                 backupFreeSpace = int(d.get_available()*1024)
                 if backupFreeSpace < last_exp_size:
                     removeOnly=True
-                    log.info('Archive drive is full, entering Remove Only Mode.')
+                    log.warn('Archive drive is full, entering Remove Only Mode.')
                 return backupFreeSpace, bkpPerFree, removeOnly
     else:
         removeOnly = True
@@ -613,26 +621,26 @@ def refreshVals(experiments):
 
 class Status(xmlrpc.XMLRPC):
     """Allow remote access to this server"""
-    def __init__(self,log):
+    def __init__(self,_log,_reportLogger):
         xmlrpc.XMLRPC.__init__(self)
-        self.log = log
+        self.log = _log #ionArchive logfile: /var/log/ion/iarchive.log
         self.start_time = datetime.datetime.now()
+        self.dmLog = _reportLogger  #Data Management logfile: /var/log/ion/reportsLog.log
+        
         
     # N.B. This is no longer used to get the list of experiments
     # views.py=>db_backup() function queries dbase directly
     def xmlrpc_next_to_archive(self):
-        global gl_experiments
-        self.log.debug("Got a next_to_archive xmlrpc from %s" % self.request.getClientIP())
-        '''Returns the meta information of all the file servers currently in the database'''
-        IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-        cur_loc = get_current_location(IP_ADDRESS,self.log)
-        isConf, params = get_params(cur_loc,self.log)
+    #    global gl_experiments
+    #    self.log.debug("Got a next_to_archive xmlrpc from %s" % self.request.getClientIP())
+    #    '''Returns the meta information of all the file servers currently in the database'''
+    #    isConf, params = get_params(self.log)
         retdict = {}
-        if isConf:
-            # Need to update the field values of the experiments in the list:
-            # in case the storage option has been changed
-            gl_experiments = refreshVals(gl_experiments)
-            retdict = gl_experiments
+    #    if isConf:
+    #        # Need to update the field values of the experiments in the list:
+    #        # in case the storage option has been changed
+    #        gl_experiments = refreshVals(gl_experiments)
+    #        retdict = gl_experiments
         return retdict
     
     def xmlrpc_user_ack(self):
@@ -664,6 +672,74 @@ class Status(xmlrpc.XMLRPC):
             seconds = 0
         return seconds
     
+    def xmlrpc_remove_only_mode(self):
+        '''Returns boolean indicating remove_only mode.
+        If remove_only is True, Runs designated to be archived will not be processed.'''
+        removeOnly = True
+        try:
+            isConf, params = get_params(self.log)
+            if isConf:
+                backupFreeSpace, bkpPerFree, removeOnly = get_archive_report(self.log,params)
+        except:
+            self.log.error (traceback.format_exc())
+        return removeOnly
+    
+    def xmlrpc_archive_report(self, pk, comment):
+        from iondb.backup import ion_archiveResult
+        result = shortcuts.get_object_or_404(models.Results, pk=pk)
+        try:
+            self.log.info('xmlrpc_archive_report: %s' % (result.resultsName))
+            ion_archiveResult.archiveReportShort(pk, comment, self.dmLog)
+            self.log.info('xmlrpc_archive_report: completed.')
+            return True
+        except Exception as inst:
+            result.updateMetaData("Failure", "Error: %s"%inst, 0, comment)
+            self.log.error('xmlrpc_archive_report: %s'%inst)
+            return False
+        
+    def xmlrpc_export_report(self, pk, comment):
+        from iondb.backup import ion_exportResult
+        result = shortcuts.get_object_or_404(models.Results, pk=pk)
+        try:
+            self.log.info('xmlrpc_export_report: %s' % (result.resultsName))
+            ion_exportResult.exportReportShort(pk, comment, self.dmLog)
+            self.log.info('xmlrpc_export_report: completed.')
+            return True
+        except Exception as inst:
+            result.updateMetaData("Failure", "Error: %s"%inst, 0, comment)
+            self.log.error('xmlrpc_export_report: %s'%inst)
+            return False
+        
+    def xmlrpc_prune_report(self, pk, comment):
+        from iondb.backup import ion_pruneReport
+        result = shortcuts.get_object_or_404(models.Results, pk=pk)
+        try:
+            self.log.info('xmlrpc_prune_report: %s' % (result.resultsName))
+            rDat = ion_pruneReport.pruneReport(pk, comment, self.dmLog)
+            self.log.info('xmlrpc_prune_report: completed.')
+            return True
+        except Exception as inst:
+            result.updateMetaData("Failure", "Error: %s"%inst, 0, comment)
+            self.log.error('xmlrpc_prune_report: %s'%inst)
+            return False
+    
+    def xmlrpc_delete_report(self, pk, comment):
+        from iondb.backup import ion_deleteResult
+        self.log.debug('xmlrpc_delete_report: REPORT DELETE IS DISABLED! pk=%s comment=%s'%(pk, comment))
+        '''
+        try:
+            self.log.debug('xmlrpc_delete_report: pk=%s comment=%s'%(pk, comment))
+            ion_deleteResult.deleteReport("%s"%pk, comment, self.dmLog)
+            self.log.debug('xmlrpc_delete_report: completed')
+            return True
+        except Exception as inst:
+            result = shortcuts.get_object_or_404(models.Results, pk=pk)
+            result.updateMetaData("Failure", "Error: %s"%inst, 0, comment)
+            self.log.error('xmlrpc_delete_report: %s'%inst)
+            return None
+        '''
+        return False
+    
 def checkThread (thread,log,reactor):
     '''Checks thread for aliveness.
     If a valid reactor object is passed, the reactor will be stopped
@@ -674,6 +750,85 @@ def checkThread (thread,log,reactor):
         if reactor.running:
             log.critical("ionArchive daemon is exiting")
             reactor.stop()
+
+''' Setting up a socket based logging receiver
+    http://docs.python.org/howto/logging-cookbook.html#network-logging
+'''
+import pickle
+import logging
+import logging.handlers
+import SocketServer
+import struct
+
+
+class LogRecordStreamHandler(SocketServer.StreamRequestHandler):
+    """Handler for a streaming logging request.
+
+    This basically logs the record using whatever logging policy is
+    configured locally.
+    """
+
+    def handle(self):
+        """
+        Handle multiple requests - each expected to be a 4-byte length,
+        followed by the LogRecord in pickle format. Logs the record
+        according to whatever policy is configured locally.
+        """
+        while True:
+            chunk = self.connection.recv(4)
+            if len(chunk) < 4:
+                break
+            slen = struct.unpack('>L', chunk)[0]
+            chunk = self.connection.recv(slen)
+            while len(chunk) < slen:
+                chunk = chunk + self.connection.recv(slen - len(chunk))
+            obj = self.unPickle(chunk)
+            record = logging.makeLogRecord(obj)
+            self.handleLogRecord(record)
+
+    def unPickle(self, data):
+        return pickle.loads(data)
+
+    def handleLogRecord(self, record):
+        # if a name is specified, we use the named logger rather than the one
+        # implied by the record.
+        if self.server.logname is not None:
+            name = self.server.logname
+        else:
+            name = record.name
+        logger = logging.getLogger(name)
+        # N.B. EVERY record gets logged. This is because Logger.handle
+        # is normally called AFTER logger-level filtering. If you want
+        # to do filtering, do it at the client end to save wasting
+        # cycles and network bandwidth!
+        logger.handle(record)
+
+class LogRecordSocketReceiver(SocketServer.ThreadingTCPServer):
+    """
+    Simple TCP socket-based logging receiver suitable for testing.
+    """
+
+    allow_reuse_address = 1
+
+    def __init__(self, host='localhost',
+                 #port=logging.handlers.DEFAULT_TCP_LOGGING_PORT,
+                 port=settings.DM_LOGGER_PORT,
+                 handler=LogRecordStreamHandler):
+        SocketServer.ThreadingTCPServer.__init__(self, (host, port), handler)
+        self.abort = 0
+        self.timeout = 1
+        self.logname = "reportLogger"
+
+    def serve_until_stopped(self):
+        import select
+        abort = 0
+        while not abort:
+            rd, wr, ex = select.select([self.socket.fileno()],
+                                       [], [],
+                                       self.timeout)
+            if rd:
+                self.handle_request()
+            abort = self.abort
 
 def main(argv):
     # Setup log file logging
@@ -706,8 +861,27 @@ def main(argv):
     l = task.LoopingCall(checkThread,lthread,archlog,reactor)
     l.start(30.0) # call every 30 second
     
+    # define a logging handler for the reportsLog.log file (Data Management Logger)
+    filename = '/var/log/ion/reportsLog.log'
+    reportLogger = logging.getLogger('reportLogger')
+    reportLogger.propagate = False
+    reportLogger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024*1024*10, backupCount=5)
+    handler.setFormatter(formatter)
+    reportLogger.addHandler(handler)
+    
+    # set up listener for log events, in a thread
+    tcpserver = LogRecordSocketReceiver()
+    print('About to start TCP server...')
+    tfunc = lambda: tcpserver.serve_until_stopped()
+    logThread = threading.Thread(target = tfunc)
+    logThread.setDaemon(True)
+    logThread.start()
+
     # start the xml-rpc server
-    r = Status(archlog)
+    print('About to start reactor...')
+    r = Status(archlog,reportLogger)
     reactor.listenTCP(settings.IARCHIVE_PORT,server.Site(r))
     reactor.run()
 

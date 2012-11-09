@@ -6,34 +6,41 @@
 
 #include "SystemContext.h"
 #include "dirent.h"
+#include "HandleExpLog.h"
+#include "IonErr.h"
 
 using namespace std;
+
 
 void SystemContext::DefaultSystemContext()
 {
   dat_source_directory = NULL;
   wells_output_directory = NULL;
-  basecaller_output_directory = NULL;
+  results_folder = NULL;
+  analysisLocation = "";
 
   strcpy (runId, "");
 
   sprintf (wellsFileName, "1.wells");
   strcpy (tmpWellsFile, "");
-  LOCAL_WELLS_FILE = true;
+  LOCAL_WELLS_FILE = 1;
   strcpy (wellsFilePath, "");
   wellStatFile=NULL;
-  wellsFormat = "hdf5";
+  stackDumpFile=NULL;
+  //wellsFormat = "hdf5";
+  wellsFormat.assign("hdf5");
   NO_SUBDIR = 0;  // when set to true, no experiment subdirectory is created for output files.
+  
+  explog_path = NULL;
 }
 
-void SystemContext::CopyBasecallerOutput (char *dirname)
+//const char *SystemContext::GetResultsFolder()
+char *SystemContext::GetResultsFolder()
 {
-  if (basecaller_output_directory)
-    free (basecaller_output_directory);
-  basecaller_output_directory = strdup (dirname);
+  return(results_folder);
 }
 
-void SystemContext::GenerateContext (int from_wells)
+void SystemContext::GenerateContext ()
 {
   if (!dat_source_directory)
   {
@@ -42,18 +49,18 @@ void SystemContext::GenerateContext (int from_wells)
   }
 
   // Test for a valid data source directory
-  // Exception: if this is a re-analysis from wells file, then we can skip this test.
-  if (isDir (dat_source_directory) == false && (from_wells == 0))
+  if (isDir (dat_source_directory) == false )
   {
     fprintf (stderr, "'%s' is not a directory.  Exiting.\n", dat_source_directory);
     exit (EXIT_FAILURE);
   }
-
+  
   // standard output directory
   if (!wells_output_directory)
   {
-    experimentName = (char*) malloc (3);
-    strcpy (experimentName, "./");
+    if (results_folder) { free (results_folder); }
+    results_folder = (char*) malloc (3);
+    strcpy (results_folder, "./");
   }
   else   // --output-dir specified, so wells_output_directory an input arg
   {
@@ -65,43 +72,49 @@ void SystemContext::GenerateContext (int from_wells)
         assert (wells_output_directory[0] != '/');   // root not allowed
       char *tmpPath = strdup (wells_output_directory);
       char *real_path = realpath (dirname (tmpPath), NULL);
+      if (real_path == NULL){
+	std::string ss = tmpPath;  // dirname overwrites tmpPath
+	ss = ss + ": directory not found";
+	ION_ASSERT ((real_path != NULL), ss.c_str());
+      }
       char *tmpBase = strdup (wells_output_directory);
       char *base_name = basename (tmpBase);
       int strSz = strlen (real_path) + strlen (base_name) + 2;
-      experimentName = (char *) malloc (sizeof (char) * strSz);
-      snprintf (experimentName,strSz,"%s/%s",real_path,base_name);
+      if (results_folder) { free (results_folder); }
+      results_folder = (char *) malloc (sizeof (char) * strSz);
+      snprintf (results_folder,strSz,"%s/%s",real_path,base_name);
       free (tmpPath);
       free (tmpBase);
       free (real_path);
     }
     else   // put wells_output_directory+time_stamp in dat_source_directory
     {
-      experimentName = experimentDir (dat_source_directory, wells_output_directory);
+      if (results_folder) { free (results_folder); }
+      results_folder = experimentDir (dat_source_directory, wells_output_directory);
     }
-  }
-
-  if (!basecaller_output_directory)
-  {
-    basecaller_output_directory = strdup (experimentName); // why is this duplicated?
   }
 
 }
 
 SystemContext::~SystemContext()
 {
-  if (experimentName)
-    free (experimentName);
-  if (wells_output_directory)
+  if (results_folder){
+    free (results_folder);
+    results_folder = NULL;
+  }
+  if (wells_output_directory){
     free (wells_output_directory);
+    wells_output_directory = NULL;
+  }
   if (dat_source_directory)
     free (dat_source_directory);
-  if (basecaller_output_directory)
-    free (basecaller_output_directory);
+  if (explog_path)
+    free (explog_path);
 }
 
 
 // utility function
-void SystemContext::MakeSymbolicLinkToOldDirectory (char *experimentName)
+void SystemContext::MakeSymbolicLinkToOldDirectory (char *results_folder)
 {
 // Create symbolic link to bfmask.bin and 1.wells in new subdirectory: links are for disc space usage reasons
   char *oldpath = NULL;
@@ -111,9 +124,9 @@ void SystemContext::MakeSymbolicLinkToOldDirectory (char *experimentName)
   char *fullPath = realpath (oldpath, NULL);
 
   char *newpath = NULL;
-  sz = strlen (experimentName) + strlen (wellsFileName) + 2;
+  sz = strlen (results_folder) + strlen (wellsFileName) + 2;
   newpath = (char *) malloc (sz);
-  snprintf (newpath, sz, "%s/%s", experimentName, wellsFileName);
+  snprintf (newpath, sz, "%s/%s", results_folder, wellsFileName);
 
   int ret = symlink (fullPath, newpath);
   if (ret)
@@ -127,7 +140,7 @@ void SystemContext::MakeSymbolicLinkToOldDirectory (char *experimentName)
 
 
 
-void SystemContext::MakeNewTmpWellsFile (char *experimentName)
+void SystemContext::MakeNewTmpWellsFile (char *results_folder)
 {
   if (wellsFilePath[0] == '\0')
   {
@@ -147,14 +160,16 @@ void SystemContext::MakeNewTmpWellsFile (char *experimentName)
     }
     else
     {
-      strcpy (wellsFilePath, experimentName);
+      strcpy (wellsFilePath, results_folder);
     }
   }
+  printf("wells_file_path: %s\n", wellsFilePath);
+  printf("wells_file_name: %s\n", wellsFileName);
 }
 
 
 // fill the new directory with files needed for report generation
-void SystemContext::CopyFilesForReportGeneration (char *experimentName, SeqListClass &my_keys)
+void SystemContext::CopyFilesForReportGeneration (char *results_folder, SeqListClass &my_keys)
 {
 //--- Copy files needed for report generation ---
 //--- Copy bfmask.stats ---
@@ -164,9 +179,9 @@ void SystemContext::CopyFilesForReportGeneration (char *experimentName, SeqListC
   sz = strlen (wellsFilePath) + strlen ("bfmask.stats") + 2;
   oldpath = (char *) malloc (sz);
   snprintf (oldpath, sz, "%s/%s", wellsFilePath, "bfmask.stats");
-  sz = strlen (experimentName) + strlen ("bfmask.stats") + 2;
+  sz = strlen (results_folder) + strlen ("bfmask.stats") + 2;
   newpath = (char *) malloc (sz);
-  snprintf (newpath, sz, "%s/%s", experimentName, "bfmask.stats");
+  snprintf (newpath, sz, "%s/%s", results_folder, "bfmask.stats");
   fprintf (stderr, "%s\n%s\n", oldpath, newpath);
   CopyFile (oldpath, newpath);
   free (oldpath);
@@ -177,16 +192,16 @@ void SystemContext::CopyFilesForReportGeneration (char *experimentName, SeqListC
   {
     char *filename;
     filename = (char *) malloc (strlen ("avgNukeTrace_") + strlen (
-                                  my_keys.seqList[q].seq) + 5);
-    sprintf (filename, "avgNukeTrace_%s.txt", my_keys.seqList[q].seq);
+                                  my_keys.seqList[q].seq.c_str()) + 5);
+    sprintf (filename, "avgNukeTrace_%s.txt", my_keys.seqList[q].seq.c_str());
 
     sz = strlen (wellsFilePath) + strlen (filename) + 2;
     oldpath = (char *) malloc (sz);
     snprintf (oldpath, sz, "%s/%s", wellsFilePath, filename);
 
-    sz = strlen (experimentName) + strlen (filename) + 2;
+    sz = strlen (results_folder) + strlen (filename) + 2;
     newpath = (char *) malloc (sz);
-    snprintf (newpath, sz, "%s/%s", experimentName, filename);
+    snprintf (newpath, sz, "%s/%s",results_folder, filename);
 
     CopyFile (oldpath, newpath);
     free (oldpath);
@@ -247,54 +262,70 @@ char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
 }
 
 
-void SystemContext::SetUpAnalysisLocation (char *experimentName, std::string &analysisLocation)
+void SystemContext::SetUpAnalysisLocation()
 {
-  // cout << "SystemContext::SetUpAnalysisLocation... experimentName=" << experimentName << endl;
-  // 1. output analysisLocation
-  char *tmpPath = strdup (experimentName);
-  char *tmpStr = realpath (dirname (tmpPath), NULL); // side-effect of dirname(): changes tmpPath, don't use experimentName directly here!!
-  string realDir (tmpStr);
-  string expName (experimentName); // use the tmp expName to get the analysisPath
-  // remove the starting "." or "./" in expName
-  if (expName.substr (0,2).compare ("./") == 0)
-    expName.replace (0,2,""); // remove "./"
-  else if (expName.substr (0,1).compare (".") == 0)
-    expName.replace (0,1,""); // remove "."
+  char *path = strdup(results_folder);
+  
+  //get full path
+  char *real_path = realpath (path, NULL);
+  if (real_path == NULL) {
+    cout << "Couldn't set up real output path from " << path << ". Using working directory." << endl;
+    real_path = realpath("./", NULL);
+  } 
 
-  // check to see if expName contains the realPath already
-  //if (wells_output_directory) expName = analPath;   // overwrite experimentName
-  size_t found = expName.find (realDir);
-  string analysisPath = (found!=string::npos) ? expName : realDir + expName; // expName used only when it does not contain the realDir
-  analysisLocation = analysisPath;
-
-  // 2. output runId (member variable)
-  char *analysisDir = NO_SUBDIR ? strdup (tmpStr) : strdup (analysisPath.c_str());
-  char *bName = basename(analysisDir);
+  analysisLocation = string(real_path);
+  // file locations
+  if (!analysisLocation.empty() && *analysisLocation.rbegin() != '/')
+    analysisLocation = analysisLocation+"/";
+  
+  char *bName = basename(real_path);
   ion_run_to_readname (runId, bName, strlen (bName)); // Create a run identifier from output results directory string
-  cout << "SystemContext::SetUpAnalysisLocation... experimentName=" << experimentName << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... tmpStr        =" << tmpStr << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... realPath      =" << realDir << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... expName       =" << expName << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... analysisDir   =" << analysisDir << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... analysisPath  =" << analysisPath << endl;
+  cout << "SystemContext::SetUpAnalysisLocation... experimentName=" << results_folder << endl;
+  cout << "SystemContext::SetUpAnalysisLocation... analysisLocation  =" << analysisLocation << endl << endl;
   cout << "SystemContext::SetUpAnalysisLocation... baseName      =" << bName << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... runId         =" << runId << endl << endl;
+  cout << "SystemContext::SetUpAnalysisLocation... runId         =" << runId << endl; 
+  
+  free(path);
+  free(real_path);
+}
 
-  /*
-    char *analysisPath = (char *) malloc (strlen (tmpStr) + strlen (experimentName) + 2);
-    sprintf (analysisPath, "%s/%s", tmpStr, experimentName);
-    fprintf (stdout, "Analysis results = %s\n\n", analysisPath);
+// make sure we have explog file if not set cmd-line
+void SystemContext::FindExpLogPath()
+{
+  if (!explog_path){
+    explog_path = MakeExpLogPathFromDatDir(dat_source_directory);
+    if (!explog_path)
+    {
+    fprintf (stderr, "Unable to find explog file.  Exiting.\n");
+    exit (EXIT_FAILURE);
+    }  
+  }    
+}
 
-    char *analysisDir = NO_SUBDIR ? strdup(basename(tmpStr)) : strdup(basename(analysisPath));
-    ion_run_to_readname (runId, analysisDir, strlen (analysisDir)); // Create a run identifier from output results directory string
-    analysisLocation = analysisPath;
+void SystemContext::CleanupTmpWellsFile ()
+{
+  //Cleanup
+  //Copy wells file from temporary, local file to permanent; remove temp file
+  //Copy temp wells file moved to pre-cafie code.
+  if (LOCAL_WELLS_FILE)
+  {
+    unlink (tmpWellsFile);
+  }
+}
 
-    cout << "SystemContext::SetUpAnalysisLocation... tmpStr=" << tmpStr << ", experimentName=" << experimentName << ", analysisDir=" << analysisDir <<", analysisPath=" << analysisPath << endl;
-  free (analysisPath);
-  */
-  free (tmpPath);
-  free (tmpStr);
-  free (analysisDir);
+void SystemContext::CopyTmpWellFileToPermanent ( char *results_folder)
+{
+  // defaults moved here because never changed
+
+  static char *wellfileIndex = "1";
+  static char *wellfileExt = "wells";
+
+  if (LOCAL_WELLS_FILE)
+  {
+    char wellFileName[MAX_PATH_LENGTH];
+    sprintf (wellFileName, "%s/%s.%s", results_folder, wellfileIndex, wellfileExt);
+    CopyFile (tmpWellsFile, wellFileName);
+  }
 }
 
 
@@ -331,83 +362,3 @@ void  ClearStaleWellsFile (void)
   closedir (dirfd);
 }
 
-/*
- *  Remove temporary 1.wells files leftover from previous Analysis
- */
-void  ClearStaleSFFFiles (void)
-{
-  DIR *dirfd;
-  struct dirent *dirent;
-  const char *files[] = {"_rawlib.sff","_rawtf.sff"};
-  for (int i = 0;i < 2; i++)
-  {
-    dirfd = opendir ("/tmp");
-    while ( (dirent = readdir (dirfd)) != NULL)
-    {
-      if (! (strstr (dirent->d_name, files[i])))
-        continue;
-
-      int pid;
-      DIR *tmpdir = NULL;
-      char name[MAX_PATH_LENGTH];
-      char trash[MAX_PATH_LENGTH];
-      sscanf (dirent->d_name,"%d_%s", &pid, trash);
-      sprintf (name, "/proc/%d", pid);
-      if ( (tmpdir = opendir (name)))
-      {
-        closedir (tmpdir);
-      }
-      else
-      {
-        char creamEntry[MAX_PATH_LENGTH];
-        sprintf (creamEntry, "/tmp/%s", dirent->d_name);
-        unlink (creamEntry);
-      }
-    }
-    closedir (dirfd);
-  }
-}
-
-
-void CreateResultsFolder (char *experimentName)
-{
-  // Create results folder
-  if (mkdir (experimentName, 0777))
-  {
-    if (errno == EEXIST)
-    {
-      //already exists? well okay...
-    }
-    else
-    {
-      perror (experimentName);
-      exit (EXIT_FAILURE);
-    }
-  }
-}
-
-void SystemContext::CleanupTmpWellsFile (bool USE_RAWWELLS)
-{
-  //Cleanup
-  //Copy wells file from temporary, local file to permanent; remove temp file
-  //Copy temp wells file moved to pre-cafie code.
-  if (LOCAL_WELLS_FILE && !USE_RAWWELLS)
-  {
-    unlink (tmpWellsFile);
-  }
-}
-
-void SystemContext::CopyTmpWellFileToPermanent (bool USE_RAWWELLS, char *experimentName)
-{
-  // defaults moved here because never changed
-
-  static char *wellfileIndex = "1";
-  static char *wellfileExt = "wells";
-
-  if (LOCAL_WELLS_FILE && !USE_RAWWELLS)
-  {
-    char wellFileName[MAX_PATH_LENGTH];
-    sprintf (wellFileName, "%s/%s.%s", experimentName, wellfileIndex, wellfileExt);
-    CopyFile (tmpWellsFile, wellFileName);
-  }
-}

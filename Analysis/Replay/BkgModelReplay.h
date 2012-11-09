@@ -4,7 +4,7 @@
 
 #include "RegionTrackerReplay.h"
 
-class BkgModel;
+class SignalProcessingMasterFitter;
 
 // *********************************************************************
 // calculation specific class
@@ -21,7 +21,7 @@ class BkgModelReplay {
   virtual RegionTracker *GetRegionTracker() { return (rt); };
 
  public:
-  BkgModel *bkg;
+  SignalProcessingMasterFitter *bkg;
 
  private:
   RegionTracker *rt;

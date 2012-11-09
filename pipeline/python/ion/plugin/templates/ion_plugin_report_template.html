@@ -1,145 +1,195 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+{% extends "rundb/data/base.html" %}
 
-<title>"{{data.pluginname}} plugin report"</title>
 {% block extra_head %}
 
-    <!--Old Styling. May or may not apply-->
-    <!--link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
-    <script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
-    <script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
-    <script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="/site_media/plugin_report.css" media="screen" /-->
+    <style> 
+        .alert-info{
+            background-color: #F6F6F6;
+            border: #E6E6E6;
+        }
 
-   <!--New Styling from Designer-->
-   <script type="text/javascript" src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
-   <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-   <script src="/site_media/new_styling/js/jquery.prettyPhoto.js" type="text/javascript"></script>
-   <script src="/site_media/new_styling/js/main.js" type="text/javascript"></script>
-   <!-- Stylesheets -->
-   <link href="/site_media/new_styling/css/prettyPhoto.css" rel="stylesheet" media="screen" />
-   <link href="/site_media/new_styling/css/basics.css" rel="stylesheet" />
-   <link href="/site_media/new_styling/css/style.css" rel="stylesheet" />
-   <link href="/site_media/new_styling/css/print.css" rel="stylesheet" media="print"/>
-</head>
+         .accordion-group{
+            margin-bottom: 10px;
+        }
+
+        .accordion-body {display: none; height: auto;}
+        .accordion-body.in {display: block;}
+
+    </style>
 {% endblock extra_head %}
 
-{% block extra_plugin_head %}
-{% endblock extra_plugin_head %}
+{% block report-header %}
+<div class="page-nav">
+	<div class="container-fluid">
+		<div class="row-fluid">
+			<div class="span10">
+			<ul class="nav nav-pills dynamic-navbar"><li><a href="#top" class="navitem">Top</a></li></ul>
+			</div>
+			<div class="span2">
+				<!--
+				<a href="#" class="btn btn-110 download-pdf pull-right" style="margin-top: 3px;margin-left: 15px;">Download as PDF</a>
+				<a href="#" class="report-log-file"><span class="message-icon error pull-right">&nbsp;</span></a>
+				-->
+			</div>
+		</div>
+	</div>		
+    </div>
 
+<div class="report-header">
+	<div class="container-fluid">
+		<div class="row-fluid">
+			<div class="span12">
+                <h1 class="pull-left">{{data.meta_data.plugin_name|upper }} Plugin Report </h1>
+				<!-- <a href="#" class="report-log-file"><span class="message-icon error pull-right">&nbsp;</span></a> -->
+			</div>
+		</div>				
+	</div>		
+    </div> <!--end of report-head-->
+    {% endblock report-header %}
 
-{% block full_page_content %}
-<!--Header Block-->
-<body>
-<div id="wrapper">
-    <div id="top">
-        <div id="header">
-            <div id="tech"><a href="#"><img src="/site_media/new_styling/images/ionsupported2.png" alt="ion supported"/></a><a href="#"><img src="/site_media/new_styling/images/print.png" alt="print"/></a><a href="#"><img src="/site_media/new_styling/images/download.png" alt="download"/></a><a href="#"><img src="/site_media/new_styling/images/torrentBrowser.png" alt="torrent browser"/></a></div>
-                      <div id="title">
-                          <!-- Report Name -->
-                          <h2>{{data.plugin_name|upper }}</h2>
-                          <h5><strong> {{data.plugin_name|capfirst}} Plugin Report</strong> Version ?? / Installed 11.11</h5>
-                      </div>
-              </div>
-              <div id="nav">
-                <div class="links">
-                    <ul></ul>
+<div class="main plugin-report">
+    <div class="container-fluid">
+{% block content %}
+            <!-- SECTIONS start here -->
+            <div id="sections" class="accordion" data-collapse-type="manual">
+              {% if data.errors %}
+                <div id="ErrorMessages" class="accordion-group alert alert-error" dynamic-navbar-section="#ErrorMessages" dynamic-navbar-section-title="Error Messages">
+                    <div class="accordion-heading">
+                        <a href="#collapseErrors" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">Error Messages <i class="pull-right icon-plus"></i></a>
+                    </div>
+                    <div class="accordion-body collapse" id="collapseErrors" style="height: auto;">
+                        <div class="accordion-inner">
+                                            <ol>
+                                                {% for i in data.errors %}
+                                                <li>{{i}}</li>
+                                                {% endfor %}
+                                            </ol>
+                        </div>
+                    </div>
                 </div>
-                <div class="messageicon ok">&nbsp;</div>
-                <br class="clear"/>
-            </div>
-        </div>
+            {% endif %}
 
-        <!--Main Content Container-->
-        <div id="contentwrap">
-            <div id="content">
-                 
-                {% if data.errors %}
-               <!--Error message box-->
-                <div class="section error collapsed">
-                    <a href="#" class="sectiontitle"><h2>ERROR MESSAGES</h2></a>
-                            <div class="sectioncontent">
-                                <ol>
-                                    {% for i in data.errors %}
-                                    <li>{{i}}</li>
-                                    {% endfor %}
-                                </ol>
-                                <div class="actions">
-                                    <a href="#">Take this action</a>&nbsp;
-                                    <a href="#" class="hide">Hide Error</a>
-                                </div>
+            {% if data.warnings %}
+                <div id="WarningMessages" class="accordion-group alert alert-error" dynamic-navbar-section="#WarningMessages" dynamic-navbar-section-title="Warning Messages">
+                    <div class="accordion-heading">
+                        <a href="#collapseErrors" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">Warning Messages <i class="pull-right icon-plus"></i></a>
+                    </div>
+                    <div class="accordion-body collapse" id="collapseWarning" style="height: auto;">
+                        <div class="accordion-inner">
+                                            <ol>
+                                                {% for i in data.warnings %}
+                                                <li>{{i}}</li>
+                                                {% endfor %}
+                                            </ol>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+
+            <!-- Sections-->
+        {% for i in data.sections %}
+          {% if i.type == "image" %}
+          <div id="{{i.title}}" class="accordion-group alert alert-info" dynamic-navbar-section="#{{i.title}}" dynamic-navbar-section-title="{{i.title}}">
+                <div class="accordion-heading">
+                    <a href="#imageSection{{i.id}}" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">{{i.title}}<i class="pull-right icon-minus"></i></a>
+                </div>
+                <div class="accordion-body collapse in" id="imageSection{{i.id}}" style="height: auto;">
+                    <div class="accordion-inner">
+                        <div id="thumbnail-gallery" data-toggle="modal-gallery" data-target="#modal-gallery" data-selector="div.thumbnail > a">
+                            <div class="row-fluid">
+                                <ul class="thumbnails">
+                                        {% for j in i.content %}
+                                            <li class="span3">
+                                            <div class="thumbnail">
+                                                <a class="" href={{j.source}} title={{j.caption}} ><img alt="" src={{j.source}}></a>
+                                                    <div class="caption">
+                                                        <h3>{{j.caption}}</h3>
+                                                            <p> {{j.description}}</p>
+                                                    </div>
+
+                                            </div>
+                                            </li>
+                                        {% endfor %}
+                                </ul>
                             </div>
                         </div>
-                  {% endif %}
-                {% if data.warnings %}
-		<!-- Warning message box -->
- 		<div class="section warning collapsed">
-		     <a href="#" class="sectiontitle"><h2>WARNING MESSAGES </h2></a>
-				<div class="sectioncontent">
-                                    <ol>
-                                        {% for i in data.warnings %}
-                                        <li>{{i}}</li>
-                                        {% endfor %}
-					</ol>
-					<div class="actions">
-						<a href="#">Take this action</a>&nbsp;
-						<a href="#" class="hide">Hide Error</a>
-					</div>
+                    </div><!--end of according-nner-->
+                </div><!--end of accordion-body collapse in-->
 
-				</div>
-                            </div>
+                <!-- modal-gallery is the modal dialog used for the image gallery -->
+                    <div id="modal-gallery" class="modal modal-gallery hide fade">
+                        <div class="modal-header">
+                            <a class="close" data-dismiss="modal">&times;</a>
+                               <h3 class="modal-title">&nbsp;</h3>
+                        </div>
+                        <div class="modal-body"><div class="modal-image"></div></div>
+                          <div class="modal-footer">
+                            <a class="btn btn-primary modal-next">Next <i class="icon-arrow-right icon-white"></i></a>
+                            <a class="btn btn-info modal-prev"><i class="icon-arrow-left icon-white"></i> Previous</a>
+                            <a class="btn btn-success modal-play modal-slideshow" data-slideshow="5000"><i class="icon-play icon-white"></i> Slideshow</a>
+                            <a class="btn modal-download" target="_blank"><i class="icon-download"></i> Download</a>
+                          </div>
+                        </div><!--end of modal-gallery-->
+            </div><!--end of ImageSectionX-->
+        {% endif %}
+
+        {% if i.type == "html" %}
+        <div id="{{i.title}}" class="accordion-group alert alert-info" dynamic-navbar-section="#{{i.title}}" dynamic-navbar-section-title="{{i.title}}">
+                <div class="accordion-heading">
+                    <a href="#htmlSection{{i.id}}" data-parent="#sections" data-toggle="collapse" class="accordion-toggle">{{i.title}}<i class="pull-right icon-minus"></i></a>
+                </div>
+                <div class="accordion-body collapse in" id="htmlSection{{i.id}}" style="height: auto;">
+                    <div class="accordion-inner">
+                        <div class="row-fluid">
+                            {% if i.content %}
+                                {{i.content|safe}}
+                            {% else %}
+                                <p></p>
                             {% endif %}
-                            {% if data.success %}
-		<!-- Success message box -->
-		<div class="section success collapsed">
-			<a href="#" class="sectiontitle"><h2>SUCCESS MESSAGES</h2></a>
-				<div class="sectioncontent">
-                                    <ol>
-                                        {% for i in data.success %}
-                                        <li>{{i}}</li>
-                                        {% endfor %}  
-                                    </ol>
-					<div class="actions">
-						<a href="#">Take this action</a>&nbsp;
-						<a href="#" class="hide">Hide Error</a>
-					</div>
-				</div>
-			</div>
+                        </div>
+                    </div><!--end of accordion-inner-->
+                </div><!--end of accordion-boy collapse-->
+            </div><!--End of HtmlSection1-->
+        {% endif %}
 
-                        {% endif %}
-
-
-		
-                <!--Section-->
-              {% for i in data.sections %}
-              <div class="section" id="{{i.id}}" >
-                  <a name="{{i.id}}" title="{{i.title}}"/>
-                  <a href="#" class="sectiontitle"><h2>{{i.title|safe}}</h2></a>
-              <div class="sectioncontent">
-              <h4>{{i.caption|safe}}</h4>
-             {% if i.type == "html" or i.type == "table"%}
-                {{i.content|safe}}
-             {% endif %}
-             {% if i.type == "image" %}
-                 <div clas="flowcontainer">
-                 {% for j in i.content %}
-                    <div class="flowitem">
-                     <h5>{{j.caption}}</h5>
-                     <a href={{j.source}} class="zoomable"><img src={{j.source}} height="200" width="300" alt="" /></a>
-                     <br class="clear">
-                 </div> <!--end of div flowitem -->
-                 {% endfor %}
-                 <br class="clear"/>
-              </div><!--end of div flowcontainer -->
-             {% endif %}
-         </div><!--end of div sectiontitle-->
-     </div><!-- end of div section -->
-              {% endfor %}
-</div>
-{% endblock full_page_content %}
-</body>
-</html>
-
+        {% endfor %}
+    </div><!--End for div sections-->
+    <script>
+            $('.download-pdf').click(function() {
+                alert('Download pdf file');
+            });
+            $('.report-log-file').click(function() {
+                alert('Display log file');
+            });
+            
+            $('#sections').on('shown', function(element) {
+                $(element.target).parent().find('.accordion-heading  i').removeClass('icon-plus').addClass('icon-minus');
+                // $('#' + $(element.target).attr('id')).parent().find('.accordion-heading  i').removeClass('icon-plus').addClass('icon-minus');
+            });
+            
+            // Reverse it for hide:
+            $('#sections').on('hidden', function(element) {
+               $(element.target).parent().find('.accordion-heading  i').removeClass('icon-minus').addClass('icon-plus');
+               //$('#' + $(element.target).attr('id')).parent().find('.accordion-heading  i').removeClass('icon-minus').addClass('icon-plus');
+            });
+            
+            //TODO: place elsewhere or REPLACE with more standard component / plugin
+            //if ($("#dynamic-navbar").length == false) {
+            // $("#dynamic-navbar").empty();
+            // $.each($("a[data-toggle='collapse']"), function(element) {
+            // //$.each($(".accordion-group.accordion-heading a"), function(element) {
+                // //append to navigation
+                // var href = $.trim($(this).attr("href"));
+                // var title = $.trim($(this).text());
+                // var section = '<li><a href="' + href + '" class="navitem">' + title + '</a></li>';
+                // // alert(section);
+                // $("#dynamic-navbar").append(section);
+            // });
+            //}
+            $("#sections").css("height", "auto")
+        </script>
+        <div class="main-push"></div>
+{% endblock content %}
+    </div><!--End for div container-fluid-->
+</div><!--End for div main plugin-report-->

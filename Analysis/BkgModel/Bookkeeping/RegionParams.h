@@ -5,6 +5,7 @@
 #include "BkgMagicDefines.h"
 #include <stdio.h>
 #include <string.h>
+#include "Serialization.h"
 
 // Isolate the over-parameterized 
 // First n pointers must be floats so they can be cast properly in the CpuStep structure
@@ -22,10 +23,33 @@ struct nuc_rise_params
   float t_mid_nuc_shift_per_flow[NUMFB]; // note how this is redundant(!)
   
   // not actually modified,should be an input parameter(!)
-  float C; // dntp in uM
+  float C[NUMNUC]; // dntp in uM
   float valve_open; // timing parameter
+  float nuc_flow_span; // timing of nuc flow
   float magic_divisor_for_timing; // timing parameter
+
+private:
+    friend class boost::serialization::access;
+  // Boost serialization support:
+  template<class Archive>
+  void serialize(Archive& ar, const unsigned int version)
+  {
+    // fprintf(stdout, "Serialize nuc_rise_params ... ");
+    ar
+      & t_mid_nuc
+      & t_mid_nuc_delay
+      & sigma
+      & sigma_mult
+      & t_mid_nuc_shift_per_flow
+      & C
+      & valve_open
+      & nuc_flow_span
+      & magic_divisor_for_timing;
+    // fprintf(stdout, "done nuc_rise_params\n");
+  }
+
 };
+
 
 float GetModifiedMidNucTime(nuc_rise_params *cur,int NucID, int fnum);
 float GetModifiedSigma(nuc_rise_params *cur,int NucID);
@@ -43,7 +67,7 @@ struct reg_params
   float d[NUMNUC];    // dNTP diffusion rate
   float kmax[NUMNUC];  // saturation per nuc action rate
 
- // relative timing parameter to traces
+  // relative timing parameter to traces
    float tshift;
  
   // parameters controlling the evolution of the buffering for beads
@@ -51,6 +75,7 @@ struct reg_params
   // this stabilizes the estimate across the region
   float tau_R_m;  // relationship of empty to bead slope
   float tau_R_o;  // relationship of empty to bead offset
+  float tauE;
   float RatioDrift;      // change over time in buffering
   float NucModifyRatio[NUMNUC];  // buffering modifier per nuc
 
@@ -58,7 +83,7 @@ struct reg_params
   float CopyDrift;
 
   // strength of unexplained background "dark matter"
-  float darkness[NUMFB] __attribute__ ((aligned (16)));
+  float darkness[NUMFB];
 
   // used during regional-fitting to allow the region-wide fit to adjust these parameters
   // across all reads.  This allows the fit to efficiently optimize across both region-wide
@@ -66,20 +91,51 @@ struct reg_params
   
   // !!!do not store the following in the .h5 file, except sens and nuc_shape!!!
   // It might be better to create another structure to copy the things that need to be output to there and output
-  float Ampl[NUMFB] __attribute__ ((aligned (16)));
+  float Ampl[NUMFB];
   float R;
   float Copies;
   
   // cache for use in fitting
   // keep the current "copydrift" pattern
   // only recompute as copydrift changes
-  float copy_multiplier[NUMFB] __attribute__ ((aligned (16)));
+  float copy_multiplier[NUMFB];
 
   // not fitted, inputs to the model
   float sens; // conversion b/w protons generated and signal - no reason why this should vary by nuc as hydrogens are hydrogens.
   float molecules_to_micromolar_conversion; // depends on volume of well
   // fitted differently
   nuc_rise_params nuc_shape;
+  bool fit_taue;
+
+private:
+  // Boost serialization support:
+  friend class boost::serialization::access;
+  template<class Archive>
+  void serialize(Archive& ar, const unsigned int version)
+  {
+    // fprintf(stdout, "Serialize reg_params ... ");
+    ar
+      & krate
+      & d
+      & kmax
+      & tshift
+      & tau_R_m
+      & tau_R_o
+      & tauE
+      & fit_taue
+      & RatioDrift
+      & NucModifyRatio
+      & CopyDrift
+      & darkness
+      & Ampl
+      & R
+      & Copies
+      & copy_multiplier
+      & sens
+      & molecules_to_micromolar_conversion
+      & nuc_shape;
+    // fprintf(stdout, "done reg_params\n");
+  }
 
 };
 
@@ -91,14 +147,15 @@ struct reg_params_H5
   float d[NUMNUC];    // dNTP diffusion rate
   float kmax[NUMNUC];  // saturation per nuc action rate
 
- // relative timing parameter to traces
-   float tshift;
+// relative timing parameter to traces
+  float tshift;
 
   // parameters controlling the evolution of the buffering for beads
   // model empty & bead buffering as falling on a particular line
   // this stabilizes the estimate across the region
   float tau_R_m;  // relationship of empty to bead slope
   float tau_R_o;  // relationship of empty to bead offset
+  float tauE;
   float RatioDrift;      // change over time in buffering
   float NucModifyRatio[NUMNUC];  // buffering modifier per nuc
 
@@ -138,12 +195,15 @@ struct reg_params_H5
 void reg_params_copyTo_reg_params_H5(reg_params &rp, reg_params_H5 &rph5);
 void reg_params_H5_copyTo_reg_params(reg_params_H5 &rp5, reg_params &rp);
 
+
 void reg_params_ApplyUpperBound(reg_params *cur, reg_params *bound);
 void reg_params_ApplyLowerBound(reg_params *cur, reg_params *bound);
 
 // the actual computations, so they can be exported to R
 float xComputeTauBfromEmptyUsingRegionLinearModel(float tau_R_m,float tau_R_o, float etbR);
 float xAdjustEmptyToBeadRatioForFlow(float etbR_original, float NucModifyRatio, float RatioDrift, int flow);
+float xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(float tauE,float adjR);
+float xAdjustEmptyToBeadRatioForFlowWithAdjR(float etbR_original, float NucModifyRatio, float RatioDrift, int flow);
 
 // Region level models dependent only on regional parameters
 float ComputeTauBfromEmptyUsingRegionLinearModel(reg_params *reg_p, float etbR);
@@ -154,7 +214,7 @@ float CalculateCopyDrift(reg_params &rp, int absolute_flow);
 void reg_params_setStandardHigh(reg_params *cur, float t_mid_nuc_start);
 void reg_params_setStandardLow(reg_params *cur, float t_mid_nuc_start);
                           
-void reg_params_setStandardValue(reg_params *cur, float t_mid_nuc_start, float sigma_start, float dntp_concentration_in_uM);
+void reg_params_setStandardValue(reg_params *cur, float t_mid_nuc_start, float sigma_start, float *dntp_concentration_in_uM, bool _fit_taue);
 
 // individual bits read from global defaults
 void reg_params_setKrate(reg_params *cur, float *krate_default);

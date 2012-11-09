@@ -7,12 +7,21 @@
 #include <stdlib.h>
 #include <math.h>
 
+#if defined( __SSE3__) && !defined( __CUDACC__ )
+    #include <xmmintrin.h>
+#else
+    typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
+#endif
+
 class PoissonCDFApproxMemo{
   public:
     float **poiss_cdf;
     float **dpoiss_cdf; // derivative of function
     float **ipoiss_cdf; // integral of function at totat intensity
     float *t;
+
+    __m128 **poissLUT; //lookup table optimized for 2D interpolation
+
     int max_events; // 0-n cdfs
     int max_dim; // 0-whatever intensity
     float scale; // scale for max_dim

@@ -1,0 +1,12 @@
+{
+  "runtype": [
+    "composite", 
+    "wholechip", 
+    "thumbnail"
+  ], 
+  "runlevel": [
+    "pre", 
+    "post", 
+    "block"
+  ]
+}

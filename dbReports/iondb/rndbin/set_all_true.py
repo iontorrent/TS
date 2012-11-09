@@ -4,11 +4,9 @@
 import sys
 import os
 from os import path
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django.db import models
-from iondb.rundb import models
 
+import iondb.bin.djangoinit
+from iondb.rundb import models
 
 def setTrue():
     temp = models.Template.objects.all()

@@ -22,13 +22,20 @@
 #include "KClass.h"
 #include "PJobQueue.h"
 #include "Utils.h"
+#include "HandleExpLog.h"
 #include "IonErr.h"
 #include "TraceStoreDelta.h"
 #include "ReservoirSample.h"
 #include "H5File.h"
 #include "T0Calc.h"
+#include "SynchDatSerialize.h"
+#include "Stats.h"
 #define DIFFSEP_ERROR 3
-
+#define T0_LEFT_OFFSET 4
+#define T0_RIGHT_OFFSET 25
+#define MIN_SD 5
+#define T0_OFFSET_LEFT_TIME -.132f
+#define T0_OFFSET_RIGHT_TIME 1.5f
 using namespace std;
 
 float DifferentialSeparator::LowerQuantile (SampleQuantiles<float> &s)
@@ -69,7 +76,9 @@ void DifferentialSeparator::ClusterRegion (int rowStart, int rowEnd,
     for (int colIx = colStart; colIx < colEnd; colIx++)
     {
       size_t idx = reference.RowColToIndex (rowIx, colIx);
-      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)) || mFilteredWells[idx] ==0) 
+      //      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx))
+      //      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)) || mFilteredWells[idx] != 1)
+      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)))
       {
         continue;
       }
@@ -91,9 +100,6 @@ void DifferentialSeparator::ClusterRegion (int rowStart, int rowEnd,
         else if (wells[idx].keyIndex >= 0 && wells[idx].snr > minBeadSnr)
         {
           cluster.push_back (1);
-        }
-        else if (mRefWells[idx] ==1) {
-          cluster.push_back(0);
         }
         // else if (reference.IsReference(idx)) {
         //   cluster.push_back(0);
@@ -148,7 +154,6 @@ void DifferentialSeparator::LoadInitialMask (Mask *preMask, const std::string &m
   }
   else if (!maskFile.empty())
   {
-    cout << "Opening exclusion mask." << endl;
     mask.SetMask (maskFile.c_str());
   }
   else
@@ -329,7 +334,7 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, BFReference &refere
       }
       else if (bCluster == 1)
       {
-        bfMask[wIx] = MaskEmpty;
+        bfMask[wIx] = (MaskEmpty | MaskReference);
       }
       bfStatsOut << row << "\t" << col << "\t" << wIx << "\t" << bCluster << "\t" << reference.GetBfMetricVal (wIx) << "\t"
       << p2Ownership << "\t" << m.mu1 << "\t" << m.var1 << "\t" << m.mu2 << "\t" << m.var2 << endl;
@@ -655,17 +660,18 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
   string bfFile = opts.resultsDir + "/" + file;
 
   Image img;
-  img.LoadRaw(bfFile.c_str());
-  img.FilterForPinned(&mask, MaskEmpty, false);
-  img.FilterForPinned(&mask, MaskIgnore, false);
+  bool loaded =   img.LoadRaw(bfFile.c_str());
+  if (!loaded) { ION_ABORT ("Couldn't load file: " + bfFile); }
   const RawImage *raw = img.GetImage(); 
+  mBFTimePoints.resize(raw->frames);
+  copy(raw->timestamps, raw->timestamps+raw->frames, &mBFTimePoints[0]);
   T0Calc t0;
   t0.SetWindowSize(3);
-  t0.SetMinFirstHingeSlope(-30.0/raw->baseFrameRate);
+  t0.SetMinFirstHingeSlope(-1.0/raw->baseFrameRate);
   t0.SetMaxFirstHingeSlope(300.0/raw->baseFrameRate);
   t0.SetMinSecondHingeSlope(-20000.0/raw->baseFrameRate);
-  t0.SetMaxSecondHingeSlope(-50.0/raw->baseFrameRate);
-  short * data = raw->image;
+  t0.SetMaxSecondHingeSlope(-10.0/raw->baseFrameRate);
+  short *data = raw->image;
   int frames = raw->frames;
   t0.SetMask(&mask);
   t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
@@ -679,7 +685,7 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
     if (t0vec[i] > 0) {
       float tmpT0Start = floor(t0vec[i]/raw->baseFrameRate);
       float tmpT0End = ceil(t0vec[i]/raw->baseFrameRate);
-      float t0Frames = (float(t0vec[i])/raw->baseFrameRate - tmpT0Start)/(tmpT0End - tmpT0Start) + tmpT0Start; 
+      float t0Frames = (t0vec[i]/raw->baseFrameRate - tmpT0Start)/(tmpT0End - tmpT0Start) + tmpT0Start-1; 
       t0Frames = max(0.0f,t0Frames);
       t0Frames = min(t0Frames, frames - 1.0f);
       t0vec[i] = t0Frames;
@@ -692,6 +698,21 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
     out.close();
   }
   img.Close();
+
+}
+
+void DifferentialSeparator::PrintVec(Col<double> &vec) {
+  for (size_t i = 0; i < vec.size(); i++) {
+    cout << ", " << vec[i];
+  }
+  cout << endl;
+}
+
+void DifferentialSeparator::PrintWell(TraceStore<double> &store, int well, int flow) {
+  Col<double> vec(store.GetNumFrames());
+  store.GetTrace(well, flow, vec.begin());
+  cout << "Well: " << well;
+  PrintVec(vec);
 }
 
 void DifferentialSeparator::RankWellsBySignal(int flow0, int flow1, TraceStore<double> &store,
@@ -715,7 +736,7 @@ void DifferentialSeparator::RankWellsBySignal(int flow0, int flow1, TraceStore<d
         okCount++;
       }
       else {
-        filter[idx] = 0;
+        filter[idx] = 2;
       }
     }
   }
@@ -775,24 +796,50 @@ void DifferentialSeparator::RankWellsBySignal(int flow0, int flow1, TraceStore<d
   minMad = max(0.0, minMad);
   double maxO = Osamp.GetQuantile(.75) + iqrMult * Osamp.GetIQR();
   double minO = Osamp.GetQuantile(.25) - iqrMult * Osamp.GetIQR();
+
+
   double maxZ = Zsamp.GetQuantile(.75) + iqrMult * Zsamp.GetIQR();
   double minZ = Zsamp.GetQuantile(.25) - iqrMult * Zsamp.GetIQR();
-
+  //  cout << "MinO is: " << minO << " for: " << Osamp.GetQuantile(.25) << "+/-" << Osamp.GetIQR() << endl;
+  // cout << "MinZ is: " << minZ << " for: " << Zsamp.GetQuantile(.25) << "+/-" << Zsamp.GetIQR() << endl;
+  // int tooMinMad = 0, tooMaxMad = 0, tooMinO = 0, tooMaxO = 0, tooMinZ = 0, tooMaxZ = 0;
   // Mark wells with good residuals as ok.
   for (size_t i = 0; i < O.n_cols; i++) {
-    if (d[i] < maxMad && d[i] > minMad && d[i+O.n_cols] < maxMad && d[i+O.n_cols] > minMad &&
-        O.at(O.n_rows - 1, i) > minO && O.at(O.n_rows -1, i) < maxO &&
-        Z.at(Z.n_rows - 1, i) > minZ && Z.at(Z.n_rows -1, i) < maxZ) {
+  //   if (!(d[i] > minMad && d[i+O.n_cols] > minMad)) {
+  //     tooMinMad++;
+  //   }
+  //   if (!(d[i] < maxMad && d[i+O.n_cols] < maxMad)) {
+  //     tooMaxMad++;
+  //   }
+  //   if (!(O.at(O.n_rows - 1, i) > minO)) {
+  //     tooMinO++;
+  //   }
+  //   if (!(O.at(O.n_rows - 1, i) < maxO)) {
+  //     tooMaxO++;
+  //   }
+  //   if (!(Z.at(Z.n_rows - 1, i) > minZ)) {
+  //     tooMinZ++;
+  //   }
+  //   if (!(Z.at(Z.n_rows - 1, i) < maxZ)) {
+  //     tooMaxZ++;
+  //   }
+    float dx = d[i];
+    float dox = d[i+O.n_cols];
+    float o = O.at(O.n_rows - 1, i);
+    float z = Z.at(Z.n_rows - 1, i);
+    if (dx < maxMad && dx > minMad && dox < maxMad && dox > minMad &&
+        o > minO && o < maxO &&
+        z > minZ && z < maxZ) {
        SampleStats<double> sam;
        Row<double> vec = abs(P.row(i) - P.row(i + O.n_cols));
-       //      Col<double> vec = O.col(i) - Z.col(i);
-      sam.AddValues(vec.memptr(), vec.n_elem);
-      mad[mapping[i]] = fabs(sam.GetMean());
+       sam.AddValues(vec.memptr(), vec.n_elem);
+       mad[mapping[i]] = fabs(sam.GetMean());
     }
     else {
-      filter[mapping[i]] = 0;
+      filter[mapping[i]] = 3;
     }
   }
+  //  cout << "Filtered: " << tooMinMad << "," << tooMaxMad << "," << tooMinO << "," << tooMaxO << "," << tooMinZ << "," << tooMaxZ << endl;
 }
 
 void DifferentialSeparator::CreateSignalRef(int flow0, int flow1, TraceStore<double> &store,
@@ -850,7 +897,7 @@ void DifferentialSeparator::PickCombinedRank(BFReference &reference, vector<vect
   for (size_t keyIx = 0; keyIx < mads.size(); keyIx++) {
     for (size_t i = 0; i < combinedRanks.size(); i++) {
       rankValues[i].second = i;
-      if (filter[mapping[i]]) {
+      if (filter[mapping[i]] == 1) {
         rankValues[i].first = mads[keyIx][mapping[i]];
       }
       else {
@@ -929,9 +976,15 @@ void DifferentialSeparator::PickReference(TraceStore<double> &store,
                                           int minWells,
                                           vector<char> &filter,
                                           vector<char> &refWells) {
+  int count = 0; 
   for (int i = 0; i < reference.GetNumWells(); i++) {
     filter[i] = reference.GetType(i) != BFReference::Exclude && reference.GetType(i) != BFReference::Filtered;
+    if (reference.GetType(i) == BFReference::Filtered) {
+      count++;
+    }
   }
+  cout << "Beadfind filtered: " << count << " wells of: " << filter.size() << " (" << float(count)/filter.size() << ")" << endl;
+
   vector<vector<float> > mads;
   if (useKeySignal) {
     mads.resize(keys.size());
@@ -945,6 +998,28 @@ void DifferentialSeparator::PickReference(TraceStore<double> &store,
         CreateSignalRef(flow0, flow1, store, rowStep, colStep, iqrMult, numBasis,
                         mask, minWells, filter, mads[i]);
       }
+      int goodCount = 0, badCount2 = 0, badCount3 = 0;
+      for (size_t fIx = 0; fIx < filter.size(); fIx++) {
+        switch (filter[fIx]) 
+          {
+          case (1) : {
+            goodCount++;
+            break;
+          }
+          case (2) : {
+            badCount2++;
+            break;
+          }
+          case (3) : { 
+            badCount3++;
+            break;
+          }
+          default : {
+            ION_ABORT("Bad value.");
+          }
+          }
+      }
+      cout << "For Key: " << i << " good wells: " << goodCount << " bad orig: " << badCount2 << " new bad: " << badCount3 << endl;
     }
   }
   else {
@@ -952,6 +1027,215 @@ void DifferentialSeparator::PickReference(TraceStore<double> &store,
   }
 
   PickCombinedRank(reference, mads, rowStep, colStep, minWells, filter, refWells);
+}
+
+void DifferentialSeparator::CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame) {
+  vector<float> t0Frames;
+  minFrame = -1;
+  maxFrame = -1;
+  for (size_t i = 0; i < sdat.GetNumRegions(); i++) {
+    float t = sdat.T0RegionFrame(i);
+    if (t > 0) {
+      t0Frames.push_back(t);
+    }
+  }
+  if (t0Frames.size() > 0) {
+    sort(t0Frames.begin(), t0Frames.end());
+    float t = ionStats::quantile_sorted(t0Frames, .5);
+    int midT = floor(t);
+    
+    minFrame = max(midT - T0_LEFT_OFFSET, 0);
+    maxFrame = min(midT + T0_RIGHT_OFFSET, sdat.GetMaxFrames());
+  }
+}
+
+void DifferentialSeparator::LoadKeySDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts) {
+
+  // size_t numWells = mask.H() * mask.W();
+  string resultsRoot = opts.resultsDir + "/acq_";
+  string resultsSuffix = opts.sdatSuffix;
+  size_t numWells = mask.H() * mask.W();
+  SetReportSet (mask.H(), mask.W(), opts.wellsReportFile, opts.reportStepSize);
+  if (keys.empty())
+  {
+    DifferentialSeparator::MakeStadardKeys (keys);
+  }
+  cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
+  cout.flush();
+  string s = opts.outData + ".trace.txt";
+  ofstream out (s.c_str());
+  vector<int> rowStarts;
+  vector<int> colStarts;
+  size_t nRow = traceStore.GetNumRows();
+  size_t nCol = traceStore.GetNumCols();
+  double percents[3] = {.2, .5, .8};
+  //int span = 7;
+  Timer first4;
+  for (size_t i = 0; i < ArraySize (percents); i++)
+  {
+    rowStarts.push_back (percents[i] * nRow);
+    colStarts.push_back (percents[i] * nCol);
+  }
+  vector<float> t;
+  Timer allLoaded;
+  Col<double> traceBuffer;
+  traceStore.SetMeshDist (opts.useMeshNeighbors);
+  int sdFilt = 0;
+  int numFrames = 0;
+  mFilteredWells.resize(numWells, 1);
+  size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
+  {
+    for (size_t i = 0; i < loadMinFlows; i++) {
+      traceStore.SetFlowIndex (i, i);
+      TraceChunkSerializer readSerializer;
+      SynchDat sdat;
+      char buff[resultsSuffix.size() + resultsRoot.size() + 21];
+      const char *p = resultsRoot.c_str();
+      const char *s = resultsSuffix.c_str();
+      snprintf (buff, sizeof (buff), "%s%.4d.%s", p, (int) i, s);
+      readSerializer.Read(buff, sdat);
+      sdat.AdjustForDrift();
+      /* Check for pinned wells. */
+      const short pinHigh = GetPinHigh();
+      const short pinLow = GetPinLow();
+      size_t row, col;
+      for (size_t wIx = 0; wIx < numWells; wIx++) {
+        traceStore.WellRowCol(wIx, row, col);
+        for (size_t f = 0; f < sdat.NumFrames(wIx); f++) {
+          if (sdat.At(row,col,f) <= pinLow || sdat.At(row,col,f) >= pinHigh) {
+            mask[wIx] = MaskPinned;
+          }
+        }
+      }
+      /* If first sdat, figure out where data is centered. */
+      if (0 == i) {
+        numFrames = 0;
+        for (float f = T0_OFFSET_LEFT_TIME; f < T0_OFFSET_RIGHT_TIME; f+= sdat.FrameRate() / 1000.0f) {
+          numFrames++;
+        }
+        traceStore.SetSize(numFrames);
+        t0.resize(numWells);
+        for (size_t wIx = 0; wIx < numWells; wIx++) {
+          traceStore.WellRowCol(wIx, row, col);
+          t0[wIx] = sdat.GetT0(row, col);
+        }
+        traceStore.SetT0(t0);
+      }
+      SampleStats<float> sd;
+      traceBuffer.resize(traceStore.GetNumFrames());
+      // @todo set time for each well...
+      for (size_t wIx = 0; wIx < numWells; wIx++) {
+        if (traceStore.HaveWell (wIx) && !(mask[wIx] & MaskIgnore) && !(mask[wIx] & MaskPinned)) {
+          traceStore.WellRowCol(wIx, row, col);
+          sd.Clear();
+          int index = 0;
+          fill(traceBuffer.begin(), traceBuffer.end(), 0.0);
+          float dc = sdat.DcOffset(row, col);
+          for (float f = T0_OFFSET_LEFT_TIME; f < T0_OFFSET_RIGHT_TIME; f+= (sdat.FrameRate() / 1000.0f)) {
+            assert(index < (int)traceBuffer.n_rows);
+            double val = sdat.GetValue(f, row, col) - dc;
+            traceBuffer[index] = val;
+            sd.AddValue(traceBuffer[index]);
+            index++;
+          }
+          traceStore.SetTrace(wIx, i, traceBuffer.begin(), traceBuffer.begin() + traceStore.GetNumFrames());
+          if (sd.GetSD() < MIN_SD) {
+            sdFilt++;
+            mFilteredWells[wIx] = 4;
+          }
+        }
+      }
+    }
+  }
+  cout << "Filtered: " << sdFilt << " based on sd." << endl;
+  traceStore.SetFirst();
+  Col<double> tmpData;
+  for (size_t fIx = 0; fIx < loadMinFlows; fIx++) {
+    for (size_t wIx = 0; wIx < traceStore.GetNumWells(); wIx++) {
+      tmpData.resize(traceStore.GetNumFrames());
+      traceStore.GetTrace(wIx, fIx, tmpData.begin());
+      for (size_t frameIx = 0; frameIx < traceStore.GetNumFrames(); frameIx++) {
+        if(!isfinite(tmpData[frameIx]) || fabs(tmpData[frameIx]) > 10000) {
+          cout << "error at: " << fIx << "\t" << wIx << "\t" << frameIx++ << endl;
+          assert(0);
+        }
+      }
+    }
+  }
+  // ofstream storeOut("trace-store.txt");
+  // traceStore.Dump(storeOut);
+  // storeOut.close();
+  cout << "Done loading all traces - took: " << allLoaded.elapsed() <<  " seconds." << endl;
+
+  mRefWells.resize(numWells, 0);
+  PickReference(traceStore, reference, opts.bfMeshStep, opts.bfMeshStep, opts.useSignalReference,
+                opts.iqrMult, 7, mask, (int)opts.bfMeshStep *opts.bfMeshStep * opts.percentReference,
+                mFilteredWells, mRefWells);
+  int filtered = 0, refChosen = 0, possible = 0;
+  for (size_t i = 0; i < mFilteredWells.size(); i++) {
+    if (mask[i] == MaskIgnore) {
+      mFilteredWells[i] = 4;
+    }
+    if (!(mask[i] & MaskPinned || mask[i] & MaskExclude)) {
+      possible++;
+      if (mFilteredWells[i] != 1) {
+        filtered++;
+      }
+      if (mRefWells[i] == 1) {
+        refChosen++;
+      }
+    }
+  }
+  cout << filtered << " wells filtered of: " << possible << " (" <<  (float)filtered/possible << ") " << refChosen << " reference wells." << endl;
+  for (size_t i = 0; i < mRefWells.size(); i++) {
+    traceStore.SetReference(i, mRefWells[i] == 1);
+  }
+  for (size_t i = 0; i < loadMinFlows; i++) {
+    traceStore.PrepareReference (i);
+  }
+}
+
+void DifferentialSeparator::CalcNumFrames(int tx, std::vector<int> &stamps, int &before_last, int &after_last, int maxStep) {
+  before_last = 0;
+  for (size_t i = (size_t)tx; i > 1; i--) {
+    if (stamps[i] - stamps[i-1] <= maxStep) {
+      before_last++;
+    }
+    else {
+      break;
+    }
+  }
+  after_last = 0;
+  for (size_t i = (size_t)tx; i < stamps.size() - 1; i++) {
+    if (stamps[i+1] - stamps[i] <= maxStep) {
+      after_last++;
+    }
+    else {
+      break;
+    }
+  }
+}
+
+void DifferentialSeparator::CheckT0VFC(std::vector<float> &t, std::vector<int> &stamps) {
+  SampleStats<double> before;
+  SampleStats<double> after;
+  int t0_last = -1;
+  int before_last = -1;
+  int after_last = -1;
+  size_t count = 0;
+  for (size_t i =0; i < t.size(); i++) {
+    int tx = floor(t[i]);
+    if (tx > 0) {
+      if (tx != t0_last) {
+        CalcNumFrames(tx, stamps,before_last,after_last, 70);
+        t0_last = tx;
+      }
+      before.AddValue(before_last);
+      after.AddValue(after_last);
+      count++;
+    }
+  }
+  cout << "VFC Compression Stats: " << count << " wells with t0. Mean before: " << before.GetMean() << " mean after: " << after.GetMean() << endl;
 }
 
 void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts) {
@@ -984,7 +1268,8 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
   vector<float> t;
   char d = '\t';
   Timer allLoaded;
-  size_t loadMinFlows = min (7, opts.maxKeyFlowLength);
+  //size_t loadMinFlows = min (9, opts.maxKeyFlowLength+2);
+  size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
   vector<SampleStats<float> > t0Stats (mask.W() * mask.H());
   string refFile = opts.outData + ".reference_t0.txt";
   std::ofstream diffOut;
@@ -992,18 +1277,21 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
   CalcBfT0(opts, t0,  "beadfind_pre_0003.dat");
   CalcBfT0(opts, t02, "beadfind_pre_0001.dat");
   for (size_t i = 0; i < t0.size(); i++) {
-    if (t0[i] > 10 && t02[i] > 10) {
+    if (t0[i] > 0 && t02[i] > 0) {
       t0[i] = (t0[i] + t02[i])/2.0;
     }
     else {
       t0[i] = max(t0[i], t02[i]);
     }
   }
+  CheckT0VFC(t0, mBFTimePoints);
   for (size_t i = 0; i < t0.size(); i++) {
-    t0[i] = max(-1.0f,t0[i] - 2.5f);
+    t0[i] = max(-1.0f,t0[i] - 4.0f);
   }
-  // Let's keep the traces in a specific scope
+
+  // Let's keep the traces in asep specific scope
   {
+    std::ofstream referenceOut;
     vector<Traces> traces;
     traces.resize (loadMinFlows);
     // Loop through the first N flows and use them to calculate average t0
@@ -1017,7 +1305,6 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
       img.SetImgLoadImmediate (false);
       img.SetIgnoreChecksumErrors (opts.ignoreChecksumErrors);
       bool loaded = img.LoadRaw (buff);
-      std::ofstream referenceOut;
       if (!loaded)
       {
         ION_ABORT ("Couldn't load file: " + ToStr (buff));
@@ -1040,7 +1327,6 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
         o << endl;
         traces[i].SetReferenceOut (&referenceOut);
         DumpDiffStats (traces[i], diffOut);
-
       }
       if (opts.filterLagOneSD)
       {
@@ -1065,9 +1351,6 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
           }
         }
       }
-      if (referenceOut.is_open()) {
-        referenceOut.close();
-      }
       img.Close();
       traces[i].SetReportSampling (reportSet, false);
       /* // @todoo - are we using a common t0? */
@@ -1083,10 +1366,6 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
     }
 
     Col<double> traceBuffer(traces[0].GetNumFrames());
-    // t0.resize(t0Stats.size(), 0);
-    // for (size_t i = 0; i < t0.size(); i++) {
-    //   t0[i] = max(0.0,t0Stats[i].GetMean() - 3); // Little big of slop as shouldn't effect differential equation
-    // }
 
     // Average in nuc t0
     for (size_t i = 0; i < t0.size(); i++) {
@@ -1196,7 +1475,6 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
   }
   out.close();
   cout << "Done loading all traces - took: " << allLoaded.elapsed() <<  " seconds." << endl;
-  cout << "Preparing reference." << endl;
   mFilteredWells.resize(numWells, 1);
   mRefWells.resize(numWells, 0);
   PickReference(traceStore, reference, opts.bfMeshStep, opts.bfMeshStep, opts.useSignalReference,
@@ -1206,7 +1484,7 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
   for (size_t i = 0; i < mFilteredWells.size(); i++) {
     if (!(mask[i] & MaskPinned || mask[i] & MaskExclude)) {
       possible++;
-      if (mFilteredWells[i] == 0) {
+      if (mFilteredWells[i] != 1) {
         filtered++;
       }
       if (mRefWells[i] == 1) {
@@ -1222,6 +1500,9 @@ void DifferentialSeparator::LoadKeyDats(TraceStore<double> &traceStore, BFRefere
   {
     traceStore.PrepareReference (flowIx);
   }
+  // ofstream storeOut("trace-store.txt");
+  // traceStore.Dump(storeOut);
+  // storeOut.close();
 }
 
 void DifferentialSeparator::OutputWellInfo (TraceStore<double> &store,
@@ -1380,6 +1661,125 @@ void DifferentialSeparator::OutputOutliers (DifSepOpt &opts, TraceStore<double> 
   OutputOutliers (store, bg, wells, KeyLowSignalFilt, wellLowSignal.GetData(), traceOut, refOut, bgOut);
 }
 
+/*
+ * For each region calculate:
+ * 1) the variance of the variance of the individual frames.
+ * 2) The 25th,50th and 75th quantiles frame wise
+ */
+void DifferentialSeparator::CalcRegionEmptyStat(H5File &h5File, GridMesh<MixModel> &mesh, TraceStore<double> &store, const string &fileName, 
+                                                vector<int> &flows, Mask &mask) {
+  fmat refVarSummary, refFrameIqr, bgVarSummary, bgFrameIqr;
+  refVarSummary.set_size(mesh.GetNumBin() * flows.size(), 9); // rowstart, rowend, colstart, colend, count var of var, mean of var, mean iqr
+  bgVarSummary.set_size(mesh.GetNumBin() * flows.size(), 9);
+  refFrameIqr.set_size(3 * mesh.GetNumBin() * flows.size(), store.GetNumFrames() + 7);
+  bgFrameIqr.set_size(3 * mesh.GetNumBin() * flows.size(), store.GetNumFrames() + 7);
+  refVarSummary.fill(0);
+  refFrameIqr.fill(0);
+  bgVarSummary.fill(0);
+  bgFrameIqr.fill(0);
+  vector<double> wellData(store.GetNumFrames());
+  for (size_t binIx = 0; binIx < mesh.GetNumBin(); binIx++) {
+    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+    mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+
+    for (size_t flow = 0; flow < flows.size(); flow++) {
+      vector<SampleQuantiles<float> > refFrameQuantiles(store.GetNumFrames());
+      vector<SampleQuantiles<float> > bgFrameQuantiles(store.GetNumFrames());
+      vector<SampleStats<float> > refFrameStats(store.GetNumFrames());
+      vector<SampleStats<float> > bgFrameStats(store.GetNumFrames());
+      for (size_t i = 0; i < refFrameQuantiles.size(); i++) {
+        refFrameQuantiles[i].Init(1000);
+        bgFrameQuantiles[i].Init(1000);
+      }
+      for (int row = rowStart; row < rowEnd; row++) {
+        for (int col = colStart; col < colEnd; col++) {
+          size_t wellIx = store.WellIndex(row, col);
+          bool needToLoad = true;
+          if (store.IsReference(wellIx)) {
+            store.GetTrace(wellIx, flows[flow], wellData.begin());
+            needToLoad = false;
+            for (size_t frame = 0; frame < store.GetNumFrames(); frame++) {
+              refFrameQuantiles[frame].AddValue(wellData[frame]);
+              refFrameStats[frame].AddValue(wellData[frame]);
+            }
+          }
+          if (mask[wellIx] & MaskReference) {
+            if (needToLoad) {
+              store.GetTrace(wellIx, flows[flow], wellData.begin());
+              needToLoad = false;
+            }
+            for (size_t frame = 0; frame < store.GetNumFrames(); frame++) {
+              bgFrameQuantiles[frame].AddValue(wellData[frame]);
+              bgFrameStats[frame].AddValue(wellData[frame]);
+            }
+          }
+        }
+      }
+      size_t wIdx = flow * mesh.GetNumBin() + binIx;
+      {
+      int col = 0;
+      float quantiles[3] = {.25,.5,.75};
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = rowStart;    col++;
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = rowEnd;      col++;
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = colStart;    col++;
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = colEnd;      col++;
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = flows[flow]; col++;
+      bgVarSummary(wIdx,col) = refVarSummary(wIdx, col) = refFrameStats[0].GetCount(); col++;
+      for (size_t q = 0; q < ArraySize(quantiles); q++) {
+        size_t qIdx = q + binIx * ArraySize(quantiles) + flow * ArraySize(quantiles) * mesh.GetNumBin();
+        size_t lcol = 0;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = rowStart;    lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = rowEnd;      lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = colStart;    lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = colEnd;      lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = flows[flow]; lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = refFrameStats[0].GetCount(); lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = quantiles[q];
+      }
+
+      SampleStats<float> refVar, refIqr, bgVar, bgIqr;
+      for (size_t frame = 0; frame < store.GetNumFrames(); frame++) {
+        for (size_t q = 0; q < ArraySize(quantiles); q++) {
+          size_t qIdx = q + binIx * ArraySize(quantiles) + flow * ArraySize(quantiles) * mesh.GetNumBin();
+          if (refFrameQuantiles[frame].GetNumSeen() > 2) {
+            refFrameIqr(qIdx, col + 1 + frame) = refFrameQuantiles[frame].GetQuantile(quantiles[q]);
+          }
+          if (bgFrameQuantiles[frame].GetNumSeen() > 2) {
+            bgFrameIqr(qIdx, col + 1 + frame) = bgFrameQuantiles[frame].GetQuantile(quantiles[q]);
+          }
+        }
+        if (refFrameQuantiles[frame].GetNumSeen() > 2) {
+          refVar.AddValue(refFrameStats[frame].GetSD());
+          refIqr.AddValue(refFrameQuantiles[frame].GetIQR());
+        }
+        if (bgFrameQuantiles[frame].GetNumSeen() > 2) {
+          bgVar.AddValue(bgFrameStats[frame].GetSD());
+          bgIqr.AddValue(bgFrameQuantiles[frame].GetIQR());
+        }
+      }
+      refVarSummary(wIdx, col) = refVar.GetSD();
+      bgVarSummary(wIdx, col) = bgVar.GetSD();
+      col++;
+      refVarSummary(wIdx, col) = refVar.GetMean();
+      bgVarSummary(wIdx, col) = bgVar.GetMean();
+      col++;
+      refVarSummary(wIdx, col) = refIqr.GetMean();
+      bgVarSummary(wIdx, col) = bgIqr.GetMean();
+      col++;
+      }
+    }
+  }    
+  string refVarSummaryH5 = "/separator/refVarSummary";
+  h5File.WriteMatrix(refVarSummaryH5, refVarSummary);
+  string refFrameStats = "/separator/refFrameStats";
+  h5File.WriteMatrix(refFrameStats, refFrameIqr);
+  string bgVarSummaryH5 = "/separator/bgVarSummary";
+  h5File.WriteMatrix(bgVarSummaryH5, bgVarSummary);
+  string bgFrameStats = "/separator/bgFrameStats";
+  h5File.WriteMatrix(bgFrameStats, bgFrameIqr);
+}
+
+
 int DifferentialSeparator::Run(DifSepOpt opts) {
 
   // Fill in references
@@ -1387,8 +1787,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   KClass kc;
   BFReference reference;
   cout << "Separator region size is: " << opts.regionXSize << "," << opts.regionYSize << endl;
-  reference.SetRegionSize (opts.bfMeshStep, opts.bfMeshStep);
+  reference.SetRegionSize (opts.regionXSize, opts.regionYSize);
   reference.SetNumEmptiesPerRegion(opts.percentReference * opts.bfMeshStep * opts.bfMeshStep);
+  reference.SetIqrOutlierMult(opts.iqrMult);
   reference.SetDoRegional (opts.useMeshNeighbors == 0);
   string bfDat;
 
@@ -1397,8 +1798,16 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   string bfBkgImgFile;
   DetermineBfFile (opts.resultsDir, opts.signalBased, opts.bfType,
                    opts.bfDat, opts.bfBgDat, bfImgFile, bfImgFile2, bfBkgImgFile);
-
+  
   LoadInitialMask(opts.mask, opts.maskFile, bfImgFile, mask, opts.ignoreChecksumErrors);
+  int exWells = 0;
+  size_t numWells = mask.H() * mask.W();
+  for (size_t i = 0; i < numWells; i++) {
+    if (mask[i] & MaskExclude) {
+      exWells++;
+    }
+  }
+  cout << "Number excluded starting is: " << exWells;
   ReportPinned(mask, "Start");
   if (opts.filterLagOneSD) {
     CheckFirstAcqLagOne(opts);
@@ -1413,13 +1822,12 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     reportSet.ReadSetFromFile (opts.wellsReportFile, 0);
   }
 
-  size_t numWells = mask.H() * mask.W();
+
   string resultsRoot = opts.resultsDir + "/acq_";
   string resultsSuffix = ".dat";
 
   time_t start = time (NULL);
   int qSize = (mask.W() / opts.t0MeshStep + 1) * (mask.H() / opts.t0MeshStep + 1);
-  //  opts.nCores = 1;
   if (opts.nCores <= 0)
   {
     opts.nCores = numCores();
@@ -1427,7 +1835,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   cout << "Num cores: " << opts.nCores << endl;
   PJobQueue jQueue (opts.nCores, qSize);
   reference.Init (mask.H(), mask.W(),
-                  opts.bfMeshStep, opts.bfMeshStep,
+                  opts.regionYSize, opts.regionXSize,
                   .95, .98);
   vector<double> bfMetric;
   if (opts.signalBased)
@@ -1450,6 +1858,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     }
   }
   ReportPinned(mask, "After Reference");
+
   time_t end = time (NULL);
   cout << "Reference Step took: " << (end - start) << " seconds." << endl;
   if (opts.justBeadfind)
@@ -1472,10 +1881,21 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   struct timeval st, et;
   gettimeofday (&st, NULL);
 
-  TraceStoreDelta<double> traceStore (mask, 25, opts.flowOrder.c_str(), opts.maxKeyFlowLength+1, opts.maxKeyFlowLength+1,
+  TraceStoreDelta<double> traceStore (mask, 31, opts.flowOrder.c_str(), opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
                                       opts.regionYSize, opts.regionXSize);
-  traceStore.SetMinRefProbes (10);
-  LoadKeyDats (traceStore, reference, opts);
+  traceStore.SetMinRefProbes (20);
+  std::string firstFile = opts.resultsDir + "/acq_0000.dat";
+  if (H5File::IsH5File(firstFile.c_str())) {
+    opts.doSdat = true;
+    opts.sdatSuffix = "dat";
+  }
+  if (opts.doSdat) {
+    LoadKeySDats (traceStore, reference, opts);
+  } 
+  else {
+    LoadKeyDats (traceStore, reference, opts);
+  }
+  zModelBulk.SetFiltered(mFilteredWells);
   gettimeofday (&et, NULL);
   cout << "Done." << endl;
   cout << "Loading traces took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
@@ -1511,12 +1931,14 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+    //    CheckFirst();
     initialJobs[binIx].Init (rowStart,rowEnd,colStart,colEnd,
                              opts.minSnr, &mask, &wellsInitial, &keys,
                              &mTime, &reporters, &traceStore, opts.maxKeyFlowLength);
     jQueue.AddJob (initialJobs[binIx]);
   }
   jQueue.WaitUntilDone();
+
   gettimeofday (&et, NULL);
   cout << "Done." << endl;
   cout << "Initial Classification took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
@@ -1525,18 +1947,21 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   {
     reporters[rIx]->Finish();
   }
-
-  zModelBulk.Init (opts.nCores, 100);
+  zModelBulk.Init (opts.nCores, emptyEstimates.GetNumBin());
   zModelBulk.SetRegionSize (opts.regionYSize, opts.regionXSize);
-  keyAssignments.resize (wellsInitial.size());
+ keyAssignments.resize (wellsInitial.size());
   int keyCounts[3] = {0,0,0};
   SampleQuantiles<float> peakSigQuantiles (10000);
+  string mykeyFile=opts.analysisDir+"/keys.assignments.txt";
+  ofstream keyOut(mykeyFile.c_str());
   for (size_t wIx = 0; wIx < keyAssignments.size(); wIx++)
   {
     keyAssignments[wIx] = wellsInitial[wIx].keyIndex;
+    keyOut << wIx << "\t" << wellsInitial[wIx].keyIndex;
     keyCounts[keyAssignments[wIx]+1]++;
-
+    
   }
+  keyOut.close();
   cout << "Key Counts: " << keyCounts[0] << " " << keyCounts[1] << "  " << keyCounts[2] << endl;
 
   Timer timer;
@@ -1546,6 +1971,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   zModelBulk.FitWellZeromers (traceStore,
                               keyAssignments,
                               keys);
+  // ofstream zout("zeromer-dump.txt");
+  // zModelBulk.Dump(zout);
+  // zout.close();
   cout << "Fitting zeromers took: " << timer.elapsed() << " seconds." << endl;
   SampleQuantiles<float> tauEQuant (10000);
 
@@ -1553,10 +1981,10 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   for (size_t i = 0; i < emptyEstimates.GetNumBin(); i++)
   {
     SampleQuantiles<double> &item = emptyEstimates.GetItem (i);
-    double val = -1;
+    //double val = -1;
     if (item.GetNumSeen() > 0)
     {
-      val = item.GetMedian();
+      item.GetMedian();
     }
   }
 
@@ -1577,7 +2005,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     wells[i] = wellsInitial[i];
   }
   Col<double> medianIncorp = incorp.GetMeanTrace();
+
   medianIncorp = medianIncorp / norm (medianIncorp,2);
+  medianIncorp.raw_print(cout, "median incorp");
   double basicTauEEst = 6;
 
   timer.restart();
@@ -1647,6 +2077,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       traceMean.AddValue (wells[i].traceMean);
       traceSd.AddValue (wells[i].traceSd);
     }
+    //    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad && isfinite(wells[i].peakSig))
     if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad)
     {
       sdStats.AddValue (wells[i].sd);
@@ -1675,9 +2106,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   KeySummaryReporter<double> keySumReport;
   keySumReport.Init (opts.flowOrder, opts.analysisDir, mask.H(), mask.W(),
                      std::min (128,mask.W()), std::min (128,mask.H()), keys);
-  double minTfPeak = min (20.0, peakSigQuantiles.GetQuantile (.75) + opts.tfFilterQuantile * IQR (peakSigQuantiles));
-  double minLibPeak = min (20.0,peakSigQuantiles.GetQuantile (.75) + opts.libFilterQuantile * IQR (peakSigQuantiles));
-  minTfPeak = max(15.0,minTfPeak);
+  double minTfPeak = min ((double)opts.minTfPeakMax, peakSigQuantiles.GetQuantile (.75) + opts.tfFilterQuantile * IQR (peakSigQuantiles));
+  double minLibPeak = min ((double)opts.minLibPeakMax,peakSigQuantiles.GetQuantile (.75) + opts.libFilterQuantile * IQR (peakSigQuantiles));
+  //  minTfPeak = max(15.0,minTfPeak);
   cout << "Min Tf peak is: " << minTfPeak << " lib peak is: " << minLibPeak << endl;
   keySumReport.SetMinKeyThreshold (1, minTfPeak);
   keySumReport.SetMinKeyThreshold (0, minLibPeak);
@@ -1772,15 +2203,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     cout << "Saw less than 10 peakSigQuantiles." << endl;
   }
 
-  //		double tauBMinThreshold = tauBQuantiles.GetQuantile(.02);
   double refMinSD = sdQuantiles.GetMedian() - (3 * (IQR(sdQuantiles))/2);
-  double refMaxSD = sdQuantiles.GetMedian();// + (opts.sigSdMult * (IQR(sdQuantiles))/2);
-
-  // double refMinSig = onemerQuantiles.GetQuantile(.05);
-  // double refMaxSig = onemerQuantiles.GetQuantile(.6);
-  // double meanMax = onemerQuantiles.GetQuantile(.5) + 1 * (IQR(onemerQuantiles))/2;
+  double refMaxSD = sdQuantiles.GetQuantile(.5);// + (opts.sigSdMult * (IQR(sdQuantiles))/2);
   double varMin =LowerQuantile (sdQuantiles);
-  //  double traceMeanThresh = traceMean.GetMean() - 3 * traceMean.GetSD();
   double traceMeanThresh = traceMean.GetMedian() - 3 * (IQR (traceMean) /2);
   double traceSDThresh = traceSd.GetMedian() - 5 * (LowerQuantile (traceSd));
   if (opts.signalBased)
@@ -1905,6 +2330,13 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   for (size_t bIx = 0; bIx < wells.size(); bIx++)
   {
     bfMask[bIx] = mask[bIx];
+    if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned) {
+      continue;
+    }
+    if (bfMask[bIx] & MaskEmpty && mFilteredWells[bIx] != 1) {
+      bfMask[bIx] = MaskIgnore;
+      continue;
+    }
     if (bfMask[bIx] & MaskWashout)
     {
       bfMask[bIx] = MaskIgnore;
@@ -2025,7 +2457,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
         else if (bCluster == 1)
         {
           wells[bIx].flag = WellEmpty;
-          bfMask[bIx] = MaskEmpty;
+          bfMask[bIx] = MaskEmpty | MaskReference;
         }
       }
     }
@@ -2042,9 +2474,10 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   cout << "Bf threshold is: " << bfThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " <<  IQR (bfQuantiles) << endl;
   for (size_t bIx = 0; bIx < wells.size(); bIx++)
   {
+
     if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold)
     {
-      bfMask[bIx] = MaskIgnore;
+      bfMask[bIx] &= ~MaskReference;
       wells[bIx].flag = WellSdFilter;
       tooVar++;
       continue;
@@ -2058,7 +2491,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     // }
     if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold)
     {
-      bfMask[bIx] = MaskIgnore;
+      bfMask[bIx] &= ~MaskReference;
       wells[bIx].flag = WellSdFilter;
       tooVar++;
       continue;
@@ -2066,13 +2499,13 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     double bfVal = wells[bIx].bfMetric;
     if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && bfVal > bfThreshold)
     {
-      bfMask[bIx] = MaskIgnore;
+      bfMask[bIx] &= ~MaskReference;
       wells[bIx].flag = WellBfBufferFilter;
       tooBf++;
       continue;
     }
     if (wells[bIx].keyIndex < 0 && (bfMask[bIx] & MaskEmpty) && wells[bIx].peakSig >= peakSigEmptyThreshold) {
-      bfMask[bIx] = MaskIgnore;
+      bfMask[bIx] &= ~MaskReference;
       wells[bIx].flag = WellEmptySignal;
       emptyWithSignal++;
       continue;
@@ -2094,12 +2527,12 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       continue;
     }
     // Call low variance non-key wells as reference
-
+    //    double bf2IqrThreshold = bfEmptyQuantiles.GetQuantile (.75) + (2 * IQR (bfEmptyQuantiles));
     if (opts.doRecoverSdFilter && wells[bIx].keyIndex < 0 && (bfMask[bIx] & MaskBead) && 
         (wells[bIx].sd >= refMinSD && wells[bIx].sd < refMaxSD) && 
         (wells[bIx].peakSig <= peakSigThreshold) &&
         (bfVal <= bfThreshold && bfVal > bfMinThreshold)) {
-      bfMask[bIx] = MaskEmpty;
+      bfMask[bIx] |= MaskReference;
       wells[bIx].flag = WellRecoveredEmpty;
       sdRefCalled++;
       continue;
@@ -2135,11 +2568,20 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       }
     }
   }
-  for (size_t i = 0; i < mRefWells.size(); i++) {
-    if (mRefWells[i] == 1) {
-      bfMask[i] = MaskEmpty;
+  
+
+  // Mark all the separator's reference wells as reference just for good measure
+  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    if (mRefWells[bIx] == 1) {
+      bfMask[bIx] = MaskReference | MaskEmpty; // reference is a subset of empty
+    }
+    // If just use the separator reference unset the non- separator references.
+    else if (opts.useSeparatorRef) {
+      bfMask[bIx] &= ~MaskReference;
     }
   }
+  
+
   gettimeofday (&et, NULL);
   cout << "Min snr: " << opts.minSnr << endl;
   cout << "Lib snr: " << keys[0].minSnr << endl;
@@ -2178,7 +2620,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
                   bfQuantiles.GetQuantile (.9), bfQuantiles.GetQuantile (.9), peakSigKeyQuantiles.GetQuantile (.1));
 
     //  CalcDensityStats(opts.outData, bfMask, wells);
-    arma::Mat<float> wellMatrix (numWells, 13);
+    arma::Mat<float> wellMatrix (numWells, 12);
     fill (wellMatrix.begin(), wellMatrix.end(), 0.0f);
     for (size_t i = 0; i < numWells; i++)
       {
@@ -2190,7 +2632,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
         KeyFit &kf = wells[i];
         const KeyBulkFit *kbf = zModelBulk.GetKeyBulkFit (i);
         wellMatrix.at (i, currentCol++) = (int) kf.keyIndex;
-        wellMatrix.at (i, currentCol++) = traceStore.GetT0 (kf.wellIdx);
+        wellMatrix.at (i, currentCol++) = t0[kf.wellIdx]; //traceStore.GetT0 (kf.wellIdx);
         wellMatrix.at (i, currentCol++) = kf.snr;
         wellMatrix.at (i, currentCol++) = kf.mad;
         wellMatrix.at (i, currentCol++) = kf.sd;
@@ -2201,18 +2643,17 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
         wellMatrix.at (i, currentCol++) = kbf->param.at (TraceStore<double>::T_NUC,0);
         wellMatrix.at (i, currentCol++) = kf.peakSig;
         wellMatrix.at (i, currentCol++) = kf.flag;
-        int val = 0;
-        if (mFilteredWells[i] == 0) {
-          val = 1;
-        }
-        if (mRefWells[i] == 1) {
-          val = 2;
-        }
-        wellMatrix.at (i, currentCol++) = val;
       }
-
-    string h5Summary = opts.outData + ".h5:/separator/summary";
-    H5File::WriteMatrix (h5Summary, wellMatrix, true);
+    string h5SummaryRoot = opts.outData + ".h5";
+    string h5Summary = "/separator/summary";
+    vector<int> flows(2);
+    flows[0] = opts.maxKeyFlowLength;
+    flows[1] = opts.maxKeyFlowLength+1;
+    H5File h5file(h5SummaryRoot);
+    h5file.Open(true);
+    h5file.WriteMatrix (h5Summary, wellMatrix);
+    CalcRegionEmptyStat(h5file, modelMesh, traceStore, h5SummaryRoot, flows, mask);
+    h5file.Close();
 
     string summaryFile = opts.outData + ".summary.txt";
     ofstream o (summaryFile.c_str());
@@ -2248,7 +2689,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       }
     o.close();
   }
-  int beadCount = 0, emptyCount = 0, ignoreCount = 0, libCount = 0, tfCount = 0, dudCount = 0, pinnedCount = 0;
+
+  int beadCount = 0, emptyCount = 0, ignoreCount = 0, libCount = 0, tfCount = 0, dudCount = 0, pinnedCount = 0, referenceCount = 0, excludedCount = 0;
+
   for (size_t bIx = 0; bIx < wells.size(); bIx++)
   {
     if (bfMask[bIx] & MaskBead)
@@ -2262,6 +2705,10 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     if (bfMask[bIx] & MaskEmpty)
     {
       emptyCount++;
+    }
+    if (bfMask[bIx] & MaskReference)
+    {
+      referenceCount++;
     }
     if (bfMask[bIx] & MaskIgnore)
     {
@@ -2279,10 +2726,16 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     {
       dudCount++;
     }
+    if (bfMask[bIx] & MaskExclude) {
+      excludedCount++;
+    }
+
   }
 
   cout << "Empties:\t" << emptyCount << endl;
+  cout << "Reference:\t" << referenceCount << endl;
   cout << "Pinned :\t" << pinnedCount << endl;
+  cout << "Excluded :\t" << excludedCount << endl;
   cout << "Ignored:\t" << ignoreCount << endl;
   cout << "Beads  :\t" << beadCount << endl;
   cout << "Duds   :\t" << dudCount << endl;

@@ -1,0 +1,13 @@
+package "headermerge"
+version "0.1"
+
+usage "headermerge -a <a.bam> -b <b.bam> -o <out.bam>"
+purpose "Remove reads that are common to both files"
+# description
+
+args "--c-extension=cpp -F headermerge_cmdline"
+option "verbose"    v "print verbose runtime messages and warnings" optional multiple
+option "debug"      - "Debug messages" optional hidden
+
+option "input" i "Input Bam Files" string typestr="filename" required multiple
+

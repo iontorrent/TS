@@ -12,6 +12,7 @@
 // interferes w/ lapackpp.  I undef it here in case anyone above has included <complex.h>
 #undef I
 #define LEVMAR_STEP_V2 10.0
+#define REGULARIZER_VAL 0.0000001
 
 class BkgFitLevMarDat;
 // base class for fitting algorithms
@@ -50,6 +51,7 @@ class LevMarFitterV2
 
     // get the mean squared error after the fit
     float GetMeanSquaredError (float *y = NULL, bool use_fval_cache = false);
+    void ReturnPredicted(float *f_predict, bool use_fval_cache);
     int getNumException()
     {
       return numException;
@@ -73,7 +75,7 @@ class LevMarFitterV2
   protected:
     LevMarFitterV2() : npts (0), x (NULL), residual (0.0), dp (NULL), residualWeight (NULL),
         prior (NULL), dampers (NULL), wtScale (0.0), nparams (0), param_val(NULL) , param_max (NULL), param_min (NULL), debug_trace (false),
-        fval_cache (NULL), enable_fval_cache (false), lambda (1.0), lambda_threshold (1.0E+10),data (NULL),numException (0)
+        fval_cache (NULL), enable_fval_cache (false), lambda (1.0), lambda_threshold (1.0E+10),regularizer(0.0),data (NULL),numException (0)
     {
     }
 
@@ -106,6 +108,7 @@ class LevMarFitterV2
       return r;
     }
 
+// virtual - >may< quit early if we have good reason
     virtual bool DoneTest (int iter,
                            int max_iter,
                            BkgFitLevMarDat *data,
@@ -124,6 +127,13 @@ class LevMarFitterV2
 
       return ( (iter >= max_iter) || (done_cnt >= 5));
     }
+    
+    // in case someone over-rides the done test and forgets to be smart
+    // like we did by not including a lambda_threshold test
+    bool ForceQuit(int iter, int max_iter, float lambda)
+    {
+      return((iter>=max_iter) or (lambda>lambda_threshold));  // no virtual function, >must< quit if we escape bounds
+    }
 
     // generic grid search
     void GridSearch (int steps,float *y,float *params);
@@ -138,7 +148,7 @@ class LevMarFitterV2
     }
 
     float EvaluateParamFromPrior (float *param_new);
-    void TryLevMarStep (float *y, float *fval, float *params, float *err_vect, double *bfjtj, double *bfrhs, int done_cnt, float r_start, float &r_chg);
+    void TryLevMarStep (float *y, float *fval, float *params, float *err_vect, double *bfjtj, double *bfrhs, int done_cnt, float &r_start, float &r_chg);
 
     // allow replacement
     virtual void MakeJacobian (float *bfjac, float *params, float *fval)
@@ -190,11 +200,8 @@ class LevMarFitterV2
   private:
     float lambda;
     float lambda_threshold;
-    //Mat<double> jac;
-    //Mat<double> jtj;
-    //Mat<double> lhs;
-    //Col<double> rhs;
-    //Col<double> delta;
+    float regularizer;
+
     BkgFitLevMarDat *data;
     int numException;
 

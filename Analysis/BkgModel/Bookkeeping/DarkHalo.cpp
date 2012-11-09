@@ -1,12 +1,14 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+#include <algorithm>
+#include <cstdio>
 #include "DarkHalo.h"
 
+using namespace std;
 
 Halo::Halo()
 {
-  dark_matter_compensator  = NULL;
-  for (int i=0; i<NUMNUC; i++)
+  for (int i=0; i<4; i++)
     dark_nuc_comp[i] = NULL;
   nuc_flow_t = 0;
 }
@@ -16,33 +18,42 @@ void Halo::Alloc (int _npts)
   // set up buffer here as time_c tells me how many points I have
   npts = _npts;
   nuc_flow_t = NUMNUC * npts; // some objects repeat per nucleotide
-  dark_matter_compensator  = new float[nuc_flow_t];
+  dark_matter_compensator.resize(nuc_flow_t);
+  SetupDarkNumComp();
+  ResetDarkMatter();
+}
+
+void Halo::SetupDarkNumComp()
+{
   for (int i=0; i<NUMNUC; i++)
     dark_nuc_comp[i] = &dark_matter_compensator[i*npts];
-  ResetDarkMatter();
 }
 
 void Halo::ResetDarkMatter()
 {
-  memset (dark_matter_compensator,0,sizeof (float[nuc_flow_t]));
-  memset (weight,0,sizeof(float[NUMNUC]));
+  fill(dark_matter_compensator.begin(), dark_matter_compensator.end(), 0.0f);
+  fill(weight, weight+NUMNUC, 0.0f);
 }
 
 void Halo::Delete()
 {
+  dark_matter_compensator.resize(0);
   for (int i=0; i<NUMNUC; i++)
     dark_nuc_comp[i] = NULL;
-  if (dark_matter_compensator != NULL) delete [] dark_matter_compensator;
-
 }
 
-void Halo::AccumulateDarkMatter(float *residual, int inuc)
+void Halo::AccumulateDarkMatter (float *residual, int inuc)
 {
-        for (int i=0;i<npts;i++)
-        {
-          dark_nuc_comp[inuc][i] += residual[i];
-        }
-        weight[inuc]++;
+  if (not dark_matter_compensator.empty())
+  {
+    for (int i=0;i<npts;i++)
+    {
+      dark_nuc_comp[inuc][i] += residual[i];
+    }
+    weight[inuc]++;
+  }
+  else
+    printf ("dark matter not allocated, illegal access\n");
 }
 
 void Halo::NormalizeDarkMatter ()
@@ -70,29 +81,35 @@ void Halo::NormalizeDarkMatter ()
 
 void Halo::DumpDarkMatterTitle (FILE *my_fp)
 {
-  // ragged columns because of variable time compression
-  fprintf (my_fp, "col\trow\tNucID\t");
-  for (int j=0; j<MAX_COMPRESSED_FRAMES; j++)
-    fprintf (my_fp,"V%d\t",j);
-  fprintf (my_fp,"Neat");
-  fprintf (my_fp,"\n");
+  if (not dark_matter_compensator.empty())
+  {
+    // ragged columns because of variable time compression
+    fprintf (my_fp, "col\trow\tNucID\t");
+    for (int j=0; j<MAX_COMPRESSED_FRAMES; j++)
+      fprintf (my_fp,"V%d\t",j);
+    fprintf (my_fp,"Neat");
+    fprintf (my_fp,"\n");
+  }
 }
 
 void Halo::DumpDarkMatter (FILE *my_fp, int x, int y, float darkness)
 {
-  // this is a little tricky across regions, as time compression is somewhat variable
-  // 4 lines, one per nuc_flow
-  for (int NucID=0; NucID<NUMNUC; NucID++)
+  if (not dark_matter_compensator.empty())
   {
-    fprintf (my_fp, "%d\t%d\t%d\t", x,y, NucID);
-    int npts = nuc_flow_t/4;
-    int j=0;
-    for (; j<npts; j++)
-      fprintf (my_fp,"%0.3f\t", dark_matter_compensator[NucID*npts+j]);
-    int max_npts = MAX_COMPRESSED_FRAMES;  // always at least this much time compression?
-    for (;j<max_npts; j++)
-      fprintf (my_fp,"%0.3f\t", 0.0);
-    fprintf (my_fp,"%f",darkness);
-    fprintf (my_fp, "\n");
+    // this is a little tricky across regions, as time compression is somewhat variable
+    // 4 lines, one per nuc_flow
+    for (int NucID=0; NucID<NUMNUC; NucID++)
+    {
+      fprintf (my_fp, "%d\t%d\t%d\t", x,y, NucID);
+      int npts = nuc_flow_t/4;
+      int j=0;
+      for (; j<npts; j++)
+        fprintf (my_fp,"%0.3f\t", dark_matter_compensator[NucID*npts+j]);
+      int max_npts = MAX_COMPRESSED_FRAMES;  // always at least this much time compression?
+      for (;j<max_npts; j++)
+        fprintf (my_fp,"%0.3f\t", 0.0);
+      fprintf (my_fp,"%f",darkness);
+      fprintf (my_fp, "\n");
+    }
   }
 }

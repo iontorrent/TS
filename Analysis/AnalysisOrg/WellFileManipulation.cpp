@@ -18,28 +18,15 @@ void SetWellsToLiveBeadsOnly(RawWells &rawWells, Mask *maskPtr)
   rawWells.SetSubsetToWrite(subset);
 }
 
-void SetChipTypeFromWells(RawWells &rawWells)
-{
-  if (rawWells.OpenMetaData())   //Use chip type stored in the wells file
-  {
-    if (rawWells.KeyExists("ChipType"))
-    {
-      string chipType;
-      rawWells.GetValue("ChipType", chipType);
-      ChipIdDecoder::SetGlobalChipId(chipType.c_str());
-    }
-  }
-}
 
 
-void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType)
+void GetMetaDataForWells(char *explog_path, RawWells &rawWells, const char *chipType)
 {
   const char * paramsToKeep[] = {"Project","Sample","Start Time","Experiment Name","User Name","Serial Number","Oversample","Frame Time", "Num Frames", "Cycles", "Flows", "LibraryKeySequence", "ChipTemperature", "PGMTemperature", "PGMPressure","W2pH","W1pH","Cal Chip High/Low/InRange"};
-  std::string logFile = getExpLogPath(dirExt);
   char* paramVal = NULL;
   for (size_t pIx = 0; pIx < sizeof(paramsToKeep)/sizeof(char *); pIx++)
   {
-    if ((paramVal = GetExpLogParameter(logFile.c_str(), paramsToKeep[pIx])) != NULL)
+    if ((paramVal = GetExpLogParameter(explog_path, paramsToKeep[pIx])) != NULL)
     {
       string value = paramVal;
       size_t pos = value.find_last_not_of("\n\r \t");
@@ -48,7 +35,9 @@ void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType)
         value = value.substr(0,pos+1);
       }
       rawWells.SetValue(paramsToKeep[pIx], value);
+      free (paramVal);
     }
+
   }
   rawWells.SetValue("ChipType", chipType);
 }
@@ -56,7 +45,7 @@ void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType)
 
 
 void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
-                                CommandLineOpts &clo,
+                                CommandLineOpts &inception_state,
                                 int num_fb,
                                 int numFlows,
                                 int numRows, int numCols,
@@ -64,33 +53,46 @@ void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
 {
   // set up wells data structure
   MemUsage ("BeforeWells");
-  int flowChunk = min (clo.bkg_control.saveWellsFrequency*num_fb, numFlows);
   //rawWells.SetFlowChunkSize(flowChunk);
   rawWells.SetCompression (3);
   rawWells.SetRows (numRows);
   rawWells.SetCols (numCols);
   rawWells.SetFlows (numFlows);
-  rawWells.SetFlowOrder (clo.flow_context.flowOrder); // 6th duplicated code
+  rawWells.SetFlowOrder (inception_state.flow_context.flowOrder); // 6th duplicated code
   SetWellsToLiveBeadsOnly (rawWells,maskPtr);
   // any model outputs a wells file of this nature
-  GetMetaDataForWells (clo.sys_context.dat_source_directory,rawWells,chipType);
-  rawWells.SetChunk (0, rawWells.NumRows(), 0, rawWells.NumCols(), 0, flowChunk);
+  GetMetaDataForWells (inception_state.sys_context.explog_path,rawWells,chipType);
+  
   rawWells.OpenForWrite();
+  rawWells.WriteRanks(); // dummy, written for completeness
+  rawWells.WriteInfo();  // metadata written, do not need to rewrite
+  rawWells.Close(); // just create in this routine
   MemUsage ("AfterWells");
 }
 
-
-void IncrementalWriteWells (RawWells &rawWells,int flow, bool last_flow,int saveWellsFrequency,int num_fb, int numFlows)
+void OpenExistingWellsForOneChunk(RawWells &rawWells,  int start_of_chunk, int chunk_depth)
 {
-  int testWellFrequency = saveWellsFrequency*num_fb; // block size
-  if ( ( (flow+1) % (testWellFrequency) == 0 && (flow != 0))  || (flow+1) >= numFlows || last_flow) //@TODO: this extends logic in CheckFlowForWrite, perhaps...
-  {
-    fprintf (stdout, "Writing incremental wells at flow: %d\n", flow);
-    MemUsage ("BeforeWrite");
-    rawWells.WriteWells();
-    rawWells.SetChunk (0, rawWells.NumRows(), 0, rawWells.NumCols(), flow+1, min (testWellFrequency,numFlows- (flow+1)));
-    MemUsage ("AfterWrite");
-  }
+    rawWells.SetChunk (0, rawWells.NumRows(), 0, rawWells.NumCols(), start_of_chunk, chunk_depth);
+    rawWells.OpenForReadWrite();
 }
+
+void WriteOneChunkAndClose(RawWells &rawWells)
+{
+    rawWells.WriteWells();
+    rawWells.Close();
+}
+
+// our logic here:  either we are writing an entire chunk_depth
+// or we are writing to the end of the current block
+int FigureChunkDepth(int flow, int numFlows, int write_well_flow_interval)
+{
+  return(min (write_well_flow_interval,numFlows-flow));
+}
+
+bool NeedToOpenWellChunk(int flow, int write_well_flow_interval)
+{
+  return( flow % write_well_flow_interval==0);
+}
+
 
 

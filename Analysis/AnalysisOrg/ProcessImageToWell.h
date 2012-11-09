@@ -10,16 +10,14 @@
 #include "Region.h"
 #include "SeqList.h"
 #include "TrackProgress.h"
+#include "SlicedPrequel.h"
+#include "ImageSpecClass.h"
 
-void DoThreadedBackgroundModel(RawWells &rawWells, CommandLineOpts &clo, Mask *maskPtr, char *experimentName, int numFlows, char *chipType,ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, Region *regions,int totalRegions, RegionTiming *region_timing, SeqListClass &my_keys);
-void DoThreadedBackgroundModel(RawWells &rawWells, CommandLineOpts &clo, Mask *maskPtr, char *experimentName, int numFlows, char *chipType,ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, Region *regions, int totalRegions, RegionTiming *region_timing, SeqListClass &my_keys, std::vector<float> *tauB, std::vector<float> *tauE);
-
-void GetFromImagesToWells(RawWells &rawWells, Mask *maskPtr,
-                          CommandLineOpts &clo,
-                          char *experimentName, std::string &analysisLocation,
-                          int numFlows,
-                          SeqListClass &my_keys,
-                          TrackProgress &my_progress, Region &wholeChip,
-                          int &well_rows, int &well_cols);
+void RealImagesToWells ( 
+                        CommandLineOpts &inception_state,                        
+                        SeqListClass &my_keys,
+                        TrackProgress &my_progress, 
+                        ImageSpecClass &my_image_spec,
+			SlicedPrequel &my_prequel_setup);
 
 #endif // PROCESSIMAGETOWELL_H

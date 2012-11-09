@@ -1,0 +1,108 @@
+.hide
+{
+	display: none;
+}
+.no_barcodes{
+	padding-top: 0px;
+}
+.show
+{
+	display: inline;
+	align: center;
+}	
+
+.pluginGroupHead{
+
+	background-image: linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
+	background-image: -o-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
+	background-image: -moz-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
+	background-image: -webkit-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
+	background-image: -ms-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
+
+	background-image: -webkit-gradient(
+		linear,
+		left bottom,
+		left top,
+		color-stop(0.29, #D6D6D6),
+		color-stop(0.82, #F5F5F5)
+	);
+
+}
+
+.pluginLog{
+	float: right;
+}
+
+.pluginBlock{
+	background: white;
+}
+
+.pluginGroup{
+    border-radius: 2px 2px 2px 2px;
+    border-style: solid;
+    border-width: 1px;
+    margin: 6px;
+    margin-top: 10px;
+}
+
+.pluginGroupHeadInner{
+    padding: 4px;
+}
+
+.pluginGroupList{
+	padding: 4px;
+}
+
+#pluginStatusTable{
+	margin-top: 20px;
+}
+
+.pluginState{
+	float: right;
+}
+
+
+#barcodes tr:hover {
+    background-color: #E5E7ED;
+}
+
+#RunSummary {
+    padding-top: 0;
+}
+#runSection {
+    padding: 0 0 15px 0;
+    margin-top: 20px;
+    border: none;
+}
+.aligned, .unaligned {
+    padding-bottom: 0;
+}
+.well .signal {
+    margin: 15px auto 15px auto;
+    float: none;
+    max-width: 200px;
+}
+.number-chunk {
+    border-bottom: 1px solid #D6D6D6;
+    padding: 0 0 10px 0;
+    margin: 0 0 10px 0;
+}
+#RunSummary .number-chunk small {
+    font-size: 12px;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+.unaligned
+{
+    page-break-after: always;
+}
+
+hr{
+    margin: 3px 0;
+    color: #000;
+    background-color: #000;
+    height: 2px;
+}
+

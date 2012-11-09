@@ -1,0 +1,490 @@
+{% extends "rundb/configure/base.html" %}
+{% load pagetools %}
+{% block sub-nav %}
+	<li><a href="{% url configure_about %}">About</a></li>			
+	<li class="active"><a href="{% url configure_references %}">References</a></li>
+	<li><a href="{% url configure_services %}">Services</a></li>
+	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
+	<li><a href="{% url configure_configure %}">Configure</a></li>	
+{% endblock sub-nav %}
+{% block extra_head %}
+	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+	<script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />
+	<script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>  	
+	
+	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-transition.min.js"></script>
+	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.min.js"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.css" />
+	
+	<style>
+	body .modal-wrapper {
+	  width: 830px;
+	  margin-left: -415px;
+	}
+	</style>
+	
+	<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script> <!-- Using updated uni-form JS -->
+	<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script> <!-- for ajaxForm -->
+
+<!--
+	Ignoring fileinput because it doesn't seem to work properly. 
+ 	<script type="text/javascript" src="/site_media/jquery/js/fileinput/jquery.fileinput.min.js"></script> 
+ 	<link type="text/css" href="/site_media/jquery/js/fileinput/fileinput.css" rel="stylesheet"/> 
+ 	-->
+{% endblock extra_head %}
+{% block content %}
+		<div id="sys_messages">
+			
+		</div>
+		<div class="content clearfix">
+			<div class="clearfix">
+				<h1 style="float:left;">Reference Sequences</h1>
+				<a href="{% url references_add_genome %}" class="btn btn-primary pull-right add_genome">Add Reference Sequence</a>
+			</div>
+			<div id="referenceSequences"></div>
+		</div>
+		<div class="spacer"></div>
+		<div class="content clearfix">
+			<h1>Obsolete Reference Sequences</h1>
+			<div id="obsoleteReferenceSequences"></div>
+		</div>
+		<div class="spacer"></div>
+		<div class="content clearfix">
+			<div class="clearfix">
+				<h1 style="float:left;">Test Fragments</h1>
+				<a href="{% url references_TF_edit %}" class="btn btn-primary add_tf" style="float:right;">Add Test Fragment</a>
+			</div>
+			<div id="testFragments"></div>
+		</div>
+		<div class="spacer"></div>
+		<div class="content clearfix">
+			<div class="clearfix">
+				<h1 style="float:left;" id="DNABarcodes">DNA Barcodes</h1>
+				<a href="{% url references_barcodeset_add %}" class="btn btn-primary add_barcodeset" style="float:right;">Add new DNA Barcodes</a>
+			</div>
+			<div id="barcodes"></div>
+		</div>	
+<script type="text/x-kendo-template" id="rebuildingAlertTemplate">
+	<div class="alert alert-block alert-success">
+		<a class="close" data-dismiss="alert">&times;</a>
+		Now rebuilding #= data.references.length # references! Refresh the page to view their status.
+	</div>
+</script>
+<script type="text/x-kendo-template" id="rebuildAlertTemplate">
+	<div class="alert alert-block" id="rebuild_alert">
+		<a data-dismiss="alert" class="close">&times;</a>
+		<h4 class="alert-heading">Warning!</h4>
+		<p>
+		Due to the upgrade of TMAP, the TMAP specific index files for your
+		references are stale, and need to be rebuilt by TMAP for each
+		reference before that reference can be used for alignments.  We ask
+		you to manually initiate this process because the index rebuild may
+		take a few hours for larger genomes during which time use of the
+		server is unadvisable.
+		</p>
+		<p>
+			We recommend you rebuild all indices at the end of the work day;
+			however, you will find controls to rebuild each index manually on that
+			index's page.
+		</p>
+		<p>
+			<button href="\#" class="btn btn-primary" id="rebuild_all">
+				Rebuild All Now
+			</button>
+		</p>
+	</div>
+</script>
+<script id="barcodesActionColumnTemplate" type="text/x-kendo-template">
+<div class="btn-group">
+	# var _id = id;# 
+	# var _name = name;# 
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"><span class="caret"></span></a>
+	<ul class="dropdown-menu pull-right">
+		<li>
+			<a href="#= '{% url references_barcodeset '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Edit</a>
+		</li>
+		<li>
+			<a href="#= '{% url references_barcodeset_delete '999999' %}'.replace('999999',id)#" class="delete_barcodeset">Delete</a>
+		</li>
+	</ul>
+</div>	
+</script>		
+<script id="barcodeNameCellTemplate" type="text/x-kendo-template">
+	# var _id = id;# 
+	<a href="#= '{% url references_barcodeset '999999' %}'.replace('999999', _id)#">#= name#</a>
+</script>
+<script type="text/javascript">
+$(document).ready(function(){
+	var referenceSequences = $("#referenceSequences").kendoGrid({
+        dataSource: {
+        	type: "json"
+			, transport: {
+                read: {
+                	url: "/rundb/api/v1/referencegenome/?special=true"
+                	, contentType: 'application/json; charset=utf-8'
+				    , type: 'GET'
+				    , dataType: 'json'
+                }
+				, parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+            }
+            , schema: {
+            	data: "objects"
+            	, total: "meta.total_count"
+                , model: {
+                    fields: {
+                        id: { type: "number" }
+                        , short_name: { type: "string" }
+                        , name: { type: "string" }
+                        , notes: { type: "string" }
+                        , date: { type: "string" }
+                        , index_version: { type: "string" }
+                        , status: { type: "string" }
+                        , enabled: { type: "bool" }
+                    }
+                }
+            }
+            , serverSorting: true
+            , sort: { field: "date", dir: "desc" }
+            , serverPaging: true                        	
+        	, pageSize: 50
+        }
+        , height: '219'
+        , groupable: false
+        , scrollable: {
+        	virtual: true
+		}
+        , selectable: false
+        , sortable: true
+        , pageable: false
+		, columns: [
+			{
+                field: "short_name"
+                , title: "Name"
+                , template: "<a href='/rundb/editgenome/${id}' class='edit_genome'>${short_name}</a>"
+            } , {
+                field: "name"
+                , title: "Description"
+                , sortable: true
+            } , {
+                field: "notes"
+                , title: "Notes"
+                , sortable: true
+            } , {
+                field: "date"
+                , title: "Date"
+                , sortable: true
+                , template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "index_version"
+                , title: "Index version"
+                , sortable: true
+            } , {
+                field: "status"
+                , title: "Status"
+                , sortable: true
+            } , {
+                field: "enabled"
+                , title: "Enabled"
+                , sortable: true    
+            }
+        ]
+    });	
+	var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
+        dataSource: {
+        	type: "json"
+			, transport: {
+                read: {
+                	url: "/rundb/api/v1/obsoletereferencegenome/?special=true"
+                	, contentType: 'application/json; charset=utf-8'
+				    , type: 'GET'
+				    , dataType: 'json'
+                }
+				, parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+            }
+            , schema: {
+            	data: "objects"
+            	, total: "meta.total_count"
+                , model: {
+                    fields: {
+                        id: { type: "number" }
+                        , short_name: { type: "string" }
+                        , name: { type: "string" }
+                        , notes: { type: "string" }
+                        , date: { type: "string" }
+                        , index_version: { type: "string" }
+                        , status: { type: "string" }
+                    }
+                }
+            }
+            , serverSorting: true
+            , sort: { field: "date", dir: "desc" }
+            , serverPaging: true                        	
+        	, pageSize: 50
+        }
+        , height: '219'
+        , groupable: false
+        , scrollable: {
+        	virtual: true
+        }
+        , selectable: false
+        , sortable: true
+        , pageable: false
+		, columns: [
+			{
+                field: "short_name"
+                , title: "Name"
+                , template: "<a href='/rundb/editgenome/${id}' class='edit_genome'>${short_name}</a>"
+            } , {
+                field: "name"
+                , title: "Description"
+                , sortable: true
+            } , {
+                field: "notes"
+                , title: "Notes"
+                , sortable: true
+            } , {
+                field: "date"
+                , title: "Date"
+                , sortable: true
+                , template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "index_version"
+                , title: "Index version"
+                , sortable: true
+            } , {
+                field: "status"
+                , title: "Status"
+                , sortable: true
+            }
+        ]
+        , dataBound: function(e) {
+    		if ($('#obsoleteReferenceSequences').data("kendoGrid").dataSource.data().length > 0) {
+				var encodingTemplate = kendo.template($("#rebuildAlertTemplate").html());
+				$('#sys_messages').html(encodingTemplate({}));
+				$("#rebuild_all").click(function(e){
+					e.preventDefault();
+			        $.get("/rundb/rebuild_index/all", function(data){
+			          	$("#rebuild_alert").hide();
+						var rebuildingTemplate = kendo.template($("#rebuildingAlertTemplate").html());
+			          	$("#sys_messages").append(rebuildingTemplate({data:data})).fadeIn('slow');
+			        });
+		     	});
+			} 
+        }
+    });
+	var testFragments = $("#testFragments").kendoGrid({
+        dataSource: {
+        	type: "json"
+			, transport: {
+                read: {
+                	url: "/rundb/api/v1/template/"
+                	, contentType: 'application/json; charset=utf-8'
+				    , type: 'GET'
+				    , dataType: 'json'
+                }
+				, parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+            }
+            , schema: {
+            	data: "objects"
+            	, total: "meta.total_count"
+                , model: {
+                    fields: {
+                        id: { type: "number" }
+                        , name: { type: "string" }
+                        , key: { type: "string" }
+                        , sequence: { type: "string" }
+                        , isofficial: { type: "boolean" }
+                        , comments: { type: "string" }
+                    }
+                }
+            }
+            , serverSorting: true
+            , sort: { field: "name", dir: "desc" }
+            , serverPaging: true                        	
+        	, pageSize: 10
+        }
+        , height: '219'
+        , groupable: false
+        , scrollable: {
+        	virtual: true
+        }
+        , selectable: false
+        , sortable: true
+        , pageable: false
+		, columns: [
+			{
+                field: "name"
+                , title: "Name"
+                , template: "<a href='/configure/references/tf/${id}' class='add_tf'>${name}</a>"
+                , width: '10%'
+            } , {
+                field: "key"
+                , title: "Key"
+                , sortable: true
+                , width: '10%'
+            } , {
+                field: "comments"
+                , title: "Comments"
+                , sortable: true
+                , width: '20%'
+            } , {
+                field: "sequence"
+                , title: "Sequence"
+                , sortable: true
+                , width: '50%'
+            } , {
+                field: "isofficial"
+                , title: "Enabled"
+                , sortable: true
+                , template: "#= kendo.toString((isofficial) ? 'Yes': 'No') #"
+                , width: '5%'
+            }
+        ]
+		, dataBound: function() {
+			$('.add_tf').unbind("click").click(function (e) {
+				e.preventDefault();
+				e.stopPropagation();
+				$('body #modal_references_edit_TF').remove();
+				$.get($(this).attr('href'), function(data) {
+					$('body').append(data);
+					$( '#modal_references_edit_TF' ).modal("show");
+					
+					return false;
+				});
+			});
+		}
+    });
+	var barcodes = $("#barcodes").kendoGrid({
+        dataSource: {
+        	type: "json"
+			, transport: {
+                read: {
+                	url: "/rundb/api/v1/dnabarcode/?distinct=true"
+                	, contentType: 'application/json; charset=utf-8'
+				    , type: 'GET'
+				    , dataType: 'json'
+                }
+				, parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+            }
+            , schema: {
+            	data: "objects"
+            	, total: "meta.total_count"
+                , model: {
+                    fields: {
+                        id: { type: "number" }
+                        , name: { type: "string" }
+                    }
+                }
+            }
+            , serverSorting: true
+            , sort: { field: "name", dir: "desc" }
+            , serverPaging: true                        	
+        	, pageSize: 10
+        }
+        , height: '264'
+        , groupable: false
+        , scrollable: {
+        	virtual: true
+        }
+        , selectable: false
+        , sortable: true
+        , pageable: false
+		, columns: [
+			{
+                field: "name"
+                , title: "Name"
+                , template: kendo.template($("#barcodeNameCellTemplate").html())
+            } 
+            , {
+                title: "Action",
+                sortable: false,
+                width: 100,
+                template: kendo.template($("#barcodesActionColumnTemplate").html())
+            }
+        ]
+        , dataBound: function() {
+			$('.delete_barcodeset').click(function (e) {
+				e.preventDefault();
+		    	var source = '#barcodes';
+				var url = $(this).attr('href');
+				console.log(url);
+				$.get(url, function(data) {
+				  	$('body').append(data);
+				  	$( "#modal_confirm_delete" ).data('source', source);
+				  	$( "#modal_confirm_delete" ).data('customevents', jQuery.makeArray(['delete_barcodeset_done']));
+				    $( "#modal_confirm_delete" ).modal("show");
+				    return false;
+				}).done(function(data) { 
+			    	console.log("success:",  url);
+		    	})
+			    .fail(function(data) {
+			    	$('#error-messages').empty();
+			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			    	console.log("error:", data);
+			    	 
+			    })
+			    .always(function(data) { /*console.log("complete:", data);*/ });; 
+				
+			});        	
+        }
+    });
+    
+    $('.add_genome').click(function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+		$('body #modal_references_new_genome').remove();
+		$.get($(this).attr('href'), function(data) {
+			$('body').append(data);
+			$( '#modal_references_new_genome' ).modal("show");
+			return false;
+		});
+	});    
+	$(document).bind('modal_references_new_genome_done', function () {
+		refreshKendoGrid("#referenceSequences");
+	});
+        
+    $('.add_barcodeset').click(function (e) {
+    	var source = '#barcodes';
+		e.preventDefault();
+		e.stopPropagation();
+		
+		url = $(this).attr('href');
+		// alert(url);
+		$.get(url, function(data) {
+			console.log(data);
+		    return false;
+		}).done(function(data) { 
+	    	$('body').append(data);
+	    	$('#modal_references_add_barcodeset').data('source', source);
+	    	$('#modal_references_add_barcodeset').modal("show");
+	    	console.log("success:",  url);
+    	})
+	    .fail(function(data) {
+	    	$('#error-messages').empty();
+	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+	    	console.log("error:", data);
+	    	 
+	    })
+	    .always(function(data) { /*console.log("complete:", data);*/ }); 
+		
+	});
+    	
+	$(document).bind('modal_references_add_barcodeset_done delete_barcodeset_done', function(e) {
+    	console.log(e.target, e.relatedTarget);
+    	refreshKendoGrid($(e.target).data('source'));
+    });
+    $(document).bind('modal_references_edit_TF_done', function () {
+		refreshKendoGrid("#testFragments");
+	});		
+});
+</script>
+{% endblock content %}	

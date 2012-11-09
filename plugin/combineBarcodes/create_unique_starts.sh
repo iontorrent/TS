@@ -11,6 +11,7 @@ OPTIONS="OPTIONS:
   -h --help Report usage and help
   -i Create the BAM INDEX file (<input file>.ustarts.bam.bai).
   -l Log progress to STDERR. A few primary progress messages will still be output.
+  -L <N> Difference between 'duplicate' reads must be less than N (by binning). Default: 0.
   -D <dirpath> Path to root Directory where results are written. Default: ./";
 
 # should scan all args first for --X options
@@ -22,10 +23,12 @@ fi
 SHOWLOG=0
 WORKDIR="."
 MAKEBAI=0
+DUPLENVAR=0
 
-while getopts "hlD:" opt
+while getopts "hlL:D:" opt
 do
   case $opt in
+    L) DUPLENVAR=$OPTARG;;
     D) WORKDIR=$OPTARG;;
     i) MAKEBAI=1;;
     l) SHOWLOG=1;;
@@ -70,21 +73,16 @@ elif ! [ -f "$BAMFILE" ]; then
   exit 1;
 fi
 
-echo "Filtering reads to unique starts..." >&2
-if [ $SHOWLOG -eq 1 ]; then
-  echo "" >&2
-fi
-
 BAMROOT=`echo $BAMFILE | sed -e 's/^.*\///'`
 BAMEXTN=`echo $BAMROOT | awk -F. '{print $NF}'`
 BAMNAME=`echo $BAMROOT | sed -e 's/\.[^.]*$//'`
 TSAMFILE="$WORKDIR/$BAMNAME.ustarts.sam"
 BAMFILE2="$WORKDIR/$BAMNAME.ustarts.$BAMEXTN"
 
-REMDUP="perl $RUNDIR/remove_pgm_duplicates.pl $LOGOPT -u \"$BAMFILE\" > \"$TSAMFILE\""
+REMDUP="perl $RUNDIR/remove_pgm_duplicates.pl $LOGOPT -L $DUPLENVAR -u \"$BAMFILE\" > \"$TSAMFILE\""
 eval "$REMDUP" >&2
 if [ $? -ne 0 ]; then
-  echo -e "\nERROR: remove_pgm_duplicates.pl failed." >&2
+  echo -e "\nERROR: Duplicate removal script failed." >&2
   echo "\$ $REMDUP" >&2
   #exit 1;
 fi

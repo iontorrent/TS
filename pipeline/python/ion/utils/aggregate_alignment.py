@@ -2,7 +2,6 @@
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 import sys
 import os
-import fnmatch
 import traceback
 
 def init_csv_file (filename,column_header):
@@ -56,6 +55,8 @@ def parse_alignment_file (filename):
     
         for line in f:
             line = line.split('=')
+            if len(line) <= 1:
+                continue
             columns.append(line[0].strip())
             data.append(line[1].strip().replace(',',''))    # remove commas
     except IOError:

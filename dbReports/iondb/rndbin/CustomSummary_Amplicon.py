@@ -4,8 +4,8 @@ import sys
 import os
 import datetime
 from os import path
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
+import iondb.bin.djangoinit
 from django.db import models
 from iondb.rundb import models
 import re
@@ -216,7 +216,7 @@ def BuildMetrics(metricRecordList, site):
 
                 if ok and projectFilter:
                     ok = False
-                    if re.search(project, rep.experiment.project, re.IGNORECASE):
+                    if re.search(project, rep.projectNames(), re.IGNORECASE):
                         ok = True
 
                 if ok and metricRecord.dateFilter:
@@ -337,7 +337,7 @@ if __name__=="__main__":
         '<tr>'
           '<th ALIGN="left" rowspan="2">Name</th>'
           '<th ALIGN="center" rowspan="2">Chip Type</th>'
-          '<th ALIGN="center" rowspan="2">Project</th>'
+          '<th ALIGN="center" rowspan="2">Projects</th>'
           '<th ALIGN="center" rowspan="2">Sample</th>'
           '<th ALIGN="center" rowspan="2">Reference</th>'
           '<th ALIGN="right" rowspan="2">AQ7 Reads</th>'
@@ -360,7 +360,7 @@ if __name__=="__main__":
         html.write('<tr style="background-color:%s;">' % (backgroundColor[cycle%2]))
         html.write('<td><a href="%s">%s</a></td>' % (webRoot + recordReport.reportLink, recordReport.resultsName))
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.chipType)
-        html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.project)
+        html.write('<td ALIGN="center">%s</td>' % recordReport.projectNames())
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.sample)
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.library)
         html.write('<td ALIGN="right">%s</td>' % ion_readable(q7reads))
@@ -394,7 +394,7 @@ if __name__=="__main__":
         '<tr>'
           '<th ALIGN="left">Name</th>'
           '<th ALIGN="center">Chip Type</th>'
-          '<th ALIGN="center">Project</th>'
+          '<th ALIGN="center">Projects</th>'
           '<th ALIGN="center">Sample</th>'
           '<th ALIGN="center">Reference</th>'
           '<th ALIGN="right">AQ7 Reads</th>'
@@ -410,7 +410,7 @@ if __name__=="__main__":
         html.write('<tr style="background-color:%s;">' % (backgroundColor[cycle%2]))
         html.write('<td><a href="%s">%s</a></td>' % (webRoot + recordReport.reportLink, recordReport.resultsName))
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.chipType)
-        html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.project)
+        html.write('<td ALIGN="center">%s</td>' % recordReport.projectNames())
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.sample)
         html.write('<td ALIGN="center">%s</td>' % recordReport.experiment.library)
         html.write('<td ALIGN="right">%s</td>' % ion_readable(q7reads))

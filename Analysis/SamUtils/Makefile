@@ -1,10 +1,11 @@
-CC=clang++
+CC=g++
 ANALYSIS=../Util/
 #samtools library must be made already, run make lib in the samtools directory to get it
-SAMTOOLS=../../external/samtools-0.1.18/
+#SAMTOOLS=./samtools/
+SAMTOOLS=../../external/samtools-0.1.18
 CFLAGS=-g -Wall -DALIGNSTATS_IGNORE
 LDFLAGS=-L. -L$(SAMTOOLS) -L$(SAMTOOLS)/bcftools/ -L./types/ -lpthread -lbam -lz
-EXE_FILES = alignStats SamVsSam
+EXE_FILES = alignStats SamVsSam BAMFilter
 EXAMPLE_FILES = example
 .PHONY: all clean
 
@@ -23,6 +24,9 @@ example: types/Cigar.o types/Sequence.o types/BAMRead.o types/MD.o BAMUtils.o BA
 SamVsSam: types/Cigar.o types/Sequence.o types/BAMRead.o types/MD.o BAMUtils.o BAMReader.o SamVsSam.o
 	$(CC) $(CFLAGS) -o SamVsSam types/*.o SamVsSam.o BAMUtils.o BAMReader.o $(LDFLAGS) $(ANALYSIS)/Utils.o
 
+BAMFilter: types/Cigar.o types/Sequence.o types/BAMRead.o types/MD.o BAMUtils.o BAMReader.o BAMFilter.o
+	$(CC) $(CFLAGS) -o BAMFilter types/*.o BAMFilter.o BAMUtils.o BAMReader.o $(LDFLAGS) $(ANALYSIS)/Utils.o
+
 alignStats: types/Cigar.o types/Sequence.o types/Qual.o types/MD.o types/BAMRead.o BAMUtils.o BAMReader.o alignStats_driver.o $(ANALYSIS)/Utils.o $(ANALYSIS)/OptArgs.o $(ANALYSIS)/IonErr.o
 	$(CC) $(CFLAGS) -o alignStats types/*.o alignStats_driver.o alignStats.o BAMUtils.o BAMReader.o $(ANALYSIS)/OptArgs.o $(ANALYSIS)/Utils.o $(ANALYSIS)/IonErr.o $(LDFLAGS)
 
@@ -31,6 +35,9 @@ example.o: example.cpp
 
 SamVsSam.o: SamVsSam.cpp
 	$(CC) $(CFLAGS) -c SamVsSam.cpp -I $(SAMTOOLS) -I $(ANALYSIS) -o SamVsSam.o
+
+BAMFilter.o: BAMFilter.cpp
+	$(CC) $(CFLAGS) -c BAMFilter.cpp -I $(SAMTOOLS) -I $(ANALYSIS) -o BAMFilter.o
 
 alignStats_driver.o: BAMReader.o alignStats.o 
 	$(CC) $(CFLAGS) -c alignStats_driver.cpp -I $(SAMTOOLS) -I $(ANALYSIS) -o alignStats_driver.o

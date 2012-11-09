@@ -1,0 +1,25 @@
+{% load humanize %}
+
+
+<div class="span3 well centered">
+    <a data-toggle="modal" class="report-metric-visual usable-sequence-link showImg" href="#qualityScoreModal">
+        <div class="number-chunk">
+        	<h2>{{dbr.percent_Q20_bases}}%</h2>
+        	<small rel='tooltip' title="{{dbr.total_Q20_bases}} Q20 bases of {{dbr.total_Q0_bases}} total bases.">Fraction of total Bases >= Q20</small>
+        </div>
+        <h2>Quality</h2>
+        <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/quality_histogram.png" />
+    </a>
+    <div class="modal hide" id="qualityScoreModal">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">×</button>
+                <h3>Quality Details</h3>
+            </div>
+            <div class="modal-body" id="qualityscore_body" style="max-height: 500px;">
+                <img src="{{report.reportWebLink}}/basecaller_results/quality_histogram.png">
+            </div>
+            <div class="modal-footer">
+                <a href="#" class="btn" data-dismiss="modal">Close</a>
+            </div>
+        </div>
+</div>

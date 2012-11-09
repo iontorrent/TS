@@ -33,12 +33,27 @@ class IncorpReporter : public KeyReporter<T> {
     if (fit.keyIndex < 0 || fit.mad > 50 || refFlows.n_cols == 0 || fit.snr < mMinSnr || !isfinite(fit.snr)) {
       return;
     }
+    SampleStats<float> peak;
+    for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
+      if (mKeys->at(fit.keyIndex).flows[flowIx] == 1) {
+        double m = 0.0;
+        for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
+          double d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
+          m = max(d,m);
+        }
+        peak.AddValue(m);
+      }
+    }
+    if (peak.GetMean() < 40) {
+      return;
+    }
     pthread_mutex_lock(&lock);
     if (wellFlows.n_rows > mTraceMean.size()) {
       mTraceMean.resize(wellFlows.n_rows);
     }
+    
     for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
-      for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
+      for (size_t frameIx = 0; frameIx < wellFlows.n_rows && frameIx < mTraceMean.size(); frameIx++) {
 	if (mKeys->at(fit.keyIndex).flows[flowIx] == 1) {
 	  double d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
           if (isfinite(d)) {

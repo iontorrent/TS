@@ -142,7 +142,7 @@ void RegionTrackerReader::ReadMissingMass(int block_id)
   vector<hsize_t> count_out(1);
   count_out[0] = nuc_flow_t;
 
-  float *out = missing_mass.dark_matter_compensator;
+  float *out = &missing_mass.dark_matter_compensator[0];
 
   reader_mm->Read(offset, count,  offset_out, count_out, out);
   fprintf(stdout, "H5 RegionTrackerReader dark_matter: block_id %d, region %d: %f, %f, ...\n", block_id, regionindex, out[0], out[1]);
@@ -272,7 +272,7 @@ void RegionTrackerRecorder::WriteMissingMass(int block_id)
 
   recorder_mm->ExtendDataSet(extension); // extend if necessary
 
-  float *in = missing_mass.dark_matter_compensator;
+  float *in = &missing_mass.dark_matter_compensator[0];
   fprintf(stdout, "H5 RegionTrackerRecorder dark_matter: block_id %d, region %d: %f, %f, ...\n", block_id, regionindex, in[0], in[1]);
   recorder_mm->Write(offset, count, offset_in, count_in, in);
 }

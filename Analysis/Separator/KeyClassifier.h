@@ -9,7 +9,7 @@
 #include "SampleQuantiles.h"
 #include "ZeromerDiff.h"
 #include "ZeromerModelBulk.h"
-#define FRAME_SIGNAL 20
+//#define FRAME_SIGNAL 20
 using namespace arma;
 
 

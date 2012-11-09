@@ -1,0 +1,120 @@
+<div id="modal_review_plan" title="" class="modal " style="width: 800px; left: 40%;">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		<h3>Review {{view|title}}: {{plan.planDisplayedName}}</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal_review_plan-content" class="workflow-steps">
+			<div class="review-workflow">
+			</div>
+		</div>
+	</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Close</a>
+	</div>
+<script type="text/javascript">
+	isPlan = '{{view}}' == 'run plan'
+	formdata = {{selectedPlanTemplate|safe}};
+	runType = {{selectedRunType|safe}};
+	barcodes = {{selectedBarcodes|safe}};
+	chipType = {{selectedChip|safe}};
+
+	if (chipType == null) {
+		chipType = "";
+	}
+	
+	/*
+	 * Fill the barcodes obj list with the corresponding samples 
+	 */
+	for (var i = 0 ; i < barcodes.length; i++) {
+		if (formdata.barcodedSamples[barcodes[i].id]) { 
+			barcodes[i].sample = formdata.barcodedSamples[barcodes[i].id].sample; 
+		} else {
+			barcodes[i].sample = '';
+		}	 
+	}
+	// Fill in selected plugins	
+	formdata.plugins = []
+	var plugins = formdata.selectedPlugins.planplugins;
+	var v = '';
+	if (plugins){
+	    for (var i = 0 ; i < plugins.length; i++) {
+	        if (isPlan)
+	            v = ' v' + plugins[i].version;
+	        formdata.plugins.push(plugins[i].name + v);
+	    }
+	} else {
+	    formdata.plugins.push("No selection saved with the Plan. <br>All active plugins selected by default")
+	}
+	// Fill in selected uploaders
+	formdata.uploaders = []
+	var uploaders = formdata.selectedPlugins.planuploaders;
+	if (uploaders){
+	    for (var i = 0 ; i < uploaders.length; i++) {
+	        if (isPlan)
+	            v = ' v' + plugins[i].version;
+	        formdata.uploaders.push(uploaders[i].name + v)	
+	    }
+	} 
+
+	console.log(formdata);
+	$.ajax({
+			type: 'GET'
+	        , url: '/site_media/template/review_plan.kendo.template'
+	        , async: false
+	        , dataType: "html"
+    }).done(function(data) {
+	    // $('#modal_review_plan').append(data);
+		var encodingTemplate = kendo.template(data);		
+		var presets = {}; //TODO: load the presets from {% url get_application_product_presets %}
+		$('.review-workflow').html(encodingTemplate({data:formdata, runType: runType, barcodes: barcodes, chip: chipType, presets:presets}));
+		if (!formdata.isReusable) {
+			$('#barcodeSamplesTitle').show(); 
+			$('.review-workflow #barcodeSamples').kendoGrid({
+				dataSource: {
+		        	type: "json",
+		        	data : barcodes
+		        	, schema: {
+		                model: {
+		                    fields: {
+		                        id_str: { type: "string" }
+		                        , sequence: { type: "string" }
+		                        , sample: { type: "string" }
+		                    }
+		                }
+		            }
+		        	, pageSize: 10
+	           	}
+		        , height: 'auto'
+		        , groupable: false
+		        , scrollable: false
+		        , selectable: false
+		        , sortable: true
+		        , pageable: true
+				, columns: [
+					{
+	                field: "id_str"
+	                , title: "ID"
+		            } 
+					, {
+		                field: "sequence"
+		                , title: "Sequence"
+		            } 
+					, {
+		                field: "sample"
+		                , title: "Sample"
+		            } 
+		        ]			
+			});
+		}
+	})
+    .fail(function(data) {
+    	alert('Error saving Plan!');
+    })
+    .always(function(data) { });
+    
+	$('#modal_review_plan').on('hidden', function () {
+    	$('body #modal_review_plan').remove();
+   	});
+</script>
+</div>

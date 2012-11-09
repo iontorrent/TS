@@ -32,8 +32,16 @@ set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepende
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
+
+add_custom_target(compileall ALL
+    COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
+)
+
 install(FILES "${PROJECT_SOURCE_DIR}/web/db/writers/systemStatsZip.php" DESTINATION /var/www)
 
+install(FILES "${PROJECT_SOURCE_DIR}/oia/oia.config" DESTINATION /usr/share/ion/oia)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oiad.py" DESTINATION /usr/share/ion/oia)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oia" DESTINATION /etc/init.d)
 
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion-plugin-status" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_netinfo" DESTINATION bin)
@@ -44,6 +52,8 @@ install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_timeout.sh" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_versionCheck.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/BlockTLScript.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/MergeTLScript.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/pluginReporting.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/java/FlowspaceCalibration.jar" DESTINATION local/lib/java)
 
 install(DIRECTORY web DESTINATION share/ion
     USE_SOURCE_PERMISSIONS
@@ -69,11 +79,11 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    samtools (>= 0.1.18),
-    tmap,
     python-matplotlib,
     python-scipy,
     python-django,
+    python-guppy,
+    python-imaging,
     python-dev")
 set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-dbreports (<= 2.1.6)")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-dbreports (<= 2.1.6)")

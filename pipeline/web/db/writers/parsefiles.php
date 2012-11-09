@@ -450,6 +450,12 @@ if (isset($_GET["progress"])){
 <?php 
 	if(isset($_GET['log'])){
 		echo "<html><body><pre>";
+		$sigproc_log = file_get_contents("sigproc_results/sigproc.log");
+		echo htmlspecialchars($sigproc_log);
+		$basecaller_log = file_get_contents("basecaller_results/basecaller.log");
+		echo htmlspecialchars($basecaller_log);
+		$alignment_log = file_get_contents("alignment.log");
+		echo htmlspecialchars($alignment_log);
 		$report_log = file_get_contents("ReportLog.html");
 		echo htmlspecialchars($report_log);
 		echo "</pre></body></html>";

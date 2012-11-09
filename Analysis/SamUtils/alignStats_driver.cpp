@@ -46,7 +46,7 @@ int main(int argc, const char* argv[])
 	
 	// Open a BAM file:	
 	string extension = get_file_extension(opt.bam_file);
-	cerr << "[alignStats] sam/bam file: " << opt.bam_file << endl;
+	cout << "[alignStats] sam/bam file: " << opt.bam_file << endl;
 	
 	if (opt.list_of_files.length() > 0) {
 		
@@ -62,7 +62,7 @@ int main(int argc, const char* argv[])
 				opt.out_file = line;
 				opt.bam_file = line;
 				AlignStats stats(opt);
-				cerr << "[alignStats] threads: " << opt.num_threads << " buffer size: " << opt.buffer_size << std::endl;
+				cout << "[alignStats] threads: " << opt.num_threads << " buffer size: " << opt.buffer_size << std::endl;
 				stats.go();
 								
 			}
@@ -78,14 +78,14 @@ int main(int argc, const char* argv[])
 		
 
 		if (opt.debug_flag) {
-			cerr << "[alignStats] debugging on" << endl;
+			cout << "[alignStats] debugging on" << endl;
 		}
 		//
 		if (opt.skip_cov_flag) {
-			cerr << "[alignStats] skipping coverage calculations" << endl;
+			cout << "[alignStats] skipping coverage calculations" << endl;
 			
 		}
-		cerr << "[alignStats] threads: " << opt.num_threads << " buffer size: " << opt.buffer_size << std::endl;
+		cout << "[alignStats] threads: " << opt.num_threads << " buffer size: " << opt.buffer_size << std::endl;
 		stats.go();
 		
 	}
@@ -107,7 +107,6 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.flow_order,				"",					'F',"flowOrder");
 	opts.GetOption(opt.read_to_keep_file,			"",					'K',"readsToKeep");
 	opts.GetOption(opt.read_to_reject_file,			"",					'R',"readsToReject");
-	opts.GetOption(opt.filter_length,			"20",					'l',"filterlength");
 	opts.GetOption(opt.q_scores,				opt.q_scores,				'q',"qScores");
 	opts.GetOption(opt.start_slop,				"0",					's',"startslop");
 	opts.GetOption(opt.sam_parsed_flag,			"0",					'p',"samParsedFlag");
@@ -123,16 +122,24 @@ void get_options(AlignStats::options& opt, OptArgs& opts) {
 	opts.GetOption(opt.keep_iupac,				"false",				'k',"keepIUPAC");
 	opts.GetOption(opt.max_coverage,			"20000",				'v',"maxCoverage");
 	opts.GetOption(opt.flow_err_file,			opt.flow_err_file,			'-' ,"flowErrFile");
-	opts.GetOption(opt.align_summary_file,			opt.align_summary_file,			'a',"alignSummaryFile");
-	opts.GetOption(opt.align_summary_min_len,		"50",					'c',"alignSummaryMinLen");
-	opts.GetOption(opt.align_summary_max_len,		"400",					'm',"alignSummaryMaxLen");
-	opts.GetOption(opt.align_summary_len_step,		"50",					'e',"alignSummaryLenStep");
-	opts.GetOption(opt.align_summary_max_errors,		 "3",					'j',"alignSummaryMaxErr");
+
+	opts.GetOption(opt.align_summary_filter_len, 		"20",					'l',"alignSummaryFilterLen");
+	opts.GetOption(opt.align_summary_min_len,		"50",					'-',"alignSummaryMinLen");
+	opts.GetOption(opt.align_summary_max_len,		"400",					'-',"alignSummaryMaxLen");
+	opts.GetOption(opt.align_summary_len_step,		"50",					'-',"alignSummaryLenStep");
+
+	opts.GetOption(opt.err_table_txt_file,			opt.err_table_txt_file,			'-',"errTableTxtFile");
+	opts.GetOption(opt.err_table_json_file,			opt.err_table_json_file,		'-',"errTableJsonFile");
+	opts.GetOption(opt.err_table_filter_len, 		"50",					'-',"errTableFilterLen");
+	opts.GetOption(opt.err_table_filter_accuracy, 		"0.9",					'-',"errTableFilterAcc");
+	opts.GetOption(opt.err_table_min_len,			"1",					'-',"errTableMinLen");
+	opts.GetOption(opt.err_table_max_len,			"400",					'-',"errTableMaxLen");
+	opts.GetOption(opt.err_table_len_step,			"1",					'-',"errTableLenStep");
+	opts.GetOption(opt.err_table_max_errors,		"10",					'-',"errTableMaxErr");
+
 	opts.GetOption(opt.stdin_sam_flag,			 "false",				'S',"stdinSam");
 	opts.GetOption(opt.stdin_bam_flag,			 "false",				'b',"stdinBam");
 	opts.GetOption(opt.list_of_files,			 opt.list_of_files,			'L',"listOfFiles");
-	opts.GetOption(opt.align_summary_filter_len, 		"50",					'f',"alignSummaryFilterLen");
-	opts.GetOption(opt.align_summary_filter_accuracy, 	"0.9",					'w',"alignSummaryFilterAcc");
 	opts.GetOption(opt.truncate_soft_clipped,		"true",					'T',"cutClippedBases");
 	opts.GetOption(opt.three_prime_clip,			"0",					'C',"3primeClip");
 	opts.GetOption(opt.round_phred_scores,			"true", 				'X',"roundPhredScores");
@@ -202,15 +209,15 @@ void usage() {
 	<< "  -3,--3primeClip"<<"\t\t\t"<<": An integer value that will ignore a specific # of soft clipped bases when calculating alignment statistics.  [Default value:  0]" << endl
 	<<"Error Table options:"<<endl
 	<< "  --flowErrFile"<<"\t\t\t"<<": optional file with reporting on number of HP and base errors per flow"<<endl
-	<< "  -a,--alignSummaryFile"<<"\t\t\t"<<": optional file that will produce a tab delimited table containing read lengths and the # of reads aligned"<<endl
-										  <<"\t\t\t\t\t  and the total # of reads with 0-alignSummaryMaxErr [Default value: alignTable.txt]" << endl
-	<< "  -c,--alignSummaryMinLen"<<"\t\t"<<": minimum length for read to be considered in table [Default value: 50]" << endl
-	<< "  -m,--alignSummaryMaxLen"<<"\t\t"<<": maximum length for read to be considered in table [Default value: 400]" << endl
-	<< "  -e,--alignSummaryLenStep"<<"\t\t"<<": step size.  table will be in incremeents of minimum length + alignSummaryLenStep, etc. [Default value: 50]" << endl
-	<< "  -j,--alignSummaryMaxErr"<<"\t\t"<<": maximum number of errors to track in output [Default value: 3]" << endl
-	<<"Error table filtering explained: ( (alignSummaryFilterLen - errors within this length of the read) / alignSummaryFilterLen ) >= alignSummaryFilterAcc" << endl
-	<< "  -f,--alignSummaryFilterLen"<<"\t\t"<<": alignment table filtering criteria length [Default value: 50]" << endl
-	<< "  -w,--alignSummaryFilterAcc"<<"\t\t"<<": alignment table filtering criteria accuracy [Default value: 0.9]" << endl
+	<< "  -a,--errTableFile"<<"\t\t\t"<<": optional file that will produce a tab delimited table containing read lengths and the # of reads aligned"<<endl
+										  <<"\t\t\t\t\t  and the total # of reads with 0-errTableMaxErr [Default value: alignTable.txt]" << endl
+	<< "  -c,--errTableMinLen"<<"\t\t"<<": minimum length for read to be considered in table [Default value: 50]" << endl
+	<< "  -m,--errTableMaxLen"<<"\t\t"<<": maximum length for read to be considered in table [Default value: 400]" << endl
+	<< "  -e,--errTableLenStep"<<"\t\t"<<": step size.  table will be in incremeents of minimum length + errTableLenStep, etc. [Default value: 50]" << endl
+	<< "  -j,--errTableMaxErr"<<"\t\t"<<": maximum number of errors to track in output [Default value: 3]" << endl
+	<<"Error table filtering explained: ( (errTableFilterLen - errors within this length of the read) / errTableFilterLen ) >= errTableFilterAcc" << endl
+	<< "  -f,--errTableFilterLen"<<"\t\t"<<": alignment table filtering criteria length [Default value: 50]" << endl
+	<< "  -w,--errTableFilterAcc"<<"\t\t"<<": alignment table filtering criteria accuracy [Default value: 0.9]" << endl
 	
 	
 	<< endl;
@@ -251,7 +258,8 @@ bool check_args(AlignStats::options& opt) {
       }
     }
     opt.out_file = opt.output_dir + "/" + opt.out_file;
-    opt.align_summary_file = opt.output_dir + "/" + opt.align_summary_file;
+    opt.err_table_txt_file = opt.output_dir + "/" + opt.err_table_txt_file;
+    opt.err_table_json_file = opt.output_dir + "/" + opt.err_table_json_file;
   }
 	return true;
 }

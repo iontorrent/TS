@@ -11,49 +11,30 @@
 
 #include "DNTPRiseModel.h"
 #include "BkgModelCudaKernels.h"
-#include "StreamingKernels.h"
 #include "BkgFitMatrixPacker.h"
-
-#define NO_CUDA_DEBUG
-#ifndef NO_CUDA_DEBUG
-#define CUDA_ERROR_CHECK()                                                                     \
-{                                                                                              \
-    cudaError_t err = cudaGetLastError();                                                      \
-    if ( err != cudaSuccess && err != cudaErrorSetOnActiveProcess ) {                          \
-        std::cout << " +----------------------------------------" << std::endl                 \
-                  << " | ** CUDA ERROR! ** " << std::endl                                      \
-                  << " | Error: " << err << std::endl                                          \
-                  << " | Msg: " << cudaGetErrorString(err) << std::endl                        \
-                  << " | File: " << __FILE__ << std::endl                                      \
-                  << " | Line: " << __LINE__ << std::endl                                      \
-                  << " +----------------------------------------" << std::endl << std::flush;  \
-                  exit(-1); }                                                                  \
-}
-#else
-#define CUDA_ERROR_CHECK() {}
-#endif
-
-
+#include "cuda_error.h"
 
 
 //
 // Constructor
 //
 
-BkgModelCuda::BkgModelCuda (BkgModel& _bkg, int _num_steps, CpuStep_t* _step_list) :
+BkgModelCuda::BkgModelCuda (SignalProcessingMasterFitter& _bkg, int _num_steps, CpuStep_t* _step_list) :
     bkg (_bkg), num_steps (_num_steps), step_list (_step_list)
 {
   // Pull size constants from the host background model for naming consistency
-  num_pts = bkg.time_c.npts;
-  num_fb = bkg.my_flow.numfb;
-  num_beads = bkg.my_beads.numLBeads;
-  num_ev = bkg.emphasis_data.numEv;
+  num_pts = bkg.region_data->time_c.npts();
+  num_fb = bkg.region_data->my_flow.numfb;
+  num_beads = bkg.region_data->my_beads.numLBeads;
+  num_ev = bkg.region_data->emphasis_data.numEv;
+
+  clearMultiFlowAllocs = false;
 
   Timer t;
   t.restart();
 
   if (verbose_cuda)
-    printf ("[Reg: %d,%d] [Initialization] ", bkg.region->col, bkg.region->col);
+    printf ("[Reg: %d,%d] [Initialization] ", bkg.region_data->region->col, bkg.region_data->region->row);
 
   cudaStreamCreate(&stream); 
 
@@ -77,6 +58,7 @@ BkgModelCuda::BkgModelCuda (BkgModel& _bkg, int _num_steps, CpuStep_t* _step_lis
   cudaMalloc ( (void**) &params_high_cuda, sizeof (bound_params) * num_beads); CUDA_ERROR_CHECK();
   cudaMalloc ( (void**) &eval_rp_cuda, sizeof (reg_params)); CUDA_ERROR_CHECK();
   cudaMalloc ( (void**) &new_rp_cuda, sizeof (reg_params)); CUDA_ERROR_CHECK();
+  cudaMalloc ( (void**) &params_state_cuda, sizeof (bead_state) * num_beads); CUDA_ERROR_CHECK();
 
   // Allocate GPU memory (I/O)
   cudaMalloc ( (void**) &scratch_space_cuda, sizeof (float) * num_pts * num_fb * num_steps * num_beads); CUDA_ERROR_CHECK();
@@ -94,8 +76,8 @@ BkgModelCuda::BkgModelCuda (BkgModel& _bkg, int _num_steps, CpuStep_t* _step_lis
 
   // Allocate GPU memory (input data)
   cudaMalloc ( (void**) &flow_ndx_map_cuda, sizeof (int) * num_fb); CUDA_ERROR_CHECK();
-  cudaMalloc ( (void**) &frame_number_cuda, sizeof (float) * bkg.my_trace.imgFrames); CUDA_ERROR_CHECK();
-  cudaMalloc ( (void**) &delta_frame_cuda, sizeof (float) * bkg.my_trace.imgFrames); CUDA_ERROR_CHECK();
+  cudaMalloc ( (void**) &frame_number_cuda, sizeof (float) * bkg.region_data->my_trace.imgFrames); CUDA_ERROR_CHECK();
+  cudaMalloc ( (void**) &delta_frame_cuda, sizeof (float) * bkg.region_data->my_trace.imgFrames); CUDA_ERROR_CHECK();
   cudaMalloc ( (void**) &dark_matter_compensator_cuda, sizeof (float) * NUMNUC * num_pts); CUDA_ERROR_CHECK();
   cudaMalloc ( (void**) &buff_flow_cuda, sizeof (int) * num_fb); CUDA_ERROR_CHECK();
   cudaMalloc ( (void**) &EmphasisVectorByHomopolymer_cuda, sizeof (float) * num_ev * num_pts); CUDA_ERROR_CHECK();
@@ -120,13 +102,13 @@ BkgModelCuda::BkgModelCuda (BkgModel& _bkg, int _num_steps, CpuStep_t* _step_lis
   cudaMalloc ( (void**) &output_list_local_cuda, sizeof (delta_mat_output_line) * mat_dim_region); CUDA_ERROR_CHECK();
 
   // Copy unchanging data structures to GPU memory
-  cudaMemcpy (flow_ndx_map_cuda, bkg.my_flow.flow_ndx_map, sizeof (int) * num_fb, cudaMemcpyHostToDevice);
-  cudaMemcpy (frame_number_cuda, bkg.time_c.frameNumber, sizeof (float) * bkg.my_trace.imgFrames, cudaMemcpyHostToDevice);
-  cudaMemcpy (delta_frame_cuda, bkg.time_c.deltaFrame, sizeof (float) * bkg.my_trace.imgFrames, cudaMemcpyHostToDevice);
-  cudaMemcpy (buff_flow_cuda, bkg.my_flow.buff_flow, sizeof (int) * num_fb, cudaMemcpyHostToDevice);
-  cudaMemcpy (fg_buffers_cuda, bkg.my_trace.fg_buffers, sizeof (FG_BUFFER_TYPE) * num_fb * num_pts * num_beads, cudaMemcpyHostToDevice);
+  cudaMemcpy (flow_ndx_map_cuda, bkg.region_data->my_flow.flow_ndx_map, sizeof (int) * num_fb, cudaMemcpyHostToDevice);
+  cudaMemcpy (frame_number_cuda, &bkg.region_data->time_c.frameNumber[0], sizeof (float) * bkg.region_data->my_trace.imgFrames, cudaMemcpyHostToDevice);
+  cudaMemcpy (delta_frame_cuda, &bkg.region_data->time_c.deltaFrame[0], sizeof (float) * bkg.region_data->my_trace.imgFrames, cudaMemcpyHostToDevice);
+  cudaMemcpy (buff_flow_cuda, bkg.region_data->my_flow.buff_flow, sizeof (int) * num_fb, cudaMemcpyHostToDevice);
+  cudaMemcpy (fg_buffers_cuda, bkg.region_data->my_trace.fg_buffers, sizeof (FG_BUFFER_TYPE) * num_fb * num_pts * num_beads, cudaMemcpyHostToDevice);
   cudaMemcpy (residual_cuda, bkg.lev_mar_fit->lm_state.residual, sizeof (float) * num_beads, cudaMemcpyHostToDevice);
-  cudaMemcpy (clonal_call_scale_cuda, bkg.global_defaults.clonal_call_scale, sizeof (float) * (MAX_HPLEN + 1), 
+  cudaMemcpy (clonal_call_scale_cuda, bkg.global_defaults.fitter_defaults.clonal_call_scale, sizeof (float) * (MAX_HPLEN + 1), 
       cudaMemcpyHostToDevice);
 
 
@@ -149,6 +131,11 @@ BkgModelCuda::BkgModelCuda (BkgModel& _bkg, int _num_steps, CpuStep_t* _step_lis
 
 BkgModelCuda::~BkgModelCuda()
 {
+  if (!clearMultiFlowAllocs) {
+    clearMultiFlowAllocs = true;
+    ClearMultiFlowMembers();
+  }
+
   Clear();
 }
 
@@ -167,6 +154,7 @@ void BkgModelCuda::Clear()
   cudaFree (params_high_cuda);
   cudaFree (eval_rp_cuda);
   cudaFree (eval_params_cuda);
+  cudaFree (params_state_cuda);
 
   // Free GPU memory (I/O)
   cudaFree (sbg_cuda);
@@ -216,7 +204,7 @@ void BkgModelCuda::ClearBinarySearchMemory()
 //
 // Member Functions
 //
-
+/*
 void BkgModelCuda::InitializeConstantMemory (PoissonCDFApproxMemo& poiss_cache)
 {
   cudaMemcpyToSymbol (POISS_0_APPROX_TABLE_CUDA, poiss_cache.poiss_cdf[0], sizeof (float) *MAX_POISSON_TABLE_ROW); CUDA_ERROR_CHECK();
@@ -233,10 +221,11 @@ void BkgModelCuda::InitializeConstantMemory (PoissonCDFApproxMemo& poiss_cache)
   cudaMemcpyToSymbol (POISS_11_APPROX_TABLE_CUDA, poiss_cache.poiss_cdf[11], sizeof (float) *MAX_POISSON_TABLE_ROW); CUDA_ERROR_CHECK();
 #ifndef USE_CUDA_ERF
   cudaMemcpyToSymbol (ERF_APPROX_TABLE_CUDA, ERF_APPROX_TABLE, sizeof (ERF_APPROX_TABLE)); CUDA_ERROR_CHECK();
+
 #endif
 
 }
-
+*/
 
 void BkgModelCuda::createCuSbgArray()
 {
@@ -251,15 +240,17 @@ void BkgModelCuda::createCuDarkMatterArray()
 void BkgModelCuda::InitializeFit()
 {
   // Transfers input data that changes between fit processes
-  cudaMemcpy (fg_buffers_cuda, bkg.my_trace.fg_buffers, sizeof (FG_BUFFER_TYPE) * num_fb * num_pts * num_beads, cudaMemcpyHostToDevice);
-  cudaMemcpy (dark_matter_compensator_cuda, bkg.my_regions->missing_mass.dark_matter_compensator, sizeof (float) * NUMNUC* num_pts, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-  cudaMemcpy (params_low_cuda, bkg.my_beads.params_low, sizeof (bound_params) * num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-  cudaMemcpy (params_high_cuda, bkg.my_beads.params_high, sizeof (bound_params) * num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-  cudaMemcpy (EmphasisScale_cuda, bkg.emphasis_data.EmphasisScale, sizeof (float) * num_ev, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (fg_buffers_cuda, bkg.region_data->my_trace.fg_buffers, sizeof (FG_BUFFER_TYPE) * num_fb * num_pts * num_beads, cudaMemcpyHostToDevice);
+  cudaMemcpy (dark_matter_compensator_cuda, &bkg.region_data->my_regions.missing_mass.dark_matter_compensator[0], sizeof (float) * NUMNUC* num_pts, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (params_low_cuda, &bkg.region_data->my_beads.params_low[0], sizeof (bound_params) * num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (params_high_cuda, &bkg.region_data->my_beads.params_high[0], sizeof (bound_params) * num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (EmphasisScale_cuda, &bkg.region_data->emphasis_data.EmphasisScale[0], sizeof (float) * num_ev, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (params_state_cuda, &bkg.region_data->my_beads.all_status[0], sizeof (bead_state) * num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+
 
   for (int i=0; i<num_ev; ++i)
   {
-    cudaMemcpy (EmphasisVectorByHomopolymer_cuda + num_pts*i, bkg.emphasis_data.EmphasisVectorByHomopolymer[i], sizeof (float) * num_pts, cudaMemcpyHostToDevice);
+    cudaMemcpy (EmphasisVectorByHomopolymer_cuda + num_pts*i, bkg.region_data->emphasis_data.EmphasisVectorByHomopolymer[i], sizeof (float) * num_pts, cudaMemcpyHostToDevice);
     CUDA_ERROR_CHECK();
   }
 }
@@ -268,11 +259,11 @@ void BkgModelCuda::InitializePerFlowFit()
 {
 
   // Transfers input data that changes between fit processes
-  cudaMemcpy (dark_matter_compensator_cuda, bkg.my_regions->missing_mass.dark_matter_compensator, sizeof (float) * NUMNUC* num_pts, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-  cudaMemcpy (EmphasisScale_cuda, bkg.emphasis_data.EmphasisScale, sizeof (float) * num_ev, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (dark_matter_compensator_cuda, &bkg.region_data->my_regions.missing_mass.dark_matter_compensator[0], sizeof (float) * NUMNUC* num_pts, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (EmphasisScale_cuda, &bkg.region_data->emphasis_data.EmphasisScale[0], sizeof (float) * num_ev, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
   for (int i=0; i<num_ev; ++i)
   {
-    cudaMemcpy (EmphasisVectorByHomopolymer_cuda + num_pts*i, bkg.emphasis_data.EmphasisVectorByHomopolymer[i], sizeof (float) * num_pts, cudaMemcpyHostToDevice);
+    cudaMemcpy (EmphasisVectorByHomopolymer_cuda + num_pts*i, bkg.region_data->emphasis_data.EmphasisVectorByHomopolymer[i], sizeof (float) * num_pts, cudaMemcpyHostToDevice);
     CUDA_ERROR_CHECK();
   }
 }
@@ -323,7 +314,7 @@ void BkgModelCuda::DfdtshStep()
   reg_params eval_rp;
   cudaMemcpy (&eval_rp, eval_rp_cuda, sizeof (reg_params), cudaMemcpyDeviceToHost);
 
-  bkg.emptytrace->GetShiftedSlope (eval_rp.tshift, bkg.time_c, sbg_slope_host);
+  bkg.region_data->emptytrace->GetShiftedSlope (eval_rp.tshift, bkg.region_data->time_c, sbg_slope_host);
   cudaMemcpy (sbg_slope_cuda, sbg_slope_host, sizeof (float) *num_fb*num_pts, cudaMemcpyHostToDevice);
 
   MultiCycleNNModelFluxPulse_tshiftPartialDeriv (scratch_space_cuda, eval_params_cuda, eval_rp_cuda, sbg_slope_cuda);
@@ -392,8 +383,8 @@ void BkgModelCuda::BuildLocalMatrices (BkgFitMatrixPacker* well_fit)
     {
       // Get offsets
       int len = instruction_list[i].si[j].len;
-      int f1_offset = instruction_list[i].si[j].src1 - bkg.my_scratch.scratchSpace;
-      int f2_offset = instruction_list[i].si[j].src2 - bkg.my_scratch.scratchSpace;
+      int f1_offset = instruction_list[i].si[j].src1 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
+      int f2_offset = instruction_list[i].si[j].src2 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
 
       const int beads_per_block = 64;
       const int block_size = 8;
@@ -558,7 +549,7 @@ void BkgModelCuda::MultiFlowComputeIncorporationPlusBackgroundCuda (float* fval,
 
   MultiCycleNNModelFluxPulse_base_CUDA_k <NUMFB, beads_per_block> <<< blocks, threads, smem_size, stream >>> (
     bkg.lev_mar_fit->lm_state.restrict_clonal, clonal_call_scale_cuda, fval,
-    eval_params_cuda, rp, ival, sbg, flow_ndx_map_cuda,
+    eval_params_cuda, params_state_cuda, rp, ival, sbg, flow_ndx_map_cuda,
     delta_frame_cuda, dark_matter_compensator_cuda,
     buff_flow_cuda, num_pts, active_bead_list_cuda, current_step, num_steps, active_bead_count);
 
@@ -741,7 +732,7 @@ float BkgModelCuda::CalculateRegionalResidual()
 
   // Calculate residual for each active bead
   cudaMemset (new_residual_cuda, 0, sizeof (float) *num_beads); CUDA_ERROR_CHECK();
-  CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.my_beads.max_emphasis);
+  CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.region_data->my_beads.max_emphasis);
   CalculateNewRegionalResidual();
 
   // Copy
@@ -791,7 +782,7 @@ void BkgModelCuda::BuildActiveBeadList (bool reg_proc, bool check_cont_proc, boo
       continue;
 
     // Extra checks for regional processing
-    if (reg_proc && check_well_region_fit && bkg.my_beads.high_quality[ibd] == false)
+    if (reg_proc && check_well_region_fit && bkg.region_data->my_beads.high_quality[ibd] == false)
       continue;
 
     // This check is performed when building for the regional matrix
@@ -819,12 +810,12 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
   CpuStep_t *StepP;
 
   float reg_lambda_min = FLT_MIN;
-  float reg_lambda = 0.0001f;
+  float reg_lambda = 0.0001;
   unsigned int PartialDeriv_mask = 0;
   unsigned int reg_mask = 0;
   unsigned int well_mask = 0;
-  float hpmax = 1.0f;
-  float tshift_cache = -10.0f;
+  float hpmax = 1;
+  float tshift_cache = -10.0;
   bkg.lev_mar_fit->lm_state.restrict_clonal = 0;
   int nreg_group = 0;
 
@@ -832,7 +823,6 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
   Timer my_timer;
 
   bkg.lev_mar_fit->lm_state.InitializeLevMarFit(well_fit,reg_fit);
-  bkg.my_beads.CorruptedBeadsAreLowQuality(); 
 
   // set up dot product matrices
   SetUpDotMatrixProduct(well_fit, reg_fit);
@@ -847,7 +837,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
 
   // initialize fitting algorithm
   int numFit = 0;
-  for (int i = 0; i < bkg.my_beads.numLBeads; i++)
+  for (int i = 0; i < bkg.region_data->my_beads.numLBeads; i++)
   {
     bkg.lev_mar_fit->lm_state.lambda[i] = lambda_start;
     bkg.lev_mar_fit->lm_state.well_completed[i] = false;
@@ -860,7 +850,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
 
   max_iter += max_reg_iter;
 
-  memset (bkg.my_scratch.cur_xtflux_block, 0, sizeof (float) *num_pts*num_fb);
+  memset (bkg.lev_mar_fit->lev_mar_scratch.cur_xtflux_block, 0, sizeof (float) *num_pts*num_fb);
 
   // Initialize data that doesn't change for this fit
   InitializeFit();
@@ -868,7 +858,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
   // -- Iteration Loop --
   while ( (iter < max_iter) && (numFit != 0))
   {
-    reg_params eval_rp = bkg.my_regions->rp;
+    reg_params eval_rp = bkg.region_data->my_regions.rp;
 
     float reg_error = 0.0;
     int reg_wells = 0;
@@ -893,15 +883,15 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
     int req_done = 0;
 
     // Initialize SBG and copy to GPU
-    if (bkg.my_regions->rp.tshift != tshift_cache)
+    if (bkg.region_data->my_regions.rp.tshift != tshift_cache)
     {
-      bkg.emptytrace->GetShiftedBkg (bkg.my_regions->rp.tshift,  bkg.time_c, sbg_host);
-      tshift_cache = bkg.my_regions->rp.tshift;
+      bkg.region_data->emptytrace->GetShiftedBkg (bkg.region_data->my_regions.rp.tshift,  bkg.region_data->time_c, sbg_host);
+      tshift_cache = bkg.region_data->my_regions.rp.tshift;
     }
     cudaMemcpy (sbg_cuda, sbg_host, sizeof (float) * num_fb * num_pts, cudaMemcpyHostToDevice);
 
     // Need to look at....chances for error
-    cudaMemcpy (params_nn_cuda, bkg.my_beads.params_nn, sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
+    cudaMemcpy (params_nn_cuda, &bkg.region_data->my_beads.params_nn[0], sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
     cudaMemcpy (eval_params_cuda, params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToDevice);
     cudaMemcpy (eval_rp_cuda, &eval_rp, sizeof (reg_params), cudaMemcpyHostToDevice);
 
@@ -910,7 +900,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
     CUDA_ERROR_CHECK();
     if (reg_proc)
     {
-      CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.my_beads.max_emphasis);
+      CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.region_data->my_beads.max_emphasis);
       bkg.lev_mar_fit->lm_state.avg_resid = CalculateFitError();
     }
 
@@ -923,11 +913,11 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
       if (hpmax > clonal_restriction)
         hpmax = clonal_restriction;
 
-      bkg.lev_mar_fit->lm_state.restrict_clonal = hpmax - 0.5f;
+      bkg.lev_mar_fit->lm_state.restrict_clonal = hpmax - 0.5;
     }
 
     if (verbose_cuda)
-      printf ("  --- [Reg: %d,%d] [Iter: %d/%d] Num Fit = %d --- \n", bkg.region->col, bkg.region->col, iter, max_iter, numFit);
+      printf ("  --- [Reg: %d,%d] [Iter: %d/%d] Num Fit = %d --- \n", bkg.region_data->region->col, bkg.region_data->region->col, iter, max_iter, numFit);
 
     // --- PartialDeriv Phase ---
 
@@ -940,7 +930,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
       cudaMemcpy (active_bead_list_cuda, active_bead_list_host, sizeof (int) * active_bead_count, cudaMemcpyHostToDevice);
       CUDA_ERROR_CHECK();
   
-      CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.my_beads.max_emphasis);
+      CalculateEmphasisVectorIndexForFlow(eval_params_cuda, bkg.region_data->my_beads.max_emphasis);
 
       for (current_step = 0; current_step < num_steps; current_step++)
       {
@@ -1102,7 +1092,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
 
             // And related parameters...
             cudaMemcpy (&bkg.lev_mar_fit->lm_state.lambda[ibd], &lambda_cuda[ibd], sizeof (float), cudaMemcpyDeviceToHost); CUDA_ERROR_CHECK();
-            cudaMemcpy (&bkg.my_beads.params_nn[ibd], &params_nn_cuda[ibd], sizeof (bead_params), cudaMemcpyDeviceToHost); CUDA_ERROR_CHECK();
+            cudaMemcpy (&bkg.region_data->my_beads.params_nn[ibd], &params_nn_cuda[ibd], sizeof (bead_params), cudaMemcpyDeviceToHost); CUDA_ERROR_CHECK();
             cudaMemcpy (&bkg.lev_mar_fit->lm_state.residual[ibd], &residual_cuda[ibd], sizeof (float), cudaMemcpyDeviceToHost); CUDA_ERROR_CHECK();
 
             // Copy to well_fit's in JTJ and RHS matrices
@@ -1121,34 +1111,34 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
             while (!cont_proc)
             {
               float achg = 0.0;
-              bead_params eval_params = bkg.my_beads.params_nn[ibd];
+              bead_params eval_params = bkg.region_data->my_beads.params_nn[ibd];
 
               // Solve and adjust delta
               if (well_fit->GetOutput (reinterpret_cast<float*> (&eval_params), bkg.lev_mar_fit->lm_state.lambda[ibd]) != LinearSolverException)
               {
                 // Bounds check new parameters
-                params_ApplyLowerBound (&eval_params, &bkg.my_beads.params_low[ibd]);
-                params_ApplyUpperBound (&eval_params, &bkg.my_beads.params_high[ibd]);
+                params_ApplyLowerBound (&eval_params, &bkg.region_data->my_beads.params_low[ibd]);
+                params_ApplyUpperBound (&eval_params, &bkg.region_data->my_beads.params_high[ibd]);
 
                 // Check residual
-                MultiFlowComputeCumulativeIncorporationSignal (&eval_params, &eval_rp, ival_host,*bkg.my_regions,bkg.my_scratch.cur_bead_block,bkg.time_c,bkg.my_flow, bkg.math_poiss);
-                MultiFlowComputeIncorporationPlusBackground (&fval_host[0], &eval_params, &eval_rp, ival_host, sbg_host,*bkg.my_regions,bkg.my_scratch.cur_buffer_block,bkg.time_c,bkg.my_flow ,bkg.use_vectorization, bkg.my_scratch.bead_flow_t);
-                bkg.lev_mar_fit->lm_state.ApplyClonalRestriction (&fval_host[0], &eval_params,bkg.time_c.npts);
+                MultiFlowComputeCumulativeIncorporationSignal (&eval_params, &eval_rp, ival_host,bkg.region_data->my_regions,bkg.region_data->my_scratch.cur_bead_block,bkg.region_data->time_c,bkg.region_data->my_flow, bkg.math_poiss);
+                MultiFlowComputeIncorporationPlusBackground (&fval_host[0], &eval_params, &eval_rp, ival_host, sbg_host,bkg.region_data->my_regions,bkg.region_data->my_scratch.cur_buffer_block,bkg.region_data->time_c,bkg.region_data->my_flow ,bkg.global_defaults.signal_process_control.use_vectorization, bkg.region_data->my_scratch.bead_flow_t);
+                bkg.lev_mar_fit->lm_state.ApplyClonalRestriction (&fval_host[0], &eval_params,bkg.region_data->time_c.npts());
 
                 float res = 0;
                 float scale = 0;
                 for (int fnum=0; fnum < num_fb; fnum++)
                 {
-                  FG_BUFFER_TYPE *pfg = &bkg.my_trace.fg_buffers[num_fb*num_pts*ibd+fnum*num_pts];
+                  FG_BUFFER_TYPE *pfg = &bkg.region_data->my_trace.fg_buffers[num_fb*num_pts*ibd+fnum*num_pts];
                   float eval;
 
                   // TO DO: need to change this
                   int emndx = (int)eval_params.Ampl[fnum];
-                  emndx = emndx > bkg.my_beads.max_emphasis ? bkg.my_beads.max_emphasis : emndx;
+                  emndx = emndx > bkg.region_data->my_beads.max_emphasis ? bkg.region_data->my_beads.max_emphasis : emndx;
                       
-                  float *em = bkg.emphasis_data.EmphasisVectorByHomopolymer[emndx];
+                  float *em = bkg.region_data->emphasis_data.EmphasisVectorByHomopolymer[emndx];
                   float rerr = 0;
-                  scale += bkg.emphasis_data.EmphasisScale[emndx];
+                  scale += bkg.region_data->emphasis_data.EmphasisScale[emndx];
 
                   for (int ii=0;ii<num_pts;ii++)
                   {
@@ -1166,12 +1156,12 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
                 {
                   for (int fb = 0; fb < num_fb; fb++)
                   {
-                    float chg = fabs (bkg.my_beads.params_nn[ibd].Ampl[fb]*bkg.my_beads.params_nn[ibd].Copies - eval_params.Ampl[fb]*eval_params.Copies);
+                    float chg = fabs (bkg.region_data->my_beads.params_nn[ibd].Ampl[fb]*bkg.region_data->my_beads.params_nn[ibd].Copies - eval_params.Ampl[fb]*eval_params.Copies);
                     if (chg > achg)
                       achg = chg;
                   }
 
-                  bkg.my_beads.params_nn[ibd] = eval_params;
+                  bkg.region_data->my_beads.params_nn[ibd] = eval_params;
                   bkg.lev_mar_fit->lm_state.lambda[ibd] *= 0.10;
 
                   if (bkg.lev_mar_fit->lm_state.lambda[ibd] < FLT_MIN)
@@ -1209,7 +1199,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
             // Sync the updated list of completed wells, lambda, and residual with the GPU
             cudaMemcpy (&well_complete_cuda[ibd], &bkg.lev_mar_fit->lm_state.well_completed[ibd], sizeof (bool), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
             cudaMemcpy (&lambda_cuda[ibd],  &bkg.lev_mar_fit->lm_state.lambda[ibd], sizeof (float), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-            cudaMemcpy (&params_nn_cuda[ibd], &bkg.my_beads.params_nn[ibd], sizeof (bead_params), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+            cudaMemcpy (&params_nn_cuda[ibd], &bkg.region_data->my_beads.params_nn[ibd], sizeof (bead_params), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
             cudaMemcpy (&residual_cuda[ibd], &bkg.lev_mar_fit->lm_state.residual[ibd], sizeof (float), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
           }
 
@@ -1253,7 +1243,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
           if (verbose_cuda)
             printf ("  > [R] [ Solve  ] Active = %d ", active_bead_count);
 
-          reg_params eval_rp = bkg.my_regions->rp;
+          reg_params eval_rp = bkg.region_data->my_regions.rp;
           memset (eval_rp.Ampl,0,sizeof (eval_rp.Ampl));
           eval_rp.R = 0.0;
           eval_rp.Copies = 0.0;
@@ -1262,8 +1252,8 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
           if (reg_fit->GetOutput (reinterpret_cast<float*> (&eval_rp), reg_lambda) != LinearSolverException)
           {
             // Clamp parameters
-            reg_params_ApplyLowerBound (&eval_rp, &bkg.my_regions->rp_low);
-            reg_params_ApplyUpperBound (&eval_rp, &bkg.my_regions->rp_high);
+            reg_params_ApplyLowerBound (&eval_rp, &bkg.region_data->my_regions.rp_low);
+            reg_params_ApplyUpperBound (&eval_rp, &bkg.region_data->my_regions.rp_high);
 
             // make a copy so we can modify it to null changes in new_rp that will
             // we push into individual bead parameters
@@ -1271,7 +1261,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
             cudaMemcpy (new_rp_cuda, &eval_rp, sizeof (reg_params), cudaMemcpyHostToDevice);
 
             // Get updated shifted background
-            bkg.emptytrace->GetShiftedBkg (new_rp.tshift, bkg.time_c, sbg_host);
+            bkg.region_data->emptytrace->GetShiftedBkg (new_rp.tshift, bkg.region_data->time_c, sbg_host);
             tshift_cache = new_rp.tshift;
             cudaMemcpy (sbg_cuda, sbg_host, sizeof (float) *num_pts*num_fb, cudaMemcpyHostToDevice);
 
@@ -1283,13 +1273,13 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
             {
 
               // Update regional parameters
-              bkg.my_regions->rp = new_rp;
+              bkg.region_data->my_regions.rp = new_rp;
 
               // Re-calculate current parameter values for each bead as necessary
               AdjustRegionalParameters (params_nn_cuda, new_rp_cuda);
 
               // Adjust lambda
-              reg_lambda /= 10.0f;
+              reg_lambda /= 10.0;
               if (reg_lambda < FLT_MIN)
                 reg_lambda = FLT_MIN;
 
@@ -1301,7 +1291,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
             else
             {
               // It's not better...
-              reg_lambda *= 10.0f;
+              reg_lambda *= 10.0;
               if (reg_lambda > 1000000000)
                 cont_proc = true;
             }
@@ -1309,7 +1299,7 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
           else
           {
             // Singular matrix
-            reg_lambda *= 10.0f;
+            reg_lambda *= 10.0;
             if (reg_lambda > 1000000000)
               cont_proc = true;
           }
@@ -1333,26 +1323,25 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
       iter++;
 
     // Final iteration outputs
-    cudaMemcpy (bkg.my_beads.params_nn, params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
+    cudaMemcpy (&bkg.region_data->my_beads.params_nn[0], params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
     cudaMemcpy (bkg.lev_mar_fit->lm_state.lambda, lambda_cuda, sizeof (float) * num_beads, cudaMemcpyDeviceToHost);
     cudaMemcpy (bkg.lev_mar_fit->lm_state.residual, residual_cuda, sizeof (float) * num_beads, cudaMemcpyDeviceToHost);
 
     if (reg_proc)
-      IdentifyParameters (bkg.my_beads,*bkg.my_regions,bkg.lev_mar_fit->lm_state.well_mask,bkg.lev_mar_fit->lm_state.reg_mask,bkg.lev_mar_fit->lm_state.skip_beads);
+      IdentifyParameters (bkg.region_data->my_beads,bkg.region_data->my_regions,bkg.lev_mar_fit->lm_state.well_mask,bkg.lev_mar_fit->lm_state.reg_mask,bkg.lev_mar_fit->lm_state.skip_beads);
   }
 
   /*bkg.lev_mar_fit->lm_state.avg_resid = 0.0;
-  for (int i = 0; i < bkg.my_beads.numLBeads; i++)
+  for (int i = 0; i < bkg.region_data->my_beads.numLBeads; i++)
     bkg.lev_mar_fit->lm_state.avg_resid += bkg.lev_mar_fit->lm_state.residual[i];
 
-  bkg.lev_mar_fit->lm_state.avg_resid /= bkg.my_beads.numLBeads;*/
+  bkg.lev_mar_fit->lm_state.avg_resid /= bkg.region_data->my_beads.numLBeads;*/
 
-  bkg.lev_mar_fit->lm_state.FinalComputeAndSetAverageResidual(bkg.my_beads.high_quality);
-
+  bkg.lev_mar_fit->lm_state.FinalComputeAndSetAverageResidual(bkg.region_data->my_beads.high_quality);
   fflush (stdout);
   bkg.lev_mar_fit->lm_state.restrict_clonal = 0.0f;
   ClearDotProductSetup(well_fit, reg_fit);
-
+  
   return (iter);
 }
 
@@ -1361,7 +1350,10 @@ int BkgModelCuda::MultiFlowSpecializedLevMarFitParameters (int max_iter, int max
 
 void BkgModelCuda::FitAmplitudePerFlow()
 {
-  ClearMultiFlowMembers();
+  if (!clearMultiFlowAllocs) {
+    clearMultiFlowAllocs = true;
+    ClearMultiFlowMembers(); 
+  }
 
   AllocateSingleFlowMembers();
 
@@ -1380,7 +1372,7 @@ void BkgModelCuda::FitAmplitudePerFlow()
               cudaMemcpyHostToDevice);
 
   // calculate shifted background
-  bkg.emptytrace->GetShiftedBkg (bkg.my_regions->rp.tshift, bkg.time_c, sbg_host);
+  bkg.region_data->emptytrace->GetShiftedBkg (bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, sbg_host);
   cudaMemcpy (sbg_cuda, sbg_host, sizeof (float) *num_pts*num_fb, cudaMemcpyHostToDevice);
 
   // calculate active bead list
@@ -1394,17 +1386,17 @@ void BkgModelCuda::FitAmplitudePerFlow()
   CalcXtalkFlux();
 
   //DNTP calculation for each nucleotide
-  DntpRiseModel dntpMod (num_pts, bkg.my_regions->rp.nuc_shape.C, bkg.time_c.frameNumber, ISIG_SUB_STEPS_SINGLE_FLOW);
+  DntpRiseModel dntpMod (num_pts, bkg.region_data->my_regions.rp.nuc_shape.C, &bkg.region_data->time_c.frameNumber[0], ISIG_SUB_STEPS_SINGLE_FLOW);
   float nucRise[num_pts*NUMNUC*ISIG_SUB_STEPS_SINGLE_FLOW];
   int i_start[NUMNUC];
 
   for (int NucID=0;NucID<NUMNUC;NucID++)
   {
-    float t_mid_nuc = bkg.my_regions->rp.nuc_shape.t_mid_nuc[0] + bkg.my_regions->rp.nuc_shape.t_mid_nuc_delay[NucID]* (bkg.my_regions->rp.nuc_shape.t_mid_nuc[0]-bkg.my_regions->rp.nuc_shape.valve_open) / bkg.my_regions->rp.nuc_shape.magic_divisor_for_timing;
+    float t_mid_nuc = bkg.region_data->my_regions.rp.nuc_shape.t_mid_nuc[0] + bkg.region_data->my_regions.rp.nuc_shape.t_mid_nuc_delay[NucID]* (bkg.region_data->my_regions.rp.nuc_shape.t_mid_nuc[0]-bkg.region_data->my_regions.rp.nuc_shape.valve_open) / bkg.region_data->my_regions.rp.nuc_shape.magic_divisor_for_timing;
     i_start[NucID]=dntpMod.CalcCDntpTop (
                      &nucRise[NucID*num_pts*ISIG_SUB_STEPS_SINGLE_FLOW],
                      t_mid_nuc,
-                     bkg.my_regions->rp.nuc_shape.sigma * bkg.my_regions->rp.nuc_shape.sigma_mult[NucID]);
+                     bkg.region_data->my_regions.rp.nuc_shape.sigma * bkg.region_data->my_regions.rp.nuc_shape.sigma_mult[NucID], bkg.region_data->my_regions.rp.nuc_shape.nuc_flow_span,NucID);
   }
 
   cudaMemcpy (c_dntp_top_pc_cuda, &nucRise[0],
@@ -1413,8 +1405,8 @@ void BkgModelCuda::FitAmplitudePerFlow()
   // end DNTP calculation
 
 
-  cudaMemcpy (params_nn_cuda, bkg.my_beads.params_nn, sizeof (bead_params) *num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
-  cudaMemcpy (eval_rp_cuda, & (bkg.my_regions->rp), sizeof (reg_params), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (params_nn_cuda, &bkg.region_data->my_beads.params_nn[0], sizeof (bead_params) *num_beads, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
+  cudaMemcpy (eval_rp_cuda, & (bkg.region_data->my_regions.rp), sizeof (reg_params), cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
 
   DetermineSingleFlowFitType();
 
@@ -1441,7 +1433,7 @@ void BkgModelCuda::ClearMultiFlowMembers()
   cudaFreeHost (req_flag_host);
 
   // Free GPU parameter arrays
-  cudaFree (new_rp_cuda); ;
+  cudaFree (new_rp_cuda); 
 
   // Free GPU memory (I/O)
   cudaFree (scratch_space_cuda);
@@ -1563,14 +1555,14 @@ void BkgModelCuda::BinarySearchAmplitude (float min_step, bool restart)
   InitializeFit();
 
   // copy active bead list to gpu
-  cudaMemcpy (params_nn_cuda, bkg.my_beads.params_nn, sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
-  cudaMemcpy (eval_rp_cuda, &bkg.my_regions->rp, sizeof (reg_params), cudaMemcpyHostToDevice);
+  cudaMemcpy (params_nn_cuda, &bkg.region_data->my_beads.params_nn[0], sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
+  cudaMemcpy (eval_rp_cuda, &bkg.region_data->my_regions.rp, sizeof (reg_params), cudaMemcpyHostToDevice);
 
   InitializeArraysForBinarySearch (restart);
   cudaMemcpy (eval_params_cuda, params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToDevice);
 
 
-  bkg.emptytrace->GetShiftedBkg (bkg.my_regions->rp.tshift, bkg.time_c, sbg_host);
+  bkg.region_data->emptytrace->GetShiftedBkg (bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, sbg_host);
   cudaMemcpy (sbg_cuda, sbg_host, sizeof (float) *num_pts*num_fb, cudaMemcpyHostToDevice);
   EvaluateAmplitudeFit (ac_cuda, ec_cuda);
 
@@ -1603,7 +1595,7 @@ void BkgModelCuda::BinarySearchAmplitude (float min_step, bool restart)
   cudaMemcpy (active_bead_list_cuda, active_bead_list_host, sizeof (int) *active_bead_count, cudaMemcpyHostToDevice);
   UpdateAmplitudeAfterBinarySearch();
 
-  cudaMemcpy (bkg.my_beads.params_nn, params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
+  cudaMemcpy (&bkg.region_data->my_beads.params_nn[0], params_nn_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
 
   ClearBinarySearchMemory();
 }
@@ -1647,9 +1639,10 @@ void BkgModelCuda::BuildActiveBeadListMinusIgnoredWells (bool check_cont_proc)
   {
     if (check_cont_proc && cont_proc_host[ibd])
       continue;
-    if (bkg.my_beads.params_nn[ibd].my_state.clonal_read || 
-        bkg.my_beads.params_nn[ibd].my_state.random_samp)
+    if (bkg.region_data->my_beads.params_nn[ibd].my_state->clonal_read || 
+        bkg.region_data->my_beads.params_nn[ibd].my_state->random_samp)
       active_bead_list_host[active_bead_count++] = ibd;
+ 
   }
 }
 
@@ -1971,7 +1964,7 @@ void BkgModelCuda::Fit()
   cudaMemcpy (active_bead_list_cuda, active_bead_list_host,
               sizeof (int) *active_bead_count, cudaMemcpyHostToDevice); CUDA_ERROR_CHECK();
   UpdateFinalParamsSingleFlow();
-  cudaMemcpy (bkg.my_beads.params_nn, params_nn_cuda, sizeof (bead_params) *num_beads,
+  cudaMemcpy (&bkg.region_data->my_beads.params_nn[0], params_nn_cuda, sizeof (bead_params) *num_beads,
               cudaMemcpyDeviceToHost);
 
   cudaMemset (flowDone_cuda, 0, sizeof (bool) *num_beads*num_fb);
@@ -1992,10 +1985,14 @@ void BkgModelCuda::Fit()
     {
       err_t.mean_residual_error[fnum] = sqrt(r1_host[ibd*num_fb + fnum]);
     }
-    DetectCorruption(&bkg.my_beads.params_nn[ibd], err_t, WASHOUT_THRESHOLD, WASHOUT_FLOW_DETECTION);
-    UpdateCumulativeAvgError(&bkg.my_beads.params_nn[ibd], err_t, bkg.my_flow.buff_flow[NUMFB-1]+1);
-    bkg.SendErrorVectorToHDF5 (&bkg.my_beads.params_nn[ibd],err_t); 
+    DetectCorruption(&bkg.region_data->my_beads.params_nn[ibd], err_t, WASHOUT_THRESHOLD, WASHOUT_FLOW_DETECTION);
+    UpdateCumulativeAvgError(&bkg.region_data->my_beads.params_nn[ibd], 
+      err_t, bkg.region_data->my_flow.buff_flow[NUMFB-1]+1);
+    bkg.global_state.SendErrorVectorToHDF5 (&bkg.region_data->my_beads.params_nn[ibd], err_t,
+      bkg.region_data->region, bkg.region_data->my_flow); 
   }
+
+
 
   // free cpu memory
   free (r1_host);
@@ -2364,11 +2361,11 @@ void BkgModelCuda::ProjectionSearch()
   InitializeFit();
 
   // copy active bead list to gpu
-  cudaMemcpy (eval_rp_cuda, &bkg.my_regions->rp, sizeof (reg_params), cudaMemcpyHostToDevice);
-  cudaMemcpy (eval_params_cuda, bkg.my_beads.params_nn, sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
+  cudaMemcpy (eval_rp_cuda, &bkg.region_data->my_regions.rp, sizeof (reg_params), cudaMemcpyHostToDevice);
+  cudaMemcpy (eval_params_cuda, &bkg.region_data->my_beads.params_nn[0], sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
 
 
-  bkg.emptytrace->GetShiftedBkg (bkg.my_regions->rp.tshift, bkg.time_c, sbg_host);
+  bkg.region_data->emptytrace->GetShiftedBkg (bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, sbg_host);
   cudaMemcpy (sbg_cuda, sbg_host, sizeof (float) *num_pts*num_fb, cudaMemcpyHostToDevice);
 
   BlueSolveBackgroundTrace (ival_cuda, sbg_cuda);
@@ -2387,7 +2384,7 @@ void BkgModelCuda::ProjectionSearch()
   }
 
   UpdateProjectionAmplitude (eval_params_cuda);
-  cudaMemcpy (bkg.my_beads.params_nn, eval_params_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
+  cudaMemcpy (&bkg.region_data->my_beads.params_nn[0], eval_params_cuda, sizeof (bead_params) * num_beads, cudaMemcpyDeviceToHost);
 
   ClearMemoryForProjectionSearch();
 }
@@ -2400,8 +2397,8 @@ void BkgModelCuda::NewXtalk()
   AllocateMemoryForXtalk (bkg.xtalk_spec.nei_affected);
 
   // copy active bead list to gpu
-  cudaMemcpy (eval_rp_cuda, &bkg.my_regions->rp, sizeof (reg_params), cudaMemcpyHostToDevice);
-  cudaMemcpy (eval_params_cuda, bkg.my_beads.params_nn, sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
+  cudaMemcpy (eval_rp_cuda, &bkg.region_data->my_regions.rp, sizeof (reg_params), cudaMemcpyHostToDevice);
+  cudaMemcpy (eval_params_cuda, &bkg.region_data->my_beads.params_nn[0], sizeof (bead_params) * num_beads, cudaMemcpyHostToDevice);
 
   ComputeXtalkContributionFromEveryBead();
 
@@ -2410,6 +2407,19 @@ void BkgModelCuda::NewXtalk()
   GenerateNeighbourMap();
 
   ComputeXtalkTraceForEveryBead (bkg.xtalk_spec.nei_affected);
+
+
+  /*float* temp;
+  float* x = (float*)malloc(sizeof(float)*num_pts*num_fb*num_beads);
+  cudaMemcpy(x, xtflux_cuda, sizeof(float)*num_pts*num_fb*num_beads, cudaMemcpyDeviceToHost);
+  for (int i=0; i<num_beads; ++i) {
+    temp = x + i*num_fb*num_pts;
+    for (int j=0; j<num_fb*num_pts; ++j) {
+        printf("%.3f ", temp[j]);
+    }
+    printf("\n");
+  }
+  free(x);*/
 
   ClearMemoryForXtalk();
 }
@@ -2461,7 +2471,7 @@ void BkgModelCuda::ComputeXtalkContributionFromEveryBead()
 
 void BkgModelCuda::GenerateNeighbourMap()
 {
-  if (bkg.my_beads.ndx_map != NULL)
+  if (not bkg.region_data->my_beads.ndx_map.empty())
   {
     int neis = bkg.xtalk_spec.nei_affected;
 
@@ -2474,19 +2484,19 @@ void BkgModelCuda::GenerateNeighbourMap()
     int* neiPtr = NULL;
     for (int ibd=0; ibd<num_beads; ++ibd)
     {
-      cx = bkg.my_beads.params_nn[ibd].x;
-      cy = bkg.my_beads.params_nn[ibd].y;
+      cx = bkg.region_data->my_beads.params_nn[ibd].x;
+      cy = bkg.region_data->my_beads.params_nn[ibd].y;
       neiPtr = NeiMapPerBead + ibd*neis*2;
 
       // Iterate over the number of neighbors, accumulating hydrogen ions
       for (int nei_idx=0; nei_idx<neis; nei_idx++)
       {
         // phase for hex-packed
-        bkg.xtalk_spec.NeighborByChipType(ncx,ncy,cx,cy,nei_idx,bkg.region->col,bkg.region->row);
+        bkg.xtalk_spec.NeighborByChipType(ncx,ncy,cx,cy,nei_idx,bkg.region_data->region->col,bkg.region_data->region->row);
 
-        if ( (ncx>-1) && (ncx <bkg.region->w) && (ncy>-1) && (ncy<bkg.region->h)) // neighbor within region
+        if ( (ncx>-1) && (ncx <bkg.region_data->region->w) && (ncy>-1) && (ncy<bkg.region_data->region->h)) // neighbor within region
         {
-          if ( (nn_ndx=bkg.my_beads.ndx_map[ncy*bkg.region->w+ncx]) !=-1) // bead present
+          if ( (nn_ndx=bkg.region_data->my_beads.ndx_map[ncy*bkg.region_data->region->w+ncx]) !=-1) // bead present
           {
             numNeisPerBead[ibd]++;
             neiPtr[0] = nn_ndx;
@@ -2621,8 +2631,8 @@ void BkgModelCuda::SetUpMatrixDotProductForWell(BkgFitMatrixPacker* well_fit)
         {
             // Get offsets
             well_dotProd_len[count] = well_instruction_list[i].si[j].len;
-            well_f1_offset[count] = well_instruction_list[i].si[j].src1 - bkg.my_scratch.scratchSpace;
-            well_f2_offset[count] = well_instruction_list[i].si[j].src2 - bkg.my_scratch.scratchSpace;
+            well_f1_offset[count] = well_instruction_list[i].si[j].src1 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
+            well_f2_offset[count] = well_instruction_list[i].si[j].src2 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
             count++;
         }
         
@@ -2682,8 +2692,8 @@ void BkgModelCuda::SetUpMatrixDotProductForRegion(BkgFitMatrixPacker* reg_fit) {
         for (int j = 0; j < reg_instruction_list[i].cnt; j++)
         {
             reg_dotProd_len[count] = reg_instruction_list[i].si[j].len;
-            reg_f1_offset[count] = reg_instruction_list[i].si[j].src1 - bkg.my_scratch.scratchSpace;
-            reg_f2_offset[count] = reg_instruction_list[i].si[j].src2 - bkg.my_scratch.scratchSpace;
+            reg_f1_offset[count] = reg_instruction_list[i].si[j].src1 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
+            reg_f2_offset[count] = reg_instruction_list[i].si[j].src2 - bkg.lev_mar_fit->lev_mar_scratch.scratchSpace;
             count++;
         }
         

@@ -2,64 +2,72 @@
 <html>
 <head>
     <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
-    <link type="text/css" href="/site_media/RunRecognitION/styles/runrecognition.css" rel="Stylesheet" />
+    <link type="text/css" href="/pluginMedia/RunRecognitION/styles/runrecognition.css" rel="Stylesheet" />
     <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
     <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-    <script type="text/javascript" src="/site_media/RunRecognitION/scripts/runrecognition.js"></script>
+    <script type="text/javascript" src="/pluginMedia/RunRecognitION/scripts/runrecognition.js"></script>
+    <script type="text/javascript" src="/pluginMedia/RunRecognitION/scripts/rrLeaderboardBuilder.js"></script>
     
     <script type='text/javascript'>
         chipType = ''
-    	timeOfRun = ''
-    	
-    	function checkGenerateFile() {
-    		$('#username').attr('disabled', $('#tc_generatefile').prop('checked'));
+        timeOfRun = ''
+
+        function checkGenerateFile() {
+       $('#username').attr('disabled', $('#tc_generatefile').prop('checked'));
             $('#password').attr('disabled', $('#tc_generatefile').prop('checked'));
             if ($('#tc_generatefile').prop('checked')) {
-            	$('#postbutton').val('Generate File')
+                $('#postbutton').val('Generate File')
             } else {
-            	$('#postbutton').val('Upload')
+                $('#postbutton').val('Upload')
             }
         }
-    	
+        
         function checkDuplicate() {
-        	$("#formwrap").hide();
+            $("#formwrap").hide();
             $('#loading-div').show();
-        	$.ajax({
-        		url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrun/',
-        		data:  {
-        		    jive_username: $('#username').val(),
-        		    time_of_run: timeOfRun.replace('T', ' '),
-        		    chip_type: chipType
-        		  }, 
-        		dataType : "jsonp",
-        		contentType : "application/json; charset=utf-8",
+        var truncatedTime = timeOfRun;
+        //strip out the T and the timezone info to keep TG tastypie happy.
+        var indexOfPlus = truncatedTime.indexOf("+");
+        if (indexOfPlus >= 0) {
+                truncatedTime = truncatedTime.substr(0, indexOfPlus);
+        }
+        truncatedTime = truncatedTime.replace('T', ' ');
+            $.ajax({
+                url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrun/',
+                data:  {
+                    jive_username: $('#username').val(),
+                    time_of_run: truncatedTime,
+                    chip_type: chipType
+                  }, 
+                dataType : "jsonp",
+                contentType : "application/json; charset=utf-8",
                 type : "GET",
                 timeout: 5000,
                 error: function(XHR, textStatus, errorThrown){
                     if (textStatus != 'success') {
-                    	$("#dialog-generate-file").dialog('open');
+                        $("#dialog-generate-file").dialog('open');
                     }
                 },
                 success : function(data) {
-                	if (data.meta.total_count > 0) {
-                		$("#dialog-confirm").dialog('open');
-                	} else {
-                		runPlugin();
-                	}
+                    if (data.meta.total_count > 0) {
+                        $("#dialog-confirm").dialog('open');
+                    } else {
+                        runPlugin();
+                    }
                 }
             });
         }
         
         // validates the form and adds any needed error messages.
         function validateForm() {
-    		errormessage = '';
-    		returnval = true;
-        	if ($('#tc_aggreement').prop('checked') == false) {
-        		errormessage += 'You must accept the terms and conditions before submitting your data.<br>';
-        		returnval = false;
-        	}
-        	if ($('#tc_generatefile').prop('checked') == false) {
-        		if ($.trim($('#username').val()).length == 0) {
+            errormessage = '';
+            returnval = true;
+            if ($('#tc_aggreement').prop('checked') == false) {
+                errormessage += 'You must accept the terms and conditions before submitting your data.<br>';
+                returnval = false;
+            }
+            if ($('#tc_generatefile').prop('checked') == false) {
+                if ($.trim($('#username').val()).length == 0) {
                     errormessage += 'Your ion community username is required.<br>';
                     returnval = false;
                 }
@@ -67,15 +75,25 @@
                     errormessage += 'Your ion community password is required.<br>';
                     returnval = false;
                 }
-        	}
-        	$('#form_errors').html(errormessage);
-        	
-        	return returnval;
+            }
+            $('#form_errors').html(errormessage);
+            
+            return returnval;
         }
+        
         
         function runPlugin() {
             obj = $('#inputform').serializeObject();
-
+            
+            configSuccess = function(data) {
+                $.each(data.config, function(key, val){
+                    if (key == "ts_url" || key == "ts_username" || key == "ts_password") {
+                        obj[key] = val;
+                    }
+                });
+            }
+            getPluginConfigFromDb(configSuccess);
+            
             pluginAPIJSON = {
                 "plugin" : [ TB_plugin.fields.name ],
                 "pluginconfig" : obj
@@ -97,13 +115,13 @@
         
         appendcount = 0
         function appendData(label, data, numCols) {
-        	numCols = typeof(numCols) != 'undefined' ? numCols : 3;
-        	if (appendcount % numCols == 0) {
-        		$('#data_preview_table').append('<tr></tr>')
-        	}
-        	
-        	$('#data_preview_table tr:last').append('<td><strong>' + label + '</strong>:' + data + '</td>');
-        	appendcount++;
+            numCols = typeof(numCols) != 'undefined' ? numCols : 3;
+            if (appendcount % numCols == 0) {
+                $('#data_preview_table').append('<tr></tr>')
+            }
+            
+            $('#data_preview_table tr:last').append('<td><strong>' + label + '</strong>:' + data + '</td>');
+            appendcount++;
         }
         
         function getGlobalConfigData() {
@@ -113,21 +131,21 @@
                 type : "GET",
                 async: true,
                 success : function(data) {
-                	site_name = data.objects[0].site_name
-                	if (site_name.toLowerCase().indexOf('set site_name') == -1) {
+                    site_name = data.objects[0].site_name
+                    if (site_name.toLowerCase().indexOf('set site_name') == -1) {
                         $('#site_name').val(data.objects[0].site_name)
-                	}
+                    }
                 }
             });
         }
         
-    	$(document).ready(function() {
-    		$('#data_preview_link').click(function(){
+        $(document).ready(function() {
+            $('#data_preview_link').click(function(){
                $('#data_preview').toggle();
             });
-    		
-    		// initialize the confirmation dialog.
-    		$("#dialog-confirm").dialog({
+            
+            // initialize the confirmation dialog.
+            $("#dialog-confirm").dialog({
                 resizable: false,
                 height:200,
                 modal: true,
@@ -144,8 +162,8 @@
                     }
                 }
             });
-    		
-    		// initialize the error dialog.
+            
+            // initialize the error dialog.
             $("#dialog-generate-file").dialog({
                 resizable: false,
                 height:200,
@@ -164,88 +182,88 @@
                     }
                 }
             });
-    		
-    		// gets the data that will be entered in to the preview pane
-    		getGlobalConfigData();
-    		runData = getRunData(TB_result);
-    		timeOfRun = runData['results'].timeStamp;
+            
+            // gets the data that will be entered in to the preview pane
+            getGlobalConfigData();
+            runData = getRunData(TB_result);
+            timeOfRun = runData['results'].timeStamp;
             chipType = runData['experiment'].chipType;
             initializeLeaderboard(chipType.replace(/[^0-9]/g, ''), '#leaderboard_wrapper', runData, '#leaderboard_position');
             $('#reference_genome').val(runData['libmetrics'].genome);
-    		$.ajax({
-    	        url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrunfielddefinition?limit=1000',
-    	        dataType : "jsonp",
-    	        contentType : "application/json; charset=utf-8",
-    	        type : "GET",
-    	        timeout: 5000,
-    	        error: function(XHR, textStatus, errorThrown){
-    	        	$('#data_preview_loading').hide();
-    	            if (textStatus != 'success') {
-    	            	appendData('Time Stamp', timeOfRun, 2);
-    	                appendData('Analysis Version', runData['results'].analysisVersion, 2);
-    	                appendData('Chip Type', chipType, 2);
-    	            	$.each(runData['qualitymetrics'], function(key, val) {
-    	            		appendData(key, val, 2)
-    	            	});
-    	            	$.each(runData['libmetrics'], function(key, val) {
+            $.ajax({
+                url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrunfielddefinition?limit=1000',
+                dataType : "jsonp",
+                contentType : "application/json; charset=utf-8",
+                type : "GET",
+                timeout: 5000,
+                error: function(XHR, textStatus, errorThrown){
+                    $('#data_preview_loading').hide();
+                    if (textStatus != 'success') {
+                        appendData('Time Stamp', timeOfRun, 2);
+                        appendData('Analysis Version', runData['results'].analysisVersion, 2);
+                        appendData('Chip Type', chipType, 2);
+                        $.each(runData['qualitymetrics'], function(key, val) {
                             appendData(key, val, 2)
                         });
-    	            }
-    	        },
-    	        success : function(fieldDefs) {
-    	        	$('#data_preview_loading').hide();
-    	        	appendData('Time Stamp', timeOfRun);
-    	            appendData('Analysis Version', runData['results'].analysisVersion);
-    	            appendData('Chip Type', chipType);
+                        $.each(runData['libmetrics'], function(key, val) {
+                            appendData(key, val, 2)
+                        });
+                    }
+                },
+                success : function(fieldDefs) {
+                    $('#data_preview_loading').hide();
+                    appendData('Time Stamp', timeOfRun);
+                    appendData('Analysis Version', runData['results'].analysisVersion);
+                    appendData('Chip Type', chipType);
                     $.each(fieldDefs['objects'], function(i, curField) {
-                    	appendData(curField.name, runData[curField.ts_object][curField.ts_field]);
+                        appendData(curField.name, runData[curField.ts_object][curField.ts_field]);
                     });
-    	        }
-    	    });
-       	});
+                }
+            });
+           });
         
         
     
-    	$(function() {
-    	    //process form to grab html objects and turn them into json objects 
-    		$.fn.serializeObject = function() {
-    			var o = {};
-    			var a = this.serializeArray();
+        $(function() {
+            //process form to grab html objects and turn them into json objects 
+            $.fn.serializeObject = function() {
+                var o = {};
+                var a = this.serializeArray();
     
-    			$.each(a, function() {
-    				if (o[this.name] != null) {
-    					if (!o[this.name].push) {
-    						o[this.name] = [ o[this.name] ];
-    					}
+                $.each(a, function() {
+                    if (o[this.name] != null) {
+                        if (!o[this.name].push) {
+                            o[this.name] = [ o[this.name] ];
+                        }
     
-    					o[this.name].push(this.value || '');
-    				} else if (this.name == "file") {
+                        o[this.name].push(this.value || '');
+                    } else if (this.name == "file") {
     
-    					o[this.name] = [ this.value || '' ];
-    				} else {
-    					o[this.name] = this.value || '';
-    				}
-    			});
+                        o[this.name] = [ this.value || '' ];
+                    } else {
+                        o[this.name] = this.value || '';
+                    }
+                });
     
-    			return o;
-    		};
+                return o;
+            };
     
-    		$(function() {
-    			$('#postbutton').click(function() {
-    				// on clicking to submit the form, first validate 
-    				if (validateForm() == false) {
-    					return;
-    				}
-    				
-    				// then check if this has been submitted before
-    				if ($('#tc_generatefile').prop('checked')) {
+            $(function() {
+                $('#postbutton').click(function() {
+                    // on clicking to submit the form, first validate 
+                    if (validateForm() == false) {
+                        return;
+                    }
+                    
+                    // then check if this has been submitted before
+                    if ($('#tc_generatefile').prop('checked')) {
                         runPlugin();
                     } else {
-        				checkDuplicate();
+                        checkDuplicate();
                     }
-    			});
-    		})
-    	});
+                });
+            })
+        });
     </script>
 </head>
 

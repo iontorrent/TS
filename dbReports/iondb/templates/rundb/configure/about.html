@@ -1,0 +1,59 @@
+{% extends "rundb/configure/base.html" %}
+{% block sub-nav %}
+	<li class="active"><a href="{% url configure_about %}">About</a></li>			
+	<li><a href="{% url configure_references %}">References</a></li>
+	<li><a href="{% url configure_services %}">Services</a></li>
+	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
+	<li><a href="{% url configure_configure %}">Configure</a></li>	
+{% endblock sub-nav %}
+{% block content %}
+
+		<div class="content clearfix">
+			<h1>Releases</h1>
+			<table id="releases" class="">
+		        <thead>
+					<tr>
+						<th>Product</th>
+						<th>Version</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><strong>Torrent Suite</strong></td><td><strong>{{meta}}</strong></td>
+					</tr>
+					{% for label,version in versions.items %}
+					<tr>
+						<td>&#8227; {{label}}</td><td>{{version}}</td>
+					</tr>
+					{% endfor %}
+					
+					</tbody> 	
+			</table>
+		</div>
+
+		<div class="content clearfix">
+			<h1>More Information and Assistance</h1>
+			<ul>
+				<li><a href="http://ioncommunity.iontorrent.com/">IonCommunity</a></li>
+				<li><a href="http://iontorrent.com/support">Support</a></li>
+				<li><a href="/ion-docs/Home.html">Local Documentation</a></li>
+				<li><a href="/configure/info">System Support Diagnostics</a></li>
+				<li><a href="/configure/chips">Instrument Diagnostics</a></li>
+			</ul>
+		</div>
+
+	<script>
+		$(document).ready(function(){
+			$("#releases").kendoGrid({
+                        dataSource: {
+                        },
+                        height: 'auto',
+                        groupable: false,
+                        scrollable: false,
+                        sortable: false,
+                        pageable: false
+            });
+			
+		});
+	</script>	
+{% endblock content %}

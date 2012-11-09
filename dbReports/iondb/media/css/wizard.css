@@ -1,0 +1,267 @@
+.dialog {
+	margin: 0 auto;
+	width: 900px;
+}
+
+.wizard-header {
+    background-color: #f4f4f4;
+    color: #666;
+    border-bottom: #ddd 1px solid;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    padding: 5px 10px;
+    margin: 0 0 10px 0;
+}
+
+
+.workflow {
+}
+.workflow-content {
+}
+.workflow-menu {
+    line-height: 1.3em;
+    margin-bottom: 20px !important;
+    margin-left: 0 !important;
+}
+.workflow-menu a:link, .workflow-menu a:visited {
+    display: block;
+    font-size: 12px;
+    overflow: hidden;
+    text-decoration: none;
+    width: 100%;
+}
+.workflow-menu a:hover, .workflow-menu a:hover strong, .workflow-menu a:hover b {
+    color: #1A2155;
+    text-decoration: none !important;
+}
+.workflow-menu b, .workflow-menu span {
+    background: url("/site_media/images/wizard_step.png") no-repeat scroll 0 0 transparent;
+}
+.workflow-menu .dark-tab b, .workflow-menu .dark-tab span {
+    background: url("/site_media/images/wizard_step_dark.png") no-repeat scroll 0 0 transparent;
+}
+.workflow-menu .dark-tab-last span span {
+    background-position: bottom right !important;
+}
+.workflow-menu .dark-tab-last.prev-tab span span {
+	background-position: right -216px !important;
+}
+.workflow-menu .first-light-tab b > span {
+	background: url("/site_media/images/wizard_step_dark.png") no-repeat scroll left -288px transparent;
+}
+.workflow-menu .dark-tab-last.active-tab span span {
+	background-image: url("/site_media/images/wizard_step.png");
+}
+.workflow-menu .first-light-tab.next-tab b > span {
+	background: url("/site_media/images/wizard_step.png") no-repeat left -144px transparent;
+}
+.workflow-menu .first-light-tab.active-tab b > span {
+	background: url("/site_media/images/wizard_step_dark.png") no-repeat left -108px transparent;
+}
+.workflow-menu b, .workflow-menu .dark-tab b {
+    background-color: #F6F6F6;
+    background-repeat: repeat-x;
+    color: #0981d2;
+    font-weight: bold;
+    height: 36px;
+    line-height: 36px;
+}
+.workflow-menu .active-tab b, .workflow-menu .active-tab a:hover b {
+    background-color: #04549D;
+    background-position: 0 -36px;
+    color: #FFFFFF;
+}
+.workflow-menu strong, .workflow-menu b, .workflow-menu span {
+    display: block;
+}
+.workflow-menu strong {
+    font-weight: normal;
+    padding: 10px;
+}
+.workflow-menu .active-tab strong, .workflow-menu .active-tab a:hover strong {
+    color: #333333;
+    font-weight: bold;
+}
+.workflow-menu span, .workflow-menu .first-wf-tab span {
+    background-position: 0 -72px;
+}
+.workflow-menu .dark-tab span {
+    background-position: 0 -72px;
+}
+.workflow-menu span span, .workflow-menu .first-wf-tab span span, .workflow-menu .next-tab span span {
+    background-position: 100% -180px;
+}
+.workflow-menu .dark-tab span span, .workflow-menu .dark-tab.next-tab span span {
+    background-position: 100% -180px;
+}
+.workflow-menu .prev-tab span span {
+    background-position: 100% -216px;
+}
+.workflow-menu .active-tab span {
+    background-position: 0 -108px;
+}
+.workflow-menu .active-tab span span {
+    background-position: 100% -252px;
+}
+.workflow-menu .next-tab span {
+    background-position: 0 -144px;
+}
+.workflow-menu .first-wf-tab span {
+    background-position: -8px 0;
+}
+.workflow-menu .last-wf-tab span span {
+    background-position: -8px 0;
+}
+.workflow-menu li {
+    float: left;
+    list-style-type: none;
+    text-align: center;
+    width: 12.5%;
+}
+.workflow-menu .active-tab a:link, .workflow-menu .active-tab a:visited, .workflow-menu .active-tab a:active, .workflow-menu .active-tab a:hover {
+    background: url("/site_media/images/wizard_step_active.png") repeat-x scroll 0 100% #FFFFFF;
+    border-bottom-color: #026AC9;
+    color: #333333;
+    text-decoration: none !important;
+}
+.workflow-menu .active-tab.dark-tab a:link, .workflow-menu .active-tab.dark-tab a:visited, .workflow-menu .active-tab.dark-tab a:active, .workflow-menu .active-tab.dark-tab a:hover {
+    background: url("/site_media/images/wizard_step_dark.png") repeat-x scroll 0 100% #FFFFFF;
+}
+.workflow-step-content { padding: 0 25px 15px }
+.workflow-step-content p span {
+	margin-right: 6px;
+	font-size: 16px;
+}
+.workflow-steps {
+    clear: both;
+}
+
+.review-workflow h3 {
+	font-size: 13px;
+	text-decoration: underline;
+	margin: 15px 0 2px;
+}
+
+.review-workflow p {
+	font-size: 12px;
+	margin: 2px 0;
+}
+
+
+
+*{
+    margin:0px;
+    padding:0px;
+}
+
+span.checked{
+    background:transparent url(../images/checked.png) no-repeat top left;
+    position:absolute;
+    top:0px;
+    left:1px;
+    width:20px;
+    height:20px;
+}
+span.error{
+    background:transparent url(../images/error.png) no-repeat top left;
+    position:absolute;
+    top:0px;
+    left:1px;
+    width:20px;
+    height:20px;
+}
+
+body {
+    background-color: #eee;
+    font-family: "Arial", "Helvetica", "Verdana", "sans-serif";
+    font-size: 12px;
+    margin: 0;
+    padding: 0;
+}
+
+#wrapper {
+    width: 800px;
+}
+
+#navigation {
+    background-color: #fff;
+    border: #ddd 1px solid;
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px;
+}
+
+#navigation li {
+    margin: 2px 0;
+}
+
+label.error {
+    color: #ff0000;
+    margin-left: 10px;
+}
+
+#progressbar {
+    margin: 10px 0;
+    width: 400px;
+    height: 15px;
+}
+
+.wizard {
+    background-color: #fff;
+    border: #ddd 1px solid;
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px;
+}
+
+.wizard .wizard-header {
+    background-color: #f4f4f4;
+    color: #666;
+    border-bottom: #ddd 1px solid;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    padding: 5px 10px;
+    margin: 0 0 10px 0;
+}
+
+.wizard .wizard-step {
+    margin: 10px;
+}
+
+.navigation {
+    border-top: #ddd 1px solid;
+    margin-top: 10px;
+    padding-top: 10px;
+    padding-left: 50px;
+}
+
+.navigation ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.navigation li {
+    float: left;
+    margin-right: 10px;
+}
+
+.clearfix:before, .clearfix:after {
+    content: "\0020";
+    display: block;
+    height: 0;
+    visibility: hidden;
+}
+
+.clearfix:after {
+    clear: both;
+}
+
+
+.firstItem {
+    margin: 0px 450px;
+}
+
+.entryNotFound {
+    color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);
+}

@@ -21,24 +21,6 @@ case "$1" in
 		invoke-rc.d celeryd stop
 	fi
 	;;
-    
-    abort-install|abort-upgrade)
-    if [ -e	"/etc/init.d/ionCrawler" ]; then
-		invoke-rc.d ionCrawler start
-	fi
-	if [ -e	"/etc/init.d/ionJobServer" ]; then
-		invoke-rc.d ionJobServer start
-	fi
-	if [ -e	"/etc/init.d/ionArchive" ]; then
-		invoke-rc.d ionArchive start
-	fi
-	if [ -e	"/etc/init.d/ionPlugin" ]; then
-		invoke-rc.d ionPlugin start
-	fi
-	if [ -e	"/etc/init.d/celeryd" ]; then
-		invoke-rc.d celeryd start
-	fi
-    ;;
 esac
 
 exit 0

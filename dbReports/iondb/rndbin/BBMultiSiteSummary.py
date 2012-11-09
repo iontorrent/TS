@@ -2,25 +2,13 @@
 
 import sys
 import os
-
-# Settings is emotionally complicated, when you import it, nothing happens, but
-# when you either read or write any of it's variables, it will configure and
-# load Django's logger as defined in settings.
-from django.conf import global_settings
-# Settings inherits the properties of global_settings which is a much simpler
-# beast.  By settings LOGGING_CONFIG to None here, settings will not act on
-# it's logging configuration when we read other stuff from it.
-global_settings.LOGGING_CONFIG=None
-
 import datetime
 from os import path
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django.db import models
-from iondb.rundb import models
 import re
 
-from django.conf import settings
+from iondb.bin.djangoinit import *
+from iondb.rundb import models
+
 Proton = {
     'Proton_East':{
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -78,6 +66,7 @@ class MetricRecord:
         self.siteFilter = False
         self.plugin = False
         self.reverse = False
+        self.floatval = False
         if (':' in metricName):
             self.plugin = True
             self.pluginStore = metricName.split(':')[0]
@@ -123,7 +112,10 @@ def BuildTrackingMetrics(metricRecordList, site):
                 if libmetrics is not None:
                     if libmetrics.align_sample == 0:
                         valtext = getattr(libmetrics, metricRecord.metricName)
-                        val = int(valtext)
+                        if metricRecord.floatval:
+                            val = float(valtext)
+                        else:
+                            val = int(valtext)
                         if val > bestVal:
                             bestVal = val
                             bestResult = rep
@@ -229,7 +221,7 @@ def BuildMetrics(metricRecordList, site):
 
                 if ok and projectFilter:
                     ok = False
-                    if re.search(project, rep.experiment.project, re.IGNORECASE):
+                    if re.search(project, rep.projectNames(), re.IGNORECASE):
                         ok = True
 
                 if ok and metricRecord.dateFilter:
@@ -257,7 +249,10 @@ def BuildMetrics(metricRecordList, site):
                                 val = 0
                     else:
                         valtext = getattr(libmetrics, metricRecord.metricName)
-                        val = int(valtext)
+                        if metricRecord.floatval:
+                            val = float(valtext)
+                        else:
+                            val = int(valtext)
 
                     if (val > 0):
                         if ((metricRecord.reverse == False and val > metricRecord.recordValue) or (metricRecord.reverse == True and val < metricRecord.recordValue)):
@@ -347,6 +342,9 @@ if __name__=="__main__":
     metricRecords.append(IonStats_Q47)
     metricRecords.append(MetricRecord('q17_mapped_bases', 5, '9'))
     metricRecords.append(MetricRecord('q17_mean_alignment_length', 10, '9'))
+    snr_stats = MetricRecord('sysSNR', 10, '9')
+    snr_stats.floatval = True
+    metricRecords.append(snr_stats)
 
     today = datetime.date.today()
     timeStart = datetime.datetime(today.year, today.month, today.day)

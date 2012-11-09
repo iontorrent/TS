@@ -3,6 +3,8 @@
 #include "BeadTracker.h"
 #include "mixed.h"
 #include "ImageLoader.h"
+#include "MathUtil.h"
+#include "LevMarState.h"
 
 using namespace std;
 
@@ -10,46 +12,35 @@ using namespace std;
 
 BeadTracker::BeadTracker()
 {
-  ndx_map = NULL;
-  params_nn = NULL;
-  params_low = NULL;
-  params_high = NULL;
-  high_quality = NULL;
   my_mean_copy_count = 0.0; // don't know this yet
-  seqList=NULL;
   DEBUG_BEAD = 0;
   numLBeads=0;
   numLBadKey=0;
   numSeqListItems = 0;
   max_emphasis = 0;
-  key_id = NULL;
   regionindex = -1;
+  isSampled = false;
 }
 
 void BeadTracker::InitHighBeadParams()
 {
-  params_high = new bound_params[numLBeads];
-  memset (params_high,0,sizeof (bound_params[numLBeads]));
-  for (int i=0;i<numLBeads;i++)
-  {
-    params_SetBeadStandardHigh (&params_high[i]);
-  }
+  params_SetBeadStandardHigh (&params_high);
 }
 
-void BeadTracker::InitLowBeadParams()
+void BeadTracker::InitLowBeadParams(float AmplLowerLimit)
 {
-  params_low = new bound_params[numLBeads];
-  memset (params_low,0,sizeof (bound_params[numLBeads]));
-  for (int i=0;i<numLBeads;i++)
-  {
-    params_SetBeadStandardLow (&params_low[i]);
-  }
+  params_SetBeadStandardLow (&params_low,AmplLowerLimit);
 }
 
 void BeadTracker::InitModelBeadParams()
 {
-  params_nn = new bead_params[numLBeads];
-  memset (params_nn,0,sizeof (bead_params[numLBeads]));
+  params_nn.resize(numLBeads);
+  all_status.resize(numLBeads);
+  for (int i=0; i<numLBeads; i++)
+  {
+    // associate status with bead
+    params_nn[i].my_state = &(all_status[i]);
+  }
   for (int i=0;i<numLBeads;i++)
   {
     params_SetBeadStandardValue (&params_nn[i]);
@@ -59,84 +50,53 @@ void BeadTracker::InitModelBeadParams()
 
 void BeadTracker::DefineKeySequence (SequenceItem *seq_list, int number_Keys)
 {
-  this->seqList= seq_list;
-  this->numSeqListItems=number_Keys;
-  key_id = new int [numLBeads]; // indexing into this item
+  seqList.clear();
+  copy(seq_list, seq_list+number_Keys, back_inserter(seqList));
+  numSeqListItems = number_Keys;
+  key_id.resize(numLBeads); // indexing into this item
 }
 
-void BeadTracker::SelectDebugBead()
+void BeadTracker::SelectDebugBead(int seed)
 {
-  // shouldn't have to bounds check this but I don't trust myself
-  DEBUG_BEAD = (int) ( ( (double) rand() /RAND_MAX) *numLBeads);
-  if (DEBUG_BEAD > numLBeads) DEBUG_BEAD =numLBeads-1; // within range
-  if (DEBUG_BEAD < 0) DEBUG_BEAD = 0;
-
-#ifdef DEBUG_BEAD_OVERRIDE
-  DEBUG_BEAD = DEBUG_BEAD_OVERRIDE;
-#endif
+  // we do threaded initialization, so trusting in rand is not reproducible
+  // fake "randomness" by using large numbers
+  if (numLBeads>0)
+    DEBUG_BEAD = (seed+SMALL_PRIME)*LARGE_PRIME % numLBeads;
+  else
+    DEBUG_BEAD = 0;
 }
 
-void BeadTracker::InitBeadParams()
+void BeadTracker::InitBeadParams(float AmplLowerLimit)
 {
   // no spatial information here
   // just boot up parameters
-  SelectDebugBead();
+  SelectDebugBead(regionindex+1);
   InitHighBeadParams();
-  InitLowBeadParams();
+  InitLowBeadParams(AmplLowerLimit);
   InitModelBeadParams();
-
 }
 
-void BeadTracker::InitQualityTracker()
-{
-  high_quality = new bool [numLBeads];
-  for (int ibd=0; ibd<numLBeads; ibd++)
-    high_quality[ibd] = true; // assume everyone good to begin with
-}
-
-void BeadTracker::InitBeadList (Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample)
+void BeadTracker::InitBeadList (Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit)
 {
   MaskType ProcessMask=MaskLive;
 
   // Number of beads to process
   numLBeads =  bfMask->GetCount (ProcessMask,*region);
+  regionindex = region->index;
 
-  // Needs number of beads to initialize
-  srand(region->index); // make the random number generator the same run to run
-  InitBeadParams();
+  InitBeadParams(AmplLowerLimit);
   DefineKeySequence (_seqList, _numSeq);
-  InitQualityTracker();
+  high_quality.resize(numLBeads, true);
+  sampled.resize(numLBeads, true);
 
   // makes spatially organized data if needed
   BuildBeadMap (region,bfMask,ProcessMask);
   // must be done after generating spatial data
   InitRandomSample (*bfMask, *region, sample);
 
-  regionindex = region->index;
+
 }
 
-// flow+1<NUMFB,0.02, 0.98
-void BeadTracker::LimitBeadEvolution (bool first_block, float R_change_max, float copy_change_max)
-{
-  for (int ibd=0;ibd < numLBeads;ibd++)
-  {
-    // offset into my per-bead structure
-    struct bead_params *p = &params_nn[ibd];
-    struct bound_params *pl = &params_low[ibd];
-    struct bound_params *ph = &params_high[ibd];
-
-    if (first_block)
-    {
-      // assume first past through
-      // limit the change in etbR
-      pl->R = p->R - R_change_max;
-      ph->R = p->R + R_change_max;
-    }
-    // limit the change in apparent number of molecules
-    pl->Copies = p->Copies*copy_change_max;
-    ph->Copies = p->Copies;
-  }
-}
 
 
 //this function try to estimate a multiplication factor to determine the number
@@ -229,11 +189,11 @@ float BeadTracker::ComputeSSQRatioOneBead(int ibd)
 
 float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
 {
-  int key_val[NUMFB];
+  int   key_val[NUMFB];
   float normalizer = 1.0f;
-  struct bead_params *p = &params_nn[ibd];
-  struct bound_params *pl = &params_low[ibd];
-  struct bound_params *ph = &params_high[ibd];
+  bead_params  *p  = &params_nn[ibd];
+  bound_params *pl = &params_low;
+  bound_params *ph = &params_high;
 
   bool oldkeynorm = false;
   int key_len;
@@ -269,7 +229,7 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
 // in particular, we need to handle 0,1,2 mers for possible signal types
 // when using arbitrary keys
 // we use this to set a good scale/copy number for the beads
-float BeadTracker::KeyNormalizeReads(bool overwrite_key)
+float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only)
 {
 
   // figure out what to expect in the key flows.
@@ -284,7 +244,28 @@ float BeadTracker::KeyNormalizeReads(bool overwrite_key)
     //  if(bfMask->Match( params_nn[ibd].x,params_nn[ibd].y, MaskLive  , MATCH_ANY)){
     meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key);
     goodBeadCount++;
-    //   }
+    // }
+  }
+  // cout << "Number of good beads:" << goodBeadCount  <<"\n";
+  meanCopyCount /= goodBeadCount;
+  return (meanCopyCount);
+}
+
+float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key)
+{
+
+  // figure out what to expect in the key flows.
+  // calculate key signal (S), set the key flows to exactly 0 and 1 mers, and
+  // then scale everything else based on S.
+  float meanCopyCount = 0.0;
+  int goodBeadCount=0;
+  // cout << "Number of live beads:" << numLBeads  <<"\n";
+  for (int ibd=0;ibd < numLBeads;ibd++)
+  {
+    if( Sampled (ibd) ){
+          meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key);
+          goodBeadCount++;
+      }
   }
   // cout << "Number of good beads:" << goodBeadCount  <<"\n";
   meanCopyCount /= goodBeadCount;
@@ -328,8 +309,8 @@ void BeadTracker::CorruptedBeadsAreLowQuality ()
 {
   for (int ibd=0; ibd<numLBeads; ibd++)
   {
-    if (params_nn[ibd].my_state.corrupt)
-      high_quality[ibd] = false; // reject beads that are sad
+    if (params_nn[ibd].my_state->corrupt or params_nn[ibd].my_state->pinned)
+      high_quality[ibd] = false; // reject beads that are sad in any way
   }
 }
 
@@ -342,10 +323,10 @@ void BeadTracker::TypicalBeadParams(bead_params *p)
     if (high_quality[ibd]) // should be a bunch!
     {
       p->Copies += params_nn[ibd].Copies;
-      p->gain += params_nn[ibd].gain;
-      p->dmult += params_nn[ibd].dmult;
-      p->R += params_nn[ibd].R;
-      count++;
+      p->gain   += params_nn[ibd].gain;
+      p->dmult  += params_nn[ibd].dmult;
+      p->R      += params_nn[ibd].R;
+      ++count;
     }
   }
   p->Copies/=count;
@@ -383,22 +364,6 @@ void BeadTracker::CompensateAmplitudeForEmptyWellNormalization(float *my_scale_b
   }
 }
 
-
-void BeadTracker::Delete()
-{
-  if (ndx_map != NULL) delete [] ndx_map;
-  if (key_id !=NULL) delete[] key_id;
-  delete [] params_high;
-  delete [] params_low;
-  delete [] params_nn;
-  delete[] high_quality;
-}
-
-BeadTracker::~BeadTracker()
-{
-  Delete();
-}
-
 //for all bead
 void BeadTracker::AssignEmphasisForAllBeads (int _max_emphasis)
 {
@@ -418,7 +383,7 @@ void BeadTracker::ComputeKeyNorm(const vector<int>& keyIonogram, const vector<fl
   for(int bead=0; bead<numLBeads; ++bead){
     bead_params& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
-    p.my_state.key_norm = ComputeNormalizerKeyFlows(&ampl[0], &keyIonogram[0], keyIonogram.size());
+    p.my_state->key_norm = ComputeNormalizerKeyFlows(&ampl[0], &keyIonogram[0], keyIonogram.size());
   }
 }
 
@@ -431,9 +396,9 @@ void BeadTracker::CheckKey(const vector<float>& copy_multiplier)
   {
     bead_params& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
-    transform (ampl.begin(), ampl.end(), nrm.begin(), bind2nd (divides<float>(),p.my_state.key_norm));
+    transform (ampl.begin(), ampl.end(), nrm.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
     if (not key_is_good (nrm.begin(), seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows)){
-      p.my_state.bad_read = true;
+      p.my_state->bad_read = true;
       ++numLBadKey;
     }
   }
@@ -466,7 +431,7 @@ void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier)
   {
     bead_params& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
-    transform (ampl.begin(), ampl.end(), ampl.begin(), bind2nd (divides<float>(),p.my_state.key_norm));
+    transform (ampl.begin(), ampl.end(), ampl.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
 
     // Update ppf and ssq:
     assert(mixed_first_flow() < NUMFB);
@@ -475,13 +440,13 @@ void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier)
     for (int i=first; i<=last; ++i)
     {
       if (ampl[i] > mixed_pos_threshold())
-        p.my_state.ppf += 1;
+        p.my_state->ppf += 1;
       float x = ampl[i] - round (ampl[i]);
-      p.my_state.ssq += x * x;
+      p.my_state->ssq += x * x;
     }
     // Flag beads with infinite signal:
     if (not all_finite (p.Ampl, p.Ampl+NUMFB))
-      p.my_state.bad_read = true;
+      p.my_state->bad_read = true;
   }
 }
 
@@ -490,7 +455,7 @@ void BeadTracker::FinishClonalFilter()
   for (int bead=0; bead<numLBeads; ++bead)
   {
     bead_params& p = params_nn[bead];
-    p.my_state.ppf /= (mixed_last_flow() - mixed_first_flow());
+    p.my_state->ppf /= (mixed_last_flow() - mixed_first_flow());
   }
 }
 int BeadTracker::NumHighPPF() const
@@ -498,8 +463,8 @@ int BeadTracker::NumHighPPF() const
   int numHigh = 0;
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
-    if (p.my_state.ppf > mixed_ppf_cutoff())
+    const bead_params& p = params_nn[bead];
+    if (p.my_state->ppf > mixed_ppf_cutoff())
       ++numHigh;
   }
   return numHigh;
@@ -510,8 +475,8 @@ int BeadTracker::NumPolyclonal() const
   int numPolyclonal = 0;
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
-    if (not p.my_state.clonal_read)
+    const bead_params& p = params_nn[bead];
+    if (not p.my_state->clonal_read)
       ++numPolyclonal;
   }
   return numPolyclonal;
@@ -538,8 +503,9 @@ void BeadTracker::ZeroOutPins (Region *region, Mask *bfmask, PinnedInFlow& pinne
     if (pinnedInFlow.IsPinned (flow, ix))
     {
       p.Ampl[iFlowBuffer] = 0.0f;
+      ndx_map[p.y*region->w+p.x] = -1; // ignore this neighbor from now on to avoid contaminating xtalk
+      p.my_state->pinned = true;
     }
-    p.my_state.pinned = true;
   }
 }
 
@@ -549,7 +515,7 @@ float BeadTracker::FindMeanDmult (bool skip_beads)
   float num_checked = 0.0001f;
   for (int ibd=0;ibd < numLBeads;ibd++)
   {
-    if (!skip_beads || high_quality[ibd])
+    if (BeadIncluded(ibd, skip_beads))
     {
       mean_dmult += params_nn[ibd].dmult;
       num_checked += 1.0f;
@@ -569,7 +535,16 @@ void BeadTracker::RescaleDmult (float scale)
 
 float BeadTracker::CenterDmult (bool skip_beads)
 {
+  // return ( CenterDmultFromSample (skip_beads) );
   float mean_dmult = FindMeanDmult (skip_beads);
+  RescaleDmult (mean_dmult);
+  return (mean_dmult);
+}
+
+
+float BeadTracker::CenterDmultFromSample (bool skip_beads)
+{
+  float mean_dmult = FindMeanDmultFromSample (skip_beads);
   RescaleDmult (mean_dmult);
   return (mean_dmult);
 }
@@ -582,14 +557,32 @@ void BeadTracker::RescaleRatio (float scale)
   }
 }
 
+float BeadTracker::FindMeanDmultFromSample (bool skip_beads)
+{
+  float mean_dmult = 0.0f;
+  float num_checked = 0.0001f;
+  for (int ibd=0; ibd < numLBeads; ibd++)
+  {
+    // if this iteration is a region-wide parameter fit, then only process beads
+    // in the selection sub-group
+    if( !Sampled (ibd) )
+      continue;
 
+    if ( BeadIncluded(ibd, skip_beads) ) {
+	mean_dmult += params_nn[ibd].dmult;
+	num_checked += 1.0f;
+      }
+  }
+  mean_dmult /= num_checked;
+  return (mean_dmult);
+}
 
 
 void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask)
 {
   if (region!=NULL)
     for (int ibd=0; ibd<numLBeads ; ibd++)
-      if (params_nn[ibd].my_state.corrupt)
+      if (params_nn[ibd].my_state->corrupt)
       {
         ndx_map[params_nn[ibd].y*region->w+params_nn[ibd].x] = -1; // ignore this neighbor from now on to avoid contaminating xtalk
         bfmask->Set (params_nn[ibd].x+region->col,params_nn[ibd].y+region->row,MaskWashout);
@@ -600,7 +593,7 @@ void BeadTracker::BuildBeadMap (Region *region, Mask *bfmask, MaskType &process_
 {
   if (region!=NULL)
   {
-    ndx_map = new int[region->w*region->h];
+    ndx_map.resize(region->w*region->h);
 //    int chipwidth = bfmask->W();
     int nbd = 0;
     for (int y=0;y<region->h;y++)
@@ -682,8 +675,42 @@ void BeadTracker::InitRandomSample (Mask& bf, Region& region, const std::set<int
     int wellIdx = chipY * chipWidth + chipX;
 
     if (sample.count (wellIdx))
-      p->my_state.random_samp = true;
+      p->my_state->random_samp = true;
   }
+}
+
+void BeadTracker::SystematicSampling()
+{
+  // Systematic Sampling scheme
+  int num_region_groups = (numLBeads / NUMBEADSPERGROUP) + 1;
+
+  for (int ibd=0; ibd < numLBeads; ibd++)
+  {
+    sampled[ibd] = false;
+
+    if ((ibd % num_region_groups) == 0) {
+      sampled[ibd] = true;
+    }
+  }
+}
+
+void BeadTracker::SetSampled(){
+  SystematicSampling();
+  isSampled = true;
+}
+
+void BeadTracker::UpdateSampled( bool *well_completed){
+  for (int ibd=0; ibd < numLBeads; ibd++) {
+    if ( (high_quality[ibd] == false) || well_completed[ibd] ) {
+      sampled[ibd] = false;
+    }
+  }
+}
+
+void BeadTracker::ExcludeFromSampled( int ibd ){
+  // @TODO reconcile use of Sampled with MultiLevMar::ExcludeBead
+  // Can we get rid of well_completed?
+  //sampled[ibd] = false;
 }
 
 void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int offset_row)
@@ -722,8 +749,8 @@ void BeadTracker::DumpAllBeadsCSV (FILE *my_fp)
       fprintf(fp, "%d",i);
       for (int j=0; j<NUMFB; j++)
       {
-        fprintf(fp, "\t%d ",params_nn[i].my_state.hits_by_flow[j]);
-        params_nn[i].my_state.hits_by_flow[j] = 0;
+        fprintf(fp, "\t%d ",params_nn[i].my_state->hits_by_flow[j]);
+        params_nn[i].my_state->hits_by_flow[j] = 0;
       }
       fprintf(fp,"\n");
     }

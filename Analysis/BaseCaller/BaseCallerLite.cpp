@@ -30,7 +30,7 @@ struct BaseCallerLite {
   int                     numRegions;
   int                     numRegionsX, numRegionsY;
   int                     numFlows;
-  string                  flowOrder;
+  ion::FlowOrder          flowOrder;
   pthread_mutex_t         wellsAccessMutex;
   int                     nextRegionX;
   int                     nextRegionY;
@@ -99,7 +99,7 @@ int main (int argc, const char *argv[])
   basecaller.wellsPtr = &wells;
   basecaller.rows = mask.H();
   basecaller.cols = mask.W();
-  basecaller.flowOrder = wells.FlowOrder();
+  basecaller.flowOrder.SetFlowOrder(wells.FlowOrder(), wells.NumFlows());
   basecaller.numFlows = wells.NumFlows();
 
 
@@ -108,11 +108,10 @@ int main (int argc, const char *argv[])
   basecaller.numRegions = basecaller.numRegionsX * basecaller.numRegionsY;
 
   basecaller.libKeyFlows.assign(basecaller.numFlows,0);
-  basecaller.libNumKeyFlows = seqToFlow(libKey.c_str(), libKey.length(),
-      &basecaller.libKeyFlows[0], basecaller.numFlows, (char *)basecaller.flowOrder.c_str(), basecaller.flowOrder.size());
+  basecaller.libNumKeyFlows = basecaller.flowOrder.BasesToFlows(libKey, &basecaller.libKeyFlows[0], basecaller.numFlows);
 
-  basecaller.libSFF.OpenForWrite(outputDirectory+"/rawlib.sff", basecaller.numRegions,
-      basecaller.numFlows, basecaller.flowOrder, libKey);
+  basecaller.libSFF.Open(outputDirectory+"/rawlib.sff", basecaller.numRegions,
+      basecaller.flowOrder, libKey);
 
 
   time_t startBasecall;
@@ -139,7 +138,7 @@ int main (int argc, const char *argv[])
 
   printf("\nBASECALLING: called %d of %d wells in %1.1f seconds with %d threads\n",
       basecaller.numWellsCalled, basecaller.rows*basecaller.cols, difftime(endBasecall,startBasecall), numWorkers);
-  printf("Generated library SFF with %d reads\n", basecaller.libSFF.NumReads());
+  printf("Generated library SFF with %d reads\n", basecaller.libSFF.num_reads());
 
   return 0;
 }
@@ -375,11 +374,11 @@ void BaseCallerLite::BasecallerWorker()
 
 
     BasecallerRead currentRead;
-    DPTreephaser dpTreephaser(flowOrder.c_str(), numFlows, 8);
+    DPTreephaser dpTreephaser(flowOrder);
     dpTreephaser.SetModelParameters(CF, IE, 0);
 
     // Process the data
-    deque<SFFWriterWell> libReads;
+    deque<SFFEntry> libReads;
 
     deque<int>::iterator x = wellX.begin();
     deque<int>::iterator y = wellY.begin();
@@ -390,16 +389,16 @@ void BaseCallerLite::BasecallerWorker()
       if (!maskPtr->Match(*x, *y, (MaskType)(MaskLib|MaskKeypass), MATCH_ALL))
         continue;
 
-      libReads.push_back(SFFWriterWell());
-      SFFWriterWell& readResults = libReads.back();
+      libReads.push_back(SFFEntry());
+      SFFEntry& readResults = libReads.back();
       stringstream wellNameStream;
       wellNameStream << runId << ":" << (*y) << ":" << (*x);
       readResults.name = wellNameStream.str();
-      readResults.clipQualLeft = 4; // TODO
-      readResults.clipQualRight = 0;
-      readResults.clipAdapterLeft = 0;
-      readResults.clipAdapterRight = 0;
-      readResults.flowIonogram.resize(numFlows);
+      readResults.clip_qual_left = 4; // TODO
+      readResults.clip_qual_right = 0;
+      readResults.clip_adapter_left = 0;
+      readResults.clip_adapter_right = 0;
+      readResults.flowgram.resize(numFlows);
 
       int minReadLength = 8; // TODO
 
@@ -407,13 +406,13 @@ void BaseCallerLite::BasecallerWorker()
 
       dpTreephaser.NormalizeAndSolve5(currentRead, numFlows); // sliding window adaptive normalization
 
-      readResults.numBases = 0;
+      readResults.n_bases = 0;
       for (int iFlow = 0; iFlow < numFlows; iFlow++) {
-        readResults.flowIonogram[iFlow] = 100 * currentRead.solution[iFlow];
-        readResults.numBases += currentRead.solution[iFlow];
+        readResults.flowgram[iFlow] = 100 * currentRead.solution[iFlow];
+        readResults.n_bases += currentRead.solution[iFlow];
       }
 
-      if(readResults.numBases < minReadLength) {
+      if(readResults.n_bases < minReadLength) {
         libReads.pop_back();
         continue;
       }
@@ -428,16 +427,16 @@ void BaseCallerLite::BasecallerWorker()
         continue;
       }
 
-      readResults.baseFlowIndex.reserve(readResults.numBases);
-      readResults.baseCalls.reserve(readResults.numBases);
-      readResults.baseQVs.reserve(readResults.numBases);
+      readResults.flow_index.reserve(readResults.n_bases);
+      readResults.bases.reserve(readResults.n_bases);
+      readResults.quality.reserve(readResults.n_bases);
 
       unsigned int prev_used_flow = 0;
       for (int iFlow = 0; iFlow < numFlows; iFlow++) {
         for (hpLen_t hp = 0; hp < currentRead.solution[iFlow]; hp++) {
-          readResults.baseFlowIndex.push_back(1 + iFlow - prev_used_flow);
-          readResults.baseCalls.push_back(flowOrder[iFlow % flowOrder.length()]);
-          readResults.baseQVs.push_back(20); // BaseCallerLite is stripped of QV generator
+          readResults.flow_index.push_back(1 + iFlow - prev_used_flow);
+          readResults.bases.push_back(flowOrder[iFlow]);
+          readResults.quality.push_back(20); // BaseCallerLite is stripped of QV generator
           prev_used_flow = iFlow + 1;
         }
       }

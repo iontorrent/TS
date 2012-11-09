@@ -44,6 +44,18 @@ wells_data_read_xy(FILE *fp, wells_header_t *header, wells_data_t *data, int32_t
   // TODO: need # of rows and columns...
 }
 */
+    
+int32_t
+wells_data_write(FILE *fp, wells_header_t *header, wells_data_t *data)
+{
+  if(fwrite(&data->rank, sizeof(uint32_t), 1, fp) != 1
+     || fwrite(&data->x, sizeof(uint16_t), 1, fp) != 1
+     || fwrite(&data->y, sizeof(uint16_t), 1, fp) != 1
+     || fwrite(data->flow_values, sizeof(float), header->num_flows, fp) != header->num_flows) {
+      return 0;
+  }
+  return 1;
+}
 
 void
 wells_data_print(FILE *fp, wells_header_t *header, wells_data_t *data, int32_t nonzero)

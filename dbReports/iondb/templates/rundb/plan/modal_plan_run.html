@@ -1,0 +1,78 @@
+<div id="modal_plan_run" class="modal modal-750 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		<h3>Plan Run</h3>
+	</div>
+	<div class="modal-body">
+		<div class="workflow-step " style="display: block;">
+			<div class="workflow-step-content">
+			<table class="plan-grid">
+    			<tr>
+    				<td>
+    					<p class="form-label">Plan Name:</p>					
+    					<p>{{planDisplayedName}}<p>
+    				</td>
+    			</tr>
+    			<tr>
+    				<td>
+    					<p class="form-label">Enter sample name(s) (comma-separated):</p>					
+    					<textarea id="samples" name="samples" style="width:100%;height:40px;"></textarea>
+    				</td>
+    			</tr>		
+    			<tr>
+    				<td><br>
+    					<p class="form-label">Select the project(s) that will receive output:</p>
+    					<div style="border:1px solid #0981d2;overflow: hidden;width:100%;height:90px;padding:5px;">
+    						<span class="option-group">
+								{% for project in planTemplateData.projects %}
+									<p><input name="plan_projects[]" name="plan_projects[]" type="checkbox" value="{{project.id}}">{{project.name}}</p>
+								{% endfor %}    											
+							</span>
+    					</div>
+    					<div style="padding:5px 0;width:100%;text-align:right">
+    						<a href="#" class="button tertiary-button">Add Project...</a>
+    					</div>							
+    				</td>
+    			</tr>
+    			<tr>
+    				<td>
+    					<p class="form-label">Add a note:</p>					
+    					<textarea id="notes" class="notes" style="width:100%;height:40px;"></textarea>
+    				</td>
+    			</tr>	
+			</table>						
+			</div>
+			<div style="text-align:right">											
+			</div>																										
+		</div>
+	</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" >Review</a>
+		<a href="#" class="btn submitSavePlanAndStay" >Save &amp; Plan Another Run</a>
+		<a href="#" class="btn btn-primary submitSavePlan">Save &amp; Finish</a>
+	</div>		
+	<script type="text/javascript">
+        $("#modal_plan_run .submitSavePlanAndStay").click(function(e) {
+        	e.preventDefault();    		
+    		$("#submitIntent").val("savePlan")
+            
+            $("#planDisplayedName").val($("#savePlannedRun_planDisplayedName").val());
+
+    		$("#isBarcodedPlan").val("False");
+    		
+    		$("#planTemplateWizard").attr('action','savePlanAndStay');
+    		$('#planTemplateWizard').submit();
+    	});
+    	$("#modal_plan_run .submitSavePlan").click(function(e) {
+    		e.preventDefault();
+    		$("#submitIntent").val("savePlan")
+            
+            $("#planDisplayedName").val($("#savePlannedRun_planDisplayedName").val());
+            
+    		$("#isBarcodedPlan").val("False");
+    		
+    		$("#planTemplateWizard").attr('action','savePlan');
+    		$('#planTemplateWizard').submit();
+    	});    			
+	</script>
+</div>

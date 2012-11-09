@@ -1,3 +1,4 @@
+#!/teusr/bin/env python
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
 from twisted.web import xmlrpc, server
@@ -9,12 +10,14 @@ import traceback
 import json
 
 from djangoinit import settings
-from iondb.plugins import PluginRunner
+from iondb.plugins.config import config
+from iondb.plugins.runner import PluginRunner
+from iondb.plugins.manager import pluginmanager
 
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 25350 $")
+__version__ = filter(str.isdigit, "$Revision: 40777 $")
 
 # Setup log file logging
 try:
@@ -54,6 +57,7 @@ try:
     except RuntimeError:
         # drmaa will sometimes raise RuntimeError if libdrmaa1.0 is not
         # installed.
+        logger.debug("Unexpected error: %s" % str(sys.exc_info()))
         raise ImportError
     import atexit # provides cleanup of the session object
     try:
@@ -62,9 +66,9 @@ try:
         _session = drmaa.Session()
         try:
             _session.initialize()
-            logger.debug("SGE DRMAA session initialized")
+            logger.debug("DRMAA session initialized")
         except:
-            logger.debug("Session already open")
+            logger.debug("Unexpected error: %s" % str(sys.exc_info()))
         atexit.register(_session.exit)
         djs = drmaa.JobState
         # globally define some status messages
@@ -101,68 +105,70 @@ def SGEPluginJob(start_json):
     try:
         os.umask(0000)
 
-        logger.debug("received request" + str(start_json) )
-
-        jt = _session.createJobTemplate()
-        #jt.nativeSpecification = "%s -q %s" % ("-pe ion_pe 1","plugin.q")
-        #SGE
-        jt.nativeSpecification = " -q %s" % ("plugin.q")
-        #TORQUE
-        #jt.nativeSpecification = ""
-
-        #New arg list
-        arg_list = []
-        arg_list.append("-j")
-        arg_list.append(start_json['runinfo']['results_dir'] + "/startplugin.json")
-
+        # Query some essential values
+        plugin = start_json['runinfo']['plugin']
+        resultpk = start_json['runinfo']['pk']
         analysis_name = os.path.basename(start_json['runinfo']['analysis_dir'])
-        plugin_name = os.path.basename(start_json['runinfo']['plugin_name'])
-        
-        # Log the analysis name requesting this plugin
-        #logger.info("Analysis: %s" % os.path.basename(start_json['runinfo']['analysis_dir']))
-        
-        launch = os.path.join(start_json['runinfo']['plugin_dir'],"launch.sh")
-        if not os.path.exists(launch):
-            logger.error("Analysis: %s. Path to plugin script: %s Does Not Exist!" % (analysis_name,launch))
-            return 1
+        plugin_output = start_json['runinfo']['results_dir']
 
-        pluginDir = start_json['runinfo']['results_dir']
+        logger.debug("Getting ready for queue : %s %s", resultpk, plugin['name'])
 
         #Make sure the dirs exist
-        if not os.path.exists(pluginDir):
-            os.makedirs(pluginDir)
+        if not os.path.exists(plugin_output):
+            os.makedirs(plugin_output, 0755)
 
-        jt.workingDirectory = pluginDir
-        jt.outputPath = ":" + os.path.join(pluginDir, "drmaa_stdout.txt")
-        #jt.errorPath = ":" + os.path.join(pluginDir, "drmaa_stderr.txt")
-        jt.args = arg_list
-        jt.joinFiles = True # Merge stdout and stderr
+        # Write start_json to startplugin.json file.
+        startpluginjson = os.path.join(plugin_output,'startplugin.json')
+        with open(startpluginjson,"w") as fp:
+            json.dump(start_json,fp,indent=2)
 
-        logger.debug("PluginDir: %s" % pluginDir)
-        #For API updates
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        url = 'http://localhost' + '/rundb/api/v1/results/' + str(start_json['runinfo']['pk']) + "/plugin/"
-
-        #waiting to get in SGE
-        logger.debug("Getting ready for queue : %s %s" % (start_json['runinfo']['pk'],start_json['runinfo']['plugin_name']) )
+        # Branch for launch.sh vs 3.0 plugin class
+        logger.debug("Finding plugin definition: '%s':'%s'", plugin['name'], plugin['path'])
+        (launch, isCompat) = pluginmanager.find_pluginscript(plugin['path'], plugin['name'])
+        if not launch or not os.path.exists(launch):
+            logger.error("Analysis: %s. Path to plugin script: '%s' Does Not Exist!", analysis_name, launch)
+            return 1
 
         # Create individual launch script from template and plugin launch.sh
         launcher = PluginRunner()
-        launchScript = launcher.createPluginWrapper(launch, start_json)
-        launchWrapper = launcher.writePluginLauncher(pluginDir, plugin_name, launchScript)
+        if isCompat:
+            launchScript = launcher.createPluginWrapper(launch, start_json)
+        else:
+            start_json.update({'command': ["python %s -vv" % launch]})
+            launchScript = launcher.createPluginWrapper(None, start_json)
+        launchWrapper = launcher.writePluginLauncher(plugin_output, plugin['name'], launchScript)
+        launcher.writePluginJson(start_json)
 
+        # Prepare drmaa Job - SGE/gridengine only
+        jt = _session.createJobTemplate()
+        jt.nativeSpecification = " -q %s" % ("plugin.q")
+
+        hold = plugin.get('hold_jid', [])
+        if hold:
+            jt.nativeSpecification += " -hold_jid " + ','.join(str(jobid) for jobid in hold)
+
+        jt.workingDirectory = plugin_output
+        jt.outputPath = ":" + os.path.join(plugin_output, "drmaa_stdout.txt")
+        jt.joinFiles = True # Merge stdout and stderr
+
+        # Plugin command is: ion_pluginname_launch.sh -j startplugin.json
         jt.remoteCommand = launchWrapper
+        jt.args = [ "-j", startpluginjson ]
+
+        # Submit the job to drmaa
         jobid = _session.runJob(jt)
 
-        logger.info("Analysis: %s. Plugin: %s. Job: %s started." % (analysis_name, plugin_name, jobid))
+        # Update pluginresult status
+        h = httplib2.Http()
+        headers = {"Content-type": "application/json","Accept": "application/json"}
+        url = 'http://localhost' + '/rundb/api/v1/results/%s/plugin/' % resultpk
+        resp, content = h.request(url, "PUT", body=json.dumps({plugin['name']:"Queued"}), headers=headers)
+        logger.debug("PluginResult Marked Queued : %s %s" % (resp, content))
 
-        #put the updated dict
-        pluginUpdate = {plugin_name : "Started"}
-        resp, content = h.request(url, "PUT", body=json.dumps(pluginUpdate),headers=headers )
-        logger.debug("JOB STARTED : %s %s" % (resp, content))
+        logger.info("Analysis: %s. Plugin: %s. Job: %s Queued." % (analysis_name, plugin['name'], jobid))
 
         _session.deleteJobTemplate(jt)
+        return jobid
     except:
         logger.critical("SGEPluginJob method failure")
         logger.critical(traceback.format_exc())
@@ -179,26 +185,16 @@ class Plugin(xmlrpc.XMLRPC):
 
     def xmlrpc_pluginStart(self, start_json):
         """
-        Return all passed args.
+        Launch the plugin defined by the start_json block
         """
-        # run method in thread
-
         logger.debug("SGE job start request")
-
         try:
-            #TEST CODE
-            if not os.path.exists(start_json['runinfo']['results_dir']):
-                os.makedirs(start_json['runinfo']['results_dir'])
-            fname=os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
-            fp=open(fname,"wb")
-            json.dump(start_json,fp,indent=2)
-            fp.close()
-
-            SGEPluginJob(start_json)
+            jobid = SGEPluginJob(start_json)
+            return jobid
         except:
             logger.error(traceback.format_exc())
-            
-        return "started job"
+            return -1
+        
 
     def xmlrpc_sgeStop(self, x):
         """
@@ -216,6 +212,16 @@ class Plugin(xmlrpc.XMLRPC):
         seconds += float(diff.microseconds)/1000000.0
         logger.debug("Uptime called - %d (s)" % seconds)
         return seconds
+        
+    def xmlrpc_pluginStatus(self, jobid):
+        """Get the status of the job"""
+        try:
+            logging.debug("jobstatus for %s" % jobid)
+            status = _session.jobStatus(jobid)
+        except:
+            logging.error(traceback.format_exc())
+            status = "DRMAA BUG"
+        return status    
 
     def xmlrpc_update(self,pk,plugin,status):
         """
@@ -235,10 +241,10 @@ class Plugin(xmlrpc.XMLRPC):
         resp, content = h.request(url, "PUT", body=json.dumps(pluginUpdate), headers=headers )
         logger.debug("Status updated : %s %s" % (resp, content))
     
-        if resp.status in [200, 203, 204]:
+        if resp.status in [200,201,202,203,204]:
             return True
         else:
-            logger.error(content)
+            logger.error('plugin status update API error [%d]: %s', resp.status, content)
             return False
 
 
@@ -262,10 +268,10 @@ class Plugin(xmlrpc.XMLRPC):
         resp, content = h.request(url,
                             "PUT", body=update,
                             headers=headers )
-        if resp.status in [200, 203, 204]:
+        if resp.status in [200,201,202,203,204]:
             return True
         else:
-            logger.error(content)
+            logger.error("resultsjson API PUT returned error [%d]: %s",resp.status,content)
             return False
 
 

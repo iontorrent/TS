@@ -17,7 +17,7 @@ dibayes : {
   # specificity (fewer false positive SNPs). Raising the mapping QV reduces the number of false 
   # positive SNP calls. However, because more reads are filtered out, the total number of SNP calls 
   # decreases also.  
-  reads-min-mapping-qv : 8,
+  reads-min-mapping-qv : 4,
   
   # The minimum unique start position of the alternate allele. Allowed values: Integers>=0
   # Impact: Increasing the threshold improves specificity and reduces sensitivity
@@ -34,6 +34,11 @@ dibayes : {
   # valid alleles. Allowed values: Float 0.0-0.5.  
   # Impact: Increasing the threshold will reduce the number of Hetrozygote SNPs called.
   het-min-allele-ratio : 0.2,
+  
+  # At hotspot positions, the less-common allele must be at least this proportion of the reads of the first two most common 
+  # valid alleles. Allowed values: Float 0.0-0.5.  
+  # Impact: Increasing the threshold will reduce the number of Hetrozygote SNPs called.
+  het-min-allele-ratio-hotspot : 0.2,
   
   # Up to what coverage Bayesian algorithm is applied, above it frequinistic algorithm is used
   het-max-coverage-bayesian : 60,
@@ -138,131 +143,63 @@ dibayes : {
 }
 
 
-
 torrent-variant-caller : {
   # maximum coverage depth, samples if exceeded (default 500)
   downsample_to_coverage : 500,
 
-  # Genotype likelihoods calculation model to employ (default SNP) -- SNP, INDEL, BOTH
-  genotype_likelihoods_model : INDEL,
-  
-  # Number of threads to use (default 1)
-  num_threads :  8,
-  
   # Minimum number of consensus indels required to trigger genotyping run (default 5)
   min_indel_count_for_genotyping : 5,
   
-  # Heterozygosity value used to compute prior likelihoods for any locus (default 1E-3)
-  # heterozygosity : 0.001,
+  # Minimum mapping quality required to consider a read for calling (default 0)
+  min_mapping_quality_score : 4,
   
-  # Heterozygosity for indel calling. This argument informs the prior probability 
-  # of having an indel at a site. (default 1.25E-4)
-  # indel_heterozygosity : 1.25E-4, 
-  
-  # Maximum number of alternate alleles to genotype (default 3)
-  max_alternate_alleles : 2,
-  
-  # Maximum fraction of reads with deletions spanning this locus for it to be 
-  # callable [to disable, set to < 0 or > 1; default:0.05]
-  max_deletion_fraction : 2,
-  
-  # Minimum base quality required to consider a base for calling (default 17)
-  #min_base_quality_score : 17,
-  
-  # The minimum phred-scaled confidence threshold at which variants not at 
-  # 'trigger' track sites should be called (default 30.0)
-  # standard_min_confidence_threshold_for_calling : 30.0,
-  
-  # The minimum phred-scaled confidence threshold at which variants not at 'trigger' track 
-  # sites should be emitted (and filtered if less than the calling threshold) (default 30.0)
-  # standard_min_confidence_threshold_for_emitting : 30.0,
-  
-  # The PCR error rate to be used for computing fragment-based likelihoods (default 1.0E-4)
-  # pcr_error_rate : 1.0E-4,
+  # Minimum base-space allele frequency for calling a variant (default 0.1)
+  # min_allele_frequency : 0.1,
+  }
 
-  # Indel gap continuation penalty (default 10.0)
-  # indelGapContinuationPenalty : 10.0,
-  
-  # Indel gap open penalty (default 45.0)
-  # indelGapOpenPenalty : 45.0, 
-  
-  # Indel haplotype size (default 80)
-  # indelHaplotypeSize : 80, 
-    
-  # Additional annotations for variant in vcf (default [IndelType,AlleleBalance,BaseCounts,ReadDepthAndAllelicFractionBySample,AlleleBalanceBySample,DepthPerAlleleBySample,MappingQualityZeroBySample])
-  # annotation : IndelType,
-  # annotation : AlleleBalance,
-  # annotation : BaseCounts,
-  # annotation : ReadDepthAndAllelicFractionBySample,
-  # annotation : AlleleBalanceBySample,
-  # annotation : DepthPerAlleleBySample,
-  # annotation : MappingQualityZeroBySample
-}
-
-
-
-# This should be the same as above torrent-variant-caller with exception of downsample_to_coverage 
-# and num_threads. This set of parameteres is used to recall downsampled variants.
+# Second stage parameters
 
 torrent-variant-caller-highcov : {
   # maximum coverage depth, samples if exceeded (default 1000)
   downsample_to_coverage : 2000,
 
-  # Genotype likelihoods calculation model to employ (default SNP) -- SNP, INDEL, BOTH
-  genotype_likelihoods_model : INDEL,
-  
-  # Number of threads to use (default 1)
-  num_threads :  1,
-  
   # Minimum number of consensus indels required to trigger genotyping run (default 5)
   min_indel_count_for_genotyping : 5,
   
-  # Heterozygosity value used to compute prior likelihoods for any locus (default 1E-3)
-  # heterozygosity : 0.001,
+  # Minimum mapping quality required to consider a read for calling (default 0)
+  min_mapping_quality_score : 4,
   
-  # Heterozygosity for indel calling. This argument informs the prior probability 
-  # of having an indel at a site. (default 1.25E-4)
-  # indel_heterozygosity : 1.25E-4, 
+  # Minimum base-space allele frequency for calling a variant (default 0.1)
+  min_allele_frequency : 0.2,
   
-  # Maximum number of alternate alleles to genotype (default 3)
-  max_alternate_alleles : 2,
+  # Minimum coverage required on each strand in order to consider position as callable.
+  hp_min_cov_each_strand : 3,
   
-  # Maximum fraction of reads with deletions spanning this locus for it to be 
-  # callable [to disable, set to < 0 or > 1; default:0.05]
-  max_deletion_fraction : 2,
+  # Minimum coverage for STB, STD filters and FPE module to be applied.
+  hp_stb_fpe_min_coverage : 50,
   
-  # Minimum base quality required to consider a base for calling (default 17)
-  #min_base_quality_score : 17,
+   # Maximum allowed distance between average intensity on positive vs negative strand for single peak.
+  hp_stb_max_avg_peak_srand_distance : 40,
+
+   # Maximum allowed relative strand bias between two peaks.
+  hp_stb_max_two_peaks_relative_bias : 0.8,
   
-  # The minimum phred-scaled confidence threshold at which variants not at 
-  # 'trigger' track sites should be called (default 30.0)
-  # standard_min_confidence_threshold_for_calling : 30.0,
+   # Maximum allowed intensity STD for HP of size 2,3.
+  hp_max_single_peak_std_23 : 18,
+
+  # Increment to maximum allowed intensity STD for HP of size larger than 3.
+  hp_max_single_peak_std_increment : 5,
+
+  # Maximum allowed deviation of the peak from 100s.
+  fpe_max_peak_deviation : 31,
+
+  # Maximum Homo-polymer length for calling indels.
+  hp_max_length : 8,
+ 
+  # Outputs additional information into VCF records.
+  info_vcf: 0,
   
-  # The minimum phred-scaled confidence threshold at which variants not at 'trigger' track 
-  # sites should be emitted (and filtered if less than the calling threshold) (default 30.0)
-  # standard_min_confidence_threshold_for_emitting : 30.0,
-  
-  # The PCR error rate to be used for computing fragment-based likelihoods (default 1.0E-4)
-  # pcr_error_rate : 1.0E-4,
-  
-  # Indel gap continuation penalty (default 10.0)
-  # indelGapContinuationPenalty : 10.0,
-  
-  # Indel gap open penalty (default 45.0)
-  # indelGapOpenPenalty : 45.0, 
-  
-  # Indel haplotype size (default 80)
-  # indelHaplotypeSize : 80, 
-    
-  # Additional annotations for variant in vcf (default [IndelType,AlleleBalance,BaseCounts,ReadDepthAndAllelicFractionBySample,AlleleBalanceBySample,DepthPerAlleleBySample,MappingQualityZeroBySample])
-  # annotation : IndelType,
-  # annotation : AlleleBalance,
-  # annotation : BaseCounts,
-  # annotation : ReadDepthAndAllelicFractionBySample,
-  # annotation : AlleleBalanceBySample,
-  # annotation : DepthPerAlleleBySample,
-  # annotation : MappingQualityZeroBySample
-}
+ }
 
 long-indel-assembler : {
   # Number of threads to use (always 1)
@@ -270,22 +207,18 @@ long-indel-assembler : {
 }
 
 filter-indels : {
-  # Indels with Bayesian_Score bellow this are filtered out (default 10)
-  min-bayesian-score : 9.5,
+  # Indels with Bayesian_Score bellow this are filtered out (default 2.5)
+  min-bayesian-score : 2.5,
   
   # Indels with frequency bellow this are filtered out (default 0.19)
   min-var-freq : 0.199,
   
-  # All indels longer than this are filtered based on GATK score (default 11)
-  gatk-score-minlen : 11,
+  # All indels longer than this are called regardless their Bayesian score (default 15)
+  bay-score-minlen : 11,
   
-  # Indels longer than gatk-score-minlen with gatk score < x are filtered out (default 900)
-  gatk-min-score : 2000,
-  
-  # Max(VF+, VF-) / (VF+ * All+ + VF- * All+) < 0.90
+  # Max(VF+, VF-) / (VF+ * All+ + VF- * All+) < 0.95
   # VF+ is number of reads on positive strand that have the variant
   # All- is the total number of reads crossing current postiton on negative strand
   # Filters the vast majority of false positives. Increase to 0.99 or 1 to reduce false negatives
   variant-strand-bias : 0.90
 }
-

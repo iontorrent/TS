@@ -25,10 +25,11 @@ class SearchAmplitude{
     BkgTrace *my_trace;
     EmptyTrace *empty_trace;
     BeadScratchSpace *my_scratch;
-    RegionTracker *my_regions;
+    RegionTracker *pointer_regions;
     TimeCompression *time_c;
     flow_buffer_info *my_flow;
     EmphasisClass *emphasis_data;
+    float negative_amplitude_limit;
     
     bool use_vectorization;
     bool rate_fit;
@@ -53,7 +54,7 @@ class SearchAmplitude{
       my_trace = _my_trace;
       empty_trace = _empty_trace;
       my_scratch = _my_scratch;
-      my_regions = _my_regions;
+      pointer_regions = _my_regions;
       time_c = _time_c;
       my_flow = _my_flow;
       emphasis_data = _emphasis_data;
@@ -67,10 +68,7 @@ class SearchAmplitude{
     // second method
     void ProjectionSearchAmplitude(BeadTracker &my_beads, bool _rate_fit);
     void ProjectionSearchOneBead(bead_params *p);
-    // and yet a third option for amplitude
-    int GoldenSectionOneBead(bead_params *p);
-    void GoldenSectionAmplitude (BeadTracker &my_beads);
-    
+
     
 };
 

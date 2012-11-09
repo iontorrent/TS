@@ -1,0 +1,17 @@
+{% load pagetools %}
+{% load ion_readable %}
+
+<div id="alignMap" class="span3 well centered">
+	<div class="number-chunk row-fluid">
+		<div class="span6">
+			<h2>{{alignStats|bracket:"total_mapped_target_bases"|ion_readable}}</h2>
+			<small rel='tooltip' title="Total number of bases aligned to the reference sequence, excludes library key, barcodes and 3' adapter sequences">Total Aligned Bases</small>
+		</div>
+		<div class="span6">
+			<h2>{{avg_coverage_depth_of_target}} </h2>
+			<small rel='tooltip' title="Total aligned bases divided by the number of bases in the reference sequence. Will not be aware of or account for any enrichment that may have been done to selectively amplify a subset of the reference sequence">Average Coverage Depth of Reference</small>
+		</div>
+	</div>
+  <img class="showImg" src="{{report.reportWebLink}}/alignment_rate_plot.png">
+
+</div>

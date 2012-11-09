@@ -2,7 +2,9 @@
 
 #include "DarkMatter.h"
 
-Axion::Axion (BkgModel &_bkg) :
+using namespace std;
+
+Axion::Axion (SignalProcessingMasterFitter &_bkg) :
     bkg (_bkg)
 {
 
@@ -11,14 +13,14 @@ Axion::Axion (BkgModel &_bkg) :
 
 void Axion::AccumulateOneBead(bead_params *p, reg_params *reg_p, int max_fnum, float my_residual, float res_threshold)
 {
-    float tmp_res[bkg.my_scratch.bead_flow_t];
+    float tmp_res[bkg.region_data->my_scratch.bead_flow_t];
   
-    bkg.my_scratch.FillObserved (bkg.my_trace, p->trace_ndx);
+    bkg.region_data->my_scratch.FillObserved (bkg.region_data->my_trace, p->trace_ndx);
     //params_IncrementHits(p);
-    MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,bkg.my_scratch.ival,*bkg.my_regions,bkg.my_scratch.cur_bead_block,bkg.time_c,bkg.my_flow,bkg.math_poiss);
-    MultiFlowComputeIncorporationPlusBackground (bkg.my_scratch.fval,p,reg_p,bkg.my_scratch.ival,bkg.my_scratch.shifted_bkg,*bkg.my_regions,bkg.my_scratch.cur_buffer_block,bkg.time_c,bkg.my_flow,bkg.use_vectorization, bkg.my_scratch.bead_flow_t);    // evaluate the function
+    MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_regions.cache_step,bkg.region_data->my_scratch.cur_bead_block,bkg.region_data->time_c,bkg.region_data->my_flow,bkg.math_poiss);
+    MultiFlowComputeTraceGivenIncorporationAndBackground (bkg.region_data->my_scratch.fval,p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_scratch.shifted_bkg,bkg.region_data->my_regions,bkg.region_data->my_scratch.cur_buffer_block,bkg.region_data->time_c,bkg.region_data->my_flow,bkg.global_defaults.signal_process_control.use_vectorization, bkg.region_data->my_scratch.bead_flow_t);    // evaluate the function
     // calculate error b/w current fit and actual data
-    bkg.my_scratch.MultiFlowReturnResiduals (tmp_res);  // wait, didn't I just compute the my_residual implicitly here?
+    bkg.region_data->my_scratch.MultiFlowReturnResiduals (tmp_res);  // wait, didn't I just compute the my_residual implicitly here?
 
     //@TODO: compute "my_residual" here so I can avoid using lev-mar state
     // aggregate error to find first-order correction for each nuc type
@@ -30,33 +32,36 @@ void Axion::AccumulateOneBead(bead_params *p, reg_params *reg_p, int max_fnum, f
       if ((my_residual>res_threshold) && (p->Ampl[fnum]<0.3) )
         continue;
 
-      bkg.my_regions->missing_mass.AccumulateDarkMatter(&tmp_res[bkg.time_c.npts*fnum],bkg.my_flow.flow_ndx_map[fnum]);
+      bkg.region_data->my_regions.missing_mass.AccumulateDarkMatter(&tmp_res[bkg.region_data->time_c.npts()*fnum],bkg.region_data->my_flow.flow_ndx_map[fnum]);
 
     }
 }
 
 
-void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, bool *well_region_fit, float *residual, float res_threshold)
+void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, float *residual, float res_threshold)
 {
 
-  for (int ibd=0;ibd < bkg.my_beads.numLBeads;ibd++)
+  for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {
-    if (well_region_fit[ibd] == false)
-      continue;
-
-    // get the current parameter values for this bead
-    bead_params *p = &bkg.my_beads.params_nn[ibd];
-    AccumulateOneBead(p,reg_p, max_fnum, residual[ibd], res_threshold);
+    if ( bkg.region_data->my_beads.StillSampled(ibd) ) {
+      // get the current parameter values for this bead
+      bead_params *p = &bkg.region_data->my_beads.params_nn[ibd];
+      AccumulateOneBead(p,reg_p, max_fnum, residual[ibd], res_threshold);
+    }
   }
 }
 
-
-void Axion::CalculateDarkMatter (int max_fnum, bool *well_region_fit, float *residual, float res_threshold)
+void Axion::CalculateDarkMatter (int max_fnum, float *residual, float res_threshold)
 {
-  bkg.my_regions->missing_mass.ResetDarkMatter();
-  
-  reg_params *reg_p = & bkg.my_regions->rp;
-  bkg.my_scratch.FillShiftedBkg(*bkg.emptytrace, reg_p->tshift, bkg.time_c, true);
-  AccumulateResiduals(reg_p,max_fnum,well_region_fit, residual, res_threshold);
-  bkg.my_regions->missing_mass.NormalizeDarkMatter ();
+  bkg.region_data->my_regions.missing_mass.ResetDarkMatter();
+  // prequel, set up standard bits
+  reg_params *reg_p = & bkg.region_data->my_regions.rp;
+  bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, reg_p->tshift, bkg.region_data->time_c, true);
+  bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(reg_p,bkg.region_data->time_c,bkg.region_data->my_flow);
+
+  AccumulateResiduals(reg_p,max_fnum, residual, res_threshold);
+
+  bkg.region_data->my_regions.missing_mass.NormalizeDarkMatter ();
+  // make sure everything is happy in the rest of the code
+  bkg.region_data->my_regions.cache_step.Unlock();
 }

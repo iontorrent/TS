@@ -16,7 +16,8 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
     double ie          = Rcpp::as<double>(Rie);
     double dr          = Rcpp::as<double>(Rdr);
     string basecaller  = Rcpp::as<string>(Rbasecaller);
-  
+
+    ion::FlowOrder flow_order(flowCycle, flowCycle.length());
     unsigned int nFlow = signal.cols();
     unsigned int nRead = signal.rows();
 
@@ -42,13 +43,14 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
 
       // Iterate over all reads
       vector <float> sigVec(nFlow);
-      string result;
+      BasecallerRead read;
+      DPTreephaser dpTreephaser(flow_order);
+
       for(unsigned int iRead=0; iRead < nRead; iRead++) {
+
         for(unsigned int iFlow=0; iFlow < nFlow; iFlow++)
           sigVec[iFlow] = (float) signal(iRead,iFlow);
-        BasecallerRead read;
         read.SetDataAndKeyNormalize(&(sigVec[0]), (int)nFlow, &(keyVec[0]), nKeyFlow-1);
-        DPTreephaser dpTreephaser(flowCycle.c_str(), flowCycle.length(), 8);
         if (basecaller == "dp-treephaser")
           dpTreephaser.SetModelParameters(cf, ie, dr);
         else
@@ -62,22 +64,23 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
         else
           dpTreephaser.NormalizeAndSolve5(read, nFlow); // sliding window adaptive normalization
 
-        read.flowToString(flowCycle,seq_out[iRead]);
+        flow_order.FlowsToBases(read.solution, seq_out[iRead]);
         for(unsigned int iFlow=0; iFlow < nFlow; iFlow++) {
           predicted_out(iRead,iFlow) = (double) read.prediction[iFlow];
-          residual_out(iRead,iFlow)  = (double) read.normalizedMeasurements[iFlow] - read.prediction[iFlow];
+          residual_out(iRead,iFlow)  = (double) read.normalized_measurements[iFlow] - read.prediction[iFlow];
           hpFlow_out(iRead,iFlow)    = (int)    read.solution[iFlow];
         }
-
-        // Store results
-        RcppResultSet rs;
-        rs.add("seq",        seq_out);
-        rs.add("predicted",  predicted_out);
-        rs.add("residual",   residual_out);
-        rs.add("hpFlow",     hpFlow_out);
-
-        ret = rs.getReturnList();
       }
+
+      // Store results
+      RcppResultSet rs;
+      rs.add("seq",        seq_out);
+      rs.add("predicted",  predicted_out);
+      rs.add("residual",   residual_out);
+      rs.add("hpFlow",     hpFlow_out);
+
+      ret = rs.getReturnList();
+
     }
   } catch(std::exception& ex) {
     exceptionMesg = copyMessageToR(ex.what());

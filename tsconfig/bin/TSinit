@@ -1,0 +1,158 @@
+#!/bin/bash
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Purpose: Provide functions necessary to initialize Torrent Server hardware
+#
+#
+set -e
+
+#---                                    ---#
+#--- Function Declarations              ---#
+#---                                    ---#
+function print_help()
+{
+    echo
+    echo "Usage: TSinit [options]"
+    echo -e "\t--setup-results-partition     Create /results partition"
+    echo -e "\t--help, -h                    Prints command line args"
+    echo -e "\t--version                     Prints version"
+    echo
+    echo
+}
+
+function needs_root()
+{
+    if [ $(id -u) != 0 ]; then
+        echo "Please run this script with root permissions:"
+        echo
+        echo "sudo $0"
+        echo
+        exit 1
+    fi
+    return 0
+}
+
+#---                                    ---#
+#--- Variable Declarations              ---#
+#---                                    ---#
+version=`echo '$Revision: 30408 $'|awk '{print $2}'`
+SETUP_RESULTS_PARTITION=0
+
+#---                                    ---#
+#--- Command Line Options Parsing       ---#
+#---                                    ---#
+
+#--- If no args given, print help and exit ---#
+if [ $# == 0 ]; then
+    print_help
+    exit 0
+fi
+
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '-s'|'--setup-results-partition')
+            SETUP_RESULTS_PARTITION=1
+        ;;
+        '-d'|'--debug')
+        	set -x
+        ;;
+        '--help'|'-h'|\?)
+            print_help
+            exit 0
+        ;;
+        '--version'|'-v')
+            echo "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+			exit 0
+        ;;
+        *)
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSinit --help for options."
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+#---                                    ---#
+#--- Main Execution                     ---#
+#---                                    ---#
+if [ $SETUP_RESULTS_PARTITION -eq 1 ]; then
+
+    # Must have root permissions to continue
+    needs_root
+    
+    #
+    # Sets up a new partition on dedicated hardware for Torrent Server
+    #
+    #   - check for /dev/sdb1 and exit if it doesn't exist
+    #   - display partition info
+    #   - create GPT partition and format as ext4
+    #   - copy /results on /dev/sda1 to /results on /dev/sdb1
+    #   - Delete all files in /results on /dev/sda1
+    #   - mount /dev/sdb1 at /results
+    #   (See jira issue TS-3559 for more details)
+    
+    dev="/dev/sdb"
+    #dev="/dev/sda"
+    
+    if ! test -b ${dev}; then
+        echo "Device: $dev does not exist.  Exiting."
+        exit
+    fi
+    
+    # install pre-requisites: parted
+    if ! dpkg -l parted|grep -q ^ii; then
+        apt-get install parted
+    fi
+    
+    # Get user confirmation
+    echo
+    echo "WARNING!  Any data on partition ${dev} will be deleted"
+    echo "Continue only if you are sure you want to reformat ${dev}"
+    read -p"Type Yes to continue: " usrin
+    if [ "$usrin" != "Yes" ]; then
+        exit
+    fi
+    
+    # Create GPT partition table and one primary partition
+    parted ${dev} mklabel gpt
+    parted ${dev} mkpart primary 1 10751488
+    parted ${dev} mkpart primary 10751488 26999808
+    
+        
+    # Format the partition with ext4 filesystem
+    # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
+    if ! mkfs.ext4 ${dev}1; then
+        echo "there was an error in mkfs.ext4 formatting ${dev}1 "
+        exit 1
+    fi
+    if ! mkfs.ext4 ${dev}2; then
+        echo "there was an error in mkfs.ext4 formatting ${dev}2"
+        exit 1
+    fi
+    
+    # Move contents of current /results directory to new partition
+    mkdir -p /rawdata
+    mkdir -p /mnt/tmpresults
+    mount /dev/sdb1 /mnt/tmpresults
+    rsync -av /results/ /mnt/tmpresults
+    umount /dev/sdb1
+    rmdir /mnt/tmpresults
+    rm -rf /results/*
+    mount /dev/sdb1 /results
+    
+    #Edit /etc/fstab to automount at boot
+    if ! grep "^/dev/sdb1" /etc/fstab; then
+        echo -e "/dev/sdb1\t/results\text4\tdefaults\t0 0" >> /etc/fstab
+    fi
+    if ! grep "^/dev/sdb2" /etc/fstab; then
+        echo -e "/dev/sdb2\t/rawdata\text4\tdefaults\t0 0" >> /etc/fstab
+    fi
+fi
+
+exit

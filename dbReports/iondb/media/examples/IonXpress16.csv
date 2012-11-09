@@ -1,0 +1,17 @@
+id_str,type,sequence,floworder,index,annotation,adapter,score_mode,score_cutoff
+IonXpress_001,,CTAAGGTAAC,,1,,GAT,1,2
+IonXpress_002,,TAAGGAGAAC,,2,,GAT,1,2
+IonXpress_003,,AAGAGGATTC,,3,,GAT,1,2
+IonXpress_004,,TACCAAGATC,,4,,GAT,1,2
+IonXpress_005,,CAGAAGGAAC,,5,,GAT,1,2
+IonXpress_006,,CTGCAAGTTC,,6,,GAT,1,2
+IonXpress_007,,TTCGTGATTC,,7,,GAT,1,2
+IonXpress_008,,TTCCGATAAC,,8,,GAT,1,2
+IonXpress_009,,TGAGCGGAAC,,9,,GAT,1,2
+IonXpress_010,,CTGACCGAAC,,10,,GAT,1,2
+IonXpress_011,,TCCTCGAATC,,11,,GAT,1,2
+IonXpress_012,,TAGGTGGTTC,,12,,GAT,1,2
+IonXpress_013,,TCTAACGGAC,,13,,GAT,1,2
+IonXpress_014,,TTGGAGTGTC,,14,,GAT,1,2
+IonXpress_015,,TCTAGAGGTC,,15,,GAT,1,2
+IonXpress_016,,TCTGGATGAC,,16,,GAT,1,2

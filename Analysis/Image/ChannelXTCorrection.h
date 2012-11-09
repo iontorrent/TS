@@ -3,6 +3,7 @@
 #define CHANNELXTCORRECTION_H
 
 #include <string.h>
+#include "ChipIdDecoder.h"
 
 struct ChannelXTCorrectionDescriptor {
     float **xt_vector_ptrs; // array of pointers to cross-talk correction vectors
@@ -11,6 +12,11 @@ struct ChannelXTCorrectionDescriptor {
     int *vector_indicies;   // relative indices for the application of each vector
 };
 
+typedef struct
+{
+  ChipIdEnum id;
+  ChannelXTCorrectionDescriptor descr;
+} ChipXtVectArrayType;
 
 /* class that describes a set of vectors used to correct for in-channel cross talk */
 class ChannelXTCorrection {
@@ -66,6 +72,9 @@ private:
     float *xt_vector_storage;   // internal storage for vector data which may or may not be used
     struct ChannelXTCorrectionDescriptor descr;
 };
+
+
+
 
 #endif // CHANNELXTCORRECTION_H 
 

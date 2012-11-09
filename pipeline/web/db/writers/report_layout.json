@@ -1,6 +1,6 @@
 {
     "Beadfind": {
-        "file_path": "bfmask.stats",
+        "file_path": "sigproc_results/bfmask.stats",
         "metrics": [
             [
                 "Wells with Ion Sphere Particles",

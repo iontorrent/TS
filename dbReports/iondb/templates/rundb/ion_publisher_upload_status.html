@@ -1,12 +1,7 @@
-{% extends "rundb/ion_base_template.html" %}
-
-{% block pagination_holder %}
-{% endblock pagination_holder %}
-{% block controls_holder %}
-{% endblock controls_holder %}
+{% extends "rundb/configure/base.html" %}
 
 {% block content %}
-
+<div class="content">
   <h1>{{ contentupload.publisher.name }} Upload: {{ filename }}</h1>
   <p>Your file is being stored in {{ contentupload.file_path }}</p>
   <h2>{{ contentupload.status }}</h2>
@@ -16,5 +11,5 @@
       <dd>{{ log.text }}</dd>
     {% endfor %}
   </dl>
-
+</div>
 {% endblock %}

@@ -73,7 +73,7 @@ $files_to_archive = array(
         'separator.bftraces.txt',
         'report.pdf',
         'drmaa_stdout.txt',
-        'drmaa_stdout_block.html',
+        'drmaa_stdout_block.txt',
         'drmaa_stderr_block.txt',
 		'DefaultTFs.conf',
 		'alignmentQC_out.txt');

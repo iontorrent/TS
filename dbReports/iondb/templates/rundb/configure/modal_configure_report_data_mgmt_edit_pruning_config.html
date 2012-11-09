@@ -1,0 +1,206 @@
+<div id="modal_configure_report_data_mgmt_edit_pruning_config" title="" data-dynamic="true" class="modal modal-1000 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">
+			×
+		</button>
+		<h3>Edit Pruning Configuration</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal-error-messages" class="alert alert-error hide">
+{% comment %}
+			{% with temp.0 as rTemp %}	
+			{{ rTemp.remField }}
+			<hr>
+			{{rTemp.remField.choices}}
+			<hr>
+			{% for choice_id, choice_label in rTemp.remField.widget.choices %}
+				{{choice_id}},{{choice_label}}
+				<br>
+			{% endfor%}
+			<hr>
+			{% for choice_id, choice_label in rTemp.remField.choices %}
+				{{choice_id}},{{choice_label}}
+				<br>
+			{% endfor%}
+			{% endwith %}
+			<hr>
+{% endcomment %}
+{% comment %}
+			
+			{% for form in temp %}
+			<li>
+				{% for choice_id, choice_label in form.fields.checkField.widget.choices %}
+					{{choice_id}},{{choice_label}}
+				{% endfor%}
+			</li>
+			{% endfor%}
+			<hr>
+			{% for form in temp %}
+			<li>
+				
+				{% for value in form.fields.checkField.initial %}
+					{{value}}
+				{% endfor%}
+			</li>
+			{% endfor%}
+			<hr>
+		{% with temp.0 as rTemp %}	
+			{% for choice_id, choice_label in rTemp.fields.remField.widget.choices %}
+			<li>
+					{{choice_id}},{{choice_label}}
+			</li>
+			{% endfor%}
+		{% endwith %}
+{% endcomment %}
+		</div>
+		<form id="modal_configure_report_data_mgmt_edit_pruning_config_form" class="form-horizontal" method='post' enctype="multipart/form-data" action="{% url configure_report_data_mgmt_edit_prune_groups %}">
+			<fieldset>
+    		<div class="control-group">
+    			<label class="control-label" for="">Pruning Options</label>
+    			<div class="controls">
+					<table class="table table-condensed table-bordered">
+    					<thead>
+    					<tr>
+    						<th></th>
+    						<th colspan="{{fields|length}}">Rule</th>
+    					</tr>
+						<tr>
+							<th>Group</th>
+							
+						{% for x in fields %}
+							<th>{{x.rule}}</th>
+						{% endfor %}
+						</tr>
+    					</thead>
+    					<tbody>
+							{% for grp in groups %}
+    						<tr class='{% ifequal grp.name selected %}alert-success{% endifequal %}'>
+								<th>
+									{{ grp.name }}
+								</th>
+								{% with forloop.counter0 as parentLoopCnt %}
+								{% for form in temp %}
+								{% if parentLoopCnt == forloop.counter0 %}
+										{% for choice_id, choice_label in form.fields.checkField.widget.choices %}
+										<td>
+										<input type="checkbox" id="id_checkField_{{forloop.counter0}}" value="{{choice_id}}" name="checkField"
+											{% spaceless %}{% for value in form.fields.checkField.initial %}
+												{% ifequal choice_id value %}checked="checked"{% endifequal %}
+											{% endfor%}{% endspaceless %}
+											rel="tooltip" title="{{choice_label}}"
+											>
+										</td>
+										{% endfor %}
+								{% endif%}
+								{% endfor%}								
+								{% endwith %}
+							</tr>
+							{% endfor %}
+    					</tbody>
+    				</table>    				
+    				<div class="help-block">
+    					Alter which rules are enabled or disabled per Pruning Group.
+    				</div>
+    			</div>
+    		</div>			
+    		<div class="control-group">
+    			<label class="control-label" for="">Remove Rule</label>
+    			<div class="controls" class='alert'>
+					<table class="table table-condensed table-bordered">
+    					<thead>
+						<tr>
+							<th></th>
+						{% for x in fields %}
+							<th>{{x.rule}}</th>
+						{% endfor %}
+						</tr>
+    					</thead>
+    					<tbody>
+	    					<tr class=''>
+	    						<th>Rule</th>
+	    						{% with temp.0 as rTemp %}	
+									{% for choice_id, choice_label in rTemp.fields.remField.widget.choices %}
+		    						<th><input type="checkbox" id="id_remField_{{forloop.counter0}}" value="{{choice_id}}" name="remField" rel="tooltip" title="Remove {{choice_label}}"></th>
+									{% endfor%}
+								{% endwith %}
+	    					</tr>
+    					</tbody>
+    				</table>    				
+    				<div class="help-block">
+    					<p>Select the rules you wish to remove.<p> 
+    					<p class="alert">This will also remove any rules that are presently active.</p> 
+    				</div>
+    			</div>
+    		</div>			
+    		<div class="control-group">
+    			<label class="control-label" for="">Add New Rule</label>
+    			<div class="controls">
+    				{{ temp.0.newField }}
+    				<div class="help-block">
+    					Adds a new rule, an available pattern.  
+    					<br />
+    					<p class="alert alert-info">
+						Use a '*' to indicate a wildcard, and a '!' at a word's beginning to exclude a file or group of files from pruning.
+    					</p>
+						<a style="margin-right:10px;" href="#" class="btn btn-info" data-toggle-content="toggle_pruneExamples">Examples <i class="icon-plus"></i></a>
+						<div id='toggle_pruneExamples' class='hide well'>
+						<p><b>*.txt</b>: Prune all .txt files.</p>
+						<b>!*.bam</b>: Don't prune any .bam files.</p>
+						<p><b>*.bam + !rawlib.bam</b>: (Separate rules) Prune all .bam files except for rawlib.bam.</p>
+						<p><b>/basecaller_results/*.txt</b>: Prune all .txt files in the basecaller_results directory.</p>
+						<p class="alert alert-info">(Note that pruning can only access directories 'below' the report directory.)</p>
+						</div>
+						</p>
+    				</div>
+    			</div>
+    		</div>			
+			</fieldset>
+		</form>
+	</div>
+	<div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <a id="save" class="btn btn-primary">Save</a>
+	</div>
+<script>
+	$('#modal_configure_report_data_mgmt_edit_pruning_config').on('hidden', function() {
+		$('body #modal_configure_report_data_mgmt_edit_pruning_config').remove();
+	});
+</script>
+<script>
+$(document).ready(function () {
+	tb.toggleContent();
+	$('#modal_configure_report_data_mgmt_edit_pruning_config_form').uniform({
+		holder_class : 'control-group'
+		, msg_selector: 'div.help-block'
+		, error_class : 'alert alert-error'
+	});	
+	
+	$('#modal_configure_report_data_mgmt_edit_pruning_config_form').submit(function(){
+		if (!isValid()) {
+			$("#modal_configure_report_data_mgmt_edit_pruning_config .modal-body").animate({
+				scrollTop : 0
+			}, "slow");
+			$(".error").effect("highlight", {
+				"color" : "#F20C18"
+			}, 2000);
+			return false;
+		}
+		return true;
+	});	
+	$('#save').click(function(e){
+		e.preventDefault()
+		console.debug($('#modal_configure_report_data_mgmt_edit_pruning_config_form').serializeArray())
+		$('#modal_configure_report_data_mgmt_edit_pruning_config_form').submit()
+	});
+	
+	function isValid() {
+		var form = $('#modal_configure_report_data_mgmt_edit_pruning_config_form');
+		var settings = form.uniform.defaults;
+	    form.find(settings.field_selector).each(function () {
+	        $(this).blur();
+	    });
+		return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists();
+	}	
+});
+</script>			
+</div>

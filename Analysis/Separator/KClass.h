@@ -42,12 +42,17 @@ void InitialClassifyWell(Mask &mask,
                                   std::vector<std::vector<float> *> &distValues,
                             KeyFit &fit);
 	
+  void FillInData(TraceStore<double> &traceStore,
+                  int nFlows,
+                  KeyFit &fit);
+
  private:
   std::vector<double> distances;
   std::vector<SampleQuantiles<double> *> values;
   Mat<double> wellFlows;
   Mat<double> refFlows;
   vector<float> reference;
+  Col<double> incRef;
   vector<float> signal;
   Mat<double> predicted;
   KeyClassifier mKClass;

@@ -4,10 +4,11 @@
 set -e
 
 case "$1" in
-    upgrade)
-    ;;
-    remove)
+    upgrade|remove)
     LIBLIST=(\
+	    bitops \
+	    caTools \
+	    gplots \
 	    Rcpp \
 	    digest \
 	    spam \
@@ -32,6 +33,7 @@ case "$1" in
     for LIB in ${LIBLIST[@]}; do
     	if [ -d /usr/local/lib/R/site-library/$LIB ]; then
     		R CMD REMOVE $LIB
+                rm -rf /usr/local/lib//R/site-library/$LIB
             echo "Removed $LIB"
         fi
     done

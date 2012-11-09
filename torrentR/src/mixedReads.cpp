@@ -47,7 +47,7 @@ RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
         sigma[i].set_size(2,2);
     }
 
-	bool converged = fit_normals(mean, sigma, prior, ppf, ssq);
+	bool converged = fit_normals(mean, sigma, prior, ppf, ssq, false); // avoid verbose
 
 	// (Wrapping the results would be much simpler with RcppArmadillo.)
 	RcppVector<double> RCloneMean  = Rcpp::wrap(mean[0]);

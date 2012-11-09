@@ -54,6 +54,14 @@ public:
     Init(nRow, nCol, nRowStep, nColStep);
   }
 
+  /** 
+   * Clean out for new init().
+   */
+  void Clear() {
+    mRow = mCol = mRowBin = mColBin = mRowStep = mColStep = 0;
+    mBins.resize(0);
+  }
+
   /** Convert row,col coordinates into an index in the mBins vector. */
   size_t XyToIndex(C rowBin, C colBin) const { return (size_t)(mColBin * rowBin + colBin); }
   
@@ -70,13 +78,19 @@ public:
   T& GetItemByRowCol(C row, C col) { return mBins[XyToIndex(row/mRowStep, col/mColStep)]; }
 
   /** Return a reference to the item in the bin at rowBin,colBin */
+  const T& GetItemByRowCol(C row, C col) const { return mBins[XyToIndex(row/mRowStep, col/mColStep)]; }
+
+  /** Return a reference to the item in the bin at rowBin,colBin */
   T& GetItem(C binIx) { return mBins[binIx]; }
+
+  /** Return a reference to the item in the bin at rowBin,colBin */
+  const T& GetItem(C binIx) const { return mBins[binIx]; }
 
   /** Get the bin for a well index. */
   size_t GetBin(C index) { return (XyToIndex( (index/mCol)/ mRowStep, (index % mCol)/ mColStep)); }
 
   /** Get the bin for a well index. */
-	size_t GetBin(C row, C col) { return (XyToIndex( (row)/ mRowStep, (col)/ mColStep)); }
+  size_t GetBin(C row, C col) { return (XyToIndex( (row)/ mRowStep, (col)/ mColStep)); }
 
   /**
    * Fill in the values vector with the T from the bins surrounding row,col
@@ -109,7 +123,7 @@ public:
     }
   }
 
-  size_t GetNumBin() { return (size_t)(mRowBin * mColBin); }
+  size_t GetNumBin() const { return (size_t)(mRowBin * mColBin); }
 
   void GetBinCoords(C regionIdx, C &rowStart, C &rowEnd, C &colStart, C &colEnd) {
     rowStart = (regionIdx / mColBin) * mRowStep;
@@ -129,7 +143,7 @@ public:
   size_t GetRowBin() const { return mRowBin; }
   size_t GetColBin() const { return mColBin; }
 
-private:
+ public:
 
   C mRow;       ///< Number of rows
   C mCol;       ///< Number of columns

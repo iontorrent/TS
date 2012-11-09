@@ -50,7 +50,7 @@ jQuery.fn.uniform = function(settings) {
         integer   : '%s needs to be a whole number',
         uint      : '%s needs to be a whole number greater than 0',
         nuc       : '%s needs to be one of the following:  A, T, C, G',
-        uniq      : '%s is already in use, please enter another barcode id',
+        uniq      : '%s is already in use, please enter another',
         alpha     : '%s should contain only letters (without special characters or numbers)',
         alphanum  : '%s should contain only numbers and letters (without special characters)',
         annospace : '%s should contain only numbers, letters, and the following: . - _ ',
@@ -504,7 +504,7 @@ jQuery.fn.uniform = function(settings) {
                            .toggleClass(settings.invalid_class, !valid)
                            .toggleClass(settings.error_class, !valid)
                            .toggleClass(settings.valid_class, valid)
-                           .find('p.formHint');
+                           .find(settings.msg_selector);
 
             if (! valid && ! $p.data('info-text')) {
                 $p.data('info-text', $p.html());
@@ -693,6 +693,7 @@ jQuery.fn.uniform.defaults = {
         focused_class       : 'focused',
         holder_class        : 'ctrlHolder',
         field_selector      : 'input, textarea, select',
+        msg_selector 		: 'p.formHint',
         default_value_color : "#AFAFAF"
 };
 

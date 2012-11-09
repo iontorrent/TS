@@ -1,427 +1,9 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "BkgFitterTracker.h"
 #include "BkgDataPointers.h"
-
-
-bool sortregionProcessOrderVector (const beadRegion& r1, const beadRegion& r2)
-{
-  return (r1.second > r2.second);
-}
-
-dbgWellTracker::dbgWellTracker()
-{
-  bkgDbg1=NULL;
-  bkgDbg2 = NULL;
-  bkgDebugKmult = NULL;
-}
-
-void dbgWellTracker::Init (char *experimentName, int rows, int cols, int numFlows, char *flowOrder)
-{
-  bkgDbg1 = new RawWells (experimentName, "1.tau");
-  bkgDbg1->CreateEmpty (numFlows, flowOrder, rows, cols);
-  bkgDbg1->OpenForWrite();
-  bkgDbg2 = new RawWells (experimentName, "1.lmres");
-  bkgDbg2->CreateEmpty (numFlows, flowOrder, rows, cols);
-  bkgDbg2->OpenForWrite();
-  bkgDebugKmult = new RawWells (experimentName, "1.kmult");
-  bkgDebugKmult->CreateEmpty (numFlows, flowOrder, rows, cols);
-  bkgDebugKmult->OpenForWrite();
-}
-
-void dbgWellTracker::Close()
-{
-  if (bkgDbg1!=NULL)
-  {
-    bkgDbg1->Close();
-    delete bkgDbg1;
-  }
-  if (bkgDbg2!=NULL)
-  {
-    bkgDbg2->Close();
-    delete bkgDbg2;
-  }
-  if (bkgDebugKmult!=NULL)
-  {
-    bkgDebugKmult->Close();
-    delete bkgDebugKmult;
-  }
-}
-dbgWellTracker::~dbgWellTracker()
-{
-  Close();
-}
-
-
-
-extern void *DynamicBkgFitWorker (void *arg, bool use_gpu)
-{
-  DynamicWorkQueueGpuCpu *q = static_cast<DynamicWorkQueueGpuCpu*> (arg);
-  assert (q);
-
-  bool done = false;
-
-  WorkerInfoQueueItem item;
-  while (!done)
-  {
-    //printf("Waiting for item: %d\n", pthread_self());
-    if (use_gpu)
-      item = q->GetGpuItem();
-    else
-      item = q->GetCpuItem();
-
-    if (item.finished == true)
-    {
-      // we are no longer needed...go away!
-      done = true;
-      q->DecrementDone();
-      continue;
-    }
-
-    int event = * ( (int *) item.private_data);
-
-    if (event == bkgWorkE)
-    {
-      BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
-      info->bkgObj->ProcessImage (info->img, info->flow, info->last,
-                                  info->learning, use_gpu);
-    }
-
-    q->DecrementDone();
-  }
-  return (NULL);
-}
-
-// BkgWorkers to be created as threads
-void* BkgFitWorkerCpu (void *arg)
-{
-  // Wrapper to create a worker
-  return (BkgFitWorker (arg,false));
-}
-
-void* DynamicBkgFitWorkerCpu (void *arg)
-{
-  // Wrapper to create a worker
-  return (DynamicBkgFitWorker (arg,false));
-}
-
-extern void *BkgFitWorker (void *arg, bool use_gpu)
-{
-  WorkerInfoQueue *q = static_cast<WorkerInfoQueue *> (arg);
-  assert (q);
-
-  bool done = false;
-
-  while (!done)
-  {
-    WorkerInfoQueueItem item = q->GetItem();
-
-    if (item.finished == true)
-    {
-      // we are no longer needed...go away!
-      done = true;
-      q->DecrementDone();
-      continue;
-    }
-
-    int event = * ( (int *) item.private_data);
-
-    if (event == bkgWorkE)
-    {
-      BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
-      info->bkgObj->ProcessImage (info->img, info->flow, info->last,
-                                  info->learning, use_gpu);
-    }
-    else if (event == imageInitBkgModel)
-    {
-      ImageInitBkgWorkInfo *info = (ImageInitBkgWorkInfo *) (item.private_data);
-      int r = info->r;
-
-      // BkgModelReplay object is passed into BkgModel constructor which is
-      // responsible for deleting it.  Constructed here instead of in
-      // the BkgModel constructor as command line options are available here
-      BkgModelReplay *replay;
-      if (info->clo->bkg_control.replayBkgModelData){
-  replay = new BkgModelReplayReader(*info->clo, info->regions[r].index);;
-      }
-      else if (info->clo->bkg_control.recordBkgModelData){
-  replay = new BkgModelReplayRecorder(*info->clo, info->regions[r].index);
-      }
-      else {
-  replay = new BkgModelReplay(true);
-      }
-
-      // should we enable debug for this region?
-      bool reg_debug_enable;
-      reg_debug_enable = CheckBkgDbgRegion (&info->regions[r],info->clo->bkg_control);
-//@TODO: get rid of >control< options on initializer that don't affect allocation or initial computation
-// Sweep all of those into a flag-setting operation across all the fitters, or send some of then to global-defaults
-      BkgModel *bkgmodel = new BkgModel (info->experimentName, info->maskPtr,
-                                         info->pinnedInFlow, info->rawWells, &info->regions[r], *info->sample, info->sep_t0_estimate,
-                                         reg_debug_enable, info->clo->loc_context.rows, info->clo->loc_context.cols,
-                                         info->maxFrames,info->uncompFrames,info->timestamps,info->math_poiss, info->emptyTraceTracker,
-                                         replay,
-                                         info->t_sigma,
-                                         info->t_mid_nuc,
-                                         info->clo->bkg_control.dntp_uM,
-                                         info->clo->bkg_control.enableXtalkCorrection,
-                                         info->clo->bkg_control.enableBkgModelClonalFilter,
-                                         info->seqList,
-                                         info->numSeqListItems
-           );
-
-      bkgmodel->SetPointers (info->ptrs);
-
-      // @TODO: this is >absolutely< the wrong place to set these quantities
-      // >only< quantities that take computation/ allocation should be set here
-      // that is,we shouldn't divide the initialization between sections of the code
-      bkgmodel->SetSingleFlowFitProjectionSearch (info->clo->bkg_control.useProjectionSearchForSingleFlowFit);
-      if (info->clo->bkg_control.bkgDebugParam)
-      {
-        bkgmodel->SetParameterDebug (info->bkgDbg1,info->bkgDbg2,info->bkgDebugKmult);
-      }
-
-      if (info->clo->bkg_control.vectorize)
-      {
-        bkgmodel->performVectorization (true);
-      }
-
-      bkgmodel->SetAmplLowerLimit (info->clo->bkg_control.AmplLowerLimit);
-
-
-      // put this fitter in the listh
-      info->BkgModelFitters[r] = bkgmodel;
-
-    }
-
-    // indicate we finished that bit of work
-    q->DecrementDone();
-  }
-
-  return (NULL);
-}
-
-
-
-
-bool CheckBkgDbgRegion (Region *r,BkgModelControlOpts &bkg_control)
-{
-  for (unsigned int i=0;i < bkg_control.BkgTraceDebugRegions.size();i++)
-  {
-    Region *dr = &bkg_control.BkgTraceDebugRegions[i];
-
-    if ( (dr->row >= r->row)
-         && (dr->row < (r->row+r->h))
-         && (dr->col >= r->col)
-         && (dr->col < (r->col+r->w)))
-    {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-
-void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control)
-{
-  if (bkg_control.numCpuThreads)
-  {
-    // User specified number of threads:
-    my_compute_plan.numBkgWorkers        = bkg_control.numCpuThreads;
-    my_compute_plan.numDynamicBkgWorkers = bkg_control.numCpuThreads;
-  }
-  else
-  {
-    // Limit threads to 1.5 * number of cores, with minimum of 4 threads:
-    my_compute_plan.numBkgWorkers        = max (4, 3 * numCores() / 2);
-    my_compute_plan.numDynamicBkgWorkers = numCores();
-  }
-  //fprintf(stdout, "ProcessImageToWell: bkg_control.numCpuThreads = %d, numCores() = %d\n", bkg_control.numCpuThreads, numCores());
-  fprintf (stdout, "ProcessImageToWell: numBkgWorkers = %d, numDynamicBkgWorkers = %d\n", my_compute_plan.numBkgWorkers, my_compute_plan.numDynamicBkgWorkers);
-  my_compute_plan.numBkgWorkers_gpu = 0;
-
-  // -- Tuning parameters --
-
-  // Flag to disable CUDA acceleration
-  my_compute_plan.use_gpu_acceleration = (bkg_control.gpuWorkLoad > 0) ? true : false;
-
-  // Dynamic balance (set to true) will create one large queue for both the CPUs and GPUs to pull from
-  // whenever the resource is free. A static balance (set to false) will create two queues, one for the
-  // GPU to pull from and one for the CPU to pull from. This division will be set deterministically so
-  // the same answer to achieved each time.
-  my_compute_plan.dynamic_gpu_balance = bkg_control.useBothCpuAndGpu;
-  // If static balance, what percent of queue items should be added to the GPU queue. Not that there is
-  // only one queue for all the GPUs to share. It is not deterministic which GPU each work item will be
-  // assigned to.  This will potentially lead to non-deterministic solution on systems with mixed GPU
-  // generations where floating point arithmetic is slightly different (i.e. Tesla vs Fermi).
-  my_compute_plan.gpu_work_load = bkg_control.gpuWorkLoad;
-  my_compute_plan.lastRegionToProcess = 0;
-  // Option to use all GPUs in system (including display devices). If set to true, will only use the
-  // devices with the highest computer version. For example, if you have a system with 4 Fermi compute
-  // devices and 1 Quadro (Tesla based) for display, only the 4 Fermi devices will be used.
-  my_compute_plan.use_all_gpus = false;
-
-  if (configureGpu (my_compute_plan.use_gpu_acceleration, my_compute_plan.valid_devices, my_compute_plan.use_all_gpus,
-                    bkg_control.numGpuThreads, my_compute_plan.numBkgWorkers_gpu))
-  {
-    printf ("use_gpu_acceleration: %d\n", my_compute_plan.use_gpu_acceleration);
-  }
-  else
-  {
-    my_compute_plan.use_gpu_acceleration = false;
-    my_compute_plan.gpu_work_load = 0;
-  }
-}
-
-
-
-void AllocateProcessorQueue (ProcessorQueue &my_queue,ComputationPlanner &analysis_compute_plan, int numRegions)
-{
-  //create queue for passing work to thread pool
-  my_queue.gpu_info.resize (analysis_compute_plan.numBkgWorkers_gpu);
-  my_queue.threadWorkQ = NULL;
-  my_queue.threadWorkQ_gpu = NULL;
-  my_queue.dynamicthreadWorkQ = NULL;
-
-  my_queue.threadWorkQ = new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers+1);
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    // If we are using a dynamic work queue, make the queue large enough for both the CPU and GPU workers
-    my_queue.dynamicthreadWorkQ = new DynamicWorkQueueGpuCpu (numRegions);
-  }
-  else
-  {
-    if (analysis_compute_plan.numBkgWorkers_gpu)
-      my_queue.threadWorkQ_gpu = new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers_gpu+1);
-  }
-
-  {
-    int cworker;
-    pthread_t work_thread;
-
-    // spawn threads for doing backgroun correction/fitting work
-    for (cworker = 0; cworker < analysis_compute_plan.numBkgWorkers; cworker++)
-    {
-      int t = pthread_create (&work_thread, NULL, BkgFitWorkerCpu,
-                              my_queue.threadWorkQ);
-      if (t)
-        fprintf (stderr, "Error starting thread\n");
-    }
-
-  }
-
-  fprintf (stdout, "Number of CPU threads for beadfind: %d\n", analysis_compute_plan.numBkgWorkers);
-  if (analysis_compute_plan.dynamic_gpu_balance)
-  {
-    fprintf (stdout, "Number of CPU threads for background model: %d\n", analysis_compute_plan.numDynamicBkgWorkers);
-    fprintf (stdout, "Number of GPU threads for background model: %d\n", analysis_compute_plan.numBkgWorkers_gpu);
-  }
-  else
-  {
-    if (analysis_compute_plan.use_gpu_acceleration)
-      fprintf (stdout, "Number of GPU threads for background model: %d\n", analysis_compute_plan.numBkgWorkers_gpu);
-    else
-      fprintf (stdout, "Number of CPU threads for background model: %d\n", analysis_compute_plan.numBkgWorkers);
-  }
-}
-
-void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan,  int flow)
-{
-  // wait for all of the regions to finish processing before moving on to the next
-  // image
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    analysis_queue.dynamicthreadWorkQ->WaitTillDone();
-  }
-  else
-  {
-    analysis_queue.threadWorkQ->WaitTillDone();
-  }
-  if (analysis_queue.threadWorkQ_gpu)
-    analysis_queue.threadWorkQ_gpu->WaitTillDone();
-
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    int gpuRegions = analysis_queue.dynamicthreadWorkQ->getGpuReadIndex();
-    printf ("Job ratio --> Flow: %d GPU: %f CPU: %f\n",
-            flow, (float) gpuRegions/ (float) analysis_compute_plan.lastRegionToProcess,
-            (1.0 - ( (float) gpuRegions/ (float) analysis_compute_plan.lastRegionToProcess)));
-    analysis_queue.dynamicthreadWorkQ->ResetIndices();
-  }
-
-}
-
-void SpinDownCPUthreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan)
-{
-  // tell all the worker threads to exit
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    analysis_queue.item.finished = true;
-    analysis_queue.item.private_data = NULL;
-    for (int i=0;i < analysis_compute_plan.numBkgWorkers;i++)
-      analysis_queue.threadWorkQ->PutItem (analysis_queue.item);
-    analysis_queue.threadWorkQ->WaitTillDone();
-  }
-}
-
-void SpinUpGPUAndDynamicThreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan)
-{
-  // create CPU threads for running dynamic gpu load since work items
-  // are placed in a different queue
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    pthread_t work_thread;
-    for (int cworker = 0; cworker < analysis_compute_plan.numDynamicBkgWorkers; cworker++)
-    {
-      int t = pthread_create (&work_thread, NULL, DynamicBkgFitWorkerCpu,
-                              analysis_queue.dynamicthreadWorkQ);
-      if (t)
-        fprintf (stderr, "Error starting dynamic CPU thread\n");
-    }
-
-  }
-
-  for (int i = 0; i < analysis_compute_plan.numBkgWorkers_gpu; i++)
-  {
-    pthread_t work_thread;
-
-    int deviceId = i / analysis_compute_plan.numBkgWorkers_gpu; // @TODO: this should be part of the analysis_compute_plan already, so clo is not needed here.
-
-    analysis_queue.gpu_info[i].dynamic_gpu_load = analysis_compute_plan.dynamic_gpu_balance;
-    analysis_queue.gpu_info[i].gpu_index = analysis_compute_plan.valid_devices[deviceId];
-    analysis_queue.gpu_info[i].queue = (analysis_compute_plan.dynamic_gpu_balance ? (void*) analysis_queue.dynamicthreadWorkQ :
-                                        (void*) analysis_queue.threadWorkQ_gpu);
-
-    // Spawn GPU workers pulling items from either the combined queue (dynamic)
-    // or a separate GPU queue (static)
-    int t = pthread_create (&work_thread, NULL, BkgFitWorkerGpu, &analysis_queue.gpu_info[i]);
-    if (t)
-      fprintf (stderr, "Error starting GPU thread\n");
-  }
-}
-
-void AssignQueueForItem (ProcessorQueue &analysis_queue,ComputationPlanner &analysis_compute_plan, int numRegions, int r)
-{
-
-  if (analysis_compute_plan.use_gpu_acceleration && analysis_compute_plan.dynamic_gpu_balance)
-  {
-    // Add all items to the shared queue
-    analysis_queue.dynamicthreadWorkQ->PutItem (analysis_queue.item);
-  }
-  else
-  {
-    // Deterministically split items between the CPU
-    // and GPU queues
-    if (r >= int (analysis_compute_plan.gpu_work_load * float (numRegions)))
-    {
-      analysis_queue.threadWorkQ->PutItem (analysis_queue.item);
-    }
-    else
-    {
-      analysis_queue.threadWorkQ_gpu->PutItem (analysis_queue.item);
-    }
-  }
-}
+#include "BkgModelHdf5.h"
+#include "MaskSample.h"
+#include "GpuMultiFlowFitControl.h"
 
 void BkgFitterTracker::SetRegionProcessOrder ()
 {
@@ -431,7 +13,7 @@ void BkgFitterTracker::SetRegionProcessOrder ()
   int zeroRegions = 0;
   for (int i=0; i<numFitters; ++i)
   {
-    numBeads = BkgModelFitters[i]->GetNumLiveBeads();
+    numBeads = sliced_chip[i]->GetNumLiveBeads();
     if (numBeads == 0)
       zeroRegions++;
 
@@ -452,44 +34,84 @@ void BkgFitterTracker::SetRegionProcessOrder ()
 }
 
 
-void BkgFitterTracker::UnSpinGpuThreads ()
+void BkgFitterTracker::UnSpinSingleFlowFitGpuThreads ()
 {
 
-  if (analysis_queue.threadWorkQ_gpu)
+  if (analysis_queue.GetSingleFitGpuQueue())
   {
     WorkerInfoQueueItem item;
     item.finished = true;
     item.private_data = NULL;
-    for (int i=0;i < analysis_compute_plan.numBkgWorkers_gpu;i++)
-      analysis_queue.threadWorkQ_gpu->PutItem (item);
-    analysis_queue.threadWorkQ_gpu->WaitTillDone();
+    for (int i=0;i < analysis_compute_plan.numSingleFlowFitGpuWorkers;i++)
+      analysis_queue.GetSingleFitGpuQueue()->PutItem (item);
+    analysis_queue.GetSingleFitGpuQueue()->WaitTillDone();
 
-    delete analysis_queue.threadWorkQ_gpu;
+    delete analysis_queue.GetSingleFitGpuQueue();
+    analysis_queue.SetSingleFitGpuQueue(NULL);
+
   }
 }
+
+void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
+{
+
+  if (analysis_queue.GetMultiFitGpuQueue())
+  {
+    WorkerInfoQueueItem item;
+    item.finished = true;
+    item.private_data = NULL;
+    for (int i=0;i < analysis_compute_plan.numMultiFlowFitGpuWorkers;i++)
+      analysis_queue.GetMultiFitGpuQueue()->PutItem (item);
+    analysis_queue.GetMultiFitGpuQueue()->WaitTillDone();
+
+    delete analysis_queue.GetMultiFitGpuQueue();
+    printf("Deleting multi fit gpu queue\n");
+    analysis_queue.SetMultiFitGpuQueue(NULL);
+  }
+}
+
 
 
 BkgFitterTracker::BkgFitterTracker (int numRegions)
 {
   numFitters = numRegions;
-  BkgModelFitters = new BkgModel * [numRegions];
+  //signal_proc_fitters = new SignalProcessingMasterFitter * [numRegions];
+  signal_proc_fitters.resize(numRegions);
+  sliced_chip.resize(numRegions);
   bkinfo = NULL;
+  all_emptytrace_track = NULL;
+}
+
+void BkgFitterTracker::AllocateRegionData(std::size_t numRegions)   
+{
+  sliced_chip.resize(numRegions);
+  for(size_t i=0; i<numRegions; ++i)
+    sliced_chip[i] = new RegionalizedData;
 }
 
 void BkgFitterTracker::DeleteFitters()
 {
   for (int r = 0; r < numFitters; r++)
-    delete BkgModelFitters[r];
-  delete [] BkgModelFitters; // remove pointers
-  BkgModelFitters = NULL;
+    delete signal_proc_fitters[r];
+
+  signal_proc_fitters.clear();
+
+  for (int r = 0; r < numFitters; r++)
+    delete sliced_chip[r];
+
+  sliced_chip.clear();
+
+  delete all_emptytrace_track;
+  all_emptytrace_track = NULL;
+
   if (bkinfo!=NULL)
     delete[] bkinfo;
 }
 
 BkgFitterTracker::~BkgFitterTracker()
 {
-  numFitters = 0;
   DeleteFitters();
+  numFitters = 0;
 }
 
 void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control)
@@ -501,84 +123,123 @@ void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control)
   AllocateProcessorQueue (analysis_queue,analysis_compute_plan,numFitters);
 }
 
-
-
-void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOpts &clo, Mask *maskPtr, PinnedInFlow *pinnedInFlow, char *experimentName,
-     ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, Region *regions, int totalRegions, RegionTiming *region_timing,SeqListClass &my_keys,
-                 BkgDataPointers *ptrs,EmptyTraceTracker &emptytracetracker, std::vector<float> *tauB,std::vector<float> *tauE)
+void BkgFitterTracker::SetUpTraceTracking(SlicedPrequel &my_prequel_setup, CommandLineOpts &inception_state, ImageSpecClass &my_image_spec, ComplexMask &from_beadfind_mask)
 {
-  // designate a set of reads that will be processed regardless of whether they pass filters
-  set<int> randomLibSet;
-  MaskSample<int> randomLib (*maskPtr, MaskLib, clo.flt_control.nUnfilteredLib);
-  randomLibSet.insert (randomLib.Sample().begin(), randomLib.Sample().end());
+  // because it is hypothetically possible that we track empties over a different region mesh than regular beads
+  // this is set up beforehand, while deferring the beads to the region mesh used in signal processing
+  all_emptytrace_track = new EmptyTraceTracker(my_prequel_setup.region_list, my_prequel_setup.region_timing, my_prequel_setup.smooth_t0_est, inception_state);
+  all_emptytrace_track->Allocate(from_beadfind_mask.my_mask, my_image_spec);
+}
 
-  // construct the shared math table
+void TrivialDebugGaussExp(string &outFile, std::vector<Region> &regions, std::vector<RegionTiming> &region_timing)
+{
+    char my_trivial_file[1024];
+    sprintf(my_trivial_file, "%s/gauss_exp_sigma_tmid.txt",outFile.c_str());
+    ofstream out (my_trivial_file);
+  out << "row\tcol\tsigma.ge.est\ttmid.ge.est" << endl;
+  unsigned int totalRegions = regions.size();
+  for (unsigned int r = 0; r < totalRegions; r++)
+  {
+    out << regions[r].row << "\t" << regions[r].col << "\t" << region_timing[r].t_sigma << "\t" << region_timing[r].t_mid_nuc << endl;
+  }
+  out.close();
+}
+
+void BkgFitterTracker::InitCacheMath()
+{
+    // construct the shared math table
   poiss_cache.Allocate (MAX_HPLEN+1,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
   poiss_cache.GenerateValues(); // fill out my table
-  // make sure the GPU knows about this table
-  if (analysis_compute_plan.use_gpu_acceleration)
-  {
-    InitConstantMemoryOnGpu (poiss_cache);
-  }
+}
 
-  if (clo.bkg_control.bkgDebugParam)
-    my_bkg_dbg_wells.Init (experimentName,my_image_spec.rows,my_image_spec.cols,clo.flow_context.numTotalFlows,clo.flow_context.flowOrder);  //@TODO: 3rd duplicated code instance
+void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask, char *results_folder,
+    ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, 
+					       std::vector<Region> &regions,
+					       std::vector<RegionTiming> &region_timing,SeqListClass &my_keys,
+					       bool restart)
+{
+  // a debugging file if needed
+  all_params_hdf.Init ( inception_state.sys_context.results_folder,
+                        inception_state.loc_context,  
+                        my_image_spec, inception_state.flow_context.GetNumFlows(),
+                        inception_state.bkg_control.bkgModelHdf5Debug );
+
+  
+  int totalRegions = regions.size();
+  // designate a set of reads that will be processed regardless of whether they pass filters
+  set<int> randomLibSet;
+  MaskSample<int> randomLib (*a_complex_mask.my_mask, MaskLib, inception_state.bkg_control.unfiltered_library_random_sample);
+  randomLibSet.insert (randomLib.Sample().begin(), randomLib.Sample().end());
+
+  InitCacheMath();
+    
+  TrivialDebugGaussExp(inception_state.sys_context.analysisLocation, regions,region_timing);
 
   ImageInitBkgWorkInfo *linfo = new ImageInitBkgWorkInfo[numFitters];
   for (int r = 0; r < numFitters; r++)
   {
     // load up the entire image, and do standard image processing (maybe all this 'standard' stuff could be on one call?)
     linfo[r].type = imageInitBkgModel;
-    linfo[r].clo = &clo;
     linfo[r].r = r;
-    linfo[r].BkgModelFitters = &BkgModelFitters[0];
-    linfo[r].bkgDbg1 = my_bkg_dbg_wells.bkgDbg1;
-    linfo[r].bkgDbg2 = my_bkg_dbg_wells.bkgDbg2;
-    linfo[r].bkgDebugKmult = my_bkg_dbg_wells.bkgDebugKmult;
+    // data holders and fitters
+    linfo[r].signal_proc_fitters = &signal_proc_fitters[0];
+    linfo[r].sliced_chip = &sliced_chip[0];
+    linfo[r].emptyTraceTracker = all_emptytrace_track;
+
+    // context same for all regions 
+    linfo[r].inception_state = &inception_state;  // why do global variables plague me so
     linfo[r].rows = my_image_spec.rows;
     linfo[r].cols = my_image_spec.cols;
-    linfo[r].maxFrames = clo.img_control.maxFrames;
+    linfo[r].maxFrames = inception_state.img_control.maxFrames;
     linfo[r].uncompFrames = my_image_spec.uncompFrames;
     linfo[r].timestamps = my_image_spec.timestamps;
-    linfo[r].pinnedInFlow = pinnedInFlow;
+    
+    linfo[r].seqList = my_keys.seqList;
+    linfo[r].numSeqListItems= my_keys.numSeqListItems;
+
+    // global state across chip
+    linfo[r].maskPtr = a_complex_mask.my_mask;
+    linfo[r].pinnedInFlow = a_complex_mask.pinnedInFlow;
+    linfo[r].global_defaults = &global_defaults;
+
+    // prequel data
+    linfo[r].regions = &regions[0];
+    linfo[r].numRegions = (int)totalRegions;
+    //linfo[r].kic = keyIncorporation;
+    linfo[r].t_mid_nuc = region_timing[r].t_mid_nuc;
+    linfo[r].t_sigma = region_timing[r].t_sigma;
+    linfo[r].sep_t0_estimate = &smooth_t0_est;
+    
+    // fix tauB,tauE passing later
+    linfo[r].math_poiss = &poiss_cache;
+    linfo[r].sample = &randomLibSet;
+
+    // i/o state
+    linfo[r].results_folder = results_folder;
     linfo[r].rawWells = &rawWells;
-    linfo[r].emptyTraceTracker = &emptytracetracker;
-    if (clo.bkg_control.bkgModelHdf5Debug)
+
+    if (inception_state.bkg_control.bkgModelHdf5Debug)
     {
-      linfo[r].ptrs = ptrs;
+      linfo[r].ptrs = &all_params_hdf.ptrs;
     }
     else
     {
       linfo[r].ptrs = NULL;
     }
-    linfo[r].regions = &regions[0];
-    linfo[r].numRegions = totalRegions;
-    //linfo[r].kic = keyIncorporation;
-    linfo[r].t_mid_nuc = region_timing[r].t_mid_nuc;
-    linfo[r].t_sigma = region_timing[r].t_sigma;
-    linfo[r].experimentName = experimentName;
-    linfo[r].maskPtr = maskPtr;
-    linfo[r].sep_t0_estimate = &smooth_t0_est;
-    if (tauB != NULL)
-      linfo[r].tauB = tauB;
-    if (tauE != NULL)
-      linfo[r].tauE = tauE;
-    linfo[r].math_poiss = &poiss_cache;
-    linfo[r].seqList = my_keys.seqList;
-    linfo[r].numSeqListItems= my_keys.numSeqListItems;
-    linfo[r].sample = &randomLibSet;
+    linfo[r].restart = restart;
 
+
+    // now put me on the queue
     analysis_queue.item.finished = false;
     analysis_queue.item.private_data = (void *) &linfo[r];
-    analysis_queue.threadWorkQ->PutItem (analysis_queue.item);
+    analysis_queue.GetCpuQueue()->PutItem (analysis_queue.item);
 
   }
   // wait for all of the images to be loaded and initially processed
-  analysis_queue.threadWorkQ->WaitTillDone();
+  analysis_queue.GetCpuQueue()->WaitTillDone();
 
   delete[] linfo;
 
-  SpinDownCPUthreads (analysis_queue,analysis_compute_plan);
   // set up for flow-by-flow fitting
   bkinfo = new BkgModelWorkInfo[numFitters];
 
@@ -588,35 +249,47 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
 // call the fitters for each region
 void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bool last)
 {
+
+  int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
   for (int r = 0; r < numFitters; r++)
   {
     // these get free'd by the thread that processes them
-    bkinfo[r].type = bkgWorkE;
-    bkinfo[r].bkgObj = BkgModelFitters[analysis_compute_plan.region_order[r].first];
+    bkinfo[r].type = MULTI_FLOW_REGIONAL_FIT;
+    bkinfo[r].bkgObj = signal_proc_fitters[analysis_compute_plan.region_order[r].first];
     bkinfo[r].flow = flow;
-    bkinfo[r].img = & (my_img_set.img[flow]);
+    bkinfo[r].sdat = NULL;
+    bkinfo[r].img = NULL;
+    bkinfo[r].doingSdat = my_img_set.doingSdat;
+    if (bkinfo[r].doingSdat)
+    {
+      bkinfo[r].sdat = & (my_img_set.sdat[flow_buffer_for_flow]);
+    }
+    else
+    {
+      bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
+    }
     bkinfo[r].last = last;
-    bkinfo[r].learning = false;
 
+    bkinfo[r].pq = &analysis_queue;
     analysis_queue.item.finished = false;
     analysis_queue.item.private_data = (void *) &bkinfo[r];
-    AssignQueueForItem (analysis_queue,analysis_compute_plan,numFitters,r);
+    AssignQueueForItem (analysis_queue,analysis_compute_plan);
   }
 
-  WaitForRegionsToFinishProcessing (analysis_queue,analysis_compute_plan, flow);
+  WaitForRegionsToFinishProcessing (analysis_queue,analysis_compute_plan);
 }
 
 void BkgFitterTracker::SpinUp()
 {
-  SpinUpGPUAndDynamicThreads (analysis_queue,analysis_compute_plan);
+  SpinUpGPUThreads (analysis_queue,analysis_compute_plan);
 }
 
 
-void BkgFitterTracker::DumpBkgModelBeadParams (char *experimentName,  int flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadParams (char *results_folder,  int flow, bool debug_bead_only)
 {
   FILE *bkg_mod_bead_dbg = NULL;
   char *bkg_mod_bead_dbg_fname = (char *) malloc (512);
-  snprintf (bkg_mod_bead_dbg_fname, 512, "%s/%s.%04d.%s", experimentName, "BkgModelBeadData",flow+1,"txt");
+  snprintf (bkg_mod_bead_dbg_fname, 512, "%s/%s.%04d.%s", results_folder, "BkgModelBeadData",flow+1,"txt");
   fopen_s (&bkg_mod_bead_dbg, bkg_mod_bead_dbg_fname, "wt");
   free (bkg_mod_bead_dbg_fname);
 
@@ -624,16 +297,16 @@ void BkgFitterTracker::DumpBkgModelBeadParams (char *experimentName,  int flow, 
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpExemplarBead (bkg_mod_bead_dbg,debug_bead_only);
+    signal_proc_fitters[r]->DumpExemplarBead (bkg_mod_bead_dbg,debug_bead_only);
   }
   fclose (bkg_mod_bead_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelBeadOffset (char *experimentName, int flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadOffset (char *results_folder, int flow, bool debug_bead_only)
 {
   FILE *bkg_mod_bead_dbg = NULL;
   char *bkg_mod_bead_dbg_fname = (char *) malloc (512);
-  snprintf (bkg_mod_bead_dbg_fname, 512, "%s/%s.%04d.%s", experimentName, "BkgModelBeadDcData",flow+1,"txt");
+  snprintf (bkg_mod_bead_dbg_fname, 512, "%s/%s.%04d.%s", results_folder, "BkgModelBeadDcData",flow+1,"txt");
   fopen_s (&bkg_mod_bead_dbg, bkg_mod_bead_dbg_fname, "wt");
   free (bkg_mod_bead_dbg_fname);
 
@@ -641,100 +314,99 @@ void BkgFitterTracker::DumpBkgModelBeadOffset (char *experimentName, int flow, b
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpExemplarBeadDcOffset (bkg_mod_bead_dbg,debug_bead_only);
+    signal_proc_fitters[r]->DumpExemplarBeadDcOffset (bkg_mod_bead_dbg,debug_bead_only);
   }
   fclose (bkg_mod_bead_dbg);
 }
 
 
-void BkgFitterTracker::DumpBkgModelBeadInfo (char *experimentName,  int flow, bool last_flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadInfo (char *results_folder,  int flow, bool last_flow, bool debug_bead_only)
 {
   // get some regional data for the entire chip as debug
   // only do this every 20 flows as this is the block
   // should be triggered by bkgmodel
   if (CheckFlowForWrite (flow,last_flow))
   {
-    DumpBkgModelBeadParams (experimentName, flow, debug_bead_only);
-    DumpBkgModelBeadOffset (experimentName,  flow, debug_bead_only);
+    DumpBkgModelBeadParams (results_folder, flow, debug_bead_only);
+    DumpBkgModelBeadOffset (results_folder,  flow, debug_bead_only);
   }
 }
 
-void BkgFitterTracker::DumpBkgModelEmphasisTiming (char *experimentName, int flow)
+void BkgFitterTracker::DumpBkgModelEmphasisTiming (char *results_folder, int flow)
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_time_dbg = NULL;
   char *bkg_mod_time_name = (char *) malloc (512);
-  snprintf (bkg_mod_time_name, 512, "%s/%s.%04d.%s", experimentName, "BkgModelEmphasisData",flow+1,"txt");
+  snprintf (bkg_mod_time_name, 512, "%s/%s.%04d.%s", results_folder, "BkgModelEmphasisData",flow+1,"txt");
   fopen_s (&bkg_mod_time_dbg, bkg_mod_time_name, "wt");
   free (bkg_mod_time_name);
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpTimeAndEmphasisByRegion (bkg_mod_time_dbg);
-    BkgModelFitters[r]->DumpTimeAndEmphasisByRegionH5 (r);
+    signal_proc_fitters[r]->DumpTimeAndEmphasisByRegion (bkg_mod_time_dbg);
   }
   fclose (bkg_mod_time_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelInitVals (char *experimentName, int flow)
+
+void BkgFitterTracker::DumpBkgModelInitVals (char *results_folder, int flow)
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_init_dbg = NULL;
   char *bkg_mod_init_name = (char *) malloc (512);
-  snprintf (bkg_mod_init_name, 512, "%s/%s.%04d.%s", experimentName, "BkgModelInitVals",flow+1,"txt");
+  snprintf (bkg_mod_init_name, 512, "%s/%s.%04d.%s", results_folder, "BkgModelInitVals",flow+1,"txt");
   fopen_s (&bkg_mod_init_dbg, bkg_mod_init_name, "wt");
   free (bkg_mod_init_name);
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpInitValues (bkg_mod_init_dbg);
+    sliced_chip[r]->DumpInitValues (bkg_mod_init_dbg);
 
   }
   fclose (bkg_mod_init_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelDarkMatter (char *experimentName, int flow)
+void BkgFitterTracker::DumpBkgModelDarkMatter (char *results_folder, int flow)
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_dark_dbg = NULL;
   char *bkg_mod_dark_name = (char *) malloc (512);
-  snprintf (bkg_mod_dark_name, 512, "%s/%s.%04d.%s", experimentName, "BkgModelDarkMatterData",flow+1,"txt");
+  snprintf (bkg_mod_dark_name, 512, "%s/%s.%04d.%s", results_folder, "BkgModelDarkMatterData",flow+1,"txt");
   fopen_s (&bkg_mod_dark_dbg, bkg_mod_dark_name, "wt");
   free (bkg_mod_dark_name);
 
-  BkgModelFitters[0]->DumpDarkMatterTitle (bkg_mod_dark_dbg);
+  signal_proc_fitters[0]->DumpDarkMatterTitle (bkg_mod_dark_dbg);
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpDarkMatter (bkg_mod_dark_dbg);
+    signal_proc_fitters[r]->DumpDarkMatter (bkg_mod_dark_dbg);
 
   }
   fclose (bkg_mod_dark_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelEmptyTrace (char *experimentName, int flow)
+void BkgFitterTracker::DumpBkgModelEmptyTrace (char *results_folder, int flow)
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_mt_dbg = NULL;
   char *bkg_mod_mt_name = (char *) malloc (512);
-  snprintf (bkg_mod_mt_name, 512, "%s/%s.%04d.%s", experimentName, "BkgModelEmptyTraceData",flow+1,"txt");
+  snprintf (bkg_mod_mt_name, 512, "%s/%s.%04d.%s", results_folder, "BkgModelEmptyTraceData",flow+1,"txt");
   fopen_s (&bkg_mod_mt_dbg, bkg_mod_mt_name, "wt");
   free (bkg_mod_mt_name);
 
-
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->DumpEmptyTrace (bkg_mod_mt_dbg);
+    sliced_chip[r]->DumpEmptyTrace (bkg_mod_mt_dbg);
 
   }
   fclose (bkg_mod_mt_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelRegionParameters (char *experimentName,int flow)
+void BkgFitterTracker::DumpBkgModelRegionParameters (char *results_folder,int flow)
 {
   FILE *bkg_mod_reg_dbg = NULL;
   char *bkg_mod_reg_dbg_fname = (char *) malloc (512);
-  snprintf (bkg_mod_reg_dbg_fname, 512, "%s/%s.%04d.%s", experimentName, "BkgModelRegionData",flow+1,"txt");
+  snprintf (bkg_mod_reg_dbg_fname, 512, "%s/%s.%04d.%s", results_folder, "BkgModelRegionData",flow+1,"txt");
   fopen_s (&bkg_mod_reg_dbg, bkg_mod_reg_dbg_fname, "wt");
   free (bkg_mod_reg_dbg_fname);
 
@@ -744,29 +416,50 @@ void BkgFitterTracker::DumpBkgModelRegionParameters (char *experimentName,int fl
 
   for (int r = 0; r < numFitters; r++)
   {
-    BkgModelFitters[r]->GetRegParams (rp);
+    signal_proc_fitters[r]->GetRegParams (rp);
     //@TODO this routine should have no knowledge of internal representation of variables
     // Make this a routine to dump an informative line to a selected file from a regional parameter structure/class
     // especially as we use a very similar dumping line a lot in different places.
     // note: t0, rdr, and pdr evolve over time.  It would be nice to also capture how they changed throughout the analysis
     // this only captures the final value of each.
-    DumpRegionParamsLine (bkg_mod_reg_dbg, BkgModelFitters[r]->GetRegion()->row,BkgModelFitters[r]->GetRegion()->col, rp);
+    DumpRegionParamsLine (bkg_mod_reg_dbg, signal_proc_fitters[r]->GetRegion()->row,signal_proc_fitters[r]->GetRegion()->col, rp);
 
   }
   fclose (bkg_mod_reg_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelRegionInfo (char *experimentName, int flow, bool last_flow)
+void BkgFitterTracker::DumpBkgModelRegionInfo (char *results_folder, int flow, bool last_flow)
 {
   // get some regional data for the entire chip as debug
   // only do this every 20 flows as this is the block
   // should be triggered by bkgmodel
   if (CheckFlowForWrite (flow,last_flow))
   {
-    DumpBkgModelRegionParameters (experimentName, flow);
-    DumpBkgModelDarkMatter (experimentName,  flow);
-    DumpBkgModelEmphasisTiming (experimentName, flow);
-    DumpBkgModelEmptyTrace (experimentName,flow);
-    DumpBkgModelInitVals (experimentName, flow);
+    DumpBkgModelRegionParameters (results_folder, flow);
+    DumpBkgModelDarkMatter (results_folder,  flow);
+    DumpBkgModelEmphasisTiming (results_folder, flow);
+    DumpBkgModelEmptyTrace (results_folder,flow);
+    DumpBkgModelInitVals (results_folder, flow);
   }
 }
+
+
+void BkgFitterTracker::DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu()
+{
+  int maxBeads = 0;
+  int maxFrames = 0;
+  for (int i=0; i<numFitters; ++i) {
+    maxBeads = maxBeads < sliced_chip[i]->GetNumLiveBeads() ? 
+                    sliced_chip[i]->GetNumLiveBeads() : maxBeads;
+    maxFrames = maxFrames < sliced_chip[i]->GetNumFrames() ? 
+                    sliced_chip[i]->GetNumFrames() : maxFrames;
+  }
+  
+  if (maxBeads)
+    GpuMultiFlowFitControl::SetMaxBeads(maxBeads);
+
+  // it is always 0 right now since frames are actually set after the first flow is read in
+  if (maxFrames)
+    GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
+}
+

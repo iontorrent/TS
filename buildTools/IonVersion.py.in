@@ -1,0 +1,38 @@
+#!/usr/bin/python
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+
+def IonVersionGetMajor ():
+    return "@ION_VERSION_MAJOR@"
+
+def IonVersionGetMinor():
+    return "@ION_VERSION_MINOR@"
+
+def IonVersionGetRelease():
+    return "@ION_VERSION_RELEASE@"
+
+def IonVersionGetSvnRev():
+    return "@ION_VERSION_SVNREV@"
+
+def IonVersionGetSvnPath():
+    return "@ION_VERSION_SVNPATH@"
+
+def IonVersionGetBuildNum():
+    return "@ION_VERSION_BUILDNUM@"
+
+def IonVersionGetBuildTag():
+    return "@ION_VERSION_BUILDTAG@"
+
+def IonVersionGetBuildHost():
+    return "@ION_VERSION_BUILDHOST@"
+    
+def IonVersionGetSvnUrl():
+    return "@ION_VERSION_SVNURL@"
+
+
+def IonVersionGetFullVersion():
+    P = '''@CMAKE_PROJECT_NAME@ (@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@)
+Build: @ION_VERSION_BUILDTAG@ (@ION_VERSION_BUILDNUM@)
+Source: @ION_VERSION_SVNPATH@ (@ION_VERSION_SVNREV@)
+Copyright 2011 Ion Torrent Systems, Inc.'''
+    return P
+

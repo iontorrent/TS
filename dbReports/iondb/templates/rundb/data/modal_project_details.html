@@ -1,0 +1,105 @@
+<div id="modal_project_details" title="" class="modal hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h3>{{methodDescription|lower|capfirst}} Project</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal-error-messages"></div>
+		<form class="form-horizontal" id="modal_project_details_form" action="{{action}}">
+			<fieldset>
+				<div class="control-group">
+					<label for="input01" class="control-label">New Project Name</label>
+					<div class="controls">
+						<input value="{{project.name}}" name="name" id="name" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="32" type="text">		
+						<p class="help-block"></p>				
+					</div>
+				</div>
+			</fieldset>
+			{% if method == 'POST' %}
+	    	<input type="hidden" value="/rundb/api/v1/user/{{user.id}}/" name="creator" id="creator" >
+	    	{% endif %}			
+		</form>				
+	</div>
+	<div class="modal-footer">
+	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+	    <a class="btn btn-primary" href="#">Save</a>
+	</div>
+	
+<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+  <script type="text/javascript">
+    $('#modal_project_details_form').uniform({
+	    holder_class : 'control-group'
+	    , msg_selector: 'p.help-block'
+	    , error_class : 'alert alert-error'
+    });
+    uniq = {{otherList|safe}};
+  
+		$('#modal_project_details').on('hidden', function () {
+    		$('body #modal_project_details').remove();
+   		});		
+		$('#modal_project_details_form').submit(function(e){
+			e.preventDefault();
+			return false;
+		});
+	
+		$('#modal_project_details .btn-primary').click(function(e) {
+			var that = this;
+			e.preventDefault();
+
+			if ($("#modal_project_details_form *").hasClass("error")) {
+		    $("#modal_project_details_form").animate({scrollTop : 0}, "slow");
+		    $(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
+		    return false;
+	    }			
+			
+			console.log($('#modal_project_details_form').serializeArray());
+			var json = $('#modal_project_details_form').serializeJSON()
+				, url = $('#modal_project_details_form').attr('action')
+				, type = '{{method}}';
+				
+			if ($('#modal_project_details_form').attr('method') == "POST") {
+				json.results = []
+			}
+			json = JSON.stringify(json);
+				
+			console.log('transmitting :', type, url, json );
+			// data2 = JSON.stringfy(data);
+	   		var jqxhr = $.ajax(url, {  
+	   						 type: type
+	   						, data: json
+	   						, contentType: 'application/json'
+	   						, dataType: 'json'
+	   						, processData: false
+			    }).done(function(data) { 
+			    	console.log("success:",  data);
+			    	var id;
+			    	if(type=='POST'){
+			    	  url = jqxhr.getResponseHeader('Location');
+			    	  var urlsplit = url.split('/');		
+			    	  id = urlsplit[urlsplit.length - 2];
+			    	}  
+			    	else{
+			    	  id = "{{id}}";
+			    	}  
+  	    	  $.post("/data/project/"+id+"/log/", {type: type, url: url});	
+			    	$(that).trigger('modal_project_details_done', {values: e.values});
+			    	$('#modal_project_details').modal("hide");			    	
+		    	})
+			    .fail(function(data) {
+			    	$('#modal-error-messages').empty();
+			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+			    	console.log("error:", data);
+			    	 
+			    })
+			    .always(function(data) { /*console.log("complete:", data);*/ });
+		});
+	    // $.ajax($('#modal_project_details_form').attr('action'), params, 
+	        // function(data) {                  
+	          // alert(data);
+	          // return false;
+	        // }
+	    // );	
+	</script>
+</div>
+

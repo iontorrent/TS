@@ -30,7 +30,6 @@ import json
 import logging
 from logging import handlers as loghandlers
 import os
-from os import path
 import re
 import socket
 import subprocess
@@ -38,30 +37,29 @@ import sys
 import threading
 import time
 import traceback
-from djangoinit import *
+import urllib
+import string
+import copy
 
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+from djangoinit import *
 from django import db
+from django.db import connection
 
 from twisted.internet import reactor
 from twisted.internet import task
 from twisted.web import xmlrpc,server
 
 from iondb.rundb import models
-from django.db import connection
-    
-import logregexp as lre
-import urllib
-import string
+from ion.utils.explogparser import load_log
+from ion.utils.explogparser import parse_log
+from iondb.utils.crawler_utils import getFlowOrder
+from iondb.utils.crawler_utils import folder_mtime
+from iondb.utils.crawler_utils import tdelt2secs
 
-__version__ = filter(str.isdigit, "$Revision: 30068 $")
+__version__ = filter(str.isdigit, "$Revision: 42009 $")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
-ENTRY_RE = re.compile(r'^(?P<name>[^:]+)[:](?P<value>.*)$')
-CLEAN_RE = re.compile(r'\s|[/]+')
-TIMESTAMP_RE = models.Experiment.PRETTY_PRINT_RE
 
 
 # TODO: these are defined in backup.py as well.  Needs to be consolidated.
@@ -73,12 +71,6 @@ RUN_STATUS_SYS_CRIT = "Lost Chip Connection"
 
 DO_THUMBNAIL=True
 
-def tdelt2secs(td):
-    """Convert a ``datetime.timedelta`` object into a floating point
-    number of seconds."""
-    day_seconds = float(td.days*24*3600)
-    ms_seconds = float(td.microseconds)/1000000.0
-    return  day_seconds + float(td.seconds) + ms_seconds
 
 class CrawlLog(object):
     """``CrawlLog`` objects store and log metadata about the main crawl loop.
@@ -101,7 +93,7 @@ class CrawlLog(object):
         self.errors.propagate = False
         self.errors.setLevel(logging.INFO)
         try:
-            fname = path.join(self.PRIVILEGED_BASE,self.BASE_LOG_NAME)
+            fname = os.path.join(self.PRIVILEGED_BASE,self.BASE_LOG_NAME)
             infile = open(fname, 'a')
             infile.close()
         except IOError:
@@ -202,168 +194,26 @@ class Status(xmlrpc.XMLRPC):
             self.logger.errors.error(traceback.format_exc())
             return "Failed to auto-generate Paired-End Report name"
         
-        return generate_http_post_PE(exp,pe_forward,pe_reverse,autoReportName)
+        status_msg = generate_http_post_PE(exp,pe_forward,pe_reverse,autoReportName,fwd_name,rev_name)
+        return status_msg
 
-ENTRY_MAP = {
-    "gain": lre.float_parse,
-    "datacollect_version": lre.int_parse,
-    "liveview_version": lre.int_parse,
-    "firmware_version": lre.int_parse,
-    "fpga_version": lre.int_parse,
-    "driver_version": lre.int_parse,
-    "script_version": lre.dot_separated_parse,
-    "board_version": lre.int_parse,
-    "kernel_build": lre.kernel_parse,
-    "prerun": lre.yn_parse,
-    # TODO: Enumerate things that will break if this is changed
-    # It is used to parse job files produced by the PGM, yes?
-    "cycles": lre.int_parse,
-    "livechip": lre.yn_parse,
-    "continuous_clocking": lre.yn_parse,
-    "auto_cal": lre.yn_parse,
-    "frequency": lre.int_parse,
-    "oversample": lre.oversample_parse,
-    "frame_time": lre.float_parse,
-    "num_frames": lre.int_parse,
-    "autoanalyze": lre.yn_parse,
-    "dac": lre.dac_parse,
-    "cal_chip_hist": lre.space_separated_parse,
-    "cal_chip_high_low_inrange": lre.cal_range_parse,
-    "prebeadfind": lre.yn_parse,
-    "flows": lre.int_parse,
-    "analyzeearly": lre.yn_parse,
-#    "chiptype": lre.chip_parse,    
-}
 
-def load_log(folder,logName):
-    """Retrieve the contents of the experiment log found in ``folder``,
-    or return ``None`` if no log can be found."""
-    fname = path.join(folder, logName)
-    if path.isfile(fname):
-        infile = None
-        try:
-            infile = open(fname)
-            text = infile.read()
-        except IOError:
-            text = None
-        finally:
-            if infile is not None:
-                infile.close()
-    else:
-        text = None
-    return text
-
-def folder_mtime(folder):
-    """Determine the time at which the experiment was performed. In order
-    to do this reliably, ``folder_mtime`` tries the following approaches,
-    and returns the result of the first successful approach:
-    
-    #. Parse the name of the folder, looking for a YYYY_MM_DD type
-       timestamp
-    #. ``stat()`` the folder and return the ``mtime``.
-    """
-    match = TIMESTAMP_RE.match(path.basename(folder))
-    if match is not None:
-        dt = datetime.datetime(*map(int,match.groups(1)))
-        return dt
-    else:
-        acqfnames = glob.glob(path.join(folder, "*.acq"))
-        if len(acqfnames) > 0:
-            fname = acqfnames[0]
-        else:
-            fname = folder
-        stat = os.stat(fname)
-        return datetime.datetime.fromtimestamp(stat.st_mtime)
-
-def parse_log(text):
-    """Take the raw text of the experiment log, and return a dictionary
-    of the entries contained in the log, parsed into the appropriate
-    datatype.
-    """
-    def filter_non_printable(str):
-        if isinstance(str,basestring):
-            return ''.join([c for c in str if ord(c) > 31 or ord(c) == 9])
-        else:
-            return str
-    def clean_name(name):
-        no_ws = CLEAN_RE.sub("_", name)
-        return no_ws.lower()
-    def extract_entries(text):
-        ret = []
-        for line in text.split('\n'):
-            match = ENTRY_RE.match(line)
-            if match is not None:
-                d = match.groupdict()
-                ret.append((clean_name(d['name']),d['value'].strip()))
-        return ret
-    ret = {}
-    entries = extract_entries(text)
-    for name,value in entries:
-        # utf-8 replace code to ensure we don't crash on invalid characters
-        #ret[name] = ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii","ignore"))
-        ret[name] = filter_non_printable(ENTRY_MAP.get(name, lre.text_parse)(value.decode("ascii","ignore")))
-    #For the oddball repeating keyword: BlockStatus
-    #create an array of them.
-    ret['blocks'] = []
-    for line in text.split('\n'):
-        if line.startswith('BlockStatus') or line.startswith('RegionStatus') or line.startswith('TileStatus'):
-            ret['blocks'].append (line)
-    return ret
 
 def extract_rig(folder):
     """Given the name of a folder storing experiment data, return the name
     of the PGM from which the date came."""
-    return path.basename(path.dirname(folder))
+    return os.path.basename(os.path.dirname(folder))
 
 def extract_prefix(folder):
     """Given the name of a folder storing experiment data, return the
     name of the directory under which all PGMs at a given location
     store their data."""
-    return path.dirname(path.dirname(folder))
+    return os.path.dirname(os.path.dirname(folder))
 
-def getFlowOrder(rawString):
-
-    '''Parses out a nuke flow order string from entry in explog.txt of the form:
-    rawString format:  "4 0 r4 1 r3 2 r2 3 r1" or "4 0 T 1 A 2 C 3 G".'''
-
-    #Initialize return value
-    flowOrder = ''
-    
-    #Capitalize all lowercase; strip leading and trailing whitespace
-    rawString = string.upper(rawString).strip()
-    
-    # If there are no space characters, it is 'new' format
-    if rawString.find(' ') == -1:
-        flowOrder = rawString
-    else:
-        #Define translation table
-        table = {
-                "R1":'G',
-                "R2":'C',
-                "R3":'A',
-                "R4":'T',
-                "T":'T',
-                "A":'A',
-                "C":'C',
-                "G":'G'}
-        #Loop thru the tokenized rawString extracting the nukes in order and append to return string
-        for c in rawString.split(" "):
-            try:
-                flowOrder += table[c]
-            except KeyError:
-                pass
-
-    # Add a safeguard.
-    if len(flowOrder) < 4:
-        flowOrder = 'TACG'
-        
-    return flowOrder
-
-  
 def exp_kwargs(d,folder):
     """Converts the output of `parse_log` to the a dictionary of
     keyword arguments needed to create an ``Experiment`` database object. """
-    identical_fields = ("project","sample","library","cycles","flows",)
+    identical_fields = ("sample","library","cycles","flows",)
     simple_maps = (
         ("experiment_name","expName"),
         ("chiptype", "chipType"),
@@ -390,7 +240,8 @@ def exp_kwargs(d,folder):
 
     derive_attribute_list = [ "libraryKey", "reverselibrarykey", "forward3primeadapter", 
                              "reverse3primeadapter", "sequencekitname", "seqKitBarcode", 
-                             "sequencekitbarcode", "librarykitname", "librarykitbarcode"]
+                             "sequencekitbarcode", "librarykitname", "librarykitbarcode",
+                             "runMode", "selectedPlanShortID","selectedPlanGUID"]
     
     ret = {}
     for f in identical_fields:
@@ -419,14 +270,15 @@ def exp_kwargs(d,folder):
     if ret['barcodeId'].lower() == 'none':
         ret['barcodeId'] = ''
         
-    # blocked datasets are indicated by presence of BlockStatus keywords
-    if 'blockstatus' in d:
+    if len(d.get('blocks',[])) > 0:
         ret['rawdatastyle'] = 'tiled'
         ret['autoAnalyze'] = False
         for bs in d['blocks']:
-            if bs.find('thumbnail') > 0:
+            # Hack alert.  Watch how explogparser.parse_log munges these strings when detecting which one is the thumbnail entry
+            # Only thumbnail will have 0,0 as first and second element of the string.
+            if '0' in bs.split(',')[0] and '0' in bs.split(',')[1]:
                 continue
-            if auto_analyze_block(bs) or analyze_on_instrument_block(bs):
+            if auto_analyze_block(bs):
                 ret['autoAnalyze'] = True
                 logger.errors.debug ("Block Run. Detected at least one block to auto-run analysis")
                 break
@@ -441,9 +293,14 @@ def exp_kwargs(d,folder):
     if (planShortId == None or len(planShortId) == 0):
         planShortId = d.get("pending_run_short_id", '')
     
-    logger.errors.debug ("...planShortId=%s" % planShortId)
-    
-    print 'crawler: plannedRunShortId=', planShortId
+    selectedPlanGUId = d.get("planned_run_guid", '')
+                         
+    ret["selectedPlanShortID"] = planShortId
+    ret["selectedPlanGUID"] = selectedPlanGUId
+                          
+    logger.errors.debug ("...planShortId=%s; selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))
+    print 'crawler: plannedRunShortId=', planShortId        
+    print 'crawler: plannedRunGUId=', selectedPlanGUId
 
     sequencingKitName = d.get("seqkitname", '')
     if sequencingKitName != "NOT_SCANNED":
@@ -478,28 +335,226 @@ def exp_kwargs(d,folder):
     #7) If the system default somehow has no value, we'll use the library key from 
     #   PGM's advanced setup page 
 
+    isPlanFound = False
+    planObj = None
+    if selectedPlanGUId:
+        try:
+            planObj = models.PlannedExperiment.objects.get(planGUID=selectedPlanGUId)
+            isPlanFound = True
+            ret["runMode"] = planObj.runMode
+   
+            expName = d.get("experiment_name", '')
+            #fix TS-4714: fail-safe measure, mark the plan executed if instrument somehow does not mark it as executed
+            if (not planObj.planExecuted):
+                logger.errors.warn("REPAIR: marking plan %s as executed for experiment %s" % (planObj.planGUID, expName))
+                planObj.planExecuted = True
+
+            planObj.expName = expName                
+            planObj.save()
+                                
+        except models.PlannedExperiment.DoesNotExist:
+            logger.errors.warn("No plan with GUId %s found in database " % selectedPlanGUId )
+        except models.PlannedExperiment.MultipleObjectsReturned:
+            logger.errors.warn("Multiple plan with GUId %s found in database " % selectedPlanGUId)
+    else:        
+        if (planShortId and len(planShortId) > 0):  
+            try:
+                #PGM should have set the plan as executed already
+                #note: if instrument does not include plan GUID for the plan and does not mark the plan as executed,
+                #crawler will not do any repair (to mark a plan as executed) and actually indexError will likely happen
+                planObj = models.PlannedExperiment.objects.filter(planShortID=planShortId, planExecuted=True).order_by("-date")[0]
+                isPlanFound = True
+                ret["runMode"] = planObj.runMode
+   
+                planObj.expName = d.get("experiment_name", '')                
+                planObj.save()
+                               
+                logger.errors.debug("...planShortId=%s is for runMode=%s; reverse=%s" % (planShortId, planObj.runMode, planObj.isReverseRun))
+            except IndexError:
+                logger.errors.warn("No plan with short id %s found in database " % planShortId )
+
+    #v3.0 if the plan is a paired-end plan, find the parent plan. 
+    #if parent plan is found and current status is NOT "reserved", mark it as "reserved"
+    #if parent plan is found and current status is already "reserved", mark it as planExecuted
+    if isPlanFound:
+        if not planObj.parentPlan == None:
+            logger.errors.debug("crawler planObj.parentPlan.guid=%s" % (planObj.parentPlan.planGUID))
+            
+            isNeedUpdate = False
+            if (planObj.parentPlan.planStatus == "reserved"):
+                logger.errors.debug("crawler GOING TO CHECK CHILDREN... planObj.parentPlan.guid=%s" % (planObj.parentPlan.planGUID))
+                
+                isChildPlanAllDone = True
+                childPlans = planObj.parentPlan.childPlan_set.all()
+                for childPlan in childPlans:         
+                    if (childPlan.planExecuted or childPlan.planStatus == "voided"):
+                        continue
+                    else:
+                        logger.errors.debug("crawler NOT ALL child plans are DONE... planObj.parentPlan.guid=%s" % (planObj.parentPlan.planGUID))
+                        isChildPlanAllDone = False
+                
+                if isChildPlanAllDone and planObj.parentPlan.planExecuted == False:
+                    logger.errors.debug("crawler GOING TO SET PLANEXECUTED to TRUE... planObj.parentPlan.guid=%s" % (planObj.parentPlan.planGUID))
+                    planObj.parentPlan.planExecuted = "True"
+                    isNeedUpdate = True
+                
+            else:
+                planObj.parentPlan.planStatus = "reserved"
+                isNeedUpdate = True
+                
+            if isNeedUpdate:
+                logger.errors.debug("crawler GOING TO SAVE... planObj.parentPlan.guid=%s" % (planObj.parentPlan.planGUID))
+                planObj.parentPlan.save()
+            
+        else:
+            logger.errors.debug("crawler NO PARENT PLAN... planObj.name=%s" % (planObj.planName))
+    else:
+        #if user does not use a plan for the run, fetch the system default plan template, and clone it for this run
+
+        isNeedSystemDefaultTemplate = False        
+        experiment = None
+        
+        #if we have already saved the experiment to db, and is using the cloned system default plan, explog will
+        #not know that
+        try:
+            experiment = models.Experiment.objects.get(expName = d.get("experiment_name", ''))
+
+            planShortId = experiment.selectedPlanShortID
+            selectedPlanGUId = experiment.selectedPlanGUID
+ 
+            #if experiment has already been saved in db with no plan associated with it, don't bother to fix it up
+            if (planShortId == None or len(planShortId) == 0):            
+                ##don't bother to create plans for old runs that don't use plans
+                isNeedSystemDefaultTemplate = False
+            else:
+                #watch out: if the run is using a system default plan template clone, explog will not have all the info                                                        
+                ##logger.errors.info("DFLTTEST...#0 explog.planShortId=%s explog.selectedPlanGUId=%s" % (ret["selectedPlanShortID"], ret["selectedPlanGUID"]))
+
+                if (ret["selectedPlanShortID"] == planShortId):                                       
+                    ##logger.errors.info("DFLTTEST #0 exp from DB...NOTHING TO FIX... planShortId=%s selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))
+                    #this case should have been handled by the code above and should not happen here
+                    pass
+                else:
+                    ret["selectedPlanShortID"] = planShortId
+                    ret["selectedPlanGUID"] = selectedPlanGUId
+            
+                    if (selectedPlanGUId and len(selectedPlanGUId) > 0):
+                   
+                        ##logger.errors.info("DFLTTEST #1 exp from DB...planShortId=%s selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))                        
+                        try:
+                            planObj = models.PlannedExperiment.objects.get(planGUID=selectedPlanGUId)
+                            isPlanFound = True
+                            ret["runMode"] = planObj.runMode
+            
+                        except models.PlannedExperiment.DoesNotExist:
+                            logger.errors.warn("No plan with GUId %s found in database " % selectedPlanGUId )
+                        except models.PlannedExperiment.MultipleObjectsReturned:
+                            logger.errors.warn("Multiple plan with GUId %s found in database " % selectedPlanGUId)
+                    else:        
+                        if (planShortId and len(planShortId) > 0):  
+                            try:
+                                #PGM should have set the plan as executed already
+                                planObj = models.PlannedExperiment.objects.filter(planShortID=planShortId, planExecuted=True).order_by("-date")[0]
+                                isPlanFound = True
+                                ret["runMode"] = planObj.runMode
+                    
+                                ##logger.errors.info("DFLTTEST #2 exp from DB...planShortId=%s is for runMode=%s; reverse=%s" % (planShortId, planObj.runMode, planObj.isReverseRun))
+                            except IndexError:
+                                logger.errors.warn("No plan with short id %s found in database " % planShortId )
+      
+        except models.Experiment.DoesNotExist:
+            logger.errors.warn("expName: %s not yet in database and may need a sys default plan" % d.get("experiment_name", ''))   
+            
+            #fix TS-4713 if a system default has somehow been cloned for this run, don't bother to clone again
+            try:
+                sysDefaultClones = models.PlannedExperiment.objects.filter(expName = d.get("experiment_name", ''))
+                
+                if sysDefaultClones:
+                    #logger.errors.debug("SKIP cloning system default plan for %s since one already exists " % (d.get("experiment_name", '')))
+                    isNeedSystemDefaultTemplate = False
+                else:
+                    isNeedSystemDefaultTemplate = True
+            except:
+                logger.errors.warn(traceback.format_exc())                
+                isNeedSystemDefaultTemplate = False
+        except models.Experiment.MultipleObjectsReturned:
+            #this should not happen since instrument assign uniques run name. But if it happens, don't bother to apply the
+            #system default plan template to the experiment 
+            logger.errors.warn("multiple expName: %s found in database" % d.get("experiment_name", ''))        
+            isNeedSystemDefaultTemplate = False            
+            
+ 
+        if isNeedSystemDefaultTemplate == True:
+            try:
+                systemDefaultPlanTemplate = models.PlannedExperiment.objects.filter(isReusable=True, isSystem=True, isSystemDefault=True).order_by("-date")[0]
+            
+                planObj = copy.copy(systemDefaultPlanTemplate)
+                planObj.pk = None
+                planObj.planGUID = None
+                planObj.planShortID = None
+                planObj.isReusable = False
+                planObj.isSystem = False
+                planObj.isSystemDefault = False
+
+                #fix TS-4664: include experiment name to system default clone
+                expName = d.get("experiment_name", '')
+                planObj.planName = "CopyOfSystemDefault_" +  expName
+                planObj.expName = expName
+                
+                planObj.planExecuted = True
+
+                planObj.save()
+
+                #clone the qc thresholds as well
+                qcValues = systemDefaultPlanTemplate.plannedexperimentqc_set.all()
+                
+                for qcValue in qcValues:
+                    qcObj  = copy.copy(qcValue)
+
+                    qcObj.pk = None
+                    qcObj.plannedExperiment = planObj
+                    qcObj.save()
+                    
+                planShortId = planObj.planShortID
+                selectedPlanGUId = planObj.planGUID
+                ret["selectedPlanShortID"] = planShortId
+                ret["selectedPlanGUID"] = selectedPlanGUId
+            
+                logger.errors.info("crawler AFTER SAVING SYSTEM DEFAULT CLONE %s for experiment=%s;"  % (planObj.planName, expName))                                  
+                isPlanFound = True
+                ret["runMode"] = planObj.runMode
+                
+            except IndexError:
+                logger.errors.warn("No system default plan template found in database ")
+            except:
+                logger.errors.warn(traceback.format_exc())
+                logger.errors.warn("Error in trying to use system default plan template for experiment=%s" % (d.get("experiment_name", '')))        
+
+
+    # planObj is initialized as None, which is an acceptable foreign key value
+    # for Experiment.plan; however, by this point, we have either found a plan
+    # or created one from the default plan template, so there should be a plan
+    # and in all three cases, None, found plan, and default plan, we're ready 
+    # to commit the plan object to the Experiment.plan foreign key relationship.
+    ret["plan"] = planObj
+
     isReverseRun = d.get("isreverserun", '')
     
     #if PGM is running the old version, there is no isReverseRun in explog.txt. Check the plan if used
     if not isReverseRun:
-        if (planShortId and len(planShortId) > 0):  
-            try:
-                planObj = models.PlannedExperiment.objects.get(planShortID=planShortId)
-                if planObj.isReverseRun:
-                    isReverseRun = "Yes"
-                else:
-                    isReverseRun = "No"
+        if isPlanFound:
+            if planObj.isReverseRun:
+                isReverseRun = "Yes"
+            else:
+                isReverseRun = "No"
 
-                logger.errors.info ("...planShortId=%s is for reverse=%s" % (planShortId, isReverseRun))
-            except models.PlannedExperiment.DoesNotExist:
-                logger.errors.warn("No plan with short id %s found in database " % planShortId )
-            except models.PlannedExperiment.MultipleObjectsReturned:
-                logger.errors.warn("Multiple plan with short id %s found in database " % planShortId)
-                                
     if isReverseRun == "Yes":
         ret['isReverseRun'] = True
         ret['reverselibrarykey'] = ''
-        
+
+        if isPlanFound == False:
+            ret["runMode"] = "pe"
+            
         try:
             defaultReverseLibraryKey = models.LibraryKey.objects.get(direction='Reverse', isDefault=True)
             defaultReverse3primeAdapter = models.ThreePrimeadapter.objects.get(direction='Reverse', isDefault=True)
@@ -535,42 +590,40 @@ def exp_kwargs(d,folder):
                 ret['reverselibrarykey'] = defaultReverseLibraryKey.sequence
                 
             ret['reverse3primeadapter'] = defaultReverse3primeAdapter.sequence
-            
-            if (planShortId and len(planShortId) > 0):  
-                planObj = models.PlannedExperiment.objects.get(planShortID=planShortId)
-                if planObj is not None:
-                    #logger.errors.debug("...REVERSE plan is FOUND for planShortId=%s " % planShortId)
+
+            if isPlanFound:
+                #logger.errors.debug("...REVERSE plan is FOUND for planShortId=%s " % planShortId)
                     
-                    if planObj.reverselibrarykey:
-                        #logger.errors.debug("...Plan used for reverse run. Use plan library key=%s " % planObj.reverselibrarykey)
+                if planObj.reverselibrarykey:
+                    #logger.errors.debug("...Plan used for reverse run. Use plan library key=%s " % planObj.reverselibrarykey)
     
-                        ret['reverselibrarykey'] = planObj.reverselibrarykey
+                    ret['reverselibrarykey'] = planObj.reverselibrarykey
+                else:
+                    if hasPassed:
+                        #logger.errors.debug("...Plan used for reverse run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
+    
+                        ret['reverselibrarykey'] = validatedPgmLibraryKey.sequence
                     else:
-                        if hasPassed:
-                            #logger.errors.debug("...Plan used for reverse run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
+                        #logger.errors.debug("...Plan used for reverse run. Use default library key=%s " % defaultReverseLibraryKey.sequence)
     
-                            ret['reverselibrarykey'] = validatedPgmLibraryKey.sequence
-                        else:
-                            #logger.errors.debug("...Plan used for reverse run. Use default library key=%s " % defaultReverseLibraryKey.sequence)
-    
-                            ret['reverselibrarykey'] = defaultReverseLibraryKey.sequence
+                        ret['reverselibrarykey'] = defaultReverseLibraryKey.sequence
                         
                     if planObj.reverse3primeadapter:
                         ret['reverse3primeadapter'] = planObj.reverse3primeadapter
                     else:
-                        ret['reverse3primeadapter'] = defaultReverse3primeAdapter.sequence
-                        
+                        ret['reverse3primeadapter'] = defaultReverse3primeAdapter.sequence                    
+                         
+            else:
+                if hasPassed:
+                    #logger.errors.debug("...Plan used but not on db for reverse run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
+    
+                    ret['reverselibrarykey'] = validatedPgmLibraryKey.sequence
                 else:
-                    if hasPassed:
-                        #logger.errors.debug("...Plan used but not on db for reverse run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
-    
-                        ret['reverselibrarykey'] = validatedPgmLibraryKey.sequence
-                    else:
-                        logger.errors.debug("...Plan used but not on db for reverse run. Use default library key=%s " % defaultReverseLibraryKey.sequence)
+                    logger.errors.debug("...Plan used but not on db for reverse run. Use default library key=%s " % defaultReverseLibraryKey.sequence)
                         
-                        ret['reverselibrarykey'] = defaultReverseLibraryKey.sequence
+                    ret['reverselibrarykey'] = defaultReverseLibraryKey.sequence
     
-                    ret['reverse3primeadapter'] = defaultReverse3primeAdapter.sequence
+                ret['reverse3primeadapter'] = defaultReverse3primeAdapter.sequence
                  
             #this should never happen                 
             if ret['reverselibrarykey']== None or len(ret['reverselibrarykey']) == 0:
@@ -580,7 +633,7 @@ def exp_kwargs(d,folder):
         except models.LibraryKey.DoesNotExist:
             logger.errors.warn("No default reverse library key in database for experiment %s" % ret['expName'])
             return ret, False
-        except models.Experiment.MultipleObjectsReturned:
+        except models.LibraryKey.MultipleObjectsReturned:
             logger.errors.warn("Multiple default reverse library keys found in database for experiment %s" % ret['expName'])
             return ret, False
         except models.ThreePrimeadapter.DoesNotExist:
@@ -589,12 +642,6 @@ def exp_kwargs(d,folder):
         except models.ThreePrimeadapter.MultipleObjectsReturned:
             logger.errors.warn("Multiple default reverse 3' adapters found in database for experiment %s" % ret['expName'])
             return ret, False
-        except models.PlannedExperiment.DoesNotExist:
-            logger.errors.warn("No plan with short id %s found in database " % planShortId )
-            #use default if plan is not found
-        except models.PlannedExperiment.MultipleObjectsReturned:
-            logger.errors.warn("Multiple plan with short id %s found in database " % planShortId)
-            return ret, False                    
         except:
             logger.errors.warn("Experiment %s" % ret['expName'])
             logger.errors.warn(traceback.format_exc())
@@ -602,7 +649,21 @@ def exp_kwargs(d,folder):
     else:
         ret['isReverseRun'] = False
         ret['libraryKey'] = ''
+        
+        if isPlanFound == False:
+            ret["runMode"] = "single"
+        
+        defaultPairedEndForward3primeAdapter = None
+        try:
+            #Note: In v3.0, plan has concept of "runMode". 
+            #TS-4524: allow crawler to be more tolerant, especially PE 3' adapter is only used for PE run
+            defaultPairedEndForward3primeAdapter = models.ThreePrimeadapter.objects.get(direction="Forward", name__iexact = "Ion Paired End Fwd")
             
+        except models.ThreePrimeadapter.DoesNotExist:
+            logger.errors.warn("No default pairedEnd forward 3' adapter in database for experiment %s" % ret['expName'])
+        except models.ThreePrimeadapter.MultipleObjectsReturned:
+            logger.errors.warn("Multiple default pairedEnd forward 3' adapters found in database for experiment %s" % ret['expName'])
+
         try:
             #NOTE: In v2.2, there is no way to tell if a run (aka an experiment) is part of a paired-end forward run or not
             defaultForwardLibraryKey = models.LibraryKey.objects.get(direction='Forward', isDefault=True)
@@ -642,42 +703,45 @@ def exp_kwargs(d,folder):
                 
             ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence     
                     
-            if (planShortId and len(planShortId) > 0):  
-                planObj = models.PlannedExperiment.objects.get(planShortID=planShortId)
-                if planObj is not None:
-    
-                    #logger.errors.debug("...FORWARD plan is FOUND for planShortId=%s " % planShortId)
+            if isPlanFound:
+                #logger.errors.debug("...FORWARD plan is FOUND for planShortId=%s " % planShortId)
                                     
-                    if planObj.libraryKey:
-                        #logger.errors.debug("...Plan used for forward run. Use plan library key=%s " % planObj.libraryKey)
+                if planObj.libraryKey:
+                    #logger.errors.debug("...Plan used for forward run. Use plan library key=%s " % planObj.libraryKey)
     
-                        ret['libraryKey'] = planObj.libraryKey
-                    else:
-                        if hasPassed:
-                            #logger.errors.debug("...Plan used for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
-    
-                            ret['libraryKey'] = validatedPgmLibraryKey.sequence
-                        else:
-                            #logger.errors.debug("...Plan used for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
-    
-                            ret['libraryKey'] = defaultForwardLibraryKey.sequence
-                        
-                    if planObj.forward3primeadapter:
-                        ret['forward3primeadapter'] = planObj.forward3primeadapter
-                    else:
-                        ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
-    
+                    ret['libraryKey'] = planObj.libraryKey
                 else:
                     if hasPassed:
-                        #logger.errors.debug("...Plan used but not on db for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
+                        #logger.errors.debug("...Plan used for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
     
                         ret['libraryKey'] = validatedPgmLibraryKey.sequence
                     else:
-                        #logger.errors.debug("...Plan used but not on db for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
-                        
-                        ret['libraryKey'] = defaultForwardLibraryKey.sequence
+                        #logger.errors.debug("...Plan used for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
     
-                    ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
+                        ret['libraryKey'] = defaultForwardLibraryKey.sequence
+                        
+                if planObj.forward3primeadapter:
+                    ret['forward3primeadapter'] = planObj.forward3primeadapter
+                else:
+                    if (planObj.runMode == "pe"):
+                        if defaultPairedEndForward3primeAdapter:
+                            ret['forward3primeadapter'] = defaultPairedEndForward3primeAdapter.sequence
+                        else:
+                            ret['forward3primeadapter'] = ""
+                    else:
+                        ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
+            else:
+                if hasPassed:
+                    #logger.errors.debug("...Plan used but not on db for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
+    
+                    ret['libraryKey'] = validatedPgmLibraryKey.sequence
+                else:
+                    #logger.errors.debug("...Plan used but not on db for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
+                        
+                    ret['libraryKey'] = defaultForwardLibraryKey.sequence
+    
+                ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
+                
                         
             if ret['libraryKey'] == None or ret['libraryKey'] == "":
                 #logger.errors.debug("...A library key cannot be determined for this FORWARD run  Use PGM default. ")
@@ -686,7 +750,7 @@ def exp_kwargs(d,folder):
         except models.LibraryKey.DoesNotExist:
             logger.errors.warn("No default forward library key in database for experiment %s" % ret['expName'])
             return ret, False
-        except models.Experiment.MultipleObjectsReturned:
+        except models.LibraryKey.MultipleObjectsReturned:
             logger.errors.warn("Multiple default forward library keys found in database for experiment %s" % ret['expName'])
             return ret, False
         except models.ThreePrimeadapter.DoesNotExist:
@@ -694,26 +758,20 @@ def exp_kwargs(d,folder):
             return ret, False
         except models.ThreePrimeadapter.MultipleObjectsReturned:
             logger.errors.warn("Multiple default forward 3' adapters found in database for experiment %s" % ret['expName'])
-            return ret, False 
-        except models.PlannedExperiment.DoesNotExist:
-            logger.errors.warn("No plan with short id %s found in database " % planShortId)
-            #use default if plan is not found
-        except models.PlannedExperiment.MultipleObjectsReturned:
-            logger.errors.warn("Multiple plan with short id %s found in database " % planShortId)
-            return ret, False                      
+            return ret, False                 
         except:
             logger.errors.warn("Experiment %s" % ret['expName'])
             logger.errors.warn(traceback.format_exc())
             return ret, False
                  
     # Limit input sizes to defined field widths in models.py
-    ret['notes'] = ret['notes'][:128]
+    ret['notes'] = ret['notes'][:1024]
     ret['expDir'] = ret['expDir'][:512]
     ret['expName'] = ret['expName'][:128]
     ret['pgmName'] = ret['pgmName'][:64]
     ret['unique'] = ret['unique'][:512]
     ret['storage_options'] = ret['storage_options'][:200]
-    ret['project'] = ret['project'][:64]
+ #   ret['project'] = ret['project'][:64]
     ret['sample'] = ret['sample'][:64]
     ret['library'] = ret['library'][:64]
     ret['chipBarcode'] = ret['chipBarcode'][:64]
@@ -732,6 +790,9 @@ def exp_kwargs(d,folder):
     ret['sequencekitbarcode'] = ret['sequencekitbarcode'][:512]
     ret['librarykitname'] = ret['librarykitname'][:512]    
     ret['librarykitbarcode'] = ret['librarykitbarcode'][:512]
+    ret['runMode'] = ret['runMode'][:64]
+    ret['selectedPlanShortID'] = ret['selectedPlanShortID'][:5]
+    ret['selectedPlanGUID'] = ret['selectedPlanGUID'][:512]
 
     logger.errors.debug("For experiment %s" % ret['expName'])        
     logger.errors.debug("...Ready to save run: isReverseRun=%s;" % ret['isReverseRun'])
@@ -790,13 +851,13 @@ def construct_crawl_directories(logger):
         l = fs.location
         rigs = models.Rig.objects.filter(location=l)
         for r in rigs:
-            rig_folder = path.join(fs.filesPrefix,r.name)
-            if path.exists(rig_folder):
+            rig_folder = os.path.join(fs.filesPrefix,r.name)
+            if os.path.exists(rig_folder):
                 try:
                     subdir_bases = os.listdir(rig_folder)
                     # create array of paths for all directories in Rig's directory
-                    s1 = [path.join(rig_folder,subd) for subd in subdir_bases]
-                    s2 = [subd for subd in s1 if path.isdir(subd)]
+                    s1 = [os.path.join(rig_folder,subd) for subd in subdir_bases]
+                    s2 = [subd for subd in s1 if os.path.isdir(subd)]
                     # create array of paths of not complete ftp transfer only
                     s3 = [subd for subd in s2 if dbase_isComplete(subd) == False]
                     ret.extend(s3)
@@ -809,11 +870,11 @@ def get_percent(exp):
     """get the percent complete to make a progress bar on the web interface"""
     
     def filecount(dir_name):
-        return len(glob.glob(path.join(dir_name, "acq*.dat")))
+        return len(glob.glob(os.path.join(dir_name, "acq*.dat")))
         
     if 'tiled' in exp.rawdatastyle:
         #N.B. Hack - we check ftp status of thumbnail data only
-        expDir = path.join(exp.expDir,'thumbnail')
+        expDir = os.path.join(exp.expDir,'thumbnail')
     else:
         expDir = exp.expDir
         
@@ -843,7 +904,8 @@ def get_name_from_json(exp, key, thumbnail_analysis):
     twig = ''
     if thumbnail_analysis:
         twig = '_tn'
-    if not name:
+    # also ignore name if it has the string value "None"
+    if not name or name == "None":
         return 'Auto_%s_%s%s' % (exp.pretty_print(),exp.pk,twig)
     else:
         return '%s_%s%s' % (str(name),exp.pk,twig)
@@ -870,7 +932,7 @@ def getForwardReport(experiment):
     
     #Get any Experiments, other than this one, with identical chipBarcode
     #Order by PK if there are multiple returns
-    pe_experiments = models.Experiment.objects.filter(chipBarcode=chipBarcode).order_by('pk').exclude(expName__exact=experiment.expName)
+    pe_experiments = models.Experiment.objects.filter(chipBarcode__iexact=chipBarcode,isReverseRun=False).order_by('pk').exclude(expName__exact=experiment.expName)
     num_experiments = len(pe_experiments)
     logger.errors.debug("Num other experiments with same chipBarcode: %d" % num_experiments)
     
@@ -897,13 +959,20 @@ def getForwardReport(experiment):
     
     return name
 
-def generate_http_post_PE(exp,f,r,autoReportName):
+def generate_http_post_PE(exp,f,r,autoReportName,fwd_name,rev_name):
     '''Wrapper function which will trigger Paired-End Analysis pipeline execution.
     exp is Experiment object, f is forward run Report name, r is reverse run Report name'''
     
-    return generate_http_post(exp,thumbnail_analysis=False,pe_forward=f,pe_reverse=r,report_name=autoReportName)
+    fwd = models.Results.objects.get(resultsName = fwd_name)  
+    rev = models.Results.objects.get(resultsName = rev_name)
+    fwd_projects = [p.name for p in fwd.projects.all()]
+    rev_projects = [p.name for p in rev.projects.all()]      
+    projects = ','.join(set(fwd_projects+rev_projects))   
+    
+    status_msg = generate_http_post(exp,projects, thumbnail_analysis=False,pe_forward=f,pe_reverse=r,report_name=autoReportName)
+    return status_msg
 
-def generate_http_post(exp,thumbnail_analysis=False,pe_forward="",pe_reverse="",report_name=""):
+def generate_http_post(exp,projectName,thumbnail_analysis=False,pe_forward="",pe_reverse="",report_name=""):
     def get_default_command(chipName):
         gc = models.GlobalConfig.objects.all()
         ret = None
@@ -914,17 +983,16 @@ def generate_http_post(exp,thumbnail_analysis=False,pe_forward="",pe_reverse="",
             ret = 'Analysis'
         # Need to also get chip specific arguments from dbase
         #print "chipType is %s" % chipName
-        chips = models.Chip.objects.all()
-        for chip in chips:
-            if chip.name in chipName:
-                ret = ret + " " + chip.args
-        return ret
+        chip_args = models.Chip.objects.filter(name__contains=chipName).exclude(args='').values_list('args', flat=True)
+        return ' '.join([ret] + list(chip_args))
 
     try:
-        basecallerArgs = models.GlobalConfig.objects.all().order_by('pk')[0]
-        basecallerArgs = basecallerArgs.basecallerargs
+        GC = models.GlobalConfig.objects.all().order_by('pk')[0]
+        basecallerArgs = GC.basecallerargs
+        base_recalibrate = GC.base_recalibrate
     except models.GlobalConfig.DoesNotExist:
         basecallerArgs = "BaseCaller"
+        base_recalibrate = False
 
     if pe_forward == "":
         pe_forward = getForwardReport(exp)
@@ -932,7 +1000,7 @@ def generate_http_post(exp,thumbnail_analysis=False,pe_forward="",pe_reverse="",
         pe_reverse = "None"
     if report_name == "":
         report_name = get_name_from_json(exp,'autoanalysisname',thumbnail_analysis)
-        
+
     params = urllib.urlencode({'report_name':report_name,
                             'tf_config':'',
                             'path':exp.expDir,
@@ -941,21 +1009,23 @@ def generate_http_post(exp,thumbnail_analysis=False,pe_forward="",pe_reverse="",
                             'submit': ['Start Analysis'],
                             'do_thumbnail':"%r" % thumbnail_analysis,
                             'forward_list':pe_forward,
-                            'reverse_list':pe_reverse})
+                            'reverse_list':pe_reverse,
+                            'project_names':projectName,
+                            'do_base_recal':base_recalibrate})
     #logger.errors.debug (params)
     headers = {"Content-type": "text/html",
                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
     
     status_msg = "Generated POST"
     try:
-        f = urllib.urlopen('http://%s/rundb/newanalysis/%s/0' % (settings.QMASTERHOST, exp.pk), params)
+        f = urllib.urlopen('http://127.0.0.1/rundb/newanalysis/%s/0' % (exp.pk), params)
         response = f.read()
         #logger.errors.debug(response)
     except:
         logger.errors.error('could not autostart %s' % exp.expName)
         logger.errors.error(traceback.format_exc())
         try:
-            f = urllib.urlopen('https://%s/rundb/newanalysis/%s/0' % (settings.QMASTERHOST, exp.pk), params)
+            f = urllib.urlopen('https://127.0.0.1/rundb/newanalysis/%s/0' % (exp.pk), params)
             response = f.read()
             #logger.errors.debug(response)
         except:
@@ -989,15 +1059,15 @@ def usedPostBeadfind(exp):
 def check_for_file(expDir, filelookup):
     """Check if ``filelookup`` has been FTP'd before adding the
     experiment to the database."""
-    return path.exists(path.join(expDir,filelookup))
+    return os.path.exists(os.path.join(expDir,filelookup))
 
 def check_for_abort(expDir, filelookup):
     """Check if run has been aborted by the user"""
     # parse explog_final.txt
     try:
-        f = open(path.join(expDir,filelookup), 'r')
+        f = open(os.path.join(expDir,filelookup), 'r')
     except:
-        print "Error opening file: ", path.join(expDir,filelookup)
+        print "Error opening file: ", os.path.join(expDir,filelookup)
         return False
     
     #search for the line we need
@@ -1016,9 +1086,9 @@ def check_for_critical(exp, filelookup):
     """Check if run has been aborted by the PGM software"""
     # parse explog_final.txt
     try:
-        f = open(path.join(exp.expDir,filelookup), 'r')
+        f = open(os.path.join(exp.expDir,filelookup), 'r')
     except:
-        print "Error opening file: ", path.join(exp.expDir,filelookup)
+        print "Error opening file: ", os.path.join(exp.expDir,filelookup)
         return False
     
     #search for the line we need
@@ -1081,7 +1151,7 @@ def check_for_completion(exp):
         
         if 'tiled' in exp.rawdatastyle:
             #N.B. Hack - we check status of thumbnail data only
-            expDir = path.join(exp.expDir,'thumbnail')
+            expDir = os.path.join(exp.expDir,'thumbnail')
         else:
             expDir = exp.expDir
             
@@ -1119,26 +1189,12 @@ def auto_analyze_block(blockstatus):
         logger.errors.error(traceback.format_exc())
         flag = False
     return flag
-    
-def analyze_on_instrument_block(blockstatus):
-    '''blockstatus is the string from explog.txt starting with keyword BlockStatus.
-    Evaluates the oninst flag.
-    Returns boolean True when argument is 1'''
-    try:
-        arg = blockstatus.split(',')[8].strip()
-        flag = int(arg.split(':')[1]) == 1
-    except:
-        # TODO: change this to warn or error once instrumente code is writing the oninst argument.
-        #logger.errors.debug(traceback.format_exc())
-        flag = False
-    return flag
 
-def get_block_subdir(blockstatus):
+def get_block_subdir(blockdata):
     '''blockstatus is the string from explog.txt starting with keyword BlockStatus.
     Evaluates the X and Y arguments.
     Returns string containing rawdata subdirectory'''
     try:
-        blockdata = blockstatus.split(':')[1].strip()
         blockx = blockdata.split(',')[0].strip()
         blocky = blockdata.split(',')[1].strip()
         subdir = "%s_%s" % (blockx,blocky)
@@ -1159,30 +1215,7 @@ def ready_to_process(exp):
     
     # Process block raw data
     if 'tiled' in exp.rawdatastyle:
-        for bs in data['blocks']:
-            if bs.find('thumbnail') > 0:
-                continue
-            if analyze_early_block(bs):
-                # This block wants early analysis;
-                if analyze_on_instrument_block(bs):
-                    # This block will analyze on-instrument
-                    readyToStart = True
-                else:
-                    # This block will analyze off-instrument
-                    # test for valid data
-                    subdir = os.path.join(exp.expDir,get_block_subdir(bs))
-                    if raw_data_exists(subdir):
-                        # If all subdirs are ready, this will remain True at exit
-                        logger.errors.debug("Ready on %s" % subdir)
-                        readyToStart = True
-                    else:
-                        # cannot start analysis - no valid data here
-                        logger.errors.debug("Waiting on %s" % subdir)
-                        readyToStart = False
-                        break
-            else:
-                # This block is not designated for early analysis
-                pass
+        readyToStart = True
     
     # Process single image dataset    
     else:
@@ -1191,66 +1224,40 @@ def ready_to_process(exp):
             
     return readyToStart
 
-def raw_data_exists(dir):
-    '''Checks if raw data files exist yet or subdirectories exist yet (Block data runs)'''
-    
-    if not os.path.isdir(dir):
-        logger.errors.warn("Invalid directory: %s" % dir)
-        return False
-    
-    # Method: check for the first flow file: acq_0000.dat
-    # Case of 31x series chips where all data is in one directory
-    # try/catch prtoects against permission errors
-    try:
-        if 'acq_0000.dat' in os.listdir(dir):
-            logger.errors.debug("We found acq_0000.dat file")
-            return True
-    except:
-        logger.errors.error(traceback.format_exc())
-        return False
-    
-    # Method: check for any subdirectory, if so, then true
-    try:
-        subdir = [name for name in os.listdir(dir) if os.path.isdir(os.path.join(dir, name))]
-        if len(subdir) > 0:
-            logger.errors.debug("We found a subdirectory")
-            return True
-    except:
-        logger.errors.error(traceback.format_exc())
-        return False
-    
-    return False
-
 def ready_to_process_thumbnail(exp):
-    
+
     if 'tiled' in exp.rawdatastyle:
-        for bs in exp.log['blocks']:
-            if bs.find('thumbnail') > 0:
-                if analyze_early_block(bs):
-                    #logger.errors.info ("Request to analyze-early thumbnail analysis")
-                    # Determine if thumbnail directory exists - sufficient to start analysis
-                    if os.path.exists(os.path.join(exp.expDir,'thumbnail')):
-                        return True
-    
+        if os.path.exists(os.path.join(exp.expDir,'thumbnail')):
+            return True
+
     return False
 
 def autorun_thumbnail(exp):
 
     if 'tiled' in exp.rawdatastyle:
+        #support for old format
         for bs in exp.log['blocks']:
             if bs.find('thumbnail') > 0:
                 arg = bs.split(',')[4].strip()
                 if int(arg.split(':')[1]) == 1:
                     #logger.errors.info ("Request to auto-run thumbnail analysis")
                     return True
-        
+        #support new format
+        try:
+            thumb = exp.log['thumbnail_000']
+            logger.errors.info("THUMB: %s" % thumb)
+            if thumb.find('AutoAnalyze:1'):
+                return True
+        except:
+            pass
     return False
 
 def crawl(folders,logger):
     """Crawl over ``folders``, reporting information to the ``CrawlLog``
     ``logger``."""
-    logger.errors.info("checking %d directories" % len(folders))
-    
+    if folders:
+        logger.errors.info("checking %d directories" % len(folders))
+
     for f in folders:
         text = load_log(f,LOG_BASENAME)
         logger.errors.debug("checking directory %s" % f)
@@ -1259,22 +1266,16 @@ def crawl(folders,logger):
         #------------------------------------
         if text is not None:
             
-            #-----------------------------------
-            # Check for valid raw data
-            #-----------------------------------
-            if raw_data_exists(f) is False:
-                logger.errors.debug ("Waiting for data...Experiment not added")
-                continue
-            
             logger.current_folder = f
             d = parse_log(text)
             kwargs, status = exp_kwargs(d,f)
             
             if (status == True):
                 exp = exp_from_kwargs(kwargs, logger, False)
+                projectName = d.get('project','')   # part of explog but not a field in Experiment table
                 if exp is not None:
                     
-                    logger.errors.debug ("%s" % f)
+                    logger.errors.info ("%s" % f)
                     
                     #--------------------------------
                     # Update FTP Transfer Status
@@ -1307,7 +1308,7 @@ def crawl(folders,logger):
                             #if check_analyze_early(exp) or check_for_completion(exp):
                             if ready_to_process(exp) or check_for_completion(exp):
                                 logger.errors.info ("  Start a whole chip auto-run analysis job")
-                                generate_http_post(exp)
+                                generate_http_post(exp,projectName)
                             else:
                                 logger.errors.info ("  Do not start a whole chip auto-run job yet")
                         else:
@@ -1323,7 +1324,7 @@ def crawl(folders,logger):
                                 logger.errors.debug ("auto-run thumbnail analysis has been requested") 
                                 if ready_to_process_thumbnail(exp) or check_for_completion(exp):
                                     logger.errors.info ("  Start a thumbnail auto-run analysis job")
-                                    generate_http_post(exp,DO_THUMBNAIL)
+                                    generate_http_post(exp,projectName,DO_THUMBNAIL)
                                 else:
                                     logger.errors.info ("  Do not start a thumbnail auto-run job yet")
                             else:
@@ -1335,7 +1336,7 @@ def crawl(folders,logger):
                 else:
                     logger.errors.debug ("exp is empty")
             else:
-                logger.errors.info("Experiment is not added due to invalid experiment status from exp_kwargs. " )
+                logger.errors.warn("folder %s is not added due to invalid experiment status from exp_kwargs. " % f)
         else:
             # No explog.txt exists; probably an engineering test run
             logger.errors.debug("no %s was found in %s" % (LOG_BASENAME,f))

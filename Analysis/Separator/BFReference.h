@@ -44,11 +44,11 @@ class BFReference {
 
   /** Should this well be used as a reference? e.g. are we reasonably
       sure of no buffering due to polymerase, bead, etc. present */
-  bool IsReference(int wellIdx) const { return mWells[wellIdx] == Reference; }
+  char GetType(int wellIdx) const { return mWells[wellIdx]; }
 
   /** Should this well be used as a reference? e.g. are we reasonably
       sure of no buffering due to polymerase, bead, etc. present */
-  char GetType(int wellIdx) const { return mWells[wellIdx]; }
+  bool IsReference(int wellIdx) const { return mWells[wellIdx] == Reference; }
 
   /** Should this well be used as a reference? e.g. are we reasonably
       sure of no buffering due to polymerase, bead, etc. present */
@@ -86,6 +86,7 @@ class BFReference {
                             int rowStart, int rowEnd, int colStart, int colEnd);
 
   void FilterForOutliers(Image &bfImg, Mask &mask, float iqrThreshold, int rowStep, int colStep);
+
   /**
    * Convert row and column to single index. 
    */
@@ -114,7 +115,6 @@ class BFReference {
   void FillInRegionRef(int rStart, int rEnd, int cStart, int cEnd,
 		       std::vector<float> &metric, 
 		       double minQuantile, double maxQuantile,
-                       int numWells,
 		       std::vector<char> &wells);
 
   /**
@@ -128,8 +128,7 @@ class BFReference {
 		       std::vector<float> &metric,
 		       GridMesh<int> &grid,
 		       double minQuantile,
-		       double maxQuantile,
-                       int numWells);
+		       double maxQuantile);
   
   float GetBfMetricVal(size_t wellIdx) const { return mBfMetric[wellIdx]; }
     
@@ -139,14 +138,16 @@ class BFReference {
   bool GetDoRegional() { return mDoRegionalBgSub; }
   void SetIqrOutlierMult(float mult) { mIqrOutlierMult = mult; }
   void SetNumEmptiesPerRegion( int num ) { ION_ASSERT(num > 0, "Must specify positive number of empties.");  mNumEmptiesPerRegion = num; }
+  void SetDoSdat(bool _doSdat) { doSdat = _doSdat; }
  private:
-
+  bool LoadImage(Image &img, const std::string &fileName);
   void DebugTraces(const std::string &fileName,  Mask &mask, Image &bfImg);
   bool InSpan(size_t rowIx, size_t colIx,
 	      const std::vector<int> &rowStarts,
 	      const std::vector<int> &colStarts,
 	      int span);
   
+  bool doSdat;
   bool mDoRegionalBgSub;
   float mIqrOutlierMult;
   arma::fmat mTraces;

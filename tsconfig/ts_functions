@@ -1,13 +1,12 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-DEBUG=0
-set -e
 #---    ---#
 function print_help()
 {
     echo
     echo "Usage: TSconfig [options]"
     echo -e "\t--configure-server            Configure this server as a head node"
+    echo -e "\t--reconfigure                 Re-run Configuration steps"
     #echo -e "\t--configure-compute           Configure this server as a compute node"
     echo -e "\t--configure-pgm-support       Add support for direct connected PGMs"
     #echo -e "\t--remove-pgm-support          Remove support for raw data (PGMs)"
@@ -15,6 +14,7 @@ function print_help()
     echo -e "\t--update-torrent-suite, -s    Update Ion software packages"
     echo -e "\t--configure-timezone, -z      Set timezone."
     echo -e "\t--configure-postfix, -p       Configure postfix mailer"
+    echo -e "\t--purge-all-deb               Deletes all debian packages in apt cache directory"
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version                     Prints version"
     echo
@@ -35,13 +35,13 @@ function how_many_options ()
     if [ $CONF_COMPUTE_NODE -gt 0 ]; then ((CNT++)); fi
     #if [ $CONF_PGM_SUPPORT -gt 0 -a $CONF_HEAD_NODE -eq 0 ]; then ((CNT++)); fi
     #if [ $REMOVE_PGM_SUPPORT -gt 0 ]; then ((CNT++)); fi
-    if [ $CONF_PROXY -gt 0 ]; then ((CNT++)); fi
-    if [ $DELETE_PROXY -gt 0 ]; then ((CNT++)); fi
     if [ $UPDATE_SOFTWARE -gt 0 ]; then ((CNT++)); fi
     if [ $UPDATE_HOSTNAME -gt 0 ]; then ((CNT++)); fi
     if [ $CONF_TIME_ZONE -gt 0 ]; then ((CNT++)); fi
     if [ $CONF_POSTFIX -gt 0 ]; then ((CNT++)); fi
     if [ $UNCONF_SERVER -gt 0 ]; then ((CNT++)); fi
+    if [ $PURGE_ALL_DEB -gt 0 ]; then ((CNT++)); fi
+    if [ $RECONFIGURE -gt 0 ]; then ((CNT++)); fi
 
     echo $CNT
     return $CNT
@@ -66,16 +66,8 @@ function config_head_node()
     # ensure tag is correct for master node
     touch /opt/ion/.masternode
     write_conf_file
+    config_ionSoftware
     
-    # Install/Update system-level software packages
-    preinst_system_packages
-    install_system_packages
-    config_system_packages
-    
-    # Install/Update Torrent Suite software packages
-    install_ion_packages
-    config_ion_packages
-
     return 0
 }
 
@@ -89,10 +81,15 @@ function config_compute_node ()
 
     # Check tag
     if is_master; then
-        echo "WARNING: This server is configured as a master node."
-        echo "To configure this server as a compute node, first run the unconfigure command"
-        echo "Then run TSconfig --configure-compute"
-        error "$0:$LINENO" "This server is configured as a master node"
+        # Since is_master will assume master node when no configuration exists, test again
+        if [ -e /opt/ion/.masternode ]; then
+        
+            echo "WARNING: This server is configured as a master node."
+            echo "To configure this server as a compute node, first run the unconfigure command"
+            echo "Then run TSconfig --configure-compute"
+            error "$0:$LINENO" "This server is configured as a master node"
+        
+        fi
     fi
 
     # ensure tag is correct for compute node
@@ -104,15 +101,8 @@ function config_compute_node ()
     
     # Remove gridengine packages to force re-init
     apt-get --assume-yes --force-yes purge gridengine-common gridengine-client gridengine-exec
-    
-    # Install/Update system-level software packages
-    preinst_system_packages
-    install_system_packages
-    config_system_packages
-    
-    # Install/Update Torrent Suite software packages
-    install_ion_packages
-    config_ion_packages
+
+    config_ionSoftware
     
     # Set host location of Ion Torrent Server Daemons
     config_cluster_settings
@@ -125,17 +115,86 @@ function config_compute_node ()
 #--------------------------------------
 function config_ionSoftware()
 {
-    ion_daemon_ctrl stop
-    
+    # Install/Update system-level software packages
     preinst_system_packages
     install_system_packages
-
     config_system_packages
-    
+    # Install/Update Torrent Suite software packages
     install_ion_packages
     config_ion_packages
 }
 
+#-------------------------------------------------
+# Re-run configuration of Torrent Server Head Node
+#-------------------------------------------------
+function reconfig_head_node ()
+{
+    echo "Head Node Re-running Configuration:" 1>&2
+
+    # Check tag
+    if ! is_master; then
+        user_msg "WARNING: This server is configured as a compute node."
+        user_msg "To configure this server as a master node, first run the unconfigure command"
+        user_msg "Then run TSconfig --configure-server"
+        error "$0:$LINENO" "This server is configured as a compute node"
+    fi
+    
+    # ensure tag is correct for master node
+    touch /opt/ion/.masternode
+    
+    #config_ionSoftware
+    # Here we intend to do all configuration steps without updating any ion software packages
+    config_system_packages
+    reconfig_ion_packages
+    
+    return 0
+}
+
+#-------------------------------------------------
+# Re-run configuration of Torrent Server Compute Node
+#-------------------------------------------------
+function reconfig_compute_node ()
+{
+
+    echo "Compute Node Re-running Configuration:" 1>&2
+
+    # Check tag
+    if is_master; then
+        # Since is_master will assume master node when no configuration exists, test again
+        if [ -e /opt/ion/.masternode ]; then
+        
+            echo "WARNING: This server is configured as a master node."
+            echo "To configure this server as a compute node, first run the unconfigure command"
+            echo "Then run TSconfig --configure-compute"
+            error "$0:$LINENO" "This server is configured as a master node"
+        
+        fi
+    fi
+
+    # ensure tag is correct for compute node
+    touch /opt/ion/.computenode
+    
+    # Get name of head node server
+    get_user_input_compute    
+    
+    # Remove gridengine packages to force re-init
+    apt-get --assume-yes --force-yes purge gridengine-common gridengine-client gridengine-exec
+
+    # Do everything except update Ion Packages.
+    preinst_system_packages
+    install_system_packages
+    config_system_packages
+    reconfig_ion_packages
+    
+    # Set host location of Ion Torrent Server Daemons
+    config_cluster_settings
+
+    return 0
+}
+
+#--------------------------------------
+# Remove and unconfigure a Torrent Server
+#--------------------------------------
 function unconfigure_torrentserver ()
 {
     log "Unconfigure Torrent Server"
@@ -196,6 +255,9 @@ function unconfigure_torrentserver ()
     #   remove vsftpd package
     #apt-get --assume-yes --force-yes remove vsftpd
     
+    # Remove this server from gridengine queues, only if it is compute node (thus, not qmaster)
+    if ! is_master; then sge_delete_host $(hostname); fi
+    
     #   remove ionguest user
     if getent passwd|grep -q ^ionguest; then deluser --remove-home --force ionguest; fi
     if getent group|grep -q ^ionguest; then delgroup ionguest; fi
@@ -217,6 +279,7 @@ function unconfigure_torrentserver ()
     user_msg "apache2"
     user_msg "exportfs"
     user_msg "sudo enabled commands for user www-data"
+    user_msg "gridengine (SGE)"
     # This is the end
 }
 
@@ -257,6 +320,7 @@ function remove_pgm_support ()
     sed -i '/auto eth2/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth3/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth5/,/netmask 255.255.255.0/d' /etc/network/interfaces
     #--- delete all trailing blank lines at end of file ---#
     sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
 
@@ -283,8 +347,8 @@ function remove_pgm_support ()
     sed -i '/^192.168.203.10[[:blank:]]pgm3/d' /etc/hosts
     sed -i '/^192.168.204.10[[:blank:]]pgm4/d' /etc/hosts
     
-    if -e /etc/init.d/dhcp3-server; then service dhcp3-server stop; fi
-    if -e /etc/init.d/dnsmasq; then service dnsmasq stop; fi
+    if [ -e /etc/init.d/dhcp3-server ]; then service dhcp3-server stop; fi
+    if [ -e /etc/init.d/dnsmasq ]; then service dnsmasq stop; fi
     #apt-get --assume-yes --force-yes purge dhcp3-server dnsmasq
     
     return 0
@@ -711,7 +775,9 @@ function cleanup_previousInstallations()
     #-----------------------------------
     # Remove deprecated ion software
     #-----------------------------------
-    apt-get --assume-yes --force-yes remove ion-eaplugins 1>&2 || true
+    if dpkg -l|grep -q ion-eaplugins; then
+        apt-get --assume-yes --force-yes remove ion-eaplugins 1>&2 || true
+    fi
     
     #---    Clean up /usr/local/lib/python2.6/dist-packages ---#
     DIR="/usr/local/lib/python2.6/dist-packages/"
@@ -744,7 +810,7 @@ function cleanup_previousInstallations()
     rm -f /usr/local/bin/cython
 
     # Remove settings.sh from bashrc
-    if grep "/opt/sge/iontorrent/common/settings.sh" ~ionadmin/.bashrc; then
+    if grep "/opt/sge/iontorrent/common/settings.sh" ~ionadmin/.bashrc >/dev/null; then
         # Remove the line
         sed -i '/\/opt\/sge\/iontorrent\/common\/settings.sh/d' ~ionadmin/.bashrc
     fi
@@ -773,8 +839,8 @@ function cleanup_previousInstallations()
 
     # Ensure no sge daemons are running any longer - they mess up subsequent configuration steps
     # and sometimes normal shutdown commands are ineffective.
-    if [ -f /etc/init.d/gridengine-exec ]; then /etc/init.d/gridengine-exec stop; fi
-    if [ -f /etc/init.d/gridengine-master ]; then /etc/init.d/gridengine-master stop; fi
+    if [ -f /etc/init.d/gridengine-exec ]; then /etc/init.d/gridengine-exec stop > /dev/null; fi
+    if [ -f /etc/init.d/gridengine-master ]; then /etc/init.d/gridengine-master stop > /dev/null; fi
     for pid in `ps aux|grep sge_|grep -v grep|awk '{print $2}'`; do
         kill -9 $pid || true
     done
@@ -799,6 +865,10 @@ function cleanup_previousInstallations()
         sed -i 's/max-lease-time 172800;/max-lease-time 300;/' /etc/dhcp3/dhcpd.conf
         if [ -e /etc/init.d/dhcp3-server ]; then service dhcp3-server force-reload 1>&2 || true; fi
     fi
+    
+    # Make sure /results directory has world write permissions (fixes a bug in TS1.4)
+    # Trap the error; do not want to exit if it fails.  May fail on nfs mounted directories.
+    if [ -d /results ]; then chmod 777 /results || true; fi
     
     return 0
 }
@@ -827,53 +897,60 @@ function pkg_installation ()
             # error for this to exist, must be from previous error
             :
         else
-            mv /etc/apt/sources.list $TMP_SRC_LST
+            if [ -f /etc/apt/sources.list ]; then
+                mv /etc/apt/sources.list $TMP_SRC_LST
+            fi
         fi
 
         #---                                                                ---#
-        #---    Our install media has a hidden file: .version               ---#
+        #---    Search for Packages.gz file                                 ---#
         #---                                                                ---#
-        verpath=$(find /media -maxdepth 2 -name .version | awk '{print $1}')
-        if [ "${verpath}" == "" ]; then
-            verpath=$(find $PWD -maxdepth 2 -name .version | awk '{print $1}')
-            if [ "${verpath}" == "" ]; then
+        updatesPath=$(find $PWD -name Packages.gz 2>/dev/null)
+        updatesPath=$(echo $updatesPath|awk '{print $1}')   #filter single entry
+        if [ "${updatesPath}" == "" ]; then
+            updatesPath=$(find /media -name Packages.gz 2>/dev/null)
+            updatesPath=$(echo $updatesPath|awk '{print $1}')   #filter single entry
+            if [ "${updatesPath}" == "" ]; then
                 echo "ERROR: Could not find any Torrent Server installation media."
                 echo
                 return 1
             fi
         fi
-        mediapath=$(dirname $verpath)
+        mediapath=$(dirname $(dirname ${updatesPath}))
         echo "deb file:${mediapath}/ updates/" > /etc/apt/sources.list
+        echo "Installing from ${mediapath}/updates"
     else
 
         #---                                                        ---#
         #---    Test for access to update servers                   ---#
         #---                                                        ---#
-        #TODO: temporary file write should go to /tmp directory
         errCnt=0
-        if ! wget -nv -o /tmp/_wget.log http://updates.iontorrent.com/updates/software/lucid/Packages.gz; then
-            user_msg "Failed to contact Ion Software update server (updates.iontorrent.com)."
-            user_msg "can not download files from http://updates.iontorrent.com/updates/software/lucid/"
+        ubuntu_codename=`lsb_release -s -c`
+        if ! wget -nv -o /tmp/_wget.log -P /tmp ${TSCONFIG_ION_UPDATE_URL}/updates/software/${ubuntu_codename}/Packages.gz; then
+            user_msg "Failed to contact Ion Software update server (${TSCONFIG_ION_UPDATE_URL})."
+            user_msg "can not download files from ${TSCONFIG_ION_UPDATE_URL}/updates/software/${ubuntu_codename}/"
             user_msg "with wget using http protocol via port 80."
             echo
             ((errCnt++)) || true
         else
-            rm -f Packages.gz
+            rm -f /tmp/Packages.gz
             user_msg "=================================================================="
             user_msg "\tAccess to Ion Torrent Software Update Repository confirmed"
             user_msg "=================================================================="
         fi
 
-        if ! wget -nv -a /tmp/_wget.log http://us.archive.ubuntu.com/ubuntu/dists/lucid-updates/main/binary-amd64/Release; then
-            user_msg "Failed to contact Ubuntu update server (ubuntu.com)."
-            user_msg "can not download files from http://us.archive.ubuntu.com/ubuntu/dists/lucid-updates/main/binary-amd64/"
-            user_msg "with wget using http protocol via port 80."
-            ((errCnt++)) || true
-        else
-            rm -f Release
-            user_msg "=================================================================="
-            user_msg "\tAccess to Ubuntu Update Repository confirmed"
-            user_msg "=================================================================="
+        if [ $errCnt -eq 0 ]; then
+            if ! wget -nv -a /tmp/_wget.log -P /tmp ${TSCONFIG_UBUNTU_UPDATE_URL}/ubuntu/dists/${ubuntu_codename}-updates/main/binary-amd64/Release; then
+                user_msg "Failed to contact Ubuntu update server (${TSCONFIG_UBUNTU_UPDATE_URL})."
+                user_msg "can not download files from ${TSCONFIG_UBUNTU_UPDATE_URL}/ubuntu/dists/${ubuntu_codename}-updates/main/binary-amd64/"
+                user_msg "with wget using http protocol via port 80."
+                ((errCnt++)) || true
+            else
+                rm -f /tmp/Release
+                user_msg "=================================================================="
+                user_msg "\tAccess to Ubuntu Update Repository confirmed"
+                user_msg "=================================================================="
+            fi
         fi
 
         if [ $errCnt -ne 0 ]; then
@@ -885,6 +962,7 @@ function pkg_installation ()
             user_msg "Software update has failed.  Please contact IT with above error messages."
             return 1
         fi
+        rm -f /tmp/_wget.log
     fi
     
     # Undo any package holds we might have enabled previously
@@ -920,12 +998,9 @@ function pkg_installation ()
     for pkg in ${pkg_list[@]}; do
         echo -n "."
         if ! apt-get --assume-yes --force-yes install $pkg 1>&2; then
-            echo "$pkg second attempt."
-            if ! apt-get install -f 1>&2; then
-                user_msg "ERROR installing $pkg"
-                cleanup_tmp_src_list $TMP_SRC_LST
-                return 1
-            fi
+            user_msg "ERROR installing $pkg"
+            cleanup_tmp_src_list $TMP_SRC_LST
+            return 1
         fi
     done
     echo ""
@@ -948,9 +1023,12 @@ function preinst_system_packages ()
 	cleanup_previousInstallations
     
     # Is there room in /var/ to update?
-    log "Deleting all deb packages from cache"
-    user_msg "Deleting all deb packages from cache"
-    apt-get clean 1>&2
+    log "Deleting obsolete deb packages from cache"
+    apt-get autoclean 1>&2
+    
+    # Fix high system load due to leap second issue
+    # http://www.novell.com/support/kb/doc.php?id=7010351
+    date -s "$(LC_ALL=C date)" > /dev/null
     
     if is_master; then
         # Preseed the master gridengine settings
@@ -994,79 +1072,30 @@ EOF
    
 }
 
+
+#Dependency Notes:
+#
+# The matePairIndividualTags plugin requires these packages:
+#	emboss-data,emboss-lib,libnucleus6,libajax6
+# The emboss package itself is not installed because of a filename conflict with
+# /usr/bin/tmap.
+
 function install_system_packages ()
 {
     user_msg "=================================================================="
     user_msg "Installing system packages"
     user_msg "=================================================================="
 
-    pkg_list=(
-        traceroute
-        arp-scan
-        nmap
-        links
-        lynx
-        minicom
-        mc
-        screen
-        make
-        gdb
-        gcc
-        build-essential
-        imagemagick
-        emacs23
-        vim
-        nano
-        curl
-        whois
-        figlet
-        binutils
-        sshpass
-        tk8.5
-        libmotif-dev
-        libxpm-dev
-        libboost-all-dev
-        xorg
-        xfce4
-        gridengine-common
-        gridengine-client
-        gridengine-exec
-        libdrmaa1.0
-        iptables
-        ntp
-        nfs-kernel-server
-        openssh-server
-        samba
-        zip
-        libz-dev
-        postfix
-        python-pysam
-        python-simplejson
-        python-calabash
-        python-jsonpipe
-		perl
-        perl-doc    
-    )
-    
+    server_files=
+    master_files=
+    read_packagelist_file system allservers server_files
     if is_master; then
-        pkg_list=( ${pkg_list[@]}
-            gridengine-master
-            gridengine-qmon
-            rabbitmq-server
-            vsftpd
-            postgresql
-            apache2
-            apache2-mpm-prefork
-            libapache2-mod-python
-            libapache2-mod-php5
-            dnsmasq
-            dhcp3-server
-            tomcat6
-            tomcat6-admin
-            python-django
-        )
+        read_packagelist_file system master master_files
+        pkg_list=( ${server_files[@]} ${master_files[@]} )
+    else
+        pkg_list=( ${server_files[@]} )
     fi
-
+    
     if ! pkg_installation ${pkg_list[@]}; then
         error ${LINENO} "In function install_system_packages"
     fi
@@ -1078,29 +1107,14 @@ function install_ion_packages()
     user_msg "Installing Ion Torrent Suite packages"
     user_msg "=================================================================="
     
-    pkg_list=(
-        ion-gpu
-        ion-analysis
-        ion-alignment
-        ion-pipeline
-        tmap
-        samtools
-        ion-rsmts
-        ion-samita
-        ion-torrentr    
-        )
-    
+    server_files=
+    master_files=
+    read_packagelist_file torrentsuite allservers server_files
     if is_master; then
-        pkg_list=( ${pkg_list[@]}
-            ion-pgmupdates
-            ion-docs
-            ion-referencelibrary
-            ion-sampledata
-            ion-publishers
-            ion-onetouchupdater
-            ion-dbreports
-            ion-plugins
-            )
+        read_packagelist_file torrentsuite master master_files
+        pkg_list=( ${server_files[@]} ${master_files[@]} )
+    else
+        pkg_list=( ${server_files[@]} )
     fi
     
     if ! pkg_installation ${pkg_list[@]}; then
@@ -1156,7 +1170,28 @@ function config_ion_packages ()
     fi
     return 0
 }
-
+function reconfig_ion_packages ()
+{
+    echo "=================================================================="
+    echo "Re-running configuration of Torrent Suite packages"
+    echo ""
+    #NEW - just run the postinst script for Torrent Suite packages that are installed
+    server_files=
+    master_files=
+    read_packagelist_file torrentsuite allservers server_files
+    if is_master; then
+        read_packagelist_file torrentsuite master master_files
+        pkg_list=( ${server_files[@]} ${master_files[@]} )
+    else
+        pkg_list=( ${server_files[@]} )
+    fi
+    
+    for pkg in ${pkg_list[@]}; do
+        echo $pkg
+        dpkg-reconfigure $pkg 1>&2 || true
+    done
+    echo "=================================================================="
+}
 #--------------------------------------
 # System Configuration Operations
 #
@@ -1178,6 +1213,10 @@ function config_system_packages ()
         config_apache2
         
         if ! config_master_sge; then error ${LINENO} "In function config_master_sge"; fi
+        
+        # Generate dbase backup files and maintain them with logrotate
+        logrotate_iondb
+        
     else
     #--------------------------------------
     # Compute Node Only Options
@@ -1194,8 +1233,50 @@ function config_system_packages ()
         
     #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
     initialize_system_users
+    
+    # limit the size of log files generated in /var.
+    set_logfile_size_limit
+    
+    # Remove motd regarding available OS upgrade: do not want TS customers to do this.
+    rm -f /etc/update-motd.d/91-release-upgrade || true
 }
 
+function logrotate_iondb ()
+{
+    # Generate dbase backup files and maintain them with logrotate
+    if [ ! -r /etc/logrotate.d/iondb ]; then
+        cat >> /etc/logrotate.d/iondb <<EOF
+/results/dbase_backup/*.sql {
+	daily
+	rotate 30
+	missingok
+	compress
+	compressext .gz
+	nodelaycompress
+	create 644 postgres postgres
+#	dateext
+	prerotate 
+	/usr/bin/pg_dump -U ion -c iondb > /results/dbase_backup/iondb.sql
+	endscript
+}
+EOF
+
+        # Needs one file to rotate on, else all is lost - it will never execute prerotate script
+        mkdir -p /results/dbase_backup
+        touch /results/dbase_backup/iondb.sql
+    else
+        echo "/etc/logrotate.d/iondb file exists" 1>&2
+    fi
+}
+
+function set_logfile_size_limit ()
+{
+    # Set a maximum size of 100MB for all log files.
+    # This gets overridden if a package sets its own size limit in logrotate.d
+    if ! grep -q ^size /etc/logrotate.conf; then
+        echo -e "# Torrent Server maximum log file limit\nsize 100M\n" |cat - /etc/logrotate.conf > /tmp/logrotate.conf && mv /tmp/logrotate.conf /etc/logrotate.conf
+    fi
+}
 
 function named_core_files ()
 {
@@ -1254,6 +1335,9 @@ function set_pkg_holds ()
     pkgList=(
         grub-common
         grub-pc
+        linux-headers-server
+        linux-image-server
+        linux-server
     )
     for pkg in ${pkgList[@]}; do
         echo "$pkg hold"|dpkg --set-selections
@@ -1280,12 +1364,18 @@ function initialize_system_users ()
 	if ! getent passwd | grep -q "^$pluginUser:"; then
         #echo -n "Adding system user $pluginUser.."
     	adduser --system \
-        				 --no-create-home \
                          --uid 1100 \
                          --ingroup $pluginGroup \
                          --disabled-password \
                          $pluginUser 1>&2 || true
 		#echo "..done"
+    else
+        # Make sure existing pluginUser has a home directory
+        if [ ! -d /home/$pluginUser ]; then
+            mkdir -p /home/$pluginUser
+            chown -R $pluginUser.$pluginGroup /home/$pluginUser
+        fi
+        usermod --home /home/$pluginUser $pluginUser
     fi
     
     #---	ionadmin, www-data should be in ionian group	---#
@@ -1383,14 +1473,30 @@ EOFftp
 #        ")
 
         # this directory is created elsewhere (?) but want to make sure it exists
+        # if it exists, make sure it is writeable
         # N.B. cluster setups probably don't write raw data to /results
         #mkdir -p /results
-        #chmod 777 /results
+        if [ -d /results ]; then chmod 777 /results || true; fi
+        if [ -d /rawdata ]; then chmod 777 /rawdata || true; fi
+        
         # create link to /results; directory where the PGMs write their data files.
         # on cluster nodes, this link might be broken, but thats okay.
-        if [ ! -h /home/$ftpUser/results ]; then
-            ln -s -f /results /home/$ftpUser/results
+        #if [ ! -h /home/$ftpUser/results ]; then
+        #    ln -s -f /results /home/$ftpUser/results
+        #fi
+        #
+        # To support newer hardware, where there is a /rawdata partition we use that
+        # partition for raw data symlink, else we default to original /results.
+        # /home/ionguest/results -> [ /results | /rawdata ]
+        #
+        if [ -d /rawdata ]; then
+            ionguest_ftp_symlink /rawdata
+        else
+            ionguest_ftp_symlink /results
         fi
+        
+
+
 
         sed -i "s/^#local_enable.*/local_enable=YES/" /etc/vsftpd.conf
         sed -i "s/^#write_enable.*/write_enable=YES/" /etc/vsftpd.conf
@@ -1528,6 +1634,43 @@ EOFdb
     su - postgres -c "sed -i 's/ident/trust/' $PGHBACONF"
     su - postgres -c "sed -i 's/ident sameuser/trust/' $PGHBACONF"
 
+    #
+    # Set some sane operational parameter values: postgresql.conf
+    #
+    sqlconffile=/etc/postgresql/8.4/main/postgresql.conf
+    sqlshmfile=$(find /etc/sysctl.d -name \*postgresql-shm.conf)
+    
+    if [ -f $sqlconffile ]; then
+        # Make sure options are enabled
+        sed -i 's/^#effective_cache_size/effective_cache_size/' $sqlconffile
+        sed -i 's/^#work_mem/work_mem/' $sqlconffile
+        sed -i 's/^#commit_delay/commit_delay/' $sqlconffile
+        sed -i 's/^#checkpoint_segments/checkpoint_segments/' $sqlconffile
+        # Set appropriate values for the options
+        sed -i 's/^effective_cache_size.*/effective_cache_size = 16GB/' $sqlconffile
+        sed -i 's/^work_mem.*/work_mem = 2MB/' $sqlconffile
+        sed -i 's/^commit_delay.*/commit_delay = 1000/' $sqlconffile
+        sed -i 's/^checkpoint_segments.*/checkpoint_segments = 16/' $sqlconffile
+        
+        if [ ! -z $sqlshmfile ] && [ -e $sqlshmfile ]; then
+        
+            # only set these if shmmax can be set
+            sed -i 's/^#shared_buffers/shared_buffers/' $sqlconffile
+            sed -i 's/^shared_buffers.*/shared_buffers = 512MB/' $sqlconffile
+            
+            # Set kernel shmmax
+            sed -i 's/^#kernel.shmmax/kernel.shmmax/' $sqlshmfile
+            sed -i 's/^kernel.shmmax.*/kernel.shmmax = 1073741824/' $sqlshmfile
+            
+            /sbin/sysctl -p $sqlshmfile 1>&2
+        fi
+    
+        #DEBUG
+        egrep '(^shared_buffers|^effective_cache_size|^work_mem|^commit_delay|^checkpoint_segments)' $sqlconffile 1>&2
+    else
+        echo -e "*\n* Could not edit $sqlconffile to set optimized postgres parameters\n*" 1>&2
+    fi
+    
     # Reload configuration files
     $PS_SCRIPT reload 1>&2
     
@@ -1538,6 +1681,28 @@ EOFdb
 
     # NOTE: config_postresql_cluster_access function also restarts the database service
 
+    # Make a backup of the database.  This is intended to backup an existing TS
+    # prior to installing ion-dbreports which usually makes db changes.
+    BACKUP_DBASE_DIR=/results
+    if [ -d $BACKUP_DBASE_DIR ]; then
+        user_msg "=================================================================="
+        user_msg "       Creating backup of postgresql database"
+        user_msg "=================================================================="
+        TIMESTAMP=$(date +%Y%m%d_%k%M%S)
+        BACKUP_DBASE_FILE=${BACKUP_DBASE_DIR}/iondb.${TIMESTAMP}.backup
+        /usr/bin/pg_dump -U ion -c iondb | gzip > ${BACKUP_DBASE_FILE}.gz || true
+        
+        # Keep 5 most recent dbase backup files
+        KEEP=5
+        filecmd="ls -rt ${BACKUP_DBASE_DIR}/iondb.*.backup.gz"
+        FILES=($($filecmd 2>/dev/null || true))
+        cnt=${#FILES[@]}
+        while [ $cnt -gt $KEEP ]; do
+            rm -f ${FILES[0]}
+            FILES=($($filecmd 2>/dev/null || true))
+            cnt=${#FILES[@]}
+        done
+    fi
     return 0
 
     #--- NOTES ON POSTGRESQL ---#
@@ -1639,7 +1804,14 @@ function default_slots ()
     # determine number of slots by number of sockets.  T-7500 have two sockets
     # with 4 cores in each socket.  T-3500 have one socket.  For now, we use the
     # number of sockets == number of slots.
-    sockets=$(lscpu|grep "^CPU socket"|awk '{print $3}')
+    # handle different lscpu output format
+    if grep -q "^Socket(s)" <(lscpu); then
+        sockets=$(lscpu|grep "^Socket(s)"|awk '{print $2}')
+    elif grep -q "^CPU socket" <(lscpu); then
+        sockets=$(lscpu|grep "^CPU socket"|awk '{print $3}')
+    else
+        echo 1
+    fi
     cores_per_socket=$(lscpu|grep "^Core(s) per socket:"|awk '{print $4}')
     #slots=$(($sockets * $cores_per_socket)) # number total cores
     slots=$(($sockets * 1))
@@ -1825,8 +1997,8 @@ function config_master_sge()
     qconf -Mc ${COMPLEX}
 
     setupQueue=1
-    S_RT_LIMIT='12:00:00'       # 12 hours
-    H_RT_LIMIT='12:00:05'
+    S_RT_LIMIT='24:00:00'       # 24 hours
+    H_RT_LIMIT='24:00:05'
     S_VMEM_LIMIT='48G'          # Upper limit on mem use
     H_VMEM_LIMIT='48G'
     # Setting vmem causes s_stack to default to vmem, which is too
@@ -1856,8 +2028,8 @@ function config_master_sge()
             sed -i 's:^shell .*:shell                 /bin/bash:' /tmp/pluginqueue.template
 
             # run time limits
-            sed -i 's/^s_rt.*/s_rt                  12:00:00/' /tmp/pluginqueue.template
-            sed -i 's/^h_rt.*/h_rt                  12:05:00/' /tmp/pluginqueue.template
+            sed -i "s/^s_rt.*/s_rt                  ${S_RT_LIMIT}/" /tmp/pluginqueue.template
+            sed -i "s/^h_rt.*/h_rt                  ${H_RT_LIMIT}/" /tmp/pluginqueue.template
 
             # job priority (nice)
             sed -i 's/^priority.*/priority      10/' /tmp/pluginqueue.template
@@ -1873,6 +2045,9 @@ function config_master_sge()
             # Queue cannot set default value for mem_free or virtual_free complex resources
             # echo "complex_values   mem_free=20G" >> # /tmp/pluginqueue.template
 
+            sed -i "s/^prolog.*/prolog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-prolog.sh" /tmp/pluginqueue.template
+            sed -i "s/^epilog.*/epilog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-epilog.sh" /tmp/pluginqueue.template
+
             # Create new queue from template file
             # This command returns true when queue already exists or creation error
             qconf -Aq /tmp/pluginqueue.template
@@ -1882,23 +2057,33 @@ function config_master_sge()
         log "plugin.q already exists"
 
         # Ensure that existing queue has non-infinite limits on runtime
-        if qconf -sq plugin.q | grep s_rt | grep INFINITY; then
-            qconf -aattr queue s_rt $S_RT_LIMIT plugin.q
+        if qconf -sq plugin.q | grep s_rt | grep -v "${S_RT_LIMIT}"; then
+            qconf -aattr queue s_rt "${S_RT_LIMIT}" plugin.q 1>&2
         fi
-        if qconf -sq plugin.q | grep h_rt | grep INFINITY; then
-            qconf -aattr queue h_rt $H_RT_LIMIT plugin.q
+        if qconf -sq plugin.q | grep h_rt | grep -v "${H_RT_LIMIT}"; then
+            qconf -aattr queue h_rt "${H_RT_LIMIT}" plugin.q 1>&2
         fi
 
         # Ensure that existing queue has non-infinite limits on memory
         if qconf -sq plugin.q | grep s_vmem | grep INFINITY; then
-            qconf -aattr queue s_vmem $S_VMEM_LIMIT plugin.q
+            qconf -aattr queue s_vmem $S_VMEM_LIMIT plugin.q 1>&2
         fi
         if qconf -sq plugin.q | grep h_vmem | grep INFINITY; then
-            qconf -aattr queue h_vmem $H_VMEM_LIMIT plugin.q
+            qconf -aattr queue h_vmem $H_VMEM_LIMIT plugin.q 1>&2
         fi
         if qconf -sq plugin.q | grep s_stack | grep INFINITY; then
-            qconf -aattr queue s_stack $S_STACK_LIMIT plugin.q
+            qconf -aattr queue s_stack $S_STACK_LIMIT plugin.q 1>&2
         fi
+
+        # Prolog and epilog scripts
+        if qconf -sq plugin.q | grep prolog | grep NONE 1>&2; then
+            qconf -aattr queue prolog "/usr/share/ion-tsconfig/gridengine-scripts/plugin-prolog.sh" plugin.q 1>&2
+        fi
+        if qconf -sq plugin.q | grep epilog | grep NONE 1>&2; then
+            qconf -aattr queue epilog "/usr/share/ion-tsconfig/gridengine-scripts/plugin-epilog.sh" plugin.q 1>&2
+        fi
+
+
     fi
 
     # SGE: Set per-host maximum mem_free to be node physical mem
@@ -2041,7 +2226,8 @@ function config_password()
 }
 
 #--------------------------------------
-# This gets called from TSchkconfig which does not do any logging of stdout
+# This gets called from TSchkconfig
+# Prior to reboot, act_qmaster file is updated
 #--------------------------------------
 function change_hostname_sge ()
 {
@@ -2049,41 +2235,9 @@ function change_hostname_sge ()
     conffile='/var/lib/gridengine/iontorrent/common/act_qmaster'
     oldName=$1
     newName=$2
-        
+    
     if is_master; then
-        # Step 1 (optional, should already be shut down)
-        #Shutdown SGE daemons on qmaster
-        qconf -ke all || true
-        qconf -km || true
-        #invoke-rc.d gridengine-exec stop
-        #invoke-rc.d gridengine-master stop
-        
-        # Step 2
-        #Renaming and restarting the qmaster and exec daemon
-        echo $newName > ${conffile}
-        /etc/init.d/gridengine-master start
-        /etc/init.d/gridengine-exec start
-        
-        sleep 15
-        
-        # Step 3
-#        #store all.q queue configuration
-#        qconf -sq all.q > /tmp/allqueue.conf
-#        #store plugin.q queue configuration
-#        qconf -sq plugin.q > /tmp/pluginqueue.conf
-        
-#        #Rename old qmaster hostname in queue configuration files
-#        sed -i "s/$oldName/$newName/g" /tmp/allqueue.conf
-#        sed -i "s/$oldName/$newName/g" /tmp/pluginqueue.conf
-        
-#        #Define the new queues
-#        qconf -Mq /tmp/allqueue.conf
-#        qconf -Mq /tmp/pluginqueue.conf
-        
-#        # add new host as submit host
-#        qconf -as ${newName}
-        
-        # Step 3
+    
         # Change hostname in all the queues
         sgequeues=$(qconf -sql)
         for qname in ${sgequeues[@]}; do
@@ -2099,34 +2253,17 @@ function change_hostname_sge ()
             rm -f $tmpqueue
         done
 
+        # TODO: Remove old hostname from exec list and admin list.  Others?
+        
         #NOTE: all the compute nodes will now need to be reset to the new qmaster host
     else
         set -x
         echo "Compute Node Renaming in development"
-        # this daemon may fail to start on reboot during renaming operation
-        #invoke-rc.d gridengine-exec stop || true
-        
-        #store all.q queue configuration
-        #qconf -sq all.q > /tmp/allqueue.conf
-        #store plugin.q queue configuration
-        #qconf -sq plugin.q > /tmp/pluginqueue.conf
-        
-        #Rename old qmaster hostname in queue configuration files
-        #sed -i "s/$oldName/$newName/g" /tmp/allqueue.conf
-        #sed -i "s/$oldName/$newName/g" /tmp/pluginqueue.conf
-        
-        #Define the new queues
-        #qconf -Mq /tmp/allqueue.conf
-       #qconf -Mq /tmp/pluginqueue.conf
-        
-        # add new host as submit host
-        #qconf -as ${newName}
-        
-        # Ensure daemon is running.
-        #/etc/init.d/gridengine-exec restart
-        
         set +x
     fi
+    
+    # Remove old hostname from exec host list
+    qconf -de ${oldName}
 }
 
 function config_iptables()
@@ -2278,6 +2415,7 @@ function config_PGM_interface()
     sed -i '/auto eth2/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth3/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
+    sed -i '/auto eth5/,/netmask 255.255.255.0/d' /etc/network/interfaces
 
     #--- delete all trailing blank lines at end of file ---#
     sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
@@ -2288,7 +2426,7 @@ function config_PGM_interface()
 # compute node subnets to be .211, .212, .213, .214
 # variable ${isCN} is either 0 or 1.
 #
-interfaces=( 1 2 3 4 )
+interfaces=( 1 2 3 4 5 )
 for i in ${interfaces[@]}; do
     if (valid_port eth${i}); then
 
@@ -2334,7 +2472,7 @@ function config_dhcp()
     echo "no-hosts" > /etc/dnsmasq.d/ion-dhcp
     echo "addn-hosts=/etc/hosts-dnsmasq" >> /etc/dnsmasq.d/ion-dhcp
     echo "no-dhcp-interface=eth0" >> /etc/dnsmasq.d/ion-dhcp
-    interfaces=( 1 2 3 4 )
+    interfaces=( 1 2 3 4 5 )
     for i in ${interfaces[@]}; do
         if valid_port eth${i}; then echo -e "interface=eth${i}\nno-dhcp-interface=eth${i}\n" >> /etc/dnsmasq.d/ion-dhcp; fi
     done
@@ -2348,13 +2486,13 @@ function config_dhcp()
     sed -i '/^192.168.204.10.*/d' /etc/hosts
 
     #---    Overwrite existing hosts-dnsmasq    ---#
-    echo $(date) > /etc/hosts-dnsmasq
+    echo "# $(date)" > /etc/hosts-dnsmasq
     echo -e "192.168.1.1\tts" >> /etc/hosts-dnsmasq
-    if valid_port eth1; then echo -e "192.168.2${isCN}1.10\tpgm1" >> /etc/hosts-dnsmasq;fi
-    if valid_port eth2; then echo -e "192.168.2${isCN}2.10\tpgm2" >> /etc/hosts-dnsmasq;fi
-    if valid_port eth3; then echo -e "192.168.2${isCN}3.10\tpgm3" >> /etc/hosts-dnsmasq;fi
-    if valid_port eth4; then echo -e "192.168.2${isCN}4.10\tpgm4" >> /etc/hosts-dnsmasq;fi
-
+    interfaces=(1 2 3 4 5)
+    for i in ${interfaces[@]}; do
+        if valid_port eth${i}; then echo -e "192.168.2${isCN}${i}.10\tpgm${i}" >> /etc/hosts-dnsmasq;fi
+    done
+    
     add_warning_msg /etc/dnsmasq.d/ion-dhcp
 
     #---    Enable reading of dnsmasq config file   ---#
@@ -2378,7 +2516,7 @@ log-facility local7;
 option domain-name "pgm.local";
 EOFDHCP
 
-interfaces=( 1 2 3 4 )
+interfaces=( 1 2 3 4 5 )
 for i in ${interfaces[@]}; do
     if valid_port eth$i; then
 
@@ -2514,9 +2652,7 @@ function rotate_log()
 }
 
 #---                                                            ---#
-#---    This creates the tsconf.conf file                       ---#
-#---    It is an error if the file already exists; in this case ---#
-#---    the file should be edited, not overwritten              ---#
+#---    This creates/edits the tsconf.conf file                 ---#
 #---                                                            ---#
 function write_conf_file()
 {
@@ -2582,6 +2718,8 @@ function write_conf_file()
         echo $conf >> $conflog
         echo -n "serialnumber:" >> $conflog
         echo $(dmidecode -s system-serial-number 2>/dev/null) >> $conflog
+        productname=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        echo "hwname:\"${productname}\"" >> $conflog
         echo -n "version:" >> $conflog
         echo -e "@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@\n" >> $conflog
     fi
@@ -2613,11 +2751,12 @@ function ionguest_ftp_symlink ()
         if [ -h /home/ionguest/results ]; then
             rm -f /home/ionguest/results
         else
-            echo -e "\nSymbolic link does not exist"
+            echo -e "\nSymbolic link does not exist" 1>&2
         fi
         ln -s ${RAW_DATA_DIR} /home/ionguest/results
+        echo -e "\nCreated symlink:\n$(ls -l /home/ionguest/results)\n" 1>&2
     else
-        echo -e "\nUsual ftp client user does not exist: /home/ionguest\n"
+        echo -e "\nUsual ftp client user does not exist: /home/ionguest\n" 1>&2
     fi
 }
 
@@ -2684,7 +2823,7 @@ function sge_delete_host ()
     # define function to print an error message and exit
     error_exit() {
         echo "Error: $*"
-        exit 1
+        return 1
     }
 
     # restrict the PATH
@@ -2739,3 +2878,30 @@ function log ()
     echo "$(date +"%F %H:%M:%S") $(basename $0): $msg"  >> $logout
 }
 
+#
+# Read the package list resource file which is json formatted
+# Use the JSON.sh tool to parse the json file: https://github.com/dominictarr/JSON.sh
+#
+function read_packagelist_file()
+{
+    #
+    # Third argument should be a variable to get defined
+    #
+    FILEPATH=$TSCONFIG_PACKAGELIST_FILE
+    LISTTYPE=$1
+    SERVERTYPE=$2
+    local __resultvar=$3
+    
+    if [ ! -r $FILEPATH ]; then
+        echo "Cannot read $FILEPATH" 1>&2
+        exit 1
+    fi
+    
+    if ! which jsonpipe > /dev/null; then
+        echo "Missing jsonpipe script.  Cannot proceed" 1>&2
+        exit 1
+    fi
+    
+    list=$(jsonpipe < $FILEPATH | grep "/packages/$LISTTYPE/$SERVERTYPE/" | cut -f2 | sed 's/"/ /g')
+    eval $__resultvar="'${list[@]}'"
+}

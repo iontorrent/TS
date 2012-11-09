@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 #AUTORUNDISABLED
-VERSION="2.2.3-31037"
+VERSION="2.2.3-1"
 
 # Option for how to use plugin; set to 1 to make each report be a different html
 ALLOW_MULTIPLE_OUTPUTS_PER_RUN=0
@@ -24,7 +24,8 @@ echo "  PGM Flow Order:    $TSP_FLOWORDER" >&2
 echo "  Output File Name:  $PLUGIN_RESULTS_NAME" >&2
 echo "  Runs To Merge:     $PLUGIN_NUM_RUNS" >&2
 echo "  Total AQ17 Reads:  $PLUGIN_TOTAL_AQ17" >&2
-echo "  Host URL:          $PLUGIN_HOST_URL" >&2
+#echo "  Host URL:          $PLUGIN_HOST_URL" >&2
+echo "  API URL:           $RUNINFO__API_URL" >&2
 echo "Selected runs to combine:" >&2
 echo "  $PLUGIN_RUN_LIST" >&2
 echo "" >&2
@@ -102,7 +103,7 @@ fi
 run "ln -sf ${DIRNAME}/css ${TSP_FILEPATH_PLUGIN_DIR}/.";
 
 # Generate list of reports to combine and BAM file list
-run "${DIRNAME}/fetchReportData.pl -x -H \"$PLUGIN_HOST_URL\" -B \"${PLUGIN_OUT_LIST_BAMS}\" \"$PLUGIN_RUN_LIST\" >> \"${TSP_FILEPATH_PLUGIN_DIR}/$PLUGIN_OUT_LIST_HTML\""
+run "${DIRNAME}/fetchReportData.pl -x -H \"$RUNINFO__API_URL\" -B \"${PLUGIN_OUT_LIST_BAMS}\" \"$PLUGIN_RUN_LIST\" >> \"${TSP_FILEPATH_PLUGIN_DIR}/$PLUGIN_OUT_LIST_HTML\""
 
 # Write a front page for non-barcode run
 write_html_results "$PLUGIN_RESULTS_NAME" "$TSP_FILEPATH_PLUGIN_DIR" "." "";

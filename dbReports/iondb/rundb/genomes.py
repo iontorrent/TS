@@ -306,7 +306,7 @@ def edit_genome(request, pk):
 
             genome_set_alignment_sample(rg.pk,rfd.cleaned_data['read_sample_size'])
             
-            url = urlresolvers.reverse("ion-references")
+            url = urlresolvers.reverse("configure_references")
             return http.HttpResponsePermanentRedirect(url)
         else:
             genome_dict = read_genome_info(rg.info_text())
@@ -320,7 +320,7 @@ def edit_genome(request, pk):
                     "index_version" : rg.index_version
             }
             ctx = template.RequestContext(request, ctxd)
-            return shortcuts.render_to_response("rundb/ion_edit_genome.html",
+            return shortcuts.render_to_response("rundb/configure/edit_reference.html",
                                                 context_instance=ctx)
     elif request.method=="GET":
         temp = forms.EditReferenceGenome()
@@ -354,7 +354,7 @@ def edit_genome(request, pk):
                 "stale_index": stale_index
         }
         ctx = template.RequestContext(request, ctxd)
-        return shortcuts.render_to_response("rundb/ion_edit_genome.html",
+        return shortcuts.render_to_response("rundb/configure/edit_reference.html",
                                             context_instance=ctx)
 
 def genome_status(request, pk):

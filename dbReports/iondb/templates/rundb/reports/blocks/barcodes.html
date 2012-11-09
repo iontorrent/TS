@@ -1,0 +1,68 @@
+{% load ion_readable %}
+
+<div>
+	{% if datasets.barcode_config %}
+		<div class="spacer clear"></div>
+				<table id="barcodes" class="">
+					<tr>
+						<th>Barcode Name</th>
+						<th>Sample</th>
+						<th rel='tooltip' title="Post filtering base output per barcode">Output</th>
+						<th>%>=Q20</th>
+						<th>Reads</th>
+						<th>Mean Read Length</th>
+						<th rel='tooltip' title="Read length for each barcode">Read Length Histogram</th>
+       					<th rel='tooltip' title="BAM file for each barcode">BAM</th>
+					</tr>
+					{% for barcode in barcodes %}
+				    	{% if not barcode.filtered %} 
+							<tr>
+								<td> {{barcode.barcode_name|default:"No barcode"}} </td>
+								<td> {{barcode.sample}} </td>
+								<td> {{barcode.total_bases|ion_readable}} </td>
+								<td> {{barcode.Q20_bases|ion_readable}} </td>
+								<td> {{barcode.read_count}} </td>
+								<td> {{barcode.mean_read_length}} </td>
+								<td><img src="{{report.reportWebLink}}/basecaller_results/{{barcode.file_prefix}}.sparkline.png"></td>
+								<td>
+								<span class="btn-group">
+		         					<a class="btn" href="{{barcode.bam_link}}">BAM</a>
+		                   			<a class="btn" href="{{barcode.bai_link}}">BAI</a>
+		                   		</span>
+								</td>
+							</tr>
+					 	{% endif %}
+					{% endfor %}
+				</table>
+		<div class="spacer clear"></div>
+	{%elif CA_barcodes %}
+    <div class="spacer clear"></div>
+				<table id="barcodes" class="">
+					<tr>
+						<th>Barcode Name</th>
+						<th rel='tooltip' title="AQ7 base output per barcode">Aligned Output</th>
+						<th>Reads</th>
+						<th rel='tooltip' title="mean AQ7 read length per barcode">Mean Aligned Read Length</th>						
+       			<th rel='tooltip' title="BAM file for each barcode">BAM</th>
+					</tr>
+					{% for barcode in CA_barcodes %}
+							<tr>
+								<td> {{barcode.ID|default:"No barcode"}} </td>
+								<td> {{barcode.Filtered_Mapped_Bases_in_Q7_Alignments|ion_readable}} </td>
+								<td> {{barcode.Total_number_of_Reads}} </td>								
+								<td> {{barcode.Filtered_Q7_Mean_Alignment_Length}} bp </td>								
+								<td>
+								<span class="btn-group">
+		         					<a class="btn" href="{{report.reportWebLink}}/{{barcode.ID}}_rawlib.bam">BAM</a>
+		                   			<a class="btn" href="{{report.reportWebLink}}/{{barcode.ID}}_rawlib.bam.bai">BAI</a>
+		                   		</span>
+								</td>
+							</tr>
+					{% endfor %}
+				</table>
+		<div class="spacer clear"></div>
+      
+	{% endif %}
+</div>
+
+

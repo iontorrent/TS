@@ -42,10 +42,7 @@ BAMUtils::BAMUtils(BAMRead& BAM_record, std::string qscores, coord_t slop)
 	_init();
 	total_three_prime_ignore = 0;
 	set_genome_length(bam_record.get_ref_len());
-	//init_error_table(error_table_min_len, error_table_max_len, error_table_step_size);
-	
 	_crunch_data();
-	
 }
 
 
@@ -69,7 +66,7 @@ BAMUtils::BAMUtils(BAMRead& BAM_record, std::string qscores, coord_t slop,
 	//set_genome_length(genome_length);	
 	set_genome_length(bam_record.get_ref_len());
 	set_slop_bases(slop);
-	init_error_table(error_table_min_len, error_table_max_len, error_table_step_size);
+	init_error_lens(error_table_min_len, error_table_max_len, error_table_step_size);
 	round_phred_scores = rounding_phred_scores;
     five_prime_justify = Five_Prime_Justify;
 	_crunch_data();
@@ -101,15 +98,10 @@ BAMUtils::~BAMUtils() {
 }
 
 
-void BAMUtils::init_error_table(int min_len, int max_len, int step_size) {
-	
-	//error_lens.resize((max_len - min_len) / step_size);
+void BAMUtils::init_error_lens(int min_len, int max_len, int step_size) {
 	for (int i = min_len; i <= max_len; i+=step_size) {
-		
-		//error_table[i] = -1; this way only have to deal with fields that have data.  no special cases
 		error_lens.push_back(i);
 	}
-	
 }
 
 
@@ -164,15 +156,18 @@ void BAMUtils::_crunch_data() {
 	if (total_three_prime_ignore > 0)
 		remove_bases_before_soft_clipped();
 	
-	int startBase = 0;
-	int stopBase = 0;
-	bool calcRegionError = bam_record.get_region_base_positions(&startBase, &stopBase);
+	int start_base = 0;
+	int stop_base = 0;
+	bool calcRegionError = bam_record.get_region_base_positions(&start_base, &stop_base);
 	
 	_region_clipped = false;
 		
-    if(calcRegionError) adjust_region_base_positions(&startBase, &stopBase, pad_target, &_region_clipped); 
+    if(calcRegionError){
+    	adjust_region_base_positions(&start_base, &stop_base, pad_target, &_region_clipped);
+    	save_region_error_positions(pad_match, _region_error_positions, start_base, stop_base);
+    }
 	
-	score_alignments(q_scores, calcRegionError, startBase, stopBase);
+	score_alignments(q_scores, calcRegionError, start_base, stop_base);
 	
 	calc_error();
 	
@@ -264,8 +259,6 @@ std::string BAMUtils::to_string() {
 	}
 
 	strm << get_full_q_length();
-	strm << "\t";
-	
 	return strm.str();
 	
 }
@@ -819,8 +812,13 @@ void BAMUtils::score_alignments(const std::string& qscores, bool calc_region_err
 			n_qlen = n_qlen + 1;
 		}
 		equiv_len[i] = t_len;
-		if (error_lens.size() != 0 ) {
-			error_table[ n_qlen ] = consecutive_error;
+		if (error_lens.size() != 0 && pad_match[i] != '|') {
+			if(pad_match[i] == ' ')
+				error_table_mis[n_qlen]++;
+			else if(pad_match[i] == '+')
+				error_table_ins[n_qlen]++;
+			else
+				error_table_del[n_qlen]++;
 		}
 
 		if(score_flows) {
@@ -888,6 +886,16 @@ void BAMUtils::score_alignments(const std::string& qscores, bool calc_region_err
 			}
 		}
 	}
+	// A sanity check for debugging purposes: ensure all errrors are accounted for
+	//int err_total = 0;
+	//for(unsigned int i=0; i<error_table_mis.size(); i++) {
+	//	err_total += error_table_mis[i];
+	//	err_total += error_table_ins[i];
+	//	err_total += error_table_del[i];
+	//}
+	//if(err_total != t_diff) {
+	//	std::cout << "ERROR: " << get_name() << " err_total = " << err_total << " and t_diff = " << t_diff << "\n";
+	//}
 
 	//if(score_flows) {
 	//	std::cout << "aligned to flow " << max_aligned_flow << "\n";
@@ -927,7 +935,7 @@ void BAMUtils::score_alignments(const std::string& qscores, bool calc_region_err
                       Q.push_back(  phred_to_upper_prob( phred_val ) );
                     }
 		} else {
-			Q.push_back(pow(10.0, (phred_val)));
+			Q.push_back( calculate_phred( static_cast<double>( phred_val) ) );
 		}
 
 	}
@@ -1009,8 +1017,47 @@ void BAMUtils::adjust_region_base_positions(int* start_base, int* stop_base, std
 		*stop_base = (*stop_base < (static_cast<int>(this_pad_target.size())-1)?(*stop_base):(static_cast<int>(this_pad_target.size())-1));
 		*region_clipped = true;
 		}
+	else{
+		if(this_pad_target[*start_base-1] == '-')*start_base = *start_base - 1;
+		if(this_pad_target[*stop_base-1] == '-')*stop_base = *stop_base - 1;	
+		if( (this_pad_target.size()-*stop_base)<this_pad_target.size()/10) *region_clipped = true; 
+	}
 	
 }
 
 
-
+void BAMUtils::save_region_error_positions(std::string my_pad_match, std::vector<std::pair<long,int> >  &region_error_positions, int start_base, int stop_base)
+{
+	coord_t ref_pos = bam_record.get_pos();
+	coord_t error_pos = ref_pos;
+	int j = 0;
+	int num_errors = 0;
+	std::pair <long, int> error_pos_pair;
+	
+	
+	for(int i = 0; i <= stop_base; i++){
+		if(i >= start_base && my_pad_match.at(i) == '+') { //insertion
+			num_errors++;
+			if((i < stop_base && my_pad_match.at(i+1) != '+') || i == stop_base){				
+				error_pos = ref_pos + j - 1;
+				error_pos_pair.first = error_pos;
+				error_pos_pair.second = num_errors;
+				region_error_positions.push_back(error_pos_pair);
+				num_errors = 0;
+			}
+		}		
+		else{
+			j++;
+			if(i >= start_base && my_pad_match.at(i) != '|'){
+				num_errors = 1;
+				error_pos = ref_pos + j - 1;
+				error_pos_pair.first = error_pos;
+				error_pos_pair.second = num_errors;				
+				region_error_positions.push_back(error_pos_pair);
+			}
+		}		
+	}
+	
+	return;
+	
+}

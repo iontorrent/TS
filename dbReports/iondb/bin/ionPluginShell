@@ -8,8 +8,8 @@ from optparse import OptionParser
 import json
 import re
 
-sys.path.append('/opt/ion/')
-from iondb.plugins import PluginRunner
+import djangoinit
+from iondb.plugins.runner import PluginRunner
 from ion.utils.plugin_json import *
 
 """

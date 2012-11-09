@@ -1,0 +1,191 @@
+	<div class="review-workflow">
+    <div class="row-fluid">
+        <div class="span4">
+            <h3 style="text-decoration: none; font-size: 15px;">Application</h3>
+            <p>
+            <table class="plan-grid">
+                <tr>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Application:</td>
+                    <td width="50%" id="review_application" style="line-height:100%;" >#= runType.description # </td>
+                </tr>
+                <tr>
+                    <td  width="50%" style="line-height:100%; font-weight: bold;">Run type:</td>
+                    <td width="50%"  id="review_runType" style="line-height:100%;">#= tb.runModeDescription(data.runMode) #</td>
+                </tr>                                           
+            </table>
+            </p>
+            <br>
+
+            <h3 style="text-decoration: none; font-size: 15px;">Kits</h3>
+            <p>
+            <p  style="line-height:100%; font-weight: bold;">Sample Preparation Kit:</p> 
+            <p style="line-height:100%; margin:10px;" id="review_samplePrepKit">
+            # if (data.samplePrepKitName != null) { #
+            	#= data.samplePrepKitName # 
+            # } #
+            </p>
+            
+            <p  style="line-height:100%; font-weight: bold;">Library Kit Type:</p> 
+            <p style="line-height:100%; margin:10px;" id="review_libKit"> 
+            # if (data.librarykitname != null) { #
+            	#= data.librarykitname # 
+            # } #
+            </p>
+            
+			<p style="line-height:100%; font-weight: bold;">Forward Library Key:</p> 
+			<p style="line-height:100%; margin:10px;" id="review_forwardLibKey">
+            # if (data.libraryKey != null) { #
+            	#= data.libraryKey # 
+            # } #
+            </p>
+            
+			<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p> 	
+			<p style="line-height:100%; margin:10px;" id="review_forward3Adapter"> 
+            # if (data.forward3primeadapter != null) { #
+            	#= data.forward3primeadapter #
+            # } #
+            </p>
+            
+			#if (data.runMode == "pe")  { #	
+				<p style="line-height:100%; font-weight: bold;">Reverse Library Key:</p> 
+				<p style="line-height:100%; margin:10px;" id="review_peReverseLibKey">
+	            # if (data.reverselibrarykey != null) { #
+	            	#= data.reverselibrarykey # 
+	            # } #
+	            </p>	
+				<p style="line-height:100%; font-weight: bold;">Reverse 3' Adapter:</p> 	
+				<p style="line-height:100%; margin:10px;" id="review_peReverse3Adapter"> 
+	            # if (data.reverse3primeadapter != null) { #
+	            	#= data.reverse3primeadapter # 
+	            # } #
+	            </p>		
+				<p style="line-height:100%; font-weight: bold;">Paired-End Library Adapter:</p> 	
+				<p style="line-height:100%; margin:10px;" id="review_peLibAdapter"> 
+	            # if (data.pairedEndLibraryAdapterName != null) { #
+	            	#= data.pairedEndLibraryAdapterName # 
+	            # } #
+	            </p>				
+			# } #
+			
+            <p  style="line-height:50%; font-weight: bold;">Templating Kit: </p>  
+            <p style="line-height:100%; margin:10px;" id="review_templateKit">
+            # if (data.templatingKitName != null) { #
+            	#= data.templatingKitName # 
+            # } #
+            </p>                                                                    
+            <p  style="line-height:50%; font-weight: bold;">Sequencing Kit:</p>
+            <p style="line-height:100%; margin:10px;" id="review_seqKit">
+            # if (data.sequencekitname != null) { #
+            	#= data.sequencekitname # 
+            # } #
+            </p>            
+            </p>
+           
+            <p>
+            <table class="plan-grid">
+                <tr>
+                <td  width="50%" style="line-height:100%; font-weight: bold;">Flows: </td>
+                <td width="50%" id="review_flowCount" style="line-height:100%;" >#= data.flows #</td>
+                </tr>
+            </table>
+            </p>
+                                        
+            <p  style="line-height:100%; font-weight: bold;" >Barcode Set (optional):</p>
+            <p style="line-height:100%; margin:10px;" id="review_barcodeKit">#= data.barcodeId #</p>
+                                        
+            <p  style="line-height:100%; font-weight: bold;">Control Sequence (optional): </p>    
+            <p style="line-height:100%; margin:10px;" id="review_controlSeq">     
+            # if (data.controlSequencekitname != null) { #
+            	#= data.controlSequencekitname # 
+            # } #
+            </p>
+            
+            <p>
+            <table class="plan-grid">
+                <tr>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Chip Type: </td>
+                    <td width="50%" id="review_chipType" style="line-height:100%;" >
+                    # if (chipType != null && chipType != "") { #
+                        #= chipType.description #&trade;
+                    # } #
+                    </td>
+                </tr>
+            </table>
+            </p>
+			
+            <br>
+        </div>
+       
+        <div class="span4">
+            <h3 style="text-decoration: none; font-size: 15px;">Monitor</h3>
+            <p>
+            <table class="plan-grid">  
+            	# for (var i = 0; i < data.qcValues.length; i++) { #	  
+                <tr>
+                <td style="line-height:100%; font-weight: bold; width:80%;">#= data.qcValues[i].qcType.qcName # : <span>&le; </span></td>
+                <td id="review_qcValues|1" style="line-height:100%;text-align: left;">#= data.qcValues[i].threshold #</td>
+                </tr>
+                # } #
+           </table>
+           </p>
+           <br>
+                            
+           <h3 style="text-decoration: none; font-size: 15px;">Reference</h3>
+           <p>
+            <p style="line-height:100%; font-weight: bold;" >Reference Library:</p>
+            <p style="line-height:100%; margin:10px;" id="review_refLib">#= data.library #</p>
+            <p style="line-height:100%; font-weight: bold;" >Target Regions BED File:</p>
+            <p style="line-height:100%; margin:10px;" id="review_bedfile">#= data.bedfile #</p>
+            <p style="line-height:100%; font-weight: bold;" >Hotspot Regions BED File:</p>
+            <p style="line-height:100%; margin:10px;" id="review_regionfile">#= data.regionfile #</p>
+            </p>                                
+        </div>
+                            
+        <div class="span4">     
+            <h3 style="text-decoration: none; font-size: 15px;">Plugins</h3>
+            <p>
+            <p style="line-height:100%; font-weight: bold;" ><b>Selected plugin(s)</b>: </p>   
+                             
+            <p style="line-height:100%; margin:10px" id="review_selectedPlugins">
+                # if (data.plugins) { #
+                    # for (var i = 0; i < data.plugins.length; i++) { #
+                        #= data.plugins[i] #,
+                    # } #
+                # } #
+           </p>
+                    
+           <p style="line-height:100%; font-weight: bold;" >Variant Frequency: </p>                   
+           <p style="line-height:100%; margin:10px;" id="review_notes">#= data.variantfrequency #</p>
+
+           <h3 style="text-decoration: none; font-size: 15px;">Projects</h3>
+           <p>
+           <p style="line-height:100%; margin:10px" id="review_projects">
+                # if (data.projects) { #
+                    # for (var i = 0; i < data.projects.length; i++) { #
+                        #= data.projects[i] #,
+                    # } #
+                # } #
+           </p>
+                              
+           <h3 style="text-decoration: none; font-size: 15px;">Export</h3>
+           <p>
+           <p style="line-height:100%; margin:10px" id="review_export">
+                # if (data.uploaders) { #
+                    # for (var i = 0; i < data.uploaders.length; i++) { #
+                        #= data.uploaders[i] #,
+                    # } #
+                # } #
+           </p>          
+                                         
+           <h3 style="text-decoration: none; font-size: 15px;">Notes</h3>
+           <p style="line-height:100%; margin:10px;" id="review_notes">#= data.notes #</p>
+           
+       </div>                    
+    </div><!-- row-fluid -->
+    <div class="row-fluid">
+    	<div class="span12">
+    		<p id="barcodeSamplesTitle" class="hide" style="line-height:100%; font-weight: bold;" ><b>Barcodes & Samples</b>: </p>
+    		<div id="barcodeSamples"></div> <!-- JS code will create a Kendo Grid -->
+		</div>
+    </div>
+</div>	

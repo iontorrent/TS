@@ -6,9 +6,8 @@ from django import db
 from django.db import transaction
 import sys
 import os
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 
+import iondb.bin.djangoinit
 from django.db import models
 from iondb.rundb import models
 from socket import gethostname

@@ -60,13 +60,8 @@ my $makebamlist = ($bamlist ne '');
 my @months = ('Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec');
 my $useragent = LWP::UserAgent->new;
 
-if( ! testConnection("http://".$host."/rundb/api/v1/") ) {
-	print STDERR "Unable to access http://".$host."/rundb/api/v1/.\n";
-	print STDERR "Attempting with default authentication 'ionadmin:ionadmin'\n";
-	$host = 'ionadmin:ionadmin@'.$host;
-	die "Unable to access API with authentication. Aborting.\n" if ! testConnection("http://".$host."/rundb/api/v1/");
-}
-$host = "http://".$host;
+my @url_parts = split(/\//,$host);
+$host = join("/",@url_parts[0..2]);
 
 
 my $reportName;
@@ -143,7 +138,7 @@ if( $flowWarn )
 
 sub getReportData
 {
-    my $json_hash = getRequest( '/rundb/api/v1/results/'.$_[0].'/?noplugin=1' );
+    my $json_hash = getRequest("/rundb/api/v1/results/".$_[0]);
     $reportName = $json_hash->{'resultsName'};
     $reportLink = $json_hash->{'reportLink'};
     $filepath = $json_hash->{'filesystempath'};
@@ -172,7 +167,7 @@ sub getReportData
 
 sub getRequest
 {
-    my $reqstr = $host.$_[0];
+    my $reqstr = $host.$_[0]."/?noplugin=1";
     my $errMsg = "DB request failed for $reqstr";
     my $request = HTTP::Request->new(GET => $reqstr);
     $request->content_type('application/json');

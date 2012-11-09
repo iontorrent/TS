@@ -76,11 +76,11 @@ void get_HP(const string& dna, uint& start, uint& end, uint& len, char& nuc) {
 
   end = start;
   len = 0;
-  while (end < dna.size() && (dna[end] == nuc || dna[end] == '-')) { 
+  while (end < dna.size() && (dna[end] == nuc || dna[end] == '-')) {
     if (dna[end] != '-') { 
       if (nuc=='-')
 	nuc=dna[end];
-      len++; 
+      len++;
     }
     end++;
   }
@@ -145,7 +145,8 @@ void tally(BAMUtils& utils1, BAMUtils& utils2) {
   vector<int> errs;
   while (dna1[hp_start1]=='-') hp_start1++;
   countErrs(utils1,errs,hp_start1);
-  hp_start1=0;
+  while (dna2[hp_start2]=='-') hp_start2++;
+  //hp_start1=0;
 
   while (hp_start1 < dna1.size() && hp_start2 < dna2.size()) {
 

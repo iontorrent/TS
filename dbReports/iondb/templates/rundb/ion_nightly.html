@@ -73,7 +73,7 @@
               <a href="{{link}}">{{ r.resultsName }}</a>
             </td>
             <td ALIGN="center">{{ r.experiment.chipType }}</td>
-            <td ALIGN="center">{{ r.experiment.project }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
             <td ALIGN="center">{{ r.experiment.sample }}</td>
             {#Full alignment data #}
             {% ifequal lbm.align_sample 0 %}
@@ -173,13 +173,13 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link,c in reportsAmplNew %}{% spaceless %}
+        {% for r,tfm,lbm,link,cov in reportsAmplNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
             </td>
             <td ALIGN="center">{{ r.experiment.chipType }}</td>
-            <td ALIGN="center">{{ r.experiment.project }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
             <td ALIGN="center">{{ r.experiment.sample }}</td>
             {#Full alignment data #}
             {% ifequal lbm.align_sample 0 %}
@@ -231,90 +231,13 @@
             {% endif %}
 
             <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
-            <td ALIGN="center">{{ c }}</td>
+            <td ALIGN="center">{{ cov }}</td>
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td colspan="11">Notes: {{ r.experiment.notes }}</td>
           </tr>
         {% endspaceless %}
         {% endfor %}
-        </tbody>
-      </table>
-      </br>    
-    {% endif %}
-    
-
-    {% if 0 %}
-      <p>
-      <h2>
-        <center>New Paired-End Run Results</center>
-      </h2>
-      </p>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead style="text-align:left;">
-        <tr>
-          <th ALIGN="left" rowspan="3">Name</th>
-          <th ALIGN="center" rowspan="3">Chip Type</th>
-          <th ALIGN="center" rowspan="3">Project</th>
-          <th ALIGN="center" rowspan="3">Sample</th>
-          <th ALIGN="center" rowspan="3">Reference</th>      
-          <th ALIGN="center" colspan="6" bgcolor=#D8D8D8>Forward</th>
-          <th ALIGN="center" colspan="6" bgcolor=#E6E6E6>Reverse</th>                   
-        </tr>
-        <tr>
-          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ7 Reads</th>
-          <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
-          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ17 bases</th>
-          <th ALIGN="center" rowspan="2" bgcolor=#D8D8D8>%paired</th>     
-          <th ALIGN="right" rowspan="2" bgcolor=#E6E6E6>AQ7 Reads</th>
-          <th ALIGN="center" colspan="3" bgcolor=#E6E6E6>AQ17 Reads</th>
-          <th ALIGN="right" rowspan="2" bgcolor=#E6E6E6>AQ17 bases</th>
-          <th ALIGN="center" rowspan="2" bgcolor=#E6E6E6>%paired</th>          
-        </tr>          
-        <tr>
-          <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
-          <th ALIGN="right" bgcolor=#D8D8D8>200 bp</th>
-          <th ALIGN="right" bgcolor=#D8D8D8>300 bp</th>
-          <th ALIGN="right" bgcolor=#E6E6E6>100 bp</th>
-          <th ALIGN="right" bgcolor=#E6E6E6>200 bp</th>
-          <th ALIGN="right" bgcolor=#E6E6E6>300 bp</th>
-        </tr>
-        <tr>
-          <!-- a little space after the last run entry -->
-          <td>&nbsp;</td>
-        </tr>
-        </thead>
-        <tbody>
-    {% spaceless %} 
-          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
-            <td>
-              <a href="{{link}}">{{ "merged_paired_end_test" }}</a>
-            </td>
-            <td ALIGN="center">{{ "318B" }}</td>
-            <td ALIGN="center">{{ "test" }}</td>
-            <td ALIGN="center">{{ "E84062-pool46-L3513" }}</td>
-            <td ALIGN="center">{{ "ampl_400HSMver12_1" }}</td>
-            
-            <td ALIGN="right" bgcolor=#D8D8D8>{{ 4933951|ion_readable }}</td>
-            <td ALIGN="right" bgcolor=#D8D8D8>{{ 701322|ion_readable }}</td>    
-            <td ALIGN="right" bgcolor=#D8D8D8>{{ 201322|ion_readable }}</td> 
-            <td ALIGN="right" bgcolor=#D8D8D8>{{ 0|ion_readable }}</td>  
-            <td ALIGN="right" bgcolor=#D8D8D8>{{ 274860000|ion_readable }}</td> 
-            <td ALIGN="center" bgcolor=#D8D8D8>{{ "60.2%" }}</td> 
-           
-            <td ALIGN="right" bgcolor=#E6E6E6>{{ 5433951|ion_readable }}</td>
-            <td ALIGN="right" bgcolor=#E6E6E6>{{ 871322|ion_readable }}</td>  
-            <td ALIGN="right" bgcolor=#E6E6E6>{{ 271322|ion_readable }}</td>
-            <td ALIGN="right" bgcolor=#E6E6E6>{{ 0|ion_readable }}</td>   
-            <td ALIGN="right" bgcolor=#E6E6E6>{{ 378600000|ion_readable }}</td> 
-            <td ALIGN="center" bgcolor=#E6E6E6>{{ "67.2%" }}</td>   
-                   
-          </tr>
-          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
-            <td colspan="11">Notes: {{ r.experiment.notes }}</td>
-          </tr>
-        {% endspaceless %}
- 
         </tbody>
       </table>
       </br>    
@@ -331,14 +254,13 @@
   <div style="width:100%; background-color:#DDD;
 	      margin-top:16px; margin-left:auto;
 	      margin-right:auto; padding:8px;">
-    {% if reportsOld %}
-
+	      
+	  {% if reportsPairNew %}
       <p>
       <h2>
-        <center>Re-analyzed Run Results</center>
+        <center>New Paired-End Results</center>
       </h2>
       </p>
-
       <table style="width: 100%; border-collapse: collapse;">
         <thead style="text-align:left;">
         <tr>
@@ -347,29 +269,30 @@
           <th ALIGN="center" rowspan="2">Project</th>
           <th ALIGN="center" rowspan="2">Sample</th>
           <th ALIGN="center" rowspan="2">Reference</th>
-          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ7 Reads</th>
-          <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
-          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ17 bases</th>
-          <th ALIGN="right" rowspan="2">SNR</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>Union AQ7 Reads</th>
+          <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>Union AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>Union AQ17 bases</th>
+          <th ALIGN="center" rowspan="2">Pairing Rate</th>
+          <th ALIGN="center" rowspan="2">Reads Corrected</th>
         </tr>
         <tr>
           <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
           <th ALIGN="right" bgcolor=#D8D8D8>200 bp</th>
           <th ALIGN="right" bgcolor=#D8D8D8>300 bp</th>
-        </tr>        
+        </tr>
         <tr>
           <!-- a little space after the last run entry -->
           <td>&nbsp;</td>
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link in reportsOld %}{% spaceless %}
+        {% for r,tfm,lbm,link,pe in reportsPairNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
             </td>
             <td ALIGN="center">{{ r.experiment.chipType }}</td>
-            <td ALIGN="center">{{ r.experiment.project }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
             <td ALIGN="center">{{ r.experiment.sample }}</td>
             {#Full alignment data #}
             {% ifequal lbm.align_sample 0 %}
@@ -380,7 +303,7 @@
               <td ALIGN="right"
                   bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
               <td ALIGN="right"
-                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+                  bgcolor=#D8D8D8 bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
               <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
             {% endifequal %}
 
@@ -407,7 +330,7 @@
               <td ALIGN="right"
                   bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
               <td ALIGN="right"
-                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+                  bgcolor=#D8D8D8 bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
               <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
             {% endifequal %}
 
@@ -420,7 +343,8 @@
               <td bgcolor=#88CC88>0</td>
             {% endif %}
 
-            <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
+            <td ALIGN="center">{{ pe.0|floatformat:2 }}%</td>
+            <td ALIGN="center">{{ pe.1|floatformat:2 }}%</td>
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td colspan="11">Notes: {{ r.experiment.notes }}</td>
@@ -429,12 +353,10 @@
         {% endfor %}
         </tbody>
       </table>
-      </br>
-    {% else %}
-      <p><b>No re-analysis reports were generated today.</b></p>
-      </br>
+      </br>    
     {% endif %}    
-    
+	      
+	      
     {% if reportsThumbsNew %}
       <p>
       <h2>
@@ -471,7 +393,7 @@
               <a href="{{link}}">{{ r.resultsName }}</a>
             </td>
             <td ALIGN="center">{{ r.experiment.chipType }}</td>
-            <td ALIGN="center">{{ r.experiment.project }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
             <td ALIGN="center">{{ r.experiment.sample }}</td>
             {#Full alignment data #}
             {% ifequal lbm.align_sample 0 %}
@@ -535,6 +457,208 @@
       </br>    
     {% endif %}    
     
+    {% if reportsOldWhole %}
+
+      <p>
+      <h2>
+        <center>Re-analyzed Whole Chip Results</center>
+      </h2>
+      </p>
+
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead style="text-align:left;">
+        <tr>
+          <th ALIGN="left" rowspan="2">Name</th>
+          <th ALIGN="center" rowspan="2">Chip Type</th>
+          <th ALIGN="center" rowspan="2">Project</th>
+          <th ALIGN="center" rowspan="2">Sample</th>
+          <th ALIGN="center" rowspan="2">Reference</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ7 Reads</th>
+          <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ17 bases</th>
+          <th ALIGN="right" rowspan="2">SNR</th>
+        </tr>
+        <tr>
+          <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
+          <th ALIGN="right" bgcolor=#D8D8D8>200 bp</th>
+          <th ALIGN="right" bgcolor=#D8D8D8>300 bp</th>
+        </tr>        
+        <tr>
+          <!-- a little space after the last run entry -->
+          <td>&nbsp;</td>
+        </tr>
+        </thead>
+        <tbody>
+        {% for r,tfm,lbm,link in reportsOldWhole %}{% spaceless %}
+          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+            <td>
+              <a href="{{link}}">{{ r.resultsName }}</a>
+            </td>
+            <td ALIGN="center">{{ r.experiment.chipType }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
+            <td ALIGN="center">{{ r.experiment.sample }}</td>
+            {#Full alignment data #}
+            {% ifequal lbm.align_sample 0 %}
+              <td ALIGN="center">{{ r.experiment.library }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i100Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
+            {% endifequal %}
+
+
+            {# extrapolated alignment data #}
+            {% ifequal lbm.align_sample 1 %}
+              <td ALIGN="center">{{ r.experiment.library }}*</td>
+              <td ALIGN="right" bgcolor=#88CC88>{{ lbm.extrapolated_q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_100q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_200q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_300q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#88CC88>{{ lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable }}</td>
+            {% endifequal %}
+
+            {# Extrapolated thumbnail data #}
+            {% ifequal lbm.align_sample 2 %}
+              <td ALIGN="center">{{ r.experiment.library }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i100Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
+            {% endifequal %}
+
+            {% if lbm.align_sample > 2 %}
+              <td>none</td>
+              <td>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+            {% endif %}
+
+            <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
+          </tr>
+          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+            <td colspan="11">Notes: {{ r.experiment.notes }}</td>
+          </tr>
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+      </br>
+    {% endif %}    
+ 
+    {% if reportsOldThumb %}
+
+      <p>
+      <h2>
+        <center>Re-analyzed Thumbnail Results</center>
+      </h2>
+      </p>
+
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead style="text-align:left;">
+        <tr>
+          <th ALIGN="left" rowspan="2">Name</th>
+          <th ALIGN="center" rowspan="2">Chip Type</th>
+          <th ALIGN="center" rowspan="2">Project</th>
+          <th ALIGN="center" rowspan="2">Sample</th>
+          <th ALIGN="center" rowspan="2">Reference</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ7 Reads</th>
+          <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
+          <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ17 bases</th>
+          <th ALIGN="right" rowspan="2">SNR</th>
+        </tr>
+        <tr>
+          <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
+          <th ALIGN="right" bgcolor=#D8D8D8>200 bp</th>
+          <th ALIGN="right" bgcolor=#D8D8D8>300 bp</th>
+        </tr>        
+        <tr>
+          <!-- a little space after the last run entry -->
+          <td>&nbsp;</td>
+        </tr>
+        </thead>
+        <tbody>
+        {% for r,tfm,lbm,link in reportsOldThumb %}{% spaceless %}
+          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+            <td>
+              <a href="{{link}}">{{ r.resultsName }}</a>
+            </td>
+            <td ALIGN="center">{{ r.experiment.chipType }}</td>
+            <td ALIGN="center">{{ r.projectNames }}</td>
+            <td ALIGN="center">{{ r.experiment.sample }}</td>
+            {#Full alignment data #}
+            {% ifequal lbm.align_sample 0 %}
+              <td ALIGN="center">{{ r.experiment.library }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i100Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
+            {% endifequal %}
+
+
+            {# extrapolated alignment data #}
+            {% ifequal lbm.align_sample 1 %}
+              <td ALIGN="center">{{ r.experiment.library }}*</td>
+              <td ALIGN="right" bgcolor=#88CC88>{{ lbm.extrapolated_q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_100q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_200q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#88CC88>{{ lbm.extrapolated_300q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#88CC88>{{ lbm.extrapolated_mapped_bases_in_q17_alignments|ion_readable }}</td>
+            {% endifequal %}
+
+            {# Extrapolated thumbnail data #}
+            {% ifequal lbm.align_sample 2 %}
+              <td ALIGN="center">{{ r.experiment.library }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q7_alignments|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i100Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i200Q17_reads|ion_readable }}</td>
+              <td ALIGN="right"
+                  bgcolor=#D8D8D8>{{ lbm.i300Q17_reads|ion_readable }}</td>
+              <td ALIGN="right" bgcolor=#D8D8D8>{{ lbm.q17_mapped_bases|ion_readable }}</td>
+            {% endifequal %}
+
+            {% if lbm.align_sample > 2 %}
+              <td>none</td>
+              <td>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+              <td bgcolor=#88CC88>0</td>
+            {% endif %}
+
+            <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
+          </tr>
+          <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
+            <td colspan="11">Notes: {{ r.experiment.notes }}</td>
+          </tr>
+        {% endspaceless %}
+        {% endfor %}
+        </tbody>
+      </table>
+      </br>
+    {% endif %}    
+
   </div> </br> 
   <p>
     * Extrapolated values from sampled alignment.

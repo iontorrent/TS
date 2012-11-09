@@ -28,6 +28,14 @@ extern "C" {
       wells_header_read(FILE *fp);
 
     /*! 
+      write the WELLS file header
+      @param  fp  the file pointer
+      @return     1 if successful, 0 otherwise
+      */
+    int32_t
+      wells_header_write(FILE *fp, wells_header_t *header);
+
+    /*! 
       print the WELLS file header
       @param  fp  the file pointer
       @param  h   pointer to the header to print

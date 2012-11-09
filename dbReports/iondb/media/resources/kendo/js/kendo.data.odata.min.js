@@ -1,0 +1,10 @@
+/*
+* Kendo UI Web v2012.1.322 (http://kendoui.com)
+* Copyright 2012 Telerik AD. All rights reserved.
+*
+* Kendo UI Web commercial licenses may be obtained at http://kendoui.com/web-license
+* If you do not own a commercial license, this file shall be governed by the
+* GNU General Public License (GPL) version 3.
+* For GPL requirements, please review: http://www.gnu.org/copyleft/gpl.html
+*/
+(function(a,b){function h(d){var f=[],g=d.logic||"and",i,j,k,l,m,n,o,p=d.filters;for(i=0,j=p.length;i<j;i++)d=p[i],k=d.field,o=d.value,n=d.operator,d.filters?d=h(d):(k=k.replace(/\./g,"/"),d=e[n],d&&o!==b&&(l=a.type(o),l==="string"?(m="'{1}'",o=o.replace(/'/g,"''")):l==="date"?m="datetime'{1:yyyy-MM-ddTHH:mm:ss}'":m="{1}",d.length>3?d!=="substringof"?m="{0}({2},"+m+")":m="{0}("+m+",{2})":m="{2} {0} "+m,d=c.format(m,d,o,k))),f.push(d);d=f.join(" "+g+" "),f.length>1&&(d="("+d+")");return d}var c=window.kendo,d=a.extend,e={eq:"eq",neq:"ne",gt:"gt",gte:"ge",lt:"lt",lte:"le",contains:"substringof",endswith:"endswith",startswith:"startswith"},f={pageSize:a.noop,page:a.noop,filter:function(a,b){b&&(a.$filter=h(b))},sort:function(b,c){b.$orderby=a.map(c,function(a){var b=a.field.replace(/\./g,"/");a.dir==="desc"&&(b+=" desc");return b}).join(",")},skip:function(a,b){b&&(a.$skip=b)},take:function(a,b){b&&(a.$top=b)}},g={read:{dataType:"jsonp"}};d(!0,c.data,{schemas:{odata:{type:"json",data:function(a){return a.d.results||[a.d]},total:"d.__count"}},transports:{odata:{read:{cache:!0,dataType:"jsonp",jsonp:"$callback"},update:{cache:!0,dataType:"json",contentType:"application/json",type:"PUT"},create:{cache:!0,dataType:"json",contentType:"application/json",type:"POST"},destroy:{cache:!0,dataType:"json",type:"DELETE"},parameterMap:function(a,b){var d,e,h,i;a=a||{},b=b||"read",i=(this.options||g)[b],i=i?i.dataType:"json";if(b==="read"){d={$format:"json",$inlinecount:"allpages"};for(h in a)f[h]?f[h](d,a[h]):d[h]=a[h]}else{if(i!=="json")throw new Error("Only json dataType can be used for "+b+" operation.");if(b!=="destroy"){for(h in a)e=a[h],typeof e=="number"&&(a[h]=e+"");d=c.stringify(a)}}return d}}}})})(jQuery)

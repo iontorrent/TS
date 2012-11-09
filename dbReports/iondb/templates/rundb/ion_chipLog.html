@@ -1,0 +1,15 @@
+<div id="modal_chip_log" title="" class="modal hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">x</button>
+		<h1>InitLog.txt</h1>
+	</div>
+	<div class="modal-body">
+	<div id="modal-error-messages"></div>
+	{% for line in lineList %}
+	  {{line}}<br />
+	{% endfor %}
+	</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Close</a>
+	</div>    
+</div>

@@ -51,7 +51,6 @@ public:
       AddValue(values[i]);
     }
   }
-  
 
   int GetNumSeen() {
     return mSample.GetNumSeen();

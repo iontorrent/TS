@@ -2,6 +2,10 @@
 #ifndef REGIONWELLSREADER_H
 #define REGIONWELLSREADER_H
 
+//! @file     RegionWellsReader.h
+//! @ingroup  BaseCaller
+//! @brief    RegionWellsReader. Thread-safe, poorly-regionized wrapper for RawWells. Delete soon.
+
 #include <deque>
 #include <vector>
 #include <string>

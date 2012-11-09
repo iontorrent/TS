@@ -1,0 +1,21 @@
+<div id="rawAligned" class="span3 well centered">
+    <a data-toggle="modal" class="report-metric-visual showImg" href="#rawAccuracyModal">
+        <div rel='tooltip' title="Average raw (1x) accuracy across each individual base position in a read" class="number-chunk">
+            <h2>{{raw_accuracy}}%</h2>
+        	<small>Mean Raw Accuracy 1x</small>
+        </div>
+    	<img class="showImg" src="{{report.reportWebLink}}/base_error_plot.png">
+    </a>
+    <div class="modal hide" id="rawAccuracyModal">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h3>Raw Accuracy Detail</h3>
+        </div>
+        <div class="modal-body" id="rawaccuracy_body">
+            <img style="width: 400px;" src="{{report.reportWebLink}}/base_error_plot.png">
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,49 @@
+{% extends "rundb/reports/base.html" %}
+
+{% block content %}
+
+<div id="data_view" class="content group">
+    {% if error %}
+        <h1>Old report analysis</h1>
+        <p>
+            Cannot display TorrentSuite 3.0-style report for a pre-3.0 analysis run.
+        </p>
+        <ul>
+            <li>
+                <a href="/report/analyze/{{report.experiment.pk}}/0/">
+                    Re-analyze the run to generate a new report
+                </a>
+            </li>
+            <li>
+                <a href="{{report_link}}/Default_Report.php">View the pre-3.0 report</a>
+            </li>
+            <li>
+                <a href="{% url report report.pk %}log" id="log-btn">
+                        View this report Log</a>
+            </li>
+        </ul>
+        
+
+    {% endif %}
+
+    {% if contents %}
+
+        {%if not error%}
+            <h1>Report Error Log <small>Refresh the page to see updates</small></h1>
+            <pre id="log">{{contents}}</pre>
+        {%endif%}
+
+    {% else %}
+        <h2>There is no log to view.</h2>
+    {% endif %}
+
+    {% if not error%}
+        <ul>
+            <li><a href="{{report_link}}/Default_Report.php">View the old report</a></li>
+            <li><a href="{{report_link}}/csa.php">Customer Support Archive</a></li>
+            <li><a href="{% url report report.pk %}">Report</a></li>
+            <li><a href="{{report_link}}/drmaa_stdout.txt">drmaa_stdout.txt</a></li>
+        </ul>
+    {%endif%}
+</div>
+{% endblock content %}

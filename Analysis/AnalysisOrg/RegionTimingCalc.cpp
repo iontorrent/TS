@@ -108,7 +108,6 @@ extern void *TimingFitWorker(void *arg)
     }
     if (true) {
       TimingFitWorkOrder *info = (TimingFitWorkOrder *)(item.private_data);
-      
       FillOneRegionTimingParameters(info->region_time, info->regions, info->r, info->kic);
     }
   // indicate we finished that bit of work
@@ -119,12 +118,14 @@ extern void *TimingFitWorker(void *arg)
 }
 
 
-void threadedFillRegionalTimingParameters(RegionTiming *region_time, Region *regions, int numRegions, AvgKeyIncorporation *kic)
+void threadedFillRegionalTimingParameters(std::vector<RegionTiming>& region_time, std::vector<Region>& regions, AvgKeyIncorporation *kic, int numThreads)
 {
   WorkerInfoQueue *threadWorkQ;
   WorkerInfoQueueItem item;
-    int numWorkers = numCores();
-    if (numWorkers>4) numWorkers = 4;
+  int numRegions = (int)regions.size();
+  int numWorkers = numCores();
+  if (numThreads > 0) numWorkers = numThreads; 
+  if (numWorkers>4) numWorkers = 4;
   
     threadWorkQ = new WorkerInfoQueue(std::max(numRegions,numWorkers)+1);
   // spawn threads

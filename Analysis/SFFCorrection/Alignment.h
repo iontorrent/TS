@@ -3,7 +3,6 @@
 #define ALIGNMENT_H
 
  #include <string>
- #include "string.h"
  #define GAP '-'
 
 

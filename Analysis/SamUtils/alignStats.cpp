@@ -43,7 +43,12 @@ AlignStats::AlignStats(options& settings) : opt(settings) {
 			  //output errors within the region to file hard-coded file "regionErrors.txt" 
 			  string region_error_file_name("region_errors.txt");
 			  _region_error_outputfile.open(region_error_file_name.c_str());
-	    	 	  _region_error_outputfile << "#read_id" << "\t"<< "HomoErr" << "\t" << "MmErr" << "\t" << "IndelErr" << "\t" << "InsErr" << "\t" << "DelErr" << "\t" << "RegionClipped" << endl;
+	    	  _region_error_outputfile << "#read_id" << "\t"<< "HomoErr" << "\t" << "MmErr" << "\t" << "IndelErr" << "\t" << "InsErr" << "\t" << "DelErr" << "\t" << "RegionClipped" << endl;
+		
+	    	  string _region_error_positions_file_name("region_error_positions.txt");
+			  _region_error_positions_outputfile.open(_region_error_positions_file_name.c_str());
+			  _region_error_positions_outputfile << "#Read_ID" << "\t"<< "Number of Positions" << "\t" << "Position 1" << "\t" << "# of Errors at Position1" << "\t" << "..." << endl;
+			    	 	  
 	
 		}
 		else{
@@ -82,15 +87,11 @@ void AlignStats::init() {
 void AlignStats::init_data_structs() {
 	
 	if (opt.stdin_sam_flag) {
-		
 		reader.open("-", "r");
-		
 	} else if (opt.stdin_bam_flag) {
 		reader.open("-", "rb");
-		
 	} else {
 		reader.open(opt.bam_file);
-
 	}
 
     if (!reader.is_open()) {
@@ -124,7 +125,6 @@ void AlignStats::init_data_structs() {
 	phreds.assign(q_scores.size(), 0);
 	for(unsigned int j = 0; j < q_scores.size(); j++) {
 		phreds[j] = strtol(q_scores[j].c_str(), NULL, 10);
-		
 	}
 	
 	// init flow-error accounting data structures
@@ -133,34 +133,33 @@ void AlignStats::init_data_structs() {
 	flow_err_bases.clear();
 
 	//init error table
-	error_to_length_map initialized_map(opt.align_summary_max_errors);
-	for (int z = 0; z <= opt.align_summary_max_errors; z++) {
+	error_to_length_map initialized_map(opt.err_table_max_errors);
+	for (int z = 0; z <= opt.err_table_max_errors; z++) {
 		initialized_map[z] = 0;
 	}
-	
-	read_totals_t::size_type read_totals_size = 0;
-	
-	for (int i = opt.align_summary_min_len; i <= opt.align_summary_max_len; i += opt.align_summary_len_step) {
-		error_table_read_lens.push_back(i);
-	
-		//error_table_errors_at_len.push_back(0);
-		
+	mapped_bases = 0;
+	mapped_reads = 0;
+	for (int i = opt.err_table_min_len; i <= opt.err_table_max_len; i += opt.err_table_len_step) {
 		unaligned_read_totals[i] = 0;
 		clipped_read_totals[i] = 0;
 		filtered_read_totals[i] = 0;
 		error_table[i] = initialized_map;
-		
 		total_error_to_length[i] = 0;
-		
+		per_position_mismatch[i] = 0;
+		per_position_insertion[i] = 0;
+		per_position_deletion[i] = 0;
+		error_table_read_lens.push_back(i);
+	}
+
+	// Init AQ length table 
+	read_totals_t::size_type read_totals_size = 0;
+	for (int i = opt.align_summary_min_len; i <= opt.align_summary_max_len; i += opt.align_summary_len_step) {
+		alignment_summary_read_lens.push_back(i);
 		read_totals_size++;
 	}
-	
-	
 	for (unsigned int j = 0; j < phreds.size(); j++) {
-		
 		alignment_summary_map[ phreds[j] ] = read_totals_t( read_totals_size );
 	}
-	
 }
 
 
@@ -205,6 +204,27 @@ void AlignStats::set_genome_info( ) {
 
 
 
+static void printProgress(long total_reads_cached, long total_reads_processed)
+{
+        static int max_length = 0;
+        int cur_length = 0;
+        std::stringstream stream;
+        // make the stream
+        stream << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed";
+        std::string str = stream.str();
+        // get the string
+        cur_length = str.length();
+        if (max_length < cur_length) {
+                max_length = cur_length;
+        }
+        // print the string
+        std::cerr << "\r" << str;
+        // print padding, if necessary
+        while(0 < max_length - cur_length) { // TODO: only need to print up to the last string's length
+            std::cerr << " ";
+            cur_length++;
+        }
+}
 
 
 void AlignStats::go() {	
@@ -242,31 +262,37 @@ void AlignStats::go() {
 	}
 	if (opt.debug_flag) std::cerr << "[go] worker threads joined" << std::endl;
 	if (opt.debug_flag ) { //opt.debug_flag output is cleaner without this, and this information is already there anyway
-		std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
+                printProgress(total_reads_cached, total_reads_processed);
 	}
 
 	//for region-specific errors: start
 	if(_region_positions_defined){		
 		_region_error_outputfile << "#total_errors" << "\t"<< _total_region_homo_err << "\t" << _total_region_mm_err << "\t" << _total_region_indel_err << "\t" << _total_region_ins_err << "\t" << _total_region_del_err << endl;
 		_region_error_outputfile.close();
+		_region_error_positions_outputfile.close();
 	}
 	//for region-specific errors: end	
 
 	if (opt.debug_flag) cerr << "[go] bam_itr.good(): " << bam_itr.good() << std::endl;
 	sam_parsed.close();
 	
-
 	
 	//while (true);
 	write_alignment_summary();
 	
-	if (opt.align_summary_file.size() > 0) {
-		write_error_table();
+	if (opt.err_table_txt_file.size() > 0) {
+		write_error_table_txt(opt.err_table_txt_file);
+	}
+	
+	if (opt.err_table_json_file.size() > 0) {
+		write_error_table_json(opt.err_table_json_file);
 	}
 	
 	if (opt.score_flows) {
 		write_flow_error_table();
 	}
+
+        std::cerr << "\n"; // final newline
 	
 }
 //bam_itr.next();
@@ -428,8 +454,8 @@ bool AlignStats::read_bam(BAMReader::iterator& bam_itr, std::vector<pthread_t>& 
 			}
 			total_reads_cached++;
 			if (!opt.debug_flag ) { //opt.debug_flag output is cleaner without this, and this information is already there anyway
-				if (total_reads_cached % 10000 == 0) {
-					std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
+				if (total_reads_cached % 10000 == 0 || (0 < total_reads_processed && total_reads_processed % 10000 == 0)) {
+                                        printProgress(total_reads_cached, total_reads_processed);
 				}
 			}
 						
@@ -642,11 +668,16 @@ void  AlignStats::consume_read_queue() {
 	std::vector<coord_t> my_coverage(q_scores.size(), 0);
 	
 							//len, errors
+	long						my_mapped_bases(mapped_bases);
+	long						my_mapped_reads(mapped_reads);
 	error_table_type					my_error_table(error_table);
 	phred_to_totals_t					my_alignment_summary_map(alignment_summary_map);
 	length_to_total_map_t				my_clipped_reads(clipped_read_totals);
-	length_to_total_map_t				my_filtered_reads(clipped_read_totals);
+	length_to_total_map_t				my_filtered_reads(filtered_read_totals);
 	length_to_total_map_t				my_total_error_to_length(total_error_to_length);
+	length_to_total_map_t				my_per_position_mismatch(per_position_mismatch);
+	length_to_total_map_t				my_per_position_insertion(per_position_insertion);
+	length_to_total_map_t				my_per_position_deletion(per_position_deletion);
 
 	std::vector<int> my_max_aligned_flow;
 	std::vector<uint32_t> my_flow_err;
@@ -686,8 +717,8 @@ void  AlignStats::consume_read_queue() {
 		
 			util_cache.push_back(BAMUtils(*itr, opt.q_scores, 
                                 opt.start_slop, opt.iupac_flag, opt.keep_iupac, 
-                                opt.truncate_soft_clipped, opt.align_summary_min_len, 
-                                opt.align_summary_max_len, opt.align_summary_len_step, 
+                                opt.truncate_soft_clipped, opt.err_table_min_len, 
+                                opt.err_table_max_len, opt.err_table_len_step, 
                                 opt.three_prime_clip, opt.round_phred_scores,
                                 opt.five_prime_justify,opt.flow_order));			
 
@@ -702,15 +733,12 @@ void  AlignStats::consume_read_queue() {
 				
 				q_len.at(k) = util.get_phred_len(phreds[k]);
 				
-				if (q_len.at(k) > opt.filter_length) {
+				if (q_len.at(k) > opt.align_summary_filter_len) {
 					my_qnum[k]++;
 					my_qsum[k] += q_len.at(k);
 					
-					
-					
-					
 					for (read_totals_t::size_type z = 0; z < my_alignment_summary_map[ phreds[k] ].size(); z++) {
-						if (q_len.at(k) >= error_table_read_lens[ z ] ) {
+						if (q_len.at(k) >= alignment_summary_read_lens[ z ] ) {
 							my_alignment_summary_map[ phreds[k] ][ z ]++;
 						} else {
 							break; //save some loop iterations
@@ -729,10 +757,10 @@ void  AlignStats::consume_read_queue() {
 					my_qhisto[k][q_len.at(k)]++;
 				}
 			}
-			if ((util.pass_filtering(opt.align_summary_filter_len, opt.align_summary_filter_accuracy) || 
-					opt.align_summary_filter_len == 0 || opt.align_summary_filter_accuracy == 0.0)  ) {
+			my_mapped_bases += util.get_t_length();
+			my_mapped_reads ++;
+			if ((util.pass_filtering(opt.err_table_filter_len, opt.err_table_filter_accuracy) || opt.err_table_filter_len == 0 || opt.err_table_filter_accuracy == 0.0)  ) {
 				// The read meets our minimal criteria to be used for error assessment
-
 				if(opt.score_flows) {
 					my_max_aligned_flow.push_back(util.get_max_aligned_flow());
 					std::vector<uint16_t>& read_flow_err = util.get_flow_err();
@@ -749,24 +777,16 @@ void  AlignStats::consume_read_queue() {
 					}
 				}
 					
-				//cerr << util.get_name() << "\tin pass_filtering conditional" << endl;
-				//for(BAMUtils::error_table_iterator tbl_itr = util.error_table_begin(); 
-				//	tbl_itr != util.error_table_end(); ++tbl_itr) {
-				
-				//tbl_itr->first = length of read
-				//tbl_itr->second = # of errors
-				
-				//first = length //second = #of errors
-				//map_itr->first = length of read
-				//map_itr->second = inner_table
-					//passed filters, but is short due to soft clipping (maybe)
 				int total_errors_in_read = 0;
-				for (int len = opt.align_summary_min_len; (len <= opt.align_summary_max_len) ; len+=opt.align_summary_len_step) {
+				for (int len = opt.err_table_min_len; (len <= opt.err_table_max_len) ; len+=opt.err_table_len_step) {
 					int errors_at_this_position = util.get_total_position_errors(len);
 					total_errors_in_read = util.get_total_error_at_length(len);
 					if ( ( len <= (util.get_q_length() ) ) ) {
 						if (total_errors_in_read >= 0)	{
-							my_total_error_to_length[ len ] +=  errors_at_this_position;
+							my_total_error_to_length[ len ]  +=  errors_at_this_position;
+							my_per_position_mismatch[ len ]  += util.get_total_position_errors_mis(len);
+							my_per_position_insertion[ len ] += util.get_total_position_errors_ins(len);
+							my_per_position_deletion[ len ]  += util.get_total_position_errors_del(len);
 							error_table_type::iterator map_itr = my_error_table.find(len); //len used to be tbl_itr->first
 							if (map_itr != my_error_table.end()) {
 								//exists in map
@@ -787,7 +807,6 @@ void  AlignStats::consume_read_queue() {
 								new_map.insert(error_to_length_map::value_type(total_errors_in_read, 1));
 								my_error_table.insert(error_table_type::value_type(len, new_map));
 							}
-							
 						} else {
 							/*if ((util.get_q_length() + util.get_soft_clipped_bases() + opt.three_prime_clip ) >= len) {
 								my_clipped_reads[ len ]++;
@@ -801,27 +820,17 @@ void  AlignStats::consume_read_queue() {
 							my_clipped_reads[ len ]++;
 						}
 					}
-
-						
 				}
-				
-				
-			}//will it at least pass accuracy filter?
+			}
 			else  {  //doesn't pass filtering or clipped metrics
-				//cerr << util.get_name() << "\tin excluded conditional\tqLen: " << util.get_q_length() << endl;
-
-				for (int i = opt.align_summary_min_len; i <= opt.align_summary_max_len; i+=opt.align_summary_len_step) {
+				for (int i = opt.err_table_min_len; i <= opt.err_table_max_len; i+=opt.err_table_len_step) {
 					if (util.get_q_length() >= i) {
 						my_filtered_reads[i]++;
 					} else {
 						break;
 					}
-					
 				}
-			} 			
-						
-			
-			
+			}
 			my_total_reads_processed++;
 		}
 		my_reads.clear();
@@ -847,18 +856,30 @@ void  AlignStats::consume_read_queue() {
 		int	region_ins_err = 0;
 		int	region_del_err = 0;
 		bool 	region_clipped = false; 
+		std::vector<std::pair<long,int> >  region_error_positions;
 		
 		if(_region_positions_defined){
 			ScopedLock lck(&_region_error_outputfile_mutex);
 			for (util_list::iterator w_itr = util_cache.begin(); w_itr != util_cache.end(); ++w_itr) {			
 				if((*w_itr).get_bamread().region_error_flag()){
-					(*w_itr).get_region_errors(&region_homo_err, &region_mm_err, &region_indel_err,&region_ins_err, &region_del_err, &region_clipped);
-					_region_error_outputfile << (*w_itr).get_bamread().get_qname() << "\t"<< region_homo_err << "\t" << region_mm_err << "\t" << region_indel_err << "\t" << region_ins_err << "\t" << region_del_err << "\t" << region_clipped<< endl;
-					_total_region_homo_err = _total_region_homo_err + region_homo_err;	
-					_total_region_mm_err = _total_region_mm_err + region_mm_err;
-					_total_region_indel_err = _total_region_indel_err + region_indel_err;
-					_total_region_ins_err = _total_region_ins_err + region_ins_err;
-					_total_region_del_err = _total_region_del_err + region_del_err;					
+					(*w_itr).get_region_errors(&region_homo_err, &region_mm_err, &region_indel_err,&region_ins_err, &region_del_err, &region_clipped, &region_error_positions);
+					if(!region_clipped){
+						_region_error_outputfile << (*w_itr).get_bamread().get_qname() << "\t"<< region_homo_err << "\t" << region_mm_err << "\t" << region_indel_err << "\t" << region_ins_err << "\t" << region_del_err << endl; //MJ
+						_total_region_homo_err = _total_region_homo_err + region_homo_err;	
+						_total_region_mm_err = _total_region_mm_err + region_mm_err;
+						_total_region_indel_err = _total_region_indel_err + region_indel_err;
+						_total_region_ins_err = _total_region_ins_err + region_ins_err;
+						_total_region_del_err = _total_region_del_err + region_del_err;			
+						
+						int len_region_error = region_error_positions.size();
+						
+						_region_error_positions_outputfile << (*w_itr).get_bamread().get_qname() << "\t" <<  len_region_error;
+						for(int ii=0; ii<len_region_error; ii++){
+							_region_error_positions_outputfile << "\t" << (region_error_positions.at(ii)).first << "\t" << (region_error_positions.at(ii)).second; 
+						}
+						_region_error_positions_outputfile << std::endl;
+					}
+					
 				}			
 			}		
 		}		
@@ -879,7 +900,12 @@ void  AlignStats::consume_read_queue() {
 		{
 			ScopedLock lck(&worker_mutex);
 			total_reads_processed += my_total_reads_processed;
-			std::cerr << "[alignStats] " << total_reads_cached << " alignments read, " << total_reads_processed << " analyzed" << "\r";
+			if (!opt.debug_flag ) { //opt.debug_flag output is cleaner without this, and this information is already there anyway
+                                if (10000 < my_total_reads_processed || (int)(total_reads_processed / 10000) != (int)((total_reads_processed-my_total_reads_processed) / 10000)) {
+                                        printProgress(total_reads_cached, total_reads_processed);
+                                }
+
+			}
 		}
 		//first_pass = false;
 	}
@@ -933,14 +959,15 @@ void  AlignStats::consume_read_queue() {
 			
 		}
 		
-		for (int i = opt.align_summary_min_len; i <= opt.align_summary_max_len; i+=opt.align_summary_len_step) {
-			clipped_read_totals[ i ] = clipped_read_totals[ i ] + my_clipped_reads[ i ];
-			
-			filtered_read_totals[ i ] = filtered_read_totals[ i ] + my_filtered_reads[ i ];
-			
-			total_error_to_length[ i ] = total_error_to_length[ i ]	+ my_total_error_to_length[ i ];
-			
-			
+		mapped_bases = mapped_bases + my_mapped_bases;
+		mapped_reads = mapped_reads + my_mapped_reads;
+		for (int i = opt.err_table_min_len; i <= opt.err_table_max_len; i+=opt.err_table_len_step) {
+			clipped_read_totals[i]    += my_clipped_reads[i];
+			filtered_read_totals[i]   += my_filtered_reads[i];
+			total_error_to_length[i]  += my_total_error_to_length[i];
+			per_position_mismatch[i]  += my_per_position_mismatch[i];
+			per_position_insertion[i] += my_per_position_insertion[i];
+			per_position_deletion[i]  += my_per_position_deletion[i];
 		}
 		
 		if(opt.score_flows) {
@@ -960,8 +987,6 @@ void  AlignStats::consume_read_queue() {
 	}//end scope
 	if (opt.debug_flag) std::cerr <<"[worker thread] thread["<< me << "] exiting.. " << std::endl;
 	pthread_exit(NULL);
-	
-	
 }
 
 
@@ -1056,6 +1081,8 @@ void AlignStats::write_alignment_summary() {
 		}
 	}
 	
+
+  alignment_stats << "[global]" << endl;
 	alignment_stats << "Genome = " << genome_name << endl;
 	alignment_stats	<< "Genome Version = " << genome_version << endl;
 	alignment_stats	<< "Index Version = " << index_version << endl;
@@ -1067,7 +1094,6 @@ void AlignStats::write_alignment_summary() {
 			if (genome_length == 0 || (opt.skip_cov_flag || !is_sorted)) {
 				alignment_stats	<< "Filtered Q" << q_scores[k] << " Coverage Percentage = 0" << endl; 
 				alignment_stats << "Filtered Q" << q_scores[k] << " Mean Coverage Depth = 0" << endl;
-				
 			}
 			if (genome_length > 0 && (!opt.skip_cov_flag && is_sorted)) {
 				if (opt.debug_flag) std::cerr << "[write_alignment_summary] q_scores["<<k<<"] coverage["<<k<<"] = " << coverage[k] << " genome_length = " << genome_length << std::endl;
@@ -1080,14 +1106,11 @@ void AlignStats::write_alignment_summary() {
 			alignment_stats << "Filtered Q" << q_scores[k] << " Alignments = " << q_num[k] << endl;
 			if (q_num[k] > 0) {
 				double align_len = (double)q_sum[k]/(double)q_num[k];
-				
-				
 				alignment_stats << "Filtered Q" << q_scores[k] << " Mean Alignment Length = " 
 				<<  fixed << setprecision(0) << align_len << endl;
 			}
 			if (q_num[k] == 0) {
 				alignment_stats << "Filtered Q" << q_scores[k] << " Mean Alignment Length = 0" << endl;
-				
 			}
 			
 			alignment_stats << "Filtered Mapped Bases in Q" 
@@ -1096,12 +1119,8 @@ void AlignStats::write_alignment_summary() {
 			
 			
 			for (unsigned int z = 0; z < alignment_summary_map[ phreds[k] ].size(); z++) {
-				alignment_stats << "Filtered " << error_table_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
+				alignment_stats << "Filtered " << alignment_summary_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
 			}
-			/*
-			<< "Filtered 50Q" << q_scores[k] << " Reads = " << q_fif_num[k] << endl
-			<< "Filtered 100Q" << q_scores[k] << " Reads = " << q_hun_num[k] << endl
-			<< "Filtered 200Q" << q_scores[k] << " Reads = " << q_two_hun_num[k] << endl;*/
 		}
 	} else { //must be sampled
 		alignment_stats << "Total number of Sampled Reads = " << opt.sample_size << endl;
@@ -1134,7 +1153,7 @@ void AlignStats::write_alignment_summary() {
 			<< q_scores[k] << " Alignments = " << q_sum[k] << endl
 			<< "Sampled Filtered Q" << q_scores[k] << " Longest Alignment = " << q_longest[k] << endl;
 			for (unsigned int z = 0; z < alignment_summary_map[ phreds[k] ].size(); z++) {
-				alignment_stats << "Sampled Filtered " << error_table_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
+				alignment_stats << "Sampled Filtered " << alignment_summary_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
 			}
 			/*
 			<< "Sampled Filtered 50Q" << q_scores[k] << " Reads = " << q_fif_num[k] << endl
@@ -1179,52 +1198,41 @@ void AlignStats::write_alignment_summary() {
 			alignment_stats << "Extrapolated Filtered Mapped Bases in Q" << q_scores[k] << " Alignments = " <<   q_sum[k] << endl
 			<< "Extrapolated Filtered Q" << q_scores[k] << " Longest Alignment = NA" << endl;
 			for (unsigned int z = 0; z < alignment_summary_map[ phreds[k] ].size(); z++) {
-				alignment_stats << "Extrapolated Filtered " << error_table_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
+				alignment_stats << "Extrapolated Filtered " << alignment_summary_read_lens[z] <<"Q"<<  q_scores[k] << " Reads = " << alignment_summary_map[ phreds[k] ][ z ] << endl;
 			}
 			/*<< "Extrapolated Filtered 50Q" << q_scores[k] << " Reads = " <<   q_fif_num[k] << endl
 			<< "Extrapolated Filtered 100Q" << q_scores[k] << " Reads = " <<   q_hun_num[k] << endl
 			<< "Extrapolated Filtered 200Q" << q_scores[k] << " Reads = " <<   q_two_hun_num[k] << endl;*/
 		}
-		
-		
 	}
-	
-	
 	alignment_stats.close();
 	
 	if (!opt.skip_cov_flag && is_sorted) { 
-	
-	
 		for ( vector<string>::size_type k = 0; k < q_scores.size(); k++) {
-			//string histo_prefix = opt.out_file+  "Q" + q_scores[k];
-          string histo_prefix =  "Q" + q_scores[k];
-          ofstream histo_file;
-          if ( opt.output_dir.length() > 0 ) {
-            histo_file.open( string( opt.output_dir + "/" + histo_prefix + ".histo.dat").c_str() );
-          } else {
-            histo_file.open( string(histo_prefix + ".histo.dat").c_str() );
-          }
-          if (histo_file.fail()) {
-            cerr << "[alignStats] couldn't open " << histo_prefix + "histo.dat" << endl;
-			exit(1);
-				
-		  }
-						
-          for (int i = 0; i <= opt.align_summary_max_len; i++) {
-              if (i <= opt.filter_length) {
-                  histo_file << i << " 0" << endl;
-              }
-              else if(i >opt.filter_length) {
-                  histo_file << i << " " << q_histo[k][i] << endl;
-                  
-              }
-          }
-          histo_file.close();
-        }
+          		string histo_prefix =  "Q" + q_scores[k];
+          		ofstream histo_file;
+          		if ( opt.output_dir.length() > 0 ) {
+            			histo_file.open( string( opt.output_dir + "/" + histo_prefix + ".histo.dat").c_str() );
+          		} else {
+            			histo_file.open( string(histo_prefix + ".histo.dat").c_str() );
+          		}
+          		if (histo_file.fail()) {
+            			cerr << "[alignStats] couldn't open " << histo_prefix + "histo.dat" << endl;
+				exit(1);
+		  	}
+
+          		for (int i = 0; i <= opt.align_summary_max_len; i++) {
+              			if (i <= opt.align_summary_filter_len) {
+                  			histo_file << i << " 0" << endl;
+				} else {
+                  			histo_file << i << " " << q_histo[k][i] << endl;
+              			}
+          		}
+			histo_file.close();
+        	}
 	}
 	
 	if (opt.debug_flag) std::cerr << "[write_alignment_summary] done" << std::endl;
-	
 }
 	
 
@@ -1253,21 +1261,18 @@ void AlignStats::write_flow_error_table() {
  x		
  */
 
-void AlignStats::write_error_table() {
-		
-	
-	ofstream alignment_stats(opt.align_summary_file.c_str());
+void AlignStats::write_error_table_txt(string outFile) {
+	ofstream alignment_stats(outFile.c_str());
 	char delimiter = '\t';
 	if (alignment_stats.fail()) {
-		cerr << "[alignStats] couldn't open " << opt.align_summary_file << endl;
+		cerr << "[alignStats] couldn't open " << outFile << endl;
 		return;
 	}
 	//write header of file
 	alignment_stats << "readLen" << delimiter << "nread" << delimiter << "unalign" << delimiter <<"excluded"<< delimiter << "clipped" << delimiter <<"totErr";
-	for (int i = 0; i <= opt.align_summary_max_errors; i++) {
-		
+	for (int i = 0; i <= opt.err_table_max_errors; i++) {
 		alignment_stats << delimiter<<"err"<<i;
-		if (i == opt.align_summary_max_errors) {
+		if (i == opt.err_table_max_errors) {
 			alignment_stats << "+";
 		}
 	}
@@ -1277,16 +1282,16 @@ void AlignStats::write_error_table() {
 		//*itr length of read
 		
 		
-		long mapped_reads = 0;
+		long cum_mapped_reads = 0;
 		
 		for (error_to_length_map::const_iterator map_itr = error_table[*itr].begin(); map_itr != error_table[*itr].end(); ++map_itr) {
 			//map_itr->first = length
 			//map_itr->second = # of reads
-			mapped_reads = mapped_reads + map_itr->second; 
+			cum_mapped_reads = cum_mapped_reads + map_itr->second; 
 		
 			
 		}//+ clipped_read_totals[ map_itr->first ] + filtered_read_totals[ map_itr->first ];
-		long nread = mapped_reads + unaligned_read_totals[*itr] + clipped_read_totals[ *itr ] + filtered_read_totals[ *itr ];
+		long nread = cum_mapped_reads + unaligned_read_totals[*itr] + clipped_read_totals[ *itr ] + filtered_read_totals[ *itr ];
 		alignment_stats <<  *itr							<< delimiter; //readLen
 		alignment_stats <<	nread							<< delimiter; //nread
 		alignment_stats <<	unaligned_read_totals[ *itr ]	<< delimiter; //unalign
@@ -1299,14 +1304,14 @@ void AlignStats::write_error_table() {
 		int final_place = 0;
 		for (error_to_length_map::const_iterator map_itr = error_table[*itr].begin(); map_itr != error_table[*itr].end(); ++map_itr) {
 			
-				if (map_itr->first >= opt.align_summary_max_errors) {
+				if (map_itr->first >= opt.err_table_max_errors) {
 					final_place += map_itr->second;
 				}
 			
 		}
 		//sum all errors at the max and after
 
-		for (int i = 0; i < opt.align_summary_max_errors; i++) {
+		for (int i = 0; i < opt.err_table_max_errors; i++) {
 			alignment_stats << error_table[*itr][i] << delimiter; //err#
 		}
 		alignment_stats << final_place;
@@ -1316,6 +1321,156 @@ void AlignStats::write_error_table() {
 	}
 	alignment_stats.close();
 	
+}
+
+void AlignStats::write_error_table_json(string outFile) {
+	ofstream alignment_stats(outFile.c_str());
+	if (alignment_stats.fail()) {
+		cerr << "[alignStats] couldn't open " << outFile << endl;
+		return;
+	}
+
+	// Collect & compute quantities to write
+	std::vector<long> v_read_length;
+	std::vector<long> v_nread;
+	std::vector<long> v_unaligned;
+	std::vector<long> v_filtered;
+	std::vector<long> v_clipped;
+	std::vector<long> v_aligned;
+	std::vector<long> v_cum_aligned;
+	std::vector<long> v_n_err_at_position;
+	std::vector<long> v_n_mis_at_position;
+	long total_mismatch = 0;
+	std::vector<long> v_n_ins_at_position;
+	long total_insertion = 0;
+	std::vector<long> v_n_del_at_position;
+	long total_deletion = 0;
+	std::vector<long> v_cum_err_at_position;
+	std::vector< std::vector<long> > v_err_count(1+opt.err_table_max_errors);
+	for (std::vector<int>::iterator itr = error_table_read_lens.begin(); itr != error_table_read_lens.end(); ++itr) {
+		long cum_mapped_reads = 0;
+		for (error_to_length_map::const_iterator map_itr = error_table[*itr].begin(); map_itr != error_table[*itr].end(); ++map_itr) {
+			//map_itr->first = length
+			//map_itr->second = # of reads
+			cum_mapped_reads = cum_mapped_reads + map_itr->second; 
+		}
+		long nread = cum_mapped_reads + unaligned_read_totals[*itr] + clipped_read_totals[ *itr ] + filtered_read_totals[ *itr ];
+		v_read_length.push_back(*itr);
+		v_nread.push_back(nread);
+		v_unaligned.push_back(unaligned_read_totals[*itr]);
+		v_filtered.push_back(filtered_read_totals[*itr]);
+		v_clipped.push_back(clipped_read_totals[*itr]);
+		long aligned = nread - unaligned_read_totals[*itr] - filtered_read_totals[*itr] - clipped_read_totals[*itr];
+		v_aligned.push_back(aligned);
+		long cum_aligned = aligned + ((v_cum_aligned.size() > 0) ? v_cum_aligned.back() : 0);
+		v_cum_aligned.push_back(cum_aligned);
+		v_n_err_at_position.push_back(total_error_to_length[*itr]);
+		v_n_mis_at_position.push_back(per_position_mismatch[*itr]);
+		total_mismatch += per_position_mismatch[*itr];
+		v_n_ins_at_position.push_back(per_position_insertion[*itr]);
+		total_insertion += per_position_insertion[*itr];
+		v_n_del_at_position.push_back(per_position_deletion[*itr]);
+		total_deletion += per_position_deletion[*itr];
+		long cum_err_at_position = total_error_to_length[*itr] + ((v_cum_err_at_position.size() > 0) ? v_cum_err_at_position.back() : 0);
+		v_cum_err_at_position.push_back(cum_err_at_position);
+		int final_place = 0;
+		for (error_to_length_map::const_iterator map_itr = error_table[*itr].begin(); map_itr != error_table[*itr].end(); ++map_itr) {
+			if (map_itr->first >= opt.err_table_max_errors) {
+				final_place += map_itr->second;
+			}
+		}
+		for (int i = 0; i < opt.err_table_max_errors; i++) {
+			v_err_count[i].push_back(error_table[*itr][i]);
+		}
+		v_err_count[opt.err_table_max_errors].push_back(final_place);
+	}
+
+	// write json
+	alignment_stats << "{" << endl;
+
+	alignment_stats << "  \"read_length\" : [" << v_read_length[0];
+	for(unsigned int i=1; i<v_read_length.size(); i++)
+		alignment_stats << ", " << v_read_length[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"nread\" : [" << v_nread[0];
+	for(unsigned int i=1; i<v_nread.size(); i++)
+		alignment_stats << ", " << v_nread[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"unaligned\" : [" << v_unaligned[0];
+	for(unsigned int i=1; i<v_unaligned.size(); i++)
+		alignment_stats << ", " << v_unaligned[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"filtered\" : [" << v_filtered[0];
+	for(unsigned int i=1; i<v_filtered.size(); i++)
+		alignment_stats << ", " << v_filtered[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"clipped\" : [" << v_clipped[0];
+	for(unsigned int i=1; i<v_clipped.size(); i++)
+		alignment_stats << ", " << v_clipped[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"aligned\" : [" << v_aligned[0];
+	for(unsigned int i=1; i<v_aligned.size(); i++)
+		alignment_stats << ", " << v_aligned[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"n_err_at_position\" : [" << v_n_err_at_position[0];
+	for(unsigned int i=1; i<v_n_err_at_position.size(); i++)
+		alignment_stats << ", " << v_n_err_at_position[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"n_mis_at_position\" : [" << v_n_mis_at_position[0];
+	for(unsigned int i=1; i<v_n_mis_at_position.size(); i++)
+		alignment_stats << ", " << v_n_mis_at_position[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"n_ins_at_position\" : [" << v_n_ins_at_position[0];
+	for(unsigned int i=1; i<v_n_ins_at_position.size(); i++)
+		alignment_stats << ", " << v_n_ins_at_position[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"n_del_at_position\" : [" << v_n_del_at_position[0];
+	for(unsigned int i=1; i<v_n_del_at_position.size(); i++)
+		alignment_stats << ", " << v_n_del_at_position[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"cum_aligned\" : [" << v_cum_aligned[0];
+	for(unsigned int i=1; i<v_cum_aligned.size(); i++)
+		alignment_stats << ", " << v_cum_aligned[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"cum_err_at_position\" : [" << v_cum_err_at_position[0];
+	for(unsigned int i=1; i<v_cum_err_at_position.size(); i++)
+		alignment_stats << ", " << v_cum_err_at_position[i];
+	alignment_stats << "]," << endl;
+
+	alignment_stats << "  \"err_count\" : {" << endl;
+	for(unsigned int i=1; i<v_err_count.size(); i++) {
+		alignment_stats << "    \"err_count" << i << "\" : [" << v_err_count[i][0];
+		for(unsigned int j=1; j<v_err_count[i].size(); j++)
+			alignment_stats << ", " << v_err_count[i][j];
+                if (i == v_err_count.size()  - 1 ){
+		        alignment_stats << "]" << endl;
+                }else{
+		        alignment_stats << "]," << endl;
+                }
+	}
+	alignment_stats << "  }," << endl;
+
+	alignment_stats << "  \"accuracy_total_bases\" : "            << v_cum_aligned.back()         << "," << endl;
+	alignment_stats << "  \"accuracy_total_errors\" : "           << v_cum_err_at_position.back() << "," << endl;
+	alignment_stats << "  \"accuracy_total_errors_mismatch\" : "  << total_mismatch               << "," << endl;
+	alignment_stats << "  \"accuracy_total_errors_insertion\" : " << total_insertion              << "," << endl;
+	alignment_stats << "  \"accuracy_total_errors_deletion\" : "  << total_deletion               << "," << endl;
+	alignment_stats << "  \"total_mapped_target_bases\" : "       << mapped_bases                 << "," << endl;
+	alignment_stats << "  \"total_mapped_reads\" : "              << mapped_reads                 << endl;
+
+	alignment_stats << "}" << endl;
+	alignment_stats.close();
 }
 
 //file i/o
@@ -1392,7 +1547,7 @@ bool AlignStats::build_read_regionmap(string region_postion_file, std::tr1::unor
 	string read_name;
 	int start_pos, stop_pos;
 	read_region this_read_region;	
-	
+
 	ifstream file_merged_region;
 	file_merged_region.open(region_postion_file.c_str());
 	
@@ -1403,7 +1558,7 @@ bool AlignStats::build_read_regionmap(string region_postion_file, std::tr1::unor
 		return false;
 	} else {				
 		while (file_merged_region.good()) {
-			file_merged_region >> read_name >> start_pos >> stop_pos;			
+			file_merged_region >> read_name >> start_pos >> stop_pos;
 			this_read_region.region_start_base = start_pos;
 			this_read_region.region_stop_base = stop_pos;
 			std::pair<std::string, read_region> read_region_pair(read_name, this_read_region);

@@ -37,68 +37,6 @@ SimplifyGenerateRedHydrogensFromNucRise<-function(
   return(val)
 }
 
-DerivativeGenerateRedHydrogensFromNucRise<-function(
-    nucRise, sub_steps,
-    deltaFrame, my_start, 
-    maxConc, 
-    amplitude, copies,
-    krate, kmax, diffusion
-){
-
-	val <- .Call("DerivativeCalculateCumulativeIncorporationHydrogensR",
-	      nucRise,sub_steps,
-        deltaFrame, my_start,
-        maxConc, 
-        amplitude,copies, 
-        krate,kmax,diffusion,
-          PACKAGE="torrentR"
-        )
-  return(val)
-}
-
-
-DualRedTrace<-function(
-    nucRise, sub_steps,
-    deltaFrame, my_start, 
-    maxConc, 
-    amplitude, copies,
-    krate, kmax, diffusion, sens, tauB
-){
-
-	val <- .Call("DualRedTraceR",
-	      nucRise,sub_steps,
-        deltaFrame, my_start,
-        maxConc, 
-        amplitude,copies, 
-        krate,kmax,diffusion, sens, tauB,
-          PACKAGE="torrentR"
-        )
-  return(val)
-}
-
-
-DualEKFTrace<-function(
-    observed,
-    nucRise, sub_steps,
-    deltaFrame, my_start, 
-    maxConc, 
-    amplitude, copies,
-    krate, kmax, diffusion, sens, tauB,
-    pkkA, pkkr, qssA, qsskr
-){
-
-	val <- .Call("DualEKFTraceR",
-        observed,
-	      nucRise,sub_steps,
-        deltaFrame, my_start,
-        maxConc, 
-        amplitude,copies, 
-        krate,kmax,diffusion, sens, tauB,
-        pkkA, pkkr, qssA, qsskr,
-          PACKAGE="torrentR"
-        )
-  return(val)
-}
 
 
 ComplexGenerateRedHydrogensFromNucRise<-function(
@@ -122,11 +60,11 @@ ComplexGenerateRedHydrogensFromNucRise<-function(
 
 CalculateNucRise<-function(
   timeFrame, sub_steps,
-  maxConc, t_mid_nuc, sigma
+  maxConc, t_mid_nuc, sigma,nuc_span=100
 ){
 	val <- .Call("CalculateNucRiseR",
         timeFrame, sub_steps,
-        maxConc, t_mid_nuc, sigma,
+        maxConc, t_mid_nuc, sigma, nuc_span,
           PACKAGE="torrentR"
         )
   return(val)

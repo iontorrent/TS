@@ -1,0 +1,110 @@
+{% load humanize %}
+
+<div id="basecaller" class="span3 well centered">
+    <div class="number-chunk">
+        {% if basecaller %}
+            <h2>{{basecaller.total_reads|intcomma}}</h2>
+        {% else %}
+            <h2>Still calculating.</h2>
+        {% endif %}
+        <small>Total Reads</small>
+    </div>    
+
+    
+    {% if basecaller %}
+        <a data-toggle="modal" class="report-metric-visual showImg" href="#baseCallerModal">
+            <div id="usable_sequence" data-usablesequence="{{usable_sequence}}"></div>  
+            <h2>ISP Summary</h2>
+            <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram.png" />
+        </a>
+    {% endif %}
+    {% if beadsummary %}
+        <div class="modal hide" id="baseCallerModal" style="width: 960px; margin-left: -480px;">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">×</button>
+                <h3>Chip Well Details</h3>
+            </div>
+            <div class="modal-body" style="max-height: 500px;" id="basecaller_body">
+                <img class="pull-left" style="width: 600px;" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram.png"><br class="hide" />
+                <table class="table table-condensed table-striped" style="height: auto; width: 330px; align: center;">
+                    <thead>
+                        <tr>
+                            <th rel="tooltip" title="Wells on the chip which can be physically reached by the library">Addressable Wells</th>
+                            <th style="text-align: right;">{{ beadsummary.total_addressable_wells|intcomma }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td rel="tooltip" title="Addressable wells on the chip which have detectable loading">With ISPs</td>
+                            <td style="text-align: right;">{{ beadsummary.bead_wells|intcomma }}</td>
+                            <td style="text-align: right;">{{ beadsummary.p_bead_wells }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Loaded wells which have a live signal">Live</td>
+                            <td style="text-align: right;">{{ beadsummary.live_beads|intcomma }}</td>
+                            <td style="text-align: right;">{{ beadsummary.p_live_beads }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Live wells which have test fragment template sequence">Test Fragment</td>
+                            <td style="text-align: right;">{{ beadsummary.test_fragment_beads|intcomma }}</td>
+                            <td style="text-align: right;">{{ beadsummary.p_test_fragment_beads }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Live wells which have library template sequence">Library</td>
+                            <td style="text-align: right;">{{ beadsummary.library_beads|intcomma }}</td>
+                            <td style="text-align: right;">{{ beadsummary.p_library_beads }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <table class="table table-condensed table-striped" style="height: auto; width: 330px;">
+                    <thead>
+                        <tr>
+                            <th rel="tooltip" title="This is the Library value above: live wells with library tempate.">Library ISPs</th>
+                            <th style="text-align: right;">{{ beadsummary.library_beads|intcomma }}</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if basecaller %}
+                        <tr>
+                            <td rel="tooltip" title="More than one template sequence per ISP">Filtered: Polyclonal</td>
+                            <td style="text-align: right;">{{ basecaller.polyclonal|intcomma }}</td>
+                            <td style="text-align: right;">{{ basecaller.p_polyclonal }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Low quality">Filtered: Low Quality</td>
+                            <td style="text-align: right;">{{ basecaller.low_quality|intcomma }}</td>
+                            <td style="text-align: right;">{{ basecaller.p_low_quality }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Insert size of less than 8 bases">Filtered: Primer Dimer</td>
+                            <td style="text-align: right;">{{ basecaller.primer_dimer|intcomma }}</td>
+                            <td style="text-align: right;">{{ basecaller.p_primer_dimer }}</td>
+                        </tr>
+                        <tr>
+                            <td rel="tooltip" title="Percentage of sequence available for analysis after filtering"><strong>Final Library ISPs</strong></td>
+                            <td style="text-align: right;"><strong>{{ basecaller.total_reads|intcomma }}</strong></td>
+                            <td style="text-align: right;"><strong>{{ basecaller.p_total_reads }}</strong></td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <a href="#" class="btn" data-dismiss="modal">Close</a>
+            </div>
+        </div>
+    {% else %}
+        <p>There aren't any ISPs</p>
+    {% endif %}
+</div>
+<script>
+$(function(){
+    $("#usable_sequence").strength('{{usable_sequence}}',
+                        '{{usable_sequence_threshold}}',
+                        '{{usable_sequence}}',
+                        'Usable Sequence');
+});
+</script>

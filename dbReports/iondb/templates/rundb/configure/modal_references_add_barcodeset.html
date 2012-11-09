@@ -1,0 +1,80 @@
+<div id="modal_references_add_barcodeset" title="" class="modal modal-750 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">×</button>
+		<h3>Add New DNA Barcodes</h3>
+	</div>
+	<div class="modal-body">
+		<div id="modal-error-messages"></div>
+		<form class="form-horizontal" id="modal_references_add_barcodeset_form" method="POST" action="{% url references_barcodeset_add %}" enctype="multipart/form-data">
+			<fieldset>
+				<div class="control-group">
+					<label for="input01" class="control-label">Barcode Set Name</label>
+					<div class="controls">
+						<input value="" name="name" id="name" class="input-xlarge" maxlength="512" type="text">
+						<p class="help-block">
+							Descriptive name of the Result
+						</p>
+					</div>
+				</div>
+				<div class="control-group">
+					<label for="fileInput" class="control-label">Barcode CSV File</label>
+					<div class="controls">
+						<input type="file" id="postedfile" name="postedfile" class="input-file required">
+						<p class="help-block">
+							CSV File of barcodes. <a href="/site_media/examples/barcodeExample.csv">Download the example file </a><em>sequence column is required</em>
+						</p>
+					</div>
+				</div>
+			</fieldset>
+		</form>
+		<div class="bump">
+			<div id="loadingstatus"></div>
+			<div id="return"></div>
+			<div id="error"></div>
+		</div>	  	
+	</div>
+	<div class="modal-footer">
+	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+		<a id="upfile" class="btn btn-primary" href="#">Upload & Save</a>
+	</div>
+	<script type="text/javascript">
+		$('#modal_references_add_barcodeset').on('hidden', function () {
+    		$('body #modal_references_add_barcodeset').remove();
+   		});	
+   		$('#upfile').click(function(e){
+   			$('#modal_references_add_barcodeset_form').submit();
+		});
+		$('#modal_references_add_barcodeset_form').ajaxForm({
+		        beforeSubmit: function verify() {
+					$("#postedfile").blur();
+					$("#name").blur();
+					if ($("#postedfile").hasClass("error") || $("#name").hasClass("error")) {
+						$(".error").effect("highlight", {"color": "#F20C18"}, 2000);
+						return false;
+					}
+					$("#fset").hide();
+					$("#loadingstatus").html("<p>Uploading Barcode file <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
+				},
+		        success: function SubmitSuccesful(responseText, statusText) {
+					upReturn = eval(responseText);
+					$("#loadingstatus").html("");
+					//upReturn.barcodes
+					$("#return").html(upReturn["status"]);
+					for (var key in upReturn["failed"]) {
+						$("#error").append("<p>Row " + key + " contained error(s)</p> ");
+						for (var i = 0; i < upReturn["failed"][key].length; i++) {
+							$("#error").append("<strong>" + upReturn["failed"][key][i][0] + "</strong> column ");
+							$("#error").append(": " + upReturn["failed"][key][i][1]);
+							$("#error").append("</br>");
+						}
+					}
+					$('#modal_references_add_barcodeset').trigger('modal_references_add_barcodeset_done', {});
+					$('#modal_references_add_barcodeset').modal("hide");
+				},
+		        error: function AjaxError() {
+					$("#loadingstatus").html("<p>Failure uploading file</p>");
+				},
+				dataType: 'json'
+		});
+	</script>
+</div>

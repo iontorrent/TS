@@ -1,0 +1,83 @@
+<div id="modal_project_log" title="" class="modal modal-800 hide">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">x</button>
+
+    <h3>Project History for {{project.name}} ({{project.id}}): </h3>
+  </div>
+  <div class="modal-body">
+  <div id="modal-error-messages"></div>
+  <form id="modal_project_log_form">
+	    <table id="log_grid">     
+         <thead>         
+         <th data-field="date">Date</th>         
+         <th data-field="user">User</th>         
+         <th data-field="text">Comment</th>     
+         </thead>
+      </table>
+  </div>    
+  </form>    
+  
+  <div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Close</a>
+	</div>    
+      
+<script type="text/javascript">
+$('#modal_project_log').on('hidden', function() {
+	$('body #modal_project_log').remove();
+});
+$(document).ready(function(){
+	var grid = $("#log_grid").kendoGrid({
+        dataSource: {
+        	type: "json",
+			transport: {
+                read: {
+                	url: '{% url api_dispatch_list resource_name="eventlog" api_name="v1" %}?object_pk={{project.id}}',
+                	contentType: 'application/json; charset=utf-8',
+				    type: 'GET',
+				    dataType: 'json'
+                },
+				parameterMap: function(options) {
+					return buildParameterMap(options)
+				}
+                
+            },
+            schema: {
+            	data: "objects",
+            	total: "meta.total_count",
+                model: {
+                    fields: {
+                        id: { type: "number" },
+                        object_pk: { type: "number" },
+                        created: { type: "string" },
+                        username: { type: "string" },
+                        text: { type: "string" }
+                    }
+                }
+            },
+            serverSorting: true,
+            serverFiltering: true,
+            serverPaging: true,                        	
+        	pageSize: 10
+        },
+        height: 'auto',
+        groupable: false,
+        scrollable: false,
+        selectable: false,
+        sortable: true,
+        pageable: true,
+		columns: [ {
+                field: "created",
+                title: "Date",
+                template: '#= kendo.toString(new Date(Date.parse(created.split(".")[0])),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "username",
+                title: "User"
+            } , {
+                field: "text",
+                title: "Comment"
+            }
+        ]
+    });
+});
+</script>
+</div>

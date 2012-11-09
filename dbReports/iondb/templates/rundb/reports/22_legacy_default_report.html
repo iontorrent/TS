@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html><!-- 2.2 and lower legacy report -->
+<head>
+  <!--[if IE]>
+    <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
+  <![endif]-->
+  <link href="/site_media/stylesheet.css" rel="stylesheet" type="text/css" />
+  <link href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" type="text/css" rel="stylesheet"  />
+  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+  <!-- This is just a subset of boot-strap needed to display the tab row -->
+  <style type="text/css">
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 18px;
+      color: #333333;
+      background-color: #ffffff;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 36px;
+    }
+    a {
+      color: #0088cc;
+      text-decoration: none;
+    }
+    ul, ol {
+      padding: 0;
+      margin: 0 0 9px 25px;
+    }
+    .nav {
+      margin-bottom: 18px;
+      margin-left: 0;
+      list-style: none;
+    }
+
+    .nav > li > a {
+      display: block;
+    }
+
+    .nav > li > a:hover {
+      text-decoration: none;
+      background-color: #eeeeee;
+    }
+    .nav-tabs,
+    .nav-pills {
+      *zoom: 1;
+    }
+    .nav-tabs:before,
+    .nav-pills:before,
+    .nav-tabs:after,
+    .nav-pills:after {
+      display: table;
+      content: "";
+    }
+    .nav-tabs:after,
+    .nav-pills:after {
+      clear: both;
+    }
+    .nav-tabs > li,
+    .nav-pills > li {
+      float: left;
+    }
+    .nav-tabs > li > a,
+    .nav-pills > li > a {
+      padding-right: 12px;
+      padding-left: 12px;
+      margin-right: 2px;
+      line-height: 14px;
+    }
+    .nav-tabs {
+      border-bottom: 1px solid #ddd;
+    }
+    .nav-tabs > li {
+      margin-bottom: -1px;
+    }
+    .nav-tabs > li > a {
+      padding-top: 8px;
+      padding-bottom: 8px;
+      line-height: 18px;
+      border: 1px solid transparent;
+      -webkit-border-radius: 4px 4px 0 0;
+         -moz-border-radius: 4px 4px 0 0;
+              border-radius: 4px 4px 0 0;
+    }
+    .nav-tabs > li > a:hover {
+      border-color: #eeeeee #eeeeee #dddddd;
+    }
+    .nav-tabs > .active > a,
+    .nav-tabs > .active > a:hover {
+      color: #555555;
+      cursor: default;
+      background-color: #ffffff;
+      border: 1px solid #ddd;
+      border-bottom-color: transparent;
+    }
+  </style>
+  <script src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
+</head>
+<body>
+  <div class="all all_width">
+
+    {% if user.is_authenticated %}
+      <div style="text-align:right">
+        Welcome, {{ user.get_full_name|default:user.username }}!
+      </div>
+    {% endif %}
+    <div id="global_messages"></div>
+    <div class="contentarea centered">
+
+      {# create a place to be overwritten by PHP #}
+      [PHP]
+
+      <div class="clear"></div>
+      <div class="footer">
+        <a href=http://www.iontorrent.com/support>Request Support</a>
+        &nbsp;|&nbsp;
+        <a href=/ion-docs/Home.html>Help/Documentation</a>
+        &nbsp;|&nbsp;
+        <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+        <br/>
+        Copyright &copy; 2012
+        <a href="http://www.iontorrent.com/">Life Technologies Corporation</a>
+        <br/>
+        This product should be used for research use only
+      </div>
+    </div>
+  </div>
+
+  <script src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+  <script src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
+  <script src="/site_media/scripts.js"></script>
+  <script src="/site_media/detectmobilebrowser.js"></script>
+  <script src="/site_media/js/underscore.js"></script>
+  <script src="/site_media/js/backbone.js"></script>
+  <script src="/site_media/js/messagebox.js"></script>
+  <script>
+    $(document).ready(function () {
+      $().tipTipDefaults({ delay: 0 });
+      $('#underconstruction').tipTip({ position: 'bottom' });
+      inbox = new MessageBox({models: {{global_messages|safe}} });
+    });
+  </script>
+</body>
+</html>

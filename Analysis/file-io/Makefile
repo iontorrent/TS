@@ -8,6 +8,7 @@ AOBJS=		ion_error.o ion_alloc.o \
 			dat_flow.o dat_chip.o \
 			wells_header.o wells_data.o \
 			wells_mask.o wells_chip.o \
+			wells_combine.o wells_mask_combine.o \
 			sff_header.o sff_read_header.o \
 			sff_read.o sff_file.o sff.o \
 			sff_index.o sff_sort.o sff_check.o \

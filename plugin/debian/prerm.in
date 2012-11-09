@@ -6,7 +6,9 @@ set -e
 case "$1" in
     upgrade|remove)
     
-    rm -f /var/www/site_media/RunRecognitION
+    # Ensure these plugins are no longer present in any system
+    rm -rf /results/plugins/IonReporterUploader
+    rm -rf /results/plugins/combineAlignments
     
     ;;
 esac

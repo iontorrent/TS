@@ -9,6 +9,14 @@ bool CheckFlowForWrite(int flow, bool last_flow)
   return((flow+1) % NUMFB ==0 || last_flow);
 }
 
+bool CheckFlowForStartBlock(int flow)
+{
+  return(flow%NUMFB==0);
+}
+
+int CurComputeBlock(int flow){
+  return(ceil ( float ( flow+1 ) /NUMFB ) - 1);
+};
 
 void flow_buffer_info::GenerateNucMap(int *prev_same_nuc_tbl, int *next_same_nuc_tbl)
 {

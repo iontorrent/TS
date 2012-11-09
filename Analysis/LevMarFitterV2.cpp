@@ -15,7 +15,7 @@ int LevMarFitterV2::Fit (int max_iter,
   int done_cnt = 0;
   float fval[npts];
   float r_start = FLT_MAX;
-  float r_chg = 0.0;
+  float r_chg = 0.0f;
   float bfjac[npts*nparams];
   float err_vect[npts];
   double bfjtj[nparams*nparams];
@@ -32,7 +32,7 @@ int LevMarFitterV2::Fit (int max_iter,
   r_start = CalcResidual (y, fval, npts, &err_vect[0]);
   r_start += EvaluateParamFromPrior (params); // account for prior
 
-  while (!DoneTest (iter,max_iter,data,lambda,done_cnt,r_start,r_chg))
+  while (!DoneTest (iter,max_iter,data,lambda,done_cnt,r_start,r_chg) and !ForceQuit(iter,max_iter, lambda))
   {
 
     // remember the last residual for comparison later
@@ -54,17 +54,10 @@ int LevMarFitterV2::Fit (int max_iter,
   // compute parameter std errs
   if (std_err)
   {
-    //LaSymmMatDouble std_err_jtj (nparams, nparams);
+
     Mat<double> tjac = (trans (* (data->jac)));
     Mat<double> std_err_jtj = (tjac * (* (data->jac)));
-    //Blas_R1_Update (std_err_jtj, jac, 1.0, 0.0, false);
 
-    //LaVectorLongInt piv;
-    //piv.resize (nparams, nparams);
-
-    //LaGenMatDouble std_err_jtj_inv = std_err_jtj;
-    //LUFactorizeIP (std_err_jtj_inv, piv);
-    //LaLUInverseIP (std_err_jtj_inv, piv);
 
     Mat<double> std_err_jtj_inv = inv (std_err_jtj);
     double mrv = (residual * npts) / (npts - nparams); // mean residual variance
@@ -75,6 +68,8 @@ int LevMarFitterV2::Fit (int max_iter,
   }
   if (numException >0)
     std::cout << "LevMarFitterV2: numException = " << numException << std::endl;
+  regularizer = 0.0f; // reset
+  numException = 0; // reset messages for next invocation of the same entity
   return (iter);
 }
 
@@ -225,6 +220,12 @@ float LevMarFitterV2::EvaluateParamFromPrior (float *param_new)
   return (sum);
 }
 
+static void LinSolveErrMessage( const char* str )
+{
+  static int maxMessages = 100; //limit complaining to some number to avoid overflowing the log file
+  if( --maxMessages > 0 )
+    std::cout << str << "\t:" << maxMessages << std::endl;
+}
 
 void LevMarFitterV2::TryLevMarStep (float *y,
                                     float *fval,
@@ -233,7 +234,7 @@ void LevMarFitterV2::TryLevMarStep (float *y,
                                     double *bfjtj,
                                     double *bfrhs,
                                     int done_cnt,
-                                    float r_start,
+                                    float &r_start,
                                     float &r_chg)
 {
   float r_trial;
@@ -242,35 +243,32 @@ void LevMarFitterV2::TryLevMarStep (float *y,
   double bflhs[nparams*nparams];
 
   bool cont_proc = false;
+  if (lambda>lambda_threshold)
+    cont_proc = true; // skip, we can't do anything if we've escaped
   while (!cont_proc)
   {
     // add lambda parameter to jtj to form lhs of matrix equation
     memcpy (bflhs,bfjtj,sizeof (bflhs));
     for (int i=0;i < nparams;i++)
       bflhs[i*nparams+i] *= (1.0 + lambda);
+    
+    // can actually check against zero here because that is the problem
+    if ((nparams==1) & (bflhs[0]==0.0f)) // one entry, it is zero, and our regularizer is zero armadillo does not throw exception but NaN
+      regularizer += REGULARIZER_VAL;  // this is a problem with our derivative calculation when we hit the top of the box
+      
+    // add regularizer in case we have trouble
+    for (int i=0;i < nparams;i++)
+      bflhs[i*nparams+i] += regularizer;
+    
     // solve for delta
     try
     {
+      {
 
-      // these special cases handle the relatively trivial 1 and 2 parameter solutions
-      // in a faster way
-      if (nparams == 1)
-        data->delta->at (0) = bfrhs[0]/bflhs[0];
-      else if (nparams == 2)
-      {
-        double a,b,c,d,det;
-        a = bflhs[0];
-        b = bflhs[1];
-        c = bflhs[2];
-        d = bflhs[3];
-        det = 1.0 / (a*d - b*c);
-        data->delta->at (0) = (d*bfrhs[0]-b*bfrhs[1]) *det;
-        data->delta->at (1) = (-c*bfrhs[0]+a*bfrhs[1]) *det;
-      }
-      else
-      {
-        // since we are doing a bigger matrix...package up everything into
-        // a form the real matrix solve
+        // armadillo just as fast for 1 and 2 so no special case required
+        // don't forget all our time is spent in other functions - simplifying here lets us make the code better and faster in the
+        // actual time-sinks
+
         for (int r=0;r < nparams;r++)
         {
           data->rhs->at (r) = bfrhs[r];
@@ -278,28 +276,35 @@ void LevMarFitterV2::TryLevMarStep (float *y,
           for (int c=0;c < nparams;c++)
             data->lhs->at (r,c) = bflhs[r*nparams+c];
         }
-        //std:: cout <<"LevMarFitterV2.cpp: Begin solve()..." << endl;
+
         * (data->delta) = solve (* (data->lhs),* (data->rhs));
       }
 
       bool NaN_detected = false;
       for (int i=0;i < nparams;i++)
       {
+        double tmp_eval = data->delta->at(i);
+        
         // test for NaN
-        if (data->delta->at (i) != data->delta->at (i))
+        if (tmp_eval != tmp_eval)
         {
           NaN_detected = true;
-          data->delta->at (i) = 0;
+          data->delta->at (i) = 0.0;
+          tmp_eval = 0.0;
         }
-
+        // if tmp_eval out of range for float, it's a disaster all around
+        tmp_eval += params[i]; // safe promotion from float to double
+        if ((tmp_eval>FLT_MAX) or (tmp_eval<-FLT_MAX)) // no adjust if disaster
+        {
+          tmp_eval = params[i]; 
+          data->delta->at(i) = 0.0;
+        }
         // adjust parameter from current baseline
-        params_new[i] = params[i] + data->delta->at (i);
+        params_new[i] = tmp_eval; // demotion from double to float
       }
       // make this virtual in case constraints need to be non-orthogonal boxes
       ApplyMoveConstraints (params_new);
       // apply limits if necessary
-      //if (param_max) params_new[i] = (params_new[i] > param_max[i] ? param_max[i] : params_new[i]);
-      //if (param_min) params_new[i] = (params_new[i] < param_min[i] ? param_min[i] : params_new[i]);
 
       if (!NaN_detected)
       {
@@ -311,11 +316,18 @@ void LevMarFitterV2::TryLevMarStep (float *y,
         r_trial += EvaluateParamFromPrior (params_new);
         r_chg = r_trial - r_start;
       }
+      else{
+          char my_message[1024];
+          sprintf(my_message,"LevMarFitterV2.cpp: NaN in TryLevMarStep matrix solve - at %f %f %f", lambda, regularizer,params[0]);
+          LinSolveErrMessage(my_message);
+      }
 
       if (!NaN_detected && (r_trial < r_start))
       {
-        lambda /= LEVMAR_STEP_V2;
-        if (lambda < FLT_MIN) lambda = FLT_MIN;
+        // safe way to check if this is step is feasible given that lambda is a float
+        if (lambda> LEVMAR_STEP_V2*FLT_MIN)
+          lambda /= LEVMAR_STEP_V2;
+
         memcpy (params,params_new,sizeof (float[nparams]));
         memcpy (fval,tmp,sizeof (float[npts]));
         cont_proc = true;
@@ -333,15 +345,20 @@ void LevMarFitterV2::TryLevMarStep (float *y,
         printf ("lambda = %f, done = %d\n",lambda,done_cnt);
 
     }
-    catch (std::runtime_error le)
+    catch (std::runtime_error &le)
     {
       // a failed solution of the matrix should be treated just like a failed attempt
       // at improving the fit...increase lambda and try again
+      if (2.0*regularizer>REGULARIZER_VAL)
+      {
+        // you're not an exception until you're an exception with a probably nonzero determinant
+        numException++;
+        LinSolveErrMessage("LevMarFitterV2.cpp: Fit - exception runtime ...");
+      }
       data->delta->set_size (nparams);
       data->delta->zeros (nparams);
       lambda *= LEVMAR_STEP_V2;
-      numException++;
-      //std::cout <<"LevMarFitterV2.cpp: Fit - exception runtime ..." << endl;
+      regularizer += REGULARIZER_VAL; // keep adding until we're nonzero on the diagonal
     }
 
     // we need a way to bail out of this loop if lambda continues to increase but we never
@@ -352,6 +369,7 @@ void LevMarFitterV2::TryLevMarStep (float *y,
     if (debug_trace)
       printf ("lambda = %f, done = %d\n",lambda,done_cnt);
   }
+  // bailed out of loop
 }
 
 
@@ -394,7 +412,10 @@ void LevMarFitterV2::SetLambdaThreshold (float _lambda_threshold)
 
 void LevMarFitterV2::SetLambdaStart (float _initial_lambda)
 {
+  // reset the extra variables here, as we're starting a new optimization
   lambda = _initial_lambda;
+  regularizer = 0.0f;
+  numException = 0;
 }
 
 float LevMarFitterV2::GetLambda (void)
@@ -451,6 +472,17 @@ float LevMarFitterV2::GetMeanSquaredError (float *y,bool use_fval_cache)
     }
     residual = CalcResidual (y, tmp, npts);
     return residual;
+  }
+}
+
+void LevMarFitterV2::ReturnPredicted(float *f_predict, bool use_fval_cache)
+{
+  if (f_predict!=NULL)
+  {
+    if (enable_fval_cache && use_fval_cache)
+      memcpy(f_predict,fval_cache, sizeof(float[npts]));
+    else
+      Evaluate(f_predict);
   }
 }
 

@@ -1,0 +1,22 @@
+digraph G {
+"chr1:1-2147483647" -> "chr1:1-4" [label=0];
+"chr1:1-2147483647" -> "chr1:2-10" [label=0];
+"chr1:2-10" -> "chr1:2-4" [label=0];
+"chr1:2-10" -> "chr1:4-5" [label=0];
+"chr1:2-10" -> "chr1:1-2147483647" [label=0];
+"chr1:4-5" -> "chr1:4-4" [label=0];
+"chr1:4-5" -> "chr1:2-10" [label=0];
+"chr1:4-4" -> "chr1" [label=0];
+"chr1:4-4" -> "chr1:4-5" [label=0];
+"chr1:4-4" -> "chr1:2-4" [label=0];
+"chr1" -> "chr1:2-3" [label=0];
+"chr1" -> "chr1:4-4" [label=0];
+"chr1:2-3" -> "chr1" [label=0];
+"chr1:2-3" -> "chr1:2-4" [label=0];
+"chr1:2-4" -> "chr1:2-3" [label=0];
+"chr1:2-4" -> "chr1:4-4" [label=0];
+"chr1:2-4" -> "chr1:1-4" [label=0];
+"chr1:2-4" -> "chr1:2-10" [label=0];
+"chr1:1-4" -> "chr1:1-2147483647" [label=0];
+"chr1:1-4" -> "chr1:2-4" [label=0];
+}

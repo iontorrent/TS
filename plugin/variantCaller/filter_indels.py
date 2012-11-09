@@ -20,15 +20,14 @@ def chompLastSemi(input):
 def main(argv):
     # arg processing
     global progName
-    min_bayesian_score = 10.0
-    min_var_freq = 0.19
-    gatk_score_minlen = 8
-    gatk_min_score = 500
-    strand_bias = 0.90
+    min_bayesian_score = 2.5
+    min_var_freq = 0.2
+    bay_score_minlen = 11
+    strand_bias = 0.95
     
     out_ds_name="#"
     try:
-        opts, args = getopt.getopt( argv, "hm:", ["help", "min-bayesian-score=","downsampled-vcf=","min-var-freq=","gatk-score-minlen=","gatk-min-score=","variant-strand-bias="] )
+        opts, args = getopt.getopt( argv, "hm:", ["help", "min-bayesian-score=","downsampled-vcf=","min-var-freq=","bay-score-minlen=","variant-strand-bias="] )
     except getopt.GetoptError, msg:
         sys.stderr.write(str(msg))
         usage()
@@ -41,10 +40,8 @@ def main(argv):
             min_bayesian_score = float(arg)
         elif opt in ("-mvf", "--min-var-freq"):
             min_var_freq = float(arg)       
-        elif opt in ("-gml", "--gatk-score-minlen"):
-            gatk_score_minlen = float(arg)       
-        elif opt in ("-gms", "--gatk-min-score"):
-            gatk_min_score = float(arg)                   
+        elif opt in ("-bml", "--bay-score-minlen"):
+            bay_score_minlen = float(arg)       
         elif opt in ("-dsvcf","--downsampled-vcf"):
             out_ds_name=str(arg)
         elif opt in ("-vsb", "--variant-strand-bias"):
@@ -69,6 +66,7 @@ def main(argv):
     header=""
     records=""
     records_ds=""
+    badformat = 0
       
     for lines in inf:
         if lines[0]=='#':
@@ -85,7 +83,7 @@ def main(argv):
             str_bias=0
             
             #removing SNPs
-            if len(fields[3]) == len(fields[4]):
+            if len(ref) == len(alt):
                 continue
             
             var_cov = 0 
@@ -111,13 +109,16 @@ def main(argv):
                      ii=0
                      for v in variants:
                         if ii % 3==0:
-                            tot_cov_plus = tot_cov_plus + int(variants[ii+1])
-                            tot_cov_minus = tot_cov_minus + int(variants[ii+2])                        
-                            if indel==v:
-                               var_cov_plus = int(variants[ii+1])
-                               var_cov_minus = int(variants[ii+2])
-                               var_cov = var_cov_plus+var_cov_minus
-                        ii=ii+1   
+                           if ii+2>=len(variants):
+                              badformat = 1
+                           else:   
+                              tot_cov_plus = tot_cov_plus + int(variants[ii+1])
+                              tot_cov_minus = tot_cov_minus + int(variants[ii+2])                        
+                              if indel==v:
+                                 var_cov_plus = int(variants[ii+1])
+                                 var_cov_minus = int(variants[ii+2])
+                                 var_cov = var_cov_plus+var_cov_minus
+                        ii=ii+1 
                      if var_cov_plus*tot_cov_minus + var_cov_minus*tot_cov_plus > 0:
                         if var_cov_plus*tot_cov_minus > var_cov_minus*tot_cov_plus:
                            str_bias = float(var_cov_plus*tot_cov_minus)/float(var_cov_plus*tot_cov_minus + var_cov_minus*tot_cov_plus) 
@@ -129,7 +130,19 @@ def main(argv):
             var_freq = 0
             if len(fields) > 8:
                info_def = fields[8].split(':')
-               info_val = fields[9].split(':')                             
+               info_val = fields[9].split(':')
+               
+               # report first non-empty genotype field for multi-sample cases
+               jj=0
+               if info_val[0] == './.':
+                  for clmn in fields:
+                     if jj>9:
+                        badformat = 1
+                        info_val = clmn.split(':')                             
+                        if info_val[0] != './.':
+                           break
+                     jj=jj+1
+                  
                # split out the GENOTYPE attributes
                ii=-1
                for items in info_def:
@@ -140,15 +153,10 @@ def main(argv):
                var_freq = float(var_cov)/float(attr['DP'])
                
                if var_freq == 0:
-                  var_freq = float(attr['FA'].split(',')[0])*100.0
+                  var_freq = float(attr['FA'].split(',')[0])
 
      #FILTERS FOR 1st and 2nd stages            
 
-            #filter based on low GATK score      
-            if gatk_score < gatk_min_score:
-               continue
-               
-               
             #removing low-score indels if no-downsampling calculaion (applied only in second step)
             if out_ds_name[0]=='#':
             
@@ -156,15 +164,14 @@ def main(argv):
                if var_freq < float(min_var_freq):
                   continue
                   
-            # filter out strand biased positions
-               if str_bias > float(strand_bias):
-                  continue
-                   
-               if len(fields[3]) < gatk_score_minlen and len(fields[4]) < gatk_score_minlen or len(fields) < 9:
+               if len(ref) < bay_score_minlen and len(alt) < bay_score_minlen:
+                  # filter out strand biased positions
+                  if str_bias > float(strand_bias):
+                     continue
                   if float(attr['Bayesian_Score']) < float(min_bayesian_score) :
                      continue
-               elif gatk_score < gatk_min_score:
-                  continue
+               elif float(attr['Bayesian_Score']) == 2 :
+                   continue
 
 
 # Change back the condition after Multi-Threading GATK<->BayAPI issue is resolved
@@ -173,6 +180,9 @@ def main(argv):
                records=records+lines
             else:
                records_ds=records_ds+lines 
+    
+    if badformat == 1:
+       print("WARNING: Unsupported VCF file format, multi-sample columns are present. Analysis is done sample by sample.")
                    
     inf.close() 
     

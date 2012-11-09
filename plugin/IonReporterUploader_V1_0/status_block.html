@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+    <head>
+
+        <link type="text/css"
+            href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css"
+            rel="Stylesheet"/>
+
+        <script type="text/javascript"
+              src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+
+        <script type="text/javascript"
+              src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+
+        <script>
+            $(function() {
+                setInterval(function(){
+                    $.ajax({
+                        url:"progress.json",
+                        dataType:"json",
+                        type: "GET",
+                        success:function(data){
+                            $("#progressbar").progressbar({value: parseInt(data.progress)});
+                            $("#loading").text("The upload is "+ data.progress + "% done.");
+                            $("#text").text(data.status);
+                        },
+                        error: function(data){
+                            $("#text").text("The Ion Reporter Uploader has not started yet");
+                        }
+                    });
+                }, 1000);
+
+            });
+        </script>
+
+    </head>
+
+<body>
+
+    <div id="status">
+        <div id="progressbar">
+        </div>
+    </div>
+
+    <div id="text_holder">
+        <p id="loading" ></p>
+
+        <p id="text"></p>
+
+        <p>
+            <a target="_blank" href="log.txt">more detailed information</a>
+        </p>
+
+    </div>
+
+</body>
+
+</html>

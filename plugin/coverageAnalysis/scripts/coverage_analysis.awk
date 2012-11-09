@@ -20,12 +20,10 @@ BEGIN {
 {
   if($3>maxdepth) {maxdepth=$3;}
   coverage[$3]++;
-  numpile++;
+  #numpile++;  # base coverage including 0 reads => homo deletions?
 }
 
 END {
-  # when bed file is used, samtools depth can give results for 0 coverage
-  coverage[0] += genome - numpile;
   # avoid awk memory bug by initializing arrays to a 8-byte integers
   for( i = 0; i < maxdepth; ++i )
   {
@@ -41,6 +39,8 @@ END {
     sum_coverage[i] = sum + sum_coverage[i+1];
     sum_sq_coverage[i] = i*sum + sum_sq_coverage[i+1];
   }
+  coverage[0] = genome - cum_coverage[1];
+  cum_coverage[0] = genome;
   scl = 100/genome;
   spc = sum_coverage[0] == 0 ? 1 : 100 / sum_coverage[0];
   showcut = (showlevels > 0 && maxdepth > showlevels);
@@ -66,7 +66,7 @@ END {
   {
     print "read_depth\tcounts\tcum_counts\tpc_cum_counts\tnum_reads\tpc_cum_num_reads" > outfile ;
   }
-  if( numpile == 0 )
+  if( cum_coverage[1] == 0 )
   {
      outx1 = 0;
   }
@@ -127,13 +127,13 @@ END {
     printf "Total base reads on target:   %.0f\n",sum;
   }
   printf "Bases in targeted reference: %.0f\n",genome;
-  printf "Bases covered (at least 1x): %.0f\n",numpile;
+  printf "Bases covered (at least 1x): %.0f\n",cum;
   printf "Average base coverage depth: %.2f\n",abc;
   printf "Uniformity of coverage:      %.2f%%\n",cum_coverage[p2m]*scl;
   printf "Maximum base read depth: %.0f\n",maxdepth;
   printf "Average base read depth: %.2f\n",ave;
   printf "Std.Dev base read depth: %.2f\n",std;
-  printf "Target coverage at 1x:   %.3f%%\n",numpile*scl;
+  printf "Target coverage at 1x:   %.3f%%\n",cum_coverage[1]*scl;
   printf "Target coverage at 10x:  %.3f%%\n",cum_coverage[10]*scl;
   printf "Target coverage at 20x:  %.3f%%\n",cum_coverage[20]*scl;
   printf "Target coverage at 50x:  %.3f%%\n",cum_coverage[50]*scl;

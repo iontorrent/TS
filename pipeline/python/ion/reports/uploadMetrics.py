@@ -11,11 +11,11 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 from django.db import models
 from django.db import connection
 from iondb.rundb import models
-from os import path
 import subprocess
 from ion.reports import parseBeadfind
 from ion.utils.blockprocessing import parse_metrics
 from ion.utils.textTo import textToDict
+import logging
 
 def getCurrentAnalysis(procMetrics, res):
     def get_current_version():
@@ -99,62 +99,146 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
             kwargs['IE'] = 0.0
             kwargs['DR'] = 0.0
         
-        tfm = models.TFMetrics(**kwargs)
-        tfm.save()
+        tfm, created = models.TFMetrics.objects.get_or_create(report=res, name=tf,
+                                                                defaults=kwargs)
+        if not created:
+            for key, value in kwargs.items():
+                setattr(tfm, key, value)
+            tfm.save()
 
 
-def addAnalysisMetrics(beadMetrics, filterMetrics, BaseCallerMetrics, res):
+def addPeMetrics(peMetrics, res):
+    
+    if peMetrics == None:
+        return
+
+    pe_metrics_map = {
+     'pairingrate' : 'pairingrate',
+     'fwdandrevcorrected' : 'fwdandrevcorrected',
+     'fwdandrevuncorrected' : 'fwdandrevuncorrected',
+     'fwdnotrev' : 'fwdnotrev',
+     'totalbasesunion' : 'totalbasesunion',
+     'totalbasescorrected' : 'totalbasescorrected',
+     'totalbasesunpairedfwd' : 'totalbasesunpairedfwd',
+     'totalbasesunpairedrev' : 'totalbasesunpairedrev',
+     'totalq17basesunpairedrev' : 'totalq17basesunpairedrev',
+     'totalq17basesunpairedfwd' : 'totalq17basesunpairedfwd',
+     'totalq17basescorrected' : 'totalq17basescorrected',
+     'totalq17basesunion' : 'totalq17basesunion',
+     'totalq20basesunion' : 'totalq20basesunion',
+     'totalq20basescorrected' : 'totalq20basescorrected',
+     'totalq20basesunpairedfwd' : 'totalq20basesunpairedfwd',
+     'totalq20basesunpairedrev' : 'totalq20basesunpairedrev',
+     'totalreadsbasesunpairedrev' : 'totalreadsbasesunpairedrev',
+     'totalreadsbasesunpairedfwd' : 'totalreadsbasesunpairedfwd',
+     'totalreadsbasescorrected' : 'totalreadsbasescorrected',
+     'totalreadsbasesunion' : 'totalreadsbasesunion',
+     'meanlengthunion' : 'meanlengthunion',
+     'meanlengthcorrected' : 'meanlengthcorrected',
+     'meanlengthunpairedfwd' : 'meanlengthunpairedfwd',
+     'meanlengthunpairedrev' : 'meanlengthunpairedrev',
+                    }
+        
+    kwargs = {'pereport'               : res,
+              'pefwdreport'            : res,
+              'perevreport'            : res,
+             }
+
+    for dbname, key in pe_metrics_map.iteritems():
+        try:
+            kwargs[dbname]=peMetrics[key]
+        except:
+            kwargs[dbname]='0'
+
+    pem, created = models.PEMetrics.objects.get_or_create(pereport=res, 
+                                                            defaults=kwargs)
+    if not created:
+        for key, value in kwargs.items():
+            setattr(pem, key, value)
+        pem.save()
+
+
+def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
     #print 'addAnalysisMetrics'
-    analysis_metrics_map = {'libLive':'Library live beads',
-                            'libKp':'Library keypass filter',
-                            'libFinal':'Library final',
-                            'tfLive':'TF live beads',
-                            'tfKp':'TF keypass filter',
-                            'tfFinal':'TF final',
-                            'lib_pass_basecaller':'Library pass basecaller',
-                            'lib_pass_cafie':'Library pass cafie'
-                            }
+    analysis_metrics_map = {
+        'libLive': 0,
+        'libKp': 0,
+        'libFinal': 0,
+        'tfLive': 0,
+        'tfKp': 0,
+        'tfFinal': 0,
+        'lib_pass_basecaller': 0,
+        'lib_pass_cafie': 0
+    }
 
-    bead_metrics_map = {'empty':'Empty Wells',
-                        'bead':'Bead Wells',
-                        'live':'Live Beads',
-                        'dud':'Dud Beads',
-                        'amb':'Ambiguous Beads',
-                        'tf':'Test Fragment Beads',
-                        'lib':'Library Beads',
-                        'pinned':'Pinned Wells',
-                        'ignored':'Ignored Wells',
-                        'excluded':'Excluded Wells',
-                        'washout':'Washout Wells',
-                        'washout_dud':'Washout Dud',
-                        'washout_ambiguous':'Washout Ambiguous',
-                        'washout_live':'Washout Live',
-                        'washout_test_fragment':'Washout Test Fragment',
-                        'washout_library':'Washout Library',
-                        'keypass_all_beads':'Keypass Beads'
-                        }
+    bead_metrics_map = {
+        'empty': 'Empty Wells',
+        'bead': 'Bead Wells',
+        'live': 'Live Beads',
+        'dud': 'Dud Beads',
+        'amb': 'Ambiguous Beads',
+        'tf': 'Test Fragment Beads',
+        'lib': 'Library Beads',
+        'pinned': 'Pinned Wells',
+        'ignored': 'Ignored Wells',
+        'excluded': 'Excluded Wells',
+        'washout': 'Washout Wells',
+        'washout_dud': 'Washout Dud',
+        'washout_ambiguous': 'Washout Ambiguous',
+        'washout_live': 'Washout Live',
+        'washout_test_fragment': 'Washout Test Fragment',
+        'washout_library': 'Washout Library',
+        'keypass_all_beads': 'Keypass Beads'
+    }
 
     kwargs = {'report':res,'libMix':0,'tfMix':0,'sysCF':0.0,'sysIE':0.0,'sysDR':0.0}
 
-    for dbname, key in analysis_metrics_map.iteritems():
-        try:
-            kwargs[dbname]=set_type(filterMetrics.get(key, '0'))
-        except:
-            kwargs[dbname]='0'
-    for dbname, key in bead_metrics_map.iteritems():
-        kwargs[dbname]=set_type(beadMetrics.get(key, '0'))
+    try:
+        analysis_metrics_map["libFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["lib"]["valid"]
+        analysis_metrics_map["tfFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["tf"]["valid"]
+    except Exception as err:
+        print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
+    kwargs.update(analysis_metrics_map)
+
+    if beadMetrics:
+        for dbname, key in bead_metrics_map.iteritems():
+            kwargs[dbname]=set_type(beadMetrics.get(key, 0))
     
     try:
         kwargs['sysCF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
         kwargs['sysIE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
         kwargs['sysDR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
-    except:
+    except Exception as err:
+        print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
         kwargs['sysCF'] = 0.0
         kwargs['sysIE'] = 0.0
         kwargs['sysDR'] = 0.0
    
-    am = models.AnalysisMetrics(**kwargs)
-    am.save()
+    am, created = models.AnalysisMetrics.objects.get_or_create(report=res, 
+                                                            defaults=kwargs)
+    if not created:
+        for key, value in kwargs.items():
+            setattr(am, key, value)
+        am.save()
+
+
+def updateAnalysisMetrics(beadPath, primarykeyPath):
+    """Create or Update AnalysisMetrics with only bfmask.stats info"""
+    result = None
+    for line in open(primarykeyPath):
+        if line.startswith("ResultsPK"):
+            rpk = int(line.split("=")[1])
+            result = models.Results.objects.get(pk=rpk)
+            break
+    if not result:
+        logging.error("Primary key %s not available", primarykeyPath)
+    beadMetrics = parseBeadfind.generateMetrics(beadPath)
+    try:
+        addAnalysisMetrics(beadMetrics, None, result)
+    except Exception as err:
+        return str(err)
+    return "Alls well that ends well"
+
 
 def set_type(num_string):
     val = 0
@@ -440,7 +524,12 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
             kwargs[dbname] = set_type('0')
     for dbname, key in metric_map.iteritems():
         if libMetrics != None:
-            kwargs[dbname] = set_type(libMetrics.get(key, '0'))
+            # convert all "N/A" values to 0, e.g. 20_coverage_percentage=N/A, see TS-5044
+            value = set_type(libMetrics.get(key, '0'))
+            if value == "N/A":
+                kwargs[dbname] = set_type('0')
+            else:
+                kwargs[dbname] = value
         else:
             kwargs[dbname] = set_type('0')
         
@@ -453,8 +542,12 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
         kwargs['ie'] = 0.0
         kwargs['dr'] = 0.0
     
-    lib = models.LibMetrics(**kwargs)
-    lib.save()
+    lib, created = models.LibMetrics.objects.get_or_create(report=res, 
+                                                            defaults=kwargs)
+    if not created:
+        for key, value in kwargs.items():
+            setattr(lib, key, value)
+        lib.save()
 
 
 def addQualityMetrics(QualityMetrics, res):
@@ -489,8 +582,15 @@ def addQualityMetrics(QualityMetrics, res):
             kwargs[dbname] = set_type(QualityMetrics.get(key, '0'))
         else:
             kwargs[dbname] = set_type('0')
-    quality = models.QualityMetrics(**kwargs)
-    quality.save()
+    quality, created = models.QualityMetrics.objects.get_or_create(report=res, 
+                                                            defaults=kwargs)
+    if not created:
+        for key, value in kwargs.items():
+            setattr(quality, key, value)
+        quality.save()
+
+
+
 
 def pluginStoreInsert(pluginDict):
     """insert plugin data into the django database"""
@@ -542,8 +642,9 @@ def updateStatus(primarykeyPath, status, reportLink = False):
 
     res.save()
 
-def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, primarykeyPath, uploadStatusPath):
+def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, peJsonPath, primarykeyPath, uploadStatusPath):
 
+    return_message = ""
     tfMetrics = None
     if os.path.exists(tfPath):
         try:
@@ -551,12 +652,11 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
             tfMetrics = json.load(file)
             file.close()
         except:
-            print "ERROR: failed to create tfMetrics object from file %s" % tfPath
             tfMetrics = None
-            traceback.print_exc()
+            return_message += traceback.print_exc()
     else:
-        print 'ERROR: generating tfMetrics failed - file %s is missing' % tfPath
         beadMetrics = None
+        return_message += 'ERROR: generating tfMetrics failed - file %s is missing' % tfPath
 
     BaseCallerMetrics = None
     if os.path.exists(BaseCallerJsonPath):
@@ -565,45 +665,50 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
             BaseCallerMetrics = json.load(afile)
             afile.close()
         except:
-            print "ERROR: failed to create BaseCallerMetrics object"
             BaseCallerMetrics = None
-            traceback.print_exc()
+            return_message += traceback.print_exc()
     else:
-        print 'ERROR: generating BaseCallerMetrics failed - file %s is missing' % BaseCallerJsonPath
         BaseCallerMetrics = None
+        return_message += 'ERROR: generating BaseCallerMetrics failed - file %s is missing' % BaseCallerJsonPath
+
+    peMetrics = None
+    if os.path.exists(peJsonPath):
+        try:
+            afile = open(peJsonPath, 'r')
+            peMetrics = json.load(afile)
+            afile.close()
+        except:
+            peMetrics = None
+            return_message += traceback.print_exc()
+    else:
+        peMetrics = None
+        return_message += 'INFO: generating peMetrics failed - file %s is missing' % peJsonPath
 
     beadMetrics = None
     if os.path.isfile(beadPath):
         try:
             beadMetrics = parseBeadfind.generateMetrics(beadPath)
         except:
-            print 'ERROR: generating beadMetrics failed'
             beadMetrics = None
-            traceback.print_exc()
+            return_message += traceback.print_exc()
     else:
-        print 'ERROR: generating beadMetrics failed - file %s is missing' % beadPath
         beadMetrics = None
-
-    if filterPath != None:
-        filterMetrics = None
-        #filterMetrics = parseFilterMetrics.generateParams(filterPath)
-    else:
-        filterMetrics = None
+        return_message += 'ERROR: generating beadMetrics failed - file %s is missing' % beadPath
 
     libMetrics = None
-    if path.exists(libPath):
+    if os.path.exists(libPath):
         libMetrics = parse_metrics(libPath)
     else:
         libMetrics = None
 
     QualityMetrics = None
-    if path.exists(QualityPath):
+    if os.path.exists(QualityPath):
         #if the quality metrics exist, make a dict out of them
         QualityMetrics = parse_metrics(QualityPath)
     else:
         QualityMetrics = None
 
-    if path.exists(keyPath):
+    if os.path.exists(keyPath):
         keyPeak = parse_metrics(keyPath)
     else:
         keyPeak = {}
@@ -614,10 +719,11 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
     if os.path.exists(procPath):
         procParams = textToDict(procPath)
 
-    writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath)
+    writeDbFromDict(tfMetrics, procParams, beadMetrics, None, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, peMetrics, primarykeyPath, uploadStatusPath)
 
+    return return_message
 
-def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath):
+def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, peMetrics, primarykeyPath, uploadStatusPath):
     print "writeDbFromDict"
 
     # We think this will fix "DatabaseError: server closed the connection unexpectedly"
@@ -660,8 +766,15 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
         print traceback.format_exc()
         print sys.exc_info()[0]
     try:
+        e.write('Adding PE Metrics\n')
+        addPeMetrics(peMetrics, res)
+    except:
+        e.write("Failed addpeMetrics\n")
+        print traceback.format_exc()
+        print sys.exc_info()[0]
+    try:
         e.write('Adding Analysis Metrics\n')
-        addAnalysisMetrics(beadMetrics, filterMetrics, BaseCallerMetrics, res)
+        addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res)
     except:
         e.write("Failed addAnalysisMetrics\n")
         print traceback.format_exc()
@@ -689,8 +802,8 @@ if __name__=='__main__':
 
     # TODO: return if argv[1] is not specified
 
-    SIGPROC_RESULTS="./"
-    BASECALLER_RESULTS="./"
+    SIGPROC_RESULTS="sigproc_results"
+    BASECALLER_RESULTS="basecaller_results"
     ALIGNMENT_RESULTS="./"
 
     folderPath = sys.argv[1]
@@ -700,16 +813,17 @@ if __name__=='__main__':
 
     tfPath = os.path.join(folderPath, BASECALLER_RESULTS, 'TFStats.json')
     procPath = os.path.join(SIGPROC_RESULTS,"processParameters.txt")
-    beadPath = os.path.join(folderPath, SIGPROC_RESULTS, 'bfmask.stats')
+    beadPath = os.path.join(folderPath, SIGPROC_RESULTS, 'analysis.bfmask.stats')
     filterPath = os.path.join(folderPath, SIGPROC_RESULTS, 'filterMetrics.txt')
     alignmentSummaryPath = os.path.join(folderPath, ALIGNMENT_RESULTS, 'alignment.summary')
     primarykeyPath = os.path.join(folderPath, 'primary.key')
     BaseCallerJsonPath = os.path.join(folderPath, BASECALLER_RESULTS, 'BaseCaller.json')
+    peJsonPath = os.path.join(folderPath, 'pe.json')
     QualityPath = os.path.join(folderPath, BASECALLER_RESULTS, 'quality.summary')
     keyPath = os.path.join(folderPath, 'raw_peak_signal')
     uploadStatusPath = os.path.join(folderPath, 'status.txt')
 
-    writeDbFromFiles(tfPath,
+    ret_messages = writeDbFromFiles(tfPath,
                      procPath,
                      beadPath,
                      filterPath,
@@ -718,5 +832,8 @@ if __name__=='__main__':
                      keyPath,
                      QualityPath,
                      BaseCallerJsonPath,
+                     peJsonPath,
                      primarykeyPath,
                      uploadStatusPath)
+
+    print("messages: '%s'" % ret_messages)

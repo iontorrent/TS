@@ -13,25 +13,48 @@ import os
 import sys
 
 
+class TsConnectionError(Exception):
+    ''' the exception thrown we experience issues connecting to ts to get run data '''
+    pass
+
+
 def gather_and_send_data(rr_config, ts_conn, lb_conn):
     '''This is the main method that will run the plugin'''
-    ts_client = TorrentServerApiClient(ts_conn)
-    ts_data = _gather_ts_data(rr_config.results_id, ts_client)
+    ts_data = None
+    try:
+        ts_client = TorrentServerApiClient(ts_conn)
+        ts_data = _gather_ts_data(rr_config.results_id, ts_client)
+        lb_client = RunRecognitionApiClient(lb_conn)
+        if rr_config.generate_file:
+            generate_export_file(ts_data, rr_config.site_name, rr_config.reference_genome, rr_config.application_type,
+                                 sys.argv[2])
+            generate_export_report(sys.argv[1], sys.argv[2], rr_config.guru_api_url)
+        elif (lb_client.submit_data(ts_data, rr_config.site_name, rr_config.reference_genome,
+                                    rr_config.application_type,
+                  rr_config.guru_api_username, rr_config.guru_api_password)):
+            generate_upload_report(sys.argv[1], sys.argv[2], 'Your data has been saved to the leaderboard.',
+                                 ts_data['experiment']['chipType'])
+        else:
+            message = '''
+                There was an error saving your data, check to
+                make sure you provided the correct username and password.
+            '''
+            generate_error_report(message, ts_data)
+    except TsConnectionError:
+        message = '''
+            There was a problem connecting to Torrent Server, so we could not retrieve run data from it.
+            Please verify your Run RecognitION plugin <a href="/configure/plugins/" target="_blank">configuration</a>
+            and try uploading the run again.
+        '''
+        generate_error_report(message, ts_data)
 
-    lb_client = RunRecognitionApiClient(lb_conn)
 
-    if rr_config.generate_file:
-        generate_export_file(ts_data, rr_config.site_name, rr_config.reference_genome, rr_config.application_type,
-                             sys.argv[2])
-        generate_export_report(sys.argv[1], sys.argv[2], rr_config.guru_api_url)
-    elif (lb_client.submit_data(ts_data, rr_config.site_name, rr_config.reference_genome, rr_config.application_type,
-              rr_config.guru_api_username, rr_config.guru_api_password)):
-        generate_upload_report(sys.argv[1], sys.argv[2], 'Your data has been saved to the leaderboard.',
-                             ts_data['experiment']['chipType'])
-    else:
-        generate_upload_report(sys.argv[1], sys.argv[2], 'There was an error saving your data, check to' +
-                             ' make sure you provided the correct username and password.',
-                             ts_data['experiment']['chipType'])
+def generate_error_report(message, ts_data=None):
+    ''' create an error report for the user '''
+    chip_type = "Unknown"
+    if ts_data and 'experiment' in ts_data and 'chipType' in ts_data['experiment']:
+        chip_type = ts_data['experiment']['chipType']
+    generate_upload_report(sys.argv[1], sys.argv[2], message, chip_type)
 
 
 def _gather_ts_data(result_id, ts_client):
@@ -40,7 +63,13 @@ def _gather_ts_data(result_id, ts_client):
     ts_data = {'results': results_data,
         'experiment': ts_client.get_experiment_data(results_data),
         'qualitymetrics': ts_client.get_quality_metrics(results_data),
-        'libmetrics': ts_client.get_lib_metrics(results_data)}
+        'libmetrics': ts_client.get_lib_metrics(results_data),
+        'tfmetrics': ts_client.get_tf_metrics(results_data),
+        'analysismetrics': ts_client.get_analysis_metrics(results_data)}
+    if 'log' in ts_data['experiment']:
+        ts_data['experiment_log'] = ts_data['experiment']['log']
+    else:
+        ts_data['experiment_log'] = {}
     return ts_data
 
 
@@ -48,8 +77,17 @@ def generate_export_file(ts_data, site_name, reference_genome, application_type,
     '''generate the data extract file'''
     data = {}
     populate_dict_with_core_fields(data, ts_data, site_name, reference_genome, application_type, None)
+
+    _purge_empties(ts_data['qualitymetrics'])
+    _purge_empties(ts_data['libmetrics'])
+    _purge_empties(ts_data['tfmetrics'])
+    _purge_empties(ts_data['analysismetrics'])
+    _purge_empties(ts_data['experiment_log'])
     data['raw_qualitymetrics'] = ts_data['qualitymetrics']
     data['raw_libmetrics'] = ts_data['libmetrics']
+    data['raw_tfmetrics'] = ts_data['tfmetrics']
+    data['raw_analysismetrics'] = ts_data['analysismetrics']
+    data['raw_experiment_log'] = ts_data['experiment_log']
 
     try:
         os.makedirs(out_file_path + '/files')
@@ -66,6 +104,16 @@ def generate_export_file(ts_data, site_name, reference_genome, application_type,
             header('Content-type: application/octet-stream');
             readfile('experiment_run.ionlb');
             ?>''')
+
+
+def _purge_empties(target_dict):
+    to_remove = []
+    for key, value in target_dict.items():
+        if value is None or len(str(value)) == 0:
+            to_remove.append(key)
+
+    for key in to_remove:
+        del target_dict[key]
 
 
 def generate_export_report(template_file_path, out_file_path, guru_api_url):
@@ -115,9 +163,10 @@ class RunRecognitionPluginConfig:  # pylint: disable=R0902
     '''class to parse the configuration of this run of the plugin'''
     def __init__(self, global_config, instance_data):
         self.guru_api_url = global_config.get('rr', 'guru_api_url')
-        self.torrent_server_api_url = global_config.get('rr', 'torrent_server_api_url')
-        self.torrent_server_api_username = global_config.get('rr', 'torrent_server_api_username')
-        self.torrent_server_api_password = global_config.get('rr', 'torrent_server_api_password')
+        self.torrent_server_api_url = None
+        self.torrent_server_api_username = None
+        self.torrent_server_api_password = None
+        self._set_ts_conn_info(global_config, instance_data)
         self.generate_file = False
         if 'tc_generatefile' in instance_data['pluginconfig']:
             self.generate_file = instance_data['pluginconfig']['tc_generatefile']
@@ -129,16 +178,43 @@ class RunRecognitionPluginConfig:  # pylint: disable=R0902
         self.reference_genome = instance_data['pluginconfig']['reference_genome']
         self.results_id = instance_data['runinfo']['pk']
 
+    def _set_ts_conn_info(self, global_config, instance_data):
+        ''' use the config the user defined or the global settings for ts connection info '''
+        if 'pluginconfig' in instance_data and 'ts_url' in instance_data['pluginconfig']:
+            self.torrent_server_api_url = instance_data['pluginconfig']['ts_url']
+            self.torrent_server_api_username = instance_data['pluginconfig']['ts_username']
+            self.torrent_server_api_password = instance_data['pluginconfig']['ts_password']
+        else:
+            #the ts api url has /rundb/api appended to it, which is not the
+            #base path as far as tastypie is concerned, so we strip it off
+            self.torrent_server_api_url = str(instance_data['runinfo']['api_url']).replace("/rundb/api", "")
+            self.torrent_server_api_username = global_config.get('rr', 'torrent_server_api_username')
+            self.torrent_server_api_password = global_config.get('rr', 'torrent_server_api_password')
+
 
 def populate_dict_with_core_fields(the_dict, ts_data, site_name, reference_genome, application_type, username):
     '''set all the core fields in to the data map'''
     the_dict['analysis_version'] = ts_data['results']['analysisVersion']
     the_dict['chip_type'] = ts_data['experiment']['chipType']
-    the_dict['time_of_run'] = ts_data['results']['timeStamp']
+    truncated_time = strip_tz(ts_data['results']['timeStamp'])
+    the_dict['time_of_run'] = truncated_time
     the_dict['jive_username'] = username
     the_dict['site_name'] = site_name
     the_dict['reference_genome'] = reference_genome
     the_dict['application_type'] = application_type
+
+
+def strip_tz(date_str):
+    '''
+        strip the timezone information from the date string passed in. It would be nice
+        to use django.utils.timezone.localtime to do this, but that won't be available till
+        django 1.4.1 comes out and we upgrade to it.
+    '''
+    retval = date_str
+    index_of_plus = retval.find("+")
+    if index_of_plus >= 0:
+        retval = retval[0: index_of_plus]
+    return retval
 
 
 class RunRecognitionApiClient:  # pylint: disable=R0914
@@ -150,7 +226,6 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
     def submit_data(self, ts_data, site_name, reference_genome, application_type, username, password):
         '''takes the data packages it for the leaderboard, and sends it.
         returns true on success, false on failure.'''
-
         # check for if there is an existing record the initial values assume it is a create
         record = self._get_existing_record(ts_data['experiment']['chipType'],
                                            ts_data['results']['timeStamp'], username)
@@ -168,7 +243,8 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
             # update the data in all of the metrics
             for cur_field in submission_data['experiment_fields']:
                 cur_field_def = cur_field['field_definition']
-                self._set_field_value(ts_data, cur_field, cur_field_def)
+                if self._check_field_existence(ts_data, cur_field_def):
+                    self._set_field_value(ts_data, cur_field, cur_field_def)
 
                 # after the data is updated, make sure the list of metrics to
                 # add no longer contains this metric
@@ -181,15 +257,22 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
         populate_dict_with_core_fields(submission_data, ts_data, site_name, reference_genome,
                                        application_type, username)
 
-        # add in any non standard fields that need to be added
+        # Add in any non standard fields that need to be added. We're having to deal
+        # with field_def versions now because older plugin code could not recover from
+        # a field definition being absent from ts_data, so now we use a try-catch
+        # to prevent future headaches.
+        # pylint: disable=W0702
         for field_def in field_defs_to_add:
             field = {}
             field['field_definition'] = {}
             field['field_definition']['id'] = field_def['id']
-            self._set_field_value(ts_data, field, field_def)
-            submission_data['experiment_fields'].append(field)
+            if self._check_field_existence(ts_data, field_def):
+                self._set_field_value(ts_data, field, field_def)
+                submission_data['experiment_fields'].append(field)
 
-        credentials = base64.encodestring('%s:%s' % (username, password)).strip()
+        temp_str = '%s:%s' % (username, password)
+        temp_str = temp_str.strip().encode("utf-8")
+        credentials = base64.encodestring(temp_str).strip()
         response = func(url, body=json.dumps(submission_data),
                         headers={'content-type': 'application/json',
                                 'AUTHORIZATION': 'Basic %s' % credentials})
@@ -201,18 +284,25 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
         return True
 
     @classmethod
+    def _check_field_existence(cls, ts_data, field_def):
+        return field_def['ts_object'] in ts_data and field_def['ts_field'] in ts_data[field_def['ts_object']]
+
+    @classmethod
     def _set_field_value(cls, ts_data, field, field_def):
         val = ts_data[field_def['ts_object']][field_def['ts_field']]
         if field_def['field_type'] == 'I':
             field['int_value'] = val
         elif field_def['field_type'] == 'F':
             field['float_value'] = val
+        elif field_def['field_type'] == 'S':
+            field['string_value'] = val
 
     def _get_existing_record(self, chip_type, time_of_run, username):
+        truncated_time = strip_tz(time_of_run.replace('T', ' '))
         response = self.connection.request_get('/runrecognition/api/v1/experimentrun/',
-               args={'jive_username': username,
+               args={'jive_username': username.encode("utf-8"),
                      'chip_type': chip_type,
-                     'time_of_run': time_of_run.replace('T', ' ')},
+                     'time_of_run': truncated_time},
                headers={'Accept': 'text/json'})
         rawdata = json.loads('[%s]' % response[u'body'])[0]
         count = rawdata['meta']['total_count']
@@ -223,7 +313,7 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
 
     def _get_field_definitions(self):
         response = self.connection.request_get('runrecognition/api/v1/experimentrunfielddefinition/',
-               args={'limit': '1000'},
+               args={'limit': '1000', 'plugin_version__lt': 1.41},
                headers={'Accept': 'text/json'})
         rawdata = json.loads('[%s]' % response[u'body'])[0]
         return rawdata['objects']
@@ -237,8 +327,7 @@ class TorrentServerApiClient:
 
     def get_results_data(self, results_id):
         '''Calls the rest api to get the results data for the run'''
-        response = self.connection.request_get('/rundb/api/v1/results/%s/?format=json' % results_id)
-        return json.loads('[%s]' % response[u'body'])[0]
+        return self._ts_json_get('/rundb/api/v1/results/%s/?format=json' % results_id)
 
     def get_experiment_data(self, results_data):
         '''get the experiment data for the given results'''
@@ -246,16 +335,38 @@ class TorrentServerApiClient:
 
     def get_quality_metrics(self, results_data):
         '''get the quality metrics for the given results'''
-        return self._get_associated_data(results_data[u'qualitymetrics'][0])
+        return self._get_metrics(results_data, u'qualitymetrics')
 
     def get_lib_metrics(self, results_data):
         '''get the quality metrics for the given results'''
-        return self._get_associated_data(results_data[u'libmetrics'][0])
+        return self._get_metrics(results_data, u'libmetrics')
+
+    def get_tf_metrics(self, result_data):
+        ''' get tf metrics for the given result '''
+        return self._get_metrics(result_data, u'tfmetrics')
+
+    def get_analysis_metrics(self, result_data):
+        ''' get analysis for the given result '''
+        return self._get_metrics(result_data, u'analysismetrics')
+
+    def _get_metrics(self, result_data, metrics_name):
+        if metrics_name in result_data and len(result_data[metrics_name]) > 0:
+            return self._get_associated_data(result_data[metrics_name][0])
+        return {}
 
     def _get_associated_data(self, resource):
         '''Calls the rest api to get the associated data for the run'''
-        response = self.connection.request_get('%s?format=json' % resource)
-        return json.loads('[%s]' % response[u'body'])[0]
+        return self._ts_json_get('%s?format=json' % resource)
+
+    def _ts_json_get(self, resource):
+        ''' do a rest get, throw a TsConnectionError if a 200 is not returned or anything else goes wrong '''
+        try:
+            response = self.connection.request_get(resource)
+            if str(response['headers']['status']) != str(200):
+                raise TsConnectionError()
+            return json.loads('[%s]' % response[u'body'])[0]
+        except:
+            raise TsConnectionError()
 
 
 if __name__ == "__main__":

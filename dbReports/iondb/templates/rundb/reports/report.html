@@ -1,0 +1,173 @@
+{% extends "rundb/reports/base.html" %}
+
+{%block title %}
+    <title> {{report.resultsName}} | {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
+{%endblock title%}
+{% load humanize %}
+
+
+	{% block responsive %}
+	{% endblock responsive %}
+
+{% block extra_head %}
+	<link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
+	<script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox.js"></script>
+	<script type="text/javascript" src="/site_media/resources/scripts/report.js"></script>
+	<script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
+	<script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+
+	<script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+	<script type="text/javascript" src="/site_media/resources/scripts/signal.min.js"></script>
+	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
+	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+	<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" media="screen" />
+	{%if not noheader  %}
+	 	<link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
+	{%endif%}
+
+{% endblock extra_head %}
+		
+{% block report-header %}
+<div class="page-nav">
+	<div class="container-fluid">
+		<div class="row-fluid">
+			<div class="span10">
+			<ul class="nav nav-pills dynamic-navbar"><li><a href="#top" class="navitem">Top</a></li></ul>
+			</div>
+				<a href="/report/getPDF/{{report.pk}}.pdf" class="btn pull-right" style="margin-top: 3px;">Download as PDF</a>
+		</div>
+	</div>		
+</div>
+
+<div class="report-header">
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div id="nameRow" class="span6">
+                <h1 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">Run: {{report.experiment.expName}}</h1>
+            </div>
+            <div id="resultSet" class="span6 form-inline" style="text-align: right;">
+            	<a href="{{report.reportLink}}" class="btn pull-right" style="margin-top: 0px;margin-left: 5px;">Classic Report</a>
+                <label class="form-label" style="margin-left: 25px;">
+                    Result Set
+                    <select id="resultList">
+                        	<option value="{{report.pk}}" selected="selected">{{report}} ({{report.pk}})</option>
+                        {% for otherReport in otherReports %}
+                       		 <option value="{{otherReport.pk}}">{{otherReport}} ({{otherReport.pk}})</option>    
+                        {% endfor %}  
+                    </select>   
+                </label>
+  
+            </div>
+        </div>              
+    </div>      
+</div>
+{% endblock report-header %}
+{%block extra-main-class%}
+report
+{%endblock extra-main-class%}
+{% block content %}
+		<div id="main" class="content group">
+			<div>
+
+			</div>
+
+
+			{#barcodes#}
+			{% include "rundb/reports/blocks/barcodes.html" %}
+
+			{% if plan %}
+				<div class="row-fluid">
+					<div class="span12">
+						<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Run Plan</a>
+					</div>
+				</div>
+			{% endif %}
+
+			{#progress indicator#}
+			{% include "rundb/reports/blocks/progress.html" %}
+
+			<section id="RunSummary" {%spaceless%} {%if not datasets.barcode_config %} class="no_barcodes" {%endif%} {%endspaceless%}>
+				<div class="row-fluid">
+					<div class="span12">
+						<a dynamic-navbar-section="" href="#RunSummary">
+							<h2><span rel='tooltip' title="Run metrics for sequence data before and after alignment to a reference sequence.  
+">Run Summary</span></h2>
+						</a>
+					</div>
+				</div>
+
+				<div id="runSection" class="section">
+          {% if report.resultsType == "CombinedAlignments" %}
+            <h3><span rel='tooltip' title="Links to parent reports">Alignments Merged From:</span></h3>
+              {% for pk,name in parents %}
+                  <ul><a href=/report/{{pk}}/> {{name}} </a></ul>
+              {% endfor %}              
+              {% if CA_warnings %}
+				      <div id="warnings">
+				        <font color=red>
+				        <p class="form-label" > WARNING </p>
+				        <ul>
+				          {% for warning in CA_warnings %}
+				            <li>{{warning}}</li>				    
+				          {% endfor %}
+				        </ul>
+				        </font>  
+				      </div>
+				      {% endif %}
+          {% else %}
+					<h3><span rel='tooltip' title="Metrics for sequence data without alignment to a reference
+">Unaligned</span></h3>			
+					<div class="row-fluid unaligned">
+						{#beadfind#}
+						{% include "rundb/reports/blocks/beadfind.html" %}
+
+						{#basecaller#}
+						{% include "rundb/reports/blocks/basecaller.html" %}
+
+						{#readlength#}
+						{% include "rundb/reports/blocks/readlength.html" %}
+					</div><!-- row-fluid -->
+          {% endif %}
+					
+					{% if reference != "none" %}
+					<h3><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
+">Aligned to {{reference.name}}</span></h3>
+					
+					<div class="row-fluid aligned">		
+						{#map#}
+						{% include "rundb/reports/blocks/map.html" %}	
+
+						{#raw accuracy#}
+						{% include "rundb/reports/blocks/raw.html" %}
+					</div><!-- row-fluid -->
+          {% else %}
+          <h3><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
+">No Alignment Reference selected</span></h3>
+          {% endif %}
+
+				</div><!-- section -->
+			</section><!-- RunSummary -->
+
+{%if not noheader  %}
+	<div id="major_blocks">
+	</div>
+{%endif%}
+
+	{%if report.isProton %}
+		<h2>Proton ISP Map</h2>
+		<div id="proton">
+
+		</div>
+	{%endif%}
+
+	{#output files#}
+	{% include "rundb/reports/blocks/output.html" %}	
+
+	{#tabs#}
+	{% include "rundb/reports/blocks/tabs.html" %}	
+
+		
+</div>
+
+{% endblock content %}

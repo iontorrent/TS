@@ -36,6 +36,7 @@ typedef enum {
 	STATUS_CONTACTINFO,
 	STATUS_NETWORK,
 	STATUS_EXPERIMENT,
+	STATUS_HARDWARE,
 } StatusType;
 
 typedef struct {
@@ -94,6 +95,7 @@ UpdateItem updateItem[] = {
 	{STATUS_FILESERVERS, 600, 0},
 	{STATUS_PGMS, 3600, 0},
 	//{STATUS_NETWORK, 3600, 0},
+	{STATUS_HARDWARE, 3600, 0},
 };
 int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
 
@@ -241,6 +243,37 @@ static void SendExperimentMetrics(AeDRMDataItem *dataItem, const char* experimen
 		char cmd[300];
 		sprintf(cmd, "rm %s", experimentFileList);
 		system(cmd);
+	}
+}
+
+static void SendHardwareName(AeDRMDataItem *dataItem, const char* nameFile)
+{
+	char buf[256];
+	int ret;
+	ret = GetConfigEntry(nameFile, ':', "hardwarename", buf, sizeof(buf));
+	if (ret == 0)
+	{
+		AeGetCurrentTime(&dataItem->value.timeStamp);
+		dataItem->pName = "TS.Config.hwname";
+		dataItem->value.data.pString = buf;
+		dataItem->value.iType = AeDRMDataString;
+		dataItem->value.iQuality = AeDRMDataGood;
+		AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+	}
+}
+static void SendBiosVersion(AeDRMDataItem *dataItem, const char* nameFile)
+{
+	char buf[256];
+	int ret;
+	ret = GetConfigEntry(nameFile, ':', "biosversion", buf, sizeof(buf));
+	if (ret == 0)
+	{
+		AeGetCurrentTime(&dataItem->value.timeStamp);
+		dataItem->pName = "TS.Config.biosversion";
+		dataItem->value.data.pString = buf;
+		dataItem->value.iType = AeDRMDataString;
+		dataItem->value.iQuality = AeDRMDataGood;
+		AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	}
 }
 
@@ -580,6 +613,16 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 
 		} break;
 
+		case STATUS_HARDWARE:
+		{
+			// Identifies the type of computer hardware the server is running on.
+			// Dell T7500 or Dell T620 for example.
+			// product_info.alt file is written during RSM_launch startup script execution
+			SendHardwareName(dataItem, "product_info.alt");
+			// Records version of BIOS installed on server
+			SendBiosVersion(dataItem, "product_info.alt");
+		} break;
+		
 		case STATUS_PGMS:
 			// get the list of attached PGM's
 			// MGD - for now, we will just do this when we start up, but might want to do once an hour or something in the future

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>$plugin_name</title>
+    <link rel="stylesheet" type="text/css" href="/pluginMedia/ERCC_Analysis/css/ercc_stylesheet.css" />
+    <link rel="stylesheet" type="text/css" href="/pluginMedia/ERCC_Analysis/js/jquery.jqplot.min.css" />
+  
+  <!--[if lt IE 9]><script language="javascript" type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/excanvas.js"></script><![endif]-->
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/jquery.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/jquery.jqplot.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.highlighter.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.cursor.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.dateAxisRenderer.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.bubbleRenderer.min.js"></script>
+
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasAxisLabelRenderer.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasAxisTickRenderer.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasTextRenderer.min.js"></script>
+    <script class="code" type="text/javascript">
+
+	jQuery(document).ready(function(){
+	    jQuery.jqplot.config.enablePlugins = true;
+		var ercc_chart_options = {
+                    title: {
+		        text: 'ERCC Dose Response',
+			show: true
+		    },
+		    axes:{
+		        xaxis:{
+		            tickRenderer:jQuery.jqplot.CanvasAxisTickRenderer,
+		            tickOptions:{
+		                pt2px: 1.6
+			    },
+			    label: 'log2 relative ERCC1 concentration',
+			    labelRenderer: jQuery.jqplot.CanvasAxisLabelRenderer,
+			    labelOptions:{
+			        fontFamily:'Helvetica',
+			        fontSize: '14pt',
+			        pt2px: 1.6
+			    }
+			},
+			yaxis:{
+			    tickRenderer:jQuery.jqplot.CanvasAxisTickRenderer,
+			    tickOptions:{
+			        pt2px: 1.6
+			    },
+			    label: 'log2 ERCC counts (present calls:>= 1 count)',
+			    labelRenderer: jQuery.jqplot.CanvasAxisLabelRenderer,
+			    labelOptions:{
+			        fontFamily:'Helvetica',
+			        fontSize: '14pt'
+			    }
+			}
+		    },
+                    $series
+                    highlighter: {
+		        show: true,
+		        showMarker:false,
+		        tooltipLocation: 'se',
+		        tooltipAxes: 'xy',
+		        yvalues: 5,
+		        // You can customize the tooltip format string of the highlighter
+		        // to include any arbitrary text or html and use format string
+		        // placeholders (%s here) to represent x and y values.
+		        formatString:'<table class="jqplot-highlighter"> \
+		        <tr><td>log2 relative ERCC1 Concentration</td><td>%s</td></tr> \
+		        <tr class="alt"><td>log2 ERCC counts:</td><td>%s</td></tr> \
+		        <tr><td>transcript:</td><td><strong>%s</strong></td></tr> \
+		        <tr class="alt"><td>reads:</td><td>%s</td></tr> \
+                        <tr><td>mean mapping quality:</td><td>%s</td></tr> \
+		        <tr><td>coverage plot:</td><td>%s</td></tr></table>'
+                    },
+                    cursor:{
+                        show: true,
+                        zoom:true,
+                        showTooltip:false
+                    } 
+		}
+                var plot1 = jQuery.jqplot('ercc_chart', [$ercc_points$trendline_points], ercc_chart_options);
+
+                jQuery('.button-reset').click(function() { plot1.resetZoom() });
+		jQuery('.transcript table').hide();
+		jQuery('.transcript h2').click(function () {
+		    var toggle_text = jQuery(this).parent().find('table').is(':visible') ? '[+]' : '[-]';
+		    jQuery(this).parent().find('table').toggle();
+		    jQuery(this).children('.toggle_tag').html(toggle_text);
+		});
+	});
+	</script>
+</head>
+<body>
+    <div id="main_content">
+		<h1>ERCC Report</h1>
+		<hr>
+		<div id="dose_response">
+                        <div style="position:absolute;z-index:99;display:none;" id="tooltip"></div>
+			<div id="ercc_chart" ></div>
+                        <div id="msg_to_user">$msg_to_user</div>
+                        <h2><a href="#static_image">Click here for a static version of the above chart</a></h2>
+			<table id="trendline_parms" >
+				<tr>
+					<th colspan="3">% of Total Reads</th>
+				</tr>
+				<tr class="alt">
+					<td>ERCC (pct)</td><td>=</td><td>$percent_total_counts_ercc</td>
+				</tr>
+				<tr>
+					<td>Other (pct)</td><td>=</td><td>$percent_total_counts_non_ercc</td>
+				</tr>
+                                <tr class="alt">
+                                        <td>Raw ERCC counts</td><td>=</td><td>$all_ercc_counts</td>
+                                </tr>
+				<tr>
+					<th colspan="3">Regression Analysis</th>
+				</tr>
+				<tr class="alt">
+					<td>R-squared</td><td>=</td><td>$rsquared</td>
+				</tr>
+				<tr>
+					<td>Slope</td><td>=</td><td>$slope</td>
+				</tr>
+				<tr class="alt">
+					<td>Y-intercept</td><td>=</td><td>$yintercept</td>
+				</tr>
+				<tr>
+					<td>N</td><td>=</td><td>$N</td>
+				</tr>
+                                        <th colspan="3">Map Quality Legend</th>
+                                <tr>
+                                        <td>Mean Mapq</td><td>=</td><td>Dot color</td>
+                                </tr>
+                        $color_legend
+			</table>
+                        <button class="button-reset">Reset Zoom</button>
+		</div>
+	$results_divs
+        <div id="static_dose_response">
+             <h2><a href="$counts_file">Counts data in list form</a>(to save, right click on link and choose "Save As")</h2>
+             <hr>
+             <h2><a name="static_image">Static image of overall dose response (right click on image to save as a separate file)</a></h2>
+             $dose_response_image
+        </div>
+    </div>
+</body>
+</html>

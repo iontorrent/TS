@@ -1,7 +1,9 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
-VERSION="2.2.3-31037"
+#MAJOR_BLOCK
+
+VERSION="3.2.1-44445"
 
 # Disable excess debug output for test machine
 #set +o xtrace
@@ -9,8 +11,8 @@ VERSION="2.2.3-31037"
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should be set to 0 in production mode
 PLUGIN_DEV_FULL_LOG=0;          # 1 for coverage analysis log, 2 for additional xtrace (not recommended)
-
-CONTINUE_AFTER_BARCODE_ERROR=1;
+CONTINUE_AFTER_BARCODE_ERROR=1;	# 0 to have plugin fail after first barcode failure
+TWO_SETS_OUTPUT=0;		# 1 to revert to 2.2 style of barcode summary report
 
 # Check for by-pass PUI
 if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
@@ -50,27 +52,34 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     PLUGINCONFIG__TARGETREGIONS=`echo "$PLUGINCONFIG__TARGETREGIONS" | sed -e 's/\/unmerged\/detail\//\/merged\/plain\//'`
   fi
   PLUGINCONFIG__PADTARGETS=0
-  PLUGINCONFIG__UNIQUESTARTS="No"
+  PLUGINCONFIG__UNIQUEMAPS="No"
+  PLUGINCONFIG__NONDUPS="No"
 else
   # Grab PUI parameters
   PLUGINCONFIG__LIBRARYTYPE_ID=`echo "$PLUGINCONFIG__LIBRARYTYPE_ID" | sed -e 's/_/ /g'`
   PLUGINCONFIG__TARGETREGIONS_ID=`echo "$PLUGINCONFIG__TARGETREGIONS_ID" | sed -e 's/_/ /g'`
-  if [ -n "$PLUGINCONFIG__UNIQUESTARTS" ]; then
-    PLUGINCONFIG__UNIQUESTARTS="Yes"
+  if [ -n "$PLUGINCONFIG__UNIQUEMAPS" ]; then
+    PLUGINCONFIG__UNIQUEMAPS="Yes"
   else
-    PLUGINCONFIG__UNIQUESTARTS="No"
+    PLUGINCONFIG__UNIQUEMAPS="No"
+  fi
+  if [ -n "$PLUGINCONFIG__NONDUPLICATES" ]; then
+    PLUGINCONFIG__NONDUPLICATES="Yes"
+  else
+    PLUGINCONFIG__NONDUPLICATES="No"
   fi
 fi
 
 PLUGIN_TARGETS=$PLUGINCONFIG__UNPTARGETS
 PLUGIN_PADSIZE=$PLUGINCONFIG__PADTARGETS
-PLUGIN_USTARTS=$PLUGINCONFIG__UNIQUESTARTS
+PLUGIN_UMAPS=$PLUGINCONFIG__UNIQUEMAPS
+PLUGIN_NONDUPS=$PLUGINCONFIG__NONDUPLICATES
 
 # Override possible non-sense parameter combinations
 if [ "$PLUGINCONFIG__LIBRARYTYPE" == "ampliseq" ]; then
-  PLUGIN_USTARTS="No"
+  PLUGIN_UMAPS="Yes"
+  PLUGIN_NONDUPS="No"
 elif [ "$PLUGINCONFIG__LIBRARYTYPE" == "fullgenome" ]; then
-  PLUGIN_USTARTS="No"
   PLUGIN_PADSIZE=0
 fi
 
@@ -84,19 +93,21 @@ else
 fi
 
 echo "Selected run options:" >&2
-echo "  Aligned Reads:  $PLUGINCONFIG__MERGEDBAM_ID" >&2
-echo "  Library Type:   $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
-echo "  Target regions: $PLUGINCONFIG__TARGETREGIONS_ID" >&2
-echo "  Target padding: $PLUGINCONFIG__PADTARGETS" >&2
-echo "  Unique starts:  $PLUGINCONFIG__UNIQUESTARTS" >&2
+echo "  Aligned Reads:   $PLUGINCONFIG__MERGEDBAM_ID" >&2
+echo "  Library Type:    $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
+echo "  Target regions:  $PLUGINCONFIG__TARGETREGIONS_ID" >&2
+echo "  Target padding:  $PLUGINCONFIG__PADTARGETS" >&2
+echo "  Uniquely mapped: $PLUGINCONFIG__UNIQUEMAPS" >&2
+echo "  Non-duplicate:   $PLUGINCONFIG__NONDUPLICATES" >&2
 
 echo "Employed run options:" >&2
-echo "  Reference Genome:  $TSP_FILEPATH_GENOME_FASTA" >&2
-echo "  Aligned Reads:     $TSP_FILEPATH_BAM" >&2
-echo "  Library Type:   $PLUGINCONFIG__LIBRARYTYPE" >&2
-echo "  Target Regions: $PLUGIN_TARGETS" >&2
-echo "  Target padding: $PLUGIN_PADSIZE" >&2
-echo "  Unique starts:  $PLUGIN_USTARTS" >&2
+echo "  Reference Genome: $TSP_FILEPATH_GENOME_FASTA" >&2
+echo "  Aligned Reads:    $TSP_FILEPATH_BAM" >&2
+echo "  Library Type:     $PLUGINCONFIG__LIBRARYTYPE" >&2
+echo "  Target Regions:   $PLUGIN_TARGETS" >&2
+echo "  Target padding:   $PLUGIN_PADSIZE" >&2
+echo "  Uniquely mapped:  $PLUGIN_UMAPS" >&2
+echo "  Non-duplicate:    $PLUGIN_NONDUPS" >&2
 
 # Check for missing files
 if [ -n "$PLUGIN_TARGETS" ]; then
@@ -118,40 +129,79 @@ BARCODES_LIST="${TSP_FILEPATH_PLUGIN_DIR}/barcodeList.txt"
 SCRIPTSDIR="${DIRNAME}/scripts"
 JSON_RESULTS="${TSP_FILEPATH_PLUGIN_DIR}/results.json"
 HTML_RESULTS="${PLUGINNAME}.html"
+HTML_BLOCK="${PLUGINNAME}_block.html"
 HTML_ROWSUMS="${PLUGINNAME}_rowsum"
-
-# Controls page layout, table size dependent on if ustarts selected
-if [ "$PLUGIN_USTARTS" = "Yes" ];then
-  RUNCOV_OPTS=""
-  BC_SUM_ROWS=8
-  BC_COV_PAGE_WIDTH=960
-  COV_PAGE_WIDTH=960
-else
-  RUNCOV_OPTS="-s"
-  BC_SUM_ROWS=4
-  BC_COV_PAGE_WIDTH=620
-  COV_PAGE_WIDTH=480
-fi
+HTML_TORRENT_WRAPPER=1
 
 # Definition of fields displayed in barcode link/summary table
-PLUGIN_INFO_ALLREADS="All mapped reads assigned to this barcode set."
-PLUGIN_INFO_USTARTS="Uniquely mapped reads sampled for one starting alignment to each reference base in both read orientations."
+PLUGIN_FILTER_READS=0
+PLUGIN_INFO_FILTERED="Coverage statistics for uniquely mapped non-duplicate reads."
+if [ $PLUGIN_UMAPS = "Yes" ];then
+  PLUGIN_FILTER_READS=1
+  if [ $PLUGIN_NONDUPS = "No" ];then 
+    PLUGIN_INFO_FILTERED="Coverage statistics for uniquely mapped reads."
+  fi
+elif [ $PLUGIN_NONDUPS = "Yes" ];then
+  PLUGIN_FILTER_READS=1
+  PLUGIN_INFO_FILTERED="Coverage statistics for non-duplicate reads."
+fi
+PLUGIN_INFO_ALLREADS="Coverage statistics for all (unfiltered) aligned reads."
 BC_COL_TITLE[0]="Mapped Reads"
 BC_COL_TITLE[1]="On Target"
 BC_COL_TITLE[2]="Mean Depth"
-BC_COL_TITLE[3]="Coverage"
-BC_COL_TITLE[4]="Mapped Reads"
-BC_COL_TITLE[5]="On Target"
-BC_COL_TITLE[6]="Mean Depth"
-BC_COL_TITLE[7]="Coverage"
-BC_COL_HELP[0]="Number of reads that were mapped to the full reference for this barcode set."
+BC_COL_HELP[0]="Number of reads that were mapped to the full."
 BC_COL_HELP[1]="Percentage of mapped reads that were aligned over a target region."
 BC_COL_HELP[2]="Mean average target base read depth, including non-covered target bases."
-BC_COL_HELP[3]="Percentage of all target bases that were covered to at least 1x read depth."
-BC_COL_HELP[4]="Number of unique starts that were mapped to the full reference for this barcode set."
-BC_COL_HELP[5]="Percentage of unique starts that were aligned over a target region."
-BC_COL_HELP[6]="Mean average target base read depth using unique starts, including non-covered target bases."
-BC_COL_HELP[7]="Percentage of all target bases that were covered to at least 1x read depth using unique starts."
+if [ $TWO_SETS_OUTPUT -ne 0 ]; then
+  BC_COL_TITLE[3]="Coverage"
+  BC_COL_TITLE[4]="Mapped Reads"
+  BC_COL_TITLE[5]="On Target"
+  BC_COL_TITLE[6]="Mean Depth"
+  BC_COL_TITLE[7]="Coverage"
+  BC_COL_HELP[3]="Percentage of target bases that were covered by at least one read."
+  BC_COL_HELP[4]="Number of unique starts reads that were mapped to the full reference."
+  BC_COL_HELP[5]="Percentage of unique starts that were aligned over a target region."
+  BC_COL_HELP[6]="Mean average target base read depth using unique starts, including non-covered target bases."
+  BC_COL_HELP[7]="Percentage of target bases that were covered by at least one read using unique starts."
+else
+  BC_COL_TITLE[3]="Uniformity"
+  BC_COL_TITLE[4]="1x Coverage"
+  BC_COL_TITLE[5]="20x Coverage"
+  BC_COL_TITLE[6]="100x Coverage"
+  BC_COL_TITLE[7]="500x Coverage"
+  BC_COL_HELP[3]="Percentage of target bases covered by at least 0.2x the average base coverage depth."
+  BC_COL_HELP[4]="Percentage of target bases that were covered by at least one read."
+  BC_COL_HELP[5]="Percentage of target bases covered by at least twenty reads."
+  BC_COL_HELP[6]="Percentage of target bases covered by at least one hundred reads."
+  BC_COL_HELP[7]="Percentage of target bases covered by at least five hundred reads."
+fi
+
+# Set up report page layout and help text
+BC_COV_PAGE_WIDTH="960px"
+COV_PAGE_WIDTH="480px"
+BC_SUM_ROWS=7
+RUNCOV_OPTS="-s"
+if [ $PLUGIN_FILTER_READS -eq 1 ];then
+  # Option to run twice with and w/o filters, producing old-style report
+  if [ $TWO_SETS_OUTPUT -ne 0 ]; then
+    RUNCOV_OPTS=""
+    BC_TITLE_INFO="Coverage summary statistics for all and filtered sampled barcoded reads."
+    BC_SUM_ROWS=8
+    COV_PAGE_WIDTH="960px"
+  else
+    BC_TITLE_INFO="Coverage summary statistics for filtered aligned barcoded reads."
+  fi
+  if [ $PLUGIN_NONDUPS = "Yes" ];then
+    RUNCOV_OPTS="$RUNCOV_OPTS -d"
+  fi
+  if [ $PLUGIN_UMAPS = "Yes" ];then
+    RUNCOV_OPTS="$RUNCOV_OPTS -u"
+  fi
+else
+  BC_TITLE_INFO="Coverage summary statistics for all (un-filtered) aligned barcoded reads."
+  #BC_SUM_ROWS=4
+  #BC_COV_PAGE_WIDTH="620px"
+fi
 
 # Set up log options
 LOGOPT=""
@@ -175,7 +225,8 @@ if [ ! -f $TSP_FILEPATH_BARCODE_TXT ]; then
    PLUGIN_CHECKBC=0
 fi
 if [ $PLUGIN_CHECKBC -eq 1 ]; then
-   run "sort -t ' ' -k 2n,2 \"$TSP_FILEPATH_BARCODE_TXT\" > \"$BARCODES_LIST\"";
+  # use the old barcode list - rely on number of BAMs in folder for actual list
+  run "sort -t ' ' -k 2n,2 \"$TSP_FILEPATH_BARCODE_TXT\" > \"$BARCODES_LIST\"";
 fi
 
 # Link local copy of js and css
@@ -189,6 +240,7 @@ if [ "$PLUGIN_DEV_FULL_LOG" -ne 0 ]; then
 fi
 
 # Create padded targets file
+PLUGIN_EFF_TARGETS="$PLUGIN_TARGETS"
 PADDED_TARGETS=""
 if [ $PLUGIN_PADSIZE -gt 0 ];then
   GENOME="${TSP_FILEPATH_GENOME_FASTA}.fai"
@@ -204,6 +256,10 @@ if [ $PLUGIN_PADSIZE -gt 0 ];then
       echo "\$ $REMDUP" >&2
       echo "- Continuing without padded targets analysis." >&2
       PADDED_TARGETS=""
+    else
+      # as of 3.0 the bed file becomes the padded bedfile so all analysis is done on the padded targets
+      PLUGIN_EFF_TARGETS="$PADDED_TARGETS"
+      PADDED_TARGETS=""
     fi
   fi
   echo >&2
@@ -218,7 +274,7 @@ write_html_footer
 COV_PAGE_WIDTH=$BC_COV_PAGE_WIDTH
 
 # Remove previous results to avoid displaying old before ready
-rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
+rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "${TSP_FILEPATH_PLUGIN_DIR}/$HTML_BLOCK" "$JSON_RESULTS"
 
 # Check for barcodes
 if [ $PLUGIN_CHECKBC -eq 1 ]; then
@@ -240,7 +296,7 @@ else
   write_html_footer "$HTML";
   # Run on single bam
   RT=0
-  eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$TSP_FILEPATH_PLUGIN_DIR\" -B \"$PLUGIN_TARGETS\" -P \"$PADDED_TARGETS\" \"$TSP_FILEPATH_GENOME_FASTA\" \"${TSP_FILEPATH_BAM}\"" || RT=$?
+  eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$TSP_FILEPATH_PLUGIN_DIR\" -B \"$PLUGIN_EFF_TARGETS\" -P \"$PADDED_TARGETS\" -Q \"$HTML_BLOCK\" \"$TSP_FILEPATH_GENOME_FASTA\" \"${TSP_FILEPATH_BAM}\"" || RT=$?
   if [ $RT -ne 0 ]; then
     write_html_header "$HTML";
     echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
@@ -250,12 +306,22 @@ else
   fi
   # Write json output
   write_json_header;
-  write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
-  echo "," >> "$JSON_RESULTS"
-  write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
+  if [ $TWO_SETS_OUTPUT -ne 0 ]; then
+    write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
+    if [ "$PLUGIN_FILTER_READS" -eq 1 ];then
+      echo "," >> "$JSON_RESULTS"
+      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/filtered_reads" "summary.txt" "filtered_reads" 2;
+    fi
+  else
+    if [ "$PLUGIN_FILTER_READS" -eq 1 ];then
+      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/filtered_reads" "summary.txt" "" 2;
+    else
+      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "" 2;
+    fi
+  fi
   write_json_footer;
   rm -f "${TSP_FILEPATH_PLUGIN_DIR}/$HTML_ROWSUMS"
 fi
 # Remove after successful completion
-rm -f "${TSP_FILEPATH_PLUGIN_DIR}/header" "${TSP_FILEPATH_PLUGIN_DIR}/footer" "${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json" "$PADDED_TARGETS" "$BARCODES_LIST"
+rm -f "${TSP_FILEPATH_PLUGIN_DIR}/header" "${TSP_FILEPATH_PLUGIN_DIR}/footer" "$PADDED_TARGETS" "$BARCODES_LIST"
 

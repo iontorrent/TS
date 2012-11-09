@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Using jQuery templates with Kendo</title>
+    <script src="../../../js/jquery.min.js"></script>
+    <script src="../../../js/kendo.web.min.js"></script>
+    <script src="../../content/shared/js/console.js"></script>
+    <link href="../../../styles/kendo.common.min.css" rel="stylesheet" />
+    <link href="../../../styles/kendo.default.min.css" rel="stylesheet" />
+</head>
+<body>
+    <a href="../index.html">Back</a>
+            <script src="../../content/web/integration/jquery.tmpl.js"></script>
+
+
+
+        <div id="example" class="k-content">
+            <div class="section-box">
+                <select id="netflixDropDown" style="width:300px"></select>
+            </div>
+            <div class="section-box">
+                <table id="netflixTable">
+                    <thead>
+                        <tr>
+                            <th>
+                                Cover
+                            </th>
+                            <th>
+                                Title
+                            </th>
+                            <th>
+                                Rating
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="3"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <style scoped="scoped">
+                
+                .section-box {
+                    padding: 10px;
+                    width: 500px;
+                    margin: 20px auto;
+                    border: 1px solid #bbb;
+                    -moz-box-shadow: 0 1px 1px rgba(0,0,0,0.25), inset 0 0 30px rgba(0,0,0,0.07);
+                    -webkit-box-shadow: 0 1px 1px rgba(0,0,0,0.25), inset 0 0 30px rgba(0,0,0,0.07);
+                    box-shadow: 0 1px 1px rgba(0,0,0,0.25), inner 0 0 30px rgba(0,0,0,0.07);
+                    -webkit-border-radius: 8px;
+                    -moz-border-radius: 8px;
+                    border-radius: 8px;
+                }
+                
+                .section-box img, .k-item img {
+                    height: 90px;
+                    -webkit-border-radius: 5px;
+                    -moz-border-radius: 5px;
+                    border-radius: 5px;
+                    margin: 5px;
+                }
+                
+                .k-item img {
+                	float: left;
+                    margin-top: 10px;
+                }
+                
+                .k-item img {
+                	float: left;
+                	width: auto;
+                    margin-top: 10px;
+                }
+                
+                .k-item:after {
+                    content: ".";
+                    display: block;
+                    clear: both;
+                    height: 0;
+                    visibility: hidden;
+                }
+                
+                .k-item h4 {
+                   font-size: 1.05em;
+                }
+
+            </style>
+
+            <script id="dropDownTemplate" type="text/x-jquery-tmpl">
+                <img src="${ BoxArt.SmallUrl }" alt="${ Name }" /> <h4>${ Name }</h4>
+            </script>
+            <script id="rowTemplate" type="text/x-jquery-tmpl">
+                <tr>
+                    <td>
+                        <img src="${ BoxArt.SmallUrl }" alt="${ Name }" />
+                    </td>
+                    <td>
+                        ${ Name }
+                    </td>
+                    <td>
+                        ${ AverageRating }
+                    </td>
+                </tr>
+            </script>
+            <script>
+                $(document).ready(function() {
+                    var dataSource = new kendo.data.DataSource({
+                        type: "odata",
+                        serverFiltering: true,
+                        filter: [{
+                            field: "Name",
+                            operator: "contains",
+                            value: "Star Wars"
+                            },{
+                            field: "BoxArt.SmallUrl",
+                            operator: "neq",
+                            value: null
+                        }],
+                        transport: {
+                            read: "http://odata.netflix.com/Catalog/Titles"
+                        }
+                    });
+
+                    $("#netflixTable").kendoGrid({
+                        dataSource: dataSource,
+                        rowTemplate: $.template($("#rowTemplate")),
+                        height: 370
+                    });
+
+                    $("#netflixDropDown").kendoDropDownList({
+                        dataTextField: "Name",
+                        dataValueField: "Id",
+                        template: $.template($("#dropDownTemplate")),
+                        dataSource: dataSource,
+                        height: 320
+                    });
+                });
+            </script>
+        </div>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+<p>The Kendo mobile View widget represents a screen in the kendo mobile Application. The
+Application automatically instantiates a mobile View for each element with a <code>role</code> data attribute set
+to <b>view</b>.</p><div class="code-sample"><h4 class="code-title">Hello World mobile View</h4><pre class="code prettyprint"><code>&lt;div data-role="view"&gt;Hello world!&lt;/div&gt;</code></pre></div><h3>Headers and Footers</h3>
+<p>By default, the mobile <strong>View</strong> contents stretch to fit the application element.
+The mobile <strong>View</strong> can also have a header and a footer.
+In order to mark header and footer elements, add elements with attribute <code>data-role="header"</code> and
+<code>data-role="footer"</code>. </p><div class="code-sample"><h4 class="code-title">Mobile View with Header and Footer</h4><pre class="code prettyprint"><code>&lt;div data-role="view"&gt;
+  &lt;div data-role="header"&gt;Header&lt;/div&gt;
+  Hello world!
+  &lt;div data-role="footer"&gt;Footer&lt;/div&gt;
+&lt;/div&gt;</code></pre></div><strong>Important:</strong>
+<p>Because of the OS UI design conventions, the header and the footer switch positions when an Android device is detected.
+Usually the footer hosts a MobileTabstrip widget, which is located at the bottom of the screen on iOS,
+and at the top of the screen in Android applications.  </p><h3>View DOM elements</h3>
+<p>Each mobile View instance exposes the following fields:</p>
+<ul>
+ <li><b>header</b> - the view (or the applied mobile layout) header DOM element;</li>
+ <li><b>footer</b> - the view (or the applied mobile layout) footer DOM element;</li>
+ <li><b>content</b> - the view content DOM element;</li>
+ <li><b>scrollerContent</b> - the view mobile scroller container DOM element. Recommended if the mobile View
+ contents need to be manipulated or <b>replaced</b>.</li>
+</ul>

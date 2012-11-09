@@ -1,5 +1,9 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
+//! @file     PhaseEstimator.cpp
+//! @ingroup  BaseCaller
+//! @brief    PhaseEstimator. Estimator of phasing parameters across chip
+
 #include <algorithm>
 #include <vector>
 #include <string>
@@ -20,226 +24,292 @@
 
 
 
+
+void PhaseEstimator::PrintHelp()
+{
+  printf ("Phasing estimation options:\n");
+  printf ("     --phasing-estimator     STRING     phasing estimation algorithm [spatial-refiner-2]\n");
+  printf ("     --libcf-ie-dr           cf,ie,dr   don't estimate phasing and use specified values [not using]\n");
+  printf ("  -R,--phasing-regions       INTxINT    number of phasing regions (ignored by spatial-refiner) [12x13]\n");
+  printf ("     --phasing-residual-filter FLOAT    maximum sum-of-squares residual to keep a read in phasing estimation [1.0]\n");
+  printf ("\n");
+}
+
+
+class CompareDensity {
+public:
+  CompareDensity(const vector<unsigned int>& density) : density_(density) {}
+  bool operator() (int i, int j) { return density_[i] > density_[j]; }
+private:
+  const vector<unsigned int> &density_;
+};
+
+
 PhaseEstimator::PhaseEstimator()
 {
-  numFlows = 0;
-  numEstimatorFlows = 0;
-  regionSizeX = regionSizeY = 0;
-  numRegionsX = numRegionsY = numRegions = 0;
-  numWellsX = numWellsY = 0;
-  numLevels = 0;
-  sharedWells = NULL;
-  sharedMask = NULL;
-  numJobsSubmitted = 0;
-  numJobsCompleted = 0;
-  nextJob = 0;
+  chip_size_x_ = 0;
+  chip_size_y_ = 0;
+  region_size_x_ = 0;
+  region_size_y_ = 0;
+  num_regions_x_ = 0;
+  num_regions_y_ = 0;
+  num_regions_ = 0;
+  wells_ = NULL;
+  mask_ = NULL;
+  jobs_in_progress_ = 0;
+  result_regions_x_ = 13;
+  result_regions_y_ = 12;
+  residual_threshold_ = 1.0;
 
-  overrideCF = 0.0;
-  overrideIE = 0.0;
-  overrideDR = 0.0;
-  cfiedrRegionsX = 13;
-  cfiedrRegionsY = 12;
-
-  jobQueue[0] = NULL;
+  train_subset_count_ = 1;
+  train_subset_ = 0;
 }
 
-void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const string& _flowOrder, int _numFlows, const vector<KeySequence>& _keys)
+void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts)
 {
-  // ***** Phase parameter estimation options
+  phasing_estimator_      = opts.GetFirstString('-', "phasing-estimator", "spatial-refiner-2");
+  string arg_cf_ie_dr     = opts.GetFirstString('-', "libcf-ie-dr", "");
+  string arg_regions      = opts.GetFirstString('R', "phasing-regions", "");
+  residual_threshold_     = opts.GetFirstDouble('-', "phasing-residual-filter", 1.0);
 
-  // "nel-mead-treephaser"; // "nel-mead-adaptive-treephaser";
-  phaseEstimator          = opts.GetFirstString('-', "phasing-estimator", "spatial-refiner");
-
-  string argLibCFIEDR     = opts.GetFirstString('-', "libcf-ie-dr", "");
-  if (!argLibCFIEDR.empty()) {
-    int stat = sscanf (argLibCFIEDR.c_str(), "%f,%f,%f", &overrideCF, &overrideIE, &overrideDR);
-    if (stat != 3)
-    {
-      fprintf (stderr, "Option Error: libcf-ie-dr %s\n", argLibCFIEDR.c_str());
+  if (!arg_cf_ie_dr.empty()) {
+    phasing_estimator_ = "override";
+    result_regions_x_ = 1;
+    result_regions_y_ = 1;
+    result_cf_.assign(1, 0.0);
+    result_ie_.assign(1, 0.0);
+    result_dr_.assign(1, 0.0);
+    if (3 != sscanf (arg_cf_ie_dr.c_str(), "%f,%f,%f", &result_cf_[0], &result_ie_[0], &result_dr_[0])) {
+      fprintf (stderr, "Option Error: libcf-ie-dr %s\n", arg_cf_ie_dr.c_str());
       exit (EXIT_FAILURE);
     }
-    phaseEstimator = "override";
+    return; // --libcf-ie-dr overrides other phasing-related options
   }
 
-  string argCfiedrRegions = opts.GetFirstString('R', "phasing-regions", "");
-  if (!argCfiedrRegions.empty()) {
-    int stat = sscanf (argCfiedrRegions.c_str(), "%dx%d", &cfiedrRegionsX, &cfiedrRegionsY);
-    if (stat != 2)
-    {
-      fprintf (stderr, "Option Error: cfiedr-regions %s\n", argCfiedrRegions.c_str());
+  if (!arg_regions.empty()) {
+    if (2 != sscanf (arg_regions.c_str(), "%dx%d", &result_regions_x_, &result_regions_y_)) {
+      fprintf (stderr, "Option Error: cfiedr-regions %s\n", arg_regions.c_str());
       exit (EXIT_FAILURE);
     }
   }
-
-  flowOrder = _flowOrder;
-  numFlows = _numFlows;
-  numEstimatorFlows = min(numFlows, 120);
-  keys = _keys;
 }
 
-void PhaseEstimator::DoPhaseEstimation(RawWells *wellsPtr, Mask *maskPtr,
-    int _regionXSize, int _regionYSize, bool singleCoreCafie)
+void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys,
+    int region_size_x, int region_size_y,  bool use_single_core)
 {
-  numWellsX = maskPtr->W();
-  numWellsY = maskPtr->H();
+  flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), 120));
+  keys_ = keys;
+  chip_size_x_ = mask->W();
+  chip_size_y_ = mask->H();
+  region_size_x_ = region_size_x;
+  region_size_y_ = region_size_y;
 
 
-  printf("Phase estimation mode = %s\n", phaseEstimator.c_str());
+  printf("Phase estimation mode = %s\n", phasing_estimator_.c_str());
 
-  if (phaseEstimator == "override") {
-    cfiedrRegionsX = 1;
-    cfiedrRegionsY = 1;
-    cf.assign(1,overrideCF);
-    ie.assign(1,overrideIE);
-    dr.assign(1,overrideDR);
+  if (phasing_estimator_ == "override")
+    return;
+
+  if (phasing_estimator_ == "nel-mead-treephaser") {
+
+    int num_workers = max(numCores(), 2);
+    if (use_single_core)
+      num_workers = 1;
+
+    result_cf_.assign(result_regions_x_*result_regions_y_,0.0);
+    result_ie_.assign(result_regions_x_*result_regions_y_,0.0);
+    result_dr_.assign(result_regions_x_*result_regions_y_,0.0);
+    RegionAnalysis region_analysis;
+    region_analysis.analyze(&result_cf_, &result_ie_, &result_dr_, wells, mask, keys_, flow_order, num_workers,
+        result_regions_x_, result_regions_y_);
     return;
   }
 
-  if ((phaseEstimator == "nel-mead-treephaser") || (phaseEstimator == "nel-mead-adaptive-treephaser")) {
+  if (phasing_estimator_ == "spatial-refiner") {
 
-    int numWorkers = max(numCores(), 2);
-    if (singleCoreCafie)
-      numWorkers = 1;
+    int num_workers = max(numCores(), 2);
+    if (use_single_core)
+      num_workers = 1;
 
-    cf.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
-    ie.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
-    dr.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
-    RegionAnalysis regionAnalysis;
-    regionAnalysis.analyze(&cf, &ie, &dr, wellsPtr, maskPtr, keys, flowOrder, numFlows, numWorkers,
-        cfiedrRegionsX, cfiedrRegionsY, phaseEstimator);
+    wells->Close();
+    wells->OpenForIncrementalRead();
+    SpatialRefiner(wells, mask, num_workers);
     return;
   }
 
-  if (phaseEstimator == "spatial-refiner") {
+  if (phasing_estimator_ == "spatial-refiner-2") {
 
-    int numWorkers = max(numCores(), 2);
-    if (singleCoreCafie)
-      numWorkers = 1;
+    int num_workers = max(numCores(), 2);
+    if (use_single_core)
+      num_workers = 1;
 
-    wellsPtr->Close();
-    wellsPtr->OpenForIncrementalRead();
-    SpatialRefiner(wellsPtr, maskPtr, _regionXSize, _regionYSize, numWorkers);
+    wells->Close();
+    wells->OpenForIncrementalRead();
+
+    train_subset_count_ = 2;
+    train_subset_cf_.resize(train_subset_count_);
+    train_subset_ie_.resize(train_subset_count_);
+    train_subset_dr_.resize(train_subset_count_);
+    train_subset_regions_x_.resize(train_subset_count_);
+    train_subset_regions_y_.resize(train_subset_count_);
+
+
+    for (train_subset_ = 0; train_subset_ < train_subset_count_; ++train_subset_) {
+      SpatialRefiner(wells, mask, num_workers);
+      train_subset_cf_[train_subset_] = result_cf_;
+      train_subset_ie_[train_subset_] = result_ie_;
+      train_subset_dr_[train_subset_] = result_dr_;
+      train_subset_regions_x_[train_subset_] = result_regions_x_;
+      train_subset_regions_y_[train_subset_] = result_regions_y_;
+    }
 
     return;
   }
+
 
   ION_ABORT("Requested phase estimator is not recognized");
 
 }
 
 
-void PhaseEstimator::ExportResultsToJson(Json::Value &phasing)
+void PhaseEstimator::ExportResultsToJson(Json::Value &json)
 {
   // Save phase estimates to BaseCaller.json
 
-  float CFmean = 0;
-  float IEmean = 0;
-  float DRmean = 0;
+  float cf_mean = 0;
+  float ie_mean = 0;
+  float dr_mean = 0;
   int count = 0;
 
-  for (int r = 0; r < cfiedrRegionsY*cfiedrRegionsX; r++) {
-    phasing["CFbyRegion"][r] = cf[r];
-    phasing["IEbyRegion"][r] = ie[r];
-    phasing["DRbyRegion"][r] = dr[r];
-    if (cf[r] || ie[r] || dr[r]) {
-      CFmean += cf[r];
-      IEmean += ie[r];
-      DRmean += dr[r];
+  for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
+    json["CFbyRegion"][r] = result_cf_[r];
+    json["IEbyRegion"][r] = result_ie_[r];
+    json["DRbyRegion"][r] = result_dr_[r];
+    if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
+      cf_mean += result_cf_[r];
+      ie_mean += result_ie_[r];
+      dr_mean += result_dr_[r];
       count++;
     }
   }
-  phasing["RegionRows"] = cfiedrRegionsY;
-  phasing["RegionCols"] = cfiedrRegionsX;
+  json["RegionRows"] = result_regions_y_;
+  json["RegionCols"] = result_regions_x_;
 
-  phasing["CF"] = count ? (CFmean/count) : 0;
-  phasing["IE"] = count ? (IEmean/count) : 0;
-  phasing["DR"] = count ? (DRmean/count) : 0;
+  json["CF"] = count ? (cf_mean/count) : 0;
+  json["IE"] = count ? (ie_mean/count) : 0;
+  json["DR"] = count ? (dr_mean/count) : 0;
 
 }
 
 
 
 
-float PhaseEstimator::getCF(int x, int y)
+float PhaseEstimator::GetWellCF(int x, int y) const
 {
-  int cafieYinc = ceil(numWellsY / (double) cfiedrRegionsY);
-  int cafieXinc = ceil(numWellsX / (double) cfiedrRegionsX);
-  int iRegion = (y / cafieYinc) + (x / cafieXinc) * cfiedrRegionsY;
-  return cf[iRegion];
+  if (train_subset_count_ == 1) {
+    int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
+    int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
+    int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
+    return result_cf_[region];
+
+  } else {
+    int my_subset = 1-get_subset(x,y);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
+    return train_subset_cf_[my_subset][region];
+  }
 }
 
-float PhaseEstimator::getIE(int x, int y)
+float PhaseEstimator::GetWellIE(int x, int y) const
 {
-  int cafieYinc = ceil(numWellsY / (double) cfiedrRegionsY);
-  int cafieXinc = ceil(numWellsX / (double) cfiedrRegionsX);
-  int iRegion = (y / cafieYinc) + (x / cafieXinc) * cfiedrRegionsY;
-  return ie[iRegion];
+  if (train_subset_count_ == 1) {
+    int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
+    int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
+    int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
+    return result_ie_[region];
+
+  } else {
+    int my_subset = 1-get_subset(x,y);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
+    return train_subset_ie_[my_subset][region];
+  }
 }
 
-float PhaseEstimator::getDR(int x, int y)
+float PhaseEstimator::GetWellDR(int x, int y) const
 {
-  int cafieYinc = ceil(numWellsY / (double) cfiedrRegionsY);
-  int cafieXinc = ceil(numWellsX / (double) cfiedrRegionsX);
-  int iRegion = (y / cafieYinc) + (x / cafieXinc) * cfiedrRegionsY;
-  return dr[iRegion];
+  if (train_subset_count_ == 1) {
+    int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
+    int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
+    int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
+    return result_dr_[region];
+
+  } else {
+    int my_subset = 1-get_subset(x,y);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
+    return train_subset_dr_[my_subset][region];
+  }
 }
 
 
 
 
 
-void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask,int _regionSizeX, int _regionSizeY, int numWorkers)
+void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers)
 {
   printf("PhaseEstimator::analyze start\n");
 
-  regionSizeX = _regionSizeX;
-  regionSizeY = _regionSizeY;
+  num_regions_x_ = (chip_size_x_+region_size_x_-1) / region_size_x_;
+  num_regions_y_ = (chip_size_y_+region_size_y_-1) / region_size_y_;
+  num_regions_ = num_regions_x_ * num_regions_y_;
 
-  numWellsX = mask->W();
-  numWellsY = mask->H();
-  numRegionsX = (numWellsX+regionSizeX-1) / regionSizeX;
-  numRegionsY = (numWellsY+regionSizeY-1) / regionSizeY;
-  numRegions = numRegionsX * numRegionsY;
-
-  numLevels = 1;
-  if (numRegionsX >= 2 and numRegionsY >= 2)
-    numLevels = 2;
-  if (numRegionsX >= 4 and numRegionsY >= 4)
-    numLevels = 3;
-  if (numRegionsX >= 8 and numRegionsY >= 8)
-    numLevels = 4;
+  int num_levels = 1;
+  if (num_regions_x_ >= 2 and num_regions_y_ >= 2)
+    num_levels = 2;
+  if (num_regions_x_ >= 4 and num_regions_y_ >= 4)
+    num_levels = 3;
+  if (num_regions_x_ >= 8 and num_regions_y_ >= 8)
+    num_levels = 4;
 
   printf("Using numEstimatorFlows %d, chip is %d x %d, region is %d x %d, numRegions is %d x %d, numLevels %d\n",
-      numEstimatorFlows, numWellsX, numWellsY, regionSizeX, regionSizeY, numRegionsX, numRegionsY, numLevels);
+      flow_order_.num_flows(), chip_size_x_, chip_size_y_, region_size_x_, region_size_y_, num_regions_x_, num_regions_y_, num_levels);
 
   // Step 1. Use mask to build region density map
 
-  regionDensityMap.assign(numRegions, 0);
-  for (int x = 0; x < mask->W(); x++)
-    for (int y = 0; y < mask->H(); y++)
-      if (mask->Match(x,y,(MaskType)(MaskTF|MaskLib)))
-        regionDensityMap[RegionByXY(x/regionSizeX,y/regionSizeY)]++;
+  region_num_reads_.assign(num_regions_, 0);
+  for (int x = 0; x < chip_size_x_; x++)
+    for (int y = 0; y < chip_size_y_; y++)
+      if (mask->Match(x, y, (MaskType)(MaskTF|MaskLib)) and
+         !mask->Match(x, y, MaskFilteredBadResidual) and
+         !mask->Match(x, y, MaskFilteredBadPPF) and
+         !mask->Match(x, y, MaskFilteredBadKey))
+        region_num_reads_[(x/region_size_x_) + (y/region_size_y_)*num_regions_x_]++;
 
   // Step 2. Build the tree of estimation subblocks.
 
-  int maxSubblocks = 2*4*4*4;
-  subblocks.reserve(maxSubblocks);
+  int max_subblocks = 2*4*4*4;
+  vector<Subblock> subblocks;
+  subblocks.reserve(max_subblocks);
   subblocks.push_back(Subblock());
-  subblocks.back().CF = 0.0;
-  subblocks.back().IE = 0.0;
-  subblocks.back().DR = 0.0;
-  subblocks.back().beginX = 0;
-  subblocks.back().endX = numRegionsX;
-  subblocks.back().beginY = 0;
-  subblocks.back().endY = numRegionsY;
+  subblocks.back().cf = 0.0;
+  subblocks.back().ie = 0.0;
+  subblocks.back().dr = 0.0;
+  subblocks.back().begin_x = 0;
+  subblocks.back().end_x = num_regions_x_;
+  subblocks.back().begin_y = 0;
+  subblocks.back().end_y = num_regions_y_;
   subblocks.back().level = 1;
-  subblocks.back().posX = 0;
-  subblocks.back().posY = 0;
+  subblocks.back().pos_x = 0;
+  subblocks.back().pos_y = 0;
   subblocks.back().superblock = NULL;
 
   for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
     Subblock &s = subblocks[idx];
-    if (s.level == numLevels) {
+    if (s.level == num_levels) {
       s.subblocks[0] = NULL;
       s.subblocks[1] = NULL;
       s.subblocks[2] = NULL;
@@ -247,111 +317,83 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask,int _regionSizeX
       continue;
     }
 
-    int cutX = (s.beginX + s.endX) / 2;
-    int cutY = (s.beginY + s.endY) / 2;
+    int cut_x = (s.begin_x + s.end_x) / 2;
+    int cut_y = (s.begin_y + s.end_y) / 2;
 
-    subblocks.push_back(s);
-    subblocks.back().CF = -1.0;
-    subblocks.back().IE = -1.0;
-    subblocks.back().DR = -1.0;
-    subblocks.back().endX = cutX;
-    subblocks.back().endY = cutY;
-    subblocks.back().level++;
-    subblocks.back().posX = (s.posX << 1);
-    subblocks.back().posY = (s.posY << 1);
-    subblocks.back().superblock = &s;
-    s.subblocks[0] = &subblocks.back();
+    for (int i = 0; i < 4; i++) {
+      subblocks.push_back(s);
+      subblocks.back().cf = -1.0;
+      subblocks.back().ie = -1.0;
+      subblocks.back().dr = -1.0;
+      subblocks.back().level++;
+      subblocks.back().superblock = &s;
+      s.subblocks[i] = &subblocks.back();
+    }
 
-    subblocks.push_back(s);
-    subblocks.back().CF = -1.0;
-    subblocks.back().IE = -1.0;
-    subblocks.back().DR = -1.0;
-    subblocks.back().beginX = cutX;
-    subblocks.back().endY = cutY;
-    subblocks.back().level++;
-    subblocks.back().posX = (s.posX << 1) + 1;
-    subblocks.back().posY = (s.posY << 1);
-    subblocks.back().superblock = &s;
-    s.subblocks[1] = &subblocks.back();
-
-    subblocks.push_back(s);
-    subblocks.back().CF = -1.0;
-    subblocks.back().IE = -1.0;
-    subblocks.back().DR = -1.0;
-    subblocks.back().endX = cutX;
-    subblocks.back().beginY = cutY;
-    subblocks.back().level++;
-    subblocks.back().posX = (s.posX << 1);
-    subblocks.back().posY = (s.posY << 1) + 1;
-    subblocks.back().superblock = &s;
-    s.subblocks[2] = &subblocks.back();
-
-    subblocks.push_back(s);
-    subblocks.back().CF = -1.0;
-    subblocks.back().IE = -1.0;
-    subblocks.back().DR = -1.0;
-    subblocks.back().beginX = cutX;
-    subblocks.back().beginY = cutY;
-    subblocks.back().level++;
-    subblocks.back().posX = (s.posX << 1) + 1;
-    subblocks.back().posY = (s.posY << 1) + 1;
-    subblocks.back().superblock = &s;
-    s.subblocks[3] = &subblocks.back();
+    s.subblocks[0]->end_x = cut_x;
+    s.subblocks[0]->end_y = cut_y;
+    s.subblocks[0]->pos_x = (s.pos_x << 1);
+    s.subblocks[0]->pos_y = (s.pos_y << 1);
+    s.subblocks[1]->begin_x = cut_x;
+    s.subblocks[1]->end_y = cut_y;
+    s.subblocks[1]->pos_x = (s.pos_x << 1) + 1;
+    s.subblocks[1]->pos_y = (s.pos_y << 1);
+    s.subblocks[2]->end_x = cut_x;
+    s.subblocks[2]->begin_y = cut_y;
+    s.subblocks[2]->pos_x = (s.pos_x << 1);
+    s.subblocks[2]->pos_y = (s.pos_y << 1) + 1;
+    s.subblocks[3]->begin_x = cut_x;
+    s.subblocks[3]->begin_y = cut_y;
+    s.subblocks[3]->pos_x = (s.pos_x << 1) + 1;
+    s.subblocks[3]->pos_y = (s.pos_y << 1) + 1;
   }
 
   // Step 3. Populate region searchOrder in lowermost subblocks
 
-  vector<int> subblockMap(numRegions,0);
 
   for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
     Subblock &s = subblocks[idx];
-    if (s.level != numLevels)
+    if (s.level != num_levels)
       continue;
 
-    int numSubblockRegions = (s.endX - s.beginX) * (s.endY - s.beginY);
-    assert(numSubblockRegions > 0);
-    s.searchOrder.reserve(numSubblockRegions);
-    for (int regionX = s.beginX; regionX < s.endX; regionX++) {
-      for (int regionY = s.beginY; regionY < s.endY; regionY++) {
-        s.searchOrder.push_back(RegionByXY(regionX,regionY));
-        subblockMap[RegionByXY(regionX,regionY)] = ((s.posX ^ s.posY) & 1);
-      }
-    }
+    s.sorted_regions.reserve((s.end_x - s.begin_x) * (s.end_y - s.begin_y));
+    for (int region_x = s.begin_x; region_x < s.end_x; region_x++)
+      for (int region_y = s.begin_y; region_y < s.end_y; region_y++)
+        s.sorted_regions.push_back(region_x + region_y*num_regions_x_);
 
-    sort(s.searchOrder.begin(), s.searchOrder.end(), CompareDensity(&regionDensityMap));
-
+    sort(s.sorted_regions.begin(), s.sorted_regions.end(), CompareDensity(region_num_reads_));
   }
 
   // Step 4. Populate region searchOrder in remaining subblocks
 
-  for (int currentLevel = numLevels-1; currentLevel >= 1; currentLevel--) {
+  for (int level = num_levels-1; level >= 1; --level) {
     for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
       Subblock &s = subblocks[idx];
-      if (s.level != currentLevel)
+      if (s.level != level)
         continue;
 
       assert(s.subblocks[0] != NULL);
       assert(s.subblocks[1] != NULL);
       assert(s.subblocks[2] != NULL);
       assert(s.subblocks[3] != NULL);
-      unsigned int sumRegions = s.subblocks[0]->searchOrder.size()
-          + s.subblocks[1]->searchOrder.size()
-          + s.subblocks[2]->searchOrder.size()
-          + s.subblocks[3]->searchOrder.size();
-      s.searchOrder.reserve(sumRegions);
-      vector<int>::iterator V0 = s.subblocks[0]->searchOrder.begin();
-      vector<int>::iterator V1 = s.subblocks[1]->searchOrder.begin();
-      vector<int>::iterator V2 = s.subblocks[2]->searchOrder.begin();
-      vector<int>::iterator V3 = s.subblocks[3]->searchOrder.begin();
-      while (s.searchOrder.size() < sumRegions) {
-        if (V0 != s.subblocks[0]->searchOrder.end())
-          s.searchOrder.push_back(*V0++);
-        if (V2 != s.subblocks[2]->searchOrder.end())
-          s.searchOrder.push_back(*V2++);
-        if (V1 != s.subblocks[1]->searchOrder.end())
-          s.searchOrder.push_back(*V1++);
-        if (V3 != s.subblocks[3]->searchOrder.end())
-          s.searchOrder.push_back(*V3++);
+      unsigned int sum_regions = s.subblocks[0]->sorted_regions.size()
+          + s.subblocks[1]->sorted_regions.size()
+          + s.subblocks[2]->sorted_regions.size()
+          + s.subblocks[3]->sorted_regions.size();
+      s.sorted_regions.reserve(sum_regions);
+      vector<int>::iterator V0 = s.subblocks[0]->sorted_regions.begin();
+      vector<int>::iterator V1 = s.subblocks[1]->sorted_regions.begin();
+      vector<int>::iterator V2 = s.subblocks[2]->sorted_regions.begin();
+      vector<int>::iterator V3 = s.subblocks[3]->sorted_regions.begin();
+      while (s.sorted_regions.size() < sum_regions) {
+        if (V0 != s.subblocks[0]->sorted_regions.end())
+          s.sorted_regions.push_back(*V0++);
+        if (V2 != s.subblocks[2]->sorted_regions.end())
+          s.sorted_regions.push_back(*V2++);
+        if (V1 != s.subblocks[1]->sorted_regions.end())
+          s.sorted_regions.push_back(*V1++);
+        if (V3 != s.subblocks[3]->sorted_regions.end())
+          s.sorted_regions.push_back(*V3++);
       }
     }
   }
@@ -359,77 +401,68 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask,int _regionSizeX
 
   // Step 5. Show time. Spawn multiple worker threads to do phasing estimation
 
-  regionReads.clear();
-  regionReads.resize(numRegions);
-  actionMap.assign(numRegions,0);
+  region_reads_.clear();
+  region_reads_.resize(num_regions_);
+  action_map_.assign(num_regions_,0);
+  subblock_map_.assign(num_regions_,' ');
 
-  pthread_mutex_init(&regionLoaderMutex, NULL);
-  pthread_mutex_init(&jobQueueMutex, NULL);
-  pthread_cond_init(&jobQueueCond, NULL);
+  pthread_mutex_init(&region_loader_mutex_, NULL);
+  pthread_mutex_init(&job_queue_mutex_, NULL);
+  pthread_cond_init(&job_queue_cond_, NULL);
 
-  sharedWells = wells;
-  sharedMask = mask;
+  wells_ = wells;
+  mask_ = mask;
 
-  jobQueue[0] = &subblocks[0];
-  numJobsSubmitted = 1;
-  numJobsCompleted = 0;
-  nextJob = 0;
+  job_queue_.push_back(&subblocks[0]);
+  jobs_in_progress_ = 0;
 
-  pthread_t worker_id[numWorkers];
+  pthread_t worker_id[num_workers];
 
-  for (int iWorker = 0; iWorker < numWorkers; iWorker++)
-    if (pthread_create(&worker_id[iWorker], NULL, EstimatorWorkerWrapper, this))
+  for (int worker = 0; worker < num_workers; worker++)
+    if (pthread_create(&worker_id[worker], NULL, EstimatorWorkerWrapper, this))
       ION_ABORT("*Error* - problem starting thread");
 
-  for (int iWorker = 0; iWorker < numWorkers; iWorker++)
-    pthread_join(worker_id[iWorker], NULL);
+  for (int worker = 0; worker < num_workers; worker++)
+    pthread_join(worker_id[worker], NULL);
 
-  pthread_cond_destroy(&jobQueueCond);
-  pthread_mutex_destroy(&jobQueueMutex);
-  pthread_mutex_destroy(&regionLoaderMutex);
+  pthread_cond_destroy(&job_queue_cond_);
+  pthread_mutex_destroy(&job_queue_mutex_);
+  pthread_mutex_destroy(&region_loader_mutex_);
 
 
 
   // Print a silly action map
+  //! @todo Get rid of action map once confidence in spatial refiner performance is high
 
-  for (int regionY = 0; regionY < numRegionsY; regionY++) {
-    for (int regionX = 0; regionX < numRegionsX; regionX++) {
-
-      int r = RegionByXY(regionX,regionY);
-      if (regionDensityMap[r] == 0) {
-        printf("  ");
-        continue;
-      }
-
-      if (actionMap[r] == 0)
+  for (int region_y = 0; region_y < num_regions_y_; region_y++) {
+    for (int region_x = 0; region_x < num_regions_x_; region_x++) {
+      int region = region_x + region_y * num_regions_x_;
+      if (action_map_[region] == 0)
         printf(" ");
       else
-        printf("%d",actionMap[r]);
-      if (subblockMap[r] == 0)
-        printf("#");
-      else
-        printf(" ");
+        printf("%d",action_map_[region]);
+      printf("%c", subblock_map_[region]);
     }
     printf("\n");
   }
 
   // Crunching complete. Retrieve phasing estimates
 
-  cfiedrRegionsX = 1 << (numLevels-1);
-  cfiedrRegionsY = 1 << (numLevels-1);
-  cf.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
-  ie.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
-  dr.assign(cfiedrRegionsX*cfiedrRegionsY,0.0);
+  result_regions_x_ = 1 << (num_levels-1);
+  result_regions_y_ = 1 << (num_levels-1);
+  result_cf_.assign(result_regions_x_*result_regions_y_,0.0);
+  result_ie_.assign(result_regions_x_*result_regions_y_,0.0);
+  result_dr_.assign(result_regions_x_*result_regions_y_,0.0);
 
-  for (unsigned int subIdx = 0; subIdx < subblocks.size(); subIdx++) {
-    Subblock *current = &subblocks[subIdx];
-    if (current->level != numLevels)
+  for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
+    Subblock *current = &subblocks[idx];
+    if (current->level != num_levels)
       continue;
     while (current) {
-      if (current->CF >= 0) {
-        cf[subblocks[subIdx].posY + cfiedrRegionsY * subblocks[subIdx].posX] = current->CF;
-        ie[subblocks[subIdx].posY + cfiedrRegionsY * subblocks[subIdx].posX] = current->IE;
-        dr[subblocks[subIdx].posY + cfiedrRegionsY * subblocks[subIdx].posX] = current->DR;
+      if (current->cf >= 0) {
+        result_cf_[subblocks[idx].pos_y + result_regions_y_ * subblocks[idx].pos_x] = current->cf;
+        result_ie_[subblocks[idx].pos_y + result_regions_y_ * subblocks[idx].pos_x] = current->ie;
+        result_dr_[subblocks[idx].pos_y + result_regions_y_ * subblocks[idx].pos_x] = current->dr;
         break;
       }
       current = current->superblock;
@@ -444,99 +477,102 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask,int _regionSizeX
 
 
 
-size_t PhaseEstimator::loadRegion(int region, RawWells *wells, Mask *mask)
+size_t PhaseEstimator::LoadRegion(int region)
 {
-  if (regionDensityMap[region] == 0) // Nothing to load ?
+  if (region_num_reads_[region] == 0) // Nothing to load ?
     return 0;
-  if (regionReads[region].size() > 0) // Region already loaded?
+  if (region_reads_[region].size() > 0) // Region already loaded?
     return 0;
 
   ClockTimer timer;
   timer.StartTimer();
 
-  regionReads[region].reserve(regionDensityMap[region]);
+  region_reads_[region].reserve(region_num_reads_[region]);
 
-  int regionY = region / numRegionsX;
-  int regionX = region - numRegionsX*regionY;
+  int region_x = region % num_regions_x_;
+  int region_y = region / num_regions_x_;
 
-  int beginY = regionY * regionSizeY;
-  int beginX = regionX * regionSizeX;
-  int endY = min((regionY+1) * regionSizeY, (int)wells->NumRows());
-  int endX = min((regionX+1) * regionSizeX, (int)wells->NumCols());
-
-
-  //printf("  - Region % 4d: Preparing to read %d %d %d %d 0 %d\n",
-  //      region, beginY, endY-beginY, beginX, endX-beginX, numEstimatorFlows);
+  int begin_x = region_x * region_size_x_;
+  int begin_y = region_y * region_size_y_;
+  int end_x = min(begin_x + region_size_x_, chip_size_x_);
+  int end_y = min(begin_y + region_size_y_, chip_size_y_);
 
   // Mutex needed for wells access, but not needed for regionReads access
-  // TODO: Investigate possibility of each thread having its own RawWells class.
-  pthread_mutex_lock(&regionLoaderMutex);
+  pthread_mutex_lock(&region_loader_mutex_);
 
-  wells->SetChunk(beginY, endY-beginY, beginX, endX-beginX, 0, numEstimatorFlows);
-  wells->ReadWells();
+  wells_->SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, flow_order_.num_flows());
+  wells_->ReadWells();
 
-  vector<float> wellBuffer(numEstimatorFlows);
+  vector<float> well_buffer(flow_order_.num_flows());
 
-  for (int y = beginY; y < endY; y++) {
-    for (int x = beginX; x < endX; x++) {
+  for (int y = begin_y; y < end_y; y++) {
+    for (int x = begin_x; x < end_x; x++) {
 
-      if (!mask->Match(x, y, MaskLive))
+      if (get_subset(x,y) != train_subset_)
         continue;
-      if (!mask->Match(x, y, MaskBead))
+
+      if (!mask_->Match(x, y, MaskLive))
+        continue;
+      if (!mask_->Match(x, y, MaskBead))
+        continue;
+
+      // A little help from friends in BkgModel
+      if (mask_->Match(x, y, MaskFilteredBadResidual))
+        continue;
+      if (mask_->Match(x, y, MaskFilteredBadPPF))
+        continue;
+      if (mask_->Match(x, y, MaskFilteredBadKey))
         continue;
 
       int cls = 0;
-      if (!mask->Match(x, y, MaskLib)) {  // Not a library bead?
+      if (!mask_->Match(x, y, MaskLib)) {  // Not a library bead?
         cls = 1;
-        if (!mask->Match(x, y, MaskTF))   // Not a tf bead?
+        if (!mask_->Match(x, y, MaskTF))   // Not a tf bead?
           continue;
       }
 
-      for (int iFlow = 0; iFlow < numEstimatorFlows; iFlow++)
-        wellBuffer[iFlow] = wells->At(y,x,iFlow);
+      for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
+        well_buffer[flow] = wells_->At(y,x,flow);
 
       // Sanity check. If there are NaNs in this read, print warning
       vector<int> nanflow;
-      for (int flow = 0; flow < numEstimatorFlows; ++flow) {
-        if (!isnan(wellBuffer[flow]))
+      for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
+        if (!isnan(well_buffer[flow]))
           continue;
-        wellBuffer[flow] = 0;
+        well_buffer[flow] = 0;
         nanflow.push_back(flow);
       }
       if(nanflow.size() > 0) {
         fprintf(stderr, "ERROR: BaseCaller read NaNs from wells file, x=%d y=%d flow=%d", x, y, nanflow[0]);
-        for(unsigned int iFlow=1; iFlow < nanflow.size(); iFlow++) {
-          fprintf(stderr, ",%d", nanflow[iFlow]);
+        for(unsigned int flow=1; flow < nanflow.size(); flow++) {
+          fprintf(stderr, ",%d", nanflow[flow]);
         }
         fprintf(stderr, "\n");
         fflush(stderr);
       }
 
-      regionReads[region].push_back(BasecallerRead());
-      regionReads[region].back().SetDataAndKeyNormalize(&wellBuffer[0], numEstimatorFlows, keys[cls].flows(), keys[cls].flows_length()-1);
+      region_reads_[region].push_back(BasecallerRead());
+      region_reads_[region].back().SetDataAndKeyNormalize(&well_buffer[0],
+          flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1);
 
       bool keypass = true;
-      for (int iFlow = 0; iFlow < (keys[cls].flows_length() - 1); iFlow++) {
-        if ((int) (regionReads[region].back().measurements[iFlow] + 0.5) != keys[cls][iFlow])
+      for (int flow = 0; flow < (keys_[cls].flows_length() - 1); flow++) {
+        if ((int) (region_reads_[region].back().raw_measurements[flow] + 0.5) != keys_[cls][flow])
           keypass = false;
-        if (isnan(regionReads[region].back().measurements[iFlow]))
+        if (isnan(region_reads_[region].back().raw_measurements[flow]))
           keypass = false;
       }
 
       if (!keypass) {
-        regionReads[region].pop_back();
+        region_reads_[region].pop_back();
         continue;
       }
-
     }
   }
 
-  pthread_mutex_unlock(&regionLoaderMutex);
+  pthread_mutex_unlock(&region_loader_mutex_);
 
-//  printf("  - Region % 4d: Expected %d, read %lu, time %luus\n",
-//      region, regionDensityMap[region], regionReads[region].size(), timer.GetMicroSec());
-
-  regionDensityMap[region] = (int)regionReads[region].size();
+  region_num_reads_[region] = region_reads_[region].size();
 
   return timer.GetMicroSec();
 }
@@ -553,44 +589,32 @@ void *PhaseEstimator::EstimatorWorkerWrapper(void *arg)
 void PhaseEstimator::EstimatorWorker()
 {
 
-  DPTreephaser dpTreephaser(flowOrder.c_str(), numEstimatorFlows, 8);
+  DPTreephaser treephaser(flow_order_);
+  vector<BasecallerRead *>  useful_reads;
+  useful_reads.reserve(10000);
 
   while (true) {
 
-    int currentJob = -1;
-    pthread_mutex_lock(&jobQueueMutex);
-    while (true) {
-      if (numJobsSubmitted == numJobsCompleted) {   // No more work
-        pthread_mutex_unlock(&jobQueueMutex);
+    pthread_mutex_lock(&job_queue_mutex_);
+    while (job_queue_.empty()) {
+      if (jobs_in_progress_ == 0) {
+        pthread_mutex_unlock(&job_queue_mutex_);
         return;
       }
-      if (nextJob < numJobsSubmitted) { // Job is available. Get on it
-        currentJob = nextJob++;
-        pthread_mutex_unlock(&jobQueueMutex);
-        break;
-      }
       // No jobs available now, but more may come, so stick around
-      pthread_cond_wait(&jobQueueCond, &jobQueueMutex);
+      pthread_cond_wait(&job_queue_cond_, &job_queue_mutex_);
     }
+    Subblock &s = *job_queue_.front();
+    job_queue_.pop_front();
+    jobs_in_progress_++;
+    pthread_mutex_unlock(&job_queue_mutex_);
 
-    Subblock &s = *jobQueue[currentJob];
 
     // Processing
 
-    //  - Get first region at lvl 0
-    //  - Keep getting more regions at level 0:
-    //    - Stop when have 5000 eligible reads or run out of regions
-    //  - Generate estimates
-    //  - If lvl 0 is last, stop (and unload regions at lvl 0)
-    //    - Else spawn lvl 1 jobs
-
-
-
-    int numGlobalIterations = 1;
-    int desiredNumReads = 5000;
+    int numGlobalIterations = 1;  // 3 iterations at top level, 1 at all other levels
     if (s.level == 1)
-      numGlobalIterations += 2;
-    int numUsefulReads = 0;
+      numGlobalIterations = 3;
 
     for (int iGlobalIteration = 0; iGlobalIteration < numGlobalIterations; iGlobalIteration++) {
 
@@ -598,203 +622,204 @@ void PhaseEstimator::EstimatorWorker()
       timer.StartTimer();
       size_t iotimer = 0;
 
-      dpTreephaser.SetModelParameters(s.CF, s.IE, s.DR);
+      treephaser.SetModelParameters(s.cf, s.ie, s.dr);
+      useful_reads.clear();
 
-      numUsefulReads = 0;
+      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); region++) {
 
-      for (vector<int>::iterator region = s.searchOrder.begin(); region != s.searchOrder.end(); region++) {
 
-        if (actionMap[*region] == 0)
-          actionMap[*region] = s.level;
-
-        iotimer += loadRegion(*region, sharedWells, sharedMask);
+        iotimer += LoadRegion(*region);
         // Ensure region loaded.
         // Grab reads, filter
         // Enough reads? Stop.
 
-        // Filter. Mark filtered out reads with -1e20 in normalizedMeasurements[0]
-        for (vector<BasecallerRead>::iterator R = regionReads[*region].begin(); R != regionReads[*region].end(); R++) {
+        if (action_map_[*region] == 0 and region_num_reads_[*region])
+          action_map_[*region] = s.level;
 
-          for (int iFlow = 0; iFlow < numEstimatorFlows; iFlow++)
-            R->normalizedMeasurements[iFlow] = R->measurements[iFlow];
+        // Filter. Reads that survive filtering are stored in useful_reads
+        //! \todo: Rethink filtering. Maybe a rule that adjusts the threshold to keep at least 20% of candidate reads.
 
-          dpTreephaser.Solve(*R, min(100, numEstimatorFlows));
-          R->Normalize(11, min(80, numEstimatorFlows));
-          dpTreephaser.Solve(*R, min(120, numEstimatorFlows));
-          R->Normalize(11, min(100, numEstimatorFlows));
-          dpTreephaser.Solve(*R, min(120, numEstimatorFlows));
+        for (vector<BasecallerRead>::iterator R = region_reads_[*region].begin(); R != region_reads_[*region].end(); R++) {
+
+          for (int flow = 0; flow < flow_order_.num_flows(); flow++)
+            R->normalized_measurements[flow] = R->raw_measurements[flow];
+
+          treephaser.Solve    (*R, min(100, flow_order_.num_flows()));
+          treephaser.Normalize(*R, 11, 80);
+          treephaser.Solve    (*R, min(120, flow_order_.num_flows()));
+          treephaser.Normalize(*R, 11, 100);
+          treephaser.Solve    (*R, min(120, flow_order_.num_flows()));
 
           float metric = 0;
-          for (int iFlow = 20; (iFlow < 100) && (iFlow < numEstimatorFlows); iFlow++) {
-            if (R->normalizedMeasurements[iFlow] > 1.2)
+          for (int flow = 20; flow < 100 and flow < flow_order_.num_flows(); ++flow) {
+            if (R->normalized_measurements[flow] > 1.2)
               continue;
-            float delta = R->normalizedMeasurements[iFlow] - R->prediction[iFlow];
+            float delta = R->normalized_measurements[flow] - R->prediction[flow];
             if (!isnan(delta))
               metric += delta * delta;
             else
               metric += 1e10;
           }
 
-          if (metric > 1)
-            R->normalizedMeasurements[0] = -1e20; // Ignore me
-          else
-            numUsefulReads++;
+          if (metric > residual_threshold_)
+            continue;
+          useful_reads.push_back(&(*R));
         }
 
-        if (numUsefulReads >= desiredNumReads)
+        if (useful_reads.size() >= 5000)
           break;
       }
 
-      if (s.level > 1 and numUsefulReads < 1000) // Not enough reads to even try
+      if (s.level > 1 and useful_reads.size() < 1000) // Not enough reads to even try
         break;
 
       // Do estimation with reads collected, update estimates
       float parameters[3];
-      parameters[0] = s.CF;
-      parameters[1] = s.IE;
-      parameters[2] = s.DR;
-      NelderMeadOptimization(s, numUsefulReads, dpTreephaser, parameters, 50, 3);
-      s.CF = parameters[0];
-      s.IE = parameters[1];
-      s.DR = parameters[2];
+      parameters[0] = s.cf;
+      parameters[1] = s.ie;
+      parameters[2] = s.dr;
+      NelderMeadOptimization(useful_reads, treephaser, parameters);
+      s.cf = parameters[0];
+      s.ie = parameters[1];
+      s.dr = parameters[2];
 
-      printf("Completed stage %2d/%2d :(%2d-%2d)x(%2d-%2d), total time %5.2lf sec, i/o time %5.2lf sec, %d reads, CF=%1.2f%% IE=%1.2f%% DR=%1.2f%%\n",
-          currentJob+1, numJobsSubmitted, s.beginX,s.endX,s.beginY,s.endY,
-          (double)timer.GetMicroSec()/1000000.0, (double)iotimer/1000000.0, numUsefulReads,
-          100.0*s.CF, 100.0*s.IE, 100.0*s.DR);
+      printf("Completed (%d,%d,%d) :(%2d-%2d)x(%2d-%2d), total time %5.2lf sec, i/o time %5.2lf sec, %d reads, CF=%1.2f%% IE=%1.2f%% DR=%1.2f%%\n",
+          s.level, s.pos_x, s.pos_y, s.begin_x, s.end_x, s.begin_y, s.end_y,
+          (double)timer.GetMicroSec()/1000000.0, (double)iotimer/1000000.0, (int)useful_reads.size(),
+          100.0*s.cf, 100.0*s.ie, 100.0*s.dr);
+    }
+
+    if (useful_reads.size() >= 1000 or s.level == 1) {
+
+      for (int region_x = s.begin_x; region_x <= s.end_x and region_x < num_regions_x_; region_x++) {
+        for (int region_y = s.begin_y; region_y <= s.end_y and region_y < num_regions_y_; region_y++) {
+          int region = region_x + region_y * num_regions_x_;
+          if     (region_x == s.begin_x and region_y == s.begin_y)
+            subblock_map_[region] = '+';
+          else if(region_x == s.begin_x and region_y == s.end_y)
+            subblock_map_[region] = '+';
+          else if(region_x == s.end_x and region_y == s.begin_y)
+            subblock_map_[region] = '+';
+          else if(region_x == s.end_x and region_y == s.end_y)
+            subblock_map_[region] = '+';
+          else if (region_x == s.begin_x)
+            subblock_map_[region] = '|';
+          else if (region_x == s.end_x)
+            subblock_map_[region] = '|';
+          else if (region_y == s.begin_y)
+            subblock_map_[region] = '-';
+          else if (region_y == s.end_y)
+            subblock_map_[region] = '-';
+        }
+      }
     }
 
 
-    if (s.level == numLevels or numUsefulReads < 4000) {
+    if (s.subblocks[0] == NULL or useful_reads.size() < 4000) {
       // Do not subdivide this block
-      for (vector<int>::iterator region = s.searchOrder.begin(); region != s.searchOrder.end(); region++)
-        regionReads[*region].clear();
+      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); region++)
+        region_reads_[*region].clear();
 
-      pthread_mutex_lock(&jobQueueMutex);
-      numJobsCompleted++;
-      if (numJobsSubmitted == numJobsCompleted)  // No more work, let everyone know
-        pthread_cond_broadcast(&jobQueueCond);
-      pthread_mutex_unlock(&jobQueueMutex);
+      pthread_mutex_lock(&job_queue_mutex_);
+      jobs_in_progress_--;
+      if (jobs_in_progress_ == 0)  // No more work, let everyone know
+        pthread_cond_broadcast(&job_queue_cond_);
+      pthread_mutex_unlock(&job_queue_mutex_);
 
     } else {
       // Subdivide. Spawn new jobs:
-
-      pthread_mutex_lock(&jobQueueMutex);
-      numJobsCompleted++;
+      pthread_mutex_lock(&job_queue_mutex_);
+      jobs_in_progress_--;
       for (int subjob = 0; subjob < 4; subjob++) {
-        jobQueue[numJobsSubmitted] = s.subblocks[subjob];
-        jobQueue[numJobsSubmitted]->CF = s.CF;
-        jobQueue[numJobsSubmitted]->IE = s.IE;
-        jobQueue[numJobsSubmitted]->DR = s.DR;
-        numJobsSubmitted++;
+        s.subblocks[subjob]->cf = s.cf;
+        s.subblocks[subjob]->ie = s.ie;
+        s.subblocks[subjob]->dr = s.dr;
+        job_queue_.push_back(s.subblocks[subjob]);
       }
-      pthread_cond_broadcast(&jobQueueCond);  // More work, let everyone know
-      pthread_mutex_unlock(&jobQueueMutex);
-
+      pthread_cond_broadcast(&job_queue_cond_);  // More work, let everyone know
+      pthread_mutex_unlock(&job_queue_mutex_);
     }
   }
-
 }
 
 
 
 
-float PhaseEstimator::evaluateParameters(Subblock& s, int numUsefulReads, DPTreephaser& treephaser, float *parameters)
+float PhaseEstimator::EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters)
 {
+  float try_cf = parameters[0];
+  float try_ie = parameters[1];
+  float try_dr = parameters[2];
+  if (try_cf < 0 or try_ie < 0 or try_dr < 0 or try_cf > 0.04 or try_ie > 0.04 or try_dr > 0.01)
+    return 1e10;
+
+  treephaser.SetModelParameters(try_cf, try_ie, try_dr);
+
   float metric = 0;
+  for (vector<BasecallerRead *>::iterator read = useful_reads.begin(); read != useful_reads.end(); ++read) {
 
-  if (parameters[0] < 0) // cf
-    metric = 1e10;
-  if (parameters[1] < 0) // ie
-    metric = 1e10;
-  if (parameters[2] < 0) // dr
-    metric = 1e10;
+    treephaser.Simulate(**read, 120);
+    float normalizer = treephaser.Normalize(**read, 20, 100);
 
-  if (parameters[0] > 0.04) // cf
-    metric = 1e10;
-  if (parameters[1] > 0.04) // ie
-    metric = 1e10;
-  if (parameters[2] > 0.01) // dr
-    metric = 1e10;
-
-  if (metric == 0) {
-
-    treephaser.SetModelParameters(parameters[0], parameters[1], parameters[2]);
-
-    int counter = 0;
-    for (vector<int>::iterator region = s.searchOrder.begin(); region != s.searchOrder.end() and (counter < numUsefulReads); region++) {
-      for (vector<BasecallerRead>::iterator R = regionReads[*region].begin(); R != regionReads[*region].end() and (counter < numUsefulReads); R++) {
-        if (R->normalizedMeasurements[0] < -1e10)
-          continue;
-
-        treephaser.Simulate3(*R, 120);
-        R->Normalize(20, 100);
-
-        for (int iFlow = 20; iFlow < std::min(100, numEstimatorFlows); iFlow++) {
-          if (R->measurements[iFlow] > 1.2)
-            continue;
-          float delta = R->measurements[iFlow] - R->prediction[iFlow] * R->miscNormalizer;
-          metric += delta * delta;
-        }
-        counter++;
-      }
+    for (unsigned int flow = 20; flow < 100 and flow < (*read)->raw_measurements.size(); flow++) {
+      if ((*read)->raw_measurements[flow] > 1.2)
+        continue;
+      float delta = (*read)->raw_measurements[flow] - (*read)->prediction[flow] * normalizer;
+      metric += delta * delta;
     }
   }
 
-  if (isnan(metric))
-    metric = 1e10;
-
-  return metric;
+  return isnan(metric) ? 1e10 : metric;
 }
 
 
 
 
 
-#define NMalpha   1.0
-#define NMgamma   2.0
-#define NMrho   0.5
-#define NMsigma   0.5
+#define kReflectionAlpha    1.0
+#define kExpansionGamma     2.0
+#define kContractionRho     0.5
+#define kReductionSigma     0.5
+#define kNumParameters      3
+#define kMaxEvaluations     50
 
-
-void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DPTreephaser& treephaser,
-    float *parameters, int numEvaluations, int numParameters)
+void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters)
 {
 
-  int iEvaluation = 0;
+  int num_evaluations = 0;
 
   //
   // Step 1. Pick initial vertices, evaluate the function at vertices, and sort the vertices
   //
 
-  float   vertex[numParameters+1][numParameters];
-  float   value[numParameters+1];
-  int     order[numParameters+1];
+  float   vertex[kNumParameters+1][kNumParameters];
+  float   value[kNumParameters+1];
+  int     order[kNumParameters+1];
 
-  for (int iVertex = 0; iVertex <= numParameters; iVertex++) {
+  for (int iVertex = 0; iVertex <= kNumParameters; iVertex++) {
 
-    for (int iParam = 0; iParam < numParameters; iParam++)
+    for (int iParam = 0; iParam < kNumParameters; iParam++)
       vertex[iVertex][iParam] = parameters[iParam];
 
-        switch (iVertex) {
-        case 0:                 // First vertex just matches the provided starting values
-            break;
-        case 1:                 // Second vertex has higher CF
-            vertex[iVertex][0] += 0.004;
-            break;
-        case 2:                 // Third vertex has higher IE
-            vertex[iVertex][1] += 0.004;
-            break;
-        case 3:                 // Fourth vertex has higher DR
-            vertex[iVertex][2] += 0.001;
-            break;
-        default:                // Default for future parameters
-            vertex[iVertex][iVertex-1] *= 1.5;
-            break;
-        }
+    switch (iVertex) {
+      case 0:                 // First vertex just matches the provided starting values
+        break;
+      case 1:                 // Second vertex has higher CF
+        vertex[iVertex][0] += 0.004;
+        break;
+      case 2:                 // Third vertex has higher IE
+        vertex[iVertex][1] += 0.004;
+        break;
+      case 3:                 // Fourth vertex has higher DR
+        vertex[iVertex][2] += 0.001;
+        break;
+      default:                // Default for future parameters
+        vertex[iVertex][iVertex-1] *= 1.5;
+        break;
+    }
 
-    value[iVertex] = evaluateParameters(s, numUsefulReads, treephaser, vertex[iVertex]);
-    iEvaluation++;
+    value[iVertex] = EvaluateParameters(useful_reads, treephaser, vertex[iVertex]);
+    num_evaluations++;
 
     order[iVertex] = iVertex;
 
@@ -809,41 +834,41 @@ void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DP
 
   // Main optimization loop
 
-  while (iEvaluation < numEvaluations) {
+  while (num_evaluations < kMaxEvaluations) {
 
     //
     // Step 2. Attempt reflection (and possibly expansion)
     //
 
-    float center[numParameters];
-    float reflection[numParameters];
+    float center[kNumParameters];
+    float reflection[kNumParameters];
 
-    int worst = order[numParameters];
-    int secondWorst = order[numParameters-1];
+    int worst = order[kNumParameters];
+    int secondWorst = order[kNumParameters-1];
     int best = order[0];
 
-    for (int iParam = 0; iParam < numParameters; iParam++) {
+    for (int iParam = 0; iParam < kNumParameters; iParam++) {
       center[iParam] = 0;
-      for (int iVertex = 0; iVertex <= numParameters; iVertex++)
+      for (int iVertex = 0; iVertex <= kNumParameters; iVertex++)
         if (iVertex != worst)
           center[iParam] += vertex[iVertex][iParam];
-      center[iParam] /= numParameters ;
-      reflection[iParam] = center[iParam] + NMalpha * (center[iParam] - vertex[worst][iParam]);
+      center[iParam] /= kNumParameters ;
+      reflection[iParam] = center[iParam] + kReflectionAlpha * (center[iParam] - vertex[worst][iParam]);
     }
 
-    float reflectionValue = evaluateParameters(s, numUsefulReads, treephaser, reflection);
-    iEvaluation++;
+    float reflectionValue = EvaluateParameters(useful_reads, treephaser, reflection);
+    num_evaluations++;
 
     if (reflectionValue < value[best]) {    // Consider expansion:
 
-      float expansion[numParameters];
-      for (int iParam = 0; iParam < numParameters; iParam++)
-        expansion[iParam] = center[iParam] + NMgamma * (center[iParam] - vertex[worst][iParam]);
-      float expansionValue = evaluateParameters(s, numUsefulReads, treephaser, expansion);
-      iEvaluation++;
+      float expansion[kNumParameters];
+      for (int iParam = 0; iParam < kNumParameters; iParam++)
+        expansion[iParam] = center[iParam] + kExpansionGamma * (center[iParam] - vertex[worst][iParam]);
+      float expansionValue = EvaluateParameters(useful_reads, treephaser, expansion);
+      num_evaluations++;
 
       if (expansionValue < reflectionValue) {   // Expansion indeed better than reflection
-        for (int iParam = 0; iParam < numParameters; iParam++)
+        for (int iParam = 0; iParam < kNumParameters; iParam++)
           reflection[iParam] = expansion[iParam];
         reflectionValue = expansionValue;
       }
@@ -851,11 +876,11 @@ void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DP
 
     if (reflectionValue < value[secondWorst]) { // Either reflection or expansion was successful
 
-      for (int iParam = 0; iParam < numParameters; iParam++)
+      for (int iParam = 0; iParam < kNumParameters; iParam++)
         vertex[worst][iParam] = reflection[iParam];
       value[worst] = reflectionValue;
 
-      for (int xVertex = numParameters; xVertex > 0; xVertex--) {
+      for (int xVertex = kNumParameters; xVertex > 0; xVertex--) {
         if (value[order[xVertex]] < value[order[xVertex-1]]) {
           int x = order[xVertex];
           order[xVertex] = order[xVertex-1];
@@ -870,19 +895,19 @@ void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DP
     // Step 3. Attempt contraction (reflection was unsuccessful)
     //
 
-    float contraction[numParameters];
-    for (int iParam = 0; iParam < numParameters; iParam++)
-      contraction[iParam] = vertex[worst][iParam] + NMrho * (center[iParam] - vertex[worst][iParam]);
-    float contractionValue = evaluateParameters(s, numUsefulReads, treephaser, contraction);
-    iEvaluation++;
+    float contraction[kNumParameters];
+    for (int iParam = 0; iParam < kNumParameters; iParam++)
+      contraction[iParam] = vertex[worst][iParam] + kContractionRho * (center[iParam] - vertex[worst][iParam]);
+    float contractionValue = EvaluateParameters(useful_reads, treephaser, contraction);
+    num_evaluations++;
 
     if (contractionValue < value[worst]) {  // Contraction was successful
 
-      for (int iParam = 0; iParam < numParameters; iParam++)
+      for (int iParam = 0; iParam < kNumParameters; iParam++)
         vertex[worst][iParam] = contraction[iParam];
       value[worst] = contractionValue;
 
-      for (int xVertex = numParameters; xVertex > 0; xVertex--) {
+      for (int xVertex = kNumParameters; xVertex > 0; xVertex--) {
         if (value[order[xVertex]] < value[order[xVertex-1]]) {
           int x = order[xVertex];
           order[xVertex] = order[xVertex-1];
@@ -897,13 +922,13 @@ void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DP
     // Step 4. Perform reduction (contraction was unsuccessful)
     //
 
-    for (int iVertex = 1; iVertex <= numParameters; iVertex++) {
+    for (int iVertex = 1; iVertex <= kNumParameters; iVertex++) {
 
-      for (int iParam = 0; iParam < numParameters; iParam++)
-        vertex[order[iVertex]][iParam] = vertex[best][iParam] + NMsigma * (vertex[order[iVertex]][iParam] - vertex[best][iParam]);
+      for (int iParam = 0; iParam < kNumParameters; iParam++)
+        vertex[order[iVertex]][iParam] = vertex[best][iParam] + kReductionSigma * (vertex[order[iVertex]][iParam] - vertex[best][iParam]);
 
-      value[order[iVertex]] = evaluateParameters(s, numUsefulReads, treephaser, vertex[order[iVertex]]);
-      iEvaluation++;
+      value[order[iVertex]] = EvaluateParameters(useful_reads, treephaser, vertex[order[iVertex]]);
+      num_evaluations++;
 
       for (int xVertex = iVertex; xVertex > 0; xVertex--) {
         if (value[order[xVertex]] < value[order[xVertex-1]]) {
@@ -915,7 +940,7 @@ void PhaseEstimator::NelderMeadOptimization (Subblock& s, int numUsefulReads, DP
     }
   }
 
-  for (int iParam = 0; iParam < numParameters; iParam++)
+  for (int iParam = 0; iParam < kNumParameters; iParam++)
     parameters[iParam] = vertex[order[0]][iParam];
 }
 

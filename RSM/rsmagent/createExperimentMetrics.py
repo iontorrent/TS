@@ -6,27 +6,17 @@
 # The primary key (id) of iondb.rundb.Results primary key is
 # expected in argv[1].
 
-from django.core.management import setup_environ
 
 import sys
 import os
-import datetime
 import uuid
 
-from os import path
 sys.path.append('/opt/ion/')
 sys.path.append("/opt/ion/iondb/")
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 
-import settings
-setup_environ(settings)
-
-from django.db import models
-from iondb.rundb import models
-from django.core.exceptions import ObjectDoesNotExist
 
 import rundb.models
-import re
 
 if __name__=="__main__":
 

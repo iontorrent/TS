@@ -1,0 +1,38 @@
+{% extends "rundb/configure/base.html" %}
+{% block content %}
+<div class="content clearfix">
+    <form class="form-horizontal" id="configure_addedit_email_form" method="post" enctype="multipart/form-data">
+        <h3>{{ name }}</h3>
+        <div class="control-group">
+            <label class="control-label validateEmail" for="">{{ temp.email_address.label }}</label>
+            <div class="controls">
+                {{ temp.email_address }}
+            </div>
+        </div>
+        <div class="control-group">
+            <label class="control-label" for="">{{ temp.selected.label }}</label>
+            <div class="controls">
+                {{ temp.selected }}
+            </div>
+        </div>
+    </form>
+    
+    <div class="pull-right">
+		<a class="btn" href="{% url configure_configure %}">Cancel</a>
+		<a id="upfile" class="btn btn-primary submit_email" >Save Email</a>
+	</div>
+</div>
+    
+<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+<script type="text/javascript">
+	$('#submit_email').click(function(){
+		$('#configure_addedit_email_form').submit();
+	});
+</script>
+{% endblock %}
+
+
+
+
+

@@ -4,6 +4,7 @@
 #define IONERR_H
 #include <string>
 #include <stdlib.h>
+#include "assert.h"
                                       
 #define ION_ABORT(_Msg) { IonErr::Abort(__FILE__,__LINE__,_Msg); }
 
@@ -11,7 +12,11 @@
 
 #define ION_WARN(_Msg) { IonErr::Warn(__FILE__,__LINE__,_Msg); }
                                       
+#ifdef ION_DEBUG
+#define ION_ASSERT(_Cond,_Msg) { if (!(_Cond)) { IonErr::Warn(__FILE__,__LINE__,_Msg); assert(_Cond);} }
+#else
 #define ION_ASSERT(_Cond,_Msg) { if (!(_Cond)) { IonErr::Abort(__FILE__,__LINE__,#_Cond,_Msg); } }
+#endif
 
 /** Class containing error handling configuration. */
 class IonErrStatus {

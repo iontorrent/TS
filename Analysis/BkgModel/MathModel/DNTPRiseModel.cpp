@@ -2,11 +2,12 @@
 
 #include "DNTPRiseModel.h"
 
-DntpRiseModel::DntpRiseModel(int _npts,float _C,float *_tvals,int _sub_steps)
+DntpRiseModel::DntpRiseModel(int _npts,float *_C,float *_tvals,int _sub_steps)
 {
     npts = _npts;
     tvals = _tvals;
-    C = _C;
+    for (int i_nuc=0; i_nuc<NUMNUC; i_nuc++)
+      C[i_nuc] = _C[i_nuc];
     i_start = 0;
     sub_steps = _sub_steps;
     splineflag = true; // we're using splineflag
@@ -166,15 +167,80 @@ int MeasuredNucRiseFunction(float *output, int npts, float *frame_times, int sub
     return(i_start);
 }
 
+inline float instant_spline_val(float scaled_dt)
+{
+  float last_nuc_value = 0.0f;
+            if ((scaled_dt>0.0f))
+            {
+              float scaled_dt_square = scaled_dt*scaled_dt;
+              last_nuc_value = scaled_dt_square*(3.0f-2.0f*scaled_dt); //spline! with zero tangents at start and end points
+
+              if (scaled_dt>1.0f)
+                last_nuc_value =1.0f;
+            }
+    return(last_nuc_value);
+}
+
+// spline with one knot
+int SplineRiseAndFallFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float nuc_time_offset)
+{
+    int ndx = 0;
+    float tlast = 0.0f;
+    float last_nuc_value = 0.0f;
+    float my_inv_sigma = 1.0f/(3.0f*sigma); // bring back into range for ERF
+    float scaled_dt = -1.0f;
+    float scaled_end_dt = -1.0f;
+    float scaled_end_nuc_time = nuc_time_offset*my_inv_sigma;
+    float my_inv_sub_steps = 1.0f/((float)sub_steps);
+    bool i_start_uninitialized = true;
+     int i_start = 0;  // always a legal value here
+
+    memset(output,0,sizeof(float[npts*sub_steps]));
+
+    for (int i=0;i < npts;i++)
+    {
+        // get the frame number of this data point (might be fractional because this point could be
+        // the average of several frames of data.  This number is the average time of all the averaged
+        // data points
+        float t=frame_times[i];
+
+        for (int st=1;st <= sub_steps;st++)
+        {
+            float tnew = tlast+(t-tlast)*(float)st*my_inv_sub_steps;
+            scaled_dt = (tnew-t_mid_nuc)*my_inv_sigma +0.5f;
+            scaled_end_dt = scaled_dt - scaled_end_nuc_time;
+
+            last_nuc_value = instant_spline_val(scaled_dt);
+            last_nuc_value -= instant_spline_val(scaled_end_dt);
+
+            last_nuc_value *=C;
+            output[ndx++] = last_nuc_value;
+        }
+
+        // first time point where we have a nonzero time
+        if (i_start_uninitialized && (scaled_dt>0.0f))
+        {
+            i_start = i;
+            i_start_uninitialized=false; // now we have a true value here
+        }
+
+        tlast = t;
+    }
+
+    if (i_start_uninitialized)
+      printf("ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f\n", t_mid_nuc, sigma);
+    return(i_start);
+}
+
 // spline with one knot
 int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float tangent_zero, float tangent_one)
 {
     int ndx = 0;
-    float tlast = 0;
-    float last_nuc_value = 0.0;
-    float scaled_dt = -1.0;
-    float my_sigma = 3*sigma; // bring back into range for ERF
-    
+    float tlast = 0.0f;
+    float last_nuc_value = 0.0f;
+    float scaled_dt = -1.0f;
+    float my_inv_sigma = 1.0f/(3.0f*sigma); // bring back into range for ERF
+    float my_inv_sub_steps = 1.0f/((float)sub_steps);
     bool i_start_uninitialized = true;
      int i_start = 0;  // always a legal value here
 
@@ -189,20 +255,20 @@ int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_step
 
         for (int st=1;st <= sub_steps;st++)
         {
-            float tnew = tlast+(t-tlast)*(float)st/sub_steps;
-            scaled_dt = (tnew-t_mid_nuc)/my_sigma +0.5f;
+            float tnew = tlast+(t-tlast)*(float)st*my_inv_sub_steps;
+            scaled_dt = (tnew-t_mid_nuc)*my_inv_sigma +0.5f;
 
-            if ((scaled_dt>0))
+            if ((scaled_dt>0.0f))
             {
               float scaled_dt_square = scaled_dt*scaled_dt;
-              float scaled_dt_minus = scaled_dt-1;
+              float scaled_dt_minus = scaled_dt-1.0f;
               last_nuc_value = scaled_dt_square*(3.0f-2.0f*scaled_dt); //spline! with zero tangents at start and end points
               last_nuc_value += scaled_dt_square*scaled_dt_minus * tangent_one; // finishing tangent, tangent at zero = 0
               last_nuc_value += scaled_dt*scaled_dt_minus*scaled_dt_minus * tangent_zero; // tangent at start, tangent at 1 = 0
               
               // scale up to finish at C
               last_nuc_value *= C;
-              if (scaled_dt>1)
+              if (scaled_dt>1.0f)
                 last_nuc_value = C;
             }
             output[ndx++] = last_nuc_value;
@@ -274,19 +340,18 @@ int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps
     return(i_start);
 }
 
-// coment this out to enable the new nuc rise function based on measured curve (more accurate)
-#define SPLINE_RISE_FUNCTION
 
-int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, bool splineflag)
+
+int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, float nuc_flow_span, bool splineflag)
 {
 if (splineflag)
-    return(SplineRiseFunction(output,npts,frame_times,sub_steps,C,t_mid_nuc,sigma,0.0f,0.0f));
+    return(SplineRiseAndFallFunction(output,npts,frame_times,sub_steps,C,t_mid_nuc,sigma,nuc_flow_span));
 else
     return(MeasuredNucRiseFunction(output,npts,frame_times,sub_steps,C,t_mid_nuc,sigma));
 }
 
-int DntpRiseModel::CalcCDntpTop(float *output,float t_mid_nuc,float sigma)
+int DntpRiseModel::CalcCDntpTop(float *output,float t_mid_nuc,float sigma, float nuc_flow_span, int i_nuc)
 {
-    return(SigmaRiseFunction(output,npts,tvals,sub_steps,C,t_mid_nuc,sigma, splineflag));
+    return(SigmaRiseFunction(output,npts,tvals,sub_steps,C[i_nuc],t_mid_nuc,sigma, nuc_flow_span, splineflag));
 }
 

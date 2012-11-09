@@ -1,0 +1,57 @@
+{% load humanize %}
+{% load pagetools %}
+{% load ion_readable %}
+
+<div id="beadfind" class="span3 well centered">
+    <div class="row-fluid number-chunk">
+        <div rel='tooltip' title="Total base output for the run after filtering" class="span6">
+            <h2>{{dbr.total_Q0_bases|ion_readable}}</h2>
+            <small>Total Bases</small>
+        </div>
+        <div class="span6">
+            <a data-toggle="modal" class="usable-sequence-link showImg" href="#keySignalModal">
+              <h2>{{key_signal}}</h2>
+              <small rel='tooltip' title="Average 1-mer signal in library key">Key Signal</small>
+            </a>
+        </div>
+    </div>
+    
+    <div id="bead-signal" data-beadloading="{{bead_loading}}"></div>
+ 
+    <h2>ISP Density</h2>
+    <a data-toggle="modal" href="#beadfindModal" class="report-metric-visual bead-loading-link">
+        <img src="{{report.reportWebLink}}/sigproc_results/Bead_density_1000.png" class="show" style="max-height: 350px;">    
+    </a>
+    <div class="modal hide" id="beadfindModal">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h3>ISP Density</h3>
+        </div>
+        <div class="modal-body" id="beadfind_body">
+            <img src="{{report.reportWebLink}}/sigproc_results/Bead_density_contour.png" style="height: 400px;">
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+    <div class="modal hide" id="keySignalModal">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h3>Key Incorporation Traces</h3>
+        </div>
+        <div class="modal-body" id="keysignal_body" style="max-height: 500px;">
+            <img src="{{report.reportWebLink}}/iontrace_Library.png">
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+</div>
+<script>
+$(function(){
+    $("#bead-signal").strength('{{bead_loading}}',
+                        '{{bead_loading_threshold}}',
+                        '{{bead_loading}}',
+                        'Bead Loading');
+});
+</script>

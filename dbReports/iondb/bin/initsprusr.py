@@ -2,13 +2,12 @@
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 import sys
-sys.path.append("/opt/ion")
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-
+import djangoinit
 from django.contrib.auth.models import User
 import psycopg2
 import traceback
 from django.db import connection
+from django.core import management
 
 def writeInitialDataFile():
     '''Writes initial_data.json file with superuser info.
@@ -62,10 +61,11 @@ def createSuperUser():
     contains superuser element, that will create a superuser.
     NOTE: If superuser of the same name exists, it will be overwritten.'''
     connection.close()
-    os.chdir('/opt/ion/iondb')
+    os.chdir('/opt/ion/iondb') ## FIXME - should be set outside script
     writeInitialDataFile()
-    os.system('python ./manage.py syncdb --noinput')
-    os.system('rm initial_data.json')
+    management.call_command("syncdb", interactive=False)
+    management.call_command("migrate")
+    os.unlink('initial_data.json')
     # The following will only work once the auth system is initialized
     #try:
     #    print "here"

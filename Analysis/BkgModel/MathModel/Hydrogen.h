@@ -7,9 +7,6 @@
 #include <float.h>
 #include "MathOptim.h"
 
-//#define FRAMESPERSEC 15.0f
-//#define n_to_uM_conv    (0.000062f)
-
 
 // provide differential equation solving functions so everyone can play equally
 void ComputeCumulativeIncorporationHydrogens(float *ival_offset, int npts, float *deltaFrame,
@@ -30,7 +27,12 @@ void ComplexComputeCumulativeIncorporationHydrogens(float *ival_offset, int npts
 void ParallelSimpleComputeCumulativeIncorporationHydrogens(float **ival_offset, int npts, float *deltaFrameSeconds,
         float **nuc_rise_ptr, int SUB_STEPS, int *my_start,
         float *A, float *SP,
-        float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion,PoissonCDFApproxMemo *math_poiss);        
+        float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion,PoissonCDFApproxMemo *math_poiss);
+        
+void UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens(float **ival_offset, int npts, float *deltaFrameSeconds,
+        float **nuc_rise_ptr, int SUB_STEPS, int *my_start,
+        float *A, float *SP,
+        float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion,PoissonCDFApproxMemo *math_poiss);
 
 
         

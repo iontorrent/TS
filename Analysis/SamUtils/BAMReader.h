@@ -184,7 +184,7 @@ public:
 		}
 		
                 ~iterator();
-		
+	
 	private:
 		friend class BAMReader;
 		// iterator ctors will go here.

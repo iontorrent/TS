@@ -72,10 +72,11 @@ import zipfile
 LOG_FILENAME = '/var/log/ion/jobserver.log'
 logging.basicConfig(filename=LOG_FILENAME,
                     level=logging.DEBUG,
+                    propagate=False,
                     format="%(asctime)s - %(levelname)s - %(message)s",
                     )
 
-__version__ = filter(str.isdigit, "$Revision: 29400 $")
+__version__ = filter(str.isdigit, "$Revision: 42967 $")
 
 class ProcessExecutionService(service.Service):
     """a queue to do one thing at a time"""
@@ -157,7 +158,7 @@ try:
         _session = drmaa.Session()
         try:
             _session.initialize()
-            logging.info("session initialized")
+            logging.info("DRMAA session initialized")
         except:
             logging.info("Unexpected error: %s" % str(sys.exc_info()))
         atexit.register(_session.exit)
@@ -292,7 +293,12 @@ class Analysis(object):
         if isinstance(self.params,dict):
             self.params = json.dumps(self.params)
         if not path.isdir(adir):
-            os.makedirs(adir)
+            try:
+                os.makedirs(adir)
+            except:
+                logging.error("Analysis cannot start. Failed to create directory: %s." % adir)
+                logging.debug(traceback.format_exc())
+                return None, None
         # find the appropriate script index, in case we are re-running
         script_index = self._get_script_index(adir)
         script_fname = path.join(adir,index2scriptname(script_index))
@@ -356,6 +362,8 @@ class DRMAnalysis(Analysis):
         """
         adir = path.join(self.savePath)
         script_fname,params_fname = self._write_out(adir)
+        if script_fname == None:
+            return None
         jt = _session.createJobTemplate()
         qname = 'tl.q'
         if self.job_type == 'PairedEnd':
@@ -625,7 +633,7 @@ class AnalysisQueue(object):
         self.cv.acquire()
         try:
             if pk in self.running:
-                ret = (True,"Running")
+                ret = (True, self.running[pk].status_string())
             else:
                 fname = path.join(save_path, "status.txt")
                 if not path.exists(fname):
@@ -715,6 +723,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
             peakOut,
             QualityPath,
             BaseCallerJsonPath,
+            pePath,
             primarykeyPath,
             uploadStatusPath,
             STATUS,
@@ -723,7 +732,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
 
         from ion.reports import uploadMetrics
         try:
-            uploadMetrics.writeDbFromFiles(
+            return_message = uploadMetrics.writeDbFromFiles(
                 tfmapperstats_outputfile,
                 procPath,
                 beadPath,
@@ -733,6 +742,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 peakOut,
                 QualityPath,
                 BaseCallerJsonPath,
+                pePath,
                 primarykeyPath,
                 uploadStatusPath)
 
@@ -742,7 +752,20 @@ class AnalysisServer(xmlrpc.XMLRPC):
             logging.error(traceback.format_exc())
             return traceback.format_exc()
 
-        return 0
+        return return_message
+
+
+    def xmlrpc_uploadanalysismetrics(self, beadPath, primarykeyPath):
+        logging.info("Testing Upload Analysis Metrics")
+        print(beadPath)
+        from ion.reports import uploadMetrics
+        try:
+            message = uploadMetrics.updateAnalysisMetrics(beadPath, primarykeyPath)
+        except Exception as err:
+            logging.error("Upload Analysis Metrics failed: %s", err)
+        logging.info("Completed Upload Analysis Metrics")
+        return "What an intriguing result: " + message
+
 
     def xmlrpc_submitjob(self,jt_nativeSpecification, jt_remoteCommand,
                            jt_workingDirectory, jt_outputPath,
@@ -761,7 +784,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
     def xmlrpc_jobstatus(self, jobid):
         """Get the status of the job"""
         try:
-            logging.debug("jobstatus for %s" % jobid)
+            logging.debug("xmlrpc jobstatus for %s" % jobid)
             status = _session.jobStatus(jobid)
         except:
             logging.error(traceback.format_exc())

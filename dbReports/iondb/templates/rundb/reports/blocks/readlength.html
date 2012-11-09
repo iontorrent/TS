@@ -1,0 +1,26 @@
+{% load pagetools %}
+{% load ion_readable %}
+
+<div id="readlength" class="span3 well centered read-length">
+    <a data-toggle="modal" class="report-metric-visual showImg" href="#readLengthModal">
+        <div class="number-chunk">
+            <h2>{{quality|bracket:"Mean Read Length at Q0"|float2int}} bp</h2>
+            <small rel='tooltip' title="Average length of called reads">Mean Read Length</small>
+        </div>
+        <h2>Read Length</h2>
+        <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/readLenHisto2.png">
+    </a>
+
+    <div class="modal hide" id="readLengthModal" style="width: 830px; margin-left: -415px;">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">×</button>
+            <h3>Read Length Details</h3>
+        </div>
+        <div class="modal-body" id="readlength_body" style="max-height: 500px;">
+            <img style="width: 800px;" src="{{report.reportWebLink}}/basecaller_results/readLenHisto.png">
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+</div>

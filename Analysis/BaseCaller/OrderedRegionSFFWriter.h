@@ -1,4 +1,9 @@
 /* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved */
+
+//! @file     OrderedRegionSFFWriter.h
+//! @ingroup  BaseCaller
+//! @brief    OrderedRegionSFFWriter. Thread-safe SFF writer with deterministic order
+
 #ifndef ORDEREDREGIONSFFWRITER_H
 #define ORDEREDREGIONSFFWRITER_H
 
@@ -6,65 +11,75 @@
 #include <vector>
 #include <deque>
 
-//#include "SpecialDataTypes.h"
+#include "BaseCallerUtils.h"
 #include "file-io/sff_definitions.h"
 
 using namespace std;
 
-class SFFWriterWell {
-public:
-  SFFWriterWell() { numBases = 0; clipQualLeft=clipQualRight=clipAdapterLeft=clipAdapterRight=0; }
-  ~SFFWriterWell() {}
+//! @brief    Content of an SFF read, essentially a c++ version of sff_t
+//! @ingroup  BaseCaller
 
-  void  moveTo(SFFWriterWell &w);
-  void  copyTo(SFFWriterWell &w);
+struct SFFEntry {
+  string            name;                     //!< Read name
+  vector<uint16_t>  flowgram;                 //!< Corrected ionogram where onemer equals 100
+  vector<uint8_t>   flow_index;               //!< Flow increment for each base. Integrate for incorporating flow per base.
+  vector<char>      bases;                    //!< Base calls
+  vector<uint8_t>   quality;                  //!< Quality values in phred scale without any offset.
+  int               n_bases;                  //!< Number of called bases
+  int32_t           clip_qual_left;           //!< First base of quality-trimmed read. 1-based. 0 means no trimming.
+  int32_t           clip_qual_right;          //!< Last base of quality-trimmed read. 1-based. 0 means no trimming.
+  int32_t           clip_adapter_left;        //!< First base of adapter-trimmed read. 1-based. 0 means no trimming.
+  int32_t           clip_adapter_right;       //!< Last base of adapter-trimmed read. 1-based. 0 means no trimming.
+  int               barcode_id;               //!< Barcode index. 1-based. 0 means unclassified/no barcode.
 
-  string            name;
-  vector<uint16_t>  flowIonogram;
-  vector<uint8_t>   baseFlowIndex;
-  vector<char>      baseCalls;
-  vector<uint8_t>   baseQVs;
-  int               numBases;
-  int32_t           clipQualLeft;
-  int32_t           clipQualRight;
-  int32_t           clipAdapterLeft;
-  int32_t           clipAdapterRight;
+  //! @brief  Swap content with another SFFEntry object
+  //! @param  w The other object
+  void  swap(SFFEntry &w);
 };
 
 
+//! @brief    Thread-safe writer class for SFF that guarantees deterministic read order
+//! @ingroup  BaseCaller
 
 class OrderedRegionSFFWriter {
 public:
+  //! Constructor.
   OrderedRegionSFFWriter();
+  //! Destructor.
   ~OrderedRegionSFFWriter();
 
-  void OpenForWrite(const string& sffFileName, int numRegions, int numFlows,
-      const string& flowChars, const string& keySequence);
+  //! @brief  Open SFF file for writing.
+  //! @param  sff_filename    Filename of the SFF file to create.
+  //! @param  num_regions     Number of regions to expect.
+  //! @param  num_flows       Number of flows.
+  //! @param  flow_order      Flow order object, also stores number of flows
+  //! @param  key             Key sequence.
+  void Open(const string& sff_filename, int num_regions, const ion::FlowOrder& flow_order, const string& key);
 
-  void WriteRegion(int iRegion, deque<SFFWriterWell> &regionWells);
+  //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
+  //! @param  region          Index of the region being dropped off.
+  //! @param  region_reads    SFF entries from this region.
+  void WriteRegion(int region, deque<SFFEntry> &region_reads);
 
+  //! Update SFF header and close.
   void Close();
 
-  int NumReads() { return numReads; }
+  //! Return number of reads physically written.
+  int num_reads() { return num_reads_; }
 
 private:
 
   void PhysicalWriteRegion(int iRegion);
 
-  int                           numReads;
-  int                           numFlows;
-  int                           numRegions;
-
-  // Queue for reads to be written out
-  int                           numRegionsWritten;
-  vector<bool>                  isRegionReady;
-  vector<deque<SFFWriterWell> > regionDropbox;
-  pthread_mutex_t               *dropboxWriteMutex;
-  pthread_mutex_t               *sffWriteMutex;
-
-  // Stuff related to actual SFF writing
-  sff_file_t                    *sff_file;
-  sff_t                         *sff;
+  int                       num_reads_;             //!< Number of reads physically written thus far
+  int                       num_regions_;           //!< Total number of regions to expect
+  int                       num_regions_written_;   //!< Number of regions physically written thus far
+  vector<bool>              region_ready_;          //!< Which regions are ready for writing?
+  vector<deque<SFFEntry> >  region_dropbox_;        //!< Reads for regions that are ready for writing
+  pthread_mutex_t           dropbox_write_mutex_;   //!< Mutex controlling access to the dropbox
+  pthread_mutex_t           sff_write_mutex_;       //!< Mutex controlling sff writing
+  sff_file_t                *sff_file_;             //!< "Native" sff file struct
+  sff_t                     *sff_;                  //!< "Native" sff read struct
 };
 
 

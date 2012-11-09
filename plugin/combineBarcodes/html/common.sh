@@ -6,7 +6,7 @@ run ()
     local EXIT_CODE=0
     eval $* >&2 || EXIT_CODE="$?"
     if [ ${EXIT_CODE} != 0 ]; then
-        echo -e "ERROR: Status code '${EXIT_CODE}' while running\n\$$*" >&2
+        echo -e "ERROR: Status code '${EXIT_CODE}' while running\n\$ $*" >&2
         rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "$JSON_RESULTS"
         exit 1
     fi
@@ -37,7 +37,20 @@ write_html_header ()
     else
 	echo "<div style=\"width:${COV_PAGE_WIDTH}px;margin-left:auto;margin-right:auto;height:100%\">" >> "$HTML"
     fi
-    echo "<h1 style=\"text-align:center\">Combine Barcodes Report</h1>" >> "$HTML"
+    local OPTIONS=""
+    if [ "$PLUGINCONFIG__COLLAPSE" = "Yes" ]; then
+        OPTIONS="   Collapse Grouping"
+    fi
+    if [ "$PLUGINCONFIG__UNIQUESTARTS" = "Yes" ]; then
+      OPTIONS="$OPTIONS   Create Unique Starts   Read End Resolution='$PLUGINCONFIG__LENGTHVAR'"
+      if [ "$PLUGINCONFIG__GROUPUNIQUESTARTS" = "Yes" ]; then
+          OPTIONS="$OPTIONS   Group Unique Starts"
+      fi
+    fi
+    if [ "$PLUGINCONFIG__COMBINEGROUPS" = "Yes" ]; then
+        OPTIONS="$OPTIONS   Combine Groups"
+    fi
+    echo "<h1><center><span style=\"cursor:help\" title=\"Barcode Grouping='${PLUGINCONFIG__GROUPING}'   Barcode Spacing='${PLUGINCONFIG__SPACING}'   Mapped Reads Threshold='${PLUGINCONFIG__READSTHRESHOLD}'${OPTIONS}\">Combine Barcodes Report</span></center></h1>" >> "$HTML"
 }
 
 write_html_footer ()

@@ -50,7 +50,7 @@ class TraceStoreDelta : public TraceStore<T>
         {
           mWellIndex[i] = keep++;
         }
-        if (mask[i] & MaskEmpty)
+        if (mask[i] & MaskReference)
         {
           mUseAsReference[i]  = true;
           empties++;
@@ -72,6 +72,17 @@ class TraceStoreDelta : public TraceStore<T>
       pthread_mutex_destroy (&mLock);
     }
 
+    void SetSize(int frames) {
+      mFrames = frames;
+      int keep = 0;
+      for (size_t i = 0; i < mWells; i++) {
+        if (mWellIndex[i] >= 0) {
+          keep++;
+        }
+      }
+      mData.resize(keep * mFrames * mFlowsBuf);
+      std::fill (mData.begin(), mData.end(), 0);
+    }
 
     void SetFlowIndex (size_t flowIx, size_t index)
     {
@@ -82,6 +93,7 @@ class TraceStoreDelta : public TraceStore<T>
       {
         mFlowToBufferIndex[mBufferIndexToFlow[index]] = -1;
       }
+      mBufferIndexToFlow[index] = flowIx;
       mRefGridsValid[index] = 0;
       mFlowToBufferIndex[flowIx] = index;
     }
@@ -121,7 +133,7 @@ class TraceStoreDelta : public TraceStore<T>
     {
       int wIdx = mWellIndex[wellIx];
       int fIdx = mFlowToBufferIndex[flowIx];
-      ION_ASSERT (wIdx >= 0, "Not valid: " + ToStr(wellIx));
+      assert (wIdx >= 0);
       assert (fIdx >= 0);
       if (wIdx >= 0 && fIdx >= 0)
       {
@@ -186,7 +198,8 @@ class TraceStoreDelta : public TraceStore<T>
     }
 
     int SetTrace (size_t wellIx, size_t flowIx,
-                  typename arma::Col<double>::col_iterator traceBegin, typename arma::Col<double>::col_iterator traceEnd)
+                  typename arma::Col<double>::col_iterator traceBegin, 
+                  typename arma::Col<double>::col_iterator traceEnd)
     {
       int wIdx = mWellIndex[wellIx];
       int fIdx = mFlowToBufferIndex[flowIx];
@@ -231,7 +244,7 @@ class TraceStoreDelta : public TraceStore<T>
       CalcReference (mRowRefStep, mColRefStep, flowIx, mRefGrids[fIdx]);
       mRefGridsValid[fIdx] = 1;
       mFineRefGrids.resize (mRefGrids.size());
-      mFineRefGrids[fIdx].Init (mRows, mCols, 50, 50);
+      mFineRefGrids[fIdx].Init (mRows, mCols, 25, 25);
       int numBin = mFineRefGrids[fIdx].GetNumBin();
       int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
       for (int binIx = 0; binIx < numBin; binIx++)
@@ -276,7 +289,6 @@ class TraceStoreDelta : public TraceStore<T>
       return (wIx * mFlowsBuf * mFrames + mFlowToBufferIndex[flowIx] * mFrames + frameIx);
     }
 
-  void SmoothTrace(std::vector<float> &reference);
 
     int CalcMedianReference (size_t row, size_t col,
                              GridMesh<std::vector<float> > &regionMed,
@@ -285,22 +297,14 @@ class TraceStoreDelta : public TraceStore<T>
                              std::vector<float> &reference)
     {
       int retVal = TraceStore<T>::TS_OK;
-      bool ok = false;
-      int maxDist = 4;
-      int binDist = mUseMeshNeighbors;
-      // Look farther and farther out for some good references as necessary
-      while (!ok && binDist < maxDist) {
-        regionMed.GetClosestNeighbors (row, col, binDist, dist, values);
-        size_t size = 0;
-        for (size_t i = 0; i < values.size(); i++) { size = max (values[i]->size(), size); }
-        reference.resize (size);
-        if (size == 0) {
-          binDist++;
-        }
-        else {
-          ok = true;
-        }
+      regionMed.GetClosestNeighbors (row, col, mUseMeshNeighbors, dist, values);
+      //  int size = 50; // @todo = fix this 50
+      size_t size = 0;
+      for (size_t i = 0; i < values.size(); i++)
+      {
+        size = max (values[i]->size(), size);
       }
+      reference.resize (size);
       std::fill (reference.begin(), reference.end(), 0.0);
       double distWeight = 0;
       size_t valSize = values.size();
@@ -363,7 +367,7 @@ class TraceStoreDelta : public TraceStore<T>
       }
       size_t length = matrix[0].size();
       size_t size = matrix.size();
-      if (length >= mMinRefProbes)
+      if (length > mMinRefProbes)
       {
         for (size_t i = 0; i < size; i++)
         {
@@ -405,6 +409,22 @@ class TraceStoreDelta : public TraceStore<T>
         CalcRegionReference (rowStart, rowEnd, colStart, colEnd, flowIx, trace);
       }
     }
+  
+  void Dump(ofstream &out) {
+    vector<T> tmp(GetNumFrames());
+    for (size_t flowIx = 0; flowIx < mFlowToBufferIndex.size(); flowIx++) {
+      for (size_t wIx = 0; wIx < GetNumWells(); wIx++) {
+        if (HaveWell(wIx)) {
+          out << wIx << "\t" << mBufferIndexToFlow[flowIx];
+          GetTrace(wIx, mBufferIndexToFlow[flowIx], tmp.begin());
+          for (size_t fIx = 0; fIx < GetNumFrames(); fIx++) {
+            out << "\t" << tmp[fIx];
+          }
+          out << endl;
+        }          
+      }
+    }
+  }
 
   private:
     size_t mFrames;

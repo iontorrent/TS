@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
-import sys
-import os
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+import iondb.bin.djangoinit
 from iondb.rundb import models
 
 import socket

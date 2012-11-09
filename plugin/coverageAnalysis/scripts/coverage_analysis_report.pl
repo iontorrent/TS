@@ -23,6 +23,8 @@ my $OPTIONS = "Options:
   -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt
   -T <file> Name for HTML Table row summary file (in output directory). Default: '' (=> none created)
   -H <dirpath> Path to directory containing files 'header' and 'footer'. If present, used to wrap the output file name.
+  -p <title> Primary table header text. Default 'All Reads'.
+  -s <title> Secondary table header text. Default 'Filtered Reads'.
   -t <title> Secondary title for report. Default: ''";
 
 my $outfile = "results.html";
@@ -35,6 +37,8 @@ my $rowsumfile = "";
 my $headfoot = "";
 my $title = "";
 my $helpfile ="";
+my $thead1 = "All Reads";
+my $thead2 = "Filtered Reads";
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -49,6 +53,8 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-A') {$helpfile = shift;}
     elsif($opt eq '-T') {$rowsumfile = shift;}
     elsif($opt eq '-H') {$headfoot = shift;}
+    elsif($opt eq '-p') {$thead1 = shift;}
+    elsif($opt eq '-q') {$thead2 = shift;}
     elsif($opt eq '-t') {$title = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
@@ -95,8 +101,14 @@ my $workdir2 = "$workdir/$results2";
 die "No output directory found at $workdir" unless( -d "$workdir" );
 die "No results directory found at $workdir1" unless( -d "$workdir1" );
 
+my @rowSumKeyList = (
+  "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Uniformity of coverage",
+  "Target coverage at 1x", "Target coverage at 20x", "Target coverage at 100x" );
+
 if( $have2runs )
 {
+    @rowSumKeyList = (
+      "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Target coverage at 1x" );
     unless( -d "$workdir2" )
     {
 	print STDERR "WARNING: Could not locate secondary results directory at $workdir2\nContinuing without...\n";
@@ -141,11 +153,11 @@ else
     print OUTFILE "<html><body>\n";
     if( $have2runs )
     {
-	print OUTFILE "<div style=\"width:960px;margin-left:auto;margin-right:auto;height:100%\">\n";
+	print OUTFILE "<div style=\"width:960px;margin-left:auto;margin-right:auto;\">\n";
     }
     else
     {
-	print OUTFILE "<div style=\"width:480px;margin-left:auto;margin-right:auto;height:100%\">\n";
+	print OUTFILE "<div style=\"width:480px;margin-left:auto;margin-right:auto;\">\n";
     }
     print OUTFILE "<h1><center>Coverage Analysis Report</center></h1>\n";
 }
@@ -163,15 +175,18 @@ print OUTFILE "  th,td {width:50% !important;border:1px solid #bbbbbb;padding:5p
 print OUTFILE "  td {padding-top:20px;padding-bottom:20px}\n";
 print OUTFILE "  td.inleft  {width:75% !important;border-width:0;text-align:left;padding:2px;padding-left:40px}\n";
 print OUTFILE "  td.inright {width:25% !important;border-width:0;text-align:right;padding:2px;padding-right:40px}\n";
-print OUTFILE "  img.frm {display:block;margin-left:auto;margin-right:auto;margin-top:10px;margin-bottom:10px;width:400;height:400;border-width:0;cursor:help}\n";
+print OUTFILE "  img.frm {display:block;margin-left:auto;margin-right:auto;margin-top:10px;margin-bottom:10px;width:${plotsize}px;height:${plotsize}px;border-width:0;cursor:help}\n";
 print OUTFILE "  .thelp {cursor:help}\n";
 print OUTFILE "</style>\n";
 
 # table header
-my $hotLable = getHelp("All Reads",1);
+my $hotLable = getHelp($thead1,1);
 print OUTFILE "<center><table>\n<tr><th>$hotLable</th>";
-$hotLable = getHelp("Unique Starts",1);
-print OUTFILE "<th>$hotLable</th>" if( $have2runs );
+if( $have2runs )
+{
+  $hotLable = getHelp($thead2,1);
+  print OUTFILE "<th>$hotLable</th>" if( $have2runs );
+}
 print OUTFILE "</tr>\n";
 
 if( $statsfile ne "" )
@@ -191,6 +206,7 @@ if( $statsfile ne "" )
     }
 }
 
+displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
 displayResults( "coverage.png", "coverage.xls", "Target Coverage" );
 displayResults( "coverage_binned.png", "coverage_binned.xls", "Binned Target Coverage" );
 displayResults( "coverage_onoff_target.png", "coverage_by_chrom.xls", "Target Coverage by Chromosome" );
@@ -277,16 +293,16 @@ sub readRowSum
 	while( <STATFILE> )
 	{
 	    my ($n,$v) = split(/:/);
-	    if( $n eq "Number of mapped reads" ||
-		$n eq "Percent reads on target" ||
-		$n eq "Average base coverage depth" ||
-		$n eq "Target coverage at 1x" )
-	    {
-		$v =~ s/^\s*//;
-		my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
-		$htmlText .= "<td>$nf</td> ";
-		++$nread;
-	    }
+            foreach $keystr (@rowSumKeyList)
+            {
+	        if( $n eq $keystr )
+	        {
+		    $v =~ s/^\s*//;
+		    my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
+		    $htmlText .= "<td>$nf</td> ";
+		    ++$nread;
+	        }
+            }
 	}
 	close( STATFILE );
     }
@@ -299,7 +315,7 @@ sub readRowSum
 
 sub displayResults
 {
-    my ($pic,$tsv,$alt,$skip) = ($_[0],$_[1],$_[2],$_[3]);
+    my ($pic,$tsv,$alt,$skip,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
     # if skip is defined (e.g. 1) do not output anything if the first data file is missing
     # i.e. it is expected for this set of data to be missing and therefore skipped
     if( $skip != 0 )
@@ -308,22 +324,23 @@ sub displayResults
     }
     my $desc = getHelp($alt);
     print OUTFILE "<tr>\n";
-    writeLinksToFiles( "$results1/$runid1.$pic", "$results1/$runid1.$tsv", $alt, $desc );
-    writeLinksToFiles( "$results2/$runid2.$pic", "$results2/$runid2.$tsv", $alt, $desc ) if( $have2runs );
+    writeLinksToFiles( "$results1/$runid1.$pic", "$results1/$runid1.$tsv", $alt, $desc, $style );
+    writeLinksToFiles( "$results2/$runid2.$pic", "$results2/$runid2.$tsv", $alt, $desc, $style ) if( $have2runs );
     print OUTFILE "\n</tr>\n\n";
 }
 
 sub writeLinksToFiles
 {
-    my ($pic,$tsv,$alt,$desc) = ($_[0],$_[1],$_[2],$_[3]);
+    my ($pic,$tsv,$alt,$desc,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
+    $style = " style=\"$style\"" if( $style ne "" );
     if( -f "$workdir/$pic" )
     {
-	print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\">$alt<br/><img class=\"frm\" src=\"$pic\" alt=\"$alt\"/></a> ";
+	print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\">$alt<br/><img class=\"frm\"$style src=\"$pic\" alt=\"$alt\"/></a> ";
     }
     else
     {
 	print STDERR "WARNING: Could not locate plot file $workdir/$pic\n";
-	print OUTFILE "<td>Plot unavailable<br/>";
+	print OUTFILE "<td $style>$alt plot unavailable.<br/>";
     }
     if( -f "$workdir/$tsv" )
     {
@@ -332,7 +349,7 @@ sub writeLinksToFiles
     else
     {
 	print STDERR "WARNING: Could not locate data file $workdir/$tsv\n";
-	print OUTFILE "No data</td>";
+	print OUTFILE "Data file unavailable.</td>";
     }
 }
 

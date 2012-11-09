@@ -9,13 +9,15 @@ import json
 
 from django.conf import settings
 #from celery.task import task
+import celery.exceptions
 
 import iondb.rundb.models
-#from iondb.rundb.zeroinstallHelper import downloadZeroFeed
 
 from distutils.version import LooseVersion
 import zeroinstall.zerostore
 import iondb.rundb.tasks  ## circular import
+
+import iondb.plugins.tasks
 
 import json
 import datetime
@@ -47,9 +49,17 @@ class PluginManager(object):
     """
     def __init__(self, gc=None):
         if not gc:
-            gc = iondb.rundb.models.GlobalConfig.objects.all().order_by('pk')[0]
-        self.default_plugin_script = gc.default_plugin_script
-        self.pluginroot = settings.PLUGIN_PATH or os.path.join("/results", gc.plugin_folder)
+            try:
+                gc = iondb.rundb.models.GlobalConfig.objects.all().order_by('pk')
+                default_plugin_script = gc[0].default_plugin_script
+            except:
+                default_plugin_script = "launch.sh"
+        else:
+            default_plugin_script = gc.default_plugin_script
+
+        self.default_plugin_script = default_plugin_script
+        self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or os.path.join("/results", gc.plugin_folder))
+        self.infocache = {}
 
 
     def rescan(self):
@@ -69,52 +79,96 @@ class PluginManager(object):
         """
         if not plugins:
             # Review all currently installed/active plugins
-            plugins = iondb.rundb.models.Plugin.objects.filter(active=True).exclude(path='')
+            activeplugins = iondb.rundb.models.Plugin.objects.filter(active=True)
 
         # for each record, test for corresponding folder
         count = 0
         scanned = 0
-        for plugin in plugins:
+        for plugin in activeplugins:
             # if specified folder does not exist
             if plugin.path == '' or not os.path.isdir(plugin.path):
                 if self.disable(plugin):
-                    plugin.save()
                     count += 1
                 # No need to uninstall - the path is already missing
+            elif not plugin.pluginscript():
+                # Path but no launch script anymore. [TS-5019]
+                if self.disable(plugin):
+                    #plugin.uninstall() ## Uninstall will force remove. Just deactivate
+                    count+= 1
             scanned += 1
         logger.debug("Scanned %d, removed %d", scanned, count)
         return count
 
-    def get_version(self, pluginpath, pluginscript=None):
-        """ Parses version from script file. Does not require plugin instance, just path """
-        if not pluginscript:
-            pluginscript = os.path.join(pluginpath, self.default_plugin_script)
-        if not os.path.exists(pluginscript):
-            logger.error("Plugin path is missing launch script '%s'", pluginscript)
-            return "0"
+    def find_pluginscript(self, pluginpath, pluginname):
+        islaunch = True
+        pluginscript = None
+        # Legacy Launch Script
+        launchsh = os.path.join(pluginpath, self.default_plugin_script)
+        # [3.0] Plugin Python class
+        plugindef = os.path.join(pluginpath, pluginname + '.py')
 
-        # Regex to capture version strings from launch.sh
-        # Flanking Quotes optional, but help delimit
-        # Leading values ignored, usually '#VERSION' or '# VERSION'
-        # Must be all-caps VERSION
-        # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-        VERSION=re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
+        # NOTE launch.sh is preferred and will be used FIRST if both exist.
+        # This may change in later releases, once python class matures.
+        if os.path.exists(launchsh):
+            pluginscript = launchsh
+            islaunch = True
+        elif os.path.exists(plugindef):
+            pluginscript = plugindef
+            islaunch = False
+        else:
+            logger.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
+        return (pluginscript, islaunch)
+
+    def get_plugininfo(self, pluginname, pluginscript, context=None, use_cache=True):
+        """
+        Query plugin script for a block of json info.
+        Delegated to celery task to isolate python plugins from web server python instance.
+        """
+        if not pluginscript:
+            return None
+        if use_cache and (pluginscript in self.infocache):
+            return self.infocache[pluginscript]
+
+        # Else, we need to requery plugin for info
+        pluginlist = [ (pluginname, pluginscript, context) ]
         try:
-            with open(pluginscript, 'r') as f:
-                for line in f:
-                    m = VERSION.search(line)
-                    if m:
-                        v = m.group(1)
-                        # Validate and canonicalize version string,
-                        # according to distutils.version.LooseVersion semantics
-                        try:
-                            v = LooseVersion(v)
-                        except ValueError:
-                            logger.warning("Version in file does not conform to LooseVersion rules: ", v)
-                        return str(v)
+            info = self.get_plugininfo_list(pluginlist, use_cache=False)
+            pinfo = info.get(pluginscript, None)
+            return pinfo
         except:
-            logger.exception("Failed to parse VERSION from '%s'", pluginscript)
-        return "0"
+            logger.exception("Failed to interrogate plugin: '%s' at '%s'", pluginname, pluginscript)
+            return None
+
+
+    def get_plugininfo_list(self, pluginlist, use_cache=True):
+        if use_cache:
+            # Only submit query for plugins we don't have data for
+            updatelist = [(p,s,c) for (p,s,c) in pluginlist if s not in self.infocache or self.infocache[s] is None]
+        else:
+            updatelist = pluginlist
+
+        info = {}
+        if updatelist:
+            try:
+                info = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[updatelist]).get(20)
+                # Update cache
+                self.infocache.update(info)
+            except celery.exceptions.TimeoutError:
+                logger.info("Plugin info query timed out: %s", updatelist, exc_info=True)
+        ## Alternate behavior - Do not cache negative entries
+        #self.infocache.update((k, v) for k,v in info.iteritems() if v is not None)
+
+        # Fill remaining requested items from cache
+        if use_cache:
+            info.update(dict((s,self.infocache[s]) for (p,s,c) in pluginlist if (s not in info) and (s in self.infocache)))
+        return info
+
+
+    def get_version(self, pluginpath, pluginname, pluginscript):
+        info = self.get_plugininfo(pluginname, pluginscript)
+        if info is None:
+            return "0"
+        return info.get('version',"0")
 
     def set_pluginconfig(self, plugin, configfile='pluginconfig.json'):
         """ if there is data in pluginconfig json
@@ -138,6 +192,19 @@ class PluginManager(object):
         # Invalid, or Unchanged
         return False
 
+    def get_pluginsettings(self, plugin, readfile='pluginsettings.json'):
+        """ read settings from file if exists """
+        filepath = os.path.join(plugin.path, readfile)
+        if not os.path.exists(filepath):
+            return False
+        try:
+            with open(filepath) as f:
+                settings = json.load(f)
+            plugin.addSettings(settings)
+            return True
+        except:
+            logger.exception("Failed to load pluginconfig from '%s'", filepath)
+
 
     def search_for_plugins(self, basedir=None):
         """ Scan folder for uninstalled or upgraded plugins
@@ -159,23 +226,39 @@ class PluginManager(object):
             full_path = os.path.join(basedir, i)
             if not os.path.isdir(full_path):
                 continue
-            launch_script = os.path.join(full_path, self.default_plugin_script)
-            if not os.path.exists(launch_script):
-                logger.info("Non-plugin (no launch.sh) in plugin folder '%s': '%s'", basedir, i)
+            (plugin_script, islaunch) = self.find_pluginscript(full_path, i)
+            if not plugin_script or not os.path.exists(plugin_script):
+                logger.info("Non-plugin in plugin folder '%s': '%s', '%s'", basedir, i, plugin_script)
                 continue
             # Candidate Plugin Found
-            folder_list.append((i, full_path, launch_script))
+            folder_list.append((i, full_path, plugin_script))
+
+        ## Pre-scan plugins - one big celery task rather than many small ones
+        pluginlist = [ (n,s,None) for n,p,s in folder_list ]
+        try:
+            self.get_plugininfo_list(pluginlist, use_cache=False)
+        except:
+            logger.exception("Failed to rescan plugin info in background task")
 
         count = 0
-        for pname, full_path, launch_script in folder_list:
+        for pname, full_path, plugin_script in folder_list:
+            # Do early check to see if plugin script is valid
+            # - cannot install without name and version.
+            info = self.get_plugininfo(pname, plugin_script)
+            if not info:
+                continue
+
             # For now, install handles "reinstall" or "refresh" cases.
-            (newplugin, updated) = self.install(pname, full_path)
+            try:
+                (newplugin, updated) = self.install(pname, full_path, plugin_script)
+            except ValueError:
+                logger.exception("Plugin not installable due to error querying name and version '%s'", full_path)
             if updated:
                 count += 1
         return count
 
 
-    def install(self, pname, full_path):
+    def install(self, pname, full_path, launch_script=None):
         """Install (or upgrade) a plugin given a src path.
 
         Safe to use for already installed plugins, with these cautions:
@@ -191,7 +274,20 @@ class PluginManager(object):
         if not os.path.exists(full_path):
             logger.error("Path specified for install does not exist '%s'", full_path)
 
-        version = self.get_version(full_path)
+        ## Check Plugin Blacklist:
+        if pname in ('scratch', 'implementations'):
+            logger.error("Scratch and Implementations are reserved folders, and cannot be installed.")
+            return (None, False)
+
+        if not launch_script:
+            (launch_script, isLaunch) = self.find_pluginscript(full_path, pname)
+
+        info = self.get_plugininfo(pname, launch_script)
+        if info is None:
+            raise ValueError("No plugininfo for '%s' in '%s'" % (pname,launch_script))
+        version = info.get('version',"0")
+        majorBlock = info.get('major_block', False)
+        allow_autorun = info.get('allow_autorun', True)
 
         # Only used if new plugin record is created
         plugin_defaults={
@@ -199,6 +295,7 @@ class PluginManager(object):
             'date':datetime.datetime.now(),
             'active':True, # auto activate new versions
             'selected': True, # Auto enable new plugins
+            'majorBlock': majorBlock,
         }
 
         # needs_save is aka created. Tracks if anything changed.
@@ -213,9 +310,20 @@ class PluginManager(object):
             # Set pluginconfig.json if needed - only for new installs / version changes
             if self.set_pluginconfig(p):
                 logger.info("Loaded new pluginconfig.json values for Plugin %s v%s at '%s'", pname, version, full_path)
+            if self.get_pluginsettings(p):
+                logger.info("Loaded new pluginsettings.json values for Plugin %s v%s at '%s'", pname, version, full_path)
+
 
         # Handle any upgrade behaviors - deactivating old versions, etc.
-        self.upgrade_helper(p)
+        (count, oldp) = self.upgrade_helper(p)
+
+        # Preserve old selected/autorun state
+        if count and oldp:
+            p.selected = oldp.selected
+            if not allow_autorun:
+                p.autorun = False
+            else:
+                p.autorun = oldp.autorun
 
         # Be careful with path handling -- FIXME
         if not p.path:
@@ -239,15 +347,24 @@ class PluginManager(object):
             # FIXME - for now, replace old plugin with new. 
             # TODO - With multi-version install, ignore duplicate of same version
             logger.info("Found relocated Plugin %s v%s at '%s' (was '%s')", pname, version, full_path, p.path)
-            self.uninstall(plugin)
+            self.uninstall(p)
             # And restore with full_path
             self.enable(p, full_path)
 
         # If the path exists, it is an active. Inactive plugins are removed
         if not p.active and os.path.exists(p.path):
             logger.info("Reactivating plugin marked inactive but present on filesystem %s v%s at '%s'", pname, version, full_path)
-            basedi  = settings.PLUGIN_PATH or os.path.join("/results", self.pluginroot)
             self.enable(p)
+
+        if p.autorunMutable != allow_autorun:
+            p.autorunMutable = allow_autorun
+            needs_save = True
+
+        if not p.script:
+            p.script = os.path.basename(launch_script)
+            if launch_script != os.path.join(p.path, p.script):
+                logger.error("Launch Script is not in plugin folder: '%s' '%s'", p.path, launch_script)
+            needs_save = True
 
         #create media symlinks if needed
         pluginMediaSrc =  os.path.join(p.path,"pluginMedia")
@@ -263,6 +380,10 @@ class PluginManager(object):
                 logger.exception("Failed to create pluginMedia Symlink: %s", pluginMediaDst)
             # No need to set needs_save - no db data changed
 
+        # Update majorBlock to current setting
+        if p.majorBlock != majorBlock:
+            p.majorBlock = majorBlock
+            needs_save = True
 
         if needs_save:
             p.save()
@@ -270,12 +391,14 @@ class PluginManager(object):
         return (p, needs_save)
 
     def upgrade_helper(self, plugin):
+        # TODO: Rename this method to be _upgrade_helper
         """ Handle additional tasks during upgrade of plugin.
             Currently deactivates old versions of plugins to avoid version conflicts.
             Pass in the new plugin object - the one you want to keep.
         """
         # Some behavior here is just to disable old versions during upgrade.
         count = 0
+        oldplugin = None
         # Upgrade - old plugins must be disabled until multiversion support is implemented
 
         # Get all plugins with the same name and different version
@@ -286,23 +409,22 @@ class PluginManager(object):
                 count+=1
 
             # Plugins other than our version are disabled
-            if oldp.active:
-                self.disable(oldp)
 
             # Uninstall - Allows manual install of plugin previously installed via zeroinstall
-            if oldp.path:
-                # Careful not to delete new path if installed in-place!!!
-                if oldp.path != plugin.path:
-                    self.uninstall(oldp)
-                    # uninstall clears path value
-                else:
-                    oldp.path=''
-                    oldp.save()
+            # Careful not to delete new path if installed in-place!!!
+            current_path = plugin.path
+            if oldp.path and oldp.path != current_path:
+                self.uninstall(oldp)
+            else:
+                oldp.path=''
+            if oldp.active:
+                oldp.active=False
+            oldp.save()
 
         if count:
             logger.debug('Deactivated %d old versions while upgrading to %s v%s', count, plugin.name, plugin.version)
 
-        return count
+        return (count, oldplugin)
 
     # Consider moving disable and enable to plugin model
 
@@ -341,6 +463,10 @@ class PluginManager(object):
             logger.error("Cannot enable plugin with no path information")
             return False
 
+        if not plugin.pluginscript():
+            logger.error("No plugin script found at path '%s'. Unable to enable plugin", plugin.path)
+            return False
+
         plugin.active=True
         plugin.save()
         return True
@@ -351,8 +477,6 @@ class PluginManager(object):
         # Helper for verifying path
         def subsumes(path, maybe_child):
             """ Test if maybe_child is contained in path """
-            if path == maybe_child:
-                return True
             if maybe_child.find(path + '/') == 0:
                 return True
             return False
@@ -362,6 +486,11 @@ class PluginManager(object):
         known_plugin_paths.extend(x.dir for x in zeroinstall.zerostore.Stores().stores)
 
         for known_path in known_plugin_paths:
+            known_path = os.path.normpath(known_path)
+            if known_path == norm_plugin_path:
+                # BLOCK deleting the paths themselves
+                return False
+
             if subsumes(os.path.normpath(known_path), norm_plugin_path):
                 return True
         else:
@@ -370,17 +499,23 @@ class PluginManager(object):
 
     def uninstall(self, plugin):
         """ Can only uninstall plugins with valid plugin.path """
-        if not plugin.path:
-            # API / programmer error
-            logger.debug("Attempting to uninstall already uninstalled plugin: %s v%s", plugin.name, plugin.version)
-            return False
-
-        plugin_path = plugin.path
+        # Grab copy of value for local use
+        plugin_path = os.path.normpath(plugin.path)
 
         # Clear database value early for concurrency issues
+        # Refresh plugin data from database, in case of concurrent uninstalls.
+        # Reduces but does not eliminate race condition
+        plugin = iondb.rundb.models.Plugin.objects.get(pk=plugin.pk)
+        if not plugin.path:
+            logger.warn("Path cleared during uninstall '%s' -> '%s'", plugin_path, plugin.path)
+            return False
         plugin.path = '' ## None?
         plugin.active=False # Ensure plugin is inactive - it no longer has any files
         plugin.save()
+
+        if not plugin_path:
+            logger.debug("Attempting to uninstall plugin with no path (already uninstalled?): %s v%s", plugin.name, plugin.version)
+            return False
 
         # Warning - removing symlink and removing tree may break old reports
         # In current usage, only used by instance.html, not reports.
@@ -389,7 +524,7 @@ class PluginManager(object):
         oldPluginMedia = os.path.join('/results/pluginMedia', plugin.name)
         if os.path.lexists(oldPluginMedia):
             try:
-                os.path.unlink(oldPluginMedia)
+                os.unlink(oldPluginMedia)
             except OSError:
                 pass
 
@@ -398,12 +533,22 @@ class PluginManager(object):
             logger.debug("Plugin files already removed for %s v%s. Missing path '%s'", plugin.name, plugin.version, plugin_path)
             return True ## success - it is gone, through no fault of our own
 
+        # Some instances of a 'scratch' plugin found in wild. Block deletion
+        blacklist = [
+            self.pluginroot,
+            settings.PLUGIN_PATH,
+            os.path.join(self.pluginroot, 'scratch'),
+            os.path.join(self.pluginroot, 'implementations'),
+        ]
+        if plugin_path in blacklist:
+            logger.error("Plugin path matches blacklist '%s'. Will not delete", plugin_path)
+            return False
+
         if not self.is_plugin_store(plugin_path):
             logger.error("Attempted to delete plugin folder in unknown plugin store: '%s'", plugin_path)
             return False
 
-        logger.warn("Purging files '%s' for plugin '%s v%s'", plugin_path, plugin.name, plugin.version)
-
+        ## For zeroinstall, removing just the plugin path will leave behind the parent folder. Remove that too.
         parent_path = os.path.normpath(os.path.dirname(plugin_path))
         # Safety checks - MUST avoid deleting parent folder unless it really is zeroinstall
         if plugin.url \
@@ -414,13 +559,20 @@ class PluginManager(object):
             logger.debug("ZeroInstall Plugin: Removing store folder - ", parent_path)
             plugin_path = parent_path
 
+        # Green Light - All tests pass, OK to remove
+        logger.warn("Purging files '%s' for plugin uninstall '%s v%s'", plugin_path, plugin.name, plugin.version)
+
         try:
             shutil.rmtree(plugin_path)
-        except OSError:
+        except (IOError, OSError):
+            # Defer to async task that runs as priv user
             # Probably permission error. See if the celery async task can remove it.
             logger.debug("Deferring delete to celery task: ", plugin_path)
-            ret = iondb.rundb.tasks.delete_that_folder.delay(plugin_path, "Plugin uninstallation")
+            import iondb.rundb.tasks as tasks   ## import here to avoid circular import
+            ret = tasks.delete_that_folder.delay(plugin_path, "Plugin uninstallation")
             ret.get() # waits for result
 
         return True
+
+pluginmanager = PluginManager()
 

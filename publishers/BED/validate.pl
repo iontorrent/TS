@@ -64,15 +64,9 @@ if( $bedName =~ m/([^a-zA-Z0-9._-])/g ) {
 }
 
 # Process bed file extension
-if( $bedName !~ m/\.bed/i ) {
-	# File does not have .bed extension
-	# Send a warning to user and add on extension
-	error("Warning: '.bed' extension not found. Adding on to end of filename.",1,0);
-	$bedName .= ".bed";
+if( $bedName !~ m/\.bed$/ ) {
+        error("Error: File name does not expected BED file type suffix. Check file format and rename file to end in '.bed'.",1,1);
 }
-# If bed file extension has an uppercase character,
-# replace with lowercase characters
-$bedName =~ s/\.(Bed|bEd|beD|BEd|BeD|bED|BED)$/\.bed/;
 
 # Check if file already exists
 my $url = $apiUrl."content/?format=json&publisher_name=BED&path__endswith=/".$bedName;
@@ -228,7 +222,7 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
 		if( $isDetail ) {
 			$col7 = chkCol478($lineConts[$trackCols-2],$lineNum,7);
 			$col8 = chkCol478($lineConts[$trackCols-1],$lineNum,8);
-			$col1 = chkCol1($lineConts[0],$lineNum.\$col1Warn);
+			$col1 = chkCol1($lineConts[0],$lineNum,\$col1Warn);
 			$col2 = chkCol2($col1,$lineConts[1],$lineNum);
 			$col3 = chkCol3($col1,$lineConts[2],$lineNum);
 			if( $trackCols == 5 ) {
@@ -402,7 +396,7 @@ sub chkTrack {
 		next if $obj eq "track";
 		
 		# Correct key=value format
-		my ($key,$val) = split(/=/,$obj);
+		my ($key,$val) = split(/=/,$obj,2);
 		if( !defined $val ) {
 			error("Error @ line $lineNum: track element expected [key]=[value] format.",1,$skipErrs);
 			return undef;
@@ -434,8 +428,8 @@ sub chkCol1 {
 		# Check if bad characters exist
 		my $errmsg = "";
 		my $warnChars = "";
-		if( $obj =~ m/([^a-zA-Z0-9._:|+-])/ ) {
-			$errmsg = "Error @ line $lineNum, column 1: illegal character found '$1'. ".
+		if( $obj =~ m/[^a-zA-Z0-9._:|+-]/ ) {
+			$errmsg = "Error @ line $lineNum, column 1: illegal character found. ".
 			"Only alphanumeric characters [a-z,A-Z,0-9], periods, hyphens, underscores, ".
 			"plus signs, and vertical bars are allowed here. Please correct and try again.";
 			error($errmsg,1,$skipErrs);
@@ -457,7 +451,7 @@ sub chkCol1 {
 	}
 	# Reference fai
 	if( !exists $faiConts{$obj} ) {
-		error("Error @ line $lineNum, column 1: No match found in reference ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 1: No match found in reference.",1,$skipErrs);
 		return undef;
 	}	
 	
@@ -471,22 +465,22 @@ sub chkCol2 {
 	}
 	# Negative
 	if( $obj =~ m/^-/ ) {
-		error("Error @ line $lineNum, column 2: Negative integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 2: Negative integer found.",1,$skipErrs);
 		return undef;
 	}
 	# Non-integer
 	if( $obj =~ m/[^0-9]/ ) {
-		error("Error @ line $lineNum, column 2: Non-integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 2: Non-integer found.",1,$skipErrs);
 		return undef;
 	}
 	# Negative
 	if( $obj < 0 ) {
-		error("Error @ line $lineNum, column 2: Negative integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 2: Negative integer found.",1,$skipErrs);
 		return undef;
 	}
 	# Start too high
 	if( $obj >= $faiConts{$chrom} ) {
-		error("Error @ line $lineNum, column 2: Start point too high ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 2: Start point too high.",1,$skipErrs);
 		return undef;
 	}
 	
@@ -500,22 +494,22 @@ sub chkCol3 {
 	}
 	# Negative
 	if( $obj =~ m/^-/ ) {
-		error("Error @ line $lineNum, column 3: Negative integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 3: Negative integer found.",1,$skipErrs);
 		return undef;
 	}
 	# Non-integer
 	if( $obj =~ m/[^0-9]/ ) {
-		error("Error @ line $lineNum, column 3: Non-integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 3: Non-integer found.",1,$skipErrs);
 		return undef;
 	}
 	# Negative
 	if( $obj < 0 ) {
-		error("Error @ line $lineNum, column 3: Negative integer found ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 3: Negative integer found.",1,$skipErrs);
 		return undef;
 	}
 	# End too high
 	if( $obj > $faiConts{$chrom} ) {
-		error("Error @ line $lineNum, column 3: End point too high ($obj).",1,$skipErrs);
+		error("Error @ line $lineNum, column 3: End point too high.",1,$skipErrs);
 		return undef;
 	}
 
@@ -529,7 +523,7 @@ sub chkCol5 {
 	}
 	# Number in range [0,1000]
 	if( $obj !~ m/^\d+$/ || $obj < 0 || $obj > 1000 ) {
-		error("Error @ line $lineNum: Expected a number in range [0,1000] in column 5; found $obj instead.",1,$skipErrs);
+		error("Error @ line $lineNum, column 5: Expected a number in range [0,1000].",1,$skipErrs);
 		return undef;
 	}
 	
@@ -543,7 +537,7 @@ sub chkCol6 {
 	}
 	# + or - strand
 	if( $obj ne "+" && $obj ne "-" ) {
-		error("Error @ line $lineNum, column 6: Strand information expected; found $obj instead.",1,$skipErrs);
+		error("Error @ line $lineNum, column 6: Strand information expected.",1,$skipErrs);
 		return undef;
 	}
 	
@@ -571,14 +565,10 @@ sub sortPrint {
 	foreach my $chrom(@refOrder) {
 		$chrom =~ s/\|/\\\|/g;
 		@tmpOrder = grep { $_ =~ m/^$chrom\t/ } @$detailLines;
-
-		push(@finalOrder,(map { $lineMap->{$_->[0]} }
-						sort { $a->[1] cmp $b->[1]
-							||
-						$a->[2] <=> $b->[2]
-							||
-						$a->[3] <=> $b->[3]
-						} map { [$_,split(/\t/,$_)] } @tmpOrder)
+		push(@finalOrder, (
+                	map { $lineMap->{$_->[0]} }
+			sort { $a->[1] <=> $b->[1] || $a->[2] <=> $b->[2] }
+			map { [$_,(split(/\t/,$_))[1,2]] } @tmpOrder )
 		);
 	}
 	
@@ -598,7 +588,7 @@ sub sortPrint {
 			print PBED "\n";
 			print DBED "\n";
 		}
-		#print $detailLines->[$idx]."\n";
+		print "$idx:  $detailLines->[$idx]\n";
 
 		# Unmerged stats check
 		@currInfo = split(/\t/,$detailLines->[$idx]);
@@ -612,7 +602,7 @@ sub sortPrint {
 			@prevInfo = @currInfo;
 		}
 		# Do not merge if diff. chr. OR same chr. and previous_end <= current_start
-		elsif( $prevInfo[0] ne $currInfo[0] || ($prevInfo[0] eq $currInfo[0] && $prevInfo[2] <= $currInfo[1]) ) {
+		elsif( $prevInfo[0] ne $currInfo[0] || $prevInfo[2] <= $currInfo[1] ) {
 			print MPBED $prevPLine."\n";
 			print MDBED $prevDLine."\n";
 			my $len = $prevInfo[2]-$prevInfo[1]-1;

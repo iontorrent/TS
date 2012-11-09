@@ -17,7 +17,7 @@
 #include "crop/Acq.h"
 #include "IonVersion.h"
 #include "Utils.h"
-#include "PinnedWellReporter.h"
+
 #include "MergeAcq.h"
 #include "Acq.h"
 #include "OptArgs.h"
@@ -145,8 +145,6 @@ int main(int argc, char *argv[])
         "beadfind_post_0002.dat", "beadfind_post_0003.dat"
     };
 
-    // Turn off this feature which sucks the life out of performance.
-    PWR::PinnedWellReporter::Instance(false);
 
     // Specify if checksum errors should be ignored
     top.SetIgnoreChecksumErrors(ignoreChecksumErrors);

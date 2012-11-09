@@ -1,16 +1,8 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "Region.h"
 
-void SetUpWholeChip (Region &wholeChip,int rows, int cols)
-{
-  //Used later to generate mask statistics for the whole chip
-  wholeChip.row = 0;
-  wholeChip.col = 0;
-  wholeChip.w = cols;
-  wholeChip.h = rows;
-}
-
-void SetUpRegions (Region *regions, int rows, int cols, int xinc, int yinc)
+/* Why is this col major when everything else is row major? */
+void RegionHelper::SetUpRegions (std::vector<Region>& regions, int rows, int cols, int xinc, int yinc)
 {
   int i,x,y;
 

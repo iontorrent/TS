@@ -4,8 +4,8 @@ import sys
 import os
 import datetime
 from os import path
-sys.path.append('/opt/ion/')
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+
+import djangoinit
 from django.db import models
 from iondb.rundb import models
 

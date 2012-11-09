@@ -1,88 +1,42 @@
 /* Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved */
-/*
- * DPTreephaser.cpp
- *
- *  Created on: July 11, 2011 adapted from DPDephaser
- *      Author: ckoller
- */
+
+//! @file     DPTreephaser.cpp
+//! @ingroup  BaseCaller
+//! @brief    DPTreephaser. Perform dephasing and call base sequence by tree search
 
 #include <cassert>
 #include <cstdio>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 #include "DPTreephaser.h"
 
-
-DPTreephaser::DPTreephaser(const char *_flowOrder, int _numFlows, int _numPaths)
+DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order)
+  : flow_order_(flow_order)
 {
-  numFlows = _numFlows;
-  numPaths = _numPaths;
-
-  // Set default values to options
-  expThreshold = 0.2;
-  minFraction = 1e-6;
-  maxPathDelay = 40;
-  negMultiplier = 2.0;
-  dotValue = 0.3;
-  maxHP = 11;
-  usePaths = numPaths;
-
-  float HpScale[5] = { 0, 1, 0.8, 0.64, 0.37 };
-  HpScaleWeight.assign(HpScale, HpScale + 5);
-  Multiplier = 1;
-
-  // Computing coefficients for nonlinear HP adjustment "TACG"
-  useNonLinHPs = false;
-  perNucHPadjustment.resize(4);
-  float nucAdjustment[4] = { -0.01, -0.01, -0.02, 0 };
-  for (int nuc = 0; nuc < 4; nuc++) {
-    perNucHPadjustment[nuc].resize(maxHP);
-    for (int iHP = 0; iHP < maxHP; iHP++)
-      perNucHPadjustment[nuc][iHP] = exp(nucAdjustment[nuc] * iHP);
-  }
-
-  // Initialize state storage
   for (int i = 0; i < 4; i++) {
-    transitionBase[i].resize(numFlows);
-    transitionFlow[i].resize(numFlows);
+    transition_base_[i].resize(flow_order_.num_flows());
+    transition_flow_[i].resize(flow_order_.num_flows());
   }
-
-  flowOrder.resize(numFlows);
-  int iFlowShort = 0;
-  for (int iFlow = 0; iFlow < numFlows; iFlow++) {
-    switch (_flowOrder[iFlowShort]) {
-    case 'T':
-      flowOrder[iFlow] = 0;
-      break;
-    case 'A':
-      flowOrder[iFlow] = 1;
-      break;
-    case 'C':
-      flowOrder[iFlow] = 2;
-      break;
-    case 'G':
-      flowOrder[iFlow] = 3;
-      break;
-    }
-    iFlowShort++;
-    if (_flowOrder[iFlowShort] == 0)
-      iFlowShort = 0;
+  path_.resize(kNumPaths);
+  for (int p = 0; p < kNumPaths; ++p) {
+    path_[p].state.resize(flow_order_.num_flows());
+    path_[p].solution.resize(flow_order_.num_flows());
+    path_[p].prediction.resize(flow_order_.num_flows());
   }
-
-  path.resize(numPaths, numFlows);
 }
 
 //-------------------------------------------------------------------------
 
-void DPTreephaser::SetModelParameters(double cf, double ie, double dr)
+void DPTreephaser::SetModelParameters(double carry_forward_rate, double incomplete_extension_rate, double droop_rate)
 {
-  double distToBase[4] = { 0, 0, 0, 0 };
-  for (int iFlow = 0; iFlow < numFlows; iFlow++) {
-    distToBase[flowOrder[iFlow]] = 1;
+  double nuc_avaliability[4] = { 0, 0, 0, 0 };
+  for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
+    nuc_avaliability[flow_order_.int_at(flow)] = 1;
     for (int nuc = 0; nuc < 4; nuc++) {
-      transitionBase[nuc][iFlow] = distToBase[nuc] * (1 - dr) * (1 - ie);
-      transitionFlow[nuc][iFlow] = (1 - distToBase[nuc]) + distToBase[nuc] * (1 - dr) * ie;
-      distToBase[nuc] *= cf;
+      transition_base_[nuc][flow] = nuc_avaliability[nuc] * (1-droop_rate) * (1-incomplete_extension_rate);
+      transition_flow_[nuc][flow] = (1-nuc_avaliability[nuc]) + nuc_avaliability[nuc] * (1-droop_rate) * incomplete_extension_rate;
+      nuc_avaliability[nuc] *= carry_forward_rate;
     }
   }
 }
@@ -90,50 +44,31 @@ void DPTreephaser::SetModelParameters(double cf, double ie, double dr)
 //-------------------------------------------------------------------------
 
 
-
-void BasecallerRead::SetDataAndKeyNormalize(const float *flowValues, int _numFlows, const int *keyVec, int numKeyFlows)
+void BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows)
 {
-  numFlows = _numFlows;
-  measurements.resize(numFlows);
-  normalizedMeasurements.resize(numFlows);
-  solution.assign(numFlows, 0);
-  prediction.assign(numFlows, 0);
+  raw_measurements.resize(num_flows);
+  normalized_measurements.resize(num_flows);
+  solution.assign(num_flows, 0);
+  prediction.assign(num_flows, 0);
+  additive_correction.assign(num_flows, 0);
+  multiplicative_correction.assign(num_flows, 1.0);
 
-  float onemerSum = 0.0;
-  float onemerCount = 0.0;
-
-  for (int iFlow = 0; iFlow < numKeyFlows; iFlow++) {
-    if (keyVec[iFlow] == 1) {
-      onemerSum += flowValues[iFlow];
-      onemerCount += 1.0;
+  float onemer_sum = 0.0;
+  float onemer_count = 0.0;
+  for (int flow = 0; flow < num_key_flows; ++flow) {
+    if (key_flows[flow] == 1) {
+      onemer_sum += measurements[flow];
+      onemer_count += 1.0;
     }
   }
 
-  keyNormalizer = 1;
-  miscNormalizer = 1;
-  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-    measurements[iFlow] = flowValues[iFlow];
+  key_normalizer = 1;
+  if (onemer_sum and onemer_count)
+    key_normalizer = onemer_count / onemer_sum;
 
-  if ((onemerSum > 0) && (onemerCount > 0)) {
-    keyNormalizer = onemerCount / onemerSum;
-
-    for (int iFlow = 0; iFlow < numFlows; iFlow++)
-      measurements[iFlow] *= keyNormalizer;
-  }
-
-  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow];
-}
-
-void BasecallerRead::flowToString(const string &flowOrder, string &seq)
-{
-  seq = "";
-  for(unsigned int iFlow=0; iFlow < solution.size(); iFlow++) {
-    if(solution[iFlow] > 0) {
-      char base = flowOrder[iFlow % flowOrder.length()];
-      for(int iNuc = solution[iFlow]; iNuc > 0; iNuc--)
-        seq += base;
-    }
+  for (int flow = 0; flow < num_flows; ++flow) {
+    raw_measurements[flow] = measurements[flow] * key_normalizer;
+    normalized_measurements[flow] = raw_measurements[flow];
   }
 }
 
@@ -142,449 +77,342 @@ void BasecallerRead::flowToString(const string &flowOrder, string &seq)
 // ----------------------------------------------------------------------
 // New normalization strategy
 
-void BasecallerRead::FitBaselineVector(int numSteps, int stepSize, int startStep)
+void DPTreephaser::WindowedNormalize(BasecallerRead& read, int num_steps, int window_size) const
 {
-  assert(numSteps > 0);
+  int num_flows = read.raw_measurements.size();
+  float median_set[window_size];
 
-  float latestNormalizer = 0;
-  int fromFlow = 0;
-  int toFlow = stepSize;
+  // Estimate and correct for additive offset
 
-  float stepNormalizers[numSteps];
-  float medianSet[stepSize];
+  float next_normalizer = 0;
+  int estim_flow = 0;
+  int apply_flow = 0;
 
-  for (int iStep = startStep; iStep < numSteps; iStep++) {
+  for (int step = 0; step < num_steps; ++step) {
 
-    if (fromFlow >= numFlows)
+    int window_end = estim_flow + window_size;
+    int window_middle = estim_flow + window_size / 2;
+    if (window_middle > num_flows)
       break;
-    toFlow = std::min(toFlow, numFlows);
 
-    if (toFlow < numFlows) {
-      int medianCount = 0;
-      for (int iFlow = fromFlow; iFlow < toFlow; iFlow++)
-        if (prediction[iFlow] < 0.3)
-          medianSet[medianCount++] = measurements[iFlow] - prediction[iFlow];
+    float normalizer = next_normalizer;
 
-      if (medianCount > 5) {
-        std::nth_element(medianSet, medianSet + medianCount/2, medianSet + medianCount);
-        latestNormalizer = medianSet[medianCount / 2];
-      }
+    int median_set_size = 0;
+    for (; estim_flow < window_end and estim_flow < num_flows; ++estim_flow)
+      if (read.prediction[estim_flow] < 0.3)
+        median_set[median_set_size++] = read.raw_measurements[estim_flow] - read.prediction[estim_flow];
+
+    if (median_set_size > 5) {
+      std::nth_element(median_set, median_set + median_set_size/2, median_set + median_set_size);
+      next_normalizer = median_set[median_set_size / 2];
+      if (step == 0)
+        normalizer = next_normalizer;
     }
 
-    stepNormalizers[iStep] = latestNormalizer;
+    float delta = (next_normalizer - normalizer) / window_size;
 
-    fromFlow = toFlow;
-    toFlow += stepSize;
+    for (; apply_flow < window_middle and apply_flow < num_flows; ++apply_flow) {
+      read.normalized_measurements[apply_flow] = read.raw_measurements[apply_flow] - normalizer;
+      read.additive_correction[apply_flow] = normalizer;
+      normalizer += delta;
+    }
   }
 
-  // Three modes:
-  //  1 - before the middle of the first region: flat
-  //  2 - in between regions: linear interpolation
-  //  3 - beyond the middle of the last region: flat
-
-
-  int halfStep = stepSize / 2;
-
-  int iFlow = 0;
-  if (startStep > 0)
-    iFlow = halfStep + startStep * stepSize;
-
-  for (; (iFlow < halfStep) && (iFlow < numFlows); iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow] - stepNormalizers[0];
-
-  for (int iStep = startStep + 1; iStep < numSteps; iStep++) {
-    for (int pos = 0; (pos < stepSize) && (iFlow < numFlows); pos++, iFlow++)
-      normalizedMeasurements[iFlow] = measurements[iFlow]
-          - (stepNormalizers[iStep - 1] * (stepSize - pos) + stepNormalizers[iStep] * pos) / stepSize;
+  for (; apply_flow < num_flows; ++apply_flow) {
+    read.normalized_measurements[apply_flow] = read.raw_measurements[apply_flow] - next_normalizer;
+    read.additive_correction[apply_flow] = next_normalizer;
   }
 
-  for (; iFlow < numFlows; iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow] - stepNormalizers[numSteps - 1];
+  // Estimate and correct for multiplicative scaling
 
-}
+  next_normalizer = 1;
+  estim_flow = 0;
+  apply_flow = 0;
 
-void BasecallerRead::FitNormalizerVector(int numSteps, int stepSize, int startStep)
-{
-  assert(numSteps > 0);
+  for (int step = 0; step < num_steps; ++step) {
 
-  float latestNormalizer = 1;
-  int fromFlow = 0;
-  int toFlow = stepSize;
-
-  float stepNormalizers[numSteps];
-  float medianSet[stepSize];
-
-  for (int iStep = startStep; iStep < numSteps; iStep++) {
-
-    if (fromFlow >= numFlows)
+    int window_end = estim_flow + window_size;
+    int window_middle = estim_flow + window_size / 2;
+    if (window_middle > num_flows)
       break;
-    toFlow = std::min(toFlow, numFlows);
 
-    if (toFlow < numFlows) {
-      int medianCount = 0;
-      for (int iFlow = fromFlow; iFlow < toFlow; iFlow++)
-        if ((prediction[iFlow] > 0.5) && (normalizedMeasurements[iFlow] > 0))
-          medianSet[medianCount++] = normalizedMeasurements[iFlow] / prediction[iFlow];
+    float normalizer = next_normalizer;
 
-      if (medianCount > 5) {
-        std::nth_element(medianSet, medianSet + medianCount/2, medianSet + medianCount);
-        if (medianSet[medianCount / 2] > 0)
-          latestNormalizer = medianSet[medianCount / 2];
-      }
+    int median_set_size = 0;
+    for (; estim_flow < window_end and estim_flow < num_flows; ++estim_flow)
+      if (read.prediction[estim_flow] > 0.5 and read.normalized_measurements[estim_flow] > 0)
+        median_set[median_set_size++] = read.normalized_measurements[estim_flow] / read.prediction[estim_flow];
+
+    if (median_set_size > 5) {
+      std::nth_element(median_set, median_set + median_set_size/2, median_set + median_set_size);
+      next_normalizer = median_set[median_set_size / 2];
+      if (step == 0)
+        normalizer = next_normalizer;
     }
 
-    stepNormalizers[iStep] = latestNormalizer;
+    float delta = (next_normalizer - normalizer) / window_size;
 
-    fromFlow = toFlow;
-    toFlow += stepSize;
-  }
-
-  // Three modes:
-  //  1 - before the middle of the first region: flat
-  //  2 - in between regions: linear interpolation
-  //  3 - beyond the middle of the last region: flat
-
-  float normalizer = 1;
-  int halfStep = stepSize / 2;
-
-  int iFlow = 0;
-  if (startStep > 0)
-    iFlow = halfStep + startStep * stepSize;
-
-  for (; (iFlow < halfStep) && (iFlow < numFlows); iFlow++) {
-    normalizer = stepNormalizers[0];
-    normalizedMeasurements[iFlow] /= normalizer;
-  }
-
-  for (int iStep = startStep + 1; iStep < numSteps; iStep++) {
-    for (int pos = 0; (pos < stepSize) && (iFlow < numFlows); pos++, iFlow++) {
-      normalizer = stepNormalizers[iStep - 1] * (stepSize - pos) + stepNormalizers[iStep] * pos;
-      normalizer /= stepSize;
-      normalizedMeasurements[iFlow] /= normalizer;
+    for (; apply_flow < window_middle and apply_flow < num_flows; ++apply_flow) {
+      read.normalized_measurements[apply_flow] /= normalizer;
+      read.multiplicative_correction[apply_flow] = normalizer;
+      normalizer += delta;
     }
   }
 
-  for (; iFlow < numFlows; iFlow++) {
-    normalizer = stepNormalizers[numSteps - 1];
-    normalizedMeasurements[iFlow] /= normalizer;
+  for (; apply_flow < num_flows; ++apply_flow) {
+    read.normalized_measurements[apply_flow] /= next_normalizer;
+    read.multiplicative_correction[apply_flow] = next_normalizer;
   }
-
 }
-
 
 
 
 // New improved normalization strategy
-void DPTreephaser::NormalizeAndSolve3(BasecallerRead& well, int maxFlows)
+void DPTreephaser::NormalizeAndSolve3(BasecallerRead& well, int max_flows)
 {
-  int stepSize = 50;
+  int window_size = 50;
+  int solve_flows = 0;
 
-  for (int iStep = 1; iStep < 100; iStep++) {
+  for (int num_steps = 1; solve_flows < max_flows; ++num_steps) {
+    solve_flows = min((num_steps+1) * window_size, max_flows);
 
-      int solveLength = (iStep+1) * stepSize;
-      solveLength = std::min(solveLength,maxFlows);
-
-      Solve(well,solveLength);
-      well.FitBaselineVector(iStep,stepSize);
-      well.FitNormalizerVector(iStep,stepSize);
-
-      if (solveLength == maxFlows)
-          break;
+    Solve(well, solve_flows);
+    WindowedNormalize(well, num_steps, window_size);
   }
 
-  Solve(well,maxFlows);
+  Solve(well, max_flows);
 }
 
 
 
 // Old normalization, but uses BasecallerRead object
-void DPTreephaser::NormalizeAndSolve4(BasecallerRead& well, int maxFlows)
+void DPTreephaser::NormalizeAndSolve4(BasecallerRead& well, int max_flows)
 {
-  for (int it = 0; it < 7; it++) {
-    int solveFlow = 100 + 20 * it;
-    if (solveFlow < maxFlows) {
-      Solve(well,solveFlow);
-      well.Normalize(11, 80 + 20 * it);
+  for (int iter = 0; iter < 7; ++iter) {
+    int solve_flow = 100 + 20 * iter;
+    if (solve_flow < max_flows) {
+      Solve(well, solve_flow);
+      Normalize(well, 11, solve_flow-20);
     }
   }
-  Solve(well,maxFlows);
+  Solve(well, max_flows);
 }
 
 
 
 
 // Sliding window adaptive normalization
-void DPTreephaser::NormalizeAndSolve5(BasecallerRead& well, int maxFlows)
+void DPTreephaser::NormalizeAndSolve5(BasecallerRead& well, int max_flows)
 {
-  int stepSize = 50;
+  int window_size = 50;
+  int solve_flows = 0;
 
-  for (int iStep = 1; iStep < 100; iStep++) {
+  for (int num_steps = 1; solve_flows < max_flows; ++num_steps) {
+    solve_flows = min((num_steps+1) * window_size, max_flows);
+    int restart_flows = max(solve_flows-100, 0);
 
-      int solveLength = (iStep+1) * stepSize;
-      solveLength = std::min(solveLength, maxFlows);
-
-      int restartLength = std::max(solveLength - 100, 0);
-      int restartStep = 0; //std::max(iStep - 3, 0);
-
-      Solve(well,solveLength, restartLength);
-      well.FitBaselineVector(iStep, stepSize, restartStep);
-      well.FitNormalizerVector(iStep, stepSize, restartStep);
-
-      if (solveLength == maxFlows)
-          break;
+    Solve(well, solve_flows, restart_flows);
+    WindowedNormalize(well, num_steps, window_size);
   }
 
-  Solve(well,maxFlows);
+  Solve(well, max_flows);
 }
 
 
 
 
-void BasecallerRead::Normalize(int fromFlow, int toFlow)
+float DPTreephaser::Normalize(BasecallerRead& read, int start_flow, int end_flow) const
 {
-  const float HpScaleWeight[5] = { 0, 1, 0.8, 0.64, 0.37 };
+  const static float kHomopolymerWeight[5] = { 0, 1, 0.8, 0.64, 0.37 };
 
-  double xy = 0;
-  double yy = 0;
+  float xy = 0;
+  float yy = 0;
+  int num_flows = read.raw_measurements.size();
 
-  for (int iFlow = fromFlow; ((iFlow < toFlow) && (iFlow < numFlows)); iFlow++) {
-    if ((solution[iFlow] > 0) && (((int)solution[iFlow]) < 5)) {
-
-      xy += HpScaleWeight[(int)solution[iFlow]] * measurements[iFlow] * prediction[iFlow];
-//      xy += HpScaleWeight[(int)solution[iFlow]] * normalizedMeasurements[iFlow] * prediction[iFlow];
-      yy += HpScaleWeight[(int)solution[iFlow]] * prediction[iFlow] * prediction[iFlow];
+  for (int flow = start_flow; flow < end_flow and flow < num_flows; ++flow) {
+    if (read.solution[flow] > 0 and read.solution[flow] < 5) {
+      xy += kHomopolymerWeight[(int)read.solution[flow]] * read.prediction[flow] * read.raw_measurements[flow];
+      yy += kHomopolymerWeight[(int)read.solution[flow]] * read.prediction[flow] * read.prediction[flow];
     }
   }
 
-  double Divisor = 1;
-  if ((yy > 0) && (xy > 0))
-    Divisor = xy / yy;
+  float divisor = 1;
+  if (xy > 0 and yy > 0)
+    divisor = xy / yy;
 
-  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow] / Divisor;
-//    normalizedMeasurements[iFlow] /= Divisor;
+  for (int flow = 0; flow < num_flows; ++flow)
+    read.normalized_measurements[flow] = read.raw_measurements[flow] / divisor;
 
-//  miscNormalizer *= Divisor;
-  miscNormalizer = Divisor;
+  read.additive_correction.assign(num_flows, 0);
+  read.multiplicative_correction.assign(num_flows, divisor);
+
+  return divisor;
 }
 
 
 //-------------------------------------------------------------------------
 
-void DPTreephaser::advanceState(TreephaserPath *child, const TreephaserPath *parent, int nuc, int toflow)
+void DPTreephaser::InitializeState(TreephaserPath *state) const
 {
-  if (child != parent) {  // The advance is not done in place
-
-    // Advance flow
-    child->flow = parent->flow;
-    while ((child->flow < toflow) && (flowOrder[child->flow] != nuc))
-      child->flow++;
-
-    // Initialize window
-    child->windowStart = parent->windowStart;
-    child->windowEnd = parent->windowEnd;
-
-    if (parent->flow == child->flow) {
-
-      // This nuc simply prolongs current homopolymer, inherits state from parent
-      for (int iFlow = child->windowStart; iFlow < child->windowEnd; iFlow++)
-        child->state[iFlow] = parent->state[iFlow];
-      return;
-    }
-
-    // This nuc begins a new homopolymer
-    float alive = 0;
-    for (int iFlow = parent->windowStart; iFlow < child->windowEnd; iFlow++) {
-
-      // State progression according to phasing model
-      if (iFlow < parent->windowEnd)
-        alive += parent->state[iFlow];
-      child->state[iFlow] = alive * transitionBase[nuc][iFlow];
-      alive *= transitionFlow[nuc][iFlow];
-
-      // Window maintenance
-      if ((iFlow == child->windowStart) && (iFlow < (child->windowEnd - 1)) && (child->state[iFlow] < minFraction))
-        child->windowStart++;
-
-      if ((iFlow == (child->windowEnd - 1)) && (child->windowEnd < toflow) && (alive > minFraction))
-        child->windowEnd++;
-    }
-
-  } else {    // The advance is done in place
-
-    // Advance flow
-    int oldFlow = child->flow;
-    while ((child->flow < toflow) && (flowOrder[child->flow] != nuc))
-      child->flow++;
-
-    if (oldFlow == child->flow) // Same homopolymer, no changes in the state
-      return;
-
-    // This nuc begins a new homopolymer
-    float alive = 0;
-    int oldWindowStart = child->windowStart;
-    int oldWindowEnd = child->windowEnd;
-    for (int iFlow = oldWindowStart; iFlow < child->windowEnd; iFlow++) {
-
-      // State progression according to phasing model
-      if (iFlow < oldWindowEnd)
-        alive += child->state[iFlow];
-      child->state[iFlow] = alive * transitionBase[nuc][iFlow];
-      alive *= transitionFlow[nuc][iFlow];
-
-      // Window maintenance
-      if ((iFlow == child->windowStart) && (iFlow < (child->windowEnd - 1)) && (child->state[iFlow] < minFraction))
-        child->windowStart++;
-
-      if ((iFlow == (child->windowEnd - 1)) && (child->windowEnd < toflow) && (alive > minFraction))
-        child->windowEnd++;
-    }
-  }
-}
-
-
-
-void DPTreephaser::Simulate2(BasecallerRead& read, int maxFlows)
-{
-  read.prediction.assign(numFlows, 0);
-
-  TreephaserPath *state = &(path[0]);
-
   state->flow = 0;
+  //state->state.resize(flow_order_.num_flows()); // Superfluous
   state->state[0] = 1;
-  state->windowStart = 0;
-  state->windowEnd = 1;
-
-  for (int mainFlow = 0; (mainFlow < numFlows) && (mainFlow < maxFlows); mainFlow++) {
-    for (int iHP = 0; iHP < read.solution[mainFlow]; iHP++) {
-
-      advanceState(state, state, flowOrder[mainFlow], maxFlows);
-
-      float myAdjustment = 1.0;
-      if (useNonLinHPs)
-        myAdjustment = perNucHPadjustment[flowOrder[mainFlow]][iHP];
-
-      for (int iFlow = state->windowStart; iFlow < state->windowEnd; iFlow++)
-        read.prediction[iFlow] += state->state[iFlow] * myAdjustment;
-    }
-  }
+  state->window_start = 0;
+  state->window_end = 1;
+  state->prediction.assign(flow_order_.num_flows(), 0);
+  state->solution.assign(flow_order_.num_flows(), 0);
 }
 
 
-void DPTreephaser::Simulate3(BasecallerRead &data, int maxFlows)
+void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *parent, int nuc, int max_flow) const
 {
-  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-    data.prediction[iFlow] = 0;
+  assert (child != parent);
 
-  path[0].state.resize(numFlows);
-  path[0].state[0] = 1;
-  int startFlowWindow = 0;
-  int endFlowWindow = 1;
+  // Advance flow
+  child->flow = parent->flow;
+  while (child->flow < max_flow and flow_order_.int_at(child->flow) != nuc)
+    child->flow++;
 
-  for (int currentFlow = 0; (currentFlow < numFlows) && (currentFlow < maxFlows); currentFlow++) {
-    for (int iHP = 0; iHP < data.solution[currentFlow]; iHP++) {
+  // Initialize window
+  child->window_start = parent->window_start;
+  child->window_end = parent->window_end;
 
-      if (iHP > 0) {
-        for (int iFlow = startFlowWindow; (iFlow < endFlowWindow) && (iFlow < numFlows); iFlow++)
-          data.prediction[iFlow] += path[0].state[iFlow];
-        continue;
-      }
+  if (parent->flow != child->flow or parent->flow == 0) {
 
-      float alive = 0;
-      int nextEndFlowWindow = endFlowWindow;
-      for (int iFlow = startFlowWindow; iFlow < numFlows; iFlow++) {
+    // This nuc begins a new homopolymer
+    float alive = 0;
+    for (int flow = parent->window_start; flow < child->window_end; ++flow) {
 
-        if (iFlow < endFlowWindow)
-          alive += path[0].state[iFlow];
-        path[0].state[iFlow] = alive * transitionBase[flowOrder[currentFlow]][iFlow];
-        alive *= transitionFlow[flowOrder[currentFlow]][iFlow];
+      // State progression according to phasing model
+      if (flow < parent->window_end)
+        alive += parent->state[flow];
+      child->state[flow] = alive * transition_base_[nuc][flow];
+      alive *= transition_flow_[nuc][flow];
 
-        data.prediction[iFlow] += path[0].state[iFlow];
+      // Window maintenance
+      if (flow == child->window_start and (child->state[flow] < kStateWindowCutoff)) // or flow < child->flow-60))
+        child->window_start++;
 
-        if (iFlow == startFlowWindow)
-          if (path[0].state[iFlow] < 1e-4)
-            startFlowWindow++;
-
-        if (iFlow == (nextEndFlowWindow - 1)) {
-          if (alive > 1e-4)
-            nextEndFlowWindow++;
-          else
-            break;
-        }
-      }
-      endFlowWindow = nextEndFlowWindow;
+      if (flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff) // and flow < child->flow+60)
+        child->window_end++;
     }
+
+  } else {
+    // This nuc simply prolongs current homopolymer, inherits state from parent
+    //for (int flow = child->window_start; flow < child->window_end; ++flow)
+    //  child->state[flow] = parent->state[flow];
+    memcpy(&child->state[child->window_start], &parent->state[child->window_start],
+        (child->window_end-child->window_start)*sizeof(float));
   }
+
+  for (int flow = parent->window_start; flow < child->window_end; ++flow)
+    child->prediction[flow] = parent->prediction[flow] + child->state[flow];
 }
 
+void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, int nuc, int max_flow) const
+{
+  // Advance in-phase flow
+  int old_flow = state->flow;
+  int old_window_start = state->window_start;
+  int old_window_end = state->window_end;
+  while (state->flow < max_flow and flow_order_.int_at(state->flow) != nuc)
+    state->flow++;
+
+  if (old_flow != state->flow or old_flow == 0) {
+
+    // This nuc begins a new homopolymer, need to adjust state
+    float alive = 0;
+    for (int flow = old_window_start; flow < state->window_end; flow++) {
+
+      // State progression according to phasing model
+      if (flow < old_window_end)
+        alive += state->state[flow];
+      state->state[flow] = alive * transition_base_[nuc][flow];
+      alive *= transition_flow_[nuc][flow];
+
+      // Window maintenance
+      if (flow == state->window_start and (state->state[flow] < kStateWindowCutoff)) // or flow < state->flow-60))
+        state->window_start++;
+
+      if (flow == state->window_end-1 and state->window_end < max_flow and alive > kStateWindowCutoff) // and flow < state->flow+60)
+        state->window_end++;
+    }
+  }
+
+//  for (int flow = old_window_start; flow < state->window_end; ++flow)
+  for (int flow = state->window_start; flow < state->window_end; ++flow)
+    state->prediction[flow] += state->state[flow];
+}
+
+
+
+void DPTreephaser::Simulate(BasecallerRead& data, int max_flows)
+{
+  max_flows = min(max_flows,flow_order_.num_flows());
+  InitializeState(&path_[0]);
+
+  for (int solution_flow = 0; solution_flow < max_flows; ++solution_flow)
+    for (int hp = 0; hp < data.solution[solution_flow]; ++hp)
+      AdvanceStateInPlace(&path_[0], flow_order_.int_at(solution_flow), flow_order_.num_flows());
+
+  data.prediction.swap(path_[0].prediction);
+}
 
 
 
 // Solve3 - main tree search procedure that determines the base sequence.
 // Another temporary version, uses external class for storing read data
 
-void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
+void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 {
-  assert(maxFlows <= numFlows);
+  assert(max_flows <= flow_order_.num_flows());
 
   // Initialize stack: just one root path
-  for (int iPath = 1; iPath < numPaths; iPath++)
-    path[iPath].inUse = false;
+  for (int p = 1; p < kNumPaths; ++p)
+    path_[p].in_use = false;
 
-  path[0].flow = 0;
-  path[0].state[0] = 1;
-  path[0].windowStart = 0;
-  path[0].windowEnd = 1;
-  path[0].pathMetric = 0;
-  path[0].perFlowMetric = 0;
-  path[0].residualLeftOfWindow = 0;
-  path[0].dotCounter = 0;
-  path[0].prediction.assign(numFlows, 0);
-  path[0].solution.assign(numFlows, 0);
-  path[0].inUse = true;
+  InitializeState(&path_[0]);
+  path_[0].path_metric = 0;
+  path_[0].per_flow_metric = 0;
+  path_[0].residual_left_of_window = 0;
+  path_[0].dot_counter = 0;
+  path_[0].in_use = true;
 
-  int spaceOnStack = usePaths - 1;
-  minDistance = maxFlows;
+  int space_on_stack = kNumPaths - 1;
+  float sum_of_squares_upper_bound = 1e20;  //max_flows; // Squared distance of solution to measurements
 
-  if (restartFlows > 0) {
-    // The solver will not attempt to solve initial restartFlows
-    // - Simulate restartFlows instead of solving
-    // - If it turns out that solving was finished before restartFlows, simply exit without any changes to the read.
+  if (restart_flows > 0) {
+    // The solver will not attempt to solve initial restart_flows
+    // - Simulate restart_flows instead of solving
+    // - If it turns out that solving was finished before restart_flows, simply exit without any changes to the read.
 
-    assert(read.solution.size() >= (unsigned int)restartFlows);
-    int lastIncorporatingFlow = 0;
+    restart_flows = min(restart_flows, flow_order_.num_flows());
+    int last_incorporating_flow = 0;
 
-    for (int mainFlow = 0; (mainFlow < numFlows) && (mainFlow < restartFlows); mainFlow++) {
+    for (int solution_flow = 0; solution_flow < restart_flows; ++solution_flow) {
 
-      path[0].solution[mainFlow] = read.solution[mainFlow];
+      path_[0].solution[solution_flow] = read.solution[solution_flow];
 
-      for (int iHP = 0; iHP < path[0].solution[mainFlow]; iHP++) {
-
-        advanceState(&path[0], &path[0], flowOrder[mainFlow], maxFlows);
-
-        float myAdjustment = 1.0;
-        if (useNonLinHPs)
-          myAdjustment = perNucHPadjustment[flowOrder[mainFlow]][iHP];
-
-        for (int iFlow = path[0].windowStart; iFlow < path[0].windowEnd; iFlow++)
-          path[0].prediction[iFlow] += path[0].state[iFlow] * myAdjustment;
-
-        lastIncorporatingFlow = mainFlow;
+      for (int hp = 0; hp < path_[0].solution[solution_flow]; ++hp) {
+        AdvanceStateInPlace(&path_[0], flow_order_.int_at(solution_flow), max_flows);
+        last_incorporating_flow = solution_flow;
       }
     }
 
-    if (lastIncorporatingFlow < (restartFlows-10)) // This read ended before restartFlows. No point resolving it.
+    if (last_incorporating_flow < restart_flows-10) { // This read ended before restartFlows. No point resolving it.
+      read.prediction.swap(path_[0].prediction);
       return;
+    }
 
-    for (int iFlow = 0; iFlow < path[0].windowStart; iFlow++) {
-      float residual = read.normalizedMeasurements[iFlow] - path[0].prediction[iFlow];
-      path[0].residualLeftOfWindow += residual * residual;
+    for (int flow = 0; flow < path_[0].window_start; ++flow) {
+      float residual = read.normalized_measurements[flow] - path_[0].prediction[flow];
+      path_[0].residual_left_of_window += residual * residual;
     }
   }
 
   // Initializing variables
-  read.solution.assign(numFlows, 0);
-  read.prediction.assign(numFlows, 0);
+  read.solution.assign(flow_order_.num_flows(), 0);
+  read.prediction.assign(flow_order_.num_flows(), 0);
 
   // Main loop to select / expand / delete paths
   while (1) {
@@ -593,60 +421,60 @@ void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
     // Step 1: Prune the content of the stack and make sure there are at least 4 empty slots
 
     // Remove paths that are more than 'maxPathDelay' behind the longest one
-    if (spaceOnStack < (numPaths - 3)) {
-      int maxFlow = 0;
-      for (int iPath = 0; iPath < usePaths; iPath++)
-        if (path[iPath].inUse)
-          maxFlow = max(maxFlow, path[iPath].flow);
+    if (space_on_stack < kNumPaths-3) {
+      int longest_path = 0;
+      for (int p = 0; p < kNumPaths; ++p)
+        if (path_[p].in_use)
+          longest_path = max(longest_path, path_[p].flow);
 
-      if (maxFlow > maxPathDelay) {
-        for (int iPath = 0; iPath < usePaths; iPath++) {
-          if (path[iPath].inUse && (path[iPath].flow < (maxFlow - maxPathDelay))) {
-            path[iPath].inUse = false;
-            spaceOnStack++;
+      if (longest_path > kMaxPathDelay) {
+        for (int p = 0; p < kNumPaths; ++p) {
+          if (path_[p].in_use and path_[p].flow < longest_path-kMaxPathDelay) {
+            path_[p].in_use = false;
+            space_on_stack++;
           }
         }
       }
     }
 
     // If necessary, remove paths with worst perFlowMetric
-    while (spaceOnStack < 4) {
+    while (space_on_stack < 4) {
       // find maximum per flow metric
-      float ExtremeVal = -0.1;
-      int newIdx = usePaths;
-      for (int iPath = 0; iPath < usePaths; iPath++) {
-        if (path[iPath].inUse && (path[iPath].perFlowMetric > ExtremeVal)) {
-          ExtremeVal = path[iPath].perFlowMetric;
-          newIdx = iPath;
+      float max_per_flow_metric = -0.1;
+      int max_metric_path = kNumPaths;
+      for (int p = 0; p < kNumPaths; ++p) {
+        if (path_[p].in_use and path_[p].per_flow_metric > max_per_flow_metric) {
+          max_per_flow_metric = path_[p].per_flow_metric;
+          max_metric_path = p;
         }
       }
 
       // killing path with largest per flow metric
-      if (!(newIdx < usePaths)) {
+      if (!(max_metric_path < kNumPaths)) {
         printf("Failed assertion in Treephaser\n");
-        for (int iPath = 0; iPath < usePaths; iPath++) {
-          if (path[iPath].inUse)
-            printf("Path %d, inUse = true, perFlowMetric = %f\n", iPath, path[iPath].perFlowMetric);
+        for (int p = 0; p < kNumPaths; ++p) {
+          if (path_[p].in_use)
+            printf("Path %d, in_use = true, per_flow_metric = %f\n", p, path_[p].per_flow_metric);
           else
-            printf("Path %d, inUse = false, perFlowMetric = %f\n", iPath, path[iPath].perFlowMetric);
+            printf("Path %d, in_use = false, per_flow_metric = %f\n", p, path_[p].per_flow_metric);
         }
         fflush(NULL);
       }
+      assert (max_metric_path < kNumPaths);
 
-      assert (newIdx < usePaths);
-      path[newIdx].inUse = false;
-      spaceOnStack++;
+      path_[max_metric_path].in_use = false;
+      space_on_stack++;
     }
 
     // ------------------------------------------
     // Step 2: Select a path to expand or break if there is none
 
     TreephaserPath *parent = NULL;
-    float ExtremeVal = 1000;
-    for (int iPath = 0; iPath < usePaths; iPath++) {
-      if (path[iPath].inUse && (path[iPath].pathMetric < ExtremeVal)) {
-        ExtremeVal = path[iPath].pathMetric;
-        parent = &(path[iPath]);
+    float min_path_metric = 1000;
+    for (int p = 0; p < kNumPaths; ++p) {
+      if (path_[p].in_use and path_[p].path_metric < min_path_metric) {
+        min_path_metric = path_[p].path_metric;
+        parent = &path_[p];
       }
     }
     if (!parent)
@@ -654,87 +482,81 @@ void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
 
     // ------------------------------------------
     // Step 3: Construct four expanded paths and calculate feasibility metrics
-    assert (spaceOnStack >= 4);
+    assert (space_on_stack >= 4);
 
     TreephaserPath *children[4];
 
-    for (int nuc = 0, iPath = 0; nuc < 4; iPath++)
-      if (!path[iPath].inUse)
-        children[nuc++] = &(path[iPath]);
+    for (int nuc = 0, p = 0; nuc < 4; ++p)
+      if (not path_[p].in_use)
+        children[nuc++] = &path_[p];
 
     float penalty[4] = { 0, 0, 0, 0 };
 
-    for (int nuc = 0; nuc < 4; nuc++) {
+    for (int nuc = 0; nuc < 4; ++nuc) {
 
       TreephaserPath *child = children[nuc];
 
-      advanceState(child, parent, nuc, maxFlows);
+      AdvanceState(child, parent, nuc, max_flows);
 
       // Apply easy termination rules
 
-      if (child->flow >= maxFlows) {
+      if (child->flow >= max_flows) {
         penalty[nuc] = 25; // Mark for deletion
         continue;
       }
 
       int currentHP = parent->solution[child->flow];
-      if (currentHP == maxHP) {
+      if (currentHP == kMaxHP) {
         penalty[nuc] = 25; // Mark for deletion
         continue;
       }
 
-      child->pathMetric = parent->residualLeftOfWindow;
-      child->residualLeftOfWindow = parent->residualLeftOfWindow;
-
-      float myAdjustment = 1.0;
-//      if (useNonLinHPs)
-//        myAdjustment = perNucHPadjustment[nuc][currentHP];
+      child->path_metric = parent->residual_left_of_window;
+      child->residual_left_of_window = parent->residual_left_of_window;
 
       float penaltyN = 0;
       float penalty1 = 0;
 
-      for (int iFlow = parent->windowStart; (iFlow < child->windowEnd) ; iFlow++) {
+      for (int flow = parent->window_start; flow < child->window_end; ++flow) {
 
-        child->prediction[iFlow] = parent->prediction[iFlow] + child->state[iFlow] * myAdjustment;
-
-        float residual = read.normalizedMeasurements[iFlow] - child->prediction[iFlow];
-        float sqResidual = residual * residual;
+        float residual = read.normalized_measurements[flow] - child->prediction[flow];
+        float residual_squared = residual * residual;
 
         // Metric calculation
-        if (iFlow < child->windowStart) {
-          child->residualLeftOfWindow += sqResidual;
-          child->pathMetric += sqResidual;
+        if (flow < child->window_start) {
+          child->residual_left_of_window += residual_squared;
+          child->path_metric += residual_squared;
         } else if (residual <= 0)
-          child->pathMetric += sqResidual;
+          child->path_metric += residual_squared;
 
         if (residual <= 0)
-          penaltyN += sqResidual;
-        else if (iFlow < child->flow)
-          penalty1 += sqResidual;
+          penaltyN += residual_squared;
+        else if (flow < child->flow)
+          penalty1 += residual_squared;
       }
 
 
-      penalty[nuc] = penalty1 + negMultiplier * penaltyN;
+      penalty[nuc] = penalty1 + kNegativeMultiplier * penaltyN;
       penalty1 += penaltyN;
 
-      child->perFlowMetric = (child->pathMetric + 0.5 * penalty1) / child->flow;
+      child->per_flow_metric = (child->path_metric + 0.5 * penalty1) / child->flow;
 
     } //looping over nucs
 
 
     // Find out which nuc has the least penalty (the greedy choice nuc)
-    int bestNuc = 0;
-    if (penalty[bestNuc] > penalty[1])
-      bestNuc = 1;
-    if (penalty[bestNuc] > penalty[2])
-      bestNuc = 2;
-    if (penalty[bestNuc] > penalty[3])
-      bestNuc = 3;
+    int best_nuc = 0;
+    if (penalty[best_nuc] > penalty[1])
+      best_nuc = 1;
+    if (penalty[best_nuc] > penalty[2])
+      best_nuc = 2;
+    if (penalty[best_nuc] > penalty[3])
+      best_nuc = 3;
 
     // ------------------------------------------
     // Step 4: Use calculated metrics to decide which paths are worth keeping
 
-    for (int nuc = 0; nuc < 4; nuc++) {
+    for (int nuc = 0; nuc < 4; ++nuc) {
 
       TreephaserPath *child = children[nuc];
 
@@ -743,31 +565,29 @@ void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
       if (penalty[nuc] >= 20)
         continue;
 
-      if (child->pathMetric > minDistance)
+      if (child->path_metric > sum_of_squares_upper_bound)
         continue;
 
       // This is the only rule that depends on finding the "best nuc"
-      if ((penalty[nuc] - penalty[bestNuc]) >= expThreshold)
+      if (penalty[nuc] - penalty[best_nuc] >= kExtendThreshold)
         continue;
 
-      float newSignal = (read.normalizedMeasurements[child->flow] - parent->prediction[child->flow]) / child->state[child->flow];
-      child->dotCounter = (newSignal < dotValue) ? (parent->dotCounter + 1) : 0;
-      if (child->dotCounter > 1)
+      float dot_signal = (read.normalized_measurements[child->flow] - parent->prediction[child->flow]) / child->state[child->flow];
+      child->dot_counter = (dot_signal < kDotThreshold) ? (parent->dot_counter + 1) : 0;
+      if (child->dot_counter > 1)
         continue;
-
-      //            if ((nuc != bestNuc) && (child->dotCounter > 0))
-      //                continue;
 
       // Path survived termination rules and will be kept on stack
-      child->inUse = true;
-      spaceOnStack--;
+      child->in_use = true;
+      space_on_stack--;
 
       // Fill out the remaining portion of the prediction
-      for (int iFlow = 0; iFlow < parent->windowStart; iFlow++)
-        child->prediction[iFlow] = parent->prediction[iFlow];
+//      for (int flow = 0; flow < parent->window_start; ++flow)
+//        child->prediction[flow] = parent->prediction[flow];
+      memcpy(&child->prediction[0], &parent->prediction[0], parent->window_start*sizeof(float));
 
-      for (int iFlow = child->windowEnd; iFlow < maxFlows; iFlow++)
-        child->prediction[iFlow] = 0;
+      for (int flow = child->window_end; flow < max_flows; ++flow)
+        child->prediction[flow] = 0;
 
       // Fill out the solution
       child->solution = parent->solution;
@@ -778,21 +598,21 @@ void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
     // Step 5. Check if the selected path is in fact the best path so far
 
     // Computing sequence squared distance
-    float SequenceDist = parent->residualLeftOfWindow;
-    for (int iFlow = parent->windowStart; iFlow < maxFlows; iFlow++) {
-      float residual = read.normalizedMeasurements[iFlow] - parent->prediction[iFlow];
-      SequenceDist += residual * residual;
+    float sum_of_squares = parent->residual_left_of_window;
+    for (int flow = parent->window_start; flow < max_flows; flow++) {
+      float residual = read.normalized_measurements[flow] - parent->prediction[flow];
+      sum_of_squares += residual * residual;
     }
 
     // Updating best path
-    if (SequenceDist < minDistance) {
+    if (sum_of_squares < sum_of_squares_upper_bound) {
       read.prediction.swap(parent->prediction);
       read.solution.swap(parent->solution);
-      minDistance = SequenceDist;
+      sum_of_squares_upper_bound = sum_of_squares;
     }
 
-    parent->inUse = false;
-    spaceOnStack++;
+    parent->in_use = false;
+    space_on_stack++;
 
   } // main decision loop
 }
@@ -804,38 +624,33 @@ void DPTreephaser::Solve(BasecallerRead& read, int maxFlows, int restartFlows)
 int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 {
 
-  oneMerHeight.assign(numFlows, 1);
+  read.state_inphase.assign(flow_order_.num_flows(), 1);
+  read.state_total.assign(flow_order_.num_flows(), 1);
 
-  int numBases = 0;
-  for (int iFlow = 0; iFlow < numFlows; iFlow++)
-    numBases += read.solution[iFlow];
+  int num_bases = 0;
+  for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
+    num_bases += read.solution[flow];
 
-  if (numBases == 0)
+  if (num_bases == 0)
     return 0;
 
-  penaltyMismatch.assign(numBases, 0);
-  penaltyResidual.assign(numBases, 0);
+  read.penalty_mismatch.assign(num_bases, 0);
+  read.penalty_residual.assign(num_bases, 0);
 
-  int toflow = numFlows;
+  int max_flows = flow_order_.num_flows();
 
-  TreephaserPath *parent = &(path[0]);
-  TreephaserPath *children[4] = { &(path[1]), &(path[2]), &(path[3]), &(path[4]) };
+  TreephaserPath *parent = &path_[0];
+  TreephaserPath *children[4] = { &path_[1], &path_[2], &path_[3], &path_[4] };
 
-  parent->flow = 0;
-  parent->state[0] = 1;
-  parent->windowStart = 0;
-  parent->windowEnd = 1;
-  parent->prediction.assign(numFlows, 0);
-  parent->solution.assign(numFlows, 0);
+  InitializeState(parent);
 
-  int iBase = 0;
-  float recentInPhaseSignal = 1;
+  int base = 0;
+  float recent_state_inphase = 1;
+  float recent_state_total = 1;
 
   // main loop for base calling
-
-  for (int mainFlow = 0; mainFlow < toflow; mainFlow++) {
-
-    for (int iHP = 0; iHP < read.solution[mainFlow]; iHP++) {
+  for (int solution_flow = 0; solution_flow < max_flows; ++solution_flow) {
+    for (int hp = 0; hp < read.solution[solution_flow]; ++hp) {
 
       float penalty[4] = { 0, 0, 0, 0 };
 
@@ -843,198 +658,73 @@ int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 
         TreephaserPath *child = children[nuc];
 
-        advanceState(child, parent, nuc, toflow);
+        AdvanceState(child, parent, nuc, max_flows);
 
         // Apply easy termination rules
 
-        if (child->flow >= toflow) {
+        if (child->flow >= max_flows) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
 
-        int currentHP = parent->solution[child->flow];
-        if (currentHP == maxHP) {
+        if (parent->solution[child->flow] >= kMaxHP) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
 
-        float myAdjustment = 1.0;
-        if (useNonLinHPs)
-          myAdjustment = perNucHPadjustment[nuc][currentHP];
-
-        for (int iFlow = parent->windowStart; iFlow < child->windowEnd; iFlow++) {
-
-          child->prediction[iFlow] = parent->prediction[iFlow] + child->state[iFlow] * myAdjustment;
-
-          float residual = read.normalizedMeasurements[iFlow] - child->prediction[iFlow];
-
-          if ((residual <= 0) || (iFlow < child->flow))
+        for (int flow = parent->window_start; flow < child->window_end; ++flow) {
+          float residual = read.normalized_measurements[flow] - child->prediction[flow];
+          if (residual <= 0 or flow < child->flow)
             penalty[nuc] += residual*residual;
         }
-
       } //looping over nucs
 
 
       // find current incorporating base
-      int calledNuc = flowOrder[mainFlow];
-      assert(children[calledNuc]->flow == mainFlow);
+      int called_nuc = flow_order_.int_at(solution_flow);
+      assert(children[called_nuc]->flow == solution_flow);
 
-      recentInPhaseSignal = children[calledNuc]->state[mainFlow];
+      recent_state_inphase = children[called_nuc]->state[solution_flow];
+      recent_state_total = 0;
+      for (int flow = children[called_nuc]->window_start; flow < children[called_nuc]->window_end; ++flow)
+        recent_state_total += children[called_nuc]->state[flow];
 
       // Get delta penalty to next best solution
-      penaltyMismatch[iBase] = -1; // min delta penalty to earlier base hypothesis
-      penaltyResidual[iBase] = 0;
+      read.penalty_mismatch[base] = -1; // min delta penalty to earlier base hypothesis
+      read.penalty_residual[base] = 0;
 
-      if( mainFlow - parent->windowStart > 0 )
-        penaltyResidual[iBase] = penalty[calledNuc] / ( mainFlow - parent->windowStart );
+      if (solution_flow - parent->window_start > 0)
+        read.penalty_residual[base] = penalty[called_nuc] / (solution_flow - parent->window_start);
 
-
-      for (int nuc = 0; nuc < 4; nuc++) {
-        if (nuc == calledNuc)
+      for (int nuc = 0; nuc < 4; ++nuc) {
+        if (nuc == called_nuc)
             continue;
-        float iDeltaPenalty = penalty[calledNuc] - penalty[nuc];
-        penaltyMismatch[iBase] = std::max( penaltyMismatch[iBase], iDeltaPenalty);
+        float penalty_mismatch = penalty[called_nuc] - penalty[nuc];
+        read.penalty_mismatch[base] = max(read.penalty_mismatch[base], penalty_mismatch);
       }
 
       // Fill out the remaining portion of the prediction
-      for (int iFlow = 0; iFlow < parent->windowStart; iFlow++)
-        children[calledNuc]->prediction[iFlow] = parent->prediction[iFlow];
+      for (int flow = 0; flow < parent->window_start; ++flow)
+        children[called_nuc]->prediction[flow] = parent->prediction[flow];
 
-      for (int iFlow = children[calledNuc]->windowEnd; iFlow < toflow; iFlow++)
-        children[calledNuc]->prediction[iFlow] = 0;
+      for (int flow = children[called_nuc]->window_end; flow < max_flows; ++flow)
+        children[called_nuc]->prediction[flow] = 0;
 
       // Called state is the starting point for next base
       TreephaserPath *swap = parent;
-      parent = children[calledNuc];
-      children[calledNuc] = swap;
+      parent = children[called_nuc];
+      children[called_nuc] = swap;
 
-      iBase++;
+      base++;
     }
 
-    oneMerHeight[mainFlow] = recentInPhaseSignal;
-    if (oneMerHeight[mainFlow] < 0.01)
-      oneMerHeight[mainFlow] = 0.01;
+    read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
+    read.state_total[solution_flow] = max(recent_state_total, 0.01f);
   }
 
-  return numBases;
+  return num_bases;
 }
 
-
-
-
-
-
-
-
-
-
-// ----------------------------------------------------------------------
-// New normalization strategy
-
-void BasecallerRead::AdaptiveNormalizationOfPredictions(int numSteps, int stepSize)
-{
-  assert(numSteps > 0);
-  int halfStep = stepSize / 2;
-
-  // Additive correction
-
-  float latestNormalizer = 0;
-  int fromFlow = 0;
-  int toFlow = stepSize;
-
-  float stepAdditive[numSteps];
-  float stepMultiplicative[numSteps];
-  float medianSet[stepSize];
-
-  for (int iStep = 0; iStep < numSteps; iStep++) {
-
-    if (fromFlow >= numFlows)
-      break;
-    toFlow = std::min(toFlow, numFlows);
-
-    if (toFlow < numFlows) {
-      int medianCount = 0;
-      for (int iFlow = fromFlow; iFlow < toFlow; iFlow++)
-        if (prediction[iFlow] < 0.3)
-          medianSet[medianCount++] = measurements[iFlow] - prediction[iFlow];
-
-      if (medianCount > 5) {
-        std::nth_element(medianSet, medianSet + medianCount/2, medianSet + medianCount);
-        latestNormalizer = medianSet[medianCount / 2];
-      }
-    }
-
-    stepAdditive[iStep] = latestNormalizer;
-
-    fromFlow = toFlow;
-    toFlow += stepSize;
-  }
-
-
-  int iFlow = 0;
-  for (; (iFlow < halfStep) && (iFlow < numFlows); iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow] - stepAdditive[0];
-
-  for (int iStep = 1; iStep < numSteps; iStep++) {
-    for (int pos = 0; (pos < stepSize) && (iFlow < numFlows); pos++, iFlow++)
-      normalizedMeasurements[iFlow] = measurements[iFlow]
-          - (stepAdditive[iStep - 1] * (stepSize - pos) + stepAdditive[iStep] * pos) / stepSize;
-  }
-
-  for (; iFlow < numFlows; iFlow++)
-    normalizedMeasurements[iFlow] = measurements[iFlow] - stepAdditive[numSteps - 1];
-
-
-  // Multiplicative correction
-
-  latestNormalizer = 1;
-  fromFlow = 0;
-  toFlow = stepSize;
-
-  for (int iStep = 0; iStep < numSteps; iStep++) {
-
-    if (fromFlow >= numFlows)
-      break;
-    toFlow = std::min(toFlow, numFlows);
-
-    if (toFlow < numFlows) {
-      int medianCount = 0;
-      for (int iFlow = fromFlow; iFlow < toFlow; iFlow++)
-        if ((prediction[iFlow] > 0.5) && (normalizedMeasurements[iFlow] > 0))
-          medianSet[medianCount++] = normalizedMeasurements[iFlow] / prediction[iFlow];
-
-      if (medianCount > 5) {
-        std::nth_element(medianSet, medianSet + medianCount/2, medianSet + medianCount);
-        if (medianSet[medianCount / 2] > 0)
-          latestNormalizer = medianSet[medianCount / 2];
-      }
-    }
-
-    stepMultiplicative[iStep] = latestNormalizer;
-
-    fromFlow = toFlow;
-    toFlow += stepSize;
-  }
-
-  iFlow = 0;
-  for (; (iFlow < halfStep) && (iFlow < numFlows); iFlow++) {
-    prediction[iFlow] *= stepMultiplicative[0];
-    prediction[iFlow] += stepAdditive[0];
-  }
-
-  for (int iStep = 1; iStep < numSteps; iStep++) {
-    for (int pos = 0; (pos < stepSize) && (iFlow < numFlows); pos++, iFlow++) {
-      prediction[iFlow] *= (stepMultiplicative[iStep - 1] * (stepSize - pos) + stepMultiplicative[iStep] * pos) / stepSize;
-      prediction[iFlow] += (stepAdditive[iStep - 1] * (stepSize - pos) + stepAdditive[iStep] * pos) / stepSize;
-    }
-  }
-
-  for (; iFlow < numFlows; iFlow++) {
-    prediction[iFlow] *= stepMultiplicative[numSteps - 1];
-    prediction[iFlow] += stepAdditive[numSteps - 1];
-  }
-
-}
 
 
 
