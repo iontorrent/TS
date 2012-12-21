@@ -420,6 +420,7 @@ void CommandLineOpts::GetOpts (int argc, char *argv[])
         {"beadmask-categorized",          no_argument,    &bfd_control.maskFileCategorized,   1},
         
         {"local-wells-file",    no_argument,    &sys_context.LOCAL_WELLS_FILE,  1},
+        {"no-local-wells-file",    no_argument,    &sys_context.LOCAL_WELLS_FILE,  0},
         
         {"use-beadmask",      required_argument,  NULL,       0},
         
