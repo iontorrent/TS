@@ -229,13 +229,12 @@ void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, int flow)
   my_trace.SetRawTrace(); // buffers treated as raw traces
   // populate bead traces from image file, just filling in data already saved
   my_trace.GenerateAllBeadTrace (region,my_beads,chunk, my_flow.flowBufferWritePos, regionAndTimingMatchSdat);
-
+  float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
+  float t_offset_beads = my_regions.rp.nuc_shape.sigma;
+  my_trace.RezeroBeads(time_c.time_start, t_mid_nuc-t_offset_beads, my_flow.flowBufferWritePos);
   // calculate average trace across all empty wells in a region for a flow
   // to FileLoadWorker at Image load time, should be able to go here
   emptytrace = emptyTraceTracker->GetEmptyTrace (*region);
-
-  // sanity check images are what we think
-  assert ( emptytrace->imgFrames == (int)chunk.NumFrames(region->row, region->col));
 }
 
 // Trivial fitters
@@ -244,31 +243,14 @@ void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, int flow)
 // t_offset_empty = 4.0
 void RegionalizedData::RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int fnum)
 {
-  if (doDcOffset)
-  {
-    // do these values make sense for offsets in RezeroBeads???
-    emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_beads, fnum);
-  }
-  else
-  {
-   my_trace.RezeroBeads (t_start, t_mid_nuc - t_offset_beads, fnum);
-    emptytrace->RezeroCompressedReference (my_trace.time_cp, t_start, t_mid_nuc - t_offset_beads, fnum);
-  }
+  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_beads, fnum);
+  my_trace.RezeroBeads (t_start, t_mid_nuc - t_offset_beads, fnum);
 }
 
 void RegionalizedData::RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty)
 {
-  //   my_trace.RezeroBeadsAllFlows (t_start, t_mid_nuc-t_offset_beads);
-  if (doDcOffset)
-  {
-    emptytrace->RezeroReferenceAllFlows (t_start, t_mid_nuc - t_offset_empty);
-  }
-  else
-  {
-   my_trace.RezeroBeadsAllFlows (t_start, t_mid_nuc-t_offset_beads);
-    emptytrace->RezeroCompressedReferenceAllFlows (my_trace.time_cp, t_start, t_mid_nuc - t_offset_beads);
-    //emptytrace->RezeroCompressedReferenceAllFlows (&my_trace->time_cp);
-  }
+  my_trace.RezeroBeadsAllFlows (t_start, t_mid_nuc-t_offset_beads);
+  emptytrace->RezeroReferenceAllFlows (t_start, t_mid_nuc - t_offset_empty);
 }
 
 void RegionalizedData::RezeroByCurrentTiming()

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+</head>
+<body>
+{% spaceless %}
+{% for section, items in config %}
+    <h2>{{section}}</h2>
+    <table class="table" style="width: auto; min-width: 200px;">
+        {% for key, value in items %}
+        <tr>
+            <td>{{key}}</td>
+            <td>{{value}}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% endfor %}
+{% endspaceless %}
+</body>
+</html

@@ -1,4 +1,4 @@
-<div id="modal_references_add_barcodeset" title="" class="modal modal-750 hide">
+<div id="modal_references_add_barcodeset" title="" class="modal hide" data-width="750">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">×</button>
 		<h3>Add New DNA Barcodes</h3>
@@ -40,7 +40,7 @@
 	<script type="text/javascript">
 		$('#modal_references_add_barcodeset').on('hidden', function () {
     		$('body #modal_references_add_barcodeset').remove();
-   		});	
+   		});
    		$('#upfile').click(function(e){
    			$('#modal_references_add_barcodeset_form').submit();
 		});

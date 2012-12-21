@@ -1,4 +1,4 @@
-<div id="modal_configure_report_data_mgmt_edit_pruning_config" title="" data-dynamic="true" class="modal modal-1000 hide">
+<div id="modal_configure_report_data_mgmt_edit_pruning_config" title="" class="modal container hide" data-modal-Overflow="true">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">
 			×
@@ -86,7 +86,9 @@
 										<input type="checkbox" id="id_checkField_{{forloop.counter0}}" value="{{choice_id}}" name="checkField"
 											{% spaceless %}{% for value in form.fields.checkField.initial %}
 												{% ifequal choice_id value %}checked="checked"{% endifequal %}
-											{% endfor%}{% endspaceless %}
+											{% endfor%}
+											{% if not grp.editable %} disabled="true" {% endif %}
+											{% endspaceless %}
 											rel="tooltip" title="{{choice_label}}"
 											>
 										</td>
@@ -97,7 +99,8 @@
 							</tr>
 							{% endfor %}
     					</tbody>
-    				</table>    				
+    				</table>
+    				<div class="help-block error"></div>
     				<div class="help-block">
     					Alter which rules are enabled or disabled per Pruning Group.
     				</div>
@@ -120,12 +123,14 @@
 	    						<th>Rule</th>
 	    						{% with temp.0 as rTemp %}	
 									{% for choice_id, choice_label in rTemp.fields.remField.widget.choices %}
-		    						<th><input type="checkbox" id="id_remField_{{forloop.counter0}}" value="{{choice_id}}" name="remField" rel="tooltip" title="Remove {{choice_label}}"></th>
+		    						<th><input type="checkbox" id="id_remField_{{forloop.counter0}}" value="{{choice_id}}" name="remField" rel="tooltip" title="Remove {{choice_label}}"
+		    							{% spaceless %}{% if choice_id in rulesUsedByReadonlyGroups %} disabled="true" {% endif %}{% endspaceless %}></th>
 									{% endfor%}
 								{% endwith %}
 	    					</tr>
     					</tbody>
-    				</table>    				
+    				</table>
+    				<div class="help-block error"></div>
     				<div class="help-block">
     					<p>Select the rules you wish to remove.<p> 
     					<p class="alert">This will also remove any rules that are presently active.</p> 
@@ -136,6 +141,7 @@
     			<label class="control-label" for="">Add New Rule</label>
     			<div class="controls">
     				{{ temp.0.newField }}
+    				<div class="help-block error"></div>
     				<div class="help-block">
     					Adds a new rule, an available pattern.  
     					<br />
@@ -162,45 +168,6 @@
         <a id="save" class="btn btn-primary">Save</a>
 	</div>
 <script>
-	$('#modal_configure_report_data_mgmt_edit_pruning_config').on('hidden', function() {
-		$('body #modal_configure_report_data_mgmt_edit_pruning_config').remove();
-	});
-</script>
-<script>
-$(document).ready(function () {
-	tb.toggleContent();
-	$('#modal_configure_report_data_mgmt_edit_pruning_config_form').uniform({
-		holder_class : 'control-group'
-		, msg_selector: 'div.help-block'
-		, error_class : 'alert alert-error'
-	});	
-	
-	$('#modal_configure_report_data_mgmt_edit_pruning_config_form').submit(function(){
-		if (!isValid()) {
-			$("#modal_configure_report_data_mgmt_edit_pruning_config .modal-body").animate({
-				scrollTop : 0
-			}, "slow");
-			$(".error").effect("highlight", {
-				"color" : "#F20C18"
-			}, 2000);
-			return false;
-		}
-		return true;
-	});	
-	$('#save').click(function(e){
-		e.preventDefault()
-		console.debug($('#modal_configure_report_data_mgmt_edit_pruning_config_form').serializeArray())
-		$('#modal_configure_report_data_mgmt_edit_pruning_config_form').submit()
-	});
-	
-	function isValid() {
-		var form = $('#modal_configure_report_data_mgmt_edit_pruning_config_form');
-		var settings = form.uniform.defaults;
-	    form.find(settings.field_selector).each(function () {
-	        $(this).blur();
-	    });
-		return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists();
-	}	
-});
+    TB.configure.reportdatamgmt.modal_edit_pruning_config.init();
 </script>			
 </div>

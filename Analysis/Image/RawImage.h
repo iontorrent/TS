@@ -15,7 +15,7 @@ struct RawImage
   int interlaceType;   // 0 is not interlaced, 1 and up are various interlace schemes
   int frameStride;   // rows * cols
   short *image;    // raw image (loaded in as unsigned short, and byte-swapped, masked with 0x3fff, and promoted to short)
-  int *timestamps;
+  int *timestamps; // milliseconds range over which the data is averaged with 0 implied for first data point. i.e. if 66,599 then 1st datapoint is avg over 0-66 millisec & 2nd is average over 67-599 millisec.
   short *compImage;
   int *compTimestamp;
   int baseFrameRate;

@@ -29,10 +29,11 @@ class RegionalizedData;
 class extern_links
 {
   public:
+
   // mask that indicate where beads/pinned wells are located
   // shared across threads, but pinning is only up to flow 0
   Mask        *bfmask;  // global information on bead type and layout
-
+  int16_t *washout_flow;
   // array to keep track of flows for which empty wells are unpinned
   // shared across threads
   PinnedInFlow *pinnedInFlow;  // not regional, set when creating this object
@@ -50,12 +51,14 @@ class extern_links
     pinnedInFlow = NULL;
     rawWells = NULL;
     mPtrs = NULL;
+    washout_flow = NULL;
   };
 
-  void FillExternalLinks(Mask *_bfmask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells){
+  void FillExternalLinks(Mask *_bfmask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, int16_t *_washout_flow){
     rawWells = _rawWells;
     pinnedInFlow = _pinnedInFlow;
     bfmask = _bfmask;
+    washout_flow = _washout_flow;
   };
   void SetHdf5Pointer(BkgDataPointers *_my_hdf5)
   {
@@ -75,6 +78,7 @@ class extern_links
     //dirName = NULL;
     mPtrs = NULL;
   };
+
   void WriteBeadParameterstoDataCubes (int iFlowBuffer, bool last, Region *region, BeadTracker &my_beads, flow_buffer_info &my_flow, BkgTrace &my_trace);
   void WriteOneBeadToDataCubes(bead_params &p, int flow, int iFlowBuffer, int last, int ibd, Region *region, BkgTrace &my_trace);
   void WriteRegionParametersToDataCubes(RegionalizedData *my_region_data);

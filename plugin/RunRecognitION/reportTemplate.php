@@ -23,7 +23,6 @@
     //-->
     </script>
 <?php
-$path = dirname($_SERVER['SCRIPT_NAME']);
-echo "<iframe id='leaderboard_frame' src='$path/leaderboard.html' width='100%' frameborder='0' onLoad='calcHeight();'></iframe>";
+echo "<iframe id='leaderboard_frame' src='./leaderboard.html' width='100%' frameborder='0' onLoad='calcHeight();'></iframe>";
 ?>
 </div>

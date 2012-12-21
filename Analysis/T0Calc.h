@@ -33,7 +33,7 @@ public:
 */
 class T0Calc {
 
- public:
+public:
 
   T0Calc() {
     mMask = NULL;
@@ -44,6 +44,9 @@ class T0Calc {
     mMaxSecondHingeSlope = 0;
     mMinSecondHingeSlope = 0;
     mAvgNth = 1;
+    mMinSdThresh = 5.0f;
+    mPixHigh = ((1<<12)-1)<<2;
+    mPixLow = 0;
   }
 
   void SetTimeStamps(int *timestamps, int size) {
@@ -158,11 +161,15 @@ class T0Calc {
     mFinder.SetWindowSize(mWindowSize);
     mFinder.SetFirstSlopeRange(mMinFirstHingeSlope, mMaxFirstHingeSlope);
     mFinder.SetSecondSlopeRange(mMinSecondHingeSlope, mMaxSecondHingeSlope);
+    int tooFew = 0;
+    int enough = 0;
     for (size_t bIx = 0; bIx < numBin; bIx++) {
       std::pair<size_t, std::vector<float> > &bin = mRegionSum.GetItem(bIx);
       if (bin.first < 20) {
+        tooFew++;
         continue;
       }
+      enough++;
       for (size_t fIx = 0; fIx < bin.second.size(); fIx++) {
         bin.second[fIx] = bin.second[fIx] / bin.first;
       }
@@ -170,6 +177,7 @@ class T0Calc {
       float &t0 = mT0.GetItem(bIx);
       T0Calc::CalcT0(mFinder, bin.second, mTimeStamps, prior, t0);
     }
+    //    std::cout << "T0 Fitting: " << enough << " enough " << tooFew << " too few good wells." << std::endl;
   }
   
   /** Sum up the traces for the regions. */
@@ -183,17 +191,39 @@ class T0Calc {
     }
   }
 
+  template <typename shortvec> bool CheckTrace(shortvec &data, 
+                                               size_t frameStep,
+                                               size_t wellIx) {
+    bool ok = true;
+    SampleStats<float,int> stats;
+    for (size_t frameIx = 0; frameIx < mFrame; frameIx++) {
+      int val = data[frameStep * frameIx + wellIx];
+      if (val <= mPixLow || val >= mPixHigh) {
+        ok = false;
+        break;
+      }
+      stats.AddValue(val);
+    }
+    ok = (stats.GetSD() > mMinSdThresh);
+    return ok;
+  }
+                                                 
+
   /** Sum up the traces for this region. */
   template <typename shortvec> void CalcSumTrace(shortvec &data, 
-		    int rowStart, int rowEnd,
-		    int colStart, int colEnd,
-                    std::pair<size_t, std::vector<float> > &bin) {
+                                                 int rowStart, int rowEnd,
+                                                 int colStart, int colEnd,
+                                                 std::pair<size_t, std::vector<float> > &bin) {
     size_t frameStep = mRow * mCol;
     int notOk = 0;
     for (int row = rowStart; row < rowEnd; row++) {
       for (int col = colStart; col < colEnd; col++) {
         int wIx = row * mCol + col;
-        if (isOk(wIx)) {
+        bool ok = isOk(wIx);
+        if (ok && mMask == NULL) {
+          ok = CheckTrace(data,frameStep, wIx);
+        }
+        if (ok) {
           bin.first++;
           for (size_t frameIx = 0; frameIx < mFrame; frameIx++) {
             bin.second[frameIx] += (float)(data[frameStep * frameIx + wIx]) - data[wIx];
@@ -204,67 +234,8 @@ class T0Calc {
         }
       }
     }
-    /* if (notOk > 0 || bin.first > 0) { */
-    /*   int ok = bin.first; */
-    /*   cout << "Ok: " << bin.first << "not ok: " << notOk << endl; */
-    /*   if (ok == notOk) { */
-    /*     cout << "weird." << endl; */
-    /*   } */
-      
-    /* } */
-    /* if(bin.first > 0) { */
-    /*   cout << rowStart << "\t" << rowEnd << "\t" << colStart << "\t" << colEnd; */
-    /*   for (size_t f =0; f < mFrame; f++) { */
-    /*     cout << "\t" << bin.second[f]; */
-    /*   } */
-    /*   cout << endl; */
-    /*   bin.first = -1 * bin.first; */
-    /*   bin.first = -1 * bin.first; */
-    /* } */
+    //    std::cout << "For: (" << rowStart << "," << colStart << ") not ok is: " << notOk << std::endl;
   }
-/*     int frameIx = 0; */
-/*     /\*  */
-/*        Loop through first frame to count wells in each region. This */
-/*        loop is optimized to loop through the memory in order of the */
-/*        frames in memory while minimizing the number of lookups into */
-/*        the regionSum grid (once every mColStep) */
-/*     *\/ */
-/*     for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) { */
-/*       for (int colIx = colStart; colIx < (int)colEnd; colIx+= mColStep) { */
-/*         int wIx = rowIx * mCol + colIx; */
-/* 	int end = min(mCol, mColStep + colIx);  */
-/* 	std::pair<size_t, std::vector<float> > &bin = mRegionSum.GetItemByRowCol(rowIx, colIx); */
-/* 	for (int cIx = colIx; cIx < end; cIx++) { */
-/* k	  if (isOk(wIx)) { */
-/* 	    bin.first++; */
-/* 	    bin.second[frameIx] += (float)data[wIx] - data[wIx]; */
-/*           } */
-/* 	  wIx++; */
-/* 	} */
-/*       } */
-/*     } */
-
-/*     /\* Loop through rest of the frames. *\/ */
-/*     for (int frameIx = 1; frameIx < (int)mFrame; frameIx++) { */
-/*       for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) { */
-/*         for (int colIx = colStart; colIx < (int)colEnd; colIx+= mColStep) { */
-/*           int fwIx = rowIx * mCol + colIx; */
-/*           if (fwIx % mAvgNth == 0) { */
-/*             int wIx = fwIx + frameIx * mRow * mCol; */
-/*             int end = min(mCol, mColStep + colIx);  */
-/*             std::pair<size_t, std::vector<float> > &bin = mRegionSum.GetItemByRowCol(rowIx, colIx); */
-/*             for (int cIx = colIx; cIx < end; cIx++) { */
-/*               if (isOk(fwIx)) { */
-/*                 bin.second[frameIx] += (float) data[wIx] - data[fwIx]; */
-/*               } */
-/*               fwIx++; */
-/*               wIx++; */
-/*             } */
-/* 	  } */
-/* 	} */
-/*       } */
-/*     } */
-/*  } */
 
   /** Write out our fits and average trace as a text file if requested. */
   void WriteResults(std::ostream &out) {
@@ -382,105 +353,113 @@ class T0Calc {
     return mT0.GetBinCoords(regionIdx, rowStart, rowEnd, colStart, colEnd);
   }
 
-  void FillInT0Prior(GridMesh<T0Prior> &priorMesh, int preMillis, int postMillis, float weight) {
+  void FillInT0Prior(GridMesh<T0Prior> &priorMesh, int preMillis, int postMillis, float weight, int hardEnd=-1) {
     priorMesh.Init(mRow, mCol, mRowStep, mColStep);
     assert(priorMesh.GetNumBin() == mT0.GetNumBin());
     for (size_t bIx = 0; bIx < mT0.GetNumBin(); bIx++) {
-      T0Prior &prior = priorMesh.GetItem(bIx);
-      float t0 = GetT0(bIx);
-      prior.mT0Weight = 0.0f;
-      prior.mTimeStart = 0;
-      prior.mTimeEnd = std::numeric_limits<size_t>::max();
-      prior.mT0Prior = -1.0f;
-      if (t0 > 0) {
-        prior.mTimeStart = max(t0 - preMillis, (float) prior.mTimeStart);
-        prior.mTimeEnd = min(t0 + preMillis, (float) prior.mTimeEnd);
-        prior.mT0Prior = t0;
-        prior.mT0Weight = weight;
+      T0Prior &mprior = priorMesh.GetItem(bIx);
+      T0Prior &prior = mT0Prior.GetItem(bIx);
+      prior = mprior;
+      if (hardEnd > 0) {
+        prior.mTimeEnd = min((size_t)hardEnd, prior.mTimeEnd);
       }
+      else {
+        prior.mTimeEnd = std::numeric_limits<size_t>::max();
+      }
+      // if (t0 > 0) {
+      //   prior.mTimeStart = max(t0 - preMillis, (float) prior.mTimeStart);
+      //   prior.mTimeEnd = min(t0 + preMillis, (float) prior.mTimeEnd);
+      //   prior.mT0Prior = t0;
+      //   prior.mT0Weight = weight;
+      // }
+    }
+  }
+
+  void SetGlobalT0Prior(T0Prior &prior) {
+    for (size_t bIx = 0; bIx < mT0Prior.GetNumBin(); bIx++) {
+      T0Prior &p = mT0Prior.GetItem(bIx);
+      p = prior;
     }
   }
 
   void SetT0Prior(GridMesh<T0Prior> &prior) { mT0Prior = prior; }
 
-  template <typename ShortVec> void ComputeT0(ShortVec& img)
-  {
+  template <typename ShortVec> void ComputeT0(ShortVec& img) {
     size_t numBin = mT0.GetNumBin();
-
+      
     int rowStart, rowEnd, colStart, colEnd;
     size_t frameStep = mRow * mCol;
     //std::vector<bool> badWells(frameStep, false); //frameStep is also the number of wells
+      
+    for (size_t bin = 0; bin < numBin; ++bin) {
+      size_t numWells;
+      std::vector<float> averageTrace(mFrame);
+      std::set<size_t> badWells;
+      //int numBadWells = 0;
+      long firstFrameTotal = 0;
 
-    for (size_t bin = 0; bin < numBin; ++bin)
-    {
-        size_t numWells;
-        std::vector<float> averageTrace(mFrame);
-        std::set<size_t> badWells;
-        //int numBadWells = 0;
-        long firstFrameTotal = 0;
+      mT0.GetBinCoords(bin, rowStart, rowEnd, colStart, colEnd);
+      int regionSize = ((rowEnd-rowStart)*(colEnd-colStart));
 
-        mT0.GetBinCoords(bin, rowStart, rowEnd, colStart, colEnd);
-        int regionSize = ((rowEnd-rowStart)*(colEnd-colStart));
-
-        //first loop is a special case (have to normalize averageTrace vector and tally good wells
-        for (int col = colStart; col < colEnd; ++col)
+      //first loop is a special case (have to normalize averageTrace vector and tally good wells
+      for (int col = colStart; col < colEnd; ++col)
         {
-            for (int row = rowStart; row < rowEnd; ++row)
+          for (int row = rowStart; row < rowEnd; ++row)
             {
-                size_t well = (row * mCol) + col;
+              size_t well = (row * mCol) + col;
 
-                if (!isOk(well))
+              if (!isOk(well))
                 {
-                    badWells.insert(well); //if the well is bad, remember to ignore it in the future
-                    //badWells[well] = true;
-                    //++numBadWells;
+                  badWells.insert(well); //if the well is bad, remember to ignore it in the future
+                  //badWells[well] = true;
+                  //++numBadWells;
                 }
-                else
+              else
                 {
-                    firstFrameTotal += img[well];
+                  firstFrameTotal += img[well];
                 }
             }
         }
-        numWells = regionSize - badWells.size(); //the total number of good wells is the number in the region minus the bad ones
-        //numWells = regionSize - numBadWells;
-        averageTrace[0] = 0; //subtracting the first frame from itself always results in zero
+      numWells = regionSize - badWells.size(); //the total number of good wells is the number in the region minus the bad ones
+      //numWells = regionSize - numBadWells;
+      averageTrace[0] = 0; //subtracting the first frame from itself always results in zero
 
-        //std::cout << "Bin " << bin << " has " << numWells << " live wells of " << regionSize << " total: " << firstFrameTotal << std::endl;
-        if (numWells < 10) continue; //dead region...let's not waste our time
+      //std::cout << "Bin " << bin << " has " << numWells << " live wells of " << regionSize << " total: " << firstFrameTotal << std::endl;
+      if (numWells < 10) continue; //dead region...let's not waste our time
 
 
-        //compute an average trace from all the wells
-        std::set<size_t>::iterator badWellsEnd = badWells.end();
-        //std::cout << "Trace: ";
-        for (size_t frame = 1; frame < mFrame; ++frame)
+      //compute an average trace from all the wells
+      std::set<size_t>::iterator badWellsEnd = badWells.end();
+      //std::cout << "Trace: ";
+      for (size_t frame = 1; frame < mFrame; ++frame)
         {
-            long frameTotal = 0;
-            for (int col = colStart; col < colEnd; ++col)
+          long frameTotal = 0;
+          for (int col = colStart; col < colEnd; ++col)
             {
-                for (int row = rowStart; row < rowEnd; ++row)
+              for (int row = rowStart; row < rowEnd; ++row)
                 {
-                    size_t well = (row* mCol) + col;
-                    if (badWells.find(well) == badWellsEnd)
+                  size_t well = (row* mCol) + col;
+                  if (badWells.find(well) == badWellsEnd)
                     //if (!badWells[well])
                     {
-                        frameTotal += img[(frameStep * frame) + well];
+                      frameTotal += img[(frameStep * frame) + well];
                     }
                 }
             }
 
-            averageTrace[frame] = (float)(frameTotal - firstFrameTotal) / (float)numWells;
-            //std::cout << averageTrace[frame] << ":" << frameTotal << " ";
+          averageTrace[frame] = (float)(frameTotal - firstFrameTotal) / (float)numWells;
+          //std::cout << averageTrace[frame] << ":" << frameTotal << " ";
         }
-        //std::cout << std::endl;
+      //std::cout << std::endl;
 
-        //use the average trace to get a T0 and slope estimate
-        T0Prior& prior = mT0Prior.GetItem(bin);
-        float& t0 = mT0.GetItem(bin);
-        T0Finder finder;
-        finder.SetWindowSize(mWindowSize);
-        finder.SetFirstSlopeRange(mMinFirstHingeSlope, mMaxFirstHingeSlope);
-        finder.SetSecondSlopeRange(mMinSecondHingeSlope, mMaxSecondHingeSlope);
-        T0Calc::CalcT0(finder, averageTrace, mTimeStamps, prior, t0);
+      //use the average trace to get a T0 and slope estimate
+      T0Prior& prior = mT0Prior.GetItem(bin);
+      float& t0 = mT0.GetItem(bin);
+      T0Finder finder;
+      finder.SetWindowSize(mWindowSize);
+      finder.SetFirstSlopeRange(mMinFirstHingeSlope, mMaxFirstHingeSlope);
+      finder.SetSecondSlopeRange(mMinSecondHingeSlope, mMaxSecondHingeSlope);
+      T0Calc::CalcT0(finder, averageTrace, mTimeStamps, prior, t0);
     }
   }
 
@@ -494,7 +473,7 @@ class T0Calc {
     //std::vector<bool> badWells(frameStep, false); //frameStep is also the number of wells
 
     for (size_t bin = 0; bin < numBin; ++bin)
-    {
+      {
         size_t numWells;
         std::vector<float> averageTrace(mFrame);
         std::set<size_t> badWells;
@@ -506,23 +485,23 @@ class T0Calc {
 
         //first loop is a special case (have to normalize averageTrace vector and tally good wells
         for (int col = colStart; col < colEnd; ++col)
-        {
+          {
             for (int row = rowStart; row < rowEnd; ++row)
-            {
+              {
                 size_t well = (row * mCol) + col;
 
                 if (!isOk(well))
-                {
+                  {
                     badWells.insert(well); //if the well is bad, remember to ignore it in the future
                     //badWells[well] = true;
                     //++numBadWells;
-                }
+                  }
                 else
-                {
+                  {
                     firstFrameTotal += img[well];
-                }
-            }
-        }
+                  }
+              }
+          }
         numWells = regionSize - badWells.size(); //the total number of good wells is the number in the region minus the bad ones
         //numWells = regionSize - numBadWells;
         averageTrace[0] = 0; //subtracting the first frame from itself always results in zero
@@ -533,23 +512,23 @@ class T0Calc {
         //compute an average trace from all the wells
         std::set<size_t>::iterator badWellsEnd = badWells.end();
         for (size_t frame = 1; frame < mFrame; ++frame)
-        {
+          {
             long frameTotal = 0;
             for (int col = colStart; col < colEnd; ++col)
-            {
+              {
                 for (int row = rowStart; row < rowEnd; ++row)
-                {
+                  {
                     size_t well = (row * mCol) + col;
                     if (badWells.find(well) == badWellsEnd)
-                    //if (!badWells[well])
-                    {
+                      //if (!badWells[well])
+                      {
                         frameTotal += img[(frameStep * frame) + well];
-                    }
-                }
-            }
+                      }
+                  }
+              }
 
             averageTrace[frame] = (float)(frameTotal - firstFrameTotal) / (float)numWells;
-        }
+          }
 
         //use the average trace to get a T0 and slope estimate
         T0Prior& prior = mT0Prior.GetItem(bin);
@@ -567,59 +546,59 @@ class T0Calc {
         first = min(first, mFrame);
         second = min(second, mFrame);
         mSlope.GetItem(bin) = (averageTrace[second] - averageTrace[first])/(mTimeStamps[second] - mTimeStamps[first]);
-    }
+      }
   }
 
   void EstimateSigma(int neighbors, GridMesh<SigmaEst>& sigmaTMid, SigmaTMidNucEstimation& sigmaEst)
   {
-      std::vector<double> dist(7);
-      std::vector<float*> values;
-      int badCount = 0;
-      for (size_t bin = 0; bin < mSlope.GetNumBin(); ++bin)
+    std::vector<double> dist(7);
+    std::vector<float*> values;
+    int badCount = 0;
+    for (size_t bin = 0; bin < mSlope.GetNumBin(); ++bin)
       {
-          int rowStart, rowEnd, colStart, colEnd;
-          float smooth = mSlope.GetItem(bin);
+        int rowStart, rowEnd, colStart, colEnd;
+        float smooth = mSlope.GetItem(bin);
 
-          mSlope.GetBinCoords(bin, rowStart, rowEnd, colStart, colEnd);
+        mSlope.GetBinCoords(bin, rowStart, rowEnd, colStart, colEnd);
 
-          int midRow = (rowStart + rowEnd) / 2;
-          int midCol = (colStart + colEnd) / 2;
+        int midRow = (rowStart + rowEnd) / 2;
+        int midCol = (colStart + colEnd) / 2;
 
-          mSlope.GetClosestNeighbors(midRow, midCol, neighbors, dist, values);
+        mSlope.GetClosestNeighbors(midRow, midCol, neighbors, dist, values);
 
-          double distWeight = 0;
-          double startX = 0;
-          for (size_t i = 0; i < values.size(); ++i)
+        double distWeight = 0;
+        double startX = 0;
+        for (size_t i = 0; i < values.size(); ++i)
           {
-              double w = Traces::WeightDist(dist[i]);
-              distWeight += w;
-              startX += w * (*(values[i]));
+            double w = Traces::WeightDist(dist[i]);
+            distWeight += w;
+            startX += w * (*(values[i]));
           }
 
-          if (distWeight > 0 && startX >= 0)
+        if (distWeight > 0 && startX >= 0)
           {
-              smooth = startX / distWeight;
+            smooth = startX / distWeight;
           }
 
-          //armed with a smoothed slope, we can now estimate sigma
-          float t0Est = GetT0(bin);
-          SigmaEst& est = sigmaTMid.GetItem(bin);
-          est.mSigma = 0;
-          est.mTMidNuc = 0;
-          if (t0Est > 0 && smooth > 0)
+        //armed with a smoothed slope, we can now estimate sigma
+        float t0Est = GetT0(bin);
+        SigmaEst& est = sigmaTMid.GetItem(bin);
+        est.mSigma = 0;
+        est.mTMidNuc = 0;
+        if (t0Est > 0 && smooth > 0)
           {
-              sigmaEst.Predict(t0Est, smooth, est.mSigma, est.mTMidNuc);
+            sigmaEst.Predict(t0Est, smooth, est.mSigma, est.mTMidNuc);
           }
-          else
+        else
           {
-	    badCount++;
-	    //              std::cout << "Couldn't estimate sigma for bin: " << bin << std::endl;
+            badCount++;
+            //              std::cout << "Couldn't estimate sigma for bin: " << bin << std::endl;
           }
       }
-      std::cout << "Couldn't estimate sigma for: " << badCount << " of " << mSlope.GetNumBin() << " bins." << std::endl;
+    std::cout << "Couldn't estimate sigma for: " << badCount << " of " << mSlope.GetNumBin() << " bins." << std::endl;
   }
 
- private:
+private:
   /** Pointer to the mask characterizing wells. */
   Mask *mMask;
   /** Dimensions of chip. */ 
@@ -644,7 +623,9 @@ class T0Calc {
   float mMinFirstHingeSlope;
   float mMaxSecondHingeSlope;
   float mMinSecondHingeSlope;
-
+  float mMinSdThresh;
+  int mPixHigh;
+  int mPixLow;
 };
 
 

@@ -5,8 +5,6 @@
 
 # LIMITATION, can process only multiple 0f 20 flows
 
-log_memory_usage = True
-
 import os
 import hashlib
 import shutil
@@ -29,17 +27,6 @@ from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
 from ion.utils import explogparser
 
-if log_memory_usage:
-    try:
-        from guppy import hpy
-        import gc
-    except:
-        log_memory_usage = False
-        pass
-
-results = "/results"
-analysisresults = "/results_ssd/analysisresults"
-config_file = "/software/config/oia.config"
 
 import logging
 import logging.handlers
@@ -195,26 +182,13 @@ def get_run_list(config):
 
     tmp_list = []
 
-    tmp_run_list = fnmatch.filter(os.listdir(results), "R_*")
+    tmp_run_list = fnmatch.filter(os.listdir(config.get('global','results')), "R_*")
     for run_name in tmp_run_list:
-        run = Run(results,run_name,config)
+        run = Run(run_name,config)
         if run:
             tmp_list.append(run)
 
     return tmp_list
-
-
-def get_run_dirs():
-
-    run_dirs = []
-
-    try:
-        run_dirs = fnmatch.filter(os.listdir(results), "R_*")
-    except:
-        pass
-
-    return run_dirs
-
 
 def print_config(config,logger):
     DEBUG = True
@@ -227,29 +201,19 @@ def print_config(config,logger):
             for option in options:
                 logger.info(option + ": " + config.get(section,option))
 
-    nb_max_jobs = int(config.get('global','nb_max_jobs'))
-    logger.info('nb_max_jobs %s' % nb_max_jobs)
-
-    nb_max_analysis_jobs = int(config.get('global','nb_max_analysis_jobs'))
-    logger.info('nb_max_analysis_jobs %s' % nb_max_analysis_jobs)
-
-    nb_min_beadfind_jobs = int(config.get('global','nb_min_beadfind_jobs'))
-    logger.info('nb_min_beadfind_jobs %s' % nb_min_beadfind_jobs)
-
-    block_to_process_start = int(config.get('global','block_to_process_start'))
-    block_to_process_end = int(config.get('global','block_to_process_end'))
-
 class Run:
-    def __init__(self,results,name,config):
+    def __init__(self,name,config):
 
         self.name = name
-        self.dat_path = os.path.join(results, name)
+        self.dat_path = os.path.join(config.get('global','results'), name)
         self.sigproc_results_path = os.path.join(self.dat_path, "onboard_results", "sigproc_results")
         self.status = 'new'
 
-        explog_file = os.path.join(results, name, "explog.txt")
-        if os.path.exists(explog_file):
+        explog_file = os.path.join(self.dat_path, "explog.txt")
+        if not os.path.exists(explog_file):
+            raise Exception("%s doesn't exist" % explog_file)
 
+        try:
             self.explog_file = explog_file
 
             # parse explog.txt
@@ -258,24 +222,21 @@ class Run:
 
             self.explogdict = parse_log(explogtext)
             self.exp_flows = int(self.explogdict["flows"])
-            self.exp_oninstranalysis = 'yes' in self.explogdict['oninstranalysis']#yes, no
-            self.exp_usesynchdats = 'yes' in self.explogdict['use_synchdats']#yes, no
-        else:
-            self.explogdict = None
-            self.explog_file = None
-            self.exp_flows = None
-            self.exp_oninstranalysis = None
-            self.exp_usesynchdats = None
+            self.exp_oninstranalysis = 'yes' in self.explogdict['oninstranalysis'] #yes, no
+            self.exp_usesynchdats = 'yes' in self.explogdict['use_synchdats'] #yes, no
+        except:
+            logger.error(traceback.format_exc())
+            raise
+
 
         self.blocks = []
-        if self.explogdict:
-            try:
-                self.discover_blocks(0,95)#TODO block_to_process_start,block_to_process_end)
-            except:
-                logger.error(traceback.format_exc())
-                pass
-        else:
-             logger.error(traceback.format_exc())
+        try:
+            self.block_to_process_start = int(config.get('global','block_to_process_start'))
+            self.block_to_process_end = int(config.get('global','block_to_process_end'))
+            self.discover_blocks()
+        except:
+            logger.error(traceback.format_exc())
+            raise
 
             
     def aborted(self):
@@ -312,10 +273,15 @@ class Run:
         return s
 
 
-    def killAnalysis(self, skipSSD=True):
+    def killAnalysis(self, skip_nb_flows=-1, skipSSD=False, skipSeparator=False):
         for block in self.blocks:
             try:
                 if block.storage == "SSD" and skipSSD:
+                    continue
+                if 'justBeadFind' in block.command and skipSeparator:
+                    continue
+                # ignore first flowchunk stored on SSD
+                if block.flow_end == skip_nb_flows-1:
                     continue
                 if block.status == 'processing':
                     logger.debug("kill pid:%s, %s" % (block.process.pid, block))
@@ -328,17 +294,18 @@ class Run:
         block_dir = '%s_%s' % (self.explogdict[block_name].split(',')[0], self.explogdict[block_name].split(',')[1].strip())
         return block_dir
 
-    def discover_blocks(self,block_to_process_start,block_to_process_end):
+    def discover_blocks(self):
 
-        for i in range(block_to_process_start,block_to_process_end+1):
+        for i in range(self.block_to_process_start,self.block_to_process_end+1):
 
             block_name = 'block_%03d' % i
             block_dir = self.block_name_to_block_dir(block_name)
-            storage = config.get('blocks','block_%03d' % i).split(',')[0]
+            storage = config.get('blocks',block_name).split(',')[0]
             full_block_dat_path = os.path.join(self.dat_path, block_dir)
             full_block_sigproc_results_path = os.path.join(self.sigproc_results_path, "block_"+block_dir)
 
             if os.path.exists(full_block_sigproc_results_path):
+                # TODO transferred?
                 block_status = "done"
             else:
                 # default entry status
@@ -361,6 +328,12 @@ class Run:
 
             self.blocks.append(newblock)
 
+    def update_status_file(self):
+        try:
+            with open(os.path.join(self.dat_path,'oia_status.txt'),'w') as f:
+                f.write(str(self))
+        except:
+            logger.error(traceback.format_exc())
 
     def __str__(self):
         s  = "    run:" + self.name
@@ -430,11 +403,8 @@ class App():
         self.nb_max_analysis_jobs = int(config.get('global','nb_max_analysis_jobs'))
         logger.info('nb_max_analysis_jobs %s' % self.nb_max_analysis_jobs)
 
-        self.nb_min_beadfind_jobs = int(config.get('global','nb_min_beadfind_jobs'))
-        logger.info('nb_min_beadfind_jobs %s' % self.nb_min_beadfind_jobs)
-
-        self.block_to_process_start = int(config.get('global','block_to_process_start'))
-        self.block_to_process_end = int(config.get('global','block_to_process_end'))
+        self.nb_max_beadfind_jobs = int(config.get('global','nb_max_beadfind_jobs'))
+        logger.info('nb_max_beadfind_jobs %s' % self.nb_max_beadfind_jobs)
 
         self.flowblocks =  int(config.get('global','flowblocks'))
 
@@ -448,6 +418,18 @@ class App():
     def printStatus(self):
         logger.debug("\n***** STATUS: blocks to process: %d *****" % len(self.blocks_to_process))
 
+
+    def get_run_dirs(self):
+
+        run_dirs = []
+
+        try:
+            run_dirs = fnmatch.filter(os.listdir(config.get('global','results')), "R_*")
+        except:
+            pass
+
+        return run_dirs
+
     def get_next_available_job(self,instr_busy,config):
 
         logger.debug('get_next_available_job')
@@ -460,10 +442,9 @@ class App():
             beadfind_request = False
             analysis_request = False
 
-        #TODO, starts too many justbeadfind jobs
-        #if self.pool.beadfind_counter >= self.nb_min_beadfind_jobs:
-        #    logger.info('max beadfind jobs limit reached')
-        #    beadfind_request = False
+        if self.pool.beadfind_counter >= self.nb_max_beadfind_jobs:
+            logger.info('max beadfind jobs limit reached')
+            beadfind_request = False
 
         if self.pool.analysis_counter >= self.nb_max_analysis_jobs:
             logger.debug('max analysis jobs limit reached')
@@ -473,48 +454,58 @@ class App():
 
         anablock = None
 
+        # Separator
         for block in self.blocks_to_process:
 
             if block.status != 'idle':
                 continue
 
-            if instr_busy and block.storage == 'HD':
-                continue
-
-            # Separator
             if block.successful_processed == -1:
                 if beadfind_request:
                     block.command = getSeparatorCommand(config,block)
                     anablock=block
                     break
-                else:
+
+        # Analysis
+        if not anablock:
+            for block in self.blocks_to_process:
+
+                if block.status != 'idle':
                     continue
-            # Analysis
-            else:
-                if analysis_request:
-                    new_flow_end = -1
-                    # TODO test acquisition complete:        
-                    # check for last flow
-                    if os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (block.flows_total-1) )):
-                        new_flow_end = block.flows_total-1
-                    else:
-                        test_flow_end = block.successful_processed-1
-                        while True:
-                            test_flow_end += self.flowblocks
-                            logger.debug('test new flowend ' + block.name + " " + str(test_flow_end))
-                            if not os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (test_flow_end) )):
-                                break
-                            new_flow_end = test_flow_end
-                        # not enough flows for chunk
-                        if new_flow_end <= block.successful_processed-1:
+
+                if block.successful_processed != -1:
+                    if analysis_request:
+                        if instr_busy and block.storage == 'HD' and block.successful_processed >= self.flowblocks:
+                            continue
+                        new_flow_end = -1
+                        # TODO test acquisition complete:        
+                        # check for last flow
+                        if os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (block.flows_total-1) )):
+                            new_flow_end = block.flows_total-1
+                        # check for first flowchuck
+                        elif os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (self.flowblocks-1) )) and block.successful_processed == 0:
+                            new_flow_end = self.flowblocks-1
+                        else:
+                            test_flow_end = block.successful_processed-1
+                            while True:
+                                test_flow_end += self.flowblocks
+                                logger.debug('test new flowend ' + block.name + " " + str(test_flow_end))
+                                if not os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (test_flow_end) )):
+                                    break
+                                new_flow_end = test_flow_end
+                            # not enough flows for chunk
+                            if new_flow_end <= block.successful_processed-1:
+                                continue
+                        # don't process HD blocks greater than self.flowblocks
+                        if instr_busy and block.storage == 'HD' and new_flow_end > self.flowblocks:
                             continue
 
-                    # always reentrant because separator runs independently
-                    block.flow_start = block.successful_processed
-                    block.flow_end = new_flow_end
-                    block.command = getAnalysisCommand(config, block, reentrant=True)
-                    anablock=block
-                    break
+                        # always reentrant because separator runs independently
+                        block.flow_start = block.successful_processed
+                        block.flow_end = new_flow_end
+                        block.command = getAnalysisCommand(config, block, reentrant=True)
+                        anablock=block
+                        break
 
         return anablock
 
@@ -525,11 +516,14 @@ class App():
         while True:
 
             if log_memory_usage:
-                logger.info("GC count: %s" % str(gc.get_count()))
-                h = hpy()
-                logger.debug(str(h.heap()))
+                try:
+                    logger.info("GC count: %s" % str(gc.get_count()))
+                    h = hpy()
+                    logger.debug(str(h.heap()))
+                except:
+                    logger.error(traceback.format_exc())
 
-            all_run_dirs = get_run_dirs()
+            all_run_dirs = self.get_run_dirs()
             logger.debug('RUNS DIRECTORIES: %s' % all_run_dirs)
 
 
@@ -539,7 +533,7 @@ class App():
                 # abort all HD jobs if run in progress
                 for run in self.runs_in_process:
                     logger.info('kill %s' % run.name)
-                    run.killAnalysis(skipSSD=True)
+                    run.killAnalysis(skip_nb_flows=self.flowblocks,skipSSD=True,skipSeparator=True)
                     #TODO set correct block status
 
 
@@ -550,7 +544,7 @@ class App():
             for run in self.runs_in_process:
                 if run.aborted():
                     logger.info('run aborted %s' % run.name)
-                    run.killAnalysis(skipSSD=False)
+                    run.killAnalysis(skip_nb_flows=-1,skipSSD=False,skipSeparator=False)
                     for block in run.blocks:
                         if block in self.blocks_to_process:
                             self.blocks_to_process.remove(block)
@@ -570,39 +564,21 @@ class App():
                 logger.info("Run %s: %s blocks ready" % (run.name, nb_blocks_finished))
                 if nb_blocks_finished == len(run.blocks):
 
+                    # update status
+                    run.update_status_file()
+
                     # write timings
                     timing_file = os.path.join(run.sigproc_results_path,'timing.txt')
-                    with open(timing_file, 'a') as f:
-                        f.write(run.gettiming())
+                    try:
+                        with open(timing_file, 'a') as f:
+                            f.write(run.gettiming())
+                    except:
+                        logger.error(traceback.format_exc())
 
                     #transfer timing.txt
                     try:
                         directory_to_transfer="onboard_results/sigproc_results"
                         file_to_transfer="timing.txt"
-                        ret = Transfer(run.name, directory_to_transfer, file_to_transfer)
-                        if ret == 0:
-                            logger.debug("Transfer registered %s %s %s" % (run.name, directory_to_transfer, file_to_transfer))
-                        else:
-                            logger.error("Transfer failed %s %s %s, is datacollect running?" % (run.name, directory_to_transfer, file_to_transfer))
-                    except:
-                        logger.error(traceback.format_exc())
-
-                    #transfer block for diagnosis
-                    try:
-                        directory_to_transfer=run.block_name_to_block_dir("block_065") # 1x: X6440_Y6660, 2x: X6440_Y3335
-                        file_to_transfer=""
-                        ret = Transfer(run.name, directory_to_transfer, file_to_transfer)
-                        if ret == 0:
-                            logger.debug("Transfer registered %s %s %s" % (run.name, directory_to_transfer, file_to_transfer))
-                        else:
-                            logger.error("Transfer failed %s %s %s, is datacollect running?" % (run.name, directory_to_transfer, file_to_transfer))
-                    except:
-                        logger.error(traceback.format_exc())
-
-                    #transfer block for diagnosis
-                    try:
-                        directory_to_transfer=run.block_name_to_block_dir("block_010") # X12880_Y0
-                        file_to_transfer=""
                         ret = Transfer(run.name, directory_to_transfer, file_to_transfer)
                         if ret == 0:
                             logger.debug("Transfer registered %s %s %s" % (run.name, directory_to_transfer, file_to_transfer))
@@ -627,15 +603,14 @@ class App():
             logger.debug('RUNS NEW: %s' % new_run_dirs)
 
             for run in self.runs_in_process:
-                with open(os.path.join(run.dat_path,'oia_status.txt'),'w') as f:
-                    f.write(str(run))
+                run.update_status_file()
 
             # add new runs (blocks)
             for run_dir in new_run_dirs:
                 logger.info('NEW RUN DETECTED: %s' % run_dir)
 
                 try:
-                    arun = Run(results,run_dir,config)
+                    arun = Run(run_dir,config)
                     logger.info(arun)
                 except:
                     logger.error(traceback.format_exc())
@@ -659,7 +634,6 @@ class App():
 
                 if not os.path.exists(os.path.join(arun.dat_path , 'thumbnail', 'acq_%04d.dat' % wait_for_flow)):
                     logger.info('NEW RUN NOT READY, missing dat file: %s' % os.path.join(arun.dat_path , 'thumbnail', 'acq_%04d.dat' % wait_for_flow))
-
                     continue
 
                 self.runs_in_process.append(arun)
@@ -673,15 +647,13 @@ class App():
                     continue
 
 
-                full_sigproc_results_path = os.path.join(analysisresults, run_dir, "onboard_results/sigproc_results")
+                full_sigproc_results_path = os.path.join(config.get('global','analysisresults'), run_dir, "onboard_results/sigproc_results")
                 if os.path.exists(full_sigproc_results_path):
                     logger.info("partial on-instrument analysis detected %s" % run_dir)
                 else:
                     try:
-                        print analysisresults, os.path.join(analysisresults,arun.name,'onboard_results')
-                        print results, os.path.join(results,arun.name,'onboard_results')
                         os.makedirs( full_sigproc_results_path )
-                        os.symlink(os.path.join(analysisresults,arun.name,'onboard_results'), os.path.join(results,arun.name,'onboard_results'))
+                        os.symlink(os.path.join(config.get('global','analysisresults'),arun.name,'onboard_results'), os.path.join(config.get('global','results'),arun.name,'onboard_results'))
                     except:
                         logger.error('link failed %s' % arun)
                         logger.error(traceback.format_exc())
@@ -797,10 +769,19 @@ if __name__ == '__main__':
 
 
     # parse on-instrument configuration file
+    config_file = "/software/config/oia.config"
     config = ConfigParser.RawConfigParser()
     config.optionxform = str # don't convert to lowercase
     config.read(config_file)
 
+    try:
+        log_memory_usage = False
+        if config.get('global','log_memory_usage') =='yes':
+            from guppy import hpy
+            import gc
+            log_memory_usage = True
+    except:
+        pass
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', dest='verbose', action='store_true')
@@ -808,7 +789,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.verbose:
-        print "BlockTLScript:", args
+        print "oiad:", args
 
         for run in get_run_list(config):
             print run
@@ -825,6 +806,8 @@ if __name__ == '__main__':
 
     print_config(config, logger)
 
-    app = App()
-    app.run()
-
+    try:
+        app = App()
+        app.run()
+    except:
+        logger.error(traceback.format_exc())

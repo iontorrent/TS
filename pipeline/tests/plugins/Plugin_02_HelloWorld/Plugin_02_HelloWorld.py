@@ -11,7 +11,8 @@ class Plugin_02_HelloWorld(IonPlugin):
         return "1.0." + filter(str.isdigit, "$Revision: 39102$")
 
     features = [ Feature.EXPORT, ]
-    runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.BLOCK ]
+    runtypes = [ RunType.THUMB, RunType.FULLCHIP]
+    runlevel = [ RunLevel.BLOCK, RunLevel.DEFAULT ]
 
     def initialize(self, **kwargs):
         self.blockcount = 0

@@ -69,7 +69,8 @@ void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
   int needMult = ceil(mWellsCompacted / DC_STEP_SIZE);
   size_t current = 12;  
   ucompressed[current++] = mWellsCompacted;
-
+  int maxOffset = 62;
+  int minOffset = -62;
   CompI cur[needMult];
   CompI last[needMult];
   CompI delta[needMult];
@@ -78,14 +79,14 @@ void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
   for (size_t i = 0; i < DC_STEP_SIZE; i++) {
     zero.vv[i] = 0;
   }
-  uint16_t *p = &chunk.mData[0];
+  int16_t *p = &chunk.mData[0];
   for (size_t i = 0; i < S; i++) {
     int16_t v = *p++;
     ucompressed[current++] = v;
     ucompressed[current++] = v >> 8;
   }
   int vals[mWellsCompacted];
-  uint16_t* pTemp = NULL;
+  int16_t* pTemp = NULL;
   // Subsequent frames delta compressed. 8 at a time with lowest delta encoding 00=2 bits, 01=4 bits, 10=8 bits 11 = uncompressed (full 14);
   for (size_t fIx = 1; fIx < chunk.mDepth; fIx++) {
     for (size_t wIx = 0; wIx < S; wIx+=mWellsCompacted) {
@@ -110,8 +111,8 @@ void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
           offset = delta[cIx].vv[0] + delta[cIx].vv[1] + delta[cIx].vv[2] + delta[cIx].vv[3];
           offset = offset >> 2; // divide by 4
           // limit to fit in 6 bits;
-          offset = min(offset, 62);
-          offset = max(offset, -62);
+          offset = offset > maxOffset ? maxOffset : offset;
+          offset = offset < minOffset ? minOffset : offset;
           // limit to even number
           offset &= ~0x1;
           offset4.vv[0] = offset4.vv[1] = offset4.vv[2] = offset4.vv[3] = offset;
@@ -137,7 +138,7 @@ void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
         c = 3;
 
       // Encode number of bits per well and the offset for this block
-      uint8_t v = c << 6 | ((offset + 62) >> 1);
+      uint8_t v = c << 6 | ((offset + maxOffset) >> 1);
       ucompressed[current++] = v;
       // here we are storing the entire packet of mWellsCompacted, but only the maxCur first entries are actually valid
       // Pack into 4, 6, 8 or 16 bits per well.
@@ -179,6 +180,134 @@ void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
   *outsize = current;
 }
 
+// void DeltaCompFstSmX::compress(TraceChunk &chunk, size_t nRows, size_t nCols, 
+//                             size_t nFrames, int8_t **compressed, size_t *outsize, size_t *maxsize) {
+//   unsigned X = nRows, Y = nCols;
+//   size_t S = X*Y; // framestep
+//   size_t L = nFrames;
+//   if (S * L * 3 > *maxsize) { ReallocBuffer(S*3*L, compressed, maxsize); }
+//   int *header = (int *)(*compressed);
+//   uint8_t *ucompressed = (uint8_t *)(*compressed);
+//   header[0] = htonl(X);
+//   header[1] = htonl(Y);
+//   header[2] = htonl(L);
+//   int needMult = ceil(mWellsCompacted / DC_STEP_SIZE);
+//   size_t current = 12;  
+//   ucompressed[current++] = mWellsCompacted;
+//   int maxOffset = 62;
+//   int minOffset = -62;
+//   CompI cur[needMult];
+//   CompI last[needMult];
+//   CompI delta[needMult];
+//   int m4 = 7, m6 = 31, m8 = 127;
+//   CompI zero, offset4;
+//   for (size_t i = 0; i < DC_STEP_SIZE; i++) {
+//     zero.vv[i] = 0;
+//   }
+//   int16_t *p = &chunk.mData[0];
+//   for (size_t i = 0; i < S; i++) {
+//     int16_t v = *p++;
+//     ucompressed[current++] = v;
+//     ucompressed[current++] = v >> 8;
+//   }
+//   int vals[mWellsCompacted];
+//   int16_t* pTemp = NULL;
+//   // Subsequent frames delta compressed. 8 at a time with lowest delta encoding 00=2 bits, 01=4 bits, 10=8 bits 11 = uncompressed (full 14);
+//   for (size_t fIx = 1; fIx < chunk.mDepth; fIx++) {
+//     for (size_t wIx = 0; wIx < S; wIx+=mWellsCompacted) {
+//       // First loop through and figure out the minimum encoding..
+//       int offset = 0;
+//       int minV = 0;
+//       size_t maxCur = min((size_t)mWellsCompacted, S - wIx);
+//       size_t cIx = 0;
+//       for (size_t curIx = 0; curIx < maxCur; curIx += DC_STEP_SIZE, cIx++) {
+//         size_t next = std::min((size_t)DC_STEP_SIZE, maxCur - curIx);
+//         cur[cIx].v = zero.v;
+//         last[cIx].v = zero.v;
+//         for (size_t i = 0; i < next; i++) {
+//           pTemp = p + i;
+//           cur[cIx].vv[i] = *(pTemp);
+//           last[cIx].vv[i] = *(pTemp - S);
+//         }
+//         p += next;
+//         delta[cIx].v = SUB_PACKED_INT(cur[cIx].v, last[cIx].v);
+//         if (curIx == 0) {
+//           // average of first 4 values as offset
+//           offset = delta[cIx].vv[0] + delta[cIx].vv[1] + delta[cIx].vv[2] + delta[cIx].vv[3];
+//           offset = offset >> 2; // divide by 4
+//           // limit to fit in 6 bits;
+//           offset = offset > maxOffset ? maxOffset : offset;
+//           offset = offset < minOffset ? minOffset : offset;
+//           // limit to even number
+//           offset &= ~0x1;
+//           offset4.vv[0] = offset4.vv[1] = offset4.vv[2] = offset4.vv[3] = offset;
+//         }
+//         delta[cIx].v = SUB_PACKED_INT(delta[cIx].v, offset4.v);
+//         // Figure out largest difference for this block of wells
+//         for (size_t i = 0; i < next; i++) {
+//           size_t x = curIx + i;
+//           vals[x] = delta[cIx].vv[i];
+//           minV = max(minV, abs(vals[x]));
+//         }
+//       }
+    
+//       // Encode the max difference
+//       uint8_t c = 0;
+//       if (minV <= m4)
+//         c = 0;
+//       else if (minV <= m6)
+//         c = 1;
+//       else if (minV <= m8)
+//         c = 2;
+//       else 
+//         c = 3;
+
+//       // Encode number of bits per well and the offset for this block
+//       uint8_t v = c << 6 | ((offset + maxOffset) >> 1);
+//       ucompressed[current++] = v;
+//       // here we are storing the entire packet of mWellsCompacted, but only the maxCur first entries are actually valid
+//       // Pack into 4, 6, 8 or 16 bits per well.
+//       switch (c) 
+//         {
+//         case (0) :
+//           // put each val in a nibble (4 bits)
+//           for (size_t i = 0; i < mWellsCompacted; i+=2) {
+//             ucompressed[current++] = (vals[i] + 7) << 4 | (vals[i+1] + 7); // all of information should be in bottom 4 bits
+//           }
+//           break;
+//         case (1) :
+//           // 6 bytes per value
+//           for (size_t i = 0; i < mWellsCompacted; i+=4) {
+//             vals[i] += 31;
+//             vals[i+1] += 31;
+//             vals[i+2] += 31;
+//             vals[i+3] += 31;
+//             ucompressed[current++] = (vals[i]) << 2 | (vals[i+1]) >> 4; // 6 bits of first one and 2 bits of second
+//             ucompressed[current++] = (vals[i+1]) << 4 | (((vals[i+2]) >> 2) & 0xF); // 4 bits of second one and 4 bits of third
+//             ucompressed[current++] = (vals[i+2]) << 6 | (vals[i+3]); // 2 bits of third one and 6 bits of second
+//           }
+//           break;
+//         case (2) :
+//           // 1 byte per value
+//           for (size_t i = 0; i < mWellsCompacted; i++) {
+//             ucompressed[current++] = vals[i] + 127; // all of information in 8 bytes
+//           }
+//           break;
+//         default:
+//           // 2 bytes per value
+//           for (size_t i = 0; i < mWellsCompacted; i++) {
+//             ucompressed[current++] = cur[i/DC_STEP_SIZE].vv[i%DC_STEP_SIZE];
+//             ucompressed[current++] = cur[i/DC_STEP_SIZE].vv[i%DC_STEP_SIZE] >> 8;
+//           }
+//         }
+//     }
+//   }
+//   *outsize = current;
+// }
+
+
+
+
 void DeltaCompFstSmX::decompress(const int8_t *compressed, size_t size, TraceChunk &chunk) {
   int *header = (int *)(compressed);
   unsigned X = ntohl(header[0]);
@@ -189,9 +318,9 @@ void DeltaCompFstSmX::decompress(const int8_t *compressed, size_t size, TraceChu
   uint8_t *ucompressed = (uint8_t *)compressed;
   size_t current = 12;
   int wellsCompacted = ucompressed[current++];
-
+  int maxOffset = 62;
   // First frame;
-  uint16_t* p = &chunk.mData[0];
+  int16_t* p = &chunk.mData[0];
   for(size_t i = 0; i < S; i++) {
     uint16_t v = ucompressed[current++];
     uint16_t u = ucompressed[current++];
@@ -206,8 +335,8 @@ void DeltaCompFstSmX::decompress(const int8_t *compressed, size_t size, TraceChu
       uint8_t x = ucompressed[current++];
       uint8_t c = x >> 6;
       int offset = x & 0x3F;
-      offset = (offset << 1) - 62;
-      uint16_t* pp = p;
+      offset = (offset << 1) - maxOffset;
+      int16_t* pp = p;
       switch (c) {
       case (0) :
         // put each val in a nibble (4 bits)

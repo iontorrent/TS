@@ -27,11 +27,14 @@
 	 * Fill the barcodes obj list with the corresponding samples 
 	 */
 	for (var i = 0 ; i < barcodes.length; i++) {
-		if (formdata.barcodedSamples[barcodes[i].id]) { 
-			barcodes[i].sample = formdata.barcodedSamples[barcodes[i].id].sample; 
-		} else {
-			barcodes[i].sample = '';
-		}	 
+            barcodes[i].sample = '';            
+            if (formdata.barcodedSamples[barcodes[i].id])  
+		barcodes[i].sample = formdata.barcodedSamples[barcodes[i].id].sample; 
+            for (var sampleName in formdata.barcodedSamples){
+		if (formdata.barcodedSamples[sampleName].hasOwnProperty(barcodes[i].id)){
+                        barcodes[i].sample = sampleName;
+		}
+            }
 	}
 	// Fill in selected plugins	
 	formdata.plugins = []
@@ -87,10 +90,12 @@
 	           	}
 		        , height: 'auto'
 		        , groupable: false
-		        , scrollable: false
+		        , scrollable : {
+		            virtual : true
+		        }
 		        , selectable: false
 		        , sortable: true
-		        , pageable: true
+		        , pageable: false
 				, columns: [
 					{
 	                field: "id_str"

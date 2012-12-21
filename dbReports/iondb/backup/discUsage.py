@@ -22,6 +22,7 @@ import iondb.bin.djangoinit
 from iondb.rundb import models
 from django import shortcuts
 
+
 def get_size(start, progress):
     total_size = 0
     i = 0
@@ -32,50 +33,49 @@ def get_size(start, progress):
                 fp = os.path.join(dirpath, f)
                 total_size += os.path.getsize(fp)
                 if i >= 10000 and progress:
-                    print "\n    Progress update: ~%s Mb" %(total_size/(1024*1024))
+                    print "\n    Progress update: ~%s Mb" % (total_size / (1024 * 1024))
                     i = 0
-                i+=1
+                i += 1
             except:
                 pass
-    print "Finished, total size: %s bytes" %total_size
+    print "Finished, total size: %s bytes" % total_size
     return total_size
 
 if __name__ == '__main__':
     rigSpace = 0
     freeSpace = 0
     totalSpace = 0
-    
+
     allServers = models.FileServer.objects.all()
     validServers = []
     for server in allServers:
         if (os.path.isdir(server.filesPrefix)):
             validServers.append(server)
             f = os.statvfs(server.filesPrefix)
-            freeSpace += f[statvfs.F_BAVAIL]*f[statvfs.F_BSIZE]
-            totalSpace += f[statvfs.F_BLOCKS]*f[statvfs.F_BSIZE]
+            freeSpace += f[statvfs.F_BAVAIL] * f[statvfs.F_BSIZE]
+            totalSpace += f[statvfs.F_BLOCKS] * f[statvfs.F_BSIZE]
     validServerPGMCombos = []
     allPGM = models.Rig.objects.all()
     for PGM in allPGM:
         for server in validServers:
-            testpath = os.path.join(server.filesPrefix,PGM.name)
+            testpath = os.path.join(server.filesPrefix, PGM.name)
             if os.path.isdir(testpath):
                 space = get_size(testpath, True)
                 rigSpace += space
-                print "\nPGM %s " %PGM.name + "on server %s " %server.filesPrefix + "contains %s bytes" %space + "= %sMb" %(space/(1024*1024))
-    
+                print "\nPGM %s " % PGM.name + "on server %s " % server.filesPrefix + "contains %s bytes" % space + "= %sMb" % (space / (1024 * 1024))
+
     analysisSpace = 0
     #(this is 'other space' without analysis or rig space removed)
     storageList = models.ReportStorage.objects.all()
     for storage in storageList:
         analysisSpace += get_size(storage.dirPath, True)
-    
-    
+
     #otherSpace = get_size('/results', True) - rigSpace - analysisSpace
     otherSpace = totalSpace - analysisSpace - rigSpace - freeSpace
-    
-    print "\nanalysis space: %s " %analysisSpace + " = %sMb" %(analysisSpace/(1024*1024))
-    print "\ntotal rig space: %s " %rigSpace + "= %sMb" %(rigSpace/(1024*1024))
-    print "\nother space: %s " %otherSpace + " = %sMb" %(otherSpace/(1024*1024))
-    print "\ntotal space used: %s " %(rigSpace+analysisSpace+otherSpace) + " = %sMb" %((rigSpace+analysisSpace+otherSpace)/(1024*1024))
-    print "\nfree space: %s" %freeSpace + " = %sMb" %(freeSpace/(1024*1024))
-    print "\ntotal space on disk: %s" %(totalSpace) + " = %sMb" %((totalSpace)/(1024*1024))
+
+    print "\nanalysis space: %s " % analysisSpace + " = %sMb" % (analysisSpace / (1024 * 1024))
+    print "\ntotal rig space: %s " % rigSpace + "= %sMb" % (rigSpace / (1024 * 1024))
+    print "\nother space: %s " % otherSpace + " = %sMb" % (otherSpace / (1024 * 1024))
+    print "\ntotal space used: %s " % (rigSpace + analysisSpace + otherSpace) + " = %sMb" % ((rigSpace + analysisSpace + otherSpace) / (1024 * 1024))
+    print "\nfree space: %s" % freeSpace + " = %sMb" % (freeSpace / (1024 * 1024))
+    print "\ntotal space on disk: %s" % (totalSpace) + " = %sMb" % ((totalSpace) / (1024 * 1024))

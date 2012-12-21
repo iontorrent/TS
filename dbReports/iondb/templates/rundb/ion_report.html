@@ -1,7 +1,6 @@
 {% extends "rundb/ion_base_template.html" %}
 
 {% load pagetools %}
-{% load embeddedhelp %}
 {% load humanize %}
 
 {% block controls %}
@@ -128,11 +127,11 @@
             {% if r.report_exist %}
               <span class="left right_margin" style="text-align: left;"
                     title="Open report in this window.">
-                <a href='{{r.reportLink}}'>{{ r.resultsName }}</a>
+                <a href='{% url report r.pk %}'>{{ r.resultsName }}</a>
               </span>
               <span class="left icon_link ui-icon ui-icon-extlink
 		     ui-state-default ui-corner-all"
-                    onclick="window.open('{{r.reportLink}}')"
+                    onclick="window.open('{% url report r.pk %}')"
                     title="Open report in new window."></span>
             {% else %}
               <span class="left right_margin">
@@ -145,7 +144,7 @@
             <td>
               <span class="left right_margin"
                     title="Re-Analyze from a 1.wells file">
-                <a href="{% url rundb.views.createReport r.experiment.pk, r.pk %}">
+                <a href="{% url report_analyze r.experiment.pk, r.pk %}">
                   <span class="left icon_link ui-icon ui-icon-arrowrefresh-1-s
                  ui-state-default ui-corner-all"
                         title="Re-Analyze from a 1.wells file"></span>

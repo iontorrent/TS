@@ -20,6 +20,7 @@ void CaptureImageState::CleanUpOldFile()
 void CaptureImageState::WriteImageGainCorrection(int rows, int cols)
 {
   std::string h5_name = h5file + ":/imgGain/gain_corr";
+  assert(ImageTransformer::gain_correction != NULL);
   std::vector<float> gain(ImageTransformer::gain_correction, ImageTransformer::gain_correction + rows*cols);    
   printf("[CaptureImageState] Writing Image gain correction to %s\n",h5file.c_str());
   H5File::WriteVector (h5_name, gain, false);    
@@ -31,8 +32,10 @@ void CaptureImageState::LoadImageGainCorrection(int rows, int cols)
   printf("[CaptureImageState] Loading Image gain correction from %s\n",h5file.c_str());   
   H5File::ReadVector (h5_name, gain);  
   
-  if (ImageTransformer::gain_correction == NULL)
+  if (ImageTransformer::gain_correction == NULL) {
     ImageTransformer::gain_correction = new float[rows*cols];  
+  }
+  std::fill(ImageTransformer::gain_correction, ImageTransformer::gain_correction + rows * cols, 0);
   std::copy(gain.begin(), gain.end(), ImageTransformer::gain_correction);
 }
 

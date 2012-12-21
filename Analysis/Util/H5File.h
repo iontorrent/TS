@@ -195,7 +195,8 @@ class H5File {
   const std::string &GetFile() const { return mName; }
   /** hdf5 file id */
   hid_t GetFileId() const { return mHFile; }
-
+  /** Open file, blindly overwriting. */
+  bool OpenNew();
   /** Open file, if overwrite is true delete any current file with name. */
   bool Open(bool overwrite = false);
 

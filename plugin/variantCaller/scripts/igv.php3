@@ -7,6 +7,15 @@ $page_url = parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH) . "";
 //just get the path of the script
 $break = explode('/', $page_url);
 $file = array_pop($break);
+
+# Force Basic Auth by using /auth/ variant of urls. TS-5802
+if ($break[1] != 'auth') {
+    # explode creates array with leading empty element
+    $leading = array_shift($break);
+    array_unshift($break, 'auth');
+    array_unshift($break, $leading);
+}
+
 $plugin_out = implode('/', $break);
 // move to the results directory
 while (0 < count($break)) {
@@ -29,6 +38,7 @@ $igv_session = str_replace("{plugin_url}", $plugin_url , $igv_session);
 
 //print out the rewritten igv
 header("Content-type: text/xml");
+header("Content-disposition: attachment; filename=igv_session.xml");
 print $igv_session;
 
 ?>

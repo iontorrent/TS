@@ -15,7 +15,6 @@
 #include <sstream>
 #include <sys/time.h>
 #ifndef ALIGNSTATS_IGNORE
-#include "Image.h"
 #include "SpecialDataTypes.h"
 #include "LinuxCompat.h"
 #endif

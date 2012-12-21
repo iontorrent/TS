@@ -2,6 +2,7 @@
 #include "Utils.h"
 #ifndef ALIGNSTATS_IGNORE
 #include "IonVersion.h"
+#include "ChipIdDecoder.h"
 #endif
 #include <sys/stat.h>
 #include <libgen.h>
@@ -41,7 +42,11 @@ void CreateResultsFolder (const char *experimentName)
   {
     if (errno == EEXIST)
     {
-      //already exists? well okay...
+      //need to check whether it is directory indeed
+      if(!isDir(experimentName)){
+          printf("%s is not a directory!\n", experimentName);
+          exit(EXIT_FAILURE);
+      }
     }
     else
     {

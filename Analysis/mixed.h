@@ -8,9 +8,10 @@
 #include <string>
 #include <vector>
 #include <armadillo>
-#include "RawWells.h"
-#include "Mask.h"
 #include "bivariate_gaussian.h"
+
+class Mask;
+class RawWells;
 
 inline float mixed_ppf_cutoff()
 {

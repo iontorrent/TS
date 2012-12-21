@@ -133,7 +133,7 @@ class ProjectionSearchOneFlow
       residual_weight = new float[npts];
       paramA = 0;
       min_paramA = 0;
-      max_paramA = MAX_HPLEN-1;
+      max_paramA = LAST_POISSON_TABLE_COL;
       projection_stop_threshold = 0.1f;
       residual = 0.0f;
       wtScale = 0.0f;

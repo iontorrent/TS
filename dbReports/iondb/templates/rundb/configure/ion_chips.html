@@ -25,7 +25,7 @@
           $(".chipLog").live('click',function(e){
             e.preventDefault();
             pk = $(this).data("pk");
-            url = "/rundb/getChipLog/" + pk;
+            url = "/configure/getChipLog/" + pk;
             $('#modal_chip_log').remove();
 
             $.get(url, function(data) {
@@ -65,23 +65,18 @@
               <div id="ex{{loc.0}}_{{loc.1}}"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[+]</a> {{ loc.0 }}:</div>
               <div id="cl{{loc.0}}_{{loc.1}}" style="display:none"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[-]</a> {{ loc.0 }}:</div>
               <ul id="{{loc.0}}_{{loc.1}}" style="display:none">
-              <!--<table>
-              {% for v in values %}{% ifequal v.1 loc %}
-                <tr><td>{{ v.0 }}</td><td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td><td><a href="/rundb/getChipPdf/{{ v.2 }}">[PDF]</a></td><td><p id="ex{{v.0}}" style="display:none"><a href="javascript:cl_expcol('{{v.0}}');">[+] View</a></p><p id="cl{{v.0}}"><a href="javascript:cl_expcol('{{v.0}}');">[+] View</a></p>
-              <ul id="{{v.0}}" style="display:none"><br />{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul>
-                </td></tr>
-              {% endifequal %}{% endfor %}</table>-->
+              
               <table>
                 <tr><th align="left"><br />Passed:</th></tr>
                 {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "T" %}
                   <tr>
                     <td>{{ v.0 }}</td>
-                    <td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td>
+                    <td><a href="/configure/getZip/{{ v.2 }}">[Download]</a></td>
                     <td>
-                      <td><a href="/rundb/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
+                      <td><a href="/configure/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
                     </td>
                     <td><ul id="{{v.0}}" style="display:none">{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul></td>
-                    <td><a href="/rundb/getChipPdf/{{ v.2 }}">[PDF]</a></td>
+                    <td><a href="/configure/getChipPdf/{{ v.2 }}">[PDF]</a></td>
                   </tr>
                 {% endifequal %}{% endifequal %}{% endfor %}
             
@@ -89,9 +84,9 @@
                 {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "F" %}
                   <tr>
                     <td>{{ v.0 }}</td>
-                    <td><a href="/rundb/getZip/{{ v.2 }}">[Download]</a></td>
+                    <td><a href="/configure/getZip/{{ v.2 }}">[Download]</a></td>
                     <td>
-                      <td><a href="/rundb/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
+                      <td><a href="/configure/getChipLog/{{v.2}}" id="l_{{v.2}}" class="chipLog" data-pk="{{v.2}}">[View log]</a></td>
                     <td><ul id="{{v.0}}" style="display:none">{% for line in v.3 %}{{ line }}<br />{% endfor %}</ul>
                     </td>
                   </tr>
@@ -109,7 +104,7 @@
       <!--Problem encountered. Detailed information below: {{ error_state }}<br /><br />{% for err in error %}{{ err.0 }}: {{ err.1 }}<br />{% endfor %}-->
           <script language="Javascript">
             alert ("Error: {{error.0.1}}")
-        window.location="/rundb/chips/"
+        window.location="/configure/chips/"
           </script>
     {% endifequal %}
   

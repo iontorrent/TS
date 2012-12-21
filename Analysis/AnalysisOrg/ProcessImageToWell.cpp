@@ -54,6 +54,109 @@ void TinyDestroyUglyStaticForSignalProcessing()
   CleanupLevMarSparseMatrices();
 }
 
+void OutputRegionAvg(RegionalizedData *rdata, int reg, int maxWidth, ofstream &meanOut, ofstream &timeOut) {
+  for (int flowIx = 0; flowIx < 10; flowIx++) {
+    meanOut << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << "\t" << flowIx;
+    timeOut << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << "\t" << flowIx;
+    vector<double> mean(rdata->time_c.npts(), 0.0);
+    int count = 0;
+    for (int ibd = 0; ibd < rdata->my_trace.numLBeads; ibd++) {
+      FG_BUFFER_TYPE *fgPtr = &rdata->my_trace.fg_buffers[rdata->my_trace.bead_flow_t*ibd+flowIx*rdata->time_c.npts()];
+      for (int i = 0; i < rdata->time_c.npts(); i++) {
+        mean[i] += fgPtr[i];
+      }
+      count++;
+    }
+    count = max(count, 1);
+    int eIx = 0;
+    int frames = 0;
+    for (eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
+      frames += rdata->time_c.frames_per_point[eIx];
+      meanOut << "\t" << mean[eIx]/count;
+      timeOut << "\t" << frames;
+    }
+    for (; eIx < maxWidth; eIx++) {
+      meanOut << "\t0";
+      timeOut << "\t0";
+    }
+    meanOut << endl;
+    timeOut << endl;
+  }
+}
+
+void WriteSampleRegion(const std::string &results_folder, BkgFitterTracker &GlobalFitter, int flow, bool doWrite) {
+  if(flow + 1 == NUMFB && doWrite) {
+    string s = results_folder + "/vfrc-empties.txt";
+    ofstream emptyFile(s.c_str());
+    string sm = results_folder + "/vfrc-region-mean.txt";
+    ofstream avgFile(sm.c_str());
+    sm = results_folder + "/vfrc-region-time.txt";
+    ofstream timeFile(sm.c_str());
+    s = results_folder + "/vfrc-live.txt";
+    ofstream liveFile(s.c_str());
+    int reg = GlobalFitter.sliced_chip.size()/2;
+    RegionalizedData *rdata = NULL;
+    int maxWidth = 0;
+    for (size_t i = 0; i < GlobalFitter.sliced_chip.size(); i++) {
+      maxWidth = max(GlobalFitter.sliced_chip[i]->time_c.npts(), maxWidth);
+    }
+    for (size_t i = 0; i < GlobalFitter.sliced_chip.size(); i++) {
+      OutputRegionAvg(GlobalFitter.sliced_chip[i],i, maxWidth, avgFile, timeFile);
+    }
+    avgFile.close();
+    timeFile.close();
+    rdata = GlobalFitter.sliced_chip[GlobalFitter.sliced_chip.size()/2];
+    cout << "Region is: " << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << endl;
+    cout << "Tmid nuc is: " << rdata->t_mid_nuc_start << "\t" << rdata->sigma_start << endl;
+    float bempty[2056];
+    cout << "Tshift is: " << rdata->my_regions.rp.tshift << endl;
+    
+    rdata->emptytrace->GetShiftedBkg(rdata->my_regions.rp.tshift, rdata->time_c, bempty);
+    cout << "Timing frames region 0: ";
+    float deltaFrame = 0, deltaSec = 0;
+    for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
+      deltaFrame += rdata->time_c.deltaFrame[eIx];
+      cout << "\t" << deltaFrame;
+    }
+    cout << endl;
+    cout << "Timing seconds region 0: ";
+    for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
+      deltaSec += rdata->time_c.deltaFrameSeconds[eIx];
+      cout << "\t" << deltaSec;
+    }
+    cout << endl;
+    for (int fIx = 0; fIx < 10; fIx++) {
+      emptyFile << fIx;
+      for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
+        emptyFile << '\t' << bempty[fIx * rdata->time_c.npts() + eIx];
+      }
+      emptyFile << endl;
+    }
+    for (int ibd = 0; ibd < rdata->my_trace.numLBeads; ibd++) {
+      for (size_t flowIx = 0; flowIx < 10; flowIx++) {
+        FG_BUFFER_TYPE *fgPtr = &rdata->my_trace.fg_buffers[rdata->my_trace.bead_flow_t*ibd+flowIx*rdata->time_c.npts()];
+        int x = rdata->my_beads.params_nn[ibd].x + rdata->region->col;
+        int y = rdata->my_beads.params_nn[ibd].y + rdata->region->row;
+        liveFile << x << "\t" << y << "\t" << ibd << "\t" << flowIx;
+        for (int i = 0; i < rdata->time_c.npts(); i++) {
+          liveFile << "\t" << fgPtr[i];
+        }
+          liveFile << endl;
+      }
+    }
+  }
+}
+
+void WriteWashoutFile(BkgFitterTracker &bgFitter, const std::string &dirName) {
+  std::string fileName = dirName + "/washouts.txt";
+  std::ofstream o(fileName.c_str());
+  o << "well\tflow" << std::endl;
+  for (size_t i = 0; i < bgFitter.washout_flow.size(); i++) {
+    o << i << '\t' << bgFitter.washout_flow[i]  << std::endl;
+  }
+  o.close();
+}
+
 void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask &from_beadfind_mask,  char *chipType,
                                   ImageSpecClass &my_image_spec, SlicedPrequel &my_prequel_setup,SeqListClass &my_keys, bool pass_tau,
 				  BkgFitterTracker *bkg_fitter_tracker)
@@ -177,7 +280,9 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     // @TODO replace with clean hdf5 interface for sampling beads and region parameters
     GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow );
     GlobalFitter.DumpBkgModelBeadInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow, inception_state.bkg_control.debug_bead_only>0 );
+    WriteSampleRegion(inception_state.sys_context.GetResultsFolder(), GlobalFitter, flow, inception_state.bkg_control.region_vfrc_debug);
 
+        
     // variables should be >captured< at the end of fitting
     //  and then the hdf5 dump happens across all threads as we synchronize
     GlobalFitter.all_params_hdf.IncrementalWrite (  flow,  last_flow );
@@ -236,7 +341,6 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     fprintf ( stdout, "Writing restart state to archive %s took %0.1f secs",
 	      filePath.c_str(), difftime ( finish_save_time, begin_save_time ));
   }
-
   rawWells.Close();
 
   GlobalFitter.UnSpinSingleFlowFitGpuThreads ();
@@ -268,7 +372,7 @@ void IsolatedSignalProcessing (
     from_beadfind_mask = *complex_mask;
   }
   else
-  {
+    {
     // starting execution fresh
     from_beadfind_mask.InitMask();
 

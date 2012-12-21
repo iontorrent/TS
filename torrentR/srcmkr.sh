@@ -40,6 +40,7 @@ cp -rp ./buildTools/cleanTorrentR.sh ${DST_PATH}/buildTools/
 
 mkdir -p ${DST_PATH}/external
 cp -rp ./external/samtools-0.1.18 ${DST_PATH}/external/
+cp -rp ./external/bamtools-2.1.1.20120920+gite235c55 ${DST_PATH}/external/
 
 #---	Purge svn control files	---#
 find ${DST_PATH} -name .svn\* -exec rm -rf {} \; 2>/dev/null

@@ -19,8 +19,6 @@ EmptyTrace::EmptyTrace ( CommandLineOpts &clo )
   numfb = 0;
   t0_mean = 0;
   nRef = -1;
-  doingSdat = false;
-  regionAndTimingMatchesSdat = false;
   secondsPerFrame = 0;
   regionIndex = -1;
 
@@ -35,6 +33,7 @@ EmptyTrace::EmptyTrace ( CommandLineOpts &clo )
   cutoff_quantile = 0;
   nuc_flow_frame_width = 0;
   nOutliers = 0;
+  trace_used = false;
 }
 
 EmptyTrace::EmptyTrace ()  // needed for serialization
@@ -46,8 +45,6 @@ EmptyTrace::EmptyTrace ()  // needed for serialization
   numfb = 0;
   t0_mean = 0;
   nRef = -1;
-  doingSdat = false;
-  regionAndTimingMatchesSdat = false;
   secondsPerFrame = 0;
   regionIndex = -1;
   referenceMask = MaskReference;
@@ -59,6 +56,7 @@ EmptyTrace::EmptyTrace ()  // needed for serialization
   cutoff_quantile = 0;
   nuc_flow_frame_width = 0;
   nOutliers = 0;
+  trace_used = false;
 }
 
 void EmptyTrace::Allocate ( int _numfb, int _imgFrames )
@@ -106,17 +104,17 @@ void EmptyTrace::SavitskyGolayComputeSlope ( float *local_slope,float *source_va
   int mmax = len-1;
   int j;
   for ( int i=0; i< len; i++ )
-  {
-    local_slope[i]=0;
-    // WARNING: I compute negative slope here because it is used that way later
-    for ( int k=0; k<BKG_SGSLOPE_LEN; k++ )
     {
-      j = i+k-moff;
-      if ( j<0 ) j=0; // make sure we're in range!!!
-      if ( j>mmax ) j=mmax; // make sure we're in range!!!
-      local_slope[i] -= source_val[j]*bkg_sg_slope[k];
+      local_slope[i]=0;
+      // WARNING: I compute negative slope here because it is used that way later
+      for ( int k=0; k<BKG_SGSLOPE_LEN; k++ )
+        {
+          j = i+k-moff;
+          if ( j<0 ) j=0; // make sure we're in range!!!
+          if ( j>mmax ) j=mmax; // make sure we're in range!!!
+          local_slope[i] -= source_val[j]*bkg_sg_slope[k];
+        }
     }
-  }
 }
 
 
@@ -145,17 +143,17 @@ void EmptyTrace::PrecomputeBackgroundSlopeForDeriv ( int flow )
   TimeCompression::Interpolate(&frameTime[0], &slopes[0], nFrames, &timePoints[0], bsPtr, imgFrames);
 
   /* // jgv
-  char s[60000]; int n=0;
-  n += sprintf(s, "SavitskyGolayComputeSlope\t%d :", regionIndex);
-  for (int pt = 0;pt < imgFrames;pt++)
-    n += sprintf(&s[n], "\t%f", bsPtr[pt]);
+     char s[60000]; int n=0;
+     n += sprintf(s, "SavitskyGolayComputeSlope\t%d :", regionIndex);
+     for (int pt = 0;pt < imgFrames;pt++)
+     n += sprintf(&s[n], "\t%f", bsPtr[pt]);
 
-  n += sprintf(&s[n], "\nOrig Time: ");
-  for (int i=0; i< timePoints.size(); i++)
-    n += sprintf(&s[n], "\t%f", timePoints[i]);
-  n += sprintf(&s[n], "\n\0");
-  assert (n<60000);
-  fprintf(stdout, "%s", s);
+     n += sprintf(&s[n], "\nOrig Time: ");
+     for (int i=0; i< timePoints.size(); i++)
+     n += sprintf(&s[n], "\t%f", timePoints[i]);
+     n += sprintf(&s[n], "\n\0");
+     assert (n<60000);
+     fprintf(stdout, "%s", s);
   */
 }
 
@@ -164,7 +162,12 @@ void EmptyTrace::PrecomputeBackgroundSlopeForDeriv ( int flow )
 // data in bg_buffers changes
 void EmptyTrace::RezeroReference ( float t_start, float t_end, int flow )
 {
-  assert ( !doingSdat ); // does not deal with compressed time
+  if (t_start > t_end) {
+    // code crashes unless t_start <= t_end
+    // @TODO if this happens the entire region is bogus, abandon computation
+    t_end = t_start;
+  }
+
   int iFlowBuffer = flowToBuffer ( flow );
 
   float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
@@ -176,60 +179,14 @@ void EmptyTrace::RezeroReference ( float t_start, float t_end, int flow )
   bg_dc_offset[iFlowBuffer] += dc_zero; // track this
 }
 
-void EmptyTrace::RezeroCompressedReferenceAllFlows ( TimeCompression *time_cp, float t_start, float t_end )
-{
-  // re-zero the traces in all flows
-  for ( int fnum=0; fnum<numfb; fnum++ )
-  {
-    RezeroCompressedReference ( time_cp, t_start, t_end, fnum );
-  }
-}
-
-// move the average empty trace in flow so it has zero mean
-// for time points between t_start and t_end
-// data in bg_buffers changes
-void EmptyTrace::RezeroCompressedReference (TimeCompression *time_cp, float t_start, float t_end, int fnum)
-{
-  int iFlowBuffer = flowToBuffer ( fnum );
-  float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
-  float dc_zero = zeroTrace.ComputeDcOffset(bPtr, *time_cp, t_start, t_end);
-  for (int pt = 0; pt < imgFrames;pt++)   // over real data
-         bPtr[pt] -= dc_zero;
-}
-
-void EmptyTrace::RezeroCompressedReference ( BkgTrace *bgTrace, int flow )
-{
-  int iFlowBuffer = flowToBuffer ( flow );
-
-  float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
-
-  // assumes time compression for this object matches BkgTrace object using it
-  float dc_zero = bgTrace->ComputeDcOffset ( bPtr,* ( bgTrace->time_cp ), 0.0f, bgTrace->time_cp->t0-2 );
-  for ( int pt = 0;pt < imgFrames;pt++ )
-    bPtr[pt] -= dc_zero;
-
-  bg_dc_offset[iFlowBuffer] += dc_zero; // track this
-}
-
-
 void EmptyTrace::RezeroReferenceAllFlows ( float t_start, float t_end )
 {
   // re-zero the traces in all flows
   for ( int fnum=0; fnum<numfb; fnum++ )
-  {
-    RezeroReference ( t_start, t_end, fnum );
-  }
+    {
+      RezeroReference ( t_start, t_end, fnum );
+    }
 }
-
-void EmptyTrace::RezeroCompressedReferenceAllFlows ( BkgTrace *bgTrace )
-{
-  // re-zero the traces in all flows
-  for ( int fnum=0; fnum<numfb; fnum++ )
-  {
-    RezeroCompressedReference ( bgTrace, fnum );
-  }
-}
-
 
 float EmptyTrace::ComputeDcOffsetEmpty ( float *bPtr, float t_start, float t_end )
 {
@@ -239,26 +196,29 @@ float EmptyTrace::ComputeDcOffsetEmpty ( float *bPtr, float t_start, float t_end
   int above_t_start = ( int ) ceil ( t_start );
   int below_t_end = ( int ) floor ( t_end );
 
+  assert ( (0 <= above_t_start) && (above_t_start-1 < imgFrames) &&
+	   (0 <= below_t_end+1) && (below_t_end < imgFrames) );
+
   for ( int pt = above_t_start; pt <= below_t_end; pt++ )
-  {
-    dc_zero += ( float ) ( bPtr[pt] );
-    cnt += 1.0f;
-  }
+    {
+      dc_zero += ( float ) ( bPtr[pt] );
+      cnt += 1.0f;
+    }
 
   // include values surrounding t_start & t_end weighted by overhang
   if ( above_t_start > 0 )
-  {
-    float overhang = ( above_t_start-t_start );
-    dc_zero = dc_zero + bPtr[above_t_start-1]*overhang;
-    cnt += overhang;
-  }
+    {
+      float overhang = ( above_t_start-t_start );
+      dc_zero = dc_zero + bPtr[above_t_start-1]*overhang;
+      cnt += overhang;
+    }
 
   if ( below_t_end < ( imgFrames-1 ) )
-  {
-    float overhang = ( t_end-below_t_end );
-    dc_zero = dc_zero + bPtr[below_t_end+1]* ( t_end-below_t_end );
-    cnt += overhang;
-  }
+    {
+      float overhang = ( t_end-below_t_end );
+      dc_zero = dc_zero + bPtr[below_t_end+1]* ( t_end-below_t_end );
+      cnt += overhang;
+    }
   dc_zero /= cnt;
 
   return ( dc_zero );
@@ -269,105 +229,29 @@ void EmptyTrace::GetShiftedBkg ( float tshift, TimeCompression &time_cp, float *
   ShiftMe ( tshift, time_cp, bg_buffers, bkg );
 }
 
-// void EmptyTrace::ShiftMe ( float tshift, TimeCompression &time_cp, float *my_buff, float *out_buff )
-// {
-//   for ( int fnum=0;fnum<numfb;fnum++ )
-//   {
-//     float *fbkg = out_buff + fnum*time_cp.npts();
-//     float *bg = &my_buff[fnum*imgFrames];         // get ptr to start of neighbor background
-//     memset (fbkg,0,sizeof (float[time_cp.npts()])); // on general principles
-//     float fn;
-//     for (int i=0;i < time_cp.npts();i++)
-//     {
-//       if ( doingSdat )
-//       {
-//         float fn = i - tshift;
-//         if ( fn < 0.0f )
-//         {
-//           fn = 0.0f;
-//         }
-//         // extrapolate
-//         if ( fn > imgFrames -2 )
-//         {
-//           float slope = ( bg[imgFrames-1] - bg[imgFrames-2] );
-//           fbkg[i] = bg[imgFrames-2] + slope * ( fn - ( imgFrames - 2 ) );
-//         }
-//         else
-//         {
-//           //interpolate
-//           int ifn = ( int ) fn;
-//           float frac = fn - ifn;
-//           fbkg[i] = ( 1 - frac ) * bg[ifn] + frac * ( bg[ifn+1] );
-//         }
-//       }
-//       else
-//       {
-//         // get the frame number of this data point (might be fractional because this point could be
-//         // the average of several frames of data.  This number is the average time of all the averaged
-//         // data points
-//         float t=time_cp.frameNumber[i];
-//         float fn=t-tshift;
-//         if ( fn < 0.0f ) fn = 0.0f;
-//         if ( fn > ( imgFrames-2 ) ) fn = imgFrames-2;
-//         int ifn= ( int ) fn;
-//         float frac = fn - ifn;
-
-//         fbkg[i] = ( ( 1-frac ) *bg[ifn] + frac*bg[ifn+1] );
-//       }
-//       assert ( !isnan(fbkg[i]) );
-//     }
-//   }
-// }
-
 void EmptyTrace::ShiftMe (float tshift, TimeCompression &time_cp, float *my_buff, float *out_buff)
 {
   for (int fnum=0;fnum<numfb;fnum++)
-  {
-    float *fbkg = out_buff + fnum*time_cp.npts();
-    float *bg = &my_buff[fnum*imgFrames];         // get ptr to start of neighbor background
-    memset (fbkg,0,sizeof (float[time_cp.npts()])); // on general principles
-    // fprintf(stdout, "tshift %f\n", tshift);
-    if(doingSdat) {
-      float tshift_secs = tshift * secondsPerFrame;  // convert from frames to seconds
-      std::vector<float> shifted(timePoints);
-      for (size_t i=0; i<timePoints.size(); i++) {
-	shifted[i] = (timePoints[i] + tshift_secs > 0) ? timePoints[i] + tshift_secs : 0;
-      }
-      TimeCompression::Interpolate(&shifted[0], bg, timePoints.size(), &time_cp.mTimePoints[0], fbkg, time_cp.npts());
-      for (int i=0;i < time_cp.npts();i++)
-      {
-	float fn = i - tshift;
-	if (fn < 0.0f) { fn = 0.0f; }
-	// extrapolate
-	if (fn > imgFrames -2) { 
-	  float slope = (bg[imgFrames-1] - bg[imgFrames-2]);
-	  fbkg[i] = bg[imgFrames-2] + slope * ( fn - ( imgFrames - 2 ) );
-	}
-	else {
-	  //interpolate
-	  int ifn = (int)fn;
-	  float frac = fn - ifn;
-	  fbkg[i] = (1 - frac) * bg[ifn] + frac * (bg[ifn+1]);
-	}
-	assert ( !isnan(fbkg[i]) );
-      }
-    }
-    else {
+    {
+      float *fbkg = out_buff + fnum*time_cp.npts();
+      float *bg = &my_buff[fnum*imgFrames];         // get ptr to start of neighbor background
+      memset (fbkg,0,sizeof (float[time_cp.npts()])); // on general principles
+      // fprintf(stdout, "tshift %f\n", tshift);
+      
       for (int i=0;i < time_cp.npts();i++){
-	// get the frame number of this data point (might be fractional because this point could be
-	// the average of several frames of data.  This number is the average time of all the averaged
-	// data points
-	float t=time_cp.frameNumber[i];
-	float fn=t-tshift;
-	if (fn < 0.0f) fn = 0.0f;
-	if (fn > (imgFrames-2)) fn = imgFrames-2;
-	int ifn= (int) fn;
-	float frac = fn - ifn;
-	fbkg[i] = ( (1-frac) *bg[ifn] + frac*bg[ifn+1]);
-	assert ( !isnan(fbkg[i]) );
+        // get the frame number of this data point (might be fractional because this point could be
+        // the average of several frames of data.  This number is the average time of all the averaged
+        // data points
+        float t=time_cp.frameNumber[i];
+        float fn=t-tshift;
+        if (fn < 0.0f) fn = 0.0f;
+        if (fn > (imgFrames-2)) fn = imgFrames-2;
+        int ifn= (int) fn;
+          float frac = fn - ifn;
+          fbkg[i] = ( (1-frac) *bg[ifn] + frac*bg[ifn+1]);
+          assert ( !isnan(fbkg[i]) );
       }
     }
-  }
 }
 
 void EmptyTrace::GetShiftedSlope ( float tshift, TimeCompression &time_cp, float *bkg )
@@ -385,10 +269,10 @@ void EmptyTrace::FillEmptyTraceFromBuffer ( short *bkg, int flow )
   float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
   int kount = 0;
   for ( int frame=0;frame<imgFrames;frame+=1 )
-  {
-    bPtr[kount] += ( bkg[frame]/FRAME_AVERAGE );
-    kount++;
-  }
+    {
+      bPtr[kount] += ( bkg[frame]/FRAME_AVERAGE );
+      kount++;
+    }
   for ( ; kount<imgFrames; kount++ )
     bPtr[kount] = bPtr[kount-1];
 }
@@ -397,10 +281,10 @@ void EmptyTrace::AccumulateEmptyTrace ( float *bPtr, float *tmp_shifted, float w
 {
   int kount = 0;
   for ( int frame=0;frame<imgFrames;frame++ )
-  {
-    bPtr[kount] += tmp_shifted[frame] * w;
-    kount++;
-  }
+    {
+      bPtr[kount] += tmp_shifted[frame] * w;
+      kount++;
+    }
 }
 
 
@@ -408,10 +292,10 @@ void EmptyTrace::RemoveEmptyTrace ( float *bPtr, float *tmp_shifted, float w )
 {
   int kount = 0;
   for ( int frame=0;frame<imgFrames;frame++ )
-  {
-    bPtr[kount] -= tmp_shifted[frame] * w;
-    kount++;
-  }
+    {
+      bPtr[kount] -= tmp_shifted[frame] * w;
+      kount++;
+    }
 }
 
 // Given a region, image and flow, average unpinned empty wells in this region
@@ -443,70 +327,70 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
   int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
   std::vector<float>valsAtT0, valsAtT1, valsAtT2;
   if ( do_ref_trace_trim )
-  {
-    valsAtT0.resize ( nRef,0 );
-    valsAtT1.resize ( nRef,0 );
-    valsAtT2.resize ( nRef,0 );
-    ix_t0 = t0_mean;                            // start of nuc flow (approx)
-    ix_t1 = ( t0_mean + nuc_flow_frame_width/2 ); // 1/2 way to the nuc_flow end
-    ix_t1 = ( ix_t1 >= imgFrames ) ? ( imgFrames - 1 ) : ix_t1;
-    ix_t2 = t0_mean + nuc_flow_frame_width;     // all the way to the nuc flow end
-    ix_t2 = ( ix_t2 >= imgFrames ) ? ( imgFrames - 1 ) : ix_t2;
-  }
+    {
+      valsAtT0.resize ( nRef,0 );
+      valsAtT1.resize ( nRef,0 );
+      valsAtT2.resize ( nRef,0 );
+      ix_t0 = t0_mean;                            // start of nuc flow (approx)
+      ix_t1 = ( t0_mean + nuc_flow_frame_width/2 ); // 1/2 way to the nuc_flow end
+      ix_t1 = ( ix_t1 >= imgFrames ) ? ( imgFrames - 1 ) : ix_t1;
+      ix_t2 = t0_mean + nuc_flow_frame_width;     // all the way to the nuc flow end
+      ix_t2 = ( ix_t2 >= imgFrames ) ? ( imgFrames - 1 ) : ix_t2;
+    }
 
   for ( int ay=region->row;ay<region->row+region->h;ay++ )
-  {
-    for ( int ax=region->col;ax<region->col+region->w;ax++ )
     {
-      int ix = bfmask->ToIndex ( ay, ax );
-      bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
-      if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned )   // valid reference well
-      {
-
-        TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
-        // shift it to account for relative timing differences - "mean zero shift"
-        // ax and ay are global coordinates and need to have the region location subtracted
-        // off in order to index into the region-sized t0_map
-        if ( t0_map.size() > 0 )
-          TraceHelper::SpecialShiftTrace ( tmp,tmp_shifted,imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
-        else
-          printf ( "Alert in EmptyTrace: t0_map nonexistent\n" );
-
-        float w=1.0;
-#ifdef LIVE_WELL_WEIGHT_BG
-        w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
-#endif
-        total_weight += w;
-        AccumulateEmptyTrace ( bPtr,tmp_shifted,w );
-        if ( do_ref_trace_trim )
+      for ( int ax=region->col;ax<region->col+region->w;ax++ )
         {
-          valsAtT0[iWell] = tmp_shifted[ix_t0];
-          valsAtT1[iWell] = tmp_shifted[ix_t1];
-          valsAtT2[iWell] = tmp_shifted[ix_t2];
-          iWell++;
+          int ix = bfmask->ToIndex ( ay, ax );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned )   // valid reference well
+            {
+
+              TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
+              // shift it to account for relative timing differences - "mean zero shift"
+              // ax and ay are global coordinates and need to have the region location subtracted
+              // off in order to index into the region-sized t0_map
+              if ( t0_map.size() > 0 )
+                TraceHelper::SpecialShiftTrace ( tmp,tmp_shifted,imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
+              else
+                printf ( "Alert in EmptyTrace: t0_map nonexistent\n" );
+
+              float w=1.0;
+#ifdef LIVE_WELL_WEIGHT_BG
+              w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
+#endif
+              total_weight += w;
+              AccumulateEmptyTrace ( bPtr,tmp_shifted,w );
+              if ( do_ref_trace_trim )
+                {
+                  valsAtT0[iWell] = tmp_shifted[ix_t0];
+                  valsAtT1[iWell] = tmp_shifted[ix_t1];
+                  valsAtT2[iWell] = tmp_shifted[ix_t2];
+                  iWell++;
+                }
+            }
         }
-      }
     }
-  }
   // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
 
   //if ((regionIndex == 132) && (flow==19))
   //  fprintf(stdout, "Debug stop");
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
-  {
-    SynchDat *sdat = NULL;
-    final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, sdat );
-  }
+    {
+      SynchDat *sdat = NULL;
+      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, sdat );
+    }
 
   // if ( final_weight != total_weight )
   //  fprintf (stdout, "Removed %f wild traces of %d from region %d in flow %d using t0_mean %f\n", total_weight - final_weight, nRef, regionIndex, flow, t0_mean);
 
   for ( int frame=0;frame < imgFrames;frame++ )
-  {
-    bPtr[frame] = bPtr[frame] / final_weight;
-    assert ( !isnan (bPtr[frame]) );
-  }
+    {
+      bPtr[frame] = bPtr[frame] / final_weight;
+      assert ( !isnan (bPtr[frame]) );
+    }
 }
 
 // given input time "seconds," return an index into time compressed trace
@@ -544,42 +428,18 @@ void EmptyTrace::SetTime(float frames_per_second)
 // assumes that the corresponding value v[i] matches the midpoint
 // of the interval [0, timePoints[0]] if i=0;
 // otherwise is    [timePoints[i-1], timePoints[i]], if i>0
-void EmptyTrace::SetTimeFromSdatChunk(Region& region, TraceChunk &chunk)
-{
+void EmptyTrace::SetTimeFromSdatChunk(Region& region, SynchDat &sdat) {
+  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region.row, region.col);
+  int numUncompFrames = sdat.GetOrigUncompFrames();
+  int baseFrameRate = sdat.GetBaseFrameRate();
   // copy the timing over
   // needed for interpolation
   timePoints.clear();
-  timePoints.assign(chunk.mTimePoints.begin(), chunk.mTimePoints.end());
-  
-  // sanity check
-  assert ( timePoints.size() > 0 );
-  // monotonicity check
-  float timeLast = 0.0f;  
-  for ( size_t i = 0; i < timePoints.size(); i++ )
-  {
-    assert ( timeLast < timePoints[i] );
-    timeLast = timePoints[i];
+  timePoints.resize(numUncompFrames);
+  for (int i = 0; i < numUncompFrames; i++) {
+    timePoints[i] = round(i * baseFrameRate / 1000.0f);
   }
   secondsPerFrame = chunk.FramesToSeconds(1.0f);
-
-  assert ( chunk.TimingMatch ( timePoints ) ); // this better match!
-
-  if ( chunk.RegionMatch ( region ) )
-  {
-    if ( chunk.TimingMatch ( timePoints ) )
-    {
-      regionAndTimingMatchesSdat = true ;
-      // fprintf(stdout, "Matched sdat to empty trace region %d\n", region.index);
-    }
-  }
-
-  if ( do_ref_trace_trim )
-  {
-    sampleIndex.resize ( 3,0 );
-    sampleIndex[0] = SecondsToIndex ( chunk.mT0, chunk.mTimePoints );
-    sampleIndex[1] = SecondsToIndex ( chunk.mT0 + nuc_flow_frame_width/2, chunk.mTimePoints ); // 1/2 way to the nuc_flow end
-    sampleIndex[1] = SecondsToIndex ( chunk.mT0 + nuc_flow_frame_width, chunk.mTimePoints );   //  nuc flow end
-  }
 }
 
 // sdat has compressed data by regions which may not match the regions
@@ -590,7 +450,6 @@ void EmptyTrace::SetTimeFromSdatChunk(Region& region, TraceChunk &chunk)
 // the EmptyTrace
 void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow )
 {
-  doingSdat = true;
   int iFlowBuffer = flowToBuffer ( flow );
   // these are used by both the background and live-bead
   bg_dc_offset[iFlowBuffer] = 0;  // zero out in each new block
@@ -604,73 +463,63 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
 
   assert ( nRef >= 0 );
 
-  int iWell = 0;
   int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
   std::vector<float>valsAtT0, valsAtT1, valsAtT2, samplingTimes;
   if ( do_ref_trace_trim )
-  {
-    valsAtT0.resize ( nRef,0 );
-    valsAtT1.resize ( nRef,0 );
-    valsAtT2.resize ( nRef,0 );
-    ix_t0 = sampleIndex[0]; // t0
-    ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
-    ix_t2 = sampleIndex[2];   //  nuc flow end
-  }
-
-  for ( int ay=region->row;ay<region->row+region->h;ay++ )
-  {
-    for ( int ax=region->col;ax<region->col+region->w;ax++ )
     {
-
-      int ix = bfmask->ToIndex ( ay, ax );
-      bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
-      if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
-      {
-        float w=1.0f;
-#ifdef LIVE_WELL_WEIGHT_BG
-        w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
-#endif
-        total_weight += w;
-        if ( regionAndTimingMatchesSdat )
-        {
-          for ( size_t f = 0; f < ( size_t ) imgFrames; f++ )
-          {
-            tmp[f] = sdat.At ( ay, ax, f );
-          }
-        }
-        else
-        {
-          sdat.InterpolatedAt ( ay, ax, timePoints, tmp );
-        }
-        AccumulateEmptyTrace ( bPtr, &tmp[0], w );
-        if ( do_ref_trace_trim )
-        {
-          valsAtT0[iWell] = tmp[ix_t0];
-          valsAtT1[iWell] = tmp[ix_t1];
-          valsAtT2[iWell] = tmp[ix_t2];
-          iWell++;
-        }
-      }
+      valsAtT0.resize ( nRef,0 );
+      valsAtT1.resize ( nRef,0 );
+      valsAtT2.resize ( nRef,0 );
+      ix_t0 = sampleIndex[0]; // t0
+      ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
+      ix_t2 = sampleIndex[2];   //  nuc flow end
     }
-  }
+  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region->row, region->col);
+  for ( int ay=region->row;ay<region->row+region->h;ay++ )
+    {
+      for ( int ax=region->col;ax<region->col+region->w;ax++ )
+        {
+
+          int ix = bfmask->ToIndex ( ay, ax );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
+            {
+              float w=1.0f;
+#ifdef LIVE_WELL_WEIGHT_BG
+              w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
+#endif
+              total_weight += w;
+              for ( size_t f = 0; f < ( size_t ) chunk.mDepth; f++ ) {
+                tmp[f] += w * sdat.At ( ay, ax, f );
+              }
+            }
+        }
+    }
   // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
-  {
-    Image *img = NULL;
-    final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
+    {
+      Image *img = NULL;
+      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
+    }
+
+  for ( int frame=0;frame < (int)chunk.mDepth;frame++ )
+    {
+      tmp[frame] = tmp[frame] / final_weight;
+      assert ( !isnan (tmp[frame]) );
+    }
+  int numUncompFrames = sdat.GetOrigUncompFrames();//GetOrigChipFrames();
+  int baseFrameRate = sdat.GetBaseFrameRate();
+  
+  for (int i = 0; i < numUncompFrames; i++) {
+    bPtr[i] = SynchDat::InterpolateValue(&tmp[0], chunk.mTimePoints, (i * baseFrameRate) / 1000.0f);
   }
 
-  for ( int frame=0;frame < imgFrames;frame++ )
-  {
-    bPtr[frame] = bPtr[frame] / final_weight;
-    assert ( !isnan (bPtr[frame]) );
-  }
 }
 
 void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow )
 {
-  doingSdat = true;
+  //  doingSdat = true;
   int iFlowBuffer = flowToBuffer ( flow );
   // these are used by both the background and live-bead
   bg_dc_offset[iFlowBuffer] = 0;  // zero out in each new block
@@ -687,57 +536,57 @@ void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Reg
   int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
   std::vector<float>valsAtT0, valsAtT1, valsAtT2, samplingTimes;
   if ( do_ref_trace_trim )
-  {
-    valsAtT0.resize ( nRef,0 );
-    valsAtT1.resize ( nRef,0 );
-    valsAtT2.resize ( nRef,0 );
-    ix_t0 = sampleIndex[0]; // t0
-    ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
-    ix_t2 = sampleIndex[2];   //  nuc flow end
-  }
+    {
+      valsAtT0.resize ( nRef,0 );
+      valsAtT1.resize ( nRef,0 );
+      valsAtT2.resize ( nRef,0 );
+      ix_t0 = sampleIndex[0]; // t0
+      ix_t1 = sampleIndex[1]; // 1/2 way to the nuc_flow end
+      ix_t2 = sampleIndex[2];   //  nuc flow end
+    }
 
   for ( int ay=region->row;ay<region->row+region->h;ay++ )
-  {
-    for ( int ax=region->col;ax<region->col+region->w;ax++ )
     {
-
-      int ix = bfmask->ToIndex ( ay, ax );
-      bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
-      if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
-      {
-        float w=1.0f;
-#ifdef LIVE_WELL_WEIGHT_BG
-        w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
-#endif
-        total_weight += w;
-        for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
-          tmp[f] = sdat.GetTimeVal ( ay, ax, f/time_cp.frames_per_second );
-        }
-        
-        AccumulateEmptyTrace ( bPtr, &tmp[0], w );
-        if ( do_ref_trace_trim )
+      for ( int ax=region->col;ax<region->col+region->w;ax++ )
         {
-          valsAtT0[iWell] = tmp[ix_t0];
-          valsAtT1[iWell] = tmp[ix_t1];
-          valsAtT2[iWell] = tmp[ix_t2];
-          iWell++;
+
+          int ix = bfmask->ToIndex ( ay, ax );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
+            {
+              float w=1.0f;
+#ifdef LIVE_WELL_WEIGHT_BG
+              w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
+#endif
+              total_weight += w;
+              for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
+                tmp[f] = sdat.GetTimeVal ( ay, ax, f/time_cp.frames_per_second );
+              }
+        
+              AccumulateEmptyTrace ( bPtr, &tmp[0], w );
+              if ( do_ref_trace_trim )
+                {
+                  valsAtT0[iWell] = tmp[ix_t0];
+                  valsAtT1[iWell] = tmp[ix_t1];
+                  valsAtT2[iWell] = tmp[ix_t2];
+                  iWell++;
+                }
+            }
         }
-      }
     }
-  }
   // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
-  {
-    Image *img = NULL;
-    final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
-  }
+    {
+      Image *img = NULL;
+      final_weight = TrimWildTraces ( region, bPtr, valsAtT0, valsAtT1, valsAtT2, total_weight, bfmask, img, &sdat );
+    }
 
   for ( int frame=0;frame < imgFrames;frame++ )
-  {
-    bPtr[frame] = bPtr[frame] / final_weight;
-    assert ( !isnan (bPtr[frame]) );
-  }
+    {
+      bPtr[frame] = bPtr[frame] / final_weight;
+      assert ( !isnan (bPtr[frame]) );
+    }
 }
 
 void EmptyTrace::T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *region, Mask *bfmask )
@@ -745,11 +594,11 @@ void EmptyTrace::T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *regio
   assert ( t0_map.size() == 0 );  // no behavior defined for resetting t0_map
   int img_cols = bfmask->W(); //whole image
   if ( sep_t0_est.size() > 0 )
-  {
-    t0_map.resize ( region->w*region->h );
-    t0_mean =TraceHelper::ComputeT0Avg ( region, bfmask, sep_t0_est, img_cols );
-    TraceHelper::BuildT0Map ( region, sep_t0_est,t0_mean, img_cols, t0_map );
-  }
+    {
+      t0_map.resize ( region->w*region->h );
+      t0_mean =TraceHelper::ComputeT0Avg ( region, bfmask, sep_t0_est, img_cols );
+      TraceHelper::BuildT0Map ( region, sep_t0_est,t0_mean, img_cols, t0_map );
+    }
 }
 
 
@@ -757,13 +606,21 @@ void EmptyTrace::T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *regio
 void EmptyTrace::DumpEmptyTrace ( FILE *my_fp, int x, int y )
 {
   // dump out the time-shifted empty trace value that gets computed
+  // if this region is unused then the buffers are not initialized
+  float value_to_dump = -1.0f;
   for ( int fnum=0; fnum<numfb; fnum++ )
-  {
-    fprintf ( my_fp, "%d\t%d\t%d\t%0.3f", x,y,fnum,bg_dc_offset[fnum] );
-    for ( int j=0; j<imgFrames; j++ )
-      fprintf ( my_fp,"\t%0.3f", bg_buffers[fnum*imgFrames+j] );
-    fprintf ( my_fp,"\n" );
-  }
+    {
+      if ( GetUsed() )
+	value_to_dump = bg_dc_offset[fnum];
+      fprintf ( my_fp, "%d\t%d\t%d\t%0.3f", x,y,fnum, value_to_dump);
+
+      for ( int j=0; j<imgFrames; j++ ) {
+	if (GetUsed() )
+	  value_to_dump = bg_buffers[fnum*imgFrames+j];
+        fprintf ( my_fp,"\t%0.3f", value_to_dump);
+      }
+      fprintf ( my_fp,"\n" );
+    }
 }
 
 void EmptyTrace::Dump_bg_buffers ( char *ss, int start, int len )
@@ -789,20 +646,20 @@ int EmptyTrace::CountReferenceTraces ( Region& region, Mask *bfmask )
     for ( int ax=region.col;ax<region.col+region.w;ax++ )
 
       if ( ReferenceWell ( ax, ay, bfmask ) )
-      {
-        int ix = bfmask->ToIndex ( ay, ax );
-        regionIndices[cnt]=ix;
-        cnt++;
-      }
+        {
+          int ix = bfmask->ToIndex ( ay, ax );
+          regionIndices[cnt]=ix;
+          cnt++;
+        }
   assert ( cnt == nRef );
   return nRef;
 }
 
 void EmptyTrace::SetTrimWildTraceOptions ( bool _do_ref_trace_trim,
-    float _span_inflator_min,
-    float _span_inflator_mult,
-    float _cutoff_quantile,
-    float _nuc_flow_frame_width )
+                                           float _span_inflator_min,
+                                           float _span_inflator_mult,
+                                           float _cutoff_quantile,
+                                           float _nuc_flow_frame_width )
 {
   do_ref_trace_trim = _do_ref_trace_trim;
   span_inflator_min = _span_inflator_min;
@@ -849,10 +706,10 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
   std::vector<float>::iterator it2 = valsAtT2.begin();
 
   for ( ; it0 !=valsAtT0.end() && it1 !=valsAtT1.end() && it2 !=valsAtT2.end(); ++it0, ++it1,++it2 )
-  {
-    *it1 = *it1 - *it0;
-    *it2 = *it2 - *it0;
-  }
+    {
+      *it1 = *it1 - *it0;
+      *it2 = *it2 - *it0;
+    }
 
   // find cutoffs at values in valsAtT1
   std::vector<float> v1 ( valsAtT1 );
@@ -887,42 +744,37 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
 
   // find traces outside the cutoffs and remove them
   for ( ; it1 !=valsAtT1.end() && it2 !=valsAtT2.end(); ++it1,++it2,++i )
-  {
-    if ( ( *it1 < v1_cutoff_low ) || ( *it1 > v1_cutoff_hi ) ||
-         ( *it2 < v2_cutoff_low ) || ( *it2 > v2_cutoff_hi ) )
     {
-      int ax;
-      int ay;
-      bfmask->IndexToRowCol ( regionIndices[i], ay, ax );
-      assert ( regionIndices[i] == bfmask->ToIndex ( ay, ax ) );
-
-      if ( sdat == NULL )
-      {
-        TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
-        if ( t0_map.size() > 0 )
-          TraceHelper::SpecialShiftTrace ( tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
-      }
-      else
-      {
-        if ( regionAndTimingMatchesSdat )
+      if ( ( *it1 < v1_cutoff_low ) || ( *it1 > v1_cutoff_hi ) ||
+           ( *it2 < v2_cutoff_low ) || ( *it2 > v2_cutoff_hi ) )
         {
-          for ( size_t f = 0; f < ( size_t ) imgFrames; f++ )
-          {
-            tmp_shifted[f] = sdat->At ( ay, ax, f );
+          int ax;
+          int ay;
+          bfmask->IndexToRowCol ( regionIndices[i], ay, ax );
+          assert ( regionIndices[i] == bfmask->ToIndex ( ay, ax ) );
+          
+          if ( sdat == NULL )  {
+            TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
+            if ( t0_map.size() > 0 )
+              TraceHelper::SpecialShiftTrace ( tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
           }
+          else {
+            //        if ( regionAndTimingMatchesSdat )
+            if(true) {
+              for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
+                tmp_shifted[f] = sdat->At ( ay, ax, f );
+              }
+            }
+            else {
+              sdat->InterpolatedAt ( ay, ax, timePoints, tmp_shifted );
+            }
+          }
+          // remove the wild trace
+          RemoveEmptyTrace ( bPtr, &tmp_shifted[0], w );
+          wt -= w;
+          nOutliers++;
         }
-        else
-        {
-          sdat->InterpolatedAt ( ay, ax, timePoints, tmp_shifted );
-        }
-      }
-      // remove the wild trace
-      RemoveEmptyTrace ( bPtr, &tmp_shifted[0], w );
-      wt -= w;
-      nOutliers++;
     }
-  }
-
   return ( ( float ) wt );
 }
 

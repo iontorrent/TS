@@ -5,8 +5,10 @@ import xmlrpclib
 
 PORT = 10000
 
-def connect(host,port):
-    return xmlrpclib.ServerProxy("http://%s:%d" % (host,port), allow_none=True)
+
+def connect(host, port):
+    return xmlrpclib.ServerProxy("http://%s:%d" % (host, port), allow_none=True)
+
 
 def load(fname):
     infile = open(fname)
@@ -24,5 +26,5 @@ if __name__ == '__main__':
     print "Run name:", name
     name2 = server.startanalysis("test2",
                                  tscript,
-                                 {"name":"test script 2",
-                                  "numbers":[1,2,3,4,5]})
+                                 {"name": "test script 2",
+                                  "numbers": [1, 2, 3, 4, 5]})

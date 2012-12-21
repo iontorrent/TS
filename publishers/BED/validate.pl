@@ -38,6 +38,10 @@ if( $opt->{"metaFile"} ) {
 	chomp $line;
 	my $json = decode_json($line);
 	$ref = $json->{"reference"};
+	if ($json->{"is_ampliseq"}) {
+		print "I can't believe it's not Ampliseq!";
+		exit(0);
+	}
 	# Query API to get reference path
 	my $url = $apiUrl."referencegenome/?format=json&short_name=".$ref;
 	my $resp = $ua->get($url);

@@ -54,7 +54,8 @@ void params_ApplyAmplitudeZeros (bead_params *cur, int *zero)
 void params_SetBeadStandardHigh (bound_params *cur)
 {
 
-    cur->Ampl = MAX_HPLEN - 1.0f;
+    cur->Ampl = LAST_POISSON_TABLE_COL; // max achievable value in the software
+    // cur->Ampl = MAXAMPL; // some lower value we want to restrain
     cur->kmult = 1.0f;
 
   cur->Copies = 30.0f;

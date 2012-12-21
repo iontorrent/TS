@@ -1,186 +1,208 @@
 {% extends "rundb/plan/base.html" %}
 {% block extra_head %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" />    
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" />
 <script type="text/javascript" src="/site_media/resources/scripts/wizard.min.js"></script>
 
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />
-<script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>  
- 
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/ui.spinner.css" />
-<script type="text/javascript" src="/site_media/resources/jquery/ui.spinner.min.js"></script>
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+<script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
 
 <script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
 <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css"/>
+
+<script src="/site_media/resources/jquery/jQuery.download.min.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script> <!-- for ajaxForm -->
+<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script> <!-- Using updated uni-form JS -->
+
 <style>
 .k-grid table {
-	table-layout: auto;
+    table-layout: auto;
 }
 </style>
 {% endblock extra_head %}
 {% block content %}
-		<div class="content group">
-			<div class="row-fluid">
-			<h1>Templates</h1>
-			<br>
-			<table class="favorites_recent plan-grid">
-				<tr>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/star-blue.png" class="favorite_star" border="0" width='37px;'>
-							<h3>Favorites</h3>
-						</div>
+        <div class="content group">
+            <div class="row-fluid">
+            <h1>Templates</h1>
+            <br>
+            <table class="favorites_recent plan-grid">
+                <tr>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/star-blue.png" class="favorite_star" border="0" width='37px;'>
+                            <h3>Favorites&nbsp;&nbsp;|<a href="{% url upload_plans_for_template %}" class="upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a></h3>
+                        </div>
                         <table id="favorites" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
                         </table>
-					</td>
-					<td width="2%">&nbsp;</td>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/recentlyused.png" border="0" width="37px;">
-							<h3>Recently Used</h3>
-						</div>
-                    	<table id="recents" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
-                        </table>                     
-					</td>
-				</tr>
-			</table>
-			
-			<table class="plan-grid">
-				<tr>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/appl_ampliSeq.png" border="0">
-							<h3>Ampliseq &nbsp;&nbsp;| <a href="{% url add_plan_template 1 %}" class="add-new-plan" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 1 %}" class="add-new-plan-run" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-						</div>
-                    	<table id="ampliSeqs" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
-                        </table> 
-					</td>
-					<td width="2%">&nbsp;</td>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/appl_wholeGenome.png" border="0">
-							<h3>Whole-Genome Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 3 %}" class="add-new-plan" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 3 %}" class="add-new-plan-run" ref="#wholeGenomes" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-						</div>						
-                    	<table id="wholeGenomes" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
-                        </table> 
-					</td>
-				</tr>
-				<tr>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/appl_targetSeq.png" border="0">
-							<h3>TargetSeq &nbsp;&nbsp;| <a href="{% url add_plan_template 2 %}" class="add-new-plan" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 2 %}" class="add-new-plan-run" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-						</div>
-						<table id="targetSeqs" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
-                        </table>                     	                        
-					</td>
-					<td width="2%">&nbsp;</td>
-					<td width="49%">
-						<div class="application-template group">
-							<img src="/site_media/resources/img/appl_rnaSeq.png" border="0">
-							<h3>RNA Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 4 %}" class="add-new-plan" ref="#rnaSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 4 %}" class="add-new-plan-run" ref="#rnaSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-						</div>
-                        <table id="rnaSeqs" style="width:100%;">
-                        	<thead style="display: none;">
-			                    <tr>
-			                        <td></td>
-			                        <td></td>
-			                    </tr>
-                        	</thead>
-                        	<tbody>
-			                    <tr>
-			                        <td colspan="2"></td>
-			                    </tr>
-                        	</tbody>
-                        </table>                    	
-					</td>					
-				</tr>
-				<tr>
-				<td width="49%">
-					<div class="application-template group">
-						<img src="/site_media/resources/img/appl_wildcard.png" border="0">
-						<h3>Generic Sequencing &nbsp;&nbsp;| <a href="{% url add_plan_template 0 %}" class="add-new-plan" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 0 %}" class="add-new-plan-run" ref="#genericSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-					</div>
-					<table id="genericSeqs" style="width:100%;">
-						<thead style="display: none;">
-							<tr>
-                        		<td></td>
-                        		<td></td>
-                        	</tr>
+                    </td>
+                    <td width="2%">&nbsp;</td>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/recentlyused.png" border="0" width="37px;">
+                            <h3>Recently Used</h3>
+                        </div>
+                        <table id="recents" style="width:100%;">
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+
+            <table class="dna_applications plan-grid">
+                <tr>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/appl_ampliSeq.png" border="0">
+                            <h3>Ampliseq DNA&nbsp;&nbsp;| <a href="{% url add_plan_template 1 %}" class="add-new-plan" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 1 %}" class="add-new-plan-run" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        </div>
+                        <table id="ampliSeqs" style="width:100%;">
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                    <td width="2%">&nbsp;</td>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/appl_wholeGenome.png" border="0">
+                            <h3>Whole-Genome Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 3 %}" class="add-new-plan" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 3 %}" class="add-new-plan-run" ref="#wholeGenomes" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        </div>
+                        <table id="wholeGenomes" style="width:100%;">
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/appl_targetSeq.png" border="0">
+                            <h3>TargetSeq &nbsp;&nbsp;| <a href="{% url add_plan_template 2 %}" class="add-new-plan" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 2 %}" class="add-new-plan-run" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        </div>
+                        <table id="targetSeqs" style="width:100%;">
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                    <td width="2%">&nbsp;</td>
+                    <td width="49%">
+                        <div class="application-template group">
+                            <img src="/site_media/resources/img/appl_wildcard.png" border="0">
+                            <h3>Generic Sequencing &nbsp;&nbsp;| <a href="{% url add_plan_template 0 %}" class="add-new-plan" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 0 %}" class="add-new-plan-run" ref="#genericSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        </div>
+                        <table id="genericSeqs" style="width:100%;">
+                            <thead style="display: none;">
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                </table>
+
+                <table class="plan-grid">
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_ampliSeqRna.png" border="0">
+                        <h3>AmpliSeq RNA&nbsp;&nbsp;| <a href="{% url add_plan_template 5 %}" class="add-new-plan" ref="#ampliSeqRNA" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 5 %}" class="add-new-plan-run" ref="#ampliSeqsRna" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="ampliSeqRna" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
                         </thead>
                         <tbody>
-                        <tr>
-                        	<td colspan="2"></td>
-                        </tr>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
                         </tbody>
-                      </table>                                 	                        
-				</td>
-				<td width="2%">&nbsp;</td>
-				<td width="49%">	
-				</td>					
-			</tr>							
-			</table>	
-			</div>																
-		</div>
-		
+                    </table>
+                </td>
+                <td width="2%">&nbsp;</td>
+                <td width="49%">
+                <div class="application-template group">
+                    <img src="/site_media/resources/img/appl_rnaSeq.png" border="0">
+                    <h3>RNA Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 4 %}" class="add-new-plan" ref="#rnaSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 4 %}" class="add-new-plan-run" ref="#rnaSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                </div>
+                <table id="rnaSeqs" style="width:100%;">
+                    <thead style="display: none;">
+                        <tr>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+            </tr>
+            </table>
+            </div>
+        </div>
+
 <script id="emptyRowTemplate" type="text/x-kendo-template">
     <tr>
         <td colspan="2">
-        	#= msg#
+            #= msg#
         </td>
     </tr>
 </script>
@@ -190,363 +212,20 @@
             #= planDisplayedName #
         </td>
         <td class="actions">
-			# var _id = id;# 
-        	# if (isSystem) { #
-    			<span><a href="#= '{% url review_plan_template 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a class="plan-run" href="#= '{% url create_plan_from_template 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="copy-plan" href="#= '{% url copy_plan_template 0 %}'.replace('0',_id)#">Copy</a></span> 
-    		# }  else { #
-    			<span><a href="#= '{% url review_plan_template 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a class="plan-run" href="#= '{% url create_plan_from_template 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="copy-plan" href="#= '{% url copy_plan_template 0 %}'.replace('0',_id)#">Copy</a> | <a class="edit-plan" href="#= '{% url edit_plan_template 0 %}'.replace('0',_id)#">Edit</a> | <a href="#= '{% url delete_plan_template 0 %}'.replace('0',_id)#" class="delete-plan">Delete</a></span> 
-			# } #
+            # var _id = id;#
+            # if (isSystem) { #
+                <span><a href="#= '{% url review_plan_template 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a class="plan-run" href="#= '{% url create_plan_from_template 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url batch_plans_from_template 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a class="copy-plan" href="#= '{% url copy_plan_template 0 %}'.replace('0',_id)#">Copy</a></span>
+            # }  else { #
+                <span><a href="#= '{% url review_plan_template 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a class="plan-run" href="#= '{% url create_plan_from_template 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url batch_plans_from_template 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a class="copy-plan" href="#= '{% url copy_plan_template 0 %}'.replace('0',_id)#">Copy</a> | <a class="edit-plan" href="#= '{% url edit_plan_template 0 %}'.replace('0',_id)#">Edit</a> | <a href="#= '{% url delete_plan_template 0 %}'.replace('0',_id)#" class="delete-plan">Delete</a></span>
+            # } #
         </td>
     </tr>
 </script>
 <script type="text/javascript">
-function commonDataBoundEvent(target, msg) {
-	$(target).addClass('plan-table')
-	$(target).parent().children('div.k-pager-wrap').show();
-	if ($(target).data("kendoGrid").dataSource.data().length == 0) {
-		var encodingTemplate = kendo.template($("#emptyRowTemplate").html());
-		$(target +' tbody').html(encodingTemplate({msg: msg}));
-		$(target).parent().children('div.k-pager-wrap').hide();
-	} 
-	bindActions(target);	
-}
-function commonKendoGrid(target, url, msg) {
-	return {
-        dataSource: {
-        	type: "json",
-			transport: {
-                read: {
-                	url: url,
-                	contentType: 'application/json; charset=utf-8',
-				    type: 'GET',
-				    dataType: 'json'
-                },
-                parameterMap: function(options) {
-					return buildParameterMap(options)
-				}                    
-            },
-            schema: {
-            	data: "objects",
-            	total: "meta.total_count"
-            },
-            serverPaging: true,                        	
-        	pageSize: 5
-        },
-        height: 'auto',
-        scrollable:false,
-        pageable: true,
-		rowTemplate: kendo.template($("#rowTemplate").html()),
-        dataBound: function(e) {
-        	commonDataBoundEvent(target, msg);
-		}                        
-   };
-}
-
-function bindActions(source) {
-	
-	$(source + ' .review-plan').click(function(e){
-		$('body').css("cursor", "wait");
-		e.preventDefault();
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-		
-		url = $(this).attr('href');
-		
-		$('body #modal_review_plan').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		    $( "#modal_review_plan" ).modal("show");
-			
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-								
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });		
-	});
-	$(source + ' .plan-run').click(function(e){
-		$('body').css("cursor", "wait");
-		e.preventDefault();
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-		
-		url = $(this).attr('href');
-		
-		$('body #modal_plan_wizard').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	setTab('#ws-8');
-		  	$( "#modal_plan_wizard" ).data('source', source);
-		    $( "#modal_plan_wizard" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-	    	// $(that).trigger('remove_from_project_done', {values: e.values});
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });		
-	});
-	
-	$(source + " .edit-plan").click(function (e) {
-		$('body').css("cursor", "wait");
-		e.preventDefault(); 
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-		
-		url = $(this).attr('href');
-		
-		$('body #modal_plan_wizard').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	
-		  	setTab('#ws-1');
-		  	$( "#modal_plan_wizard" ).data('source', source);
-		    $( "#modal_plan_wizard" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-	    	// $(that).trigger('remove_from_project_done', {values: e.values});
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });
-	});	
-	$(source + " .copy-plan").click(function (e) {
-		$('body').css("cursor", "wait");
-		e.preventDefault(); 
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-		
-		url = $(this).attr('href');
-		$('body #modal_plan_wizard').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-			setTab('#ws-8');
-		  	$( "#modal_plan_wizard" ).data('source', source);
-		    $( "#modal_plan_wizard" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });
-		return false;
-	});
-	
-	$(source + " .delete-plan").click(function (e) {
-		e.preventDefault();
-		url = $(this).attr('href');
-		$('body #modal_confirm_delete').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	$( "#modal_confirm_delete" ).data('source', source);
-		    $( "#modal_confirm_delete" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-		})
-	    .fail(function(data) {
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });
-	});	 
-
-}	
-	   
-$(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e) {
-	console.log(e.target, e.relatedTarget);
-	var target, grid;
-	
-	// refreshKendoGrid('#favorites');
-	// refreshKendoGrid('#recents');
-	// var target = $(e.target).data('source');
-	$('.main .plan-grid table').each(function(i, element){
-		refreshKendoGrid(element);
-	});
-});
-
-$(document).ready(function() {
-	var basePlannedExperimentUrl = "/rundb/api/v1/plannedexperiment/?format=json&isReusable=true&planExecuted=False&isSystemDefault=False";
-	var orderByOptions = "&order_by=-date&order_by=planDisplayedName";
-	var favorites = $("#favorites").kendoGrid(
-		commonKendoGrid("#favorites"
-		, basePlannedExperimentUrl + "&isFavorite=true&username={{user.username}}" + orderByOptions
-		, 'No Favorites yet')
-	);
-	var recents = $("#recents").kendoGrid(
-		commonKendoGrid("#recents"
-		, basePlannedExperimentUrl + orderByOptions
-		, 'No Recents yet')
-	);
-		
-	var ampliSeqs = $("#ampliSeqs").kendoGrid(
-		commonKendoGrid("#ampliSeqs"
-		, basePlannedExperimentUrl + "&runType=AMPS" + orderByOptions
-		, 'No Ampliseq templates yet')
-	);
-	
-	var wholeGenomes = $("#wholeGenomes").kendoGrid(
-		commonKendoGrid("#wholeGenomes"
-		, basePlannedExperimentUrl + "&runType=WGNM" + orderByOptions
-		, 'No Whole Genome templates yet')
-	);
-	var targetSeqs = $("#targetSeqs").kendoGrid(
-		commonKendoGrid("#targetSeqs"
-		, basePlannedExperimentUrl + "&runType=TARS" + orderByOptions
-		, 'No TargetSeq templates yet')
-	);
-	var rnaSeqs = $("#rnaSeqs").kendoGrid(
-			commonKendoGrid("#rnaSeqs"
-			, basePlannedExperimentUrl + "&runType=RNA" + orderByOptions
-			, 'No RNASeq templates yet')
-		);	
-	var genericSeqs = $("#genericSeqs").kendoGrid(
-		commonKendoGrid("#genericSeqs"
-		, basePlannedExperimentUrl + "&runType=GENS" + orderByOptions
-		, 'No Generic Sequencing templates yet')
-	);
-	
-	$('.add-new-plan').click(function(e){
-		$('body').css("cursor", "wait");
-		e.preventDefault();		
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-		
-		url = $(this).attr('href');
-		source = $(this).attr('ref');
-		$('body #modal_plan_wizard').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	
-		  	setTab('#ws-1');
-		  	$( "#modal_plan_wizard" ).data('source', source);
-		    $( "#modal_plan_wizard" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-	    	// $(that).trigger('remove_from_project_done', {values: e.values});
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    	 
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });		
-	});
-	$('.add-new-plan-run').click(function(e){
-		//browser bug: mouse cursor will not change if user has not moved the mouse.
-		$('body').css("cursor", "wait");		
-
-		e.preventDefault();
-
-		var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-		$('body').prepend(busyDiv);
-
-		url = $(this).attr('href');
-		source = $(this).attr('ref');
-		$('body #modal_plan_wizard').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		  	
-		  	setTab('#ws-1');
-		  	$( "#modal_plan_wizard" ).data('source', source);
-		    $( "#modal_plan_wizard" ).modal("show");
-		    return false;
-		}).done(function(data) { 
-	    	console.log("success:",  url);
-	    	// $(that).trigger('remove_from_project_done', {values: e.values});
-		})
-	    .fail(function(data) {
-			$('body').css("cursor", "default");
-			$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			
-	    	$('#error-messages').empty();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-	    	console.log("error:", data);
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ 
-	    	$('body').css("cursor", "default");
-	    	$('.myBusyDiv').empty();
-			$('body').remove('.myBusyDiv');
-			delete busyDiv;
-	    });	
-	});
-});
-
+var username = '{{user.username}}';
 </script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/plans.html.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_plan_wizard.html.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_batch_planning_upload.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_batch_planning.js"></script>
 {% endblock content %}

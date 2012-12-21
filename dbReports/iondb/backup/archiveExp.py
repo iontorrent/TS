@@ -3,17 +3,31 @@
 import os
 
 # Definition of archiveExperiment object used by archive tool
+
+
 class Experiment:
-    def __init__(self, exp, name, date, star, storage_options, user_ack, dir, pk, rawdatastyle):
-        self.prettyname = exp.pretty_print()
-        self.name = name
-        self.date = date
-        self.star = star
-        self.store_opt = storage_options
-        self.user_ack = user_ack
-        self.dir = dir
-        self.pk = pk
-        self.rawdatastyle = rawdatastyle
+    def __init__(self,
+                 _exp,
+                 _name,
+                 _date,
+                 _star,
+                 _storage_options,
+                 _user_ack,
+                 _dir,
+                 _pk,
+                 _rawdatastyle,
+                 _diskusage):
+        
+        self.prettyname = _exp.pretty_print()
+        self.name = _name
+        self.date = _date
+        self.star = _star
+        self.store_opt = _storage_options
+        self.user_ack = _user_ack
+        self.dir = _dir
+        self.pk = _pk
+        self.rawdatastyle = _rawdatastyle
+        self.diskusage = _diskusage
 
     def get_exp_path(self):
         return self.dir
@@ -27,11 +41,10 @@ class Experiment:
         return to_bool(self.star)
 
     def get_folder_size(self):
-        dir = self.dir
         dir_size = 0
         for (path, dirs, files) in os.walk(self.dir):
-            for file in files:
-                filename = os.path.join(path, file)
+            for item in files:
+                filename = os.path.join(path, item)
                 dir_size += os.path.getsize(filename)
         return dir_size
 
@@ -43,4 +56,3 @@ class Experiment:
 
     def get_storage_option(self):
         return self.store_opt
-    

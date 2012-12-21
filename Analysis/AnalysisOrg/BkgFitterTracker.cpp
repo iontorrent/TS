@@ -23,9 +23,9 @@ void BkgFitterTracker::SetRegionProcessOrder ()
 
   int nonZeroRegions = numFitters - zeroRegions;
 
+  printf ("Number of live bead regions: %d\n", nonZeroRegions);
   if (analysis_compute_plan.gpu_work_load != 0)
   {
-    printf ("Number of live bead regions: %d\n", nonZeroRegions);
 
     int gpuRegions = int (analysis_compute_plan.gpu_work_load * float (nonZeroRegions));
     if (gpuRegions > 0)
@@ -129,6 +129,7 @@ void BkgFitterTracker::SetUpTraceTracking(SlicedPrequel &my_prequel_setup, Comma
   // this is set up beforehand, while deferring the beads to the region mesh used in signal processing
   all_emptytrace_track = new EmptyTraceTracker(my_prequel_setup.region_list, my_prequel_setup.region_timing, my_prequel_setup.smooth_t0_est, inception_state);
   all_emptytrace_track->Allocate(from_beadfind_mask.my_mask, my_image_spec);
+  washout_flow.resize(from_beadfind_mask.my_mask->H() * from_beadfind_mask.my_mask->W(), -1);
 }
 
 void TrivialDebugGaussExp(string &outFile, std::vector<Region> &regions, std::vector<RegionTiming> &region_timing)
@@ -148,7 +149,7 @@ void TrivialDebugGaussExp(string &outFile, std::vector<Region> &regions, std::ve
 void BkgFitterTracker::InitCacheMath()
 {
     // construct the shared math table
-  poiss_cache.Allocate (MAX_HPLEN+1,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
+  poiss_cache.Allocate (MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
   poiss_cache.GenerateValues(); // fill out my table
 }
 
@@ -201,7 +202,7 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
     linfo[r].maskPtr = a_complex_mask.my_mask;
     linfo[r].pinnedInFlow = a_complex_mask.pinnedInFlow;
     linfo[r].global_defaults = &global_defaults;
-
+    linfo[r].washout_flow = &washout_flow[0];
     // prequel data
     linfo[r].regions = &regions[0];
     linfo[r].numRegions = (int)totalRegions;
@@ -397,7 +398,6 @@ void BkgFitterTracker::DumpBkgModelEmptyTrace (char *results_folder, int flow)
   for (int r = 0; r < numFitters; r++)
   {
     sliced_chip[r]->DumpEmptyTrace (bkg_mod_mt_dbg);
-
   }
   fclose (bkg_mod_mt_dbg);
 }

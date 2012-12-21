@@ -9,10 +9,16 @@ djcelery.setup_loader()
 
 HOSTNAME = socket.gethostname()
 TEST_INSTALL= False
-LOCALPATH = path.dirname(__file__)
+LOCALPATH = path.abspath(path.dirname(__file__))
 AUTO_START = False
+
+
 DEBUG = False
 TEMPLATE_DEBUG = DEBUG
+
+# Set ADMINS in local_settings
+ADMINS = ()
+MANAGERS = ADMINS
 
 DATABASES = {
     'default': {
@@ -26,12 +32,15 @@ DATABASES = {
 }
 
 # Django Celery config
-CELERYD_LOG_FILE = "/var/log/ion/celery.log"
+CELERYD_LOG_FILE = "/var/log/ion/celery_django.log"
+CELERYD_LOG_LEVEL = 'DEBUG'
 BROKER_HOST = "localhost"
 BROKER_PORT = 5672
 BROKER_USER = "ion"
 BROKER_PASSWORD = "ionadmin"
 BROKER_VHOST = "ion"
+## Avoid indefinite hangs by forcing results to expire after 30 minutes
+CELERY_TASK_RESULT_EXPIRES = 1800
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -44,6 +53,7 @@ TIME_ZONE = None
 # information in UTC in the database, uses time-zone-aware datetime
 # objects internally, and translates them to the end user's time zone
 # in templates and forms.
+# If you set this to False, Django will not use timezone-aware datetimes.
 USE_TZ = True
 
 # Language code for this installation. All choices can be found here:
@@ -54,7 +64,11 @@ SITE_ID = 1
 
 # If you set this to False, Django will make some optimizations so as not
 # to load the internationalization machinery.
-USE_I18N = True
+USE_I18N = False
+
+# If you set this to False, Django will not format dates, numbers and
+# calendars according to the current locale.
+USE_L10N = False
 
 # Absolute path to the directory that holds media.
 # Example: "/home/media/media.lawrence.com/"
@@ -73,6 +87,14 @@ MEDIA_URL = ''
 STATIC_URL = '/media/'
 STATIC_ROOT = '/var/www/media'
 
+# List of finder classes that know how to find static files in
+# various locations.
+STATICFILES_FINDERS = (
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+#    'django.contrib.staticfiles.finders.DefaultStorageFinder',
+)
+
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = 'mlnpl3nkj5(iu!517y%pr=gbcyi=d$^la)px-u_&i#u8hn0o@$'
 
@@ -90,7 +112,9 @@ MIDDLEWARE_CLASSES = (
     'iondb.rundb.middleware.DeleteSessionOnLogoutMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    #'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'iondb.rundb.login.middleware.BasicAuthMiddleware',
     'django.contrib.auth.middleware.RemoteUserMiddleware',
     'iondb.rundb.middleware.LocalhostAuthMiddleware',
     'iondb.bin.startup_housekeeping.StartupHousekeeping'
@@ -110,8 +134,8 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.core.context_processors.media',
     'django.core.context_processors.static',
     'django.contrib.messages.context_processors.messages',
-    'iondb.rundb.views.base_context_processor',
-    'iondb.rundb.views.message_binding_processor',
+    'iondb.rundb.context_processors.base_context_processor',
+    'iondb.rundb.context_processors.message_binding_processor',
     'django.contrib.messages.context_processors.messages',
 )
 
@@ -151,12 +175,17 @@ CELERY_IMPORTS = (
     "iondb.rundb.tasks",
     "iondb.rundb.publishers",
     "iondb.plugins.tasks",
+    "iondb.backup.tasks",
+    "iondb.rundb.session_cleanup.tasks"
 )
 
 # Allow tasks the generous run-time of six hours before they're killed.
 CELERYD_TASK_TIME_LIMIT=21600
-# Plugin tasks drop privileges to ionian, so need to start new worker each time
-CELERYD_MAX_TASKS_PER_CHILD=1
+
+from iondb.rundb.session_cleanup.settings import nightly_schedule
+CELERYBEAT_SCHEDULE = {
+    'session_cleanup': nightly_schedule
+}
 
 if path.exists("/opt/ion/.computenode"):
     # This is the standard way to disable logging in Django.
@@ -178,17 +207,10 @@ LOGGING = {
     'handlers': {
         'default': {
             'level': 'DEBUG',
-            'class': 'logging.handlers.RotatingFileHandler',
+            'class': 'logging.handlers.WatchedFileHandler',
             'filename': '/var/log/ion/django.log',
-            'maxBytes': 1024 * 1024 * 5, # 5 MB
-            'backupCount': 5,
             'formatter': 'standard',
         },
-        #'mail_admins': {
-        #    'level': 'ERROR',
-        #         'filters': ['require_debug_false'],
-        #         'class': 'django.utils.log.AdminEmailHandler'
-        #}
     },
     'filters': {
         'require_debug_false': {
@@ -200,8 +222,18 @@ LOGGING = {
         # logs from any application in this project would go here.
         '': {
             'handlers': ['default'],
-            'level': 'DEBUG',
+            'level': 'INFO', # python default is WARN for root logger
             'propagate': True
+        },
+        'iondb': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': False
+        },
+        'ion': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': False
         },
         # When DEBUG is True, django.db will log every SQL query.  That is too
         # much stuff that we don't normally need, so it's logged elsewhere.
@@ -259,6 +291,23 @@ PLUGIN_WAREHOUSE = [
     )
 ]
 
+# This is defined here for sharing and debugging purpuses only
+# Remove before launch
+# Identify a Model and an event, which can be 'create', 'save', 'delete'
+EVENTAPI_CONSUMERS =  {}
+#EVENTAPI_CONSUMERS =  {
+#    ('Result', 'save'): [
+#        'http://localhost/rundb/demo_consumer/result_save',
+#     ],
+#    ('Experiment', 'create'): [
+#        'http://localhost/rundb/demo_consumer/generic'
+#     ],
+#    ('Plan', 'delete'): [
+#        'http://localhost/rundb/demo_consumer/plan_delete'
+#     ],
+#}
+
+
 try:
     # this file is generated and placed into /opt/ion/iondb/ion_dbreports_version.py by the CMake process and .deb pkg installation
     import version #@UnresolvedImport
@@ -268,6 +317,15 @@ except:
     SVNREVISION=''
     VERSION=''
     pass
+
+TEST_RUNNER = "iondb.test_runner.IonTestSuiteRunner"
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'ion-rundb-cache'
+    }
+}
 
 # import from the local settings file
 try:

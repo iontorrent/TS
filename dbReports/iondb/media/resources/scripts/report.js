@@ -22,7 +22,7 @@ function resizeiFrames(){
     $(".pluginMajorBlock:visible").each(function(){
         var height = $(this).contents().height(),
             width = parseInt($(".section").css("width"),10) - 20;
-        height = height > 800? 800 : height;
+        height = height > 800 ? 800 : height;
     	if ($(this).height() != height)  $(this).height(height);
         if ($(this).width() != width)  $(this).width(width);
     });
@@ -114,10 +114,13 @@ function progress_load(){
 	    success: function (data) {
 	    	$("#progress_message").html(data.status);
 	    	
-	    	if (data.status === "Completed"){
-	    		$("#progress_message").html("The report has been completed. The page will reload in 5 seconds");
-	    		setTimeout(function(){location.reload()}, 5000);
-	    	}
+			if (data.status.indexOf("Completed") == 0){
+				clearInterval($(document).data('report_progress'));
+				if (data.status === "Completed") {
+					$("#progress_message").html("The report has been completed. The page will reload in 5 seconds");
+					setTimeout(function(){location.reload()}, 5000);
+				}
+			}
 	    },
 		error: function (msg) {
 	    	$("#progress_message").html("Error checking status");
@@ -156,19 +159,6 @@ $(document).ready(function(){
 	$("#proton").load(protonData);
 
 	//load the tabs
-	phpInfo = $("#report").data("php") + " #ReportInfo div div table:eq(1)";
-	$("#AnalysisDetails").load(phpInfo, function(responseText, textStatus, XMLHttpRequest) {
-		var dateCell = $("#AnalysisDetails tbody tr:has(th:contains('Run Date')) td:first");
-		dateCell.text(kendo.toString(new Date(Date.parse(dateCell.text().replace(" ", "T"))),"yyyy/MM/dd hh:mm tt"));
-		//$("#AnalysisDetails").prepend("<h2>Analysis Details</h2> <hr/>");
-	});
-
-
-	phpSoftware = $("#report").data("php") + " #ReportInfo div div table:eq(2)"; 
-	$("#SoftwareVersion").load(phpSoftware, function(){
-		//$("#SoftwareVersion").prepend("<h2>Software Versions</h2><hr/>");
-	});
-
     var q30_quality = $("#q30_quality").data("percent");
     $("#q30_quality").strength(q30_quality, 'undefined', q30_quality, 
         'Sequence >= Q30');
@@ -232,10 +222,9 @@ $(document).ready(function(){
 
 	//TODO : Rewrite with bootstrap
 	//provide the SGE log for plugins
-	$('.pluginLog').live("click", function () {
+	$('.pluginLog').live("click", function (e) {
+		e.preventDefault();
 	    var url = $(this).attr("href");
-	    dialog = $("#logBox");
-	    dialog.html("");
 	    var title = $($(this)).data("title");
 	    // load remote content
 	    var logParent = $($(this).parent());
@@ -248,21 +237,12 @@ $(document).ready(function(){
 	        speed: 1.5,
 	        padding: '3'
 	    });
-	    $.get(
-	    url, function (responseText) {
-	        dialog.html(htmlEscape(responseText));
+	    $.get(url, function (responseText) {
 	        logParent.activity(false);
-	        dialog.dialog({
-	            width: 900,
-	            height: 600,
-	            title: title,
-	            buttons: [{
-	                text: "Close",
-	                click: function () {
-	                    $(this).dialog("close");
-	                }
-	            }]
-	        });
+	        var $modal_plugin_log = $('#modal_plugin_log'); 
+	        $modal_plugin_log.find('.modal-body').html('<pre class="log">' + htmlEscape(responseText) + '</pre>');
+	        $modal_plugin_log.find('.modal-header h3').text(title);
+	        $modal_plugin_log.modal('show');
 	    });
 	    //prevent the browser to follow the link
 	    return false;

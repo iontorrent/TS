@@ -75,7 +75,7 @@ public:
   }
 
   /** Accessor */
-  inline uint16_t & At(size_t chipRow, size_t chipCol, size_t chipFrame) {
+  inline int16_t & At(size_t chipRow, size_t chipCol, size_t chipFrame) {
     chipFrame = std::min((int)mDepth - 1, (int)chipFrame);
     size_t idx = mFrameStep * chipFrame + (chipRow - mRowStart) * mWidth + (chipCol - mColStart);
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
@@ -83,7 +83,7 @@ public:
   }
 
   /** Const accessor. */
-  inline const uint16_t & At(size_t chipRow, size_t chipCol, size_t chipFrame) const {
+  inline const int16_t & At(size_t chipRow, size_t chipCol, size_t chipFrame) const {
     chipFrame = std::min((int)mDepth - 1, (int)chipFrame);
     size_t idx = mFrameStep * chipFrame + (chipRow - mRowStart) * mWidth + (chipCol - mColStart);
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
@@ -91,7 +91,7 @@ public:
   }
 
   /** Const accessor. */
-  inline const uint16_t & At(size_t wellIx, size_t chipFrame) const {
+  inline const int16_t & At(size_t wellIx, size_t chipFrame) const {
     chipFrame = std::min((int)mDepth - 1, (int)chipFrame);
     size_t idx = mFrameStep * chipFrame + wellIx;
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
@@ -99,7 +99,7 @@ public:
   }
   
   /** accessor. */
-  inline uint16_t & At(size_t wellIx, size_t chipFrame)  {
+  inline int16_t & At(size_t wellIx, size_t chipFrame)  {
     chipFrame = std::min((int)mDepth - 1, (int)chipFrame);
     size_t idx = mFrameStep * chipFrame + wellIx;
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
@@ -107,13 +107,13 @@ public:
   }
 
   /** Accessor by well index. */
-  inline uint16_t & At(size_t idx)  {
+  inline int16_t & At(size_t idx)  {
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
     return (mData[idx]);
   }
 
   /** Const accessor by well index. */
-  inline const uint16_t & At(size_t idx) const {
+  inline const int16_t & At(size_t idx) const {
     ION_ASSERT(idx < mData.size(), "Outside of bounds");
     return (mData[idx]);
   }
@@ -129,7 +129,7 @@ public:
   inline void SubDcOffset(size_t row, size_t col) {
     float m = DcOffset(row, col);
     for (size_t i = 0; i < mTimePoints.size(); i++) {
-      uint16_t &val = At(row, col, i);
+      int16_t &val = At(row, col, i);
       val -= m;
     }
   }
@@ -160,7 +160,7 @@ public:
     double slope = 0;
     double weight = 0;
     for (size_t frame = 1; frame < maxFrame; frame++) {
-      double last = (mTimePoints[frame-1] + frame == 1 ? 0 : mTimePoints[frame -2])/2.0f; 
+      double last = (mTimePoints[frame-1] + (frame == 1 ? 0 : mTimePoints[frame -2]))/2.0f; 
       double current = (mTimePoints[frame] + mTimePoints[frame-1])/2.0;
       double w = (current - last);
       double s = (avg[frame] - avg[frame-1]) / w;
@@ -176,10 +176,10 @@ public:
   inline void AdjustForDrift() {
     double slope = CalcDriftAdjust();
     for (size_t frame = 0; frame < mDepth; frame++) {
-      float adjust = slope * (mTimePoints[frame] + frame == 0 ? 0 : mTimePoints[frame-1]) / 2.0f;
+      float adjust = slope * (mTimePoints[frame] + (frame == 0 ? 0 : mTimePoints[frame-1])) / 2.0f;
       for (size_t row = mRowStart; row < mRowStart + mHeight; row++) {
         for (size_t col = mColStart; col < mColStart + mWidth; col++) {
-          uint16_t &val = At(row, col, frame);
+          int16_t &val = At(row, col, frame);
           val -= adjust;
         }
       }
@@ -271,7 +271,14 @@ public:
     seconds = mT0 * mBaseFrameRate / 1000.0f + seconds;
     if (seconds < mTimePoints[0]) { return 0.0f; }
     std::vector<float>::iterator i = std::upper_bound(mTimePoints.begin(), mTimePoints.end(), seconds);
-    assert(i != mTimePoints.end());
+    if (i == mTimePoints.end()) {
+      // extrapolate
+      int end = mTimePoints.size() -1;
+      float slope = (At(row, col, end) - At(row,col,end -1))/(mTimePoints[end] - mTimePoints[end -1]);
+      float y = slope * (seconds - mTimePoints[end-1]); // y = mx + b 
+      return y;
+    }
+  //    assert(i != mTimePoints.end());
     assert(i != mTimePoints.begin());
     int frameAbove = i - mTimePoints.begin();
     int frameBelow = frameAbove - 1;
@@ -295,6 +302,8 @@ public:
     return lowerVal + (upperVal - lowerVal) * (seconds - mTimePoints[frameBelow])/(mTimePoints[frameAbove] - mTimePoints[frameBelow]);
   }
 
+
+
   size_t mRowStart, mColStart, mFrameStart, mFrameStep;
   size_t mChipRow, mChipCol, mChipFrame;
   size_t mOrigFrames;
@@ -306,7 +315,7 @@ public:
   size_t mHeight, mWidth, mDepth; // row, col, frame
   std::vector<float> mTimePoints; // units = seconds
   TimeCompression mTime;
-  std::vector<uint16_t> mData;
+  std::vector<int16_t> mData;
 };
 
 #endif // TRACECHUNK_H

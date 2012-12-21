@@ -31,14 +31,15 @@ class DifSepOpt
       reportStepSize = 0;
       maxMad = 30;
       bfThreshold = .5;
-      minSnr = 3;
-      minBfGoodWells = 80;
-      bfMeshStep = 100;
+      minSnr = 8;
+      minBfGoodWells = 30;
+      bfMeshStep = 50;
+      clusterMeshStep = 100;
       t0MeshStep = 50;
       useMeshNeighbors = 1;
       tauEEstimateStep = 100;
       nCores = -1;
-      minTauESnr = 20;
+      minTauESnr = 10;
       sigSdMult = 6;
       doMeanFilter = true;
       doSigVarFilter = true;
@@ -46,8 +47,8 @@ class DifSepOpt
       doRecoverSdFilter  = true;
       doRemoveLowSignalFilter = true;
       doEmptyCenterSignal = false;
-      regionXSize = 100;
-      regionYSize = 100;
+      regionXSize = 50;
+      regionYSize = 50;
       mask = NULL;
       justBeadfind = false;
       clusterTrim = .01;
@@ -62,15 +63,18 @@ class DifSepOpt
       iqrMult = 3;
       tfFilterQuantile = .5;
       libFilterQuantile = .5;
-      minTfPeakMax = 20.0f;
-      minLibPeakMax = 20.0f;
+      minTfPeakMax = 10.0f;
+      minLibPeakMax = 10.0f;
       useProjectedCurve = true;
       outputDebug = false;
-      percentReference = .005;
+      percentReference = .01;
       useSignalReference = true;
       doSdat = false;
       sdatSuffix = "sdat";
       useSeparatorRef = false;
+      //      sdAsBf = false;
+      sdAsBf = true;
+      bfMult = 1.0;
     }
 
     Mask *mask;
@@ -88,6 +92,7 @@ class DifSepOpt
     double minSnr;
     size_t minBfGoodWells;
     int bfMeshStep;
+    int clusterMeshStep;
     int t0MeshStep;
     int useMeshNeighbors;
     int tauEEstimateStep;
@@ -126,6 +131,8 @@ class DifSepOpt
     float minTfPeakMax,minLibPeakMax;
     std::string sdatSuffix;
     bool useSeparatorRef;
+    float bfMult;
+    bool sdAsBf;
 };
 
 /**
@@ -187,8 +194,8 @@ class DifferentialSeparator : public AvgKeyIncorporation
                         float maxMad,
                         float minBeadSnr,
                         size_t minGoodWells,
-                        const BFReference &reference,
-                        const vector<KeyFit> &wells,
+                        BFReference &reference,
+                        vector<KeyFit> &wells,
                         double trim,
                         MixModel &model);
 

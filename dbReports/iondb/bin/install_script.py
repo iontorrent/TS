@@ -28,8 +28,14 @@ def add_user(username,password):
         user = User.objects.create_user(username,"ionuser@iontorrent.com",password)
         user.is_staff = True
         user.save()
-        return user              
-    
+        return user
+
+def create_user_profiles():
+    for user in User.objects.all():
+        (profile, created) = models.UserProfile.objects.get_or_create(user=user)
+        if created:
+            print "Added missing userprofile for: %s" % user.username
+
 def add_location():
     '''Checks if a location exists and creates a default location
     called `Home` if none exist. '''
@@ -136,6 +142,7 @@ def add_backupconfig():
         print 'BackupConfig added'
 
 def add_chips():
+    from iondb.utils.default_chip_args import default_chip_args
     '''Sets the per chip default analysis args into the 
     `chips` table in the database.  '''
     try:
@@ -148,33 +155,42 @@ def add_chips():
         sockets = 2
         print traceback.format_exc()
         
-    #chip 900 has been handled by south migration script 0068_data_add_n_update_kitInfo.chip.py
-    chip_to_slots = (('318',1,''),
-                     ('316',1,''),
-                     ('314',1,''),
-                     )
-    chips = [c.name for c in models.Chip.objects.all()]
-    # Add any chips that might not be in the database
-    # (this case is only on TS initialization)
-    for (name,slots,args) in chip_to_slots:
-        if name not in chips:
-            c = models.Chip(name=name,
-                            slots=slots,
-                            args=args,
-                            description = name
-                            )
-            c.save()
-    # make sure all chips in database have the above settings
-    # (this case when updating TS typically)
-    for (name,slots,args) in chip_to_slots:
+    chips = (('318',1,'318'),
+             ('316',1,'316'),
+             ('314',1,'314'),
+             ('900',1,'PI'),                     
+            )
+
+    for (name,slots,description) in chips:
+        
+        # get default args for this chip
+        args = default_chip_args(name)
+ 
         try:
-            #print "Chip: %s Slots: %d" % (name,slots)
+            # (this case when updating TS typically)
             c = models.Chip.objects.get(name=name)
             c.slots = slots
-            c.args  = args
+            c.analysisargs    = args['analysisArgs']
+            c.basecallerargs  = args['basecallerArgs']
+            c.beadfindargs    = args['beadfindArgs']
+            c.thumbnailanalysisargs    = args['thumbnailAnalysisArgs']
+            c.thumbnailbasecallerargs  = args['thumbnailBasecallerArgs']
+            c.thumbnailbeadfindargs    = args['thumbnailBeadfindArgs']
             c.save()
-        except:
-            print "Could not find a chip named %s.  This is rubbish.  Should never get here." % name
+        except ObjectDoesNotExist:
+            # (this case is only on TS initialization or when new chips added)
+            c = models.Chip(name=name,
+                            slots=slots,
+                            description = description,
+                            analysisargs    = args['analysisArgs'],
+                            basecallerargs  = args['basecallerArgs'],
+                            beadfindargs    = args['beadfindArgs'],
+                            thumbnailanalysisargs    = args['thumbnailAnalysisArgs'],
+                            thumbnailbasecallerargs  = args['thumbnailBasecallerArgs'],
+                            thumbnailbeadfindargs    = args['thumbnailBeadfindArgs']
+                            )
+            c.save()
+            print "Added Chip object named %s." % name
     
     # Remove the special chip labelled 'takeover'; no longer used.
     try:
@@ -187,51 +203,11 @@ def add_chips():
 
 def add_global_config():
     gc = models.GlobalConfig.objects.all()
-    #defaultArg = 'Analysis --wellsfileonly'
-    defaultArg              = 'Analysis'
-    defaultBaseCallerArg    = 'BaseCaller'
-    analysisthumbnailargs   = 'Analysis'
-    basecallerthumbnailargs = 'BaseCaller'
     defaultStore = 'A'
-    if len(gc)>0:
-        gc = gc[0]
-        #print 'GlobalConfig exists: %s' % gc.name
-        if not os.path.isfile (int_test_file):
-
-            if gc.default_command_line != defaultArg:
-                gc.default_command_line = defaultArg
-                gc.save()
-                print "Updated default Analysis args to %s" % defaultArg
-            else:
-                pass
-    
-            if gc.basecallerargs != defaultBaseCallerArg:
-                gc.basecallerargs = defaultBaseCallerArg
-                gc.save()
-                print "Updated default BaseCaller args to %s" % defaultBaseCallerArg
-            else:
-                pass
-
-            if gc.analysisthumbnailargs != analysisthumbnailargs:
-                gc.analysisthumbnailargs = analysisthumbnailargs
-                gc.save()
-                print "Updated default Thumbnail Analysis args to %s" % analysisthumbnailargs
-            else:
-                pass
-
-            if gc.basecallerthumbnailargs != basecallerthumbnailargs:
-                gc.basecallerthumbnailargs = basecallerthumbnailargs
-                gc.save()
-                print "Updated default Thumbnail BaseCaller args to %s" % basecallerthumbnailargs
-            else:
-                pass
-
-    else:
+    if not len(gc)>0:
         kwargs = {'name':'Config', 
                   'selected':False,
                   'plugin_folder':'plugins',
-                  'default_command_line':defaultArg,
-                  'basecallerargs':'BaseCaller',
                   'fasta_path':'',
                   'reference_path':'',
                   'records_to_display':20,
@@ -921,6 +897,8 @@ if __name__=="__main__":
         print traceback.format_exc()
         sys.exit(1)
 
+    create_user_profiles()
+
     try:
         # TODO: for these users, set_unusable_password()
         # These users exists only to uniformly store records of their contact
@@ -943,9 +921,10 @@ if __name__=="__main__":
     #try to add runTypes
     try:
         runtype_add("GENS","Generic Sequencing")
-        runtype_add("AMPS","AmpliSeq")
+        runtype_add("AMPS","AmpliSeq DNA")
         runtype_add("TARS","TargetSeq")
         runtype_add("WGNM","Whole Genome")
+        runtype_add("AMPS_RNA", "AmpliSeq RNA")
     except:
         print 'Adding runType failed'
         print traceback.format_exc()
@@ -1026,66 +1005,6 @@ if __name__=="__main__":
         print "Modifying barcode-args list failed"
         print traceback.format_exc()
         sys.exit(1)
-        
-    try:
-        add_sequencing_kit_info('IonSeqKit','(100bp) Ion Sequencing Kit','260')
-        add_sequencing_kit_info('IonSeq200Kit','(200bp) Ion Sequencing 200 Kit','520')
-        add_sequencing_kit_info('IonPGM200Kit','(200bp) Ion PGM(tm) 200 Sequencing Kit','500')
-
-    except:
-        print "Adding sequencing_kit info failed"
-        print traceback.format_exc()
-        sys.exit(1)
-
-    try:
-        add_sequencing_kit_part_info('IonSeqKit','4468997')
-        add_sequencing_kit_part_info('IonSeqKit','4468996')
-        add_sequencing_kit_part_info('IonSeqKit','4468995')
-        add_sequencing_kit_part_info('IonSeqKit','4468994')
-        add_sequencing_kit_part_info('IonSeq200Kit','4471258')
-        add_sequencing_kit_part_info('IonSeq200Kit','4471257')
-        add_sequencing_kit_part_info('IonSeq200Kit','4471259')
-        add_sequencing_kit_part_info('IonSeq200Kit','4471260')
-        add_sequencing_kit_part_info('IonPGM200Kit','4474004')
-        add_sequencing_kit_part_info('IonPGM200Kit','4474005')
-        add_sequencing_kit_part_info('IonPGM200Kit','4474006')
-        add_sequencing_kit_part_info('IonPGM200Kit','4474007')
-    except:
-        print "Adding sequencing_kit part info failed"
-        print traceback.format_exc()
-        sys.exit(1)    
-   
-    try:
-        add_library_kit_info('IonFragmentLibKit','Ion Fragment Library Kit','0')
-        add_library_kit_info('IonFragmentLibKit2','Ion Fragment Library Kit','0')
-        add_library_kit_info('IonPlusFragmentLibKit','Ion Plus Fragment Library Kit','0')
-        add_library_kit_info('Ion Xpress Plus Fragment Library Kit','Ion Xpress Plus Fragment Library Kit','0')
-        add_library_kit_info('Ion Xpress Plus Paired-End Library Kit','Ion Xpress Plus Paired-End Library Kit','0')
-        add_library_kit_info('Ion Plus Paired-End Library Kit','Ion Plus Paired-End Library Kit','0')
-        add_library_kit_info('Ion AmpliSeq 2.0 Beta Kit','Ion AmpliSeq 2.0 Beta Kit','0')
-        add_library_kit_info('Ion AmpliSeq 2.0 Library Kit','Ion AmpliSeq 2.0 Library Kit','0')
-        add_library_kit_info('Ion Total RNA Seq Kit','Ion Total RNA Seq Kit','0')
-        add_library_kit_info('Ion Total RNA Seq Kit v2','Ion Total RNA Seq Kit v2','0')
-    except:
-        print "Adding library_kit info failed"
-        print traceback.format_exc()
-        sys.exit(1)
-        
-    try:
-        add_library_kit_part_info('IonFragmentLibKit','4462907')
-        add_library_kit_part_info('IonFragmentLibKit2','4466464')
-        add_library_kit_part_info('IonPlusFragmentLibKit','4471252')
-        add_library_kit_part_info('Ion Xpress Plus Fragment Library Kit','4471269')
-        add_library_kit_part_info('Ion Xpress Plus Paired-End Library Kit','4477109')  
-        add_library_kit_part_info('Ion Plus Paired-End Library Kit','4477110')
-        add_library_kit_part_info('Ion AmpliSeq 2.0 Beta Kit','4467226')  
-        add_library_kit_part_info('Ion AmpliSeq 2.0 Library Kit','4475345')
-        add_library_kit_part_info('Ion Total RNA Seq Kit','4466666')  
-        add_library_kit_part_info('Ion Total RNA Seq Kit v2','4475936')              
-    except:
-        print "Adding library_kit part info failed"
-        print traceback.format_exc()
-        sys.exit(1)       
        
     try:
         add_libraryKey('Forward', 'Ion TCAG', 'TCAG', 'Default forward library key', True)

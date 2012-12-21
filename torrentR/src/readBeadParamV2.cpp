@@ -37,41 +37,31 @@ RcppExport SEXP readBeadParamRV2(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol,
     
     colOut.reserve(nCol * nRow * nFlow);
     rowOut.reserve(nCol * nRow * nFlow);
-    // Recast int to unsigned int
-    vector<unsigned int> col, row, flow;
-    col.resize(nCol);
-    for(unsigned int i=0;i<col.size();++i) 
-      col[i] = (unsigned int)(i+minCol);
-    row.resize(nRow);
-    for(unsigned int i=0;i<row.size();++i)
-      row[i] = (unsigned int) (i+minRow);
-    flow.resize(nFlow);
-    for(unsigned int i=0;i<flow.size();++i)
-      flow[i] = (unsigned int) (i+minFlow);
 
     H5File beadParam;
     beadParam.SetFile(beadParamFile);
-    beadParam.Open();
+    //beadParam.Open();
+    beadParam.OpenForReading();
     H5DataSet *resErrDS = beadParam.OpenDataSet("/bead/residual_error");
-    //H5DataSet *avgBlkErrDS = beadParam.OpenDataSet("/bead/average_error_by_block");
+    //H5DataSet *avgBlkErrDS = beadParam.OpenDataSet("/bead/average_error_by_block");                                                                     
     H5DataSet *ampDS = beadParam.OpenDataSet("bead/amplitude");
     H5DataSet *krateMulDS = beadParam.OpenDataSet("bead/kmult");
     H5DataSet *beadInitDS = beadParam.OpenDataSet("bead/bead_base_parameters");
     H5DataSet *beadDCDS = beadParam.OpenDataSet("bead/trace_dc_offset");
-   
-    //float  tresErr[nCol * nRow * nFlow];
+
     float *tresErr;
-    //float *tavgBlkErr;
+    //float *tavgBlkErr;                                                                                                                                  
     float *tamp;
     float *tkrateMul;
     float *tbeadInit;
     float *tbeadDC;
+    int nParams = 5;
 
     tresErr = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
-    //tavgBlkErr = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
+    //tavgBlkErr = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);                                                                               
     tamp = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
     tkrateMul = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
-    tbeadInit = (float *) malloc ( sizeof(float) * nCol * nRow * 4);
+    tbeadInit = (float *) malloc ( sizeof(float) * nCol * nRow * nParams);
     tbeadDC = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
 
     size_t starts[3];
@@ -79,23 +69,23 @@ RcppExport SEXP readBeadParamRV2(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol,
     starts[0] = minCol;
     starts[1] = minRow;
     starts[2] = minFlow;
-    ends[0] = maxCol;
-    ends[1] = maxRow;
-    ends[2] = maxFlow;
+    ends[0] = maxCol+1;
+    ends[1] = maxRow+1;
+    ends[2] = maxFlow+1;
     resErrDS->ReadRangeData(starts, ends, sizeof(tresErr),tresErr);
     ampDS->ReadRangeData(starts, ends, sizeof(tamp),tamp);
     krateMulDS->ReadRangeData(starts, ends, sizeof(tkrateMul),tkrateMul);
     beadDCDS->ReadRangeData(starts, ends, sizeof(tbeadDC),tbeadDC);
 
     starts[2] = 0;
-    ends[2] = 3;
+    ends[2] = nParams;
     beadInitDS->ReadRangeData(starts,ends,sizeof(tbeadInit),tbeadInit);
     beadParam.Close();
 
     RcppMatrix< double > resErrMat(nRow*nCol,nFlow);
     RcppMatrix< double > ampMat(nRow*nCol,nFlow);
     RcppMatrix< double > krateMulMat(nRow*nCol,nFlow);
-    RcppMatrix< double > beadInitMat(nRow*nCol,4);
+    RcppMatrix< double > beadInitMat(nRow*nCol,nParams);
     RcppMatrix< double > beadDCMat(nRow*nCol,nFlow);
     vector<int> colOutInt,rowOutInt,flowOutInt;
 
@@ -105,15 +95,19 @@ RcppExport SEXP readBeadParamRV2(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol,
 	for(size_t iFlow=0;iFlow<nFlow;++iFlow)
 	  {
 	    ampMat(count,iFlow) = (double) tamp[icol * nRow * nFlow + irow * nFlow + iFlow] ;
+	    resErrMat(count,iFlow) = (double) tresErr[icol * nRow * nFlow + irow * nFlow + iFlow] ;
 	    krateMulMat(count,iFlow) = (double) tkrateMul[icol * nRow * nFlow + irow * nFlow + iFlow];
-	    beadDCMat(count,iFlow) = (double) tbeadDC[icol * nRow *nFlow + irow * nFlow + iFlow];
+	    beadDCMat(count,iFlow) = (double) tbeadDC[icol * nRow * nFlow + irow * nFlow + iFlow];
 	  }
-	for(size_t ip=0;ip<4;++ip)
-	  beadInitMat(count,ip) = (double) tbeadInit[icol * nRow * ip + irow * 4 + ip];
+	for(size_t ip=0;ip<nParams;++ip)
+	  beadInitMat(count,ip) = (double) tbeadInit[icol * nRow * nParams + irow * nParams + ip];
 	colOutInt.push_back(minCol+icol);
 	rowOutInt.push_back(minRow+irow);
 	count++;
       }
+
+    for(size_t iFlow=0;iFlow<nFlow;++iFlow)
+	flowOutInt.push_back(minFlow+iFlow);
 
     RcppResultSet rs;
     rs.add("beadParamFile", beadParamFile);
@@ -124,6 +118,7 @@ RcppExport SEXP readBeadParamRV2(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol,
     rs.add("nFlow", (int)nFlow);
     rs.add("col", colOutInt);
     rs.add("row",rowOutInt);
+    rs.add("flow",flowOutInt);
     rs.add("res_error",resErrMat);
     rs.add("amplitude",ampMat);
     rs.add("kmult",krateMulMat);

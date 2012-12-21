@@ -1,6 +1,15 @@
 {% extends "rundb/data/base.html" %}
+{% block extra_head_js %}
+<script type="text/javascript" src="/site_media/js/sprintf-0.7-beta1.js"></script>
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script src="/site_media/resources/jquery/jQuery.download.min.js"></script>
+<script src="/site_media/resources/scripts/data/modal_combine_results.js"></script>
+{% endblock extra_head_js %}
 {% block extra_head %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />  
+<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
+<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />  
 <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
@@ -31,10 +40,7 @@
     }
 </style>
 {% endblock extra_head %}
-{% block extra_head_js %}
-	<script type="text/javascript" src="/site_media/js/sprintf-0.7-beta1.js"></script>
-	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
-{% endblock extra_head_js %}
+
 {% block content %}
 <div class="content clearfix">
 	<div class="row-fluid">
@@ -61,9 +67,12 @@
 			</div>
 	</div>
 	{%endspaceless%}										
-	<div id="grid"></div>
+	<div id="grid" style="margin-top: 5px; margin-bottom: 5px;"></div>
 	<!--
 	-->
+        <div align='center' style="margin-top: 0px;">
+            <a class="download_csv" href="/data/project/{{project.id}}/results/%s/getSelectedCSV.csv">Download Selected CSV</a>
+        </div>
 	<div class="btn-group pull-left">						
 		<a id="combine_selected_dropdown" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" > Combine Selected...<span class="caret"></span> </a>
 		<ul class="dropdown-menu">
@@ -82,16 +91,13 @@
 				<a class="remove_from_project" href="/data/project/{{project.id}}/results/%s/">&raquo;&nbsp;&nbsp; Remove from Project</a>
 			</li>			
 			<li class="divider"></li>
-        <li><a class="report_action" name="export" href="/rundb/report/%s/E" >&raquo;&nbsp;&nbsp; Export</a></li>
-        <li><a class="report_action" name="archive" href="/rundb/report/%s/A" >&raquo;&nbsp;&nbsp; Archive</a></li>
-        <li><a class="report_action" name="prune" href="/rundb/report/%s/P">&raquo;&nbsp;&nbsp; Prune</a></li>
+        <li><a class="report_action" name="export" href="/report/action/%s/E" >&raquo;&nbsp;&nbsp; Export</a></li>
+        <li><a class="report_action" name="archive" href="/report/action/%s/A" >&raquo;&nbsp;&nbsp; Archive</a></li>
+        <li><a class="report_action" name="prune" href="/report/action/%s/P">&raquo;&nbsp;&nbsp; Prune</a></li>
 		</ul>
 	</div>
-	<div class="btn-group pull-left">						
-		<a id="clear" class="btn clear_selection" > Clear Selection </a>
-	</div>
 
-<script src="/site_media/js/jquery-ui-1.8.17.custom.min.js"></script>	
+<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>	
 <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
 <script src="/site_media/js/date.min.js"></script>
 <script src="/site_media/js/jquery.daterangepicker.min.js"></script>
@@ -177,7 +183,7 @@ $(document).ready(function(){
         pageable: false,
 		columns: [ {
                 field: "id",
-                title: "Selected",
+                title: "&nbsp;",
                 sortable: false, 
                 width: '7%',
                 template: "<input id='${id}' type='checkbox' class='selected'>"
@@ -202,7 +208,7 @@ $(document).ready(function(){
             }
         ],  
 		dataBound: function(e) {
-		    $("#grid :checkbox").each(function(){				      
+		    $("#grid :checkbox.selected").each(function(){				      
 			if ($.inArray($(this).attr("id").toString(), checked_ids) > -1){
 				$(this).attr('checked', true) ;
 			}
@@ -213,15 +219,33 @@ $(document).ready(function(){
 						checked_ids.push(id);
 					else
 						checked_ids.splice(checked_ids.indexOf(id),1);
-				});
-			 }                                                           
+			});
+		}
 	});
   
-	$('.clear_selection').click(function (e) {    
-		checked_ids = [];
-		$("#grid input:checked").attr('checked', false);
-  	});
-        
+        // make selectAll checkbox in grid header        
+        $('#grid').data('kendoGrid').thead.find("th:first")
+            .append($('<input class="selectAll" type="checkbox"/>'))
+            .delegate(".selectAll", "click", function() {
+                var checked = $(this).is(":checked");
+                checked_ids = [];
+                $("#grid :checkbox.selected").each(function(){
+                    $(this).attr('checked',checked);
+                    if (checked)
+                        checked_ids.push($(this).attr('id'));
+                });
+            });
+ 
+  
+        $('.download_csv').click(function (e) {
+		e.preventDefault();
+		e.stopPropagation();                             
+		if (checked_ids.length != 0) {
+                    url = sprintf($(this).attr('href'), checked_ids.join());
+                    jQuery.download(url, {}, 'POST');
+                }
+        });
+  
 	$('.delete_project').click(function (e) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -269,6 +293,7 @@ $(document).ready(function(){
 			    return false;
 			}).done(function(data) { 
 		    //	console.log("success:",  data);
+	            checked_ids = [];
 		    	$(that).trigger('remove_from_project_done', {values: e.values});
 	    	})
 		    .fail(function(data) {
@@ -281,28 +306,42 @@ $(document).ready(function(){
 		}
 		
 	});
-	
-	$('.report_action').unbind("click").click(function (e) {
-		e.preventDefault();
-		e.stopPropagation();				
-		if (checked_ids.length != 0) {
-		  var r = prompt("Proceed with "+$(this).attr("name")+" of "+checked_ids.length+" selected reports?\nUpdate comment:", "");
-		  if (r != null) {
-		      for (var index=0; index<checked_ids.length; index++){			
-			      url = sprintf($(this).attr('href'), checked_ids[index]) +'/'+(r || 'noComment');
-			      console.log(url)					      
-        $.ajax({
-            type: 'POST',
-            url: url,
-            success: function(){$(that).trigger('report_action_done', {values: e.values});},
-            error: function(){$(that).trigger('report_action_done', {values: e.values});}
-        });					
-			    }
-			}
-			$('#action_dropdown').dropdown('toggle');
-		}
-	});
-	
+
+    $('.report_action').unbind("click").click(function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (checked_ids.length != 0) {
+            var url = $(this).attr('href');
+            var action = $(this).attr("name");
+            $('#modal_data_management .modal-header h3').text(sprintf("Proceed with %s of %s selected reports. Proceed?", action, checked_ids.length));
+            $("#modal_data_management .btn-primary").click(function(e) {
+                e.preventDefault();
+                $(e.target).addClass('disabled');
+                $(e.target).unbind('click');
+                var error = false;
+                var data = {};
+                data.comment = $.trim($("#data_management_comments").val()) || 'No Comment';
+                for (var index=0; index<checked_ids.length; index++) {
+                    var idurl = sprintf(url, checked_ids[index]);
+                    $.ajax({
+                        type: 'POST',
+                        data: data,
+                        url: idurl,
+                        error: function(){error = true;}
+                    });
+                }
+                if (error) {
+                    alert('Error: could not complete task. Check the report logs for more details.');
+                }
+                $(that).trigger('report_action_done', {values: e.values});
+                $('#modal_data_management').modal('hide');
+            });
+            $("#modal_data_management .btn-primary").removeClass('disabled');
+            $('#modal_data_management').modal('show');
+            $('#action_dropdown').dropdown('toggle');
+        }
+    });
+
     $('.combine_alignments').click(function (e) {
 		e.preventDefault();
 		e.stopPropagation();				
@@ -358,6 +397,38 @@ $(document).ready(function(){
 	initialize_search();
 	
 });
-</script>			
+</script>
+    <div id="modal_data_management" title="" class="modal hide">
+        <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+            <h3>Title</h3>
+        </div>
+        <div class="modal-body">
+            <div id="modal_data_management_errormessages" class="alert alert-danger hide"></div>
+            <form class="form-horizontal" id="modal_data_management_form" method="POST">
+                <fieldset>
+                    <div class="control-group">
+                        <label for="data_management_comments" class="control-label">Comment:</label>
+                        <div class="controls">
+                            <input id="data_management_comments" type="text"/>
+                            <p class="help-block">
+                            </p>
+                        </div>
+                    </div>
+                </fieldset>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+            <a href="#" class="btn btn-primary">Ok</a>
+        </div>
+        
+        <script>
+            $('#modal_data_management').on("hide", function() {
+                $('#modal_data_management .btn_primary').unbind('click');
+                $('#data_management_comments').val('');
+            });
+        </script>       
+    </div>
 </div>
 {% endblock content %}

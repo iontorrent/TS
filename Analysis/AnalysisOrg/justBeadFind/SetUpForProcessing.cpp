@@ -23,7 +23,7 @@ void SetUpToProcessImages ( ImageSpecClass &my_image_spec, CommandLineOpts &ince
   ImageTransformer::CalibrateChannelXTCorrection ( inception_state.sys_context.dat_source_directory,"lsrowimage.dat" );
 
   //Again smuggling "global" variables using static variables for side effects
-  if ( inception_state.img_control.gain_correct_images )
+  if ( inception_state.img_control.gain_correct_images)
     ImageTransformer::CalculateGainCorrectionFromBeadfindFlow ( inception_state.sys_context.dat_source_directory,inception_state.img_control.gain_debug_output );
 
   //@TODO: this mess has nasty side effects on the arguments.

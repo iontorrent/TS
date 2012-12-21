@@ -321,8 +321,8 @@ function remove_pgm_support ()
     sed -i '/auto eth3/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth5/,/netmask 255.255.255.0/d' /etc/network/interfaces
-    #--- delete all trailing blank lines at end of file ---#
-    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+    #--- delete all consecutive blank lines, allows 0 blanks at top, 1 at EOF ---#
+    sed -i '/./,/^$/!d' /etc/network/interfaces
 
     #--- Delete any existing config file ---#
     if [ -w /etc/dnsmasq.d/ion-dhcp ]; then
@@ -639,6 +639,7 @@ function change_hostname()
         newFQDN=${newHostName}.${newDomainName}
     fi
     log "Changing $oldFQDN to $newFQDN"
+    log "Changing hostname from $oldFQDN to $newFQDN ..."
 
     log "Backing-up configuration files after hostname change."
     #--- Change hostname where applicable ---#
@@ -686,8 +687,11 @@ function change_hostname()
 
     # Reboot
     echo
-    echo -n "Press Enter when you are ready to reboot the server"
-    read -p "Press Enter when you are ready to reboot the server"
+    echo
+    echo "To complete the renaming process, the server must be rebooted"
+    echo
+    echo -n "Press Enter to reboot the server "
+    read -p "Press Enter to reboot the server "
     shutdown -r now
 }
 
@@ -816,11 +820,11 @@ function cleanup_previousInstallations()
     fi
 
     # Remove export of SGE directory
-    set +e
-        sed -i '/\/opt\/sge/d' /etc/exports
-        exportfs -ua 1>&2
-        exportfs -a 1>&2
-    set -e
+    if [ -e /etc/exports ]; then
+        sed -i '/\/opt\/sge/d' /etc/exports ||true
+        exportfs -ua 1>&2 || true
+        exportfs -a 1>&2 || true
+    fi
 
     if ps aux|grep sge_execd|grep -v grep > /dev/null; then
         if [ -f /etc/init.d/sgeexecd ];
@@ -870,6 +874,32 @@ function cleanup_previousInstallations()
     # Trap the error; do not want to exit if it fails.  May fail on nfs mounted directories.
     if [ -d /results ]; then chmod 777 /results || true; fi
     
+    # Previous versions of ion-dbreports created Report archive/export directories as root owner and 755 permissions
+    # Change permissions to 777
+    # Directories will be in /media only and named 'archivedReports' and 'exportedReports'
+    for dire in $(find /media -maxdepth 2 -type d -name archivedReports -o -name exportedReports); do
+        if [ $(stat -c'%a' $dire) != '777' ]; then
+            echo "Changing permissions on $dire" 1>&2
+            chmod -R 0777 $dire || true
+        else
+            echo "Permissions are okay on $dire" 1>&2
+        fi
+    done
+    
+    # Ensure insecure tomcat user is not enabled
+    infile="/etc/tomcat6/tomcat-users.xml"
+    if [ -e $infile ]; then
+        if grep -q "<user username=\"tomcat\" password=\"tomcat\"" $infile; then
+        
+            sed -i '/^.*<user username="tomcat" password="tomcat".*/d' $infile
+           
+            echo -e "<!-- default tomcat user deleted by TSconfig script\n" \
+                    "    do not use the default tomcat password -->" >>  $infile
+            
+            service tomcat6 restart 1>&2
+        fi
+    fi
+
     return 0
 }
 
@@ -973,7 +1003,7 @@ function pkg_installation ()
     
     apt-get update 1>&2 || true
     
-    # TEST CODE: download packages first
+    # Download packages first
     user_msg "=================================================================="
     user_msg "\tDownloading packages"
     user_msg "=================================================================="
@@ -986,11 +1016,6 @@ function pkg_installation ()
         fi
     done
     echo ""
-#    if ! apt-get --assume-yes --force-yes --download-only install ${pkg_list[@]} 1>&2; then
-#        user_msg "ERROR downloading packages"
-#        cleanup_tmp_src_list $TMP_SRC_LST
-#        return 1
-#    fi
     
     user_msg "=================================================================="
     user_msg "\tInstalling packages"
@@ -1004,11 +1029,6 @@ function pkg_installation ()
         fi
     done
     echo ""
-#    if ! apt-get --assume-yes --force-yes install ${pkg_list[@]} 1>&2; then
-#        user_msg "ERROR installing packages"
-#        cleanup_tmp_src_list $TMP_SRC_LST
-#        return 1
-#    fi
 }
 
 
@@ -1069,6 +1089,14 @@ EOF
     debconf-set-selections << EOF
 rabbitmq-server rabbitmq-server/upgrade_previous note
 EOF
+
+    # tmpreaper package posts a security notice requiring user acknowledgement
+    debconf-set-selections << EOF
+tmpreaper	tmpreaper/readsecurity	note	
+tmpreaper	tmpreaper/TMPREAPER_TIME	note
+tmpreaper	tmpreaper/confignowexists	note	
+tmpreaper	tmpreaper/readsecurity_upgrading	note
+EOF
    
 }
 
@@ -1113,6 +1141,17 @@ function install_ion_packages()
     if is_master; then
         read_packagelist_file torrentsuite master master_files
         pkg_list=( ${server_files[@]} ${master_files[@]} )
+        
+        #Load proton specific packages if this is Proton Torrent Server
+        inst_files=
+        if is_proton_ts; then
+            read_packagelist_file torrentsuite proton inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+        else
+            #Default to PGM specific packages
+            read_packagelist_file torrentsuite pgm inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+        fi
     else
         pkg_list=( ${server_files[@]} )
     fi
@@ -1125,9 +1164,10 @@ function install_ion_packages()
     ERRCNT=0
     for i in ${pkg_list[@]}
     do
+        i=${i,,}    # to lower case.  dpkg database is all lowercase despite what the package filename might contain
         echo "Verifying $i"
         if [ "ii" != "$(dpkg -l ${i}|tail -1|awk '{print $1}')" ]; then
-            ((ERRCNT++))
+            ((ERRCNT++)) || echo "Error detected"   # or statement required to prevent early exit
         fi
     done
 
@@ -1206,8 +1246,6 @@ function config_system_packages ()
     #--------------------------------------
         #NOTE: dbreports cannot install until postgres iondb is setup
         config_postgres
-        #TODO: This seems to be required now
-        a2enmod python 1>&2
         
         #NOTE: apache2 log rotation, original code from ion-dbreports' postinst.in
         config_apache2
@@ -1226,9 +1264,6 @@ function config_system_packages ()
     
     named_core_files
 
-    # This is an internal-only feature and should not be part of regular install process
-    #remote_loghost
-
     config_grub_menu || true
         
     #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
@@ -1239,6 +1274,27 @@ function config_system_packages ()
     
     # Remove motd regarding available OS upgrade: do not want TS customers to do this.
     rm -f /etc/update-motd.d/91-release-upgrade || true
+    
+    # Disable checking for updates
+    sed -i 's/^[Pp]rompt=.*/prompt=never/' /etc/update-manager/release-upgrades
+    
+    # Configure tmpreaper package to purge old files from /tmp directory
+    if [ -e /etc/tmpreaper.conf ]; then
+        sed -i 's/^SHOWWARNING=true/#SHOWWARNING=true/' /etc/tmpreaper.conf
+        sed -i 's/^.*TMPREAPER_TIME=.*/TMPREAPER_TIME=7d/' /etc/tmpreaper.conf
+    fi
+    
+    # Configure maximum number of open file descriptors allowed
+    set_max_open_files
+    
+    # SGE changes:
+    set_sge_open_files
+    
+    # Disable ipv6
+    if [ -f /etc/sysctl.d/20-disable-ipv6.conf ]; then
+        sysctl -p /etc/sysctl.d/20-disable-ipv6.conf 1>&2
+    fi
+
 }
 
 function logrotate_iondb ()
@@ -1349,6 +1405,18 @@ function initialize_system_users ()
     user_msg "=================================================================="
     user_msg "Initializing required users and groups"
     user_msg "=================================================================="
+    
+    #
+    # Create ionadmin user which historically is created during OS install
+    #
+    if ! getent passwd | grep -q "^ionadmin:"; then
+        
+        echo -n "Adding system user ionadmin..."
+        pass=ionadmin # default password
+        encryptedpass=$(perl -e "print crypt($pass, 'password')" $password)
+        useradd -m -s /bin/bash -p $encryptedpass -G admin ionadmin
+		echo "done"
+    fi
     
     #---										---#
 	#---	Create system user to run plugins	---#
@@ -1480,11 +1548,6 @@ EOFftp
         if [ -d /rawdata ]; then chmod 777 /rawdata || true; fi
         
         # create link to /results; directory where the PGMs write their data files.
-        # on cluster nodes, this link might be broken, but thats okay.
-        #if [ ! -h /home/$ftpUser/results ]; then
-        #    ln -s -f /results /home/$ftpUser/results
-        #fi
-        #
         # To support newer hardware, where there is a /rawdata partition we use that
         # partition for raw data symlink, else we default to original /results.
         # /home/ionguest/results -> [ /results | /rawdata ]
@@ -1494,9 +1557,6 @@ EOFftp
         else
             ionguest_ftp_symlink /results
         fi
-        
-
-
 
         sed -i "s/^#local_enable.*/local_enable=YES/" /etc/vsftpd.conf
         sed -i "s/^#write_enable.*/write_enable=YES/" /etc/vsftpd.conf
@@ -1638,7 +1698,7 @@ EOFdb
     # Set some sane operational parameter values: postgresql.conf
     #
     sqlconffile=/etc/postgresql/8.4/main/postgresql.conf
-    sqlshmfile=$(find /etc/sysctl.d -name \*postgresql-shm.conf)
+    sqlshmfile=/etc/sysctl.d/10-postgresql-shm.conf
     
     if [ -f $sqlconffile ]; then
         # Make sure options are enabled
@@ -1652,7 +1712,7 @@ EOFdb
         sed -i 's/^commit_delay.*/commit_delay = 1000/' $sqlconffile
         sed -i 's/^checkpoint_segments.*/checkpoint_segments = 16/' $sqlconffile
         
-        if [ ! -z $sqlshmfile ] && [ -e $sqlshmfile ]; then
+        if [ -f $sqlshmfile ]; then
         
             # only set these if shmmax can be set
             sed -i 's/^#shared_buffers/shared_buffers/' $sqlconffile
@@ -2160,11 +2220,16 @@ function config_compute_sge()
     fi
     
     #add host to queues
+    #TODO: when host is first added to queue, disable it.  All other times, do nothing.
     sgequeues=( all.q plugin.q thumbnail.q )
     for qname in ${sgequeues[@]}; do
         if ! qconf -aattr queue hostlist $currentNodeName $qname 1>&2; then
             user_msg "WARNING: SGE config failed adding host to $qname"
             return 1
+        #else
+        #    # When host successfully added to queue, disable it.  When a new compute node is
+        #    # getting configured, at this point it is not ready yet for jobs.
+        #    qmod -d ${qname}@${currentNodeName}
         fi
     done
 
@@ -2263,7 +2328,7 @@ function change_hostname_sge ()
     fi
     
     # Remove old hostname from exec host list
-    qconf -de ${oldName}
+    qconf -de ${oldName} || true
 }
 
 function config_iptables()
@@ -2316,8 +2381,8 @@ EOFRules
     # Delete line starting up iptables
     sed -i '/iptables-restore/d' /etc/network/interfaces
 
-    #--- delete all trailing blank lines at end of file ---#
-    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+    #--- delete all consecutive blank lines, allows 0 blanks at top, 1 at EOF ---#
+    sed -i '/./,/^$/!d' /etc/network/interfaces
     echo "pre-up iptables-restore < /etc/iptables.rules" >> /etc/network/interfaces
 
     return 0
@@ -2417,8 +2482,8 @@ function config_PGM_interface()
     sed -i '/auto eth4/,/netmask 255.255.255.0/d' /etc/network/interfaces
     sed -i '/auto eth5/,/netmask 255.255.255.0/d' /etc/network/interfaces
 
-    #--- delete all trailing blank lines at end of file ---#
-    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' /etc/network/interfaces
+    #--- delete all consecutive blank lines, allows 0 blanks at top, 1 at EOF ---#
+    sed -i '/./,/^$/!d' /etc/network/interfaces
 
 #--- Add interface definitions ---#
 #
@@ -2448,7 +2513,7 @@ done
     sed -i 's/^#net.ipv4.ip_forward/net.ipv4.ip_forward/' /etc/sysctl.conf
     sed -i 's/^net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
 
-    sysctl -p
+    sysctl -p 1>&2
 
 
     return 0
@@ -2686,6 +2751,13 @@ function write_conf_file()
         sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
         sed -i "s/^serialnumber:.*/serialnumber:$sn/" ${conflog}
 
+        #--- change the hardware name   ---#
+        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        if ! grep -q ^hardwarename ${conflog}; then
+            echo "hardwarename:\"${hardwarename}\"" >> $conflog
+        else
+            sed -i "s/^hardwarename:.*/hardwarename:\"${hardwarename}\"/"  ${conflog}
+        fi
         #--- change the version ---#
         version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@"
         sed -i "s/^version:.*/version:$version/" ${conflog}
@@ -2718,8 +2790,8 @@ function write_conf_file()
         echo $conf >> $conflog
         echo -n "serialnumber:" >> $conflog
         echo $(dmidecode -s system-serial-number 2>/dev/null) >> $conflog
-        productname=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
-        echo "hwname:\"${productname}\"" >> $conflog
+        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        echo "hardwarename:\"${hardwarename}\"" >> $conflog
         echo -n "version:" >> $conflog
         echo -e "@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@\n" >> $conflog
     fi
@@ -2903,5 +2975,107 @@ function read_packagelist_file()
     fi
     
     list=$(jsonpipe < $FILEPATH | grep "/packages/$LISTTYPE/$SERVERTYPE/" | cut -f2 | sed 's/"/ /g')
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
+        echo "Error parsing $FILEPATH.  Cannot proceed" 1>&2
+        exit 1
+    fi
+    
     eval $__resultvar="'${list[@]}'"
 }
+
+
+function set_max_open_files ()
+{
+    echo "RUNNING:set_max_open_files" 1>&2
+    local debug=0
+    local CONFIG='/etc/security/limits.conf'
+    local MAX_FILES_OPEN=8192
+    
+    # This will print existing lines setting file limits.
+    [ $debug -eq 1 ] && {
+        echo "Current $CONFIG max file settings:" 1>&2
+        egrep '(root|\*).*?(hard|soft).*?(nofile).*?' $CONFIG 1>&2
+        echo "-----------------" 1>&2
+    }
+    
+    # The four lines we want are:
+    #*                soft    nofile          8192
+    #*                hard    nofile          8192
+    #root             soft    nofile          8192
+    #root             hard    nofile          8192
+    
+    line='*                soft    nofile          '$MAX_FILES_OPEN
+    [ $debug -eq 1 ] && "Searching for $line"
+    if egrep -q '(\*).*?(soft).*?(nofile).*?' $CONFIG; then
+        # set the max value
+        sed -i "s/\(\*.*soft.*nofile\).*/\1          $MAX_FILES_OPEN/" $CONFIG
+    else
+        sed -i '/^# End of file/d' $CONFIG
+        echo "$line" >> $CONFIG
+        echo -e "# End of file" >> $CONFIG
+    fi
+    
+    
+    line='*                hard    nofile          '$MAX_FILES_OPEN
+    [ $debug -eq 1 ] && "Searching for $line"
+    if egrep -q '(\*).*?(hard).*?(nofile).*?' $CONFIG; then
+        # set the max value
+        sed -i "s/\(\*.*hard.*nofile\).*/\1          $MAX_FILES_OPEN/" $CONFIG
+    else
+        sed -i '/^# End of file/d' $CONFIG
+        echo "$line" >> $CONFIG
+        echo -e "# End of file" >> $CONFIG
+    fi
+    
+    
+    line='root             soft    nofile          '$MAX_FILES_OPEN
+    [ $debug -eq 1 ] && "Searching for $line"
+    if egrep -q '(^root).*?(soft).*?(nofile).*?' $CONFIG; then
+        # set the max value
+        sed -i "s/\(^root.*soft.*nofile\).*/\1          $MAX_FILES_OPEN/" $CONFIG
+    else
+        sed -i '/^# End of file/d' $CONFIG
+        echo "$line" >> $CONFIG
+        echo -e "# End of file" >> $CONFIG
+    fi
+    
+    
+    line='root             hard    nofile          '$MAX_FILES_OPEN
+    [ $debug -eq 1 ] && "Searching for $line"
+    if egrep -q '(^root).*?(hard).*?(nofile).*?' $CONFIG; then
+        # set the max value
+        sed -i "s/\(^root.*hard.*nofile\).*/\1          $MAX_FILES_OPEN/" $CONFIG
+    else
+        sed -i '/^# End of file/d' $CONFIG
+        echo "$line" >> $CONFIG
+        echo -e "# End of file" >> $CONFIG
+    fi    
+
+}
+
+
+function set_sge_open_files ()
+{
+    # The configuration line we want:
+    #execd_params              S_DESCRIPTORS=8192,H_DESCRIPTORS=8192
+    echo "RUNNING: set_sge_open_files" 1>&2
+    local MAX_FILES_OPEN=8192
+    local TMP_FILE=/tmp/global  # filename required to be "global" to update the global configuration
+    qconf -sconf global > $TMP_FILE
+    sed -i "s/\(^execd_params[ \t]*\).*$/\1S_DESCRIPTORS=$MAX_FILES_OPEN,H_DESCRIPTORS=$MAX_FILES_OPEN/" $TMP_FILE
+    qconf -Mconf $TMP_FILE
+    rm -f $TMP_FILE
+}
+
+function is_proton_ts ()
+{
+    # If package ion-protonupdates is installed, then return 0
+    if ! dpkg -l ion-protonupdates|tail -1|grep -q ^ii; then
+        echo "This is not a Proton TS" 1>&2
+        return 1
+    else
+        echo "This is a Proton TS" 1>&2
+        return 0
+    fi
+}
+

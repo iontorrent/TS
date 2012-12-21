@@ -16,6 +16,9 @@ class MixModel {
     var2 = 0;
     var2sq2p = 0;
     count = 0;
+    threshold = 0;
+    thresholdSet = false;
+    refMean = 0.0;
   }
 
   double mix;
@@ -25,6 +28,9 @@ class MixModel {
   double mu2;
   double var2;
   double var2sq2p;
+  double threshold;
+  bool thresholdSet;
+  double refMean;
   int count;
 };
 
@@ -41,6 +47,8 @@ public:
   /** Constructor - How many points to use (sample) from total */
   DualGaussMixModel(int n=-1);
 
+  static void SetThreshold(MixModel &m);
+
   void SetTrim(double trim) { mTrim = trim; }
 
   /** Calculate the best 2 center mixture model. */
@@ -55,7 +63,8 @@ public:
   /** Assign the points to clusters based on models. */
   void AssignToCluster(int *cluster, MixModel &model, const float *data, 
 		       int length, double threshold);
-  
+
+  static bool CalculateResponsibility(const MixModel &m, float data, float &ownership);  
   /** Guassian density function. */
   static double DNorm(double x, double mu, double var, double varsq2p);
 

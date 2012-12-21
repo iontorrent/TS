@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+'''Tool to show a disk's unusable space due to either Runs that are marked Keep, or non-Run data.'''
+
 import os
-from os import path
-import sys
-import time
-import datetime
-from socket import gethostname
 from django.core.exceptions import ObjectDoesNotExist
 
 import iondb.bin.djangoinit
 from iondb.rundb import models
+
 
 def disk_space(path):
     '''
@@ -19,16 +17,17 @@ def disk_space(path):
     total = commands.getstatusoutput("df -mP %s 2>/dev/null|tail -1" % path)
     data = total[1]
     capacity = int(data.split()[1])
-    used = int (data.split()[2])
-    available = int (data.split()[3])
+    used = int(data.split()[2])
+    available = int(data.split()[3])
     #kbytes = used + available
-    
+
     # DEBUG PRINTOUT
     #print "Disk Capacity %s" % path
     #print "---------"
     #print str(kbytes) + " KBytes"
     #print str(int(kbytes) / 1024 / 1024) + " GB"
     return used, available, capacity
+
 
 def disk_usage(path):
     import commands
@@ -37,8 +36,9 @@ def disk_usage(path):
         return 0
     else:
         data = total[1]
-    
+
     return int(data.split()[0])
+
 
 def valid_fileservers():
     # get all fileservers from dbase
@@ -48,6 +48,7 @@ def valid_fileservers():
         if (os.path.isdir(fileserver.filesPrefix)):
             validfileservers.append(fileserver)
     return validfileservers
+
 
 def valid_experiments(path):
     '''Returns list of experiments that have not been deleted or archived'''
@@ -68,6 +69,7 @@ def valid_experiments(path):
             validExperiments.append(experiment)
     return validExperiments
 
+
 def diskSpaceForRuns(experiments):
     keepSpace = 0
     otherSpace = 0
@@ -79,8 +81,9 @@ def diskSpaceForRuns(experiments):
         else:
             #TODO: get disk space usage for this Run
             otherSpace += usedSpace
-            
+
     return keepSpace, otherSpace
+
 
 def print_report():
     validFS = valid_fileservers()
@@ -95,41 +98,38 @@ def print_report():
         # list of Runs on this server
         validExperiments = valid_experiments(FS.filesPrefix)
         print "Number of valid experiments %d" % len(validExperiments)
-        
+
         # wicked-heavy system resource call right here...use at own risk
         #print "du value for disk usage: %d" % disk_usage(FS.filesPrefix)
-        
+
         # disk space occupied by Runs marked Keep and all other runs
         keepRuns, otherRuns = diskSpaceForRuns(validExperiments)
-        
+
         # total space occupied by Runs
         runsDiskSpace = keepRuns + otherRuns
-        
+
         # total non-Run data
         nonRunData = usedDiskSpace - runsDiskSpace
-        
+
         # unavailable disk space - sum of non-Run data and Keep Runs space
         # or, total used space less non-Keep Runs - space that will never be recovered by archiving or deleting
         unavailable = usedDiskSpace - otherRuns
-        
+
         # Print the key information: disk space lost to us
-        print "Total Disk Space (Free + Used):            %12d MBytes %5.1f%%" % (usableCapacity, 100.0 * float(usableCapacity)/float(usableCapacity))
-        print "Total Free Disk Space:                     %12d MBytes %5.1f%%" % (available, 100.0 * float(available)/float(usableCapacity))
-        print "Total Used Disk Space:                     %12d MBytes %5.1f%%" % (usedDiskSpace, 100.0 * float(usedDiskSpace)/float(usableCapacity))
+        print "Total Disk Space (Free + Used):            %12d MBytes %5.1f%%" % (usableCapacity, 100.0 * float(usableCapacity) / float(usableCapacity))
+        print "Total Free Disk Space:                     %12d MBytes %5.1f%%" % (available, 100.0 * float(available) / float(usableCapacity))
+        print "Total Used Disk Space:                     %12d MBytes %5.1f%%" % (usedDiskSpace, 100.0 * float(usedDiskSpace) / float(usableCapacity))
         print "Check Free + Used = %d" % (available + usedDiskSpace)
         print ""
-        print "Total Runs Disk Space:                     %12d MBytes %5.1f%%" % (runsDiskSpace, 100.0 * float(runsDiskSpace)/float(usableCapacity))
-        print "Total Volatile Runs Disk Space:            %12d MBytes %5.1f%%" % (otherRuns, 100.0 * float(otherRuns)/float(usableCapacity))
-        print "Total Keep Runs Disk Space:                %12d MBytes %5.1f%%" % (keepRuns, 100.0 * float(keepRuns)/float(usableCapacity))
-        print "Total Non-Run Space:                       %12d MBytes %5.1f%%" % (nonRunData, 100.0 * float(nonRunData)/float(usableCapacity))
-        print "Total Disk Space Unavailable for Run Data: %12d MBytes %5.1f%%" % (unavailable, 100.0 * float(unavailable)/float(usableCapacity))
+        print "Total Runs Disk Space:                     %12d MBytes %5.1f%%" % (runsDiskSpace, 100.0 * float(runsDiskSpace) / float(usableCapacity))
+        print "Total Volatile Runs Disk Space:            %12d MBytes %5.1f%%" % (otherRuns, 100.0 * float(otherRuns) / float(usableCapacity))
+        print "Total Keep Runs Disk Space:                %12d MBytes %5.1f%%" % (keepRuns, 100.0 * float(keepRuns) / float(usableCapacity))
+        print "Total Non-Run Space:                       %12d MBytes %5.1f%%" % (nonRunData, 100.0 * float(nonRunData) / float(usableCapacity))
+        print "Total Disk Space Unavailable for Run Data: %12d MBytes %5.1f%%" % (unavailable, 100.0 * float(unavailable) / float(usableCapacity))
         print ""
     return
 
-if __name__=="__main__":
-    '''Tool to show a disk's unusable space due to either Runs that are marked
-    Keep, or non-Run data.'''
-        
+if __name__ == "__main__":
     # Print the way this is calculated
     print "Disk space unavailable for Run data is calculated by"
     print "Taking total used space and subtracting space used by volatile"

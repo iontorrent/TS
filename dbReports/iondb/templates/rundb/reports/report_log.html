@@ -3,8 +3,9 @@
 {% block content %}
 
 <div id="data_view" class="content group">
-    {% if error %}
-        <h1>Old report analysis</h1>
+    <h1>Status: {{report.status}}</h1>
+    {% if error == "old_report" %}
+        <h2>Old report analysis</h2>
         <p>
             Cannot display TorrentSuite 3.0-style report for a pre-3.0 analysis run.
         </p>
@@ -18,32 +19,46 @@
                 <a href="{{report_link}}/Default_Report.php">View the pre-3.0 report</a>
             </li>
             <li>
-                <a href="{% url report report.pk %}log" id="log-btn">
-                        View this report Log</a>
+                <a href="{% url report report.pk %}log" id="log-btn">View this report Log</a>
             </li>
+        </ul>    
+    {% else %}
+        {% if error == "report_archived" %}
+            <h2>Report was archived and cannot be viewed</h2>
+        {% endif %}
+        <ul>
+            <li><a href="{% url report_csa report.pk %}">Customer Support Archive</a></li>
+            {% if error == "report_archived" %}
+                <li><a href="{{report_link}}/backupPDF.pdf">View Backup Report PDF</a></li>
+            {% else %}
+                <li><a href="{% url report report.pk %}">Report</a></li>
+            {% endif %}
         </ul>
-        
+        <ul>
+            {% for exists, path, text in file_links %}
+            <li>
+                {% if exists %}
+                    <a href="{{path}}">{{text}}</a>
+                {% else %}
+                    {{text}} (Does not exist)
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    {%endif%}
 
-    {% endif %}
-
-    {% if contents %}
-
-        {%if not error%}
+    {% if log_data %}
             <h1>Report Error Log <small>Refresh the page to see updates</small></h1>
-            <pre id="log">{{contents}}</pre>
-        {%endif%}
-
+            {% for name, contents in log_data %}
+            <div class="clearfix">
+                <h2 class="pull-left">{{name}}</h2>&nbsp;
+                <a href="{{report_link}}/{{name}}" class="btn btn-small"><i class="icon-download"></i> Download</a>
+            </div>
+            <pre class="log">{{contents}}</pre>
+            {% endfor %}
     {% else %}
         <h2>There is no log to view.</h2>
     {% endif %}
 
-    {% if not error%}
-        <ul>
-            <li><a href="{{report_link}}/Default_Report.php">View the old report</a></li>
-            <li><a href="{{report_link}}/csa.php">Customer Support Archive</a></li>
-            <li><a href="{% url report report.pk %}">Report</a></li>
-            <li><a href="{{report_link}}/drmaa_stdout.txt">drmaa_stdout.txt</a></li>
-        </ul>
-    {%endif%}
 </div>
 {% endblock content %}

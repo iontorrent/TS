@@ -1,0 +1,214 @@
+{% extends "rundb/configure/base.html" %}
+{% block pagination_holder %}{% endblock %}
+{% block current_tab %}about{% endblock %}
+{% block sub-nav %}
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li class="active"><a href="{% url configure_account %}">Accounts</a></li>
+{% endblock sub-nav %}
+
+{% block extra_head_js %}
+<script>
+$(document).ready(function() {
+    $(".approve-user").click(function (e) {
+        var btn = $(this);
+        var userId = btn.data('id');
+        $('#modal_confirm_approve').modal('show');
+        $('#modal_confirm_approve .modal-body p b').text(btn.data('username'));
+        $('#modal_confirm_approve .modal-body #modal-error-messages').empty();
+        $('#modal_confirm_approve .btn-success').click(function(e){
+            e.preventDefault();
+            console.log('clicked Yes, Approve!');
+            $.ajax({
+                type: "POST",
+                beforeSend: function () {
+                    //show processing animation
+                },
+                url: btn.attr('href')
+            }).done(function (data) {
+                console.log("Approved/Activated user " + userId);
+                btn.parents(".pending-user").remove();
+                $('#modal_confirm_approve').modal('hide');
+            }).fail(function (data) {
+               $('#modal_confirm_approve .modal-body #modal-error-messages').append('<p>Error</p><p>' + data.responseText + '</p>');
+            });
+        });
+        e.preventDefault();
+    });
+    $(".reject-user").click(function (e) {
+        e.preventDefault();
+        var btn = $(this);
+        var userId = btn.data('id');
+        $('#modal_confirm_reject').modal('show');
+        $('#modal_confirm_reject .modal-body p b').text(btn.data('username'));
+        $('#modal_confirm_reject .modal-body #modal-error-messages').empty();
+        $('#modal_confirm_reject .btn-danger').click(function(e){
+            e.preventDefault();
+            console.log('clicked Yes, Reject!');
+            $.ajax({
+                type: "POST",
+                beforeSend: function () {
+                    //show processing animation
+                },
+                url: btn.attr('href')
+            }).done(function (data) {
+                console.log("Rejected user " + userId);
+                btn.parents(".pending-user").remove();
+                $('#modal_confirm_reject').modal('hide');
+            }).fail(function (data) {
+               $('#modal_confirm_approve .modal-body #modal-error-messages').append('<p>Error</p><p>' + data.responseText + '</p>');
+            });
+        });
+    });
+});
+</script>
+{% endblock extra_head_js %}
+
+
+{% block content %}
+
+<div class="content">
+    <h1>User Profile / Account Information  <small>Allows to view and update your existing user profile and account information</small></h1>
+    <form method="post" action="" class="form-horizontal">
+        {% csrf_token %}
+        <div id="form-error-messages" class="alert alert-danger hide">
+            {% for error in form.errors %}
+            <p>{{ error }}</p>
+            {% endfor %}
+        </div>
+        <fieldset>
+            <div class="control-group">
+                <label for="input01" class="control-label">Username</label>
+                <div class="controls">
+                    {{ user.username }}
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">Full Name</label>
+                <div class="controls">
+                    {{ user.get_full_name|default:"[Not Set]" }}
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">REST API Key</label>
+                <div class="controls">
+                    <pre>{{ user.api_key.key }}</pre>
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">Account Level</label>
+                <div class="controls">
+                    {% if user.is_superuser %}Admin{% else %}{% if user.is_staff %}Staff{% else %}User{% endif %}{% endif %}
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">{{form.name.label}}</label>
+                <div class="controls">
+                    {{form.name}}
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">{{form.email.label}}</label>
+                <div class="controls">
+                    {{form.email}}
+                    <p class="help-block">
+                    </p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="fileInput" class="control-label">{{form.phone_number.label}}</label>
+                <div class="controls">
+                    {{form.phone_number}}
+                    <p class="help-block">
+                    </p>
+                </div>
+                <div class="form-actions">
+                    <input type="reset" class="btn" value="Reset"/>
+                    <input type="submit" class="btn btn-primary" value="Submit"/>
+                </div>
+            </div>
+        </fieldset>
+    </form>
+</div>
+
+
+{% if user.is_superuser %}
+<div class="content clearfix">
+    <h1>User Registrations <small>New user registrations awaiting approval</small></h1>
+    {% if approve %}
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Full Name</th>
+                <th>Date Joined</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for user in approve %}
+            <tr class="pending-user">
+                <td>{{ user.username }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.get_full_name }}</td>
+                <td>{{ user.date_joined }}</td>
+                <td><a href="{% url api_dispatch_activate resource_name="user" api_name="v1" pk=user.id %}" 
+                       class="btn btn-success approve-user" id="approve-user-{{user.id}}"
+                        data-id="{{ user.id }}" data-username="{{ user.username }}">Approve</a>
+                    <a href="{% url api_dispatch_reject resource_name="user" api_name="v1" pk=user.id %}" 
+                       class="btn btn-danger reject-user" id="reject-user-{{user.id}}"
+                        data-id="{{ user.id }}" data-username="{{ user.username }}">Reject</a>
+                </td>
+            </tr>
+        {% endfor user %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No user accounts pending approval.</p>
+    {% endif %}
+</div>
+{% endif %}
+<div id="modal_confirm_reject" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Confirm Reject Registration</h3>
+    </div>
+    <div class="modal-body">
+        <p>Are you sure you want to reject the registration for <b></b>?</p>
+        <div id="modal-error-messages"></div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <a href="#" class="btn btn-danger">Yes, Reject!</a>
+    </div>
+</div>
+<div id="modal_confirm_approve" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Confirm Approve Registration</h3>
+    </div>
+    <div class="modal-body">
+        <p>Are you sure you want to approve the registration for <b></b>?</p>
+        <div id="modal-error-messages"></div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <a href="#" class="btn btn-success">Yes, Approve!</a>
+    </div>
+</div>
+{% endblock content %}

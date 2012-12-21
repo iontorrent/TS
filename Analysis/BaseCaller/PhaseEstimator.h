@@ -75,6 +75,24 @@ public:
   float GetWellDR(int x, int y) const;
 
 
+  //! @brief    Retrieve chip average of carry forward estimates
+  float GetAverageCF() const { return average_cf_; }
+
+  //! @brief    Retrieve chip average of incomplete extension estimates
+  float GetAverageIE() const { return average_ie_; }
+
+  //! @brief    Retrieve chip average of droop estimates
+  float GetAverageDR() const { return average_dr_; }
+
+  //! @brief    Save train subset to json.
+  //! @param    json                Json value object
+  void ExportTrainSubsetToJson(Json::Value &json);
+
+  //! @brief	Load phase estimation from json file
+  bool LoadPhaseEstimationTrainSubset(const string& phase_file_name,  Mask *mask,
+                                      int region_size_x, int region_size_y);
+
+
 protected:
 
   //! @brief    Run spatial-refiner, the nelder-mead based estimator with progressive chip partitioning
@@ -143,6 +161,9 @@ protected:
   vector<float>         result_ie_;               //!< Incomplete extension estimates for all regions
   vector<float>         result_dr_;               //!< Droop estimates for all regions
   float                 residual_threshold_;      //!< Maximum sum-of-squares residual to keep a read in phasing estimation
+  float                 average_cf_;              //!< Chip average of CF estimates
+  float                 average_ie_;              //!< Chip average of IE estimates
+  float                 average_dr_;              //!< Chip average of DR estimates
 
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation

@@ -1,0 +1,123 @@
+/*
+* Kendo UI Web v2012.3.1114 (http://kendoui.com)
+* Copyright 2012 Telerik AD. All rights reserved.
+*
+* Kendo UI Web commercial licenses may be obtained at
+* https://www.kendoui.com/purchase/license-agreement/kendo-ui-web-commercial.aspx
+* If you do not own a commercial license, this file shall be governed by the
+* GNU General Public License (GPL) version 3.
+* For GPL requirements, please review: http://www.gnu.org/copyleft/gpl.html
+*/
+@image-folder: "Black";
+@texture: none;
+@fallback-texture: url('textures/glass.png');
+
+/* Widget Base Styles */
+@widget-text-color: #fff;
+@widget-gradient: "rgba(255,255,255,.12) 0%, rgba(255,255,255,.08) 50%, rgba(255,255,255,.05) 51%, rgba(255,255,255,.0) 100%";
+@widget-background-color: #4d4d4d;
+@widget-border-color: #2b2b2b;
+@widget-shadow: none;
+
+/* Selects, Dropdowns */
+@select-background-color: #272727;
+@select-border-color: @widget-border-color;
+@select-hover-background-color: #3d3d3d;
+@select-group-background-color: @select-background-color;
+
+/* Inputs */
+@input-background-color: #fff;
+@input-text-color: #181818;
+
+/* Links */
+@link-text-color: @widget-text-color;
+
+/* Headers */
+@header-text-color: @widget-text-color;
+@header-background-color: #1d1d1d;
+
+/* Buttons */
+@button-text-color: @widget-text-color;
+@button-background-color: @select-background-color;
+
+/* Group Base Styles */
+@group-background-color: #555;
+@group-border-color: @widget-border-color;
+
+/* Content */
+@content-background-color: #3d3d3d;
+
+
+/* Widget States */
+
+/* Hover State */
+@hover-text-color: @widget-text-color;
+@hover-gradient: "rgba(255,255,255,.12) 0%, rgba(255,255,255,.20) 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.07) 100%";
+@hover-background-color: #3d3d3d;
+@hover-border-color: @widget-border-color;
+@hover-shadow: none;
+
+/* Selected State */
+@selected-text-color: @widget-text-color;
+@selected-gradient: @widget-gradient;
+@selected-background-color: #0066cc;
+@selected-border-color: #0066cc;
+@selected-shadow: none;
+
+/* Active State */
+@active-text-color: @widget-text-color;
+@active-gradient: none;
+@active-background-color: @widget-background-color;
+@active-border-color: #020202;
+@active-shadow: none;
+
+/* Error State */
+@error-text-color: @widget-text-color;
+@error-background-color: #ff0000;
+@error-border-color: #ff0000;
+
+/* Disabled State */
+@disabled-text-color: #7a7a7a;
+
+/* ToolTip */
+@tooltip-text-color: #062430;
+@tooltip-background-color: #fff;
+@tooltip-border-color: #030303;
+
+/* Validation Message */
+@validation-text-color: #080808;
+@validation-background-color: #ffb400;
+@validation-border-color: #ffb400;
+
+/* Splitter */
+@splitbar-background-color: #4c4c4c;
+
+/* Slider */
+@draghandle-border-radius: 7px;
+@draghandle-border-color: @widget-border-color;
+@draghandle-background-color: @widget-background-color;
+@draghandle-shadow: none;
+@draghandle-hover-border-color: @hover-border-color;
+@draghandle-hover-background-color: @hover-background-color;
+@draghandle-hover-shadow: none;
+
+/* Grid */
+@alt-background-color: #525252;
+
+/* Loading Indicators */
+@loading-panel-color: #666;
+
+/* Shadows */
+@shadow-color: rgba(0, 0, 0, .3);
+@shadow-inset-color: #aaa;
+
+/* Border Radii */
+@main-border-radius: 4px;
+@list-border-radius: @main-border-radius - 1;
+@inner-border-radius: @main-border-radius - 2;
+@slider-border-radius: 13px;
+
+/* Icons */
+@default-icon-opacity: 0.85;
+
+@import "template.less";

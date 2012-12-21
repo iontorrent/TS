@@ -17,6 +17,8 @@ import commands
 #   * - Next idea is to just flag all the directories which are not registered
 #       as Rigs in the database.  That will identify all non-Run data.
 #
+
+
 def valid_fileservers():
     # get all fileservers from dbase
     fileservers = models.FileServer.objects.all()
@@ -25,6 +27,7 @@ def valid_fileservers():
         if (os.path.isdir(fileserver.filesPrefix)):
             validfileservers.append(fileserver)
     return validfileservers
+
 
 def disk_usage(path):
     import commands
@@ -35,8 +38,9 @@ def disk_usage(path):
         return 0
     else:
         data = total[1]
-    
+
     return int(data.split()[0])
+
 
 def find_explog_files(path):
     #For given path, search for explog.txt files - this is our test for raw dataset
@@ -55,6 +59,7 @@ def find_explog_files(path):
             files.append(entry)
 
     return files
+
 
 def parse_runname(filename):
     runname = ''
@@ -76,13 +81,13 @@ if __name__ == '__main__':
     # get all Experiment records from database.  we will hit database only once.
     experiments = models.Experiment.objects.all()
     print "Number of records: %d" % experiments.count()
-    
+
     # get all file server records from database.
     validfileservers = valid_fileservers()
-    
+
     # get all Rigs records from database
     rigs = models.Rig.objects.all()
-    rignames = [rig.name for rig in rigs] 
+    rignames = [rig.name for rig in rigs]
     for fs in validfileservers:
         print "Checking %s" % fs.filesPrefix
         #NOTE: This assumes there are only valid Runs in the PGM directories.
@@ -95,9 +100,8 @@ if __name__ == '__main__':
         # Get disc usage for remaining files
         totaldu = 0
         for file in paredlist:
-            thisfile = disk_usage(os.path.join(fs.filesPrefix,file))
-            print "%d\t%s" % (thisfile,file)
+            thisfile = disk_usage(os.path.join(fs.filesPrefix, file))
+            print "%d\t%s" % (thisfile, file)
             totaldu += thisfile
         print "----------------"
         print "%d Mbytes\tTOTAL" % totaldu
-                              

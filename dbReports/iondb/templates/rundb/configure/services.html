@@ -1,10 +1,11 @@
 {% extends "rundb/configure/base.html" %}
 {% block sub-nav %}
-	<li><a href="{% url configure_about %}">About</a></li>			
-	<li><a href="{% url configure_references %}">References</a></li>
-	<li class="active"><a href="{% url configure_services %}">Services</a></li>
-	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
-	<li><a href="{% url configure_configure %}">Configure</a></li>	
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li class="active"><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
@@ -85,6 +86,17 @@ $(document).ready(function () {
 			url: "/configure/services/storage/" + runpk + "/" + setstr
 		});
 	});
+
+	    $('.queueStat').live('click',function(e){
+		    e.preventDefault();	
+		    url = $(this).attr('href');	
+		    $('body #modal_queuestat').remove();	
+		    $.get(url, function(data) {
+		       $('body').append(data);
+		       $( "#modal_queuestat" ).modal("show");
+		       return false;
+		    })
+	    });
 
 	$(".acknowledgeButton").click(function () {
 		runpk = $(this).data("runpk");
@@ -207,6 +219,7 @@ $(document).ready(function () {
 	</div>			
 	<div class="content clearfix">
 		<h1>Active Jobs</h1>
+		<h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
 		<br>
 		{% if not jobs.jobs %}
 			<p class="centered_message">No active jobs.</p>
@@ -407,11 +420,12 @@ $(document).ready(function () {
 					<table class="data-table">
 						<thead>
 							<tr>
-								<th colspan="4">{{ key }}</th>
+								<th colspan="5">{{ key }}</th>
 							</tr>
 							<tr>
 								<th>Run</th>
 								<th>Run Date</th>
+								<th>Size (Mb)</th>
 								<th>Storage Option</th>
 								<th>Acknowledge Delete</th>
 							</tr>
@@ -421,6 +435,8 @@ $(document).ready(function () {
 							<tr class="{% cycle 'row1' 'row2' %}">
 								<td>{{ v.name }}</td>
 								<td>{{ v.date }}</td>
+                                <!--TODO: Clean up this formatting.  Desire right-justified column of numbers-->
+								<td style="text-align:right">{{ v.diskusage }}&nbsp;&nbsp;&nbsp;</td>
 								<td class='ch_storage_td'>
 									<select name="storage_options"
 									data-runname="{{ v.name|slugify }}"

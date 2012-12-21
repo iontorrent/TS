@@ -1,0 +1,8 @@
+Repository for FlowspaceCalibration.jar source code
+https://github.com/iontorrent/Torrent-Variant-Caller/tree/FlowspaceCalibration
+
+build:
+cd to checkout directory, type "ant FlowspaceCalibration.jar" to build and the built jar is under dist subfolder
+
+note: ant build might require proper setting of JAVA_HOME, pointing to where jdk installs
+

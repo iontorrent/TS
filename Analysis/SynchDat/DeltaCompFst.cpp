@@ -23,27 +23,9 @@
 #include <arpa/inet.h>
 #include "DeltaCompFst.h"
 #include "BitHandler.h"
-
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
 using namespace std;
-
-#ifdef __INTEL_COMPILER
-#define v4si __m128i
-#define ADD_PACKED_INT( x, y) _mm_add_epi32( (x), (y));
-#define SUB_PACKED_INT( x, y) _mm_sub_epi32( (x), (y));
-#else
-typedef int v4si __attribute__ ( (vector_size (sizeof (int) *4)));
-#define ADD_PACKED_INT( x, y) ( (x) + (y) );
-#define SUB_PACKED_INT( x, y) ( (x) - (y) );
-#endif // __INTEL_COMPILER
-
-#define DC_STEP_SIZE 4
-#define DC_STEP_SIZEU 4ul
-#define WELLS_COMPACTED 16
-
-union CompI {
-  v4si v;
-  int vv[DC_STEP_SIZE];
-};
 
 void DeltaCompFst::decompress(const int8_t *compressed, size_t size, TraceChunk &chunk) {
     // @todo - neorder these bits                                                  
@@ -51,51 +33,40 @@ void DeltaCompFst::decompress(const int8_t *compressed, size_t size, TraceChunk 
   unsigned X = ntohl(header[0]);
   unsigned Y = ntohl(header[1]);
   unsigned L = ntohl(header[2]);
-    size_t S = X*Y;
+  size_t S = X*Y;
 
-    size_t current = 12;
-    size_t end = X*Y*(L+1)+12;
-    chunk.mData.resize(S*L);
-    uint16_t* p = &chunk.mData[0];
-    const int16_t *eptr = (const int16_t *)(&compressed[end]);
-    const int8_t *sptr = &compressed[0] + current;
-    size_t sIdx = 0;
-    size_t eIdx = 0;
-    // Pull off the first frame
-    for(size_t i = 0; i < S; i++) {
-      uint16_t v = (uint8_t)(sptr[sIdx++]);
-      uint16_t u = (uint8_t)(sptr[sIdx++]);
-      *p++ = v + (u << 8 );
-    }
-    CompI cur;
-    CompI last;
-    for (size_t i = 1 ; i < L; i++) {
-      for (size_t j = 0; j < S; j+=DC_STEP_SIZE) {
-        size_t next = std::min(DC_STEP_SIZEU, S-j);
-        for (size_t x = 0; x < next; x++) {
-          cur.vv[x] = (int8_t)sptr[sIdx+x];
-          last.vv[x] = *(p-S+x);
-        }
-        sIdx += next;
-        for (size_t x = 0; x < next; x++) {
-          if(cur.vv[x] == 127) {
-            cur.vv[x] = ntohs(eptr[eIdx++]);
-          }
-        }
-	cur.v = ADD_PACKED_INT(last.v, cur.v);
-        for (size_t x = 0; x < next; x++) {
-          *(p+x) = cur.vv[x];
-        }
-        p += next;
+  size_t current = 12;
+  size_t end = X*Y*(L+1)+12;
+  chunk.mData.resize(S*L);
+  int16_t* p = &chunk.mData[0];
+  const int16_t *eptr = (const int16_t *)(&compressed[end]);
+  // Pull off the first frame
+  const int8_t *s = &compressed[0] + current;
+  size_t i = 0;
+  while(likely(i++ < S)) {
+    *p = (uint8_t)(*s++);
+    *p++ += (uint16_t) (*s) << 8;
+    s++;
+  }
+  i = 1;
+  while(likely(i++ < L)) {
+    int16_t *pS = p - S;
+    size_t j = 0;
+    while(likely(j++ < S)) {
+      if (*s == 127) {
+  	*(p++) = ntohs(*eptr++) + *(pS++);
+	s++;
+      }
+      else {
+  	*(p++) = *(s++) + *(pS++);
       }
     }
+  }
 }
 
-// Memory is organized by frames
 void DeltaCompFst::compress(TraceChunk &chunk, size_t nRows, size_t nCols, 
                             size_t nFrames, int8_t **compressed, size_t *outsize, size_t *maxSize) {
-  unsigned X = nRows, Y = nCols;
-  size_t S = X*Y; // framestep
+  size_t S = nRows * nCols;
   size_t L = nFrames;
 
   // Reallocate memory if needed
@@ -104,54 +75,37 @@ void DeltaCompFst::compress(TraceChunk &chunk, size_t nRows, size_t nCols,
 
   // Write header about dimensions in network order bytes
   int *header = (int *)(*compressed);
-  header[0] = htonl(X);
-  header[1] = htonl(Y);
+  header[0] = htonl(nRows);
+  header[1] = htonl(nCols);
   header[2] = htonl(L);
-  size_t current = 12;
-
+  int8_t *c = *compressed + 12;
   // End of byte sized deltas where we'll put things that don't compress into a byte
   int16_t *end = (int16_t *)((*compressed + S * (L+1) + 12));
-  size_t eIx = 0;
+  int16_t *endstart = end;
 
   // First frame as full 16 bits
-  const uint16_t* p = &chunk.mData[0];
-  for (size_t i = 0; i < S; i++) {
-    int16_t v = *p++;
-    (*compressed)[current++] = v;
-    (*compressed)[current++] = v >> 8;
+  const int16_t* p = &chunk.mData[0];
+  size_t i = 0;
+  while (likely(i++ < S)) {
+    *c++ = *p;
+    *c++ = *p++ >> 8;
   }
 
-  // Delta for all the other frames
-  CompI cur;
-  CompI last;
-  CompI zero;
-  for (size_t i = 0; i < DC_STEP_SIZEU; i++) {
-    zero.vv[i] = 0.0f;
-  }
-  for (size_t i = 1 ; i < L; i++) {
-    for (size_t j = 0; j < S; j+=DC_STEP_SIZE) {
-      cur.v = zero.v;
-      last.v = zero.v;
-      size_t next = std::min(DC_STEP_SIZEU, S-j);
-      const uint16_t *pS = p - S;
-      for (size_t x = 0; x < next; x++) {
-        cur.vv[x] = *(p + x);
-        last.vv[x] = *(pS + x);
+  i = 1;
+  while(likely(i++ < L)) { 
+    size_t j = 0;
+    const int16_t *pS = p - S;
+    while (likely(j++ < S)) {
+    //    for (size_t j = 0; j < S; j++) { // for each well
+      int16_t d = *p++ - *pS++;
+      if (d >= 127 || d <= -127) {
+	*end++ = htons(d);
+	d = 127;
       }
-      p += next;
-      cur.v = SUB_PACKED_INT( cur.v, last.v);
-      for (size_t x= 0; x < next; x++) {
-        // If doesn't fit in a byte store it at the end as a short.
-        if (abs(cur.vv[x]) >= 127) {
-          int16_t v = cur.vv[x];
-          end[eIx++] = htons(v); // network order for shorts
-          cur.vv[x] = 127;
-        }
-        (*compressed)[current++] = cur.vv[x];
-      }
+      *c++ = d;
     }
   }
-  *outsize = current + sizeof(int16_t) * eIx;
+  *outsize = (c - *compressed) + sizeof(int16_t) * (end - endstart);
 }
 
 

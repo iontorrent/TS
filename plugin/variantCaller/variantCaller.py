@@ -6,6 +6,8 @@ import os
 import os.path
 import getopt
 import subprocess
+import json
+import datetime
 from collections import defaultdict
 
 def usage():
@@ -19,6 +21,7 @@ def usage():
     sys.stderr.write("  -p, --paramfile  =>  Parameters file for all variant programs used (simple json)\n")
     sys.stderr.write("  -r, --rundir     =>  Directory path to location of variant caller programs. Defaults to the directory this script is located\n")
     sys.stderr.write("  -k, --keepdir    =>  Keep variant mapping to individual contigs (dibayes). (No genome file required.)\n")
+    sys.stderr.write("  -n, --nosnp      =>  Call indels only.\n")
     sys.stderr.write("  -l, --log        =>  Send additional Log messages to STDERR\n")
     sys.stderr.write("  -L, --logfile    =>  Send additional Log messages to specified log file\n")
     sys.stderr.write("  -W, --warnto     =>  Exit normal status after an error occurs with valid partial results and send additional warning message to specified log file\n")
@@ -26,8 +29,42 @@ def usage():
     
 paradict = defaultdict(lambda: defaultdict(defaultdict))
 
-# set to 0/1 to exclude/include SNP calling    
-callSNPs = 1
+def ReadParamsFromUI( paramfile):
+    paradict['dibayes'] = ""
+    paradict['torrent-variant-caller'] = ""
+    paradict['long-indel-assembler'] = ""    
+    paradict['filter-indels'] = ""
+    if paramfile == "":
+        return
+    JSON_INPUT = json.load( open(paramfile, "r") )
+    params = JSON_INPUT['pluginconfig']
+    for line in params:
+	value=params[line]
+	line = line.strip()
+	line = line.replace('___', '-')
+	tokens = line.split('__')
+	if(tokens[0].strip().replace('"', '') == "param"):
+		group = tokens[1].strip().replace('"', '')
+            	paradict[group] += "--%s=%s " % (tokens[2].strip().replace('"', ''),value)
+
+def ReadParamsFromPlan( paramfile):
+    paradict['dibayes'] = ""
+    paradict['torrent-variant-caller'] = ""
+    paradict['long-indel-assembler'] = ""    
+    paradict['filter-indels'] = ""
+    if paramfile == "":
+        return
+    JSON_INPUT = json.load( open(paramfile, "r") )
+    params = JSON_INPUT['runinfo']['plugin']['userInput']
+    for line in params:
+	value=params[line]
+	line = line.strip()
+	line = line.replace('___', '-')
+	tokens = line.split('__')
+	if(tokens[0].strip().replace('"', '') == "param"):
+		group = tokens[1].strip().replace('"', '')
+            	paradict[group] += "--%s=%s " % (tokens[2].strip().replace('"', ''),value)
+            	
 
 def ReadParamsFile( paramfile ):
     # defaults for expected dictionary elements
@@ -108,24 +145,14 @@ def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, hotspo
 def IndelCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, outDir ):
     if bedfile != "":
         bedfile = '-L ' + bedfile
-    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s %s -o %s/%s -glm INDEL --bypassFlowAlign --ignoreFlowIntensities -S SILENT -U ALL -filterMBQ  --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 " % (
-        binDir, binDir, binDir, reference, bamfile, bedfile, outDir, "bayesian_scorer.vcf")
+    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s %s -o %s/%s -glm INDEL -S SILENT -U ALL -filterMBQ --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 8 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 " % (
+        binDir, binDir, binDir, reference, bamfile, bedfile, outDir, "small_indels.vcf")
     if paramstr == "":
-       paramstr = " -glm INDEL -minIndelCnt 5 -dcov 500 --bypassFlowAlign --ignoreFlowIntensities -S SILENT -U ALL -filterMBQ  --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5  "
+       paramstr = " -minIndelCnt 5 -dcov 2000 "
     else:
        paramstr = paramstr.replace('=',' ')
     annotation = " -A IndelType -A AlleleBalance -A BaseCounts -A ReadDepthAndAllelicFractionBySample -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample "   
-    return "%s %s %s > %s/%s " % (fixedprms, annotation, paramstr, outDir, "indel_caller.log")
-
-def IndelReCallerCommandLine( binDir, paramstr, bamfile, reference, outDir ):
-    fixedprms = "java -Xmx8G -Djava.library.path=%s/TVC/lib -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar -T UnifiedGenotyper -R %s -I %s -L %s/%s -o %s/%s -glm INDEL -S SILENT -U ALL -filterMBQ --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 " % (
-        binDir, binDir, binDir, reference, bamfile, outDir, "downsampled.vcf", outDir, "bayesian_scorer.vcf")
-    if paramstr == "":
-       paramstr = " -glm INDEL -minIndelCnt 5 -dcov 2000 -S SILENT -U ALL -filterMBQ --selectMostFreqAllele --excludeHMM -combineSample ion-sample -nt 7 --max_alternate_alleles 2 --max_deletion_fraction 2 --min_base_quality_score 5 "
-    else:
-       paramstr = paramstr.replace('=',' ')
-    annotation = " -A IndelType -A AlleleBalance -A BaseCounts -A ReadDepthAndAllelicFractionBySample -A AlleleBalanceBySample -A DepthPerAlleleBySample -A MappingQualityZeroBySample "   
-    return "%s %s %s > %s/%s; cat %s/filtered.non-downsampled.vcf >> %s/bayesian_scorer.vcf" % (fixedprms, annotation, paramstr, outDir, "indel_caller.log", outDir, outDir)
+    return "%s %s %s > %s/%s;" % (fixedprms, annotation, paramstr, outDir, "indel_caller.log")
 
 def IndelAssemblyCommandLine( binDir, paramstr, reference, bamfile, bedfile, outDir ):
     if bedfile != "":
@@ -155,16 +182,6 @@ def BedFilterIndelsCommandLine( binDir, bedfile, outDir ):
 def VCFSortFilterCommandLine( binDir, outDir ):
     return "java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.FixQUALRun %s/variantCalls.filtered.vcf %s/indels.gatk-qual-rescored.vcf;java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.SortVcfRun %s/indels.gatk-qual-rescored.vcf %s/indels.merged.vcf" % ( binDir, binDir, binDir, outDir, outDir, binDir, binDir, binDir, outDir, outDir )
 
-    
-def RunRecalculation(binDir, paramstr, outDir):
-    command="%s/filter_indels.py %s --downsampled-vcf=%s/downsampled.vcf %s/bayesian_scorer.vcf %s/filtered.non-downsampled.vcf" % ( binDir, paramstr, outDir, outDir, outDir )
-    WriteLog( " $ %s\n" % command )
-    exit_code=os.system(command)
-    # 768 = sys.exit(3)
-    if exit_code==768:
-       return True
-    else:
-       return False
 
 def MergeSNPandIndelVCF( binDir, outDir ):
     return "java -Xmx4G -cp  %s/TVC/jar/VcfUtils.jar:%s/TVC/jar/VcfModel.jar:%s/TVC/jar/log4j-1.2.15.jar com.lifetech.ngs.vcfutils.MergeVcfRun %s/SNP_variants.vcf %s/indel_variants.vcf %s/TSVC_variants.vcf" % ( binDir, binDir, binDir, outDir, outDir, outDir )
@@ -226,6 +243,54 @@ def CreateEmptyVcf( fileName ):
         sys.stderr.write("ERROR: Cannot open output file '%s'" % fileName)
         sys.exit(1)
 
+def CreateParamsFile( fileName ):
+    try:
+	fout = open(fileName, 'w')
+	now = datetime.datetime.now()
+	fout.write("VariantCaller : ")
+	fout.write(now.strftime("%Y-%m-%d %H:%M"))
+	fout.write("\n\n")
+	fout.write("SNP Caller Parameter Settings:")
+	fout.write("\n")
+	cmdStr = paradict['dibayes']
+	parameters = cmdStr.split(' ')
+	for p in parameters:
+		p = p.replace('--', '')
+		fout.write(p)
+		fout.write("\n")	
+	fout.write("\n")
+	fout.write("Indel Caller Parameter Settings:")
+	fout.write("\n")
+	cmdStr = paradict['torrent-variant-caller']
+	parameters = cmdStr.split(' ')
+	for p in parameters:
+		p = p.replace('--', '')
+		fout.write(p)
+		fout.write("\n")	
+	fout.write("\n")
+	fout.write("Long Indel Assembly Parameter Settings:")
+	fout.write("\n")
+	cmdStr = paradict['long-indel-assembler']
+	parameters = cmdStr.split(' ')
+	for p in parameters:
+		p = p.replace('--', '')
+		fout.write(p)
+		fout.write("\n")	
+	fout.write("\n")
+	fout.write("Filter-Indels Parameter Settings:")
+	fout.write("\n")
+	cmdStr = paradict['filter-indels']
+	parameters = cmdStr.split(' ')
+	for p in parameters:
+		p = p.replace('--', '')
+		fout.write(p)
+		fout.write("\n")	
+	fout.write("\n")
+	fout.close()
+    except:
+	sys.stderr.write("WARNING: Cannot open output file '%s'" % fileName)
+	#sys.exit(1)
+
 def ZindexVcf( binDir, fileName ):
     RunCommand( '%s/bgzip -c "%s" > "%s.gz"' % (binDir,fileName,fileName) )
     WriteLog(" > %s.gz\n" % fileName)
@@ -243,11 +308,12 @@ def WriteLog( msg, force=0 ):
         
 def main(argv):
     # arg processing
-    global progName, logout, logfile, logerr, keepdir, errorExit, haveBed, noerrWarn, noerrWarnFile
+    global progName, logout, logfile, logerr, keepdir, errorExit, haveBed, noerrWarn, noerrWarnFile, callSNPs
     rundir = os.path.realpath(__file__)
     logerr = 0
     logout = 0
     keepdir = 0
+    callSNPs = 1
     noerror = 0
     logfile=""
     paramfile=""
@@ -257,8 +323,8 @@ def main(argv):
     fsbam = ""
     noerrWarnFile = ""
     try:
-        opts, args = getopt.getopt( argv, "hlkp:r:b:s:f:g:o:W:L:",
-            ["help", "log", "keepdir", "paramfile=", "rundir=", "bedfile=", "hotspotsfile=", "fsbam=", "genome=", "warnto=", "logfile="] )
+        opts, args = getopt.getopt( argv, "hlknp:r:b:s:f:g:o:W:L:",
+            ["help", "log", "keepdir", "nosnp", "paramfile=", "rundir=", "bedfile=", "hotspotsfile=", "fsbam=", "genome=", "warnto=", "logfile="] )
     except getopt.GetoptError, msg:
         sys.stderr.write(msg)
         usage()
@@ -293,6 +359,8 @@ def main(argv):
             faifile = arg
         elif opt in ("-k", "--keepdir"):
             keepdir = 1
+        elif opt in ("-n", "--nosnp"):
+            callSNPs = 0    
         elif opt in ("-W", "--warnto"):
             noerrWarnFile = arg
         elif opt in ("-l", "--log"):
@@ -336,9 +404,20 @@ def main(argv):
     errorExit = 1
     noerrWarn = ""
 
-    # read calling parameters (germline/somatic)
-    ReadParamsFile(paramfile)
+    try:
+       ReadParamsFromUI(os.environ['START_PLUGIN_JSON']);
 
+       if(paradict['dibayes'] == ""):
+          # read calling parameters (germline/somatic)
+          ReadParamsFromPlan(os.environ['START_PLUGIN_JSON'])
+       if(paradict['dibayes'] == ""):
+          # read calling parameters (germline/somatic)
+          ReadParamsFile(paramfile)
+          
+    except:
+       ReadParamsFile(paramfile)
+
+    CreateParamsFile(outdir + "/variantCaller_Params.xls");
     # create output directories for diBayes, if not already present
     snp_dir = outdir + "/dibayes_out"
     indel_dir = outdir
@@ -346,7 +425,7 @@ def main(argv):
         os.makedirs(snp_dir)
     if not os.path.exists(indel_dir):
         os.makedirs(indel_dir)
-    
+   
     if callSNPs == 1:
     # create command for SNP caller and run
        WriteLog(" Finding SNPs using diBayes...\n",1)
@@ -369,28 +448,15 @@ def main(argv):
        snpsout = "%s/SNP_variants.vcf" % outdir
        CreateEmptyVcf(snpsout)
 
-    # create command for indel caller and run
-    WriteLog(" Finding INDELs using torrent-variant-caller...\n",1)
+    # create command for INDEL calling and run
+    WriteLog("Calling small INDELs ...\n",1)
     cmdoptions = paradict['torrent-variant-caller']
     RunCommand( IndelCallerCommandLine( rundir, cmdoptions, fsbam, reference, bedfile, indel_dir ) )
+    WriteLog(" > %s/small_indels.vcf\n" % indel_dir)
+    if( os.path.exists( "%s/small_indels.vcf" % indel_dir ) ):
+       RunCommand( "cat %s/small_indels.vcf > %s/bayesian_scorer.vcf" % (indel_dir , indel_dir) )
     WriteLog(" > %s/bayesian_scorer.vcf\n" % indel_dir)
-
-    #remove after debug
-    WriteLog(" Save prefiltered files \n",1)    
-    RunCommand("cp %s/bayesian_scorer.vcf %s/gatk_prefiltered.vcf \n" % (indel_dir,indel_dir))
-    
-    # find downsampled variants and rerun for them variant caller
-    WriteLog(" Check for downsampled variants...\n",1)
-    cmdoptions = paradict['filter-indels']
-    if RunRecalculation( rundir, cmdoptions, indel_dir ):
-        WriteLog(" Recalculating downsampled variants...\n",1)
-        cmdoptions = paradict['torrent-variant-caller-highcov']
-        RunCommand( IndelReCallerCommandLine( rundir, cmdoptions, fsbam, reference, indel_dir ) )
-        WriteLog(" > %s/bayesian_scorer.vcf\n" % indel_dir)
-    else:
-        WriteLog(" None of variant calls are downsampled.\n",1)      
-    # RunCommand("cp -p %s/bayesian_scorer.vcf %s/.bayesian_scorer.vcf \n" % (indel_dir,indel_dir))
-    
+       
     # create command for long indel assembly and run
     noerrWarn = "No long INDEL calls made"
     WriteLog(" Assembling Long INDELs using LiM ...\n",1)

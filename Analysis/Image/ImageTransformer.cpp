@@ -2,9 +2,12 @@
 #include "ImageTransformer.h"
 #include "LSRowImageProcessor.h"
 #include "Utils.h"
+#include "Image.h"
 #include "IonErr.h"
+#include "SynchDat.h"
 
 //Initialize chipSubRegion in Image class
+#define MAX_GAIN_CORRECT 16383
 
 Region ImageCropping::chipSubRegion(0,0,0,0);
 int ImageCropping::cropped_region_offset_x = 0;
@@ -207,9 +210,25 @@ void ImageTransformer::GainCorrectImage(RawImage *raw)
       {
         float val = *(prow+frame*raw->frameStride);
         val *= gain;
-        if (val > 16383) val = 16383;
+        if (val > MAX_GAIN_CORRECT) val = MAX_GAIN_CORRECT;
 
         *(prow+frame*raw->frameStride) = (short)(val);
+      }
+    }
+  }
+}
+
+void ImageTransformer::GainCorrectImage(SynchDat *sdat)
+{
+  for (size_t row = 0;row < sdat->NumRow();row++)
+  {
+    for (size_t col = 0;col < sdat->NumCol();col++)
+    {
+      float gain = gain_correction[row*sdat->NumCol() + col];
+      size_t numFrames = sdat->NumFrames(row, col);
+      for (size_t frame=0;frame < numFrames;frame++)
+      {
+        sdat->At(row, col, frame) = std::min(MAX_GAIN_CORRECT, (int)round(sdat->At(row, col, frame) * gain));
       }
     }
   }

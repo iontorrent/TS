@@ -48,7 +48,9 @@ include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Bookkeeping )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Util )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Wells )
 include_directories( ${PROJECT_SOURCE_DIR}/../external/samtools-0.1.18 )
+include_directories( ${PROJECT_SOURCE_DIR}/../external/bamtools-2.1.1.20121022+git27d37964e1 )
 include_directories( /usr/local/lib/R/site-library/Rcpp/lib )
+
 
 add_custom_target(LIBTORRENTRCLEAN ALL
            COMMAND "../../buildTools/cleanTorrentR.sh"
@@ -92,7 +94,8 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
     libcurl4-openssl-dev,
     libatlas3gf-base, 
     libblas3gf, 
-    libc6, 
+    libc6,
+    libhdf5-serial-dev,
     libgcc1, 
     libgfortran3, 
     liblapack3gf, 

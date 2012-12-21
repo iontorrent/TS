@@ -36,7 +36,7 @@ class EmptyTraceTracker
     void SetEmptyTracesFromImage (Image &img, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
     void SetEmptyTracesFromImage(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
     void SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc);
-    void SetEmptyTracesFromImageForRegion(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc_start);
+    void SetEmptyTracesFromImageForRegion(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc, float sigma, float t_start,TimeCompression *time_cp);
     EmptyTrace *AllocateEmptyTrace (Region &region, int imgFrames);
     EmptyTrace *GetEmptyTrace (Region &region);
 

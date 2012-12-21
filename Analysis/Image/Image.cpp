@@ -23,7 +23,6 @@
 #include "Image.h"
 #include "SampleStats.h"
 
-#include "Histogram.h"
 #include "Utils.h"
 #include "deInterlace.h"
 #include "LinuxCompat.h"
@@ -39,6 +38,7 @@
 
 using namespace std;
 
+Image_semaphore_t *Image::Image_SemPtr=0;
 
 // default constructor
 Image::Image()
@@ -276,6 +276,172 @@ double TinyTimer()
   return ( curT );
 }
 
+void Image::JustCacheOneImage(const char *name)
+{
+	int totalLen = 0;
+    double startT = TinyTimer();
+    double stopT;
+	char buf[1024 * 1024];
+	int len;
+
+	// just read the file in...  It will be stored in cache
+	int fd = open(name, O_RDONLY);
+	if (fd >= 0)
+	{
+		while ((len = read(fd, &buf[0], sizeof(buf))) > 0)
+			totalLen += len;
+		close(fd);
+	}
+	else
+	{
+		printf("failed to open %s\n", name);
+	}
+
+	stopT = TinyTimer();
+	fprintf ( stdout, "File %s cache access = %0.2lf sec. with %d bytes\n", name,stopT - startT,totalLen );
+	fflush ( stdout );
+}
+
+
+Image_semaphore_t *IMG_semaphore_create(const char *semaphore_name)
+{
+	int fd;
+	Image_semaphore_t *semap;
+
+    fd = open(semaphore_name, O_RDWR | O_CREAT /*| O_EXCL*/, 0666);
+    if (fd < 0){
+    	printf("%s: failed, %s\n",__FUNCTION__,strerror(errno));
+        return (NULL);
+    }
+    if( ftruncate(fd, sizeof(Image_semaphore_t)))
+    {}
+#ifdef USE_IMG_PTHREAD_SEM
+    pthread_mutexattr_t psharedm;
+    pthread_condattr_t psharedc;
+    (void) pthread_mutexattr_init(&psharedm);
+//    int robustness=0;
+//    (void) pthread_mutexattr_getrobust_np(&psharedm,&robustness);
+//	DTRACEP("%s: robust: %d\n",__FUNCTION__,robustness);
+    (void) pthread_mutexattr_setpshared(&psharedm,
+        PTHREAD_PROCESS_SHARED);
+    (void)pthread_mutexattr_setrobust_np(&psharedm, PTHREAD_MUTEX_ROBUST_NP);
+    (void) pthread_condattr_init(&psharedc);
+    (void) pthread_condattr_setpshared(&psharedc,
+        PTHREAD_PROCESS_SHARED);
+#endif
+    semap = (Image_semaphore_t *) mmap(NULL, sizeof(Image_semaphore_t),
+            PROT_READ | PROT_WRITE, MAP_SHARED,
+            fd, 0);
+    close (fd);
+    if(semap)
+    {
+    	memset(semap,0,sizeof(Image_semaphore_t));
+#ifdef USE_IMG_PTHREAD_SEM
+    	(void) pthread_mutex_init(&semap->lock, &psharedm);
+#endif
+    //    (void) pthread_cond_init(&semap->nonzero, &psharedc);
+    }
+    return (semap);
+}
+
+
+Image_semaphore_t *IMG_semaphore_open(const char *semaphore_name)
+{
+    int fd;
+    Image_semaphore_t *semap;
+
+    fd = open(semaphore_name, O_RDWR, 0666);
+    if (fd < 0){
+    	printf("%s: Creating sema, %s\n",__FUNCTION__,strerror(errno));
+    	semap = IMG_semaphore_create(semaphore_name);
+    }
+    else
+    {
+		semap = (Image_semaphore_t *) mmap(NULL, sizeof(Image_semaphore_t),
+				PROT_READ | PROT_WRITE, MAP_SHARED,
+				fd, 0);
+
+	    close (fd);
+
+	    if(semap == NULL)
+	    	semap = IMG_semaphore_create(semaphore_name);
+
+#ifdef USE_IMG_PTHREAD_SEM
+	    int lock_rc;
+	    if((lock_rc = pthread_mutex_lock(&semap->lock)) != 0)
+		{
+			munmap(semap,sizeof(Image_semaphore_t));
+			semap = IMG_semaphore_create(semaphore_name);
+		}
+	    else
+	    {
+	    	pthread_mutex_unlock(&semap->lock);
+	    }
+#endif
+    }
+
+    return (semap);
+}
+
+
+void initImageSem(void)
+{
+  static const char *SemName="/tmp/ImageSem";
+  Image::Image_SemPtr = IMG_semaphore_open(SemName);
+}
+
+void Image::ImageSemTake()
+{
+	uint32_t msecs_waited=0;
+	if(Image_SemPtr)
+	{
+#ifdef USE_IMG_PTHREAD_SEM
+		int lock_rc;
+		if((lock_rc = pthread_mutex_lock(&Image_SemPtr->lock)) != 0)
+			  printf("problems taking image sem %s\n",strerror(lock_rc));
+#else
+		uint32_t i;
+		static const uint32_t sleepUsecs = 20000;
+		static const uint32_t limit=(2*60*(1000000/sleepUsecs));
+
+		for(i=0;i<limit;i++)
+		{
+			if(Image_SemPtr->owner == 0)
+			{
+				break;
+			}
+			usleep(sleepUsecs); // sleep for 1/50 of a second
+		}
+		if(i == limit)
+			printf("issues taking semaphore %lx\n",Image_SemPtr->owner);
+
+		msecs_waited = i*sleepUsecs/1000;
+		if(msecs_waited > 0)
+			printf("waited %d msecs for file semaphore\n",msecs_waited);
+		Image_SemPtr->owner = pthread_self();
+#endif
+	}
+	else
+	{
+		printf("Image Sem is NULL\n");
+	}
+}
+
+void Image::ImageSemGive()
+{
+	if(Image_SemPtr)
+	{
+#ifdef USE_IMG_PTHREAD_SEM
+        pthread_mutex_unlock(&Image_SemPtr->lock);
+#else
+		if(Image_SemPtr->owner == pthread_self())
+		{
+			Image_SemPtr->owner = 0;
+		}
+#endif
+	}
+}
+
 // This is the actual function
 bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly,
                       TikhonovSmoother *tikSmoother )
@@ -346,7 +512,7 @@ void Image::InitFromSdat(SynchDat *sdat) {
   raw->rows = sdat->NumRow();
   raw->cols = sdat->NumCol();
   raw->compFrames = raw->frames = sdat->GetMaxFrames(timestamps);
-  raw->uncompFrames = sdat->GetOrigChipFrames();
+  raw->uncompFrames = sdat->GetOrigUncompFrames();
   raw->chip_offset_y = 0;
   raw->chip_offset_x = 0;
   raw->channels = -1;
@@ -366,6 +532,7 @@ void Image::InitFromSdat(SynchDat *sdat) {
 
 int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly )
 {
+  static pthread_once_t  onceControl = PTHREAD_ONCE_INIT;
   int rc;
   raw->channels = 4;
   raw->interlaceType = 0;
@@ -373,6 +540,7 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
   if ( frames )
     raw->frames = frames;
 
+  pthread_once(&onceControl, initImageSem);
 
   if ( headerOnly )
   {
@@ -385,12 +553,23 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
   }
   else
   {
+
+	  if(Image_SemPtr)
+	  {
+		  ImageSemTake();
+
+		  JustCacheOneImage(rawFileName);
+
+		  ImageSemGive();
+	  }
+
     rc = deInterlace_c ( ( char * ) rawFileName,&raw->image,&raw->timestamps,
                          &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
                          0,0,
                          ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
                          ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
                          ignoreChecksumErrors );
+
 
 
     if ( ImageCropping::chipSubRegion.h != 0 )
@@ -1319,6 +1498,121 @@ void Image::CalcBeadfindMetric_1 ( Mask *mask, Region region, char *idStr, int f
       }
       results[x+y*raw->cols] = max - abs ( min );
 
+    }
+  }
+}
+
+void Image::CalcBeadfindMetricRegionMean ( Mask *mask, Region region, char *idStr, int frameStart, int frameEnd )
+{
+  //  printf ( "gathering regional mean...\n" );
+  if ( !results )
+  {
+    results = new double[raw->rows * raw->cols];
+    memset ( results, 0, raw->rows * raw->cols * sizeof ( double ) );
+    //fprintf (stdout, "Image::CalcBeadfindMetric_1 allocated: %lu\n",raw->rows * raw->cols * sizeof(double) );
+  }
+
+  if ( frameStart == -1 )
+  {
+    frameStart = GetFrame ( 12 ); // Frame 15;
+  }
+  if ( frameEnd == -1 )
+  {
+    frameEnd = GetFrame ( 2374 ); // Frame 50;
+  }
+  //  fprintf ( stdout, "Image: CalcBeadFindMetricRegionMean %d %d\n", frameStart, frameEnd );
+  int frame, x, y;
+  int k;
+  int min, max;
+  vector<float> mean(frameEnd - frameStart, 0);
+  //int printCnt = 0;
+  int count = 0;
+  int rStart = region.row;
+  int rEnd = region.row + region.h;
+  int cStart = region.col;
+  int cEnd = region.col + region.w;
+
+  // Get the mean for the region
+  for ( y=rStart;y<rEnd;y++ )
+  {
+    for ( x=cStart;x<cEnd;x++ )
+    {
+      if (!mask->Match(x,y,MaskPinned)) {
+        k = x + y*raw->cols;
+        k += frameStart*raw->frameStride;
+        for ( frame=frameStart;frame<frameEnd;frame++ ) {
+          mean[frame - frameStart] += raw->image[k];
+          k += raw->frameStride;
+        }
+        count++;        
+      }
+    }
+  }
+
+  for (size_t i = 0; i < mean.size(); i++) {
+    mean[i] = mean[i] / count;
+  }
+
+  // Get the beadfind signal from mean
+  for ( y=rStart;y<rEnd;y++ )
+  {
+    for ( x=cStart;x<cEnd;x++ )
+    {
+      k = x + y*raw->cols;
+      min = 65536;
+      max = -65536;
+      k += frameStart*raw->frameStride;
+      for ( frame=frameStart;frame<frameEnd;frame++ )
+      {
+        int val = raw->image[k] - mean[frame - frameStart];
+        if ( frame == frameStart || ( val > max ) ) {
+          max = val;
+        }
+        if ( frame == frameStart || ( val < min ) ) {
+          min = val;
+        }
+        k += raw->frameStride;
+      }
+      results[x+y*raw->cols] = max - abs ( min );
+    }
+  }
+}
+
+void Image::CalcBeadfindMetricIntegral ( Mask *mask, Region region, char *idStr, int frameStart, int frameEnd )
+{
+  printf ( "gathering metric integral...\n" );
+  if ( !results )
+  {
+    results = new double[raw->rows * raw->cols];
+    memset ( results, 0, raw->rows * raw->cols * sizeof ( double ) );
+    //fprintf (stdout, "Image::CalcBeadfindMetric_1 allocated: %lu\n",raw->rows * raw->cols * sizeof(double) );
+  }
+
+  if ( frameStart == -1 )
+  {
+    frameStart = GetFrame ( 12 ); // Frame 15;
+  }
+  if ( frameEnd == -1 )
+  {
+    frameEnd = GetFrame ( 2374 ); // Frame 50;
+  }
+  fprintf ( stdout, "Image: CalcBeadFindMetricIntegral %d %d\n", frameStart, frameEnd );
+  int frame, x, y;
+  int k;
+  //int printCnt = 0;
+  for ( y=0;y<raw->rows;y++ )
+  {
+    for ( x=0;x<raw->cols;x++ )
+    {
+      k = x + y*raw->cols;
+      k += frameStart*raw->frameStride;
+      double sum = 0;
+      for ( frame=frameStart;frame<frameEnd;frame++ )
+      {
+        sum += raw->image[k];
+        k += raw->frameStride;
+      }
+      results[x+y*raw->cols] = sum;
     }
   }
 }

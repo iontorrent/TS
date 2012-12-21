@@ -1,0 +1,68 @@
+<!-- EXPORT -->
+<div id="ws-7" class="workflow-step " style="display: none;">
+    <div class="workflow-step-content">
+        <table class="plan-grid">
+            <tr>
+                <td>
+                    <p class="form-label">Select the data loader(s) to invoke:</p>
+                    <div style="border:1px solid #0981d2;overflow:auto; width:350px;height:90px;padding:5px;">
+                        <span class="option-group">
+                        {% if selectedApplProductData %}
+
+                            {% for uploader in planTemplateData.uploaders %}
+                                {% if uploader.autorun %}
+                                    <p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{uploader.name}}</p>
+                                {% else %}
+                                    <p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {% for uploader in planTemplateData.uploaders %}
+                                {% if uploader.selected %}
+                                    <p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+                                {% elif uploader.autorun %}
+                                    <p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox"  checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{uploader.name}}</p>
+                                {% else %}
+                                    <p><input id="uploaders" name="uploaders" class="uploader_input" type="checkbox" value="{{uploader.id}}|{{uploader.name}}|{{uploader.version}}"> {{uploader.name}}</p>
+                                {% endif %}
+                            {% endfor %}
+
+                        {% endif %}
+
+                        <!-- <p><input type="checkbox">NextBio Uploader</p> -->
+                        <!-- <p><input type="checkbox" checked>GALAXY Uploader</p> -->
+                        </span>
+                    </div>
+                    <br>
+                </td>
+            </tr>
+            <!--
+            <tr>
+                <td>
+                    <p class="form-label">External file location to save a copy of data:</p>
+                    <input type="file">
+                </td>
+            </tr>
+            -->
+        </table>
+
+        <div id="ws-7_ir1_IRConfig"  class="ir1_hideable_IRConfig" style="display: none;">
+            <table class="plan-grid">
+                <tr>
+                    <td>
+                        <p class="form-label">IonReporter v1.0 Workflow Configuration:
+                        {% for uploader in planTemplateData.uploaders %}
+                            {% ifequal uploader.name "IonReporterUploader_V1_0"%}
+                            <a href="{% url configure_plugins_plugin_refresh uploader.id %}" class="refresh-uploader-information" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
+                            {% endifequal %}
+                        {% endfor%}</p>
+                        <select id="ir1_irWorkflow" name="ir1_irWorkflow_select" class="ir1_irWorkflow_select select-group" style="width:150px;">
+                            <option value=""></option>
+                        </select>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+    </div>
+</div>

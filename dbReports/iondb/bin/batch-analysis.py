@@ -33,20 +33,10 @@ def get_name_from_json(exp, key):
         return '%s_%s' % (str(name),exp.pk)
     
 def generate_http_post(exp, server):
-    def get_default_command():
-        gc = models.GlobalConfig.objects.all()
-        ret = None
-        if len(gc)>0:
-            for i in gc:
-                ret = i.default_command_line
-        else:
-            ret = 'Analysis'
-        return ret
     params = urllib.urlencode({'report_name':get_name_from_json(exp,'autoanalysisname')+"_V7",
                                'tf_config':'',
                                'path':exp.expDir,
                                'qname': settings.SGEQUEUENAME,
-                               'args':get_default_command(),
                                'submit': ['Start Analysis']
                                })
     print params

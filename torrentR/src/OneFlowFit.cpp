@@ -79,7 +79,7 @@ RcppExport SEXP SingleFlowFitR(
   
 
     PoissonCDFApproxMemo    *math_poiss = new PoissonCDFApproxMemo;
-    math_poiss->Allocate(MAX_HPLEN+1,512,0.05);
+    math_poiss->Allocate(MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
     math_poiss->GenerateValues();
     
 

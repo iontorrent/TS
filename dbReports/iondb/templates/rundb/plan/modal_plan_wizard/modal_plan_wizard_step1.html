@@ -1,0 +1,62 @@
+<!-- APPLICATION -->    
+<div id="ws-1" class="workflow-step " style="display: block;">
+    <div class="workflow-step-content">
+        <table class="plan-grid">
+            <tr>
+                <td width="50%">
+                    <p class="form-label">Application:</p>
+                    <span class="option-group">
+                        {% for applType in planTemplateData.runTypes %}
+                            {% if selectedApplProductData %}
+                                {% ifequal applType.runType selectedApplProductData.runType.runType %}
+                                    <p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% else %}
+                                    <p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% endifequal %}
+                            {% else %}
+                                {% ifequal applType.runType selectedPlanTemplate.runType %}
+                                    <p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% else %}
+                                    <p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% endifequal %}
+                            {% endif %}
+                        {% endfor %}
+                    </span>
+                </td>
+                <td width="50%">
+                    <p class="form-label hide">Run Type:</p>
+                    <span class="option-group hide">
+                        {% if selectedApplProductData %}
+                            <!-- if no PE libKits are active, peForwardLibKeys will be none and we'll hide the pe run mode -->
+                            {% if planTemplateData.peForwardLibKeys %}
+                                {% if selectedApplProductData.isDefaultPairedEnd %}
+                                    <p><input type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                                    <p><input checked="checked" type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>
+                                {% else %}
+                                    <p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                                    <p><input type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>  
+                                {% endif %}
+                            {% else %}
+                                <p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                            {% endif %}
+                        {% else %}    
+                            <!-- if no PE libKits are active, peForwardLibKeys will be none and we'll hide the pe run mode -->
+                            {% if planTemplateData.peForwardLibKeys %}
+                                {% ifequal selectedPlanTemplate.runMode  "pe" %}
+                                    <p><input type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                                    <p><input checked="checked" type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>
+                                {% else %}
+                                    <p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                                    <p><input type="radio" id="runMode" name="runMode" value="pe"> Paired-end</p>                                                    
+                                {% endifequal %}
+                            {% else %}
+                                <p><input checked="checked" type="radio" id="runMode" name="runMode" value="single"> Forward (default)</p>
+                            {% endif %}
+                                
+                        {% endif %}
+                    </span>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>

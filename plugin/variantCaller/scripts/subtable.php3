@@ -11,7 +11,7 @@ $tableFile = "subtable.xls";
 $tbfh = fopen($tableFile,"w");
 if( $tbfh == 0 ) {
   fclose($dtfh);
-  print 'Could write to file '.$tableFile;
+  print 'ERROR: Unable to write to file '.$tableFile;
   exit(0);
 }
 // keep header line

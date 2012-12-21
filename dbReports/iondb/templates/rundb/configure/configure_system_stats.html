@@ -1,11 +1,3 @@
-<div class="content clearfix">
-	<h1>System Diagnostics <small>Results from:&nbsp;{{ stats_network_cmd }}&nbsp;and&nbsp;{{ stats_cmd }}</small></h1>
-        
-    <p>
-      <a href="../../systemStatsZip.php">System Status Support Archive</a>
-    </p>
-
-    <div class="content clearfix">
     	<div class="row-fluid">
     	<h2>Network</h2>
 	
@@ -19,9 +11,7 @@
 			<p><b>No network statistics available</b></p>
 		{% endif %}
 	    </div>
-    </div>
 
-    <div class="content clearfix">
     	<div class="row-fluid">
 	    <h2>System</h2>
 	    {% if stats %}
@@ -34,9 +24,7 @@
 			<p><b>No system statistics available</b></p>
     	{% endif %}
 	    </div>
-    </div>
 
-    <div class="content clearfix">
     	<div class="row-fluid">
 	    <h2>Data</h2>
     	{% if stats_dm %}
@@ -49,5 +37,3 @@
       		<p><b>No raw data management statistics available</b></p>
     	{% endif %}
 	    </div>
-    </div>
-</div>

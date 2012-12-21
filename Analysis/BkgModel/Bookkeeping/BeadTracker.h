@@ -13,7 +13,7 @@
 #include "PinnedInFlow.h"
 
 class LevMarBeadAssistant;
-
+class extern_links;
 float ComputeNormalizerKeyFlows(const float *observed, const int *keyval, int len);
 
 // wrap a bunch of bead tracking into one place
@@ -103,7 +103,7 @@ public:
     int  FindKeyID(Mask *bfMask, int ax, int ay);
     void AssignKeyID(Region *region, Mask *bfmask);
     void BuildBeadMap(Region *region, Mask *bfmask,MaskType &process_mask);
-    void WriteCorruptedToMask(Region* region, Mask* bfmask);
+    void WriteCorruptedToMask(Region* region, Mask* bfmask, int16_t *washout_flow, int flow);
     void ZeroOutPins(Region *region, Mask *bfmask, PinnedInFlow &pinnedInFlow, int flow, int iFlowBuffer);
     void DumpBeads(FILE *my_fp, bool debug_only, int offset_col, int offset_row);
     void DumpAllBeadsCSV(FILE *my_fp);

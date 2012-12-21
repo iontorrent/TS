@@ -106,6 +106,7 @@ struct ImageInitBkgWorkInfo
   std::vector<float> *tauE;
 
   bool restart;
+  int16_t *washout_flow;
 };
 
 void* BkgFitWorkerCpu (void *arg);

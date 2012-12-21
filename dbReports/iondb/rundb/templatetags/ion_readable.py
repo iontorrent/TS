@@ -45,6 +45,21 @@ def float2int(value):
     except:
         pass
 
+
+@register.filter(name='latexsafe')
+def latexsafe(value):
+    try:
+        return_value = value.replace("_","\_")
+        return_value = return_value.replace("%","\%")
+        return return_value
+    except:
+        pass
+
+@register.filter(name='bracewrap')
+def bracewrap(value):
+    return "{" + value + "}"
+
+
 ion_readable.is_safe = True
 
 

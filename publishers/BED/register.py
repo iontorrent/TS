@@ -43,22 +43,104 @@ except IOError:
 line = fh.read().rstrip()
 meta = json.loads(line)
 ref = meta["reference"]
-# Get bed file name without directory path
-bedFName = bedFile.split("/").pop()
 
-# File paths to call into publisher
-pbed = ref+"/unmerged/plain/"+bedFName
-dbed = ref+"/unmerged/detail/"+bedFName
-mpbed = ref+"/merged/plain/"+bedFName
-mdbed = ref+"/merged/detail/"+bedFName
-
-def register(file):
+def register(file, meta):
     full_path = os.path.join(directory, file)
     reg = "/%s" % file
-    api.post("content", publisher=pub_uid, meta=line, file=full_path, path=reg, contentupload=upload_uid)
+    api.post("content", publisher=pub_uid, meta=meta, file=full_path, path=reg, contentupload=upload_uid)
 
-# Register files to Publisher
-register(pbed)
-register(dbed)
-register(mpbed)
-register(mdbed)
+
+def register_bed_file(bedFName, meta):
+    # File paths to call into publisher
+    pbed = ref+"/unmerged/plain/"+bedFName
+    dbed = ref+"/unmerged/detail/"+bedFName
+    mpbed = ref+"/merged/plain/"+bedFName
+    mdbed = ref+"/merged/detail/"+bedFName
+    # Register files to Publisher
+    register(pbed, meta)
+    register(dbed, meta)
+    register(mpbed, meta)
+    register(mdbed, meta)
+
+def plan_json(meta):
+    primary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['primary_bed'])
+    if meta['secondary_bed'] is not None:
+        secondary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['secondary_bed'])
+    else:
+        secondary_path = None
+    plan_stub = {
+       "adapter": None,
+       "autoAnalyze": True,
+       "autoName": None,
+       "barcodeId": "",
+       "barcodedSamples": {},
+       "bedfile": primary_path,
+       "regionfile": secondary_path,
+       "chipBarcode": None,
+       "chipType": "",
+       "controlSequencekitname": "",
+       "cycles": None,
+       "date": "2012-11-21T04:59:11.000877+00:00",
+       "expName": "",
+       "flows": 500,
+       "flowsInOrder": None,
+       "forward3primeadapter": "ATCACCGACTGCCCATAGAGAGGCTGAGAC",
+       "irworkflow": "",
+       "isFavorite": False,
+       "isPlanGroup": False,
+       "isReusable": True,
+       "isReverseRun": False,
+       "isSystem": False,
+       "isSystemDefault": False,
+       "libkit": None,
+       "library": meta["reference"],
+       "libraryKey": "TCAG",
+       "librarykitname": "Ion AmpliSeq 2.0 Library Kit",
+       "metaData": {},
+       "notes": "",
+       "pairedEndLibraryAdapterName": "",
+       "parentPlan": None,
+       "planDisplayedName": meta["plan"]["design_name"],
+       "planExecuted": False,
+       "planExecutedDate": None,
+       "planName": meta["plan"]["design_name"],
+       "planPGM": None,
+       "planStatus": "",
+       "preAnalysis": True,
+       "reverse3primeadapter": None,
+       "reverse_primer": None,
+       "reverselibrarykey": None,
+       "runMode": "single",
+       "runType": "AMPS",
+       "runname": None,
+       "sample": "",
+       "sampleDisplayedName": "",
+       "samplePrepKitName": "",
+       "seqKitBarcode": None,
+       "sequencekitname": "IonPGM200Kit",
+       "storageHost": None,
+       "storage_options": "A",
+       "templatingKitName": "Ion OneTouch 200 Template Kit v2 DL",
+       "usePostBeadfind": True,
+       "usePreBeadfind": True,
+       "username": "ionadmin",
+       "variantfrequency": "Germ Line"
+    }
+    return plan_stub
+
+if meta['is_ampliseq']:
+    print("I can't believe it's not Ampliseq!")
+    print("Primary: %s" % meta['primary_bed'])
+    print("Secondary: %s" % meta['secondary_bed'])
+    meta["hotspot"] = False
+    register_bed_file(meta['primary_bed'], json.dumps(meta))
+    if meta['secondary_bed'] is not None:
+        meta["hotspot"] = True
+        register_bed_file(meta['secondary_bed'], json.dumps(meta))
+    plan_prototype = plan_json(meta)
+    api.post("plannedexperiment", **plan_prototype)
+    sys.exit()
+else:
+    # Get bed file name without directory path
+    bed_file_name = bedFile.split("/").pop()
+    register_bed_file(bed_file_name, line)

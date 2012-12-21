@@ -1,0 +1,145 @@
+This directory contains code for ion-dbreports.
+
+---------------------------------------------------------------------------------------------------
+Development Environment
+---------------------------------------------------------------------------------------------------
+This section describes how to set up your local machine. Unless otherwise specified, this section assumes
+that you have checked out the project and are executing all of the commands listed from the
+directory where this README resides.
+
+Note that this initial section describes how to develop locally. However, the following section on setting up a local vm more closely resembles a production instance
+and may be easier to use.
+
+................
+1. Prerequisites
+````````````````
+- Install Python 2.6.5 or greater (already installed)
+
+- Run ./init.sh (Step 1 & 2 complete), jump to Step 3 
+
+................
+1b. Prerequisites (manually)
+````````````````
+- Install appropriate version of setuptools for your version of Python from http://pypi.python.org/pypi/setuptools 
+$> sudo sh setuptools-0.6c11-py2.6.egg
+OR 
+$> sudo sh setuptools-0.6c11-py2.7.egg
+
+- 
+
+- From the command line use easy_instal pip to install the pip package
+$> sudo easy_install -U pip
+
+- Then use pip to install virtualenv
+$> sudo pip install virtualenv==1.8.2
+
+
+.................
+2. Initial Setup. (manually)
+'''''''''''''''''
+Create an isolated python environment, and fabric for deploying
+running tests and performing static analysis. When first starting to work on the code, you should
+create and activate a virtualenv.
+
+$> virtualenv --system-site-packages local-python
+$> source local-python/bin/activate
+
+You should then install Fabric:
+$> pip install Fabric==1.4.3
+
+** Note: OSX users if this fails and you have XCode 4 installed do the following to fix the issue:
+$> sudo env ARCHFLAGS="-arch i386 -arch x86_64"
+$> pip install Fabric==1.4.3
+
+Finally install nose and run the fabric "dev_setup" command to acquire the other required
+libraries.
+$> fab dev_setup
+
+.................................
+3. Environment-specific settings.
+'''''''''''''''''''''''''''''''''
+- Activate the isolated python environment (virtualenv)
+$> source local-python/bin/activate
+
+......................
+4. Database management
+''''''''''''''''''''''
+N/A
+
+................
+5. Running tests
+''''''''''''''''
+Uses Nose to run the tests. The easiest way to run them is by using the
+Fabric "test" command.
+
+$> fab test
+
+..........................
+6. Running Static Analysis
+''''''''''''''''''''''''''
+Uses pep8 and pylint for static analysis. The easiest way to run them us by using
+the fabric "check" command. The pylint configuration is stored in .pylintrc
+
+$> fab check
+
+...................
+7. Running the app
+'''''''''''''''''''
+TBD. 
+
+---------------------------------------------------------------------------------------------------
+Deployment Environments - Local VM
+---------------------------------------------------------------------------------------------------
+Plugin Warehouse is intended to be deployed using Apache2 with WSGI providing the bridge to the
+django application. The provided fabric scripts can manage the configuration and deployment to
+such an environment. All that is required is a server to connect to. This section will go through
+the instructions for creating a local VM Ware instance that will mimic a production environment.
+This is especially handy if this machine on which you are developing is not a linux box.
+
+...................
+1. Creating the VM
+'''''''''''''''''''
+Since Plugin Warehouse production will be hosted on Ubuntu 10.4 64bit in the Amazon E2 cloud, we
+will install a similar server on our local VM. A good place to start from is the VM Ware image
+available at http://www.thoughtpolice.co.uk/vmware/#ubuntu10.04  Note that notroot is the default
+username and it has a password of thoughtpolice. Note that this VM does not have the openssh
+server installed by default. This will allow you to ssh to this vm (performed at your
+vm command line via VMWare)
+
+$>sudo apt-get update
+$>sudo apt-get install openssh-server
+
+Once you have downloaded your instance, install it to VM Ware and start the server. This can
+be done by unzipping the archive, and opening the vmx file in WM Ware.
+
+You may also want to set the VM timezone to match the application. By default the application is
+set to use the 'America/Los_Angeles' time zone.
+
+.........................................................
+2. Provide the needed configuration information to Fabric
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+The first needed piece of information is the ip address of the server. ifconfig will get this for
+you. Once you have the IP address, open up fabfile.py and replace the ip in the localvm() hosts
+entry with your vm's ip. This will allow fabric to connect to your vm. You will also need
+to modify environments/localvm/localvm_settings.py if you have to change any django configuration
+options. environments/localvm/pluginwarehouse.conf will also need to be edited to get the correct
+ip address as well as environments/trustdb.xml.
+
+..................................
+3. Install requirements on server
+''''''''''''''''''''''''''''''''''
+Once the server is setup and the configuration information is in the correct files run this command
+in your development environment:
+
+$> fab [env] setup
+
+So, in this case where we are setting up the localvm, you should run
+
+$> fab localvm setup
+
+This will connect to the virtual machine and install the needed requirements. Note you will be promted
+to create a password for the pluginwarehouse user. Remember the password you use here as future deployments
+will ask for this as well. Also, if you are asked for a mysql root password you can hit tab and then the
+spacebar to select no password. You may have to do this 3 times. Then the screen will appear to freeze for
+a minute or two while mysql installs, just wait patiently.
+

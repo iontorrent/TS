@@ -34,8 +34,8 @@
 #define T0_LEFT_OFFSET 4
 #define T0_RIGHT_OFFSET 25
 #define MIN_SD 5
-#define T0_OFFSET_LEFT_TIME -.132f
-#define T0_OFFSET_RIGHT_TIME 1.5f
+#define T0_OFFSET_LEFT_TIME -.323f
+#define T0_OFFSET_RIGHT_TIME .9f // seconds
 using namespace std;
 
 float DifferentialSeparator::LowerQuantile (SampleQuantiles<float> &s)
@@ -61,8 +61,8 @@ void DifferentialSeparator::ClusterRegion (int rowStart, int rowEnd,
     float maxMad,
     float minBeadSnr,
     size_t minGoodWells,
-    const BFReference &reference,
-    const vector<KeyFit> &wells,
+    BFReference &reference,
+    vector<KeyFit> &wells,
     double trim,
     MixModel &model)
 {
@@ -71,53 +71,66 @@ void DifferentialSeparator::ClusterRegion (int rowStart, int rowEnd,
   int numWells = (rowEnd - rowStart) * (colEnd - colStart);
   metric.reserve (numWells);
   cluster.reserve (numWells);
-  for (int rowIx = rowStart; rowIx < rowEnd; rowIx++)
-  {
-    for (int colIx = colStart; colIx < colEnd; colIx++)
-    {
+  double regionRefMean = 0;
+  if (!wells.empty()) {
+    SampleStats<double> refMean;
+    for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) {
+      for (int colIx = colStart; colIx < colEnd; colIx++) {
+        size_t idx = reference.RowColToIndex (rowIx, colIx);
+        if(wells[idx].isRef) {
+          float val = wells[idx].bfMetric;
+          if (isfinite(val)) {
+            refMean.AddValue(val);
+          }
+        }
+      }
+    }
+    regionRefMean = refMean.GetMean();
+  }
+
+  for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) {
+    for (int colIx = colStart; colIx < colEnd; colIx++) {
       size_t idx = reference.RowColToIndex (rowIx, colIx);
       //      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx))
       //      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)) || mFilteredWells[idx] != 1)
-      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)))
-      {
+      if (mask[idx] & MaskPinned || mask[idx] & MaskExclude || !isfinite (reference.GetBfMetricVal (idx)) || mFilteredWells[idx] != 1) {
         continue;
       }
-      if (wells.empty() || (wells[idx].ok == 1 && wells[idx].mad <= maxMad))
-      {
-        //    metric.push_back(reference.GetBfMetricVal(idx));
-        if (wells.empty())
-        {
+      if (wells.empty() || (wells[idx].ok == 1 && wells[idx].mad <= maxMad)) {
+        if (wells.empty()) {
+          reference.SetBfMetricVal(idx, reference.GetBfMetricVal (idx) - regionRefMean);
           metric.push_back (reference.GetBfMetricVal (idx));
         }
-        else
-        {
+        else {
+          wells[idx].bfMetric -= regionRefMean;
           metric.push_back (wells[idx].bfMetric);
         }
-        if (wells.empty())
-        {
+        if (wells.empty()) {
           cluster.push_back (-1);
         }
-        else if (wells[idx].keyIndex >= 0 && wells[idx].snr > minBeadSnr)
-        {
+        else if (wells[idx].goodLive) {
           cluster.push_back (1);
         }
         // else if (reference.IsReference(idx)) {
         //   cluster.push_back(0);
         // }
-        else
-        {
+        else if (wells[idx].isRef) {
+          cluster.push_back(0);
+        }
+        else {
           cluster.push_back (-1);
         }
       }
     }
   }
-  if (metric.size() < minGoodWells)
-  {
+  if (metric.size() < minGoodWells) {
     return;
   }
-  DualGaussMixModel dgm (2000);
+  DualGaussMixModel dgm (metric.size());
   dgm.SetTrim (trim);
   model = dgm.FitDualGaussMixModel (&metric[0], &cluster[0], metric.size());
+  model.refMean = regionRefMean;
+  DualGaussMixModel::SetThreshold(model);
 }
 
 void DifferentialSeparator::MakeStadardKeys (vector<KeySeq> &keys)
@@ -233,7 +246,7 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, BFReference &refere
   GridMesh<MixModel> modelMesh;
   opts.bfMeshStep = min (min (mask.H(), mask.W()), opts.bfMeshStep);
   cout << "bfMeshStep is: " << opts.bfMeshStep << endl;
-  modelMesh.Init (mask.H(), mask.W(), opts.bfMeshStep, opts.bfMeshStep);
+  modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
   gettimeofday (&st, NULL);
   size_t numWells = mask.H() * mask.W();
   SampleStats<double> bfSnr;
@@ -245,7 +258,7 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, BFReference &refere
   ofstream modelOut (modelFile.c_str());
   ofstream bfStatsOut (bfStats.c_str());
   opts.minBfGoodWells = min (300, (int) (opts.bfMeshStep * opts.bfMeshStep * .4));
-  modelOut << "bin\tbinRow\tbinCol\tcount\tmix\tmu1\tvar1\tmu2\tvar2" << endl;
+  modelOut << "bin\tbinRow\tbinCol\tcount\tmix\tmu1\tvar1\tmu2\tvar2\tthreshold\trefMean" << endl;
   for (size_t binIx = 0; binIx < modelMesh.GetNumBin(); binIx++)
   {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
@@ -268,9 +281,10 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, BFReference &refere
     int binRow, binCol;
     modelMesh.IndexToXY (binIx, binRow, binCol);
     modelOut << binIx << "\t" << binRow << "\t" << binCol << "\t"
-    << model.count << "\t" << model.mix << "\t"
-    << model.mu1 << "\t" << model.var1 << "\t"
-    << model.mu2 << "\t" << model.var2 << endl;
+             << model.count << "\t" << model.mix << "\t"
+             << model.mu1 << "\t" << model.var1 << "\t"
+             << model.mu2 << "\t" << model.var2 << "\t" 
+             << model.threshold << "\t" << model.refMean << endl;
   }
 
   cout << "BF SNR: " << bfSnr.GetMean() << " +/- " << (bfSnr.GetSD()) << endl;
@@ -398,10 +412,16 @@ void DifferentialSeparator::DetermineBfFile (const std::string &resultsDir, bool
   if (!bfDat.empty())
   {
     bfFile = bfDat;
+    if(bfFile.at(0) != '/') {
+      bfFile = resultsDir + "/" + bfFile;
+    }
   }
   if (!bfBgDat.empty())
   {
     bfBkgFile = bfBgDat;
+    if(bfBkgFile.at(0) != '/') {
+      bfBkgFile = resultsDir + "/" + bfBkgFile;
+    }
   }
 
   if (bfFile.empty())
@@ -430,8 +450,8 @@ void DifferentialSeparator::DetermineBfFile (const std::string &resultsDir, bool
     }
     else if (isFile (preBeadFind.c_str()))
     {
-      bfFile = preBeadFind;
-      bfFile2 = preBeadFind2;
+      bfFile = preBeadFind2;
+      bfFile2 = "";//preBeadFind2;
       signalBased = false;
     }
     else if (isFile (postBeadFind.c_str()))
@@ -445,7 +465,9 @@ void DifferentialSeparator::DetermineBfFile (const std::string &resultsDir, bool
     }
   }
   cout << "Using " << (signalBased ? "signal" : "buffer") << " based beadfind on file: " << bfFile << endl;
-  cout << "BkgFile: " << bfBkgFile << endl;
+  if (!bfBkgFile.empty()) {
+    cout << "BkgFile: " << bfBkgFile << endl;
+  }
 }
 
 bool DifferentialSeparator::InSpan (size_t rowIx, size_t colIx,
@@ -678,6 +700,9 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
   //  t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, 1);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
+  T0Prior prior;
+  prior.mTimeEnd = 3000;
+  t0.SetGlobalT0Prior(prior);
   t0.CalcAllSumTrace(data);
   t0.CalcT0FromSum();
   t0.CalcIndividualT0(t0vec, opts.useMeshNeighbors);
@@ -1060,6 +1085,11 @@ void DifferentialSeparator::LoadKeySDats(TraceStore<double> &traceStore, BFRefer
   {
     DifferentialSeparator::MakeStadardKeys (keys);
   }
+  if (opts.outputDebug) {
+    std::vector<float> t02;
+    CalcBfT0(opts, t02,  "beadfind_pre_0003.dat");
+    CalcBfT0(opts, t02, "beadfind_pre_0001.dat");
+  }
   cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
   cout.flush();
   string s = opts.outData + ".trace.txt";
@@ -1114,6 +1144,7 @@ void DifferentialSeparator::LoadKeySDats(TraceStore<double> &traceStore, BFRefer
           numFrames++;
         }
         traceStore.SetSize(numFrames);
+        cout << "Num frames are: " << numFrames << endl;
         t0.resize(numWells);
         for (size_t wIx = 0; wIx < numWells; wIx++) {
           traceStore.WellRowCol(wIx, row, col);
@@ -1733,7 +1764,7 @@ void DifferentialSeparator::CalcRegionEmptyStat(H5File &h5File, GridMesh<MixMode
         bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = colStart;    lcol++;
         bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = colEnd;      lcol++;
         bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = flows[flow]; lcol++;
-        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = refFrameStats[0].GetCount(); lcol++;
+        bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = bgFrameStats[0].GetCount(); lcol++;
         bgFrameIqr(qIdx, lcol) = refFrameIqr(qIdx, lcol) = quantiles[q];
       }
 
@@ -1781,9 +1812,9 @@ void DifferentialSeparator::CalcRegionEmptyStat(H5File &h5File, GridMesh<MixMode
 
 
 int DifferentialSeparator::Run(DifSepOpt opts) {
+  ClockTimer totalTimer;
 
-  // Fill in references
-  //  opts.reportStepSize = 1;
+  // --- Fill in the beadfind reference and buffering
   KClass kc;
   BFReference reference;
   cout << "Separator region size is: " << opts.regionXSize << "," << opts.regionYSize << endl;
@@ -1798,16 +1829,11 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   string bfBkgImgFile;
   DetermineBfFile (opts.resultsDir, opts.signalBased, opts.bfType,
                    opts.bfDat, opts.bfBgDat, bfImgFile, bfImgFile2, bfBkgImgFile);
-  
+
   LoadInitialMask(opts.mask, opts.maskFile, bfImgFile, mask, opts.ignoreChecksumErrors);
-  int exWells = 0;
   size_t numWells = mask.H() * mask.W();
-  for (size_t i = 0; i < numWells; i++) {
-    if (mask[i] & MaskExclude) {
-      exWells++;
-    }
-  }
-  cout << "Number excluded starting is: " << exWells;
+
+  // Look for pinned and lag one
   ReportPinned(mask, "Start");
   if (opts.filterLagOneSD) {
     CheckFirstAcqLagOne(opts);
@@ -1817,16 +1843,13 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   if (opts.wellsReportFile.empty()) {
     reportSet.SetStepSize(opts.reportStepSize);
   }
-  else
-  {
+  else  {
     reportSet.ReadSetFromFile (opts.wellsReportFile, 0);
   }
 
-
   string resultsRoot = opts.resultsDir + "/acq_";
   string resultsSuffix = ".dat";
-
-  time_t start = time (NULL);
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Before Reference.");
   int qSize = (mask.W() / opts.t0MeshStep + 1) * (mask.H() / opts.t0MeshStep + 1);
   if (opts.nCores <= 0)
   {
@@ -1838,50 +1861,42 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
                   opts.regionYSize, opts.regionXSize,
                   .95, .98);
   vector<double> bfMetric;
-  if (opts.signalBased)
-  {
-    reference.CalcSignalReference
-    (bfImgFile, bfBkgImgFile, mask, 9);
+  if (opts.signalBased) {
+    reference.CalcSignalReference(bfImgFile, bfBkgImgFile, mask, 9);
   }
   else
   {
     string debugSample = opts.outData + ".bftraces.txt";
     reference.SetDebugFile (debugSample);
-    if (bfImgFile2.empty())
-    {
+    if (bfImgFile2.empty())  {
       reference.CalcReference (bfImgFile, mask);
     }
-    else
-    {
+    else {
       cout << "Using average beadfind." << endl;
       reference.CalcDualReference (bfImgFile, bfImgFile2, mask);
     }
   }
+  for (int i = 0; i < reference.GetNumWells(); i++) {
+    reference.SetBfMetricVal(i, opts.bfMult * reference.GetBfMetricVal(i));
+  }
   ReportPinned(mask, "After Reference");
-
-  time_t end = time (NULL);
-  cout << "Reference Step took: " << (end - start) << " seconds." << endl;
-  if (opts.justBeadfind)
-  {
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After reference.");
+  if (opts.justBeadfind) {
     DoJustBeadfind (opts, reference);
     return 0;
   }
-  if (keys.empty())
-  {
-    MakeStadardKeys (keys);
-  }
-  for (size_t kIx = 0; kIx < keys.size(); kIx++)
-  {
+
+  // Create the keys if not specified.
+  if (keys.empty())  { MakeStadardKeys (keys); }
+  for (size_t kIx = 0; kIx < keys.size(); kIx++) {
     opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, keys[kIx].usableKeyFlows);
+    cout << "key: " << kIx << " min snr is: " << keys[kIx].minSnr << endl;
   }
-  // For each key flow load up the dat file
+
+  // --- Load up the key flows into our data
   cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
   cout.flush();
-  double mil = 1000000.0;
-  struct timeval st, et;
-  gettimeofday (&st, NULL);
-
-  TraceStoreDelta<double> traceStore (mask, 31, opts.flowOrder.c_str(), opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
+  TraceStoreDelta<double> traceStore (mask, 19, opts.flowOrder.c_str(), opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
                                       opts.regionYSize, opts.regionXSize);
   traceStore.SetMinRefProbes (20);
   std::string firstFile = opts.resultsDir + "/acq_0000.dat";
@@ -1889,84 +1904,40 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     opts.doSdat = true;
     opts.sdatSuffix = "dat";
   }
+
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Before Loading Dats.");
   if (opts.doSdat) {
     LoadKeySDats (traceStore, reference, opts);
   } 
   else {
     LoadKeyDats (traceStore, reference, opts);
   }
-  zModelBulk.SetFiltered(mFilteredWells);
-  gettimeofday (&et, NULL);
-  cout << "Done." << endl;
-  cout << "Loading traces took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
-  start = time (NULL);
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Loading Dats.");
 
-  mTime.set_size (traceStore.GetNumFrames());
-  for (size_t i = 0; i < mTime.n_rows; i++)
-  {
-    mTime[i] = i;
-  }
-
-  ZeromerDiff<double> bg;
   wells.resize (numWells);
+  // Currently time is just linear
+  mTime.set_size (traceStore.GetNumFrames());
+  for (size_t i = 0; i < mTime.n_rows; i++)  { mTime[i] = i; }
+
+  // --- Do inital fit of zeromers and tauE
+  ZeromerDiff<double> bg;
   vector<KeyFit> wellsInitial (numWells);
   vector<KeyReporter<double> *> reporters;
-  //  reporters.push_back(&reportInitial);
   GridMesh<SampleQuantiles<double> > emptyEstimates;
   emptyEstimates.Init (mask.H(), mask.W(), opts.tauEEstimateStep, opts.tauEEstimateStep);
-  for (size_t i = 0; i < keys.size(); i++)
-  {
-    cout << "key: " << i << " min snr is: " << keys[i].minSnr << endl;
-  }
-  cout << "Doing initial estimates...";
-  cout.flush();
-  gettimeofday (&st, NULL);
+
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Before fitting param.");
   std::vector<double> dist;
   std::vector<std::vector<float> *> values;
-  IncorpReporter<double> incorp (&keys, opts.minTauESnr);
-  reporters.push_back (&incorp);
-
-  vector<KeyClassifyJob> initialJobs (emptyEstimates.GetNumBin());
-  for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++)
-  {
-    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-    //    CheckFirst();
-    initialJobs[binIx].Init (rowStart,rowEnd,colStart,colEnd,
-                             opts.minSnr, &mask, &wellsInitial, &keys,
-                             &mTime, &reporters, &traceStore, opts.maxKeyFlowLength);
-    jQueue.AddJob (initialJobs[binIx]);
-  }
-  jQueue.WaitUntilDone();
-
-  gettimeofday (&et, NULL);
-  cout << "Done." << endl;
-  cout << "Initial Classification took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
-
-  for (size_t rIx = 0; rIx < reporters.size(); rIx++)
-  {
-    reporters[rIx]->Finish();
-  }
+  zModelBulk.SetFiltered(mFilteredWells);
   zModelBulk.Init (opts.nCores, emptyEstimates.GetNumBin());
-  zModelBulk.SetRegionSize (opts.regionYSize, opts.regionXSize);
- keyAssignments.resize (wellsInitial.size());
-  int keyCounts[3] = {0,0,0};
-  SampleQuantiles<float> peakSigQuantiles (10000);
-  string mykeyFile=opts.analysisDir+"/keys.assignments.txt";
-  ofstream keyOut(mykeyFile.c_str());
-  for (size_t wIx = 0; wIx < keyAssignments.size(); wIx++)
-  {
-    keyAssignments[wIx] = wellsInitial[wIx].keyIndex;
-    keyOut << wIx << "\t" << wellsInitial[wIx].keyIndex;
-    keyCounts[keyAssignments[wIx]+1]++;
-    
-  }
-  keyOut.close();
-  cout << "Key Counts: " << keyCounts[0] << " " << keyCounts[1] << "  " << keyCounts[2] << endl;
+  zModelBulk.SetRegionSize (opts.tauEEstimateStep, opts.tauEEstimateStep);
+  keyAssignments.resize (wellsInitial.size());
+  fill(keyAssignments.begin(), keyAssignments.end(), -1);
 
-  Timer timer;
+  ClockTimer zeromerTimer;
   zModelBulk.SetTime (mTime);
-  Timer zeromerTimer;
+
   cout << "Starting fitting zeromers." << endl;
   zModelBulk.FitWellZeromers (traceStore,
                               keyAssignments,
@@ -1974,131 +1945,45 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   // ofstream zout("zeromer-dump.txt");
   // zModelBulk.Dump(zout);
   // zout.close();
-  cout << "Fitting zeromers took: " << timer.elapsed() << " seconds." << endl;
+  zeromerTimer.PrintMilliSeconds(cout, "Fitting zeromers took:");
   SampleQuantiles<float> tauEQuant (10000);
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Fitting param.");
 
-
-  for (size_t i = 0; i < emptyEstimates.GetNumBin(); i++)
-  {
-    SampleQuantiles<double> &item = emptyEstimates.GetItem (i);
-    //double val = -1;
-    if (item.GetNumSeen() > 0)
-    {
-      item.GetMedian();
-    }
-  }
-
+  // Stats for some of the distributions we'd like to keep track of
   SampleStats<float> sdStats;
   SampleQuantiles<float> traceMean (10000);
   SampleQuantiles<float> traceSd (10000);
   SampleQuantiles<float> sdQuantiles (10000);
-  SampleQuantiles<float> tauBQuantiles (10000);
+  SampleQuantiles<float> sdKeyQuantiles (10000);
   SampleQuantiles<float> bfQuantiles (10000);
   SampleQuantiles<float> onemerQuantiles (10000);
   SampleQuantiles<float> madQuantiles (10000);
   SampleQuantiles<float> peakSigKeyQuantiles (10000);
-  reporters.clear();
+  SampleQuantiles<float> peakSigQuantiles (10000);
 
   vector<KeyClassifyTauEJob> finalJobs (emptyEstimates.GetNumBin());
-  for (size_t i = 0; i < numWells; i++)
-  {
+  for (size_t i = 0; i < numWells; i++) {
     wells[i] = wellsInitial[i];
   }
-  Col<double> medianIncorp = incorp.GetMeanTrace();
+
+  // Median incorporation shape, we project onto this so if shape changes need to be updated
+  double incorpShape[19] = { 0.00983675,0.0304656,-0.0236857,-0.0118875,-2.06058e-05,0.0602131,0.111392,0.193223,0.275271,0.33843,0.378151,0.382406,0.361487,0.326388,0.280362,0.255308,0.20398,0.160868, 0.129953 };
+  Col<double> medianIncorp(19);
+  copy(&incorpShape[0], &incorpShape[19], medianIncorp.begin());
 
   medianIncorp = medianIncorp / norm (medianIncorp,2);
-  medianIncorp.raw_print(cout, "median incorp");
+  //  medianIncorp.raw_print(cout, "median incorp");
   double basicTauEEst = 6;
 
-  timer.restart();
-  cout << "Starting estimates." << endl;
-  for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++)
-  {
-    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-    finalJobs[binIx].Init (rowStart,rowEnd,colStart,colEnd,
-                           opts.minSnr, &mask, &wells, &keys,
-                           &mTime, basicTauEEst, &medianIncorp,
-                           &zModelBulk,
-                           &reporters, &traceStore, opts.maxKeyFlowLength,
-                           &emptyEstimates, tauEQuant);
-    jQueue.AddJob (finalJobs[binIx]);
-  }
-  jQueue.WaitUntilDone();
-  cout << "Final classification took: " << timer.elapsed() << " seconds" << endl;
-
-
   GridMesh<SampleQuantiles<float> > bfMesh;
-  bfMesh.Init (mask.H(), mask.W(), 50, 50);
-  for (size_t i = 0; i < bfMesh.GetNumBin(); i++)
-  {
+  bfMesh.Init (mask.H(), mask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
+  for (size_t i = 0; i < bfMesh.GetNumBin(); i++) {
     SampleQuantiles<float> &x = bfMesh.GetItem (i);
     x.Init (10000);
   }
-  int gotKeyCount = 0, gotNoKeyCount = 0;
-  for (size_t idx = 0; idx < wells.size(); idx++)
-  {
-    if (wells[idx].keyIndex >= 0  && wells[idx].mad < opts.maxMad)
-    {
-      gotKeyCount++;
-    }
-    if (wellsInitial[idx].mad < opts.maxMad && wellsInitial[idx].keyIndex < 0)
-    {
-      gotNoKeyCount++;
-    }
-  }
-
-  int notExcludePinnedWells = 0;
-  for (size_t i = 0; i < numWells; i++)
-  {
-    if (! (mask[i] & MaskExclude || mask[i] & MaskPinned))
-    {
-      notExcludePinnedWells++;
-    }
-  }
-
-  int minOkCount = max (10.0, opts.minRatioLiveWell * notExcludePinnedWells);
-  if (gotKeyCount <= minOkCount)
-  {
-    ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " key passing wells. Couldn't find enough (" + ToStr (minOkCount) + ") wells with key signal.", DIFFSEP_ERROR);
-  }
-  if (gotNoKeyCount <= minOkCount)
-  {
-    ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " no key wells. Couldn't find enough (" + ToStr (minOkCount) + ") wells without key signal.", DIFFSEP_ERROR);
-  }
-
-  peakSigKeyQuantiles.Clear();
-  for (size_t i = 0; i < numWells; i++)
-  {
-
-    if (isfinite (wells[i].mad) && wells[i].mad >= 0)
-    {
-      madQuantiles.AddValue (wells[i].mad);
-      traceMean.AddValue (wells[i].traceMean);
-      traceSd.AddValue (wells[i].traceSd);
-    }
-    //    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad && isfinite(wells[i].peakSig))
-    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad)
-    {
-      sdStats.AddValue (wells[i].sd);
-      sdQuantiles.AddValue (wells[i].sd);
-      peakSigQuantiles.AddValue (wells[i].peakSig);
-
-      if (isfinite (wells[i].param.at (0)) && isfinite (wells[i].param.at (1)))
-      {
-        tauBQuantiles.AddValue (wells[i].param.at (0) - wells[i].param.at (1));
-      }
-      if (isfinite (wells[i].onemerAvg))
-      {
-        onemerQuantiles.AddValue (wells[i].onemerAvg);
-      }
-    }
-    if (wells[i].keyIndex >= 0)
-    {
-      peakSigKeyQuantiles.AddValue (wells[i].peakSig);
-    }
-  }
-
+  ClockTimer keyFitTimer;
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Starting Calling Live.");
+  // --- Setup for final fit and key calls
   SampleKeyReporter<double> report (opts.outData, numWells);
   report.SetReportSet (reportSet.GetReportIndexes());
   reporters.push_back (&report);
@@ -2106,34 +1991,28 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   KeySummaryReporter<double> keySumReport;
   keySumReport.Init (opts.flowOrder, opts.analysisDir, mask.H(), mask.W(),
                      std::min (128,mask.W()), std::min (128,mask.H()), keys);
-  double minTfPeak = min ((double)opts.minTfPeakMax, peakSigQuantiles.GetQuantile (.75) + opts.tfFilterQuantile * IQR (peakSigQuantiles));
-  double minLibPeak = min ((double)opts.minLibPeakMax,peakSigQuantiles.GetQuantile (.75) + opts.libFilterQuantile * IQR (peakSigQuantiles));
-  //  minTfPeak = max(15.0,minTfPeak);
-  cout << "Min Tf peak is: " << minTfPeak << " lib peak is: " << minLibPeak << endl;
-  keySumReport.SetMinKeyThreshold (1, minTfPeak);
-  keySumReport.SetMinKeyThreshold (0, minLibPeak);
+
+  keySumReport.SetMinKeyThreshold (1, 0);
+  keySumReport.SetMinKeyThreshold (0, 0);
 
   if (opts.outputDebug) {
-    avgReport.SetMinKeyThreshold(1, minTfPeak);
-    avgReport.SetMinKeyThreshold(0, minLibPeak);
+    avgReport.SetMinKeyThreshold(1, 0);
+    avgReport.SetMinKeyThreshold(0, 0);
     reporters.push_back(&avgReport);
   }
   mRegionIncorpReporter.Init(opts.outData, mask.H(), mask.W(),
 			     opts.regionXSize, opts.regionYSize,
 			     keys, t0);
-  mRegionIncorpReporter.SetMinKeyThreshold(1, minTfPeak);
-  mRegionIncorpReporter.SetMinKeyThreshold(0, minLibPeak);
+  mRegionIncorpReporter.SetMinKeyThreshold(1, 0);
+  mRegionIncorpReporter.SetMinKeyThreshold(0, 0);
   reporters.push_back(&keySumReport);
   reporters.push_back(&mRegionIncorpReporter);
-
-  timer.restart();
-  cout << "Starting final classification." << endl;
-  for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++)
-  {
+  for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++) {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
     finalJobs[binIx].Init (rowStart,rowEnd,colStart,colEnd,
-                           opts.minSnr, &mask, &wells, &keys,
+                           min(keys[0].minSnr,keys[1].minSnr), &mask, &wells, &keys,
+                           //                           opts.minSnr, &mask, &wells, &keys,
                            &mTime, basicTauEEst, &medianIncorp,
                            &zModelBulk,
                            &reporters, &traceStore, opts.maxKeyFlowLength,
@@ -2141,65 +2020,95 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     jQueue.AddJob (finalJobs[binIx]);
   }
   jQueue.WaitUntilDone();
-  cout << "Final classification took: " << timer.elapsed() << " seconds" << endl;
 
-  gettimeofday (&et, NULL);
-  cout << "Done." << endl;
-  cout << "Final Classification took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
-  for (size_t rIx = 0; rIx < reporters.size(); rIx++)
-  {
-    reporters[rIx]->Finish();
+
+  for (size_t rIx = 0; rIx < reporters.size(); rIx++) { reporters[rIx]->Finish(); }
+  keyFitTimer.PrintMilliSeconds(cout, "Calling keys took.");
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Calling Keys.");
+  /// --- Check to make sure we got some live wells, do we really need this anymore?
+  int notExcludePinnedWells = 0;
+  for (size_t i = 0; i < numWells; i++) {
+    if (! (mask[i] & MaskExclude || mask[i] & MaskPinned)) {
+      notExcludePinnedWells++;
+    }
+  }
+  int gotKeyCount = 0, gotNoKeyCount = 0;
+  for (size_t idx = 0; idx < wells.size(); idx++) {
+    if (wells[idx].keyIndex >= 0  && wells[idx].mad < opts.maxMad) { gotKeyCount++; }
+    if (wellsInitial[idx].mad < opts.maxMad && wellsInitial[idx].keyIndex < 0) { gotNoKeyCount++; }
   }
 
+  int minOkCount = max (10.0, opts.minRatioLiveWell * notExcludePinnedWells);
+  if (gotKeyCount <= minOkCount) { ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " key passing wells. Couldn't find enough (" + ToStr (minOkCount) + ") wells with key signal.", DIFFSEP_ERROR); }
+  if (gotNoKeyCount <= minOkCount) { ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " no key wells. Couldn't find enough (" + ToStr (minOkCount) + ") wells without key signal.", DIFFSEP_ERROR); }
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Fitting Filters.");
+  /// --- Calculate filters based on distribution
+  peakSigKeyQuantiles.Clear();
+  for (size_t i = 0; i < numWells; i++) {
+    if (isfinite (wells[i].mad) && wells[i].mad >= 0) {
+      madQuantiles.AddValue (wells[i].mad);
+      traceMean.AddValue (wells[i].traceMean);
+      traceSd.AddValue (wells[i].traceSd);
+    }
+    //    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad && isfinite(wells[i].peakSig))
+    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad) {
+      sdStats.AddValue (wells[i].sd);
+      sdQuantiles.AddValue (wells[i].sd);
+      peakSigQuantiles.AddValue (wells[i].peakSig);
+
+      if (isfinite (wells[i].onemerAvg)) {
+        onemerQuantiles.AddValue (wells[i].onemerAvg);
+      }
+    }
+    if (wells[i].keyIndex >= 0) {
+      peakSigKeyQuantiles.AddValue (wells[i].peakSig);
+      sdKeyQuantiles.AddValue(wells[i].sd);
+    }
+  }
+  double minTfPeak = min ((double)opts.minTfPeakMax, peakSigQuantiles.GetQuantile (.75) + opts.tfFilterQuantile * IQR (peakSigQuantiles));
+  double minLibPeak = min ((double)opts.minLibPeakMax,peakSigQuantiles.GetQuantile (.75) + opts.libFilterQuantile * IQR (peakSigQuantiles));
+  cout << "Min Tf peak is: " << minTfPeak << " lib peak is: " << minLibPeak << endl;
   double madThreshold = madQuantiles.GetQuantile (.75) + (3 * IQR (madQuantiles));
-  //  double varThreshold = sdQuantiles.GetQuantile(.75) + (1.5 * IQR(sdQuantiles));
-  double varThreshold = sdQuantiles.GetMedian() + (3 * IQR (sdQuantiles) /1.35);
+  double varThreshold = sdQuantiles.GetQuantile(.5) + (sdQuantiles.GetQuantile(.5) - sdQuantiles.GetQuantile(.05));
+  //  double varThreshold = sdQuantiles.GetQuantile(.75) + 3 * (sdQuantiles.GetQuantile(.75) - sdQuantiles.GetQuantile(.25));
   //double varBeadThreshold = sdQuantiles.GetMedian() + LowerQuantile(sdQuantiles);
   double meanSigThreshold = std::numeric_limits<double>::max() * -1;
-  if (onemerQuantiles.GetNumSeen() > 10)
-  {
-
+  if (onemerQuantiles.GetNumSeen() > 10) {
     meanSigThreshold = onemerQuantiles.GetMedian() + (2.5 * IQR (onemerQuantiles) /2);
   }
 
-  double tauBThreshold = tauBQuantiles.GetMedian() + (opts.sigSdMult * (IQR (tauBQuantiles)) /2);
   double peakSigThreshold = std::numeric_limits<double>::max() * -1;
-  if (peakSigQuantiles.GetNumSeen() > 10)
-  {
+  if (peakSigQuantiles.GetNumSeen() > 10) {
     peakSigThreshold = peakSigQuantiles.GetMedian() + (IQR (peakSigQuantiles)) /2; //sdStats.GetMean() + (2.5*sdStats.GetSD());
   }
   double peakSigEmptyThreshold = std::numeric_limits<double>::max() * -1;
-  if (peakSigQuantiles.GetNumSeen() > 10)
-  {
-    peakSigEmptyThreshold = peakSigQuantiles.GetMedian() + (4* (IQR (peakSigQuantiles)) /2); //sdStats.GetMean() + (2.5*sdStats.GetSD());
+  if (peakSigQuantiles.GetNumSeen() > 10) {
+    //    peakSigEmptyThreshold = peakSigQuantiles.GetMedian() + (4* (IQR (peakSigQuantiles)) /2); //sdStats.GetMean() + (2.5*sdStats.GetSD());    
+    peakSigEmptyThreshold = peakSigQuantiles.GetMedian() + (peakSigQuantiles.GetMedian() - peakSigQuantiles.GetQuantile(.05));
     cout << "Peak Signal Empty Threshold: " << peakSigEmptyThreshold << endl;
     peakSigEmptyThreshold = min(peakSigEmptyThreshold, 10.0);
   }
 
-  if (peakSigKeyQuantiles.GetNumSeen() > 10)
-  {
+  if (peakSigKeyQuantiles.GetNumSeen() > 10) {
     cout << "Key Peak distribution is: " << peakSigKeyQuantiles.GetMedian() << " +/- " <<  IQR (peakSigKeyQuantiles) /2 << " "
          << peakSigKeyQuantiles.GetQuantile (.1) << ", " << peakSigKeyQuantiles.GetQuantile (.25) << ", "
          << peakSigKeyQuantiles.GetQuantile (.5) << ", " << peakSigKeyQuantiles.GetQuantile (.75) << endl;
 
   }
+
   double keyPeakSigThresh = std::numeric_limits<double>::max() * -1;
-  if (peakSigQuantiles.GetNumSeen() > 10)
-  {
+  if (peakSigQuantiles.GetNumSeen() > 10) {
     cout << "Empty Peak distribution is: " << peakSigQuantiles.GetMedian() << " +/- " <<  IQR (peakSigQuantiles) /2 << endl;
     keyPeakSigThresh = peakSigQuantiles.GetQuantile (.75);
     cout << "Key peak signal theshold: " << keyPeakSigThresh
          << " (" << peakSigQuantiles.GetQuantile (.75) << ", " << IQR (peakSigQuantiles) << ")" << endl;
-    if (peakSigQuantiles.GetNumSeen() > 10)
-    {
+    if (peakSigQuantiles.GetNumSeen() > 10) {
       cout << "Empty Key Peak distribution is: " << peakSigQuantiles.GetMedian() << " +/- " <<  IQR (peakSigQuantiles) /2 << " "
            << peakSigQuantiles.GetQuantile (.1) << ", " << peakSigQuantiles.GetQuantile (.25) << ", "
            << peakSigQuantiles.GetQuantile (.5) << ", " << peakSigQuantiles.GetQuantile (.75) << endl;
-
     }
   }
-  else
-  {
+  else {
     cout << "Saw less than 10 peakSigQuantiles." << endl;
   }
 
@@ -2208,30 +2117,20 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   double varMin =LowerQuantile (sdQuantiles);
   double traceMeanThresh = traceMean.GetMedian() - 3 * (IQR (traceMean) /2);
   double traceSDThresh = traceSd.GetMedian() - 5 * (LowerQuantile (traceSd));
-  if (opts.signalBased)
-  {
+  if (opts.signalBased) {
     PredictFlow (bfImgFile, opts.outData, opts.ignoreChecksumErrors, opts, traceStore, zModelBulk);
     opts.doRecoverSdFilter = false;
   }
-  else
-  {
-    for (size_t i = 0; i < numWells; i++)
-    {
-      wells[i].bfMetric = reference.GetBfMetricVal (i);
+  else {
+    for (size_t i = 0; i < numWells; i++) {
+      wells[i].bfMetric = wells[i].bufferMetric = reference.GetBfMetricVal (i);
     }
   }
-  if (opts.signalBased)
-  {
+  if (opts.signalBased) {
     opts.doRecoverSdFilter = false;
   }
-  for (size_t i = 0; i < numWells; i++)
-  {
-    wells[i].bfMetric = reference.GetBfMetricVal (i);
-  }
-  for (size_t i = 0; i < numWells; i++)
-  {
-    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad && isfinite (wells[i].bfMetric))
-    {
+  for (size_t i = 0; i < numWells; i++) {
+    if (wells[i].keyIndex < 0 && wells[i].sd != 0 && isfinite (wells[i].sd) && wells[i].mad < opts.maxMad && isfinite (wells[i].bfMetric))  {
       bfQuantiles.AddValue (wells[i].bfMetric);
       SampleQuantiles<float> &bfQ = bfMesh.GetItem (bfMesh.GetBin (wells[i].wellIdx));
       bfQ.AddValue (wells[i].bfMetric);
@@ -2240,47 +2139,63 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
 
   cout << "Mad threshold is: " << madThreshold << " for: " << madQuantiles.GetMedian() << " +/- " << (madQuantiles.GetQuantile (.75) - madQuantiles.GetMedian()) << endl;
   cout << "Var threshold is: " << varThreshold << " for: " << sdQuantiles.GetMedian() << " +/- " <<  IQR (sdQuantiles) /2 << endl;
-
-  cout << "TauB threshold is: " << tauBThreshold << " for: " << tauBQuantiles.GetMedian() << " +/- " <<  IQR (tauBQuantiles) /2 << endl;
   cout << "Var min is: " << varMin << " for: " << sdQuantiles.GetMedian() << " +/- " << (sdQuantiles.GetQuantile (.75)) << endl;
-  if (onemerQuantiles.GetNumSeen() > 10)
-  {
+  if (onemerQuantiles.GetNumSeen() > 10) {
     cout << "Signal threshold is: " << meanSigThreshold << " for: " << onemerQuantiles.GetMedian() << " +/- " <<  IQR (onemerQuantiles) /2 << endl;
   }
-  else
-  {
+  else {
     cout << "Saw less than 10 wells with onemer signal." << endl;
   }
-  // if (peakSigQuantiles.GetNumSeen() > 10) {
-  //   cout << "Peak threshold is: " << peakSigThreshold << " for: " << peakSigQuantiles.GetMedian() << " +/- " <<  IQR(peakSigQuantiles)/2 << endl;
-  // }
-  // else {
-  //   cout << "Saw less than 10 wells with peakSigQuantiles." << endl;
-  // }
-
-
-  // cout << "Peak empty threshold is: " << peakSigEmptyThreshold << " for: " << peakSigQuantiles.GetMedian() << " +/- " <<  IQR(peakSigQuantiles)/2 << endl;
-
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After fitting filters.");
   cout << "Mean Trace threshold: " << traceMeanThresh << " median: " << traceMean.GetMedian() << " +/- " << traceMean.GetQuantile (.25) << endl;
   // Set up grid mesh for beadfinding.
   ofstream modelOut;
   if (opts.outputDebug) {
     string modelFile = opts.outData + ".mix-model.txt";
     modelOut.open(modelFile.c_str());
-    modelOut << "bin\tbinRow\tbinCol\trowStart\trowEnd\tcolStart\tcolEnd\tcount\tmix\tmu1\tvar1\tmu2\tvar2" << endl;
+    modelOut << "bin\tbinRow\tbinCol\trowStart\trowEnd\tcolStart\tcolEnd\tcount\tmix\tmu1\tvar1\tmu2\tvar2\tthreshold\trefMean" << endl;
   }
   GridMesh<MixModel> modelMesh;
   opts.bfMeshStep = min (min (mask.H(), mask.W()), opts.bfMeshStep);
   cout << "bfMeshStep is: " << opts.bfMeshStep << endl;
-  modelMesh.Init (mask.H(), mask.W(), opts.bfMeshStep, opts.bfMeshStep);
-  gettimeofday (&st, NULL);
-
+  modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
   SampleStats<double> bfSnr;
 
   double bfMinThreshold = bfQuantiles.GetQuantile (.02);
-
   cout << "Bf min threshold is: " << bfMinThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " << ( (bfQuantiles.GetQuantile (.75) - bfQuantiles.GetQuantile (.25)) /2) << endl;
-  opts.minBfGoodWells = min (300, (int) (opts.bfMeshStep * opts.bfMeshStep * .4));
+
+  // Should we use standard deviation of signal as the beadfind metric
+  // (eg cluster signal vs no signal instead of buffering vs no
+  // buffering.
+  if (opts.sdAsBf) {
+    for (size_t i = 0; i < numWells; i++) {
+      reference.SetBfMetricVal(i, wells[i].sd);
+      wells[i].bfMetric = wells[i].sd;
+    }
+  }
+  int refCount = 0;
+  for (size_t i = 0; i < numWells; i++) {
+    if(traceStore.IsReference(i)) {
+      wells[i].isRef = true;
+      refCount++;
+    }
+    else { 
+      wells[i].isRef = false;
+    }
+  }
+  cout << "Got: " << refCount << " reference wells." << endl;
+  // Anchor clusters based off of set of good live beads and the empty wells.
+  for (size_t i = 0; i < numWells; i++) {
+    if (wells[i].snr >= opts.minTauESnr && wells[i].peakSig > 50) {
+      wells[i].goodLive = true;
+    }
+  }
+
+  // Do clustering for wells into beads and empties for each
+  // region. Wells will be classified based on smoothed cluster
+  // parameters later.
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Before Clustering.");
+  opts.minBfGoodWells = min (300, (int) (opts.clusterMeshStep * opts.clusterMeshStep * .1));
   for (size_t binIx = 0; binIx < modelMesh.GetNumBin(); binIx++)
   {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
@@ -2308,33 +2223,131 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
                << rowStart << "\t" << rowEnd << "\t" << colStart << "\t" << colEnd << "\t"
                << model.count << "\t" << model.mix << "\t"
                << model.mu1 << "\t" << model.var1 << "\t"
-               << model.mu2 << "\t" << model.var2 << endl;
+               << model.mu2 << "\t" << model.var2 << "\t"
+               << model.threshold << "\t" << model.refMean << endl;
     }
   }
   cout << "BF SNR: " << bfSnr.GetMean() << " +/- " << (bfSnr.GetSD()) << endl;
   if (modelOut.is_open()) {
     modelOut.close();
   }
-  // For each bead call based on nearest gridmesh neighbors
+
   bfMask.Init (&mask);
+  int notGood = 0;
   vector<MixModel *> bfModels;
-  int overMaxMad = 0, notGood = 0, tooVar = 0, badFit = 0, noTauE = 0, varMinCount = 0, traceMeanMinCount = 0, sdRefCalled = 0, badSignal = 0, beadLow = 0;
+  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    bfMask[bIx] = mask[bIx];
+    if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned) {
+      continue;
+    }
+    if (wells[bIx].keyIndex < 0) {
+      size_t row, col;
+      double weight = 0;
+      MixModel m;
+      int good = 0;
+      traceStore.WellRowCol (wells[bIx].wellIdx, row, col);
+      modelMesh.GetClosestNeighbors (row, col, opts.bfNeighbors, dist, bfModels);
+      for (size_t i = 0; i < bfModels.size(); i++) {
+        if ( (size_t) bfModels[i]->count > opts.minBfGoodWells) {
+          good++;
+          float w = 1.0/ (log (dist[i] + 2.50));
+          weight += w;
+          m.mu1 += w * bfModels[i]->mu1;
+          m.mu2 += w * bfModels[i]->mu2;
+          m.var1 += w * bfModels[i]->var1;
+          m.var2 += w * bfModels[i]->var2;
+          m.mix += w * bfModels[i]->mix;
+          m.count += w * bfModels[i]->count;
+        }
+      }
+      if (good == 0) {
+        notGood++;
+        bfMask[bIx] = MaskIgnore;
+        wells[bIx].flag = WellBfBad;
+      }
+      else {
+        m.mu1 = m.mu1 / weight;
+        m.mu2 = m.mu2 / weight;
+        m.var1 = m.var1 / weight;
+        m.var2 = m.var2 / weight;
+        m.mix = m.mix / weight;
+        m.count = m.count / weight;
+        m.var1sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var1);
+        m.var2sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var2);
+        double ownership = 0;
+        int bCluster = DualGaussMixModel::PredictCluster (m, wells[bIx].bfMetric, opts.bfThreshold, ownership);
+        if (bCluster == 2) {
+          wells[bIx].flag = WellBead;
+          bfMask[bIx] = MaskBead;
+        }
+        else if (bCluster == 1) {
+          wells[bIx].flag = WellEmpty;
+          bfMask[bIx] = MaskEmpty | MaskReference;
+        }
+      }
+    }
+  }
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Clustering.");
+
+  SampleQuantiles<float> sepRefSdQuantiles (10000);
+  SampleQuantiles<float> sepRefBfQuantiles (10000);
+  for (size_t bIx = 0; bIx < wells.size(); bIx++)  {
+    if (wells[bIx].isRef) {
+      sepRefBfQuantiles.AddValue(wells[bIx].bufferMetric);
+      sepRefSdQuantiles.AddValue(wells[bIx].sd);
+    }
+  }
+
+  cout << "Sep Quantiles:" << endl;
+  for (size_t i = 0; i <= 100; i+=5) {
+    cout << i << "\t" << sepRefBfQuantiles.GetQuantile(i/100.0f) << "\t" << sepRefSdQuantiles.GetQuantile(i/100.0f) << endl;
+  }
+  float sepRefBfThresh = sepRefBfQuantiles.GetQuantile(.75) + 3 * IQR(sepRefBfQuantiles);
+  float sepRefSdThresh = sepRefSdQuantiles.GetQuantile(.75) + 3 * IQR(sepRefSdQuantiles);
+  cout << "Sep BF Thresh: " << sepRefBfThresh << endl;
+  cout << "Sep SD Thresh: " << sepRefSdThresh << endl;
+
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Before Post Filtering.");
+  SampleQuantiles<float> sdEmptyQuantiles (10000);
+  for (size_t bIx = 0; bIx < wells.size(); bIx++)  {
+    if (wells[bIx].flag == WellEmpty || wells[bIx].isRef == true) {
+      sdEmptyQuantiles.AddValue(wells[bIx].sd);
+    }
+  }
+  double varEmptyThreshold = sdEmptyQuantiles.GetQuantile(.5) + (sdEmptyQuantiles.GetQuantile(.5) - sdEmptyQuantiles.GetQuantile(.1));
+  //  double varEmptyThreshold = sdEmptyQuantiles.GetQuantile(.75) + 3 * IQR(sdEmptyQuantiles);
+  cout << "Empty var threshold is: " << varEmptyThreshold << " for: " << sdEmptyQuantiles.GetMedian() << " +/- " <<  IQR (sdEmptyQuantiles) /2 << " for: " << sdEmptyQuantiles.GetNumSeen() << endl;
+  varThreshold = min(varEmptyThreshold, varThreshold);
+  // --- For each bead call based on filters and nearest gridmesh neighbors
+
+  int overMaxMad = 0,  tooVar = 0, badFit = 0, noTauE = 0, varMinCount = 0, traceMeanMinCount = 0, sdRefCalled = 0, badSignal = 0, beadLow = 0;
   int tooBf = 0;
   int tooTauB = 0;
   int poorSignal = 0;
   int poorLibPeakSignal = 0;
   int poorTfPeakSignal = 0;
   int emptyWithSignal = 0;
+  int tooRefVar = 0;
+  int tooRefBuffer = 0;
   SampleQuantiles<float> libSnrQuantiles(10000);
   SampleQuantiles<float> tfSnrQuantiles(10000);
   for (size_t bIx = 0; bIx < wells.size(); bIx++)
   {
-    bfMask[bIx] = mask[bIx];
     if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned) {
       continue;
     }
     if (bfMask[bIx] & MaskEmpty && mFilteredWells[bIx] != 1) {
       bfMask[bIx] = MaskIgnore;
+      continue;
+    }
+    if (bfMask[bIx] & MaskReference && wells[bIx].sd > sepRefSdThresh) {
+      bfMask[bIx] &= ~MaskReference;
+      tooRefVar++;
+      continue;
+    }
+    if (bfMask[bIx] & MaskReference && wells[bIx].bufferMetric > sepRefBfThresh) {
+      bfMask[bIx] &= ~MaskReference;
+      tooRefBuffer++;
       continue;
     }
     if (bfMask[bIx] & MaskWashout)
@@ -2395,8 +2408,8 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     if (opts.doMadFilter && wells[bIx].keyIndex < 0 && (wells[bIx].mad > madThreshold))
     {
       bfMask[bIx] = MaskIgnore;
-      wells[bIx].flag = WellMadHigh,
-                        overMaxMad++;
+      wells[bIx].flag = WellMadHigh;
+      overMaxMad++;
       continue;
     }
     if (wells[bIx].keyIndex < 0 && wells[bIx].mad < 0)
@@ -2407,76 +2420,21 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       continue;
     }
 
-    if (wells[bIx].keyIndex < 0)
-    {
-      size_t row, col;
-      double weight = 0;
-      MixModel m;
-      int good = 0;
-      traceStore.WellRowCol (wells[bIx].wellIdx, row, col);
-      modelMesh.GetClosestNeighbors (row, col, opts.bfNeighbors, dist, bfModels);
-      //      modelMesh.GetClosestNeighbors(row, col, 0, dist, bfModels);
-      for (size_t i = 0; i < bfModels.size(); i++)
-      {
-        if ( (size_t) bfModels[i]->count > opts.minBfGoodWells)
-        {
-          good++;
-          float w = 1.0/ (log (dist[i] + 2.50));
-          weight += w;
-          m.mu1 += w * bfModels[i]->mu1;
-          m.mu2 += w * bfModels[i]->mu2;
-          m.var1 += w * bfModels[i]->var1;
-          m.var2 += w * bfModels[i]->var2;
-          m.mix += w * bfModels[i]->mix;
-          m.count += w * bfModels[i]->count;
-        }
-      }
-      if (good == 0)
-      {
-        notGood++;
-        bfMask[bIx] = MaskIgnore;
-        wells[bIx].flag = WellBfBad;
-      }
-      else
-      {
-        m.mu1 = m.mu1 / weight;
-        m.mu2 = m.mu2 / weight;
-        m.var1 = m.var1 / weight;
-        m.var2 = m.var2 / weight;
-        m.mix = m.mix / weight;
-        m.count = m.count / weight;
-        m.var1sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var1);
-        m.var2sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var2);
-        double ownership = 0;
-        int bCluster = DualGaussMixModel::PredictCluster (m, wells[bIx].bfMetric, opts.bfThreshold, ownership);
-        if (bCluster == 2)
-        {
-          wells[bIx].flag = WellBead;
-          bfMask[bIx] = MaskBead;
-        }
-        else if (bCluster == 1)
-        {
-          wells[bIx].flag = WellEmpty;
-          bfMask[bIx] = MaskEmpty | MaskReference;
-        }
-      }
-    }
   }
+
   SampleQuantiles<float> bfEmptyQuantiles (10000);
-  for (size_t bIx = 0; bIx < wells.size(); bIx++)
-  {
-    if (bfMask[bIx] & MaskEmpty)
-    {
+  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    if (bfMask[bIx] & MaskEmpty) {
       bfEmptyQuantiles.AddValue (wells[bIx].bfMetric);
     }
   }
+
+  // --- Apply filters
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Cluster.");
   double bfThreshold = bfEmptyQuantiles.GetQuantile (.75) + (3 * IQR (bfEmptyQuantiles));
   cout << "Bf threshold is: " << bfThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " <<  IQR (bfQuantiles) << endl;
-  for (size_t bIx = 0; bIx < wells.size(); bIx++)
-  {
-
-    if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold)
-    {
+  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    if (bfMask[bIx] & MaskEmpty && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold) {
       bfMask[bIx] &= ~MaskReference;
       wells[bIx].flag = WellSdFilter;
       tooVar++;
@@ -2489,13 +2447,13 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     //   tooLowPeakSignal++;
     //   continue;
     // }
-    if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold)
-    {
-      bfMask[bIx] &= ~MaskReference;
-      wells[bIx].flag = WellSdFilter;
-      tooVar++;
-      continue;
-    }
+    // if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && wells[bIx].sd >= varThreshold)
+    // {
+    //   bfMask[bIx] &= ~MaskReference;
+    //   wells[bIx].flag = WellSdFilter;
+    //   tooVar++;
+    //   continue;
+    // }
     double bfVal = wells[bIx].bfMetric;
     if (bfMask[bIx] & MaskEmpty && opts.doSigVarFilter && wells[bIx].keyIndex < 0 && bfVal > bfThreshold)
     {
@@ -2504,28 +2462,42 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       tooBf++;
       continue;
     }
-    if (wells[bIx].keyIndex < 0 && (bfMask[bIx] & MaskEmpty) && wells[bIx].peakSig >= peakSigEmptyThreshold) {
-      bfMask[bIx] &= ~MaskReference;
-      wells[bIx].flag = WellEmptySignal;
-      emptyWithSignal++;
-      continue;
-    }
-    if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].peakSig < minLibPeak)))
-    {
+    if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].peakSig < minLibPeak))) {
       wells[bIx].keyIndex = -1;
       wells[bIx].flag = WellLowSignal;
       poorLibPeakSignal++;
       bfMask[bIx] = MaskIgnore;
       continue;
     }
-    if (opts.doRemoveLowSignalFilter && ( (wells[bIx].keyIndex == 1 && (wells[bIx].peakSig < minTfPeak))))
-    {
+    if (opts.doRemoveLowSignalFilter && ( (wells[bIx].keyIndex == 1 && (wells[bIx].peakSig < minTfPeak)))) {
       wells[bIx].keyIndex = -1;
       wells[bIx].flag = WellLowSignal;
       poorTfPeakSignal++;
       bfMask[bIx] = MaskIgnore;
       continue;
     }
+    //  if (wells[bIx].keyIndex < 0 && (bfMask[bIx] & MaskReference) && wells[bIx].peakSig >= peakSigEmptyThreshold) {
+    //   bfMask[bIx] &= ~MaskReference;
+    //   wells[bIx].flag = WellEmptySignal;
+    //   emptyWithSignal++;
+    //   continue;
+    // }
+    //    if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].peakSig < minLibPeak)))
+    // if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].sd < varBeadThreshold)))    {
+    //   wells[bIx].keyIndex = -1;
+    //   wells[bIx].flag = WellLowSignal;
+    //   poorLibPeakSignal++;
+    //   bfMask[bIx] = MaskIgnore;
+    //   continue;
+    // }
+    // //    if (opts.doRemoveLowSignalFilter && ( (wells[bIx].keyIndex == 1 && (wells[bIx].peakSig < minTfPeak))))
+    // if (opts.doRemoveLowSignalFilter && ( (wells[bIx].keyIndex == 1 && (wells[bIx].sd < varBeadThreshold)))) {
+    //   wells[bIx].keyIndex = -1;
+    //   wells[bIx].flag = WellLowSignal;
+    //   poorTfPeakSignal++;
+    //   bfMask[bIx] = MaskIgnore;
+    //   continue;
+    // }
     // Call low variance non-key wells as reference
     //    double bf2IqrThreshold = bfEmptyQuantiles.GetQuantile (.75) + (2 * IQR (bfEmptyQuantiles));
     if (opts.doRecoverSdFilter && wells[bIx].keyIndex < 0 && (bfMask[bIx] & MaskBead) && 
@@ -2569,7 +2541,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     }
   }
   
-
   // Mark all the separator's reference wells as reference just for good measure
   for (size_t bIx = 0; bIx < wells.size(); bIx++) {
     if (mRefWells[bIx] == 1) {
@@ -2580,10 +2551,8 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       bfMask[bIx] &= ~MaskReference;
     }
   }
-  
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: After Post Filtering.");  
 
-  gettimeofday (&et, NULL);
-  cout << "Min snr: " << opts.minSnr << endl;
   cout << "Lib snr: " << keys[0].minSnr << endl;
   if (libSnrQuantiles.GetNumSeen() > 100) {
     cout << "Lib SNR: " << endl;
@@ -2597,10 +2566,12 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       cout << i*10 << ":\t" << tfSnrQuantiles.GetQuantile(i/10.0) << endl;
     }
   }
-  cout << "SD IQR mult: " << opts.sigSdMult << endl;
+  //  cout << "SD IQR mult: " << opts.sigSdMult << endl;
   cout << badFit << " bad fit "  <<  noTauE << " no tauE. " << varMinCount << " under min sd." << endl;
   cout << "Trace sd thresh: " << traceSDThresh << ", mean thresh: " <<traceMeanThresh << endl;
   cout << "Ignore: " << overMaxMad << " over max MAD. " << endl;
+  cout << "Ignore: " << tooRefVar << " too var compared to reference " << endl;
+  cout << "Ignore: " << tooRefBuffer << " too high bf metric compared to reference." << endl;
   cout << "Ignore: " << tooVar << " too var " << endl;
   cout << "Ignore: " << tooBf << " too high bf metric." << endl;
   cout << "Ignore: " << tooTauB << " too high tauB metric." << endl;
@@ -2612,22 +2583,19 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   cout << "Marked: " << badSignal << " wells ignore based on mean 1mer signal." << endl;
   cout << "Marked: " << beadLow << " wells ignore based on low bead mean 1mer signal." << endl;
   cout << traceMeanMinCount << " were less than mean threshold. " << notGood << " not good." << endl;
-  cout << "Clustering and prediction took: " << ( (et.tv_sec*mil+et.tv_usec) - (st.tv_sec * mil + st.tv_usec)) /mil << " seconds." << endl;
 
   if (opts.outputDebug) {
     OutputOutliers (opts, traceStore, zModelBulk, wells,
                   sdQuantiles.GetQuantile (.9), sdQuantiles.GetQuantile (.9), madQuantiles.GetQuantile (.9),
                   bfQuantiles.GetQuantile (.9), bfQuantiles.GetQuantile (.9), peakSigKeyQuantiles.GetQuantile (.1));
 
-    //  CalcDensityStats(opts.outData, bfMask, wells);
-    arma::Mat<float> wellMatrix (numWells, 12);
+    // Write out debugging matrix
+    arma::Mat<float> wellMatrix (numWells, 15);
     fill (wellMatrix.begin(), wellMatrix.end(), 0.0f);
-    for (size_t i = 0; i < numWells; i++)
-      {
-        if (mask[i] & MaskExclude || !zModelBulk.HaveModel (i))
-          {
+    for (size_t i = 0; i < numWells; i++) {
+        if (mask[i] & MaskExclude || !zModelBulk.HaveModel (i)) {
             continue;
-          }
+        }
         int currentCol = 0;
         KeyFit &kf = wells[i];
         const KeyBulkFit *kbf = zModelBulk.GetKeyBulkFit (i);
@@ -2643,7 +2611,10 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
         wellMatrix.at (i, currentCol++) = kbf->param.at (TraceStore<double>::T_NUC,0);
         wellMatrix.at (i, currentCol++) = kf.peakSig;
         wellMatrix.at (i, currentCol++) = kf.flag;
-      }
+        wellMatrix.at (i, currentCol++) = kf.goodLive;
+        wellMatrix.at (i, currentCol++) = kf.isRef;
+        wellMatrix.at (i, currentCol++) = kf.bufferMetric;
+    }
     string h5SummaryRoot = opts.outData + ".h5";
     string h5Summary = "/separator/summary";
     vector<int> flows(2);
@@ -2655,21 +2626,18 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     CalcRegionEmptyStat(h5file, modelMesh, traceStore, h5SummaryRoot, flows, mask);
     h5file.Close();
 
+    // Write out smaller sampled file
     string summaryFile = opts.outData + ".summary.txt";
     ofstream o (summaryFile.c_str());
-    o << "well\tkey\tt0\tsnr\tmad\ttraceMean\ttraceSd\tsigSd\tok\tbfMetric\ttauB.A\ttauB.C\ttauB.G\ttauB.T\ttauE.A\ttauE.C\ttauE.G\ttauE.T\tmeanSig\tmeanProj\tprojMad\tprojPeak\tflag";
+    o << "well\tkey\tt0\tsnr\tmad\ttraceMean\ttraceSd\tsigSd\tok\tbfMetric\ttauB.A\ttauB.C\ttauB.G\ttauB.T\ttauE.A\ttauE.C\ttauE.G\ttauE.T\tmeanSig\tmeanProj\tprojMad\tprojPeak\tflag\tbuffMetric";
     o << endl;
-    for (size_t i = 0; i < numWells; i+=opts.samplingStep)
-      {
-
-        if (mask[i] & MaskExclude)
-          {
+    for (size_t i = 0; i < numWells; i+=opts.samplingStep) {
+        if (mask[i] & MaskExclude) {
             continue;
           }
         KeyFit &kf = wells[i];
         const KeyBulkFit *kbf = zModelBulk.GetKeyBulkFit (i);
-        if (kbf != NULL)
-          {
+        if (kbf != NULL) {
             assert (kf.wellIdx == kbf->wellIdx);
             o << kf.wellIdx << "\t" << (int) kf.keyIndex << "\t" << traceStore.GetT0 (kf.wellIdx) << "\t" << kf.snr << "\t"
               <<  kf.mad << "\t" << kf.traceMean << "\t" << kf.traceSd << "\t" << kf.sd << "\t" << (int) kf.ok << "\t"
@@ -2683,55 +2651,28 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
               << kbf->param.at (TraceStore<double>::G_NUC,1) << "\t"
               << kbf->param.at (TraceStore<double>::T_NUC,1) << "\t"
               << kf.onemerAvg << "\t" << kf.onemerProjAvg << "\t" << kf.projResid << "\t"
-              << kf.peakSig << "\t" << kf.flag;
+              << kf.peakSig << "\t" << kf.flag << "\t" << kf.bufferMetric;
             o << endl;
           }
       }
     o.close();
   }
 
-  int beadCount = 0, emptyCount = 0, ignoreCount = 0, libCount = 0, tfCount = 0, dudCount = 0, pinnedCount = 0, referenceCount = 0, excludedCount = 0;
-
-  for (size_t bIx = 0; bIx < wells.size(); bIx++)
-  {
-    if (bfMask[bIx] & MaskBead)
-    {
-      beadCount++;
-    }
-    if (bfMask[bIx] & MaskPinned)
-    {
-      pinnedCount++;
-    }
-    if (bfMask[bIx] & MaskEmpty)
-    {
-      emptyCount++;
-    }
-    if (bfMask[bIx] & MaskReference)
-    {
-      referenceCount++;
-    }
-    if (bfMask[bIx] & MaskIgnore)
-    {
-      ignoreCount++;
-    }
-    if (bfMask[bIx] & MaskLib)
-    {
-      libCount++;
-    }
-    if (bfMask[bIx] & MaskTF)
-    {
-      tfCount++;
-    }
-    if (bfMask[bIx] & MaskDud)
-    {
-      dudCount++;
-    }
-    if (bfMask[bIx] & MaskExclude) {
-      excludedCount++;
-    }
-
+  // --- Some reporting for the log.
+  int beadCount = 0, emptyCount = 0, ignoreCount = 0, libCount = 0, tfCount = 0, dudCount = 0, pinnedCount = 0, referenceCount = 0, excludedCount = 0, excludeCount = 0;
+  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    if (bfMask[bIx] & MaskExclude) { excludeCount++; }
+    if (bfMask[bIx] & MaskBead) { beadCount++; }
+    if (bfMask[bIx] & MaskPinned) { pinnedCount++; }
+    if (bfMask[bIx] & MaskEmpty) { emptyCount++; }
+    if (bfMask[bIx] & MaskReference) { referenceCount++; }
+    if (bfMask[bIx] & MaskIgnore) { ignoreCount++; }
+    if (bfMask[bIx] & MaskLib) { libCount++; }
+    if (bfMask[bIx] & MaskTF) { tfCount++; }
+    if (bfMask[bIx] & MaskDud) { dudCount++; }
+    if (bfMask[bIx] & MaskExclude) { excludedCount++; }
   }
-
+  cout << "Exclude:\t" << excludeCount << endl;
   cout << "Empties:\t" << emptyCount << endl;
   cout << "Reference:\t" << referenceCount << endl;
   cout << "Pinned :\t" << pinnedCount << endl;
@@ -2746,6 +2687,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     string outMask = opts.outData + ".mask.bin";
     bfMask.WriteRaw (outMask.c_str());
   }
+  totalTimer.PrintMilliSeconds(cout, "Total Timer: Total Time.");
   return 0;
 }
 

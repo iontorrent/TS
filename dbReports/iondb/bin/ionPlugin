@@ -11,6 +11,10 @@
 # Short-Description: Start/stop ionPlugin daemon
 ### END INIT INFO
 
+# Define LSB log_* functions.
+# Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
+. /lib/lsb/init-functions
+
 EXEC='/opt/ion/iondb/bin/ionPlugin.py'
 EXEC_CMD="/usr/bin/python -- ${EXEC}"
 DAEMON_NAME='ionPlugin'
@@ -55,14 +59,7 @@ function stop_function ()
 function status ()
 {
     if [ -f ${PIDFILE} ]; then
-        pid=$(cat ${PIDFILE})
-        if [ "$pid" != "" ]
-        then
-            echo "$DAEMON_NAME is running. pid = $pid"
-        else
-            echo "No $DAEMON_NAME process"
-            return 1
-        fi
+        pidofproc ${PIDFILE%*.*} $DAEMON_NAME
     else
         echo "No pid file: ${PIDFILE}"
         return 1

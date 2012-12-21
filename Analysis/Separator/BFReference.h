@@ -131,7 +131,8 @@ class BFReference {
 		       double maxQuantile);
   
   float GetBfMetricVal(size_t wellIdx) const { return mBfMetric[wellIdx]; }
-    
+  void  SetBfMetricVal(size_t wellIdx, float val) { mBfMetric[wellIdx] = val; }
+  void FillBfMetric(float v) { std::fill(mBfMetric.begin(), mBfMetric.end(), v); }
   void SetRegionSize(int regionXSize, int regionYSize) { mRegionXSize = regionXSize, mRegionYSize = regionYSize; }
   void GetRegionSize(int &regionXSize, int &regionYSize) {regionXSize = mRegionXSize; regionYSize = mRegionYSize; }
   void SetDoRegional(bool doRegional) { mDoRegionalBgSub = doRegional; }

@@ -12,17 +12,24 @@
 #include "Serialization.h"
 #include "IonErr.h"
 #include "VectorMacros.h"
-
+#include "Image.h"
 #ifndef __CUDACC__   //cuda compiler is allergic to xmmintrin.h
     #include <xmmintrin.h>
 #endif
 
-// handle the time compression for bkgmodel
-union f4vec {
-  v4sf v;
-  float f[VEC_INC];
-};
+// avx
+/* #define TC_VEC_INC 8 */
+/* union simdvec { */
+/*   v8sf v; */
+/*   float f[TC_VEC_INC]; */
+/* }; */
 
+// non-avx
+#define TC_VEC_INC 4
+union simdvec {
+  v4sf v;
+  float f[TC_VEC_INC];
+};
 
 class TimeCompression
 {
@@ -48,6 +55,7 @@ class TimeCompression
   std::vector<float> mTotalWeight;
   std::vector<int> mVFCFlush;
   std::vector<float> mTimePoints;
+  std::vector<int> origTimeStamps;
   TimeCompression();
   ~TimeCompression();
   void Allocate(int imgFrames);
@@ -58,6 +66,7 @@ class TimeCompression
   }
 	int npts(int npt);  // setter for npts
 	inline int npts() { return (int)_npts; }         // getter for npts
+
   void SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg); // interface
   void SetUpOldTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void SetUpStandardTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
@@ -67,67 +76,107 @@ class TimeCompression
   void StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void HalfSpeedSampling(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep);
-
-  void ConvertVfcSegments(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd,
-                          size_t nRow, size_t nCol, size_t nFrame, short *source  , uint16_t *output) {
-    size_t frameStep = nRow * nCol;
-    size_t outFrameStep = (colEnd - colStart) * (rowEnd-rowStart);
-    size_t wIx = 0;
-    for (size_t row = rowStart; row < rowEnd; row++) {
-      for (size_t col = colStart; col < colEnd; col++) {
-        for (size_t frame = 0; frame < (size_t)_npts; frame++) {
-          float accumulator = 0.0;
-          for (size_t n = 0; n < mVfcAverage[frame].size(); n++) {
-            accumulator += source[mVfcAverage[frame][n].second * frameStep + row*nCol+col] * mVfcAverage[frame][n].first;
-          }
-          output[frame*outFrameStep + wIx] = round(accumulator);
+  void WriteLinearTransformation(int frameStep);
+  void RecompressTrace (float *fgPtr, float *tmp_shifted)
+  {
+    int frame = 0;
+    // do not shift real bead wells at all
+    // compress them from the frames_per_point structure in time-compression
+    for (int npt=0;npt < npts();npt++)   // real data
+    {
+        float avg;
+        avg=0.0;
+        for (int i=0;i<frames_per_point[npt];i++)
+        {
+            avg += tmp_shifted[frame+i];
         }
-        wIx++;
-      }
+
+        fgPtr[npt] = (avg/frames_per_point[npt]);
+        frame+=frames_per_point[npt];
     }
   }
 
-  /* deprecated experiment, don't use. */
-  void ConvertVfcSegmentsVec(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd, 
-                             size_t nRow, size_t nCol, size_t nFrame, short *source, uint16_t *output);
 
   /* Preferred vectorized version. */
   template <typename ShortVec> void ConvertVfcSegmentsOpt(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd, 
-                                                          size_t nRow, size_t nCol, size_t nFrame, ShortVec &source, uint16_t *output) {
+                                                          size_t nRow, size_t nCol, size_t nFrame, ShortVec &source, int16_t *output) {
     size_t outFrameStep = (colEnd - colStart) * (rowEnd-rowStart);
     size_t wIx = 0;
-    f4vec acc,dat,weight;
+    simdvec acc,dat,weight,zero;
+    for (size_t i = 0; i < TC_VEC_INC; i++) {
+      zero.f[i] = 0.0f;
+    }
+    size_t frameSizes[_npts];
+    for (size_t n = 0; n < _npts; n++) {
+      frameSizes[n] =  mVfcAverage[n].size();
+    }
+    size_t rowOffset = rowStart * nCol;
     for (size_t row = rowStart; row < rowEnd; row++) {
-      for (size_t col = colStart; col < colEnd; col += VEC_INC) {
-        // in case we're not a multiple of VEC_INC, just do the first n
-        size_t cend = std::min(colEnd - col, (size_t) VEC_INC);
-        for (size_t frame = 0; frame < (size_t)_npts; frame++) {
-#ifndef __CUDACC__
-            acc.v = _mm_xor_ps(acc.v, acc.v); // zero the accumulator
-#else
-            acc.v = __builtin_ia32_xorps(acc.v, acc.v); // zero the accumulator
-#endif
-          for (size_t n = 0; n < mVfcAverage[frame].size(); n++) {
-            size_t offset = mVfcAverage[frame][n].second + row*nCol+col;
+      for (size_t col = colStart; col < colEnd; col += TC_VEC_INC) {
+        // in case we're not a multiple of TC_VEC_INC, just do the first n
+        size_t cend = std::min(colEnd - col, (size_t) TC_VEC_INC);
+        for (size_t frame = 0; frame < _npts; frame++) {
+	  acc.v = zero.v;
+          for (size_t n = 0; n < frameSizes[frame]; n++) {
+            size_t offset = mVfcAverage[frame][n].second + rowOffset + col;
             for (size_t i = 0; i < cend; i++) {
               weight.f[i] = mVfcAverage[frame][n].first;
-              dat.f[i] = source[offset+i];
+              dat.f[i] = source[offset++];
             }
-#ifndef __CUDACC__
-            acc.v = _mm_add_ps(acc.v, _mm_mul_ps(dat.v, weight.v));
-#else
-            acc.v = __builtin_ia32_addps(acc.v, __builtin_ia32_mulps(dat.v, weight.v));
-#endif
+	    acc.v = acc.v + (dat.v * weight.v);
           }
           size_t out = frame*outFrameStep + wIx; 
           for (size_t i = 0; i < cend; i++) {
-            output[out + i] =  acc.f[i];
+            output[out++] =  acc.f[i];
           }
         }
         wIx+=cend;
       }
+      rowOffset += nCol;
     }
   }
+
+  /* Preferred vectorized version. */
+  void ConvertVfcSegmentsOpt(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd, 
+			     size_t nRow, size_t nCol, size_t nFrame, int16_t **frameBuff, int16_t *output) {
+    size_t outFrameStep = (colEnd - colStart) * (rowEnd-rowStart);
+    size_t wIx = 0;
+    simdvec acc,dat,weight,zero;
+    for (size_t i = 0; i < TC_VEC_INC; i++) {
+      zero.f[i] = 0.0f;
+    }
+    size_t frameSizes[_npts];
+    for (size_t n = 0; n < _npts; n++) {
+      frameSizes[n] =  mVfcAverage[n].size();
+    }
+    size_t rowOffset = rowStart * nCol;
+    for (size_t row = rowStart; row < rowEnd; row++) {
+      for (size_t col = colStart; col < colEnd; col += TC_VEC_INC) {
+        // in case we're not a multiple of TC_VEC_INC, just do the first n
+        size_t cend = std::min(colEnd - col, (size_t) TC_VEC_INC);
+        for (size_t frame = 0; frame < _npts; frame++) {
+	  acc.v = zero.v;
+          for (size_t n = 0; n < frameSizes[frame]; n++) {
+	    //            size_t offset = mVfcAverage[frame][n].second + rowOffset + col;
+	    size_t offset = rowOffset + col;
+	    int iframe = mVfcAverage[frame][n].second;
+            for (size_t i = 0; i < cend; i++) {
+              weight.f[i] = mVfcAverage[frame][n].first;
+              dat.f[i] = frameBuff[iframe][offset++];
+            }
+	    acc.v = acc.v + (dat.v * weight.v);
+          }
+          size_t out = frame*outFrameStep + wIx; 
+          for (size_t i = 0; i < cend; i++) {
+            output[out++] =  acc.f[i];
+          }
+        }
+        wIx+=cend;
+      }
+      rowOffset += nCol;
+    }
+  }
+
 
   /* don't use - deprecated experiment moving through memory in different way. */
   void ConvertVfcSegmentsFlat(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd, 
@@ -272,4 +321,5 @@ inline void TimeCompression::Interpolate(float *t1_end, T *v1, int n1, float *t2
     }
   }
 }
+
 #endif // TIMECOMPRESSION_H

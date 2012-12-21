@@ -67,6 +67,8 @@ def runPlugin(plugin, start_json, level = 'default', pluginserver = None, retrie
     try:             
         if (level == 'pre'):
             plugin['results_dir'] = start_json['runinfo']['results_dir'] #shared folder for multilevel plugins
+        if (level == 'post'):
+            start_json['runinfo']['results_dir'] = start_json['runinfo']['results_dir'] + "/post" #provide separate folder to store 'post' runlevel output
             
         if (level != 'block') and ('block_jid' in plugin.keys() ):
             plugin['hold_jid'] += plugin['block_jid']                                      
@@ -83,10 +85,9 @@ def runPlugin(plugin, start_json, level = 'default', pluginserver = None, retrie
                 while len(jobIds) > 0:
                     for j in jobIds:
                         status = pluginserver.pluginStatus(j)
-                        if ('queued' in status) or ('on_hold' in status):
-                          time.sleep(5)                    
-                        else:
-                          jobIds.remove(j)                    
+                        if ('queued' not in status) and ('on_hold' not in status):
+                            jobIds.remove(j)
+                    time.sleep(5)
             
         # launch plugin
         jid = callPluginXMLRPC(start_json, pluginserver, retries)

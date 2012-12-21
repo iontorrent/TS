@@ -244,9 +244,17 @@ int main ( int argc, char *argv[] )
   sprintf ( cmd, "cp -v %s/*.txt %s", expPath, destPath );
   assert ( system ( cmd ) == 0 );
   // Copy lsrowimage.txt file
-  sprintf ( cmd, "cp -v %s/lsrowimage.dat %s", expPath, destPath );
-  if(system ( cmd ) == 1)
-    fprintf (stdout, "No lsrowimage.dat file found\n");
+  char *filesToMove[] = {
+    "lsrowimage.dat",
+    "gainimage.dat",
+    "reimage.dat",
+    "rmsimage.dat"
+  };
+  for(int iFile=0; iFile < 4; iFile++) {
+    sprintf ( cmd, "cp -v %s/%s %s", expPath, filesToMove[iFile], destPath);
+    if(system ( cmd ) == 1)
+      fprintf (stdout, "No %s file found\n",filesToMove[iFile]);
+  }
 
   while ( mode < 2 ) {
     if ( mode == 0 ) {

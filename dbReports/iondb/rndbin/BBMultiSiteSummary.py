@@ -340,7 +340,9 @@ if __name__=="__main__":
     metricRecords.append(IonStats_Q20)
     IonStats_Q47 = MetricRecord('q47_longest_alignment', 5, '9')
     metricRecords.append(IonStats_Q47)
-    metricRecords.append(MetricRecord('q17_mapped_bases', 5, '9'))
+    metricRecords.append(MetricRecord('q7_mapped_bases', 10, '9'))
+    metricRecords.append(MetricRecord('q10_mapped_bases', 10, '9'))
+    metricRecords.append(MetricRecord('q17_mapped_bases', 10, '9'))
     metricRecords.append(MetricRecord('q17_mean_alignment_length', 10, '9'))
     snr_stats = MetricRecord('sysSNR', 10, '9')
     snr_stats.floatval = True

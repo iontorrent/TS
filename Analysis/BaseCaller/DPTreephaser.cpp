@@ -14,15 +14,15 @@
 DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order)
   : flow_order_(flow_order)
 {
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 8; i++) {
     transition_base_[i].resize(flow_order_.num_flows());
     transition_flow_[i].resize(flow_order_.num_flows());
   }
   path_.resize(kNumPaths);
   for (int p = 0; p < kNumPaths; ++p) {
     path_[p].state.resize(flow_order_.num_flows());
-    path_[p].solution.resize(flow_order_.num_flows());
     path_[p].prediction.resize(flow_order_.num_flows());
+    path_[p].sequence.reserve(2*flow_order_.num_flows());
   }
 }
 
@@ -30,28 +30,30 @@ DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order)
 
 void DPTreephaser::SetModelParameters(double carry_forward_rate, double incomplete_extension_rate, double droop_rate)
 {
-  double nuc_avaliability[4] = { 0, 0, 0, 0 };
+
+  double nuc_avaliability[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
   for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
-    nuc_avaliability[flow_order_.int_at(flow)] = 1;
-    for (int nuc = 0; nuc < 4; nuc++) {
+    nuc_avaliability[flow_order_[flow]&7] = 1;
+    for (int nuc = 0; nuc < 8; nuc++) {
       transition_base_[nuc][flow] = nuc_avaliability[nuc] * (1-droop_rate) * (1-incomplete_extension_rate);
       transition_flow_[nuc][flow] = (1-nuc_avaliability[nuc]) + nuc_avaliability[nuc] * (1-droop_rate) * incomplete_extension_rate;
       nuc_avaliability[nuc] *= carry_forward_rate;
     }
   }
+
 }
 
-//-------------------------------------------------------------------------
 
+//-------------------------------------------------------------------------
 
 void BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows)
 {
   raw_measurements.resize(num_flows);
   normalized_measurements.resize(num_flows);
-  solution.assign(num_flows, 0);
   prediction.assign(num_flows, 0);
   additive_correction.assign(num_flows, 0);
   multiplicative_correction.assign(num_flows, 1.0);
+  sequence.reserve(2*num_flows);
 
   float onemer_sum = 0.0;
   float onemer_count = 0.0;
@@ -71,7 +73,6 @@ void BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_f
     normalized_measurements[flow] = raw_measurements[flow];
   }
 }
-
 
 
 // ----------------------------------------------------------------------
@@ -165,8 +166,7 @@ void DPTreephaser::WindowedNormalize(BasecallerRead& read, int num_steps, int wi
   }
 }
 
-
-
+//-------------------------------------------------------------------------
 // New improved normalization strategy
 void DPTreephaser::NormalizeAndSolve3(BasecallerRead& well, int max_flows)
 {
@@ -184,7 +184,6 @@ void DPTreephaser::NormalizeAndSolve3(BasecallerRead& well, int max_flows)
 }
 
 
-
 // Old normalization, but uses BasecallerRead object
 void DPTreephaser::NormalizeAndSolve4(BasecallerRead& well, int max_flows)
 {
@@ -197,8 +196,6 @@ void DPTreephaser::NormalizeAndSolve4(BasecallerRead& well, int max_flows)
   }
   Solve(well, max_flows);
 }
-
-
 
 
 // Sliding window adaptive normalization
@@ -219,20 +216,18 @@ void DPTreephaser::NormalizeAndSolve5(BasecallerRead& well, int max_flows)
 }
 
 
-
+//-------------------------------------------------------------------------
 
 float DPTreephaser::Normalize(BasecallerRead& read, int start_flow, int end_flow) const
 {
-  const static float kHomopolymerWeight[5] = { 0, 1, 0.8, 0.64, 0.37 };
-
   float xy = 0;
   float yy = 0;
   int num_flows = read.raw_measurements.size();
 
   for (int flow = start_flow; flow < end_flow and flow < num_flows; ++flow) {
-    if (read.solution[flow] > 0 and read.solution[flow] < 5) {
-      xy += kHomopolymerWeight[(int)read.solution[flow]] * read.prediction[flow] * read.raw_measurements[flow];
-      yy += kHomopolymerWeight[(int)read.solution[flow]] * read.prediction[flow] * read.prediction[flow];
+    if (read.prediction[flow] > 0.5 and read.prediction[flow] <= 4) {
+      xy += read.raw_measurements[flow];
+      yy += read.prediction[flow];
     }
   }
 
@@ -250,28 +245,36 @@ float DPTreephaser::Normalize(BasecallerRead& read, int start_flow, int end_flow
 }
 
 
+
 //-------------------------------------------------------------------------
 
 void DPTreephaser::InitializeState(TreephaserPath *state) const
 {
   state->flow = 0;
-  //state->state.resize(flow_order_.num_flows()); // Superfluous
   state->state[0] = 1;
   state->window_start = 0;
   state->window_end = 1;
   state->prediction.assign(flow_order_.num_flows(), 0);
-  state->solution.assign(flow_order_.num_flows(), 0);
+  state->sequence.clear();
+  state->sequence.reserve(2*flow_order_.num_flows());
+  state->last_hp = 0;
 }
 
 
-void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *parent, int nuc, int max_flow) const
+//-------------------------------------------------------------------------
+
+void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *parent, char nuc, int max_flow) const
 {
   assert (child != parent);
 
   // Advance flow
   child->flow = parent->flow;
-  while (child->flow < max_flow and flow_order_.int_at(child->flow) != nuc)
+  while (child->flow < max_flow and flow_order_[child->flow] != nuc)
     child->flow++;
+  if (child->flow == parent->flow)
+    child->last_hp = parent->last_hp + 1;
+  else
+    child->last_hp = 1;
 
   // Initialize window
   child->window_start = parent->window_start;
@@ -286,14 +289,14 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
       // State progression according to phasing model
       if (flow < parent->window_end)
         alive += parent->state[flow];
-      child->state[flow] = alive * transition_base_[nuc][flow];
-      alive *= transition_flow_[nuc][flow];
+      child->state[flow] = alive * transition_base_[nuc&7][flow];
+      alive *= transition_flow_[nuc&7][flow];
 
       // Window maintenance
-      if (flow == child->window_start and (child->state[flow] < kStateWindowCutoff)) // or flow < child->flow-60))
+      if (flow == child->window_start and child->state[flow] < kStateWindowCutoff)
         child->window_start++;
 
-      if (flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff) // and flow < child->flow+60)
+      if (flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff)
         child->window_end++;
     }
 
@@ -305,18 +308,26 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
         (child->window_end-child->window_start)*sizeof(float));
   }
 
-  for (int flow = parent->window_start; flow < child->window_end; ++flow)
+  for (int flow = parent->window_start; flow < parent->window_end; ++flow)
     child->prediction[flow] = parent->prediction[flow] + child->state[flow];
+  for (int flow = parent->window_end; flow < child->window_end; ++flow)
+    child->prediction[flow] = child->state[flow];
 }
 
-void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, int nuc, int max_flow) const
+//-------------------------------------------------------------------------
+
+void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_flow) const
 {
   // Advance in-phase flow
   int old_flow = state->flow;
   int old_window_start = state->window_start;
   int old_window_end = state->window_end;
-  while (state->flow < max_flow and flow_order_.int_at(state->flow) != nuc)
+  while (state->flow < max_flow and flow_order_[state->flow] != nuc)
     state->flow++;
+  if (old_flow == state->flow)
+    state->last_hp++;
+  else
+    state->last_hp = 1;
 
   if (old_flow != state->flow or old_flow == 0) {
 
@@ -327,14 +338,14 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, int nuc, int max_f
       // State progression according to phasing model
       if (flow < old_window_end)
         alive += state->state[flow];
-      state->state[flow] = alive * transition_base_[nuc][flow];
-      alive *= transition_flow_[nuc][flow];
+      state->state[flow] = alive * transition_base_[nuc&7][flow];
+      alive *= transition_flow_[nuc&7][flow];
 
       // Window maintenance
-      if (flow == state->window_start and (state->state[flow] < kStateWindowCutoff)) // or flow < state->flow-60))
+      if (flow == state->window_start and state->state[flow] < kStateWindowCutoff)
         state->window_start++;
 
-      if (flow == state->window_end-1 and state->window_end < max_flow and alive > kStateWindowCutoff) // and flow < state->flow+60)
+      if (flow == state->window_end-1 and state->window_end < max_flow and alive > kStateWindowCutoff)
         state->window_end++;
     }
   }
@@ -345,26 +356,57 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, int nuc, int max_f
 }
 
 
+//-------------------------------------------------------------------------
 
 void DPTreephaser::Simulate(BasecallerRead& data, int max_flows)
 {
-  max_flows = min(max_flows,flow_order_.num_flows());
   InitializeState(&path_[0]);
 
-  for (int solution_flow = 0; solution_flow < max_flows; ++solution_flow)
-    for (int hp = 0; hp < data.solution[solution_flow]; ++hp)
-      AdvanceStateInPlace(&path_[0], flow_order_.int_at(solution_flow), flow_order_.num_flows());
+  for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end() and path_[0].flow < max_flows; ++nuc)
+    AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
 
   data.prediction.swap(path_[0].prediction);
 }
 
 
+//-------------------------------------------------------------------------
 
-// Solve3 - main tree search procedure that determines the base sequence.
-// Another temporary version, uses external class for storing read data
+void DPTreephaser::QueryState(BasecallerRead& data, vector<float>& query_state, int& current_hp, int max_flows, int query_flow)
+{
+  // xxx See if max_flows is really necessary or if it should be replaced with num_flows()
+  // xxx How about a query_base?
+  max_flows = min(max_flows,flow_order_.num_flows());
+  assert(query_flow < max_flows);
+  InitializeState(&path_[0]);
+  query_state.assign(max_flows,0);
+  char myNuc = 'N';
+
+  for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end() and path_[0].flow <= query_flow; ++nuc) {
+    if (path_[0].flow == query_flow and myNuc != 'N' and myNuc != *nuc)
+      break;
+    AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
+    if (path_[0].flow == query_flow and myNuc == 'N')
+      myNuc = *nuc;
+  }
+
+  // Catching cases where a query_flow without incorporation or query_flow after end of sequence was given
+  int until_flow = min(path_[0].window_end, max_flows);
+  if (path_[0].flow == query_flow) {
+    current_hp = path_[0].last_hp;
+    for (int flow = path_[0].window_start; flow < until_flow; ++flow)
+      query_state[flow] = path_[0].state[flow];
+  }
+  else
+    current_hp = 0;
+}
+
+
+//-------------------------------------------------------------------------
 
 void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 {
+  static const char nuc_int_to_char[5] = "ACGT";
+
   assert(max_flows <= flow_order_.num_flows());
 
   // Initialize stack: just one root path
@@ -377,6 +419,7 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
   path_[0].residual_left_of_window = 0;
   path_[0].dot_counter = 0;
   path_[0].in_use = true;
+  //path_[0].sequence.reserve(2*flow_order_.num_flows()); //Done in InitializeState
 
   int space_on_stack = kNumPaths - 1;
   float sum_of_squares_upper_bound = 1e20;  //max_flows; // Squared distance of solution to measurements
@@ -387,19 +430,13 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
     // - If it turns out that solving was finished before restart_flows, simply exit without any changes to the read.
 
     restart_flows = min(restart_flows, flow_order_.num_flows());
-    int last_incorporating_flow = 0;
 
-    for (int solution_flow = 0; solution_flow < restart_flows; ++solution_flow) {
-
-      path_[0].solution[solution_flow] = read.solution[solution_flow];
-
-      for (int hp = 0; hp < path_[0].solution[solution_flow]; ++hp) {
-        AdvanceStateInPlace(&path_[0], flow_order_.int_at(solution_flow), max_flows);
-        last_incorporating_flow = solution_flow;
-      }
+    for (vector<char>::iterator nuc = read.sequence.begin(); nuc != read.sequence.end() and path_[0].flow < restart_flows; ++nuc) {
+      AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
+      path_[0].sequence.push_back(*nuc);
     }
 
-    if (last_incorporating_flow < restart_flows-10) { // This read ended before restartFlows. No point resolving it.
+    if (path_[0].flow < restart_flows-10) { // This read ended before restart_flows. No point resolving it.
       read.prediction.swap(path_[0].prediction);
       return;
     }
@@ -411,7 +448,9 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
   }
 
   // Initializing variables
-  read.solution.assign(flow_order_.num_flows(), 0);
+  //read.solution.assign(flow_order_.num_flows(), 0);
+  read.sequence.clear();
+  read.sequence.reserve(2*flow_order_.num_flows());
   read.prediction.assign(flow_order_.num_flows(), 0);
 
   // Main loop to select / expand / delete paths
@@ -480,6 +519,7 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
     if (!parent)
       break;
 
+
     // ------------------------------------------
     // Step 3: Construct four expanded paths and calculate feasibility metrics
     assert (space_on_stack >= 4);
@@ -496,7 +536,7 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 
       TreephaserPath *child = children[nuc];
 
-      AdvanceState(child, parent, nuc, max_flows);
+      AdvanceState(child, parent, nuc_int_to_char[nuc], max_flows);
 
       // Apply easy termination rules
 
@@ -505,8 +545,12 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
         continue;
       }
 
-      int currentHP = parent->solution[child->flow];
-      if (currentHP == kMaxHP) {
+      if (child->last_hp > kMaxHP) {
+        penalty[nuc] = 25; // Mark for deletion
+        continue;
+      }
+
+      if ((int)parent->sequence.size() >= (2 * flow_order_.num_flows() - 10)) {
         penalty[nuc] = 25; // Mark for deletion
         continue;
       }
@@ -539,7 +583,8 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
       penalty[nuc] = penalty1 + kNegativeMultiplier * penaltyN;
       penalty1 += penaltyN;
 
-      child->per_flow_metric = (child->path_metric + 0.5 * penalty1) / child->flow;
+      if (child->flow>0)
+        child->per_flow_metric = (child->path_metric + 0.5 * penalty1) / child->flow;
 
     } //looping over nucs
 
@@ -582,16 +627,14 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
       space_on_stack--;
 
       // Fill out the remaining portion of the prediction
-//      for (int flow = 0; flow < parent->window_start; ++flow)
-//        child->prediction[flow] = parent->prediction[flow];
       memcpy(&child->prediction[0], &parent->prediction[0], parent->window_start*sizeof(float));
 
       for (int flow = child->window_end; flow < max_flows; ++flow)
         child->prediction[flow] = 0;
 
       // Fill out the solution
-      child->solution = parent->solution;
-      child->solution[child->flow]++;
+      child->sequence = parent->sequence;
+      child->sequence.push_back(nuc_int_to_char[nuc]);
     }
 
     // ------------------------------------------
@@ -607,7 +650,7 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
     // Updating best path
     if (sum_of_squares < sum_of_squares_upper_bound) {
       read.prediction.swap(parent->prediction);
-      read.solution.swap(parent->solution);
+      read.sequence.swap(parent->sequence);
       sum_of_squares_upper_bound = sum_of_squares;
     }
 
@@ -618,56 +661,60 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 }
 
 
-
 // ------------------------------------------------------------------------
 // Compute quality metrics
-int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
+
+void  DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 {
+  static const char nuc_int_to_char[5] = "ACGT";
 
   read.state_inphase.assign(flow_order_.num_flows(), 1);
   read.state_total.assign(flow_order_.num_flows(), 1);
 
-  int num_bases = 0;
-  for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
-    num_bases += read.solution[flow];
+  if (read.sequence.empty())
+    return;
 
-  if (num_bases == 0)
-    return 0;
-
-  read.penalty_mismatch.assign(num_bases, 0);
-  read.penalty_residual.assign(num_bases, 0);
-
-  int max_flows = flow_order_.num_flows();
+  read.penalty_mismatch.assign(read.sequence.size(), 0);
+  read.penalty_residual.assign(read.sequence.size(), 0);
 
   TreephaserPath *parent = &path_[0];
   TreephaserPath *children[4] = { &path_[1], &path_[2], &path_[3], &path_[4] };
 
   InitializeState(parent);
 
-  int base = 0;
   float recent_state_inphase = 1;
   float recent_state_total = 1;
 
   // main loop for base calling
-  for (int solution_flow = 0; solution_flow < max_flows; ++solution_flow) {
-    for (int hp = 0; hp < read.solution[solution_flow]; ++hp) {
+  for (int solution_flow = 0, base = 0; solution_flow < flow_order_.num_flows(); ++solution_flow) {
+    for (; base < (int)read.sequence.size() and read.sequence[base] == flow_order_[solution_flow]; ++base) {
 
       float penalty[4] = { 0, 0, 0, 0 };
+
+      int called_nuc = 0;
 
       for (int nuc = 0; nuc < 4; nuc++) {
 
         TreephaserPath *child = children[nuc];
 
-        AdvanceState(child, parent, nuc, max_flows);
+        AdvanceState(child, parent, nuc_int_to_char[nuc], flow_order_.num_flows());
+
+        if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
+          called_nuc = nuc;
 
         // Apply easy termination rules
 
-        if (child->flow >= max_flows) {
+        if (child->flow >= flow_order_.num_flows()) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
 
-        if (parent->solution[child->flow] >= kMaxHP) {
+        if (parent->last_hp >= kMaxHP) {
+          penalty[nuc] = 25; // Mark for deletion
+          continue;
+        }
+
+        if ((int)parent->sequence.size() >= (2 * flow_order_.num_flows() - 10)) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
@@ -681,7 +728,6 @@ int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 
 
       // find current incorporating base
-      int called_nuc = flow_order_.int_at(solution_flow);
       assert(children[called_nuc]->flow == solution_flow);
 
       recent_state_inphase = children[called_nuc]->state[solution_flow];
@@ -707,7 +753,7 @@ int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
       for (int flow = 0; flow < parent->window_start; ++flow)
         children[called_nuc]->prediction[flow] = parent->prediction[flow];
 
-      for (int flow = children[called_nuc]->window_end; flow < max_flows; ++flow)
+      for (int flow = children[called_nuc]->window_end; flow < flow_order_.num_flows(); ++flow)
         children[called_nuc]->prediction[flow] = 0;
 
       // Called state is the starting point for next base
@@ -715,15 +761,16 @@ int DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
       parent = children[called_nuc];
       children[called_nuc] = swap;
 
-      base++;
     }
 
     read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
     read.state_total[solution_flow] = max(recent_state_total, 0.01f);
   }
 
-  return num_bases;
+  read.prediction.swap(parent->prediction);
+
 }
+
 
 
 

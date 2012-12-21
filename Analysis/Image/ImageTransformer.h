@@ -20,6 +20,7 @@
 #include <string>
 
   #define DEFAULT_VECT_LEN  7
+class SynchDat;
   
 // Clarify current state of image transformation available globally for all image loading
 // this is state that needs to be re-entrant
@@ -63,6 +64,7 @@ public:
 
   static void GainCalculationFromBeadfind(Mask *mask, RawImage *raw);
   static void GainCorrectImage(RawImage *raw);
+  static void GainCorrectImage(SynchDat *sdat);
     static float getPixelGain(int row,int col,int img_cols)
   {
       return(gain_correction[row*img_cols+ col]);

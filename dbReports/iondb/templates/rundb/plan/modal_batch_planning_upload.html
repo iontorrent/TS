@@ -1,0 +1,45 @@
+<div id="modal_batch_planning_upload" title="" class="modal modal-900 hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3 id="modal_batch_plan_title">Upload Plan Runs</h3>
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages" class="alert alert-error hide"></div>
+        <form class="form-horizontal" id="modalBatchPlanningUpload" method="POST" action="{% url save_uploaded_plans_for_template %}" enctype="multipart/form-data">
+            <fieldset>
+                <div class="control-group">
+                    <label for="postedfile" class="control-label">CSV File for Plans</label>
+                    <div class="controls">
+                        <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
+                            <br>
+                            One row for each plan.
+                            <br>
+                            Tips:
+                            <br>
+                            (1) Plan values not included in the CSV file will default to values of the template you are planning from.
+                            <br>
+                            (2) If you want to associate a Plan with multiple Plugins or Projects, use ";" as the separator (e.g., My Project1; My Project2)
+                        </p>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+
+        <div class="bump">
+            <div id="loadingstatus"></div>
+            <div id="return"></div>
+            <div id="error"></div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a href="#" id="submitUpload" class="btn btn-primary submitUpload" >Upload CSV for batch planning</a>
+    </div>
+</div>
+
+<script type="text/javascript">
+TB.plan.batchupload.ready("{% url planned %}");</script>
+</div>
+

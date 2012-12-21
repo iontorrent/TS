@@ -29,6 +29,7 @@ class ImageControlOpts{
   char tikSmoothingInternal[32];  // parameter for internal smoothing matrix (APB)
   bool doSdat;
   int total_timeout; // optional arg for image class, when set will cause the image class to wait this many seconds before giving up
+  int threaded_file_access; // read DAT files for signal processing in image processing threads
   std::string sdatSuffix;
     char *acqPrefix;
     int has_wash_flow;

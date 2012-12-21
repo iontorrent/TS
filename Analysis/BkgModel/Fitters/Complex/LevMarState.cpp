@@ -37,7 +37,7 @@ LevMarBeadAssistant::LevMarBeadAssistant()
   skip_beads = false;
   well_mask = 0;
   reg_mask = 0;
-  for (int i=0; i<MAX_HPLEN; i++)
+  for (int i=0; i<MAX_POISSON_TABLE_COL; i++)
     non_integer_penalty[i] = 0.0f;
   
   shrink_factor = 0.0f;
@@ -185,10 +185,10 @@ LevMarBeadAssistant::~LevMarBeadAssistant()
 
 void LevMarBeadAssistant::SetNonIntegerPenalty (float *clonal_call_scale, float clonal_call_penalty, int len)
 {
-  int tlen = MAX_HPLEN-1;
+  int tlen = MAX_POISSON_TABLE_COL;
   if (len<tlen)
     tlen = len;
-  for (int i=0; i<=len; i++)
+  for (int i=0; i<tlen; i++)
   {
     non_integer_penalty[i] = clonal_call_scale[i]*clonal_call_penalty;
   }

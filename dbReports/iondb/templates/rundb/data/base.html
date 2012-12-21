@@ -11,16 +11,17 @@
         <div id="gear" class="gear-inactive"><b class="caret"></b></div>
         </a>
         <ul class="dropdown-menu">
-            <li><a href="{% url configure_about %}">About</a></li>          
+            <li><a href="{% url configure_about %}">About</a></li>
             <li><a href="{% url configure_references %}">References</a></li>
             <li><a href="{% url configure_services %}">Services</a></li>
-            <li><a href="{% url configure_plugins %}">Plugins</a></li>          
-            <li><a href="{% url configure_configure %}">Configure</a></li>  
+            <li><a href="{% url configure_plugins %}">Plugins</a></li>
+            <li><a href="{% url configure_configure %}">Configure</a></li>
+            <li><a href="{% url configure_account %}">Accounts</a></li>
         </ul>
     </li>
 </ul>
 {% endblock nav %}
 {% block sub-nav %}
-    <li><a href="{% url data %}">Completed Runs & Results</a></li>
-    <li class="active"><a href="{% url projects %}">Projects</a></li>               
+<li><a href="{% url data %}">Completed Runs & Results</a></li>
+<li class="active"><a href="{% url projects %}">Projects</a></li>
 {% endblock sub-nav %}

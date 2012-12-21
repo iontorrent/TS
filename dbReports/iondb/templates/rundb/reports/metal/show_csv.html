@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+</head>
+<body>
+{% spaceless %}
+    <table class="table table-condensed" style="width: auto; min-width: 200px;">
+        {% for row in table_rows %}
+        <tr>
+            {% for col in row %}
+            <td>{{col}}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </table>
+{% endspaceless %}
+</body>
+</html

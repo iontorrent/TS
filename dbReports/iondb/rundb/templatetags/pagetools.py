@@ -109,7 +109,6 @@ def raw(parser, token):
 
 @register.filter(name='bracket')
 def bracket(value, arg):
-    arg = arg.lower()
     try:
         return value[arg]
     except:

@@ -96,17 +96,9 @@ void *MultiFlowFitGPUWorker(void *arg)
 void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item) {
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
 
-  int iflow = info->flow % info->bkgObj->region_data->my_flow.numfb;
-
   if (info->doingSdat)
   {
     info->bkgObj->ProcessImage (* (info->sdat), info->flow);
-    EmptyTrace *emptytrace = info->bkgObj->region_data->emptytrace;
-    if (emptytrace != NULL) {
-      RegionalizedData *d = info->bkgObj->region_data;
-      //emptytrace->RezeroCompressedReference (d->my_trace, iflow);
-      emptytrace->RezeroCompressedReference (d->my_trace.time_cp, GetTypicalMidNucTime (& (d->my_regions.rp.nuc_shape)), d->my_regions.rp.nuc_shape.sigma, iflow);
-    }
   }
   else
   {
@@ -156,8 +148,6 @@ void DoInitialBlockOfFlowsRemainingRegionalFit(WorkerInfoQueueItem &item)
     info->pq->GetCpuQueue()->PutItem(item);
 }
 
-
-
 void DoPostFitProcessing(WorkerInfoQueueItem &item) {
   //printf("=====> Post Processing job on CPU\n");
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
@@ -186,14 +176,15 @@ void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item)
 //@TODO: get rid of >control< options on initializer that don't affect allocation or initial computation
 // Sweep all of those into a flag-setting operation across all the fitters, or send some of then to global-defaults
   SignalProcessingMasterFitter *local_fitter = new SignalProcessingMasterFitter (info->sliced_chip[r], *info->global_defaults, info->results_folder, info->maskPtr,
-      info->pinnedInFlow, info->rawWells, &info->regions[r], *info->sample, *info->sep_t0_estimate,
-      reg_debug_enable, info->inception_state->loc_context.rows, info->inception_state->loc_context.cols,
-      info->maxFrames,info->uncompFrames,info->timestamps, info->emptyTraceTracker,
-      info->t_sigma,
-      info->t_mid_nuc,
-      info->seqList,
-      info->numSeqListItems,
-      info->restart);
+                                                                                 info->pinnedInFlow, info->rawWells, &info->regions[r], *info->sample, *info->sep_t0_estimate,
+                                                                                 reg_debug_enable, info->inception_state->loc_context.rows, info->inception_state->loc_context.cols,
+                                                                                 info->maxFrames,info->uncompFrames,info->timestamps, info->emptyTraceTracker,
+                                                                                 info->t_sigma,
+                                                                                 info->t_mid_nuc,
+                                                                                 info->seqList,
+                                                                                 info->numSeqListItems,
+                                                                                 info->restart,
+                                                                                 info->washout_flow);
 
   local_fitter->SetPoissonCache (info->math_poiss);
   local_fitter->SetComputeControlFlags (info->inception_state->bkg_control.enableXtalkCorrection);

@@ -26,6 +26,9 @@ class BeadfindControlOpts{
     int noduds;
     int beadfindUseSepRef; // should we just use the reference wells the separator uses or go for expanded set?
     int bfOutputDebug;
+    float bfMult;
+    bool sdAsBf;
+    bool gainCorrection;
     std::string beadfindType;
     std::string bfType; // signal or buffer
     std::string bfDat;

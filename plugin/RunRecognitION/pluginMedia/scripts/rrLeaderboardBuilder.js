@@ -23,7 +23,7 @@ function initializeLeaderboard(leagueId, divId, rundata, lbPositionDivId) {
         }, 
         error: function(XHR, textStatus, errorThrown){
         	if (textStatus != 'success') {
-        		$(divId).html("<div style='background: #ffffff;'>We are unable to connect to the leaderboard at this time.</div>");
+        		$(divId).html("<div style='background: #ffffff;'>We are unable to connect to the leaderboard at this time. You can still generare a .iondb file and upload it manually to Run RecongnION.</div>");
         	}
         },
         success : function(leagues) {
@@ -59,6 +59,9 @@ function getAddLeaderboard(parentJqRef, league, rundata, lbPositionDivId){
 	                	parentJqRef.append(holder);
 	                	getfillInPosition(leaderboard, rundata, lbPositionDivId);
 	              });
+    		},
+    		error : function(data) {
+    		    //noop, nothing we can do here.
     		}
     });
 }
@@ -189,7 +192,10 @@ function switchLargeLeaderboard(rrTemplateJqRef, parentLeague, leaderboardResour
         		
         		var topJqRef = $("#largeWidget" + parentLeague.chip_type + " #topPart" + parentLeague.chip_type);
         		setLargeLeaderboardSize(topJqRef, data);
-    		}
+    		},
+        error : function(data) {
+            //noop, nothing we can do here.
+        }
     });	
 }
 
@@ -207,6 +213,9 @@ function getfillInPosition(data, rundata, lbPositionDivId){
                 data: {name: data.metric_label},
                 success : function(field_def_data) {
                 		fillInPosition(data, rundata, lbPositionDivId, field_def_data);
+                },
+                error : function(data) {
+                    //noop, nothing we can do here.
                 }
         	});
     	}

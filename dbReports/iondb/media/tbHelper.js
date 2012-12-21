@@ -8,30 +8,6 @@ $(document).ready(function() {
 });
 */
 
-/**
-* @param {string|Object} dialogPanel jQuery selector for the panel
-* @param {string=} cancelButtonSelector jQuery selector for the cancel button.
-* The panel is used as the root element.
-* @param width the width in px of the dialog, or "auto". default is 800.
-*/
-function createDialog(dialogPanel, cancelButtonSelector, width) {
-	width = width || 800;
-	$(dialogPanel).dialog({
-		autoOpen: false,
-		modal: true,
-		width: width,
-		open: function(event, ui) {
-			$('.ui-dialog-titlebar-close').html('<span>CLOSE X</span>');
-		}
-	});
-	if (cancelButtonSelector != null) {
-		$(dialogPanel).dialog().find(cancelButtonSelector).click(function(e) {
-			$(dialogPanel).dialog('close');
-			return false;
-		});
-	}
-} 
-
 $(document).ready(function(){
 	if ($(".dynamic-navbar").length <= 0) return
 	

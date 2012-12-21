@@ -7,7 +7,7 @@ set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
 
 #custom ExternalProject_add with timeout feature
-IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.1)
+IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.2)
   SET(CMAKE_MODULE_PATH
     ${CMAKE_MODULE_PATH}
     ${ION_TS_EXTERNAL}/CMake

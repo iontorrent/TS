@@ -2,6 +2,9 @@
 #pre-process fastq files by filtering for base quality and then for length
 from __future__ import division
 from itertools import izip
+import subprocess
+from ion.utils import blockprocessing
+import traceback
 
 reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
 
@@ -47,7 +50,22 @@ def process_4line_block(four_lines,threshold,min_length):
  	    output_lines[3] = output_lines[3] + "\n"
         return ''.join(output_lines)
 
-def fastq_preproc(path_to_fastq_input,path_to_fastq_output,threshold, min_length):
+def bam2fastq(bam, fastq):
+
+    try:
+        com = blockprocessing.bam2fastq_command(bam,fastq)
+        ret = subprocess.call(com,shell=True)
+    except:
+        traceback.print_exc()
+
+    return False
+
+
+def fastq_preproc(path_to_bam_input,path_to_fastq_output,threshold, min_length):
+
+    path_to_fastq_input = 'tmp.fastq'
+    bam2fastq(path_to_bam_input, path_to_fastq_input)
+
     input_file = open(path_to_fastq_input,'r')
     output_file = open(path_to_fastq_output,'w')
     lines_from_input = []

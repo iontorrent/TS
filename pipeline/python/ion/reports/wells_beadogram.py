@@ -128,31 +128,48 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
     # Row 1: Loading
     loaded_wells = int(beadfind["bead wells"])
     empty_wells = available_wells - loaded_wells
-    loaded_percent = int(round(100.0 * float(loaded_wells) / float(available_wells)))
-    empty_percent = 100 - loaded_percent
+    if available_wells > 0:
+        loaded_percent = int(round(100.0 * float(loaded_wells) / float(available_wells)))
+        empty_percent = 100 - loaded_percent
+    else:
+        loaded_percent = 0.0
+        empty_percent = 0.0
     
     # Row 2: Enrichment
     enriched_wells = int(beadfind["live beads"])
     unenriched_wells = loaded_wells - enriched_wells
-    enriched_percent = int(round(100.0 * float(enriched_wells) / float(loaded_wells)))
-    unenriched_percent = 100 - enriched_percent
+    if loaded_wells > 0:
+        enriched_percent = int(round(100.0 * float(enriched_wells) / float(loaded_wells)))
+        unenriched_percent = 100 - enriched_percent
+    else:
+        enriched_percent = 0.0
+        unenriched_percent = 0.0
 
     # Row 3: Clonality
     polyclonal_wells = int(basecaller["Filtering"]["LibraryReport"]["filtered_polyclonal"])
     clonal_wells = enriched_wells - polyclonal_wells
-    clonal_percent = int(round(100.0 * float(clonal_wells) / float(enriched_wells)))
-    polyclonal_percent = 100 - clonal_percent
+    if enriched_wells > 0:
+        clonal_percent = int(round(100.0 * float(clonal_wells) / float(enriched_wells)))
+        polyclonal_percent = 100 - clonal_percent
+    else:
+        clonal_percent = 0.0
+        polyclonal_percent = 0.0
 
     # Row 4: Filtering
     final_library_wells = int(basecaller["Filtering"]["LibraryReport"]["final_library_reads"])
     final_tf_wells = int(basecaller["Filtering"]["ReadDetails"]["tf"]["valid"])
     dimer_wells = int(basecaller["Filtering"]["LibraryReport"]["filtered_primer_dimer"])
     low_quality_wells = clonal_wells - final_library_wells - final_tf_wells - dimer_wells
-    final_library_percent = int(round(100.0 * float(final_library_wells) / float(clonal_wells)))
-    final_tf_percent = int(round(100.0 * float(final_tf_wells) / float(clonal_wells)))
-    dimer_percent = int(round(100.0 * float(dimer_wells) / float(clonal_wells)))
-    low_quality_percent = 100 - final_library_percent - final_tf_percent - dimer_percent
-    
+    if clonal_wells > 0:
+        final_library_percent = int(round(100.0 * float(final_library_wells) / float(clonal_wells)))
+        final_tf_percent = int(round(100.0 * float(final_tf_wells) / float(clonal_wells)))
+        dimer_percent = int(round(100.0 * float(dimer_wells) / float(clonal_wells)))
+        low_quality_percent = 100 - final_library_percent - final_tf_percent - dimer_percent
+    else:
+        final_library_percent = 0.0
+        final_tf_percent = 0.0
+        dimer_percent = 0.0
+        low_quality_percent = 0.0
 
     color_blue = "#2D4782"
     color_gray = "#808080"

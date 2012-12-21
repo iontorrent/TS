@@ -1,23 +1,8 @@
-<div id="modal_report_log" title="" class="modal hide">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		<h1>Report history log</h1>
-	</div>
-	<div class="modal-body">
-	<div id="modal-error-messages"></div>
-	<br />
-	====================================================
-	{% for s in log %}
-	 {% for st in s %}<li>{{ st }}</li>{% endfor %}
-	 ====================================================
-	{% endfor %}
-	</div>
-	<div class="modal-footer">
-		<a href="#" class="btn" data-dismiss="modal">Close</a>
-	</div>    
-	<script>
-		$('#modal_report_log').on('hidden', function() {
-			$('body #modal_report_log').remove();
-		});
-	</script>
-</div>
+<div id="modal-error-messages"></div>
+<br />
+{% for s in log %}
+<ul class="unstyled">
+    {% for st in s %}<li>{{ st }}</li>{% endfor %}
+</ul>
+{% if forloop.revcounter != 1 %}<hr>{% endif %}
+{% endfor %}

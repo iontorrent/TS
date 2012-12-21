@@ -24,7 +24,7 @@ int ImageSpecClass::LeadTimeForChipSize()
     if ( ( rows * cols ) > 2000000 )
       return ( 10 ); // 316
     else
-      return ( 20 );
+      return ( 21 );
   }
   else
   {
@@ -33,7 +33,7 @@ int ImageSpecClass::LeadTimeForChipSize()
     if ( ( rows * cols ) > 2000000 )
       return ( 4 ); // 316
     else
-      return ( 20 );
+      return ( 21 );
   }
 }
 

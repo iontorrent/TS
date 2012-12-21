@@ -22,7 +22,6 @@
 #include "Image.h"
 #include "SampleStats.h"
 
-#include "Histogram.h"
 #include "Utils.h"
 #include "deInterlace.h"
 #include "LinuxCompat.h"

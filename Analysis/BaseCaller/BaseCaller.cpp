@@ -18,21 +18,22 @@
 #include "json/json.h"
 #include "MaskSample.h"
 #include "LinuxCompat.h"
-#include "Stats.h"
 #include "IonErr.h"
-#include "PhaseEstimator.h"
-#include "BaseCallerFilters.h"
 #include "OptArgs.h"
 #include "IonVersion.h"
 #include "file-io/ion_util.h"
 #include "Utils.h"
 #include "RawWells.h"
-#include "PerBaseQual.h"
-#include "BaseCallerMetricSaver.h"
-#include "TreephaserSSE.h"
-#include "BarcodeClassifier.h"
+
 #include "BarcodeDatasets.h"
+#include "BarcodeClassifier.h"
 #include "OrderedDatasetWriter.h"
+#include "TreephaserSSE.h"
+#include "PhaseEstimator.h"
+#include "PerBaseQual.h"
+#include "BaseCallerFilters.h"
+#include "BaseCallerMetricSaver.h"
+#include "BaseCallerRecalibration.h"
 
 #include "dbgmem.h"
 
@@ -55,9 +56,11 @@ struct BaseCallerContext {
   ion::FlowOrder            flow_order;             //!< Flow order object, also stores number of flows
   vector<KeySequence>       keys;                   //!< Info about key sequences in use by library and TFs
   string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
-  string                    output_directory;
+  string                    output_directory;       //!< Root directory for all output files
   int                       block_row_offset;       //!< Offset added to read names
   int                       block_col_offset;       //!< Offset added to read names
+  int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
+  bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
 
   // Important outside entities accessed by BaseCaller
   Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
@@ -67,6 +70,7 @@ struct BaseCallerContext {
   vector<int>               class_map;              //!< What to do with each well
   BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
   BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
+  BaseCallerRecalibration   recalibration;          //!< Base call and signal adjustment algorithm
 
   // Threaded processing
   pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
@@ -75,22 +79,15 @@ struct BaseCallerContext {
   int                       next_begin_y;           //!< Starting Y coordinate of next region
 
   // Basecalling results saved here
-  //OrderedRegionSFFWriter    lib_sff;                //!< Writer object for library SFF
-  OrderedDatasetWriter      lib_sff;
-  OrderedDatasetWriter      tf_sff;                 //!< Writer object for test fragment SFF
-  set<unsigned int>         unfiltered_set;         //!< Indicates which wells are to be saved to unfiltered SFF
-  OrderedDatasetWriter      unfiltered_sff;         //!< Writer object for unfiltered SFF for a random subset of library reads
-  OrderedDatasetWriter      unfiltered_trimmed_sff; //!< Writer object for unfiltered trimmed SFF for a random subset of library reads
-  RawWells                  *residual_file;         //!< Cafie residual writer object. Can be NULL if residual file not needed.
-  FILE                      *well_stat_file;        //!< WellStats.txt file handle. Can be NULL if well stats file not needed.
+  OrderedDatasetWriter      lib_writer;                 //!< Writer object for library BAMs
+  OrderedDatasetWriter      tf_writer;                  //!< Writer object for test fragment BAMs
+  set<unsigned int>         unfiltered_set;             //!< Indicates which wells are to be saved to unfiltered BAMs
+  OrderedDatasetWriter      unfiltered_writer;          //!< Writer object for unfiltered BAMs for a random subset of library reads
+  OrderedDatasetWriter      unfiltered_trimmed_writer;  //!< Writer object for unfiltered trimmed BAMs for a random subset of library reads
 };
 
 
 void * BasecallerWorker(void *input);
-FILE * OpenWellStatFile(const string& well_stat_file);
-void WriteWellStatFileEntry(FILE *well_stat_file, const KeySequence& key,
-    SFFEntry & sff_entry, BasecallerRead & read, const vector<float> & residual,
-    int x, int y, double cf, double ie, double dr, bool clonal);
 
 
 
@@ -164,16 +161,19 @@ void PrintHelp()
   printf ("     --region-size           INTxINT    wells processing chunk size [50x50]\n");
   printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
   printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
-  printf ("     --cafie-residuals       on/off     generate cafie residuals file [off]\n");
-  printf ("     --well-stat-file        on/off     generate wells stats file [off]\n");
-  printf ("     --flow-signals-type     STRING     the flow signals type [default]\n");
-  printf ("                                          \"default\" - Normalized and phased\n");
+  printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
+  printf ("                                          \"none\" - FZ not generated\n");
   printf ("                                          \"wells\" - Raw values (unnormalized and not dephased)\n");
   printf ("                                          \"key-normalized\" - Key normalized and not dephased\n");
   printf ("                                          \"adaptive-normalized\" - Adaptive normalized and not dephased\n");
-  printf ("                                          \"unclipped\" - Normalized and phased but unclipped\n");
+  printf ("                                          \"residual\" - Measurement-prediction residual\n");
+  printf ("                                          \"scaled-residual\" - Scaled measurement-prediction residual\n");
   printf ("     --block-row-offset      INT        Offset added to read coordinates [0]\n");
   printf ("     --block-col-offset      INT        Offset added to read coordinates [0]\n");
+  printf ("     --extra-trim-left       INT        Number of additional bases after key and barcode to remove from each read [0]\n");
+  printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. 0=off [0]\n");
+  printf ("     --calibration-file      FILE       Enable recalibration using tables from provided file [off]\n");
+  printf ("     --phase-estimation-file FILE       Enable reusing phase estimation from provided file [off]\n");
   printf ("\n");
 
   BaseCallerFilters::PrintHelp();
@@ -229,7 +229,9 @@ void ReportState(time_t analysis_start_time, char *my_state)
 {
   time_t analysis_current_time;
   time(&analysis_current_time);
-  fprintf(stdout, "\n%s: Elapsed: %.1lf minutes\n\n", my_state, difftime(analysis_current_time, analysis_start_time) / 60);
+  fprintf(stdout, "\n%s: Elapsed: %.1lf minutes, Timestamp: %s\n", my_state,
+      difftime(analysis_current_time, analysis_start_time) / 60,
+      ctime (&analysis_current_time));
 }
 
 //! @brief    Shortcut: save json value to a file.
@@ -332,8 +334,6 @@ int main (int argc, const char *argv[])
   ValidateAndCanonicalizePath(filename_wells);
   ValidateAndCanonicalizePath(filename_mask, input_directory + "/bfmask.bin");
 
-  string filename_lib_sff       = output_directory + "/rawlib.sff";
-  string filename_tf_sff        = output_directory + "/rawtf.sff";
   string filename_filter_mask   = output_directory + "/bfmask.bin";
   string filename_json          = output_directory + "/BaseCaller.json";
 
@@ -364,23 +364,31 @@ int main (int argc, const char *argv[])
   bc.run_id                     = opts.GetFirstString ('-', "run-id", default_run_id);
   bc.dephaser                   = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
   int num_threads               = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
-  bool generate_well_stat_file  = opts.GetFirstBoolean('-', "well-stat-file", false);
-  bool generate_cafie_residual  = opts.GetFirstBoolean('-', "cafie-residuals", false);
   int num_unfiltered            = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
-  bc.flow_signals_type          = opts.GetFirstString ('-', "flow-signals-type", "default");
+  bc.flow_signals_type          = opts.GetFirstString ('-', "flow-signals-type", "none");
   bc.block_row_offset           = opts.GetFirstInt    ('-', "block-row-offset", 0);
   bc.block_col_offset           = opts.GetFirstInt    ('-', "block-col-offset", 0);
+  bc.extra_trim_left            = opts.GetFirstInt    ('-', "extra-trim-left", 0);
+  int calibration_training      = opts.GetFirstInt    ('-', "calibration-training", 0);
+  string phase_file_name        = opts.GetFirstString ('s', "phase-estimation-file", "");
+
+  bc.process_tfs = true;
+  int subsample_library = -1;
+
+  if (calibration_training > 0) {
+    printf (" ======================================================================================\n");
+    printf (" ===== BaseCaller will only generate training set (up to %d reads) for Recalibration !\n", calibration_training);
+    printf (" ======================================================================================\n\n");
+    bc.process_tfs = false;
+    subsample_library = calibration_training;
+    num_unfiltered = 0;
+    bc.flow_signals_type = "scaled-residual";
+  }
 
   // Dataset setup
 
   BarcodeDatasets datasets(opts, bc.run_id);
   datasets.GenerateFilenames("basecaller_bam",".basecaller.bam");
-
-  BarcodeDatasets datasets_tf(bc.run_id);
-  datasets_tf.dataset(0)["file_prefix"] = "rawtf";
-  datasets_tf.dataset(0)["dataset_name"] = "Test Fragments";
-  datasets_tf.read_group(0)["description"] = "Test Fragments";
-  datasets_tf.GenerateFilenames("basecaller_bam",".basecaller.bam");
 
   printf("Datasets summary (Library):\n");
   printf("   datasets.json %s/datasets_basecaller.json\n", output_directory.c_str());
@@ -392,14 +400,23 @@ int main (int argc, const char *argv[])
   }
   printf("\n");
 
-  printf("Datasets summary (TF):\n");
-  printf("   datasets.json %s/datasets_tf.json\n", output_directory.c_str());
-  for (int ds = 0; ds < datasets_tf.num_datasets(); ++ds) {
-    printf("            %3d: %s   Contains read groups: ", ds+1, datasets_tf.dataset(ds)["basecaller_bam"].asCString());
-    for (int bc = 0; bc < (int)datasets_tf.dataset(ds)["read_groups"].size(); ++bc)
-      printf("%s ", datasets_tf.dataset(ds)["read_groups"][bc].asCString());
-    printf("\n");
-  }
+  BarcodeDatasets datasets_tf(bc.run_id);
+  if (bc.process_tfs) {
+    datasets_tf.dataset(0)["file_prefix"] = "rawtf";
+    datasets_tf.dataset(0)["dataset_name"] = "Test Fragments";
+    datasets_tf.read_group(0)["description"] = "Test Fragments";
+    datasets_tf.GenerateFilenames("basecaller_bam",".basecaller.bam");
+
+    printf("Datasets summary (TF):\n");
+    printf("   datasets.json %s/datasets_tf.json\n", output_directory.c_str());
+    for (int ds = 0; ds < datasets_tf.num_datasets(); ++ds) {
+      printf("            %3d: %s   Contains read groups: ", ds+1, datasets_tf.dataset(ds)["basecaller_bam"].asCString());
+      for (int bc = 0; bc < (int)datasets_tf.dataset(ds)["read_groups"].size(); ++bc)
+        printf("%s ", datasets_tf.dataset(ds)["read_groups"][bc].asCString());
+      printf("\n");
+    }
+  } else
+    printf("TF basecalling disabled\n");
   printf("\n");
 
   BarcodeDatasets datasets_unfiltered_untrimmed(datasets);
@@ -422,7 +439,7 @@ int main (int argc, const char *argv[])
 
   bc.region_size_x = 50; //! @todo Get default chip size from wells reader
   bc.region_size_y = 50;
-  string arg_region_size          = opts.GetFirstString ('-', "region-size", "");
+  string arg_region_size        = opts.GetFirstString ('-', "region-size", "");
   if (!arg_region_size.empty()) {
     if (2 != sscanf (arg_region_size.c_str(), "%dx%d", &bc.region_size_x, &bc.region_size_y)) {
       fprintf (stderr, "Option Error: region-size %s\n", arg_region_size.c_str());
@@ -469,16 +486,28 @@ int main (int argc, const char *argv[])
   if (!arg_subset_rows.empty() or !arg_subset_cols.empty())
     printf("Processing chip subregion %u-%u x %u-%u\n", subset_begin_x, subset_end_x, subset_begin_y, subset_end_y);
 
+
+
+
   bc.class_map.assign(bc.chip_size_x*bc.chip_size_y, -1);
   for (unsigned int y = subset_begin_y; y < subset_end_y; ++y) {
     for (unsigned int x = subset_begin_x; x < subset_end_x; ++x) {
       if (mask.Match(x, y, MaskLib))
         bc.class_map[x + y * bc.chip_size_x] = 0;
-      if (mask.Match(x, y, MaskTF))
+      if (mask.Match(x, y, MaskTF) and bc.process_tfs)
         bc.class_map[x + y * bc.chip_size_x] = 1;
     }
   }
 
+  // If we are in library subsampling mode, remove excess reads from bc.class_map
+  if (subsample_library > 0) {
+    vector<int> new_class_map(bc.chip_size_x*bc.chip_size_y, -1);
+    MaskSample<unsigned int> random_lib(mask, MaskLib, (MaskType)(MaskFilteredBadResidual|MaskFilteredBadPPF|MaskFilteredBadKey), subsample_library);
+    vector<unsigned int> & values = random_lib.Sample();
+    for (int idx = 0; idx < (int)values.size(); ++idx)
+      new_class_map[values[idx]] = bc.class_map[values[idx]];
+    bc.class_map.swap(new_class_map);
+  }
 
   bc.mask = &mask;
   bc.filename_wells = filename_wells;
@@ -486,6 +515,7 @@ int main (int argc, const char *argv[])
   BaseCallerFilters filters(opts, bc.flow_order, bc.keys, mask);
   bc.filters = &filters;
   bc.estimator.InitializeFromOptArgs(opts);
+  bc.recalibration.Initialize(opts, bc.flow_order);
 
   int num_regions_x = (bc.chip_size_x +  bc.region_size_x - 1) / bc.region_size_x;
   int num_regions_y = (bc.chip_size_y +  bc.region_size_y - 1) / bc.region_size_y;
@@ -494,7 +524,7 @@ int main (int argc, const char *argv[])
   bc.barcodes = &barcodes;
 
   // initialize the per base quality score generator
-  bc.quality_generator.Init(opts, chip_type, output_directory);
+  bc.quality_generator.Init(opts, chip_type, output_directory,bc.recalibration.is_enabled());
 
   BaseCallerMetricSaver metric_saver(opts, bc.chip_size_x, bc.chip_size_y, bc.flow_order.num_flows(),
       bc.region_size_x, bc.region_size_y, output_directory);
@@ -540,14 +570,24 @@ int main (int argc, const char *argv[])
 
   // Library CF/IE/DR parameter estimation
   MemUsage("BeforePhaseEstimation");
-  wells.OpenForIncrementalRead();
-  bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc.region_size_x, bc.region_size_y, num_threads == 1);
-  wells.Close();
+  bool isLoaded = false;
+  if(!phase_file_name.empty()){
+	cout << "\nLoad phase estimation from " << phase_file_name << endl;
+    isLoaded = bc.estimator.LoadPhaseEstimationTrainSubset(phase_file_name, &mask, bc.region_size_x, bc.region_size_y);
+  }
+  if(!isLoaded){
+      wells.OpenForIncrementalRead();
+      bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc.region_size_x, bc.region_size_y, num_threads == 1);
+      wells.Close();
+  }
 
   bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
+  bc.estimator.ExportTrainSubsetToJson(basecaller_json["TrainSubset"]);
+
   SaveJson(basecaller_json, filename_json);
   SaveBaseCallerProgress(10, output_directory);  // Phase estimation assumed to be 10% of the work
 
+  bc.barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
 
   MemUsage("AfterPhaseEstimation");
 
@@ -557,56 +597,50 @@ int main (int argc, const char *argv[])
 
 
   //
-  // Step 1. Open wells and sff files
+  // Step 1. Open wells and output BAM files
   //
 
-  bc.lib_sff.Open(output_directory, datasets, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
+  bc.lib_writer.Open(output_directory, datasets, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
       "BaseCaller",
       basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
       basecaller_json["BaseCaller"]["command_line"].asString(),
-      basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString());
+      basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
+      false);
 
-  bc.tf_sff.Open(output_directory, datasets_tf, num_regions_x*num_regions_y, bc.flow_order, bc.keys[1].bases(),
-      "BaseCaller",
-      basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
-      basecaller_json["BaseCaller"]["command_line"].asString(),
-      basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString());
+  if (bc.process_tfs) {
+    bc.tf_writer.Open(output_directory, datasets_tf, num_regions_x*num_regions_y, bc.flow_order, bc.keys[1].bases(),
+        "BaseCaller",
+        basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
+        basecaller_json["BaseCaller"]["command_line"].asString(),
+        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
+        false);
+  }
 
   //! @todo Random subset should also respect options -r and -c
-  MaskSample<unsigned int> random_lib(mask, MaskLib, num_unfiltered);
-  bc.unfiltered_set.insert(random_lib.Sample().begin(), random_lib.Sample().end());
+  if (num_unfiltered > 0) {
+    MaskSample<unsigned int> random_lib(mask, MaskLib, num_unfiltered);
+    bc.unfiltered_set.insert(random_lib.Sample().begin(), random_lib.Sample().end());
+  }
   if (!bc.unfiltered_set.empty()) {
 
-    bc.unfiltered_sff.Open(unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
+    bc.unfiltered_writer.Open(unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
         "BaseCaller",
         basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
         basecaller_json["BaseCaller"]["command_line"].asString(),
-        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString());
+        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
+        true);
 
-    bc.unfiltered_trimmed_sff.Open(unfiltered_trimmed_directory, datasets_unfiltered_trimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
+    bc.unfiltered_trimmed_writer.Open(unfiltered_trimmed_directory, datasets_unfiltered_trimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
         "BaseCaller",
         basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
         basecaller_json["BaseCaller"]["command_line"].asString(),
-        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString());
+        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
+        true);
   }
 
   //
   // Step 3. Open miscellaneous results files
   //
-
-  // Set up phase residual file
-  bc.residual_file = NULL;
-  if (generate_cafie_residual) {
-    bc.residual_file = new RawWells(output_directory.c_str(), "1.cafie-residuals");
-    bc.residual_file->CreateEmpty(bc.flow_order.num_flows(), bc.flow_order.c_str(), bc.chip_size_y, bc.chip_size_x);
-    bc.residual_file->OpenForWrite();
-    bc.residual_file->SetChunk(0, bc.chip_size_y, 0, bc.chip_size_x, 0, bc.flow_order.num_flows());
-  }
-
-  // Set up wellStats file (if necessary)
-  bc.well_stat_file = NULL;
-  if (generate_well_stat_file)
-    bc.well_stat_file = OpenWellStatFile(output_directory + "/wellStats.txt");
 
   //
   // Step 4. Execute threaded basecalling
@@ -636,28 +670,18 @@ int main (int argc, const char *argv[])
   time_t basecall_end_time;
   time(&basecall_end_time);
 
+
   //
   // Step 5. Close files and print out some statistics
   //
 
-  printf("\n\nBASECALLING: called %d of %u wells in %1.0lf seconds with %d threads\n",
+  printf("\n\nBASECALLING: called %d of %u wells in %1.0lf seconds with %d threads\n\n",
       filters.NumWellsCalled(), (subset_end_y-subset_begin_y)*(subset_end_x-subset_begin_x),
       difftime(basecall_end_time,basecall_start_time), num_threads);
 
-  bc.lib_sff.Close(datasets);
-  bc.tf_sff.Close(datasets_tf);
-
-  // Close files
-  if (bc.well_stat_file)
-    fclose(bc.well_stat_file);
-
-  if(bc.residual_file) {
-    bc.residual_file->WriteWells();
-    bc.residual_file->WriteRanks();
-    bc.residual_file->WriteInfo();
-    bc.residual_file->Close();
-    delete bc.residual_file;
-  }
+  bc.lib_writer.Close(datasets, "Library");
+  if (bc.process_tfs)
+    bc.tf_writer.Close(datasets_tf, "Test Fragments");
 
   filters.TransferFilteringResultsToMask(mask);
 
@@ -691,8 +715,8 @@ int main (int argc, const char *argv[])
     }
     filter_status.close();
 
-    bc.unfiltered_sff.Close(datasets_unfiltered_untrimmed, true);
-    bc.unfiltered_trimmed_sff.Close(datasets_unfiltered_trimmed, true);
+    bc.unfiltered_writer.Close(datasets_unfiltered_untrimmed);
+    bc.unfiltered_trimmed_writer.Close(datasets_unfiltered_trimmed);
 
     datasets_unfiltered_untrimmed.SaveJson(unfiltered_untrimmed_directory+"/datasets_basecaller.json");
     datasets_unfiltered_trimmed.SaveJson(unfiltered_trimmed_directory+"/datasets_basecaller.json");
@@ -704,11 +728,15 @@ int main (int argc, const char *argv[])
 
   datasets.SaveJson(output_directory+"/datasets_basecaller.json");
 
-  datasets_tf.SaveJson(output_directory+"/datasets_tf.json");
+  if (bc.process_tfs)
+    datasets_tf.SaveJson(output_directory+"/datasets_tf.json");
 
   // Generate BaseCaller.json
 
-  filters.GenerateFilteringStatistics(basecaller_json, mask);
+  bc.lib_writer.SaveFilteringStats(basecaller_json, "lib", true);
+  if (bc.process_tfs)
+    bc.tf_writer.SaveFilteringStats(basecaller_json, "tf", false);
+
   time_t analysis_end_time;
   time(&analysis_end_time);
 
@@ -718,19 +746,16 @@ int main (int argc, const char *argv[])
 
   basecaller_json["Filtering"]["qv_histogram"] = Json::arrayValue;
   for (int qv = 0; qv < 50; ++qv)
-    basecaller_json["Filtering"]["qv_histogram"][qv] = (Json::UInt64)bc.lib_sff.qv_histogram()[qv];
+    basecaller_json["Filtering"]["qv_histogram"][qv] = (Json::UInt64)bc.lib_writer.qv_histogram()[qv];
 
   SaveJson(basecaller_json, filename_json);
   SaveBaseCallerProgress(100, output_directory);
 
-  MemUsage("AfterBasecalling");
-
-  ReportState(analysis_start_time,"Basecalling Complete");
-
   mask.WriteRaw (filename_filter_mask.c_str());
   mask.validateMask();
 
-  ReportState (analysis_start_time,"Analysis (from wells file) Complete");
+  MemUsage("AfterBasecalling");
+  ReportState(analysis_start_time,"Basecalling Complete");
 
   return EXIT_SUCCESS;
 }
@@ -750,12 +775,19 @@ void * BasecallerWorker(void *input)
   pthread_mutex_unlock(&bc.mutex);
 
   vector<float> residual(bc.flow_order.num_flows(), 0);
-  vector<float> corrected_ionogram(bc.flow_order.num_flows(), 0);
-  vector<float> flow_values(bc.flow_order.num_flows(), 0);
+  vector<float> scaled_residual(bc.flow_order.num_flows(), 0);
+  vector<float> wells_measurements(bc.flow_order.num_flows(), 0);
   vector<float> local_noise(bc.flow_order.num_flows(), 0);
   vector<float> minus_noise_overlap(bc.flow_order.num_flows(), 0);
   vector<float> homopolymer_rank(bc.flow_order.num_flows(), 0);
   vector<float> neighborhood_noise(bc.flow_order.num_flows(), 0);
+  vector<float> phasing_parameters(3);
+  vector<uint16_t>  flowgram(bc.flow_order.num_flows());
+  vector<int16_t>   flowgram2(bc.flow_order.num_flows());
+  vector<int16_t> filtering_details(13,0);
+
+  vector<uint8_t>   quality(3*bc.flow_order.num_flows());
+  vector<int>       base_to_flow (3*bc.flow_order.num_flows());             //!< Flow of in-phase incorporation of each base.
 
   DPTreephaser treephaser(bc.flow_order);
   TreephaserSSE treephaser_sse(bc.flow_order);
@@ -806,17 +838,18 @@ void * BasecallerWorker(void *input)
     pthread_mutex_unlock(&bc.mutex);
 
     // Process the data
-    deque<SFFEntry> lib_reads;
-    deque<SFFEntry> tf_reads;
-    deque<SFFEntry> unfiltered_reads;
-    deque<SFFEntry> unfiltered_trimmed_reads;
+    deque<ProcessedRead> lib_reads;
+    deque<ProcessedRead> tf_reads;
+    deque<ProcessedRead> unfiltered_reads;
+    deque<ProcessedRead> unfiltered_trimmed_reads;
 
     if (num_usable_wells == 0) { // There is nothing in this region. Don't even bother reading it
-      bc.lib_sff.WriteRegion(current_region,lib_reads);
-      bc.tf_sff.WriteRegion(current_region,tf_reads);
+      bc.lib_writer.WriteRegion(current_region,lib_reads);
+      if (bc.process_tfs)
+        bc.tf_writer.WriteRegion(current_region,tf_reads);
       if (!bc.unfiltered_set.empty()) {
-        bc.unfiltered_sff.WriteRegion(current_region,unfiltered_reads);
-        bc.unfiltered_trimmed_sff.WriteRegion(current_region,unfiltered_trimmed_reads);
+        bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
+        bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);
       }
       continue;
     }
@@ -839,32 +872,44 @@ void * BasecallerWorker(void *input)
 
       bc.filters->SetValid(read_index); // Presume valid until some filter proves otherwise
 
+      if (read_class == 0)
+        lib_reads.push_back(ProcessedRead());
+      else
+        tf_reads.push_back(ProcessedRead());
+
+      ProcessedRead& processed_read = (read_class==0) ? lib_reads.back() : tf_reads.back();
+
+      if (read_class == 0)
+        processed_read.read_group_index = bc.barcodes->no_barcode_read_group_;
+      else
+        processed_read.read_group_index = 0;
+
       // Respect filter decisions from Background Model
       if (bc.mask->Match(read_index, MaskFilteredBadResidual))
-        bc.filters->SetBkgmodelHighPPF(read_index);
+        bc.filters->SetBkgmodelHighPPF(read_index, processed_read.filter);
 
       if (bc.mask->Match(read_index, MaskFilteredBadPPF))
-        bc.filters->SetBkgmodelPolyclonal(read_index);
+        bc.filters->SetBkgmodelPolyclonal(read_index, processed_read.filter);
 
       if (bc.mask->Match(read_index, MaskFilteredBadKey))
-        bc.filters->SetBkgmodelFailedKeypass(read_index);
+        bc.filters->SetBkgmodelFailedKeypass(read_index, processed_read.filter);
 
       if (!is_random_unfiltered and !bc.filters->IsValid(read_index)) // No reason to waste more time
-          continue;
+        continue;
 
       float cf = bc.estimator.GetWellCF(x,y);
       float ie = bc.estimator.GetWellIE(x,y);
       float dr = bc.estimator.GetWellDR(x,y);
 
       for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
-        flow_values[flow] = wells.At(y,x,flow);
+        wells_measurements[flow] = wells.At(y,x,flow);
 
       // Sanity check. If there are NaNs in this read, print warning
       vector<int> nanflow;
       for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
-        if (!isnan(flow_values[flow]))
+        if (!isnan(wells_measurements[flow]))
           continue;
-        flow_values[flow] = 0;
+        wells_measurements[flow] = 0;
         nanflow.push_back(flow);
       }
       if(nanflow.size() > 0) {
@@ -881,15 +926,14 @@ void * BasecallerWorker(void *input)
       //
 
       BasecallerRead read;
-      read.SetDataAndKeyNormalize(&flow_values[0], flow_values.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
+      read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
 
-      bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, read.raw_measurements);
-      if (!is_random_unfiltered and !bc.filters->IsValid(read_index)) // No reason to waste more time
-          continue;
+      bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, processed_read.filter, read.raw_measurements);
+      if (!is_random_unfiltered and !bc.filters->IsValid(read_index))// No reason to waste more time
+        continue;
 
 
       // Execute the iterative solving-normalization routine
-      //! @todo Reuse treephaser & cafie parameters for an entire region
 
       if (bc.dephaser == "treephaser-sse") {
         treephaser_sse.SetModelParameters(cf, ie);
@@ -913,71 +957,71 @@ void * BasecallerWorker(void *input)
         treephaser.ComputeQVmetrics(read);
       }
 
+      // If recalibration is enabled, generate adjusted sequence and normalized_measurements, and recompute QV metrics
 
-      SFFEntry sff_entry;
-      char read_name[256];
-      sprintf(read_name, "%s:%05d:%05d", bc.run_id.c_str(), bc.block_row_offset + y, bc.block_col_offset + x);
-      sff_entry.name = read_name;
-      sff_entry.clip_qual_left = bc.keys[read_class].bases_length() + 1;
-      sff_entry.clip_qual_right = 0;
-      sff_entry.clip_adapter_left = 0;
-      sff_entry.clip_adapter_right = 0;
-      sff_entry.clip_adapter_flow = -1;
-      sff_entry.flowgram.resize(bc.flow_order.num_flows());
-      sff_entry.n_bases = 0;
-      sff_entry.barcode_id = 0;
-      sff_entry.barcode_n_errors = 0;
+      if (bc.recalibration.is_enabled()) {
+        bc.recalibration.CalibrateRead(x,y,read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
+        treephaser.ComputeQVmetrics(read); // also generates updated read.prediction
+      }
+
+      // Misc data management: Generate residual, scaled_residual
 
       for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
         residual[flow] = read.normalized_measurements[flow] - read.prediction[flow];
-        float adjustment = residual[flow] / read.state_inphase[flow];
-        adjustment = min(0.49f, max(-0.49f, adjustment));
-        corrected_ionogram[flow] = max(0.0f, read.solution[flow] + adjustment);
-        sff_entry.flowgram[flow] = (int)(corrected_ionogram[flow]*100.0+0.5);
-        sff_entry.n_bases += read.solution[flow];
+        scaled_residual[flow] = residual[flow] / read.state_inphase[flow];
       }
 
-      // Fix left clip if have fewer bases than are supposed to be in the key
-      if(sff_entry.clip_qual_left > (sff_entry.n_bases+1))
-        sff_entry.clip_qual_left = sff_entry.n_bases+1;
+      // Misc data management: Put base calls in proper string form
 
-      sff_entry.flow_index.reserve(sff_entry.n_bases);
-      sff_entry.bases.reserve(sff_entry.n_bases);
-      sff_entry.quality.reserve(sff_entry.n_bases);
+      processed_read.filter.n_bases = read.sequence.size();
+      processed_read.filter.is_called = true;
 
-      vector<int> base_to_flow;
-      base_to_flow.reserve(sff_entry.n_bases);
+      // Misc data management: Generate base_to_flow
 
-      unsigned int prev_used_flow = 0;
-      for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
-        for (int hp = 0; hp < read.solution[flow]; hp++) {
-          sff_entry.flow_index.push_back(1 + flow - prev_used_flow);
-          base_to_flow.push_back(flow);
-          sff_entry.bases.push_back(bc.flow_order[flow]);
-          prev_used_flow = flow + 1;
-        }
+      base_to_flow.clear();
+      base_to_flow.reserve(processed_read.filter.n_bases);
+      for (int base = 0, flow = 0; base < processed_read.filter.n_bases; ++base) {
+        while (flow < bc.flow_order.num_flows() and read.sequence[base] != bc.flow_order[flow])
+          flow++;
+        base_to_flow.push_back(flow);
       }
+
+
+      // Misc data management: Populate some trivial read properties
+
+      char read_name[256];
+      sprintf(read_name, "%s:%05d:%05d", bc.run_id.c_str(), bc.block_row_offset + y, bc.block_col_offset + x);
+      processed_read.bam.Name = read_name;
+      processed_read.bam.SetIsMapped(false);
+
+      phasing_parameters[0] = cf;
+      phasing_parameters[1] = ie;
+      phasing_parameters[2] = dr;
+      processed_read.bam.AddTag("ZP", phasing_parameters);
 
 
       // Calculation of quality values
       // Predictor 1 - Treephaser residual penalty
       // Predictor 2 - Local noise/flowalign - 'noise' in the input base's measured val.  Noise is max[abs(val - round(val))] within +-1 BASES
       // Predictor 3 - Read Noise/Overlap - mean & stdev of the 0-mers & 1-mers in the read
+      // Predictor 3 (new) - Beverly Events
       // Predictor 4 - Transformed homopolymer length
       // Predictor 5 - Treephaser: Penalty indicating deletion after the called base
       // Predictor 6 - Neighborhood noise - mean of 'noise' +-5 BASES around a base.  Noise is mean{abs(val - round(val))}
 
-      int num_predictor_bases = min(bc.flow_order.num_flows(), sff_entry.n_bases);
+      int num_predictor_bases = min(bc.flow_order.num_flows(), processed_read.filter.n_bases);
 
-      PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases, base_to_flow, corrected_ionogram);
-      PerBaseQual::PredictorNoiseOverlap(minus_noise_overlap, num_predictor_bases, corrected_ionogram);
-      PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, sff_entry.flow_index);
-      PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases, base_to_flow, corrected_ionogram);
+      PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction);
+      PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases, base_to_flow, read.normalized_measurements, read.prediction);
+      //PerBaseQual::PredictorNoiseOverlap(minus_noise_overlap, num_predictor_bases, read.normalized_measurements, read.prediction);
+      PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases, base_to_flow, scaled_residual);
+      PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence);
 
-      bc.quality_generator.GenerateBaseQualities(sff_entry.name, sff_entry.n_bases, bc.flow_order.num_flows(),
+      quality.clear();
+      bc.quality_generator.GenerateBaseQualities(processed_read.bam.Name, processed_read.filter.n_bases, bc.flow_order.num_flows(),
           read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
           homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
-          base_to_flow, sff_entry.quality,
+          base_to_flow, quality,
           read.additive_correction,
           read.multiplicative_correction,
           read.state_inphase);
@@ -986,24 +1030,36 @@ void * BasecallerWorker(void *input)
       // Step 4a. Barcode classification of library reads
       //
 
+      if (processed_read.filter.n_bases_filtered == -1)
+        processed_read.filter.n_bases_filtered = processed_read.filter.n_bases;
+
+      processed_read.filter.n_bases_key = min(bc.keys[read_class].bases_length(), processed_read.filter.n_bases);
+      processed_read.filter.n_bases_prefix = processed_read.filter.n_bases_key;
+
       if (read_class == 0)
-        bc.barcodes->ClassifyAndTrimBarcode(read_index, sff_entry);
+        bc.barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
+
+      //
+      // Step 4b. Custom mod: Trim extra bases after key and barcode. Make it look like barcode trimming.
+      //
+
+      if (bc.extra_trim_left > 0)
+        processed_read.filter.n_bases_prefix = min(processed_read.filter.n_bases_prefix + bc.extra_trim_left, processed_read.filter.n_bases);
+
 
       //
       // Step 4. Calculate/save read metrics and apply filters
       //
 
-      bc.filters->SetReadLength       (read_index, sff_entry);
-      bc.filters->FilterZeroBases     (read_index, read_class, sff_entry);
-      bc.filters->FilterShortRead     (read_index, read_class, sff_entry);
-      bc.filters->FilterFailedKeypass (read_index, read_class, read.solution);
-      bc.filters->FilterHighResidual  (read_index, read_class, residual);
-      bc.filters->FilterBeverly       (read_index, read_class, read, sff_entry); // Also trims clipQualRight
-      bc.filters->TrimAdapter         (read_index, read_class, sff_entry);
-      bc.filters->TrimQuality         (read_index, read_class, sff_entry);
+      bc.filters->FilterZeroBases     (read_index, read_class, processed_read.filter);
+      bc.filters->FilterShortRead     (read_index, read_class, processed_read.filter);
+      bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
+      bc.filters->FilterHighResidual  (read_index, read_class, processed_read.filter, residual);
+      bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
+      bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
+      bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality);
 
       //! New mechanism for dumping potentially useful metrics.
-      //! @todo use this to replace cafie residual
       if (bc.metric_saver->save_anything() and (is_random_unfiltered or !bc.metric_saver->save_subset_only())) {
         pthread_mutex_lock(&bc.mutex);
 
@@ -1012,7 +1068,6 @@ void * BasecallerWorker(void *input)
         bc.metric_saver->SaveMultiplicativeCorrection (y,x,read.multiplicative_correction);
         bc.metric_saver->SaveNormalizedMeasurements   (y,x,read.normalized_measurements);
         bc.metric_saver->SavePrediction               (y,x,read.prediction);
-        bc.metric_saver->SaveSolution                 (y,x,read.solution);
         bc.metric_saver->SaveStateInphase             (y,x,read.state_inphase);
         bc.metric_saver->SaveStateTotal               (y,x,read.state_total);
         bc.metric_saver->SavePenaltyResidual          (y,x,read.penalty_residual);
@@ -1026,139 +1081,120 @@ void * BasecallerWorker(void *input)
       }
 
 
-      if (bc.well_stat_file or bc.residual_file) {
-        //! @todo This extra information dump needs justification/modernization
-        //!       Might be useful for filter/trimmer development. Should it be part of BaseCallerFilters?
-        //!       Perhaps hdf5-based WellStats? WellStats+cafieResidual in one file?
+      //
+      // Step 4b. Add flow signal information to ZM tag in BAM record.
+      //
 
-        pthread_mutex_lock(&bc.mutex);
-        if (bc.well_stat_file) {
-          WriteWellStatFileEntry(bc.well_stat_file, bc.keys[read_class], sff_entry, read, residual,
-            x, y, cf, ie, dr, !bc.filters->IsPolyclonal(read_index));
+      flowgram2.clear();
+      int max_flow = min(bc.flow_order.num_flows(),16);
+      if (processed_read.filter.n_bases_filtered > 0)
+        max_flow = min(bc.flow_order.num_flows(), base_to_flow[processed_read.filter.n_bases_filtered-1] + 16);
+
+      for (int flow = 0; flow < max_flow; ++flow)
+        flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
+      processed_read.bam.AddTag("ZM", flowgram2);
+      //flowgram2.push_back(1*(int16_t)(256*read.normalized_measurements[flow]));
+      //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
+      //flowgram2.push_back(4*(int16_t)(64*read.normalized_measurements[flow]));
+      //flowgram2.push_back(8*(int16_t)(32*read.normalized_measurements[flow]));
+
+      //
+      // Step 4c. Populate FZ tag in BAM record.
+      //
+
+      flowgram.clear();
+      if (bc.flow_signals_type == "wells") {
+        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+          flowgram.push_back(max(0,(int)(100.0*wells_measurements[flow]+0.5)));
+        processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
+
+      } else if (bc.flow_signals_type == "key-normalized") {
+        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+          flowgram.push_back(max(0,(int)(100.0*read.raw_measurements[flow]+0.5)));
+        processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
+
+      } else if (bc.flow_signals_type == "adaptive-normalized") {
+        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+          flowgram.push_back(max(0,(int)(100.0*read.normalized_measurements[flow]+0.5)));
+        processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
+
+      } else if (bc.flow_signals_type == "residual") {
+        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
+          flowgram.push_back(max(0,(int)(1000 + 100*residual[flow])));
+        processed_read.bam.AddTag("FZ", flowgram); // Will be phased out soon
+
+      } else if (bc.flow_signals_type == "scaled-residual") { // This settings is necessary part of calibration training
+        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow){
+          //between 0 and 98
+          float adjustment = min(0.49f, max(-0.49f, scaled_residual[flow]));
+          flowgram.push_back(max(0,(int)(49.5 + 100*adjustment)));
         }
-        if (bc.residual_file) {
-          for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow)
-            bc.residual_file->WriteFlowgram(flow, x, y, residual[flow]);
-        }
-        pthread_mutex_unlock(&bc.mutex);
+        processed_read.bam.AddTag("FZ", flowgram);
       }
 
       //
-      // Step 4b. Use pre-dephased but normalized signals.
-      // 
-      if ("default" != bc.flow_signals_type) {
-        for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
-          if ("wells" == bc.flow_signals_type) sff_entry.flowgram[flow] = (int)(100.0*flow_values[flow]+0.5);
-          else if ("key-normalized" == bc.flow_signals_type) sff_entry.flowgram[flow] = (int)(100.0*read.raw_measurements[flow]+0.5);
-          else if ("adaptive-normalized" == bc.flow_signals_type) sff_entry.flowgram[flow] = (int)(100.0*read.normalized_measurements[flow]+0.5);
-          else if ("unclipped" == bc.flow_signals_type) {
-            float adjustment = residual[flow] / read.state_inphase[flow];
-            corrected_ionogram[flow] = max(0.0f, read.solution[flow] + adjustment);
-            sff_entry.flowgram[flow] = (int)(corrected_ionogram[flow]*100.0+0.5);
-          } else break; // ignore
-        }
-      } 
-
-      //
-      // Step 5. Save the basecalling results to appropriate sff files
+      // Step 5. Pass basecalled reads to appropriate writers
       //
 
-      if (read_class == 0) { // Lib
-        if (is_random_unfiltered) { // Lib, random
-          if (bc.filters->IsValid(read_index)) { // Lib, random, valid
-            lib_reads.push_back(sff_entry);
-          }
-          unfiltered_trimmed_reads.push_back(sff_entry);
+      if (processed_read.filter.n_bases > 0) {
+        processed_read.bam.QueryBases.reserve(processed_read.filter.n_bases);
+        processed_read.bam.Qualities.reserve(processed_read.filter.n_bases);
+        for (int base = processed_read.filter.n_bases_prefix; base < processed_read.filter.n_bases_filtered; ++base) {
+          processed_read.bam.QueryBases.push_back(read.sequence[base]);
+          processed_read.bam.Qualities.push_back(quality[base] + 33);
+        }
+        processed_read.bam.AddTag("ZF","i", base_to_flow[processed_read.filter.n_bases_prefix]);
+      } else
+        processed_read.bam.AddTag("ZF","i", 0);
 
-          unfiltered_reads.push_back(SFFEntry());
-          sff_entry.clip_adapter_right = 0;     // Strip trimming info before writing to random sff
-          sff_entry.clip_qual_right = 0;
-          sff_entry.swap(unfiltered_reads.back());
 
-        } else { // Lib, not random
-          if (bc.filters->IsValid(read_index)) { // Lib, not random, valid
-            lib_reads.push_back(SFFEntry());
-            sff_entry.swap(lib_reads.back());
+
+      if (is_random_unfiltered) { // Lib, random
+        unfiltered_trimmed_reads.push_back(processed_read);
+        unfiltered_reads.push_back(processed_read);
+
+        ProcessedRead& untrimmed_read = unfiltered_reads.back();
+
+        processed_read.filter.GenerateZDVector(filtering_details);
+        untrimmed_read.bam.AddTag("ZD", filtering_details);
+
+        if (processed_read.filter.n_bases > 0) {
+          untrimmed_read.bam.QueryBases.reserve(processed_read.filter.n_bases);
+          untrimmed_read.bam.Qualities.reserve(processed_read.filter.n_bases);
+          for (int base = max(processed_read.filter.n_bases_filtered,processed_read.filter.n_bases_prefix); base < processed_read.filter.n_bases; ++base) {
+            untrimmed_read.bam.QueryBases.push_back(read.sequence[base]);
+            untrimmed_read.bam.Qualities.push_back(quality[base] + 33);
           }
         }
-      } else {  // TF
-        if (bc.filters->IsValid(read_index)) { // TF, valid
-          tf_reads.push_back(SFFEntry());
-          sff_entry.swap(tf_reads.back());
+
+        // Temporary workaround: provide fake FZ tag for unfiltered.trimmed and unfiltered.untrimmed sets.
+        if (bc.flow_signals_type == "none") {
+          flowgram.assign(1,0);
+          unfiltered_reads.back().bam.AddTag("FZ", flowgram);
+          unfiltered_trimmed_reads.back().bam.AddTag("FZ", flowgram);
         }
+
+
+        // If this read was supposed to have "early filtering", make sure we emulate that here
+        if (processed_read.filter.n_bases_after_bkgmodel_bad_key >= 0 or
+            processed_read.filter.n_bases_after_bkgmodel_high_ppf >= 0 or
+            processed_read.filter.n_bases_after_bkgmodel_polyclonal >= 0 or
+            processed_read.filter.n_bases_after_high_ppf >= 0 or
+            processed_read.filter.n_bases_after_polyclonal >= 0)
+          processed_read.filter.n_bases = -1;
       }
     }
 
-    bc.lib_sff.WriteRegion(current_region,lib_reads);
-    bc.tf_sff.WriteRegion(current_region,tf_reads);
+    bc.lib_writer.WriteRegion(current_region,lib_reads);
+    if (bc.process_tfs)
+      bc.tf_writer.WriteRegion(current_region,tf_reads);
     if (!bc.unfiltered_set.empty()) {
-      bc.unfiltered_sff.WriteRegion(current_region,unfiltered_reads);
-      bc.unfiltered_trimmed_sff.WriteRegion(current_region,unfiltered_trimmed_reads);
+      bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
+      bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);
     }
   }
 }
 
-
-//! @brief    Open WellStats.txt file for writing and write out the header
-//! @ingroup  BaseCaller
-
-FILE * OpenWellStatFile(const string &well_stat_filename)
-{
-  FILE *well_stat_file = NULL;
-  fopen_s(&well_stat_file, well_stat_filename.c_str(), "wb");
-  if (!well_stat_file) {
-    perror(well_stat_filename.c_str());
-    return NULL;
-  }
-  fprintf(well_stat_file,
-      "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-      "col", "row", "isTF", "isLib", "isDud", "isAmbg", "nCall",
-      "cf", "ie", "dr", "keySNR", "keySD", "keySig", "oneSig",
-      "zeroSig", "ppf", "isClonal", "medAbsRes", "multiplier");
-
-  return well_stat_file;
-}
-
-//! @brief    Generate and write a WellStats.txt record
-//! @ingroup  BaseCaller
-
-void WriteWellStatFileEntry(FILE *well_stat_file, const KeySequence& key,
-    SFFEntry & sff_entry, BasecallerRead & read, const vector<float> & residual,
-    int x, int y, double cf, double ie, double dr, bool clonal)
-{
-  double median_abs_residual = BaseCallerFilters::MedianAbsoluteCafieResidual(residual, 60);
-  vector<float>::const_iterator first = read.raw_measurements.begin() + mixed_first_flow();
-  vector<float>::const_iterator last  = read.raw_measurements.begin() + mixed_last_flow();
-  float ppf = percent_positive(first, last);
-
-  double zeromers[key.flows_length()-1];
-  double onemers[key.flows_length()-1];
-  int num_zeromers = 0;
-  int num_onemers = 0;
-
-  for(int i=0; i<(key.flows_length()-1); i++) {
-    if(key[i] == 0)
-      zeromers[num_zeromers++] = read.normalized_measurements[i];
-    else if(key[i] == 1)
-      onemers[num_onemers++] = read.normalized_measurements[i];
-  }
-
-  double min_stdev      = 0.01;
-  double zeromer_sig    = ionStats::median(zeromers,num_zeromers);
-  double zeromer_stdev  = std::max(min_stdev,ionStats::sd(zeromers,num_zeromers));
-  double onemer_sig     = ionStats::median(onemers,num_onemers);
-  double onemer_stdev   = std::max(min_stdev,ionStats::sd(onemers,num_onemers));
-  double key_sig        = onemer_sig - zeromer_sig;
-  double key_stdev      = sqrt(pow(zeromer_stdev,2) + pow(onemer_stdev,2));
-  double key_snr        = key_sig / key_stdev;
-
-  // Write a line of results - make sure this stays in sync with the header line written by OpenWellStatFile()
-  fprintf(well_stat_file,
-      "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%1.4f\t%1.4f\t%1.5f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%1.3f\t%d\t%1.3f\t%1.3f\n",
-      x, y, key.name()=="tf", key.name()=="lib", 0, 0, sff_entry.n_bases,
-      cf, ie, dr, key_snr, key_stdev, key_sig, onemer_sig,
-      zeromer_sig, ppf, (int)clonal, median_abs_residual, read.key_normalizer);
-}
 
 
 

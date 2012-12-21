@@ -45,7 +45,7 @@ public:
   ComputationPlanner analysis_compute_plan;
 
   BkgParamH5 all_params_hdf;
-
+  std::vector<int16_t> washout_flow;
 
   void ThreadedInitialization ( RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask,
                                 char *results_folder,ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est,
@@ -82,6 +82,7 @@ public:
   void DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu();
 
  private:
+  
   BkgFitterTracker(){
     all_emptytrace_track = NULL;
     bkinfo = NULL;
@@ -99,6 +100,7 @@ public:
 	global_defaults &      // serialize out before signal_proc_fitters as ref'd
 	// signal_proc_fitters &  // rebuilt in ThreadedInitialization
 	numFitters &
+        washout_flow &
 	all_emptytrace_track;
 	// poiss_cache &   // rebuilt in ThreadedInitialization
 	// bkinfo;         // rebuilt in ThreadedInitialization
@@ -115,6 +117,7 @@ public:
 	global_defaults &      // serialize out before signal_proc_fitters as ref'd
 	// signal_proc_fitters &  // 
 	numFitters &
+        washout_flow &
 	all_emptytrace_track;
 	// poiss_cache &
 	// bkinfo; 

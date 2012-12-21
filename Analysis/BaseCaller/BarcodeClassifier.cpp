@@ -12,18 +12,15 @@
 
 #include "Utils.h"
 
-#define BASES(val) ((int)((val)/100.0+0.5))
-
 void ValidateAndCanonicalizePath(string &path);   // Borrowed from BaseCaller.cpp
-
 
 void BarcodeClassifier::PrintHelp()
 {
   printf ("Barcode classification options:\n");
   printf ("  -b,--barcodes              FILE/off   detect barcodes listed in provided file [off]\n");
-//  printf ("     --barcode-directory     DIRECTORY  output directory for barcode-specific sff files [output-dir/bc_files]\n");
-//  printf ("     --score-mode            STRING     Set the score mode and threshold in XvY format [0v0.9]\n");
-//  printf ("     --barcode-mask          on/off     write barcode ids to output-dir/barcodeMask.bin [on]\n" );
+  printf ("     --barcode-mode          INT        selects barcode classification algorithm [3]\n" );
+  printf ("     --barcode-cutoff        FLOAT      minimum score to call a barcode [1.5\n" );
+  printf ("     --barcode-separation    FLOAT      minimum difference between best and second best scores [0.5]\n" );
   printf ("     --barcode-filter        FLOAT      barcode freq. threshold, if >0 writes output-dir/barcodeFilter.txt [0.0 = off]\n" );
   printf ("\n");
 }
@@ -41,8 +38,6 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
   // Retrieve command line options
 
   barcode_directory_              = opts.GetFirstString ('-', "barcode-directory", output_directory+"/bc_files");
-  // Deprecated option. Barcode mask generated always!
-  opts.GetFirstBoolean('-', "barcode-mask", true);
   barcode_filter_                 = opts.GetFirstDouble ('-', "barcode-filter", 0.0);
 
   if (barcode_filter_ > 0.0)
@@ -54,8 +49,14 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
   //
 
   string file_id  = datasets.barcode_config().get("barcode_id","").asString();
-  score_mode_     = datasets.barcode_config().get("score_mode",1).asInt();
-  score_cutoff_   = datasets.barcode_config().get("score_cutoff",2.0).asDouble();
+  //score_mode_     = datasets.barcode_config().get("score_mode",1).asInt();
+  //score_cutoff_   = datasets.barcode_config().get("score_cutoff",2.0).asDouble();
+
+  score_mode_                     = opts.GetFirstInt    ('-', "barcode-mode", 3);
+  score_cutoff_                   = opts.GetFirstDouble ('-', "barcode-cutoff", 1.5);
+  score_separation_               = opts.GetFirstDouble ('-', "barcode-separation", 0.5);
+
+  barcode_.reserve(datasets.num_read_groups());
 
   for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
 
@@ -75,14 +76,14 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
     barcode_.back().start_flow = -1;
     barcode_.back().end_flow = -1;
 
-    string full_barcode = keys[0].bases();
-    int key_length = full_barcode.length();
+    barcode_.back().full_barcode = keys[0].bases();
+    int key_length = barcode_.back().full_barcode.length();
 
-    full_barcode += read_group["barcode_sequence"].asString();
-    int key_barcode_length = full_barcode.length();
+    barcode_.back().full_barcode += read_group["barcode_sequence"].asString();
+    int key_barcode_length = barcode_.back().full_barcode.length();
 
-    full_barcode += read_group.get("barcode_adapter","").asString();
-    int key_barcode_adapter_length = full_barcode.length();
+    barcode_.back().full_barcode += read_group.get("barcode_adapter","").asString();
+    int key_barcode_adapter_length = barcode_.back().full_barcode.length();
 
 
     int flow = 0;
@@ -90,7 +91,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
 
     while (curBase < key_barcode_adapter_length and flow < flow_order_.num_flows()) {
 
-      while (full_barcode[curBase] == flow_order_[flow] and curBase < key_barcode_adapter_length) {
+      while (barcode_.back().full_barcode[curBase] == flow_order_[flow] and curBase < key_barcode_adapter_length) {
         barcode_.back().flow_seq[flow]++;
         curBase++;
       }
@@ -106,6 +107,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
     if (barcode_.back().end_flow == -1)
       barcode_.back().end_flow = flow - 1;
     barcode_.back().num_flows = flow;
+    barcode_.back().last_homopolymer = barcode_.back().flow_seq[flow-1];
   }
 
   // Prepare directory structure and output files
@@ -145,134 +147,123 @@ BarcodeClassifier::~BarcodeClassifier()
 }
 
 
+void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
+{
+  if (num_barcodes_ == 0)
+    return;
+
+  DPTreephaser treephaser(flow_order_);
+  BasecallerRead basecaller_read;
+  treephaser.SetModelParameters(cf, ie, dr);
+
+  for (int bc = 0; bc < num_barcodes_; ++bc) {
+    basecaller_read.sequence.assign(barcode_[bc].full_barcode.begin(),barcode_[bc].full_barcode.end());
+    basecaller_read.prediction.assign(flow_order_.num_flows(), 0);
+
+    treephaser.Simulate(basecaller_read, barcode_[bc].num_flows);
+
+    barcode_[bc].predicted_signal.swap(basecaller_read.prediction);
+  }
+}
+
+
+
+
 
 /*
  * flowSpaceTrim - finds the closest barcode in flowspace to the sequence passed in,
  * and then trims to exactly the expected flows so it can be error tolerant in base space
  */
-void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, SFFEntry &sffentry)
+void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read,
+    const vector<int>& base_to_flow)
 {
 
-  int minErrors = (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
+  int best_barcode = -1;
+  int best_errors = 1 + (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
 
-  double bestScore = score_cutoff_;
+  float best_distance = 1 + score_cutoff_;
+  float second_best_distance = 1e20;
 
-  int totalFlows;
+  if (score_mode_ == 1) { // looks at flow-space absolute error counts, not ratios
 
-  // find best barcode match
-  int bestBarcodeIndex = -1;
+    for (int bc = 0; bc < num_barcodes_; ++bc) {
 
-  std::string scoreHistLineBest;
-
-  double old_weightedscore=0.0;
-  double old_weightedErr = 0;
-
-  // barcode loop
-  for (int i = 0; i < num_barcodes_; ++i) {
-
-    const Barcode& bce = barcode_[i];
-
-    // calculate a score for the barcode comparison
-    double totalErrors = 0;
-    double weightedErr = 0;
-    int flow;
-
-    // lets not try and look at more flows than we were provided!
-    int endFlow = bce.end_flow;
-    if (endFlow >= flow_order_.num_flows())
-      endFlow = flow_order_.num_flows()-1;
-
-    totalFlows = endFlow - bce.start_flow + 1;
-
-    for (flow = bce.start_flow; flow <= endFlow; ++flow) {
-
-      double delta = bce.flow_seq[flow] - BASES(sffentry.flowgram[flow]);
-      // AS: for weighted scoring may want to give more weight to accurate 1-mers
-      double delta_res = 2*fabs(sffentry.flowgram[flow]/100.0 - BASES(sffentry.flowgram[flow])); //used for weighted scoring
-
-      if (delta < 0)
-        delta = -delta;
-      totalErrors += delta;
-      weightedErr += delta * (1-delta_res);
-    }
-
-    double score = 0.0;
-    double weightedscore = 0.0;
-    if (totalFlows > 0) {
-      score = 1.0 - ( double ) totalErrors/ ( double ) totalFlows;
-      weightedscore = 1.0 - ( double ) weightedErr/ ( double ) totalFlows;
-    }
-
-
-    // see if this score is the best (best starts at minimum so might never hit)
-    if (score_mode_ == 1 or score_mode_ == 2) // looks at flow-space absolute error counts, not ratios
-    {
-      if (totalErrors <= minErrors)
-      {
-        minErrors = totalErrors;
-        bestBarcodeIndex = i;
-        old_weightedErr = weightedErr;
+      int num_errors = 0;
+      for (int flow = 0, base = 0; flow <= barcode_[bc].end_flow; ++flow) {
+        int hp_length = 0;
+        while (base < processed_read.filter.n_bases and base_to_flow[base] == flow) {
+          base++;
+          hp_length++;
+        }
+        if (flow >= barcode_[bc].start_flow)
+          num_errors += abs(barcode_[bc].flow_seq[flow] - hp_length);
       }
-      // use weighted error to resolve conflicts
-      else if ( ( score_mode_ == 2 ) && ( totalErrors == minErrors ) && ( bestBarcodeIndex > -1 ) && ( weightedErr < old_weightedErr ) )
-      {
-        bestBarcodeIndex = i;
-        old_weightedErr = weightedErr;
+
+      if (num_errors < best_errors) {
+        best_errors = num_errors;
+        best_barcode = bc;
       }
     }
-    else   //default score mode
-    {
-      if ( score > bestScore )
-      {
-        bestScore = score;
-        bestBarcodeIndex = i;
-        old_weightedscore = weightedscore;
-      }
-      // use weighted score to resolve conflicts
-      else if ( ( fabs ( bestScore - score ) < 0.000001 ) && ( bestBarcodeIndex > -1 ) && ( weightedscore < old_weightedscore ) )
-        bestBarcodeIndex = i;
-    }
-
   }
-  // end barcode loop
 
-  // generate the barcode match struct and return to user
-  // MGD note - we might just want to have the user pass in a pre-allocated struct or something so we don't thrash mem so bad
-  if (bestBarcodeIndex == -1) {
+  else if (score_mode_ == 3) { // Minimize square-distance to barcode predicted signal
+
+    for (int bc = 0; bc < num_barcodes_; ++bc) {
+
+      float xy = 0;
+      float yy = 0;
+      for (int flow = barcode_[bc].start_flow; flow <= barcode_[bc].end_flow; ++flow) {
+        xy += barcode_[bc].predicted_signal[flow] * basecaller_read.normalized_measurements[flow];
+        yy += basecaller_read.normalized_measurements[flow] * basecaller_read.normalized_measurements[flow];
+      }
+      if (yy == 0)
+        continue;
+
+      float distance = 0;
+      for (int flow = barcode_[bc].start_flow; flow <= barcode_[bc].end_flow; ++flow)
+        distance += fabs(barcode_[bc].predicted_signal[flow] - basecaller_read.normalized_measurements[flow] * xy / yy);
+
+      if (distance < best_distance) {
+        best_errors = (int)distance;
+        second_best_distance = best_distance;
+        best_distance = distance;
+        best_barcode = bc;
+      }
+      else if (distance < second_best_distance)
+        second_best_distance = distance;
+    }
+
+    if (second_best_distance - best_distance  < score_separation_)
+      best_barcode = -1;
+  }
+
+
+  if (best_barcode == -1) {
     int x, y;
     barcode_mask_.IndexToRowCol (read_index, y, x);
     barcode_mask_.SetBarcodeId(x, y, 0);
-    sffentry.barcode_id = no_barcode_read_group_;
+    processed_read.read_group_index = no_barcode_read_group_;
     return;
   }
 
-  const Barcode& bce = barcode_[bestBarcodeIndex];
-
-  // since the match done in flowspace allows for errors, we need to see where in the input read we really want to clip in terms of bases
-  // count the number of bases called based on the input flowVals but using the barcode's expected number of flows
-  int bases = 0;
-  for (int flow = 0; flow < bce.num_flows-1; ++flow)
-    bases += BASES ( sffentry.flowgram[flow] );
-
-  // special-case for the last flow since bases may match library insert as well
-  // additional is how many we found minus how many we expected for the barcode end (or 5'-adpater end)
-  if ( BASES ( sffentry.flowgram[bce.num_flows-1] ) > 0 )
-  { // if we called at least one base on the last flow, need to make sure we clip correctly
-    int additional = BASES ( sffentry.flowgram[bce.num_flows-1] ) - bce.flow_seq[bce.num_flows-1];
-    bases += bce.flow_seq[bce.num_flows-1];
-    if ( additional < 0 )
-      bases += additional; // remove bases that spilled over into real read
-  }
-
-  // keep track of the average residual error in the fit for each barcode type
-
-  sffentry.clip_adapter_left = bases+1; // Trim this many bases
+  const Barcode& bce = barcode_[best_barcode];
 
   int x, y;
   barcode_mask_.IndexToRowCol (read_index, y, x);
   barcode_mask_.SetBarcodeId(x, y, (uint16_t)bce.mask_index);
-  sffentry.barcode_id = bce.read_group_index;
-  sffentry.barcode_n_errors = minErrors;
+  processed_read.read_group_index = bce.read_group_index;
+
+  processed_read.barcode_n_errors = best_errors;
+
+  processed_read.filter.n_bases_prefix = 0;
+  while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows-1)
+    processed_read.filter.n_bases_prefix++;
+
+  int last_homopolymer = bce.last_homopolymer;
+  while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows and last_homopolymer > 0) {
+    processed_read.filter.n_bases_prefix++;
+    last_homopolymer--;
+  }
 }
 
 

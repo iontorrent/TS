@@ -2,10 +2,12 @@
 
 //! @file     OrderedDatasetWriter.cpp
 //! @ingroup  BaseCaller
-//! @brief    OrderedDatasetWriter. Thread-safe, barcode-friendly SFF/BAM writer with deterministic order
+//! @brief    OrderedDatasetWriter. Thread-safe, barcode-friendly BAM writer with deterministic order
 
 #include "OrderedDatasetWriter.h"
 
+#include <sstream>
+#include <iomanip>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -14,25 +16,32 @@
 
 using namespace std;
 
+class ThousandsSeparator : public numpunct<char> {
+protected:
+    string do_grouping() const { return "\03"; }
+};
+
 
 OrderedDatasetWriter::OrderedDatasetWriter()
 {
   num_regions_ = 0;
   num_regions_written_ = 0;
-  pthread_mutex_init(&dropbox_write_mutex_, NULL);
-  pthread_mutex_init(&sff_write_mutex_, NULL);
+  pthread_mutex_init(&dropbox_mutex_, NULL);
+  pthread_mutex_init(&write_mutex_, NULL);
+  pthread_mutex_init(&delete_mutex_, NULL);
 }
 
 OrderedDatasetWriter::~OrderedDatasetWriter()
 {
-  pthread_mutex_destroy(&dropbox_write_mutex_);
-  pthread_mutex_destroy(&sff_write_mutex_);
+  pthread_mutex_destroy(&dropbox_mutex_);
+  pthread_mutex_destroy(&write_mutex_);
+  pthread_mutex_destroy(&delete_mutex_);
 }
 
 
 void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions, const ion::FlowOrder& flow_order, const string& key,
     const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
-    const string& production_date, const string& platform_unit)
+    const string& production_date, const string& platform_unit, bool save_filtered_reads)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -44,10 +53,25 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
   num_datasets_ = datasets.num_datasets();
   num_barcodes_ = datasets.num_barcodes();
+  num_read_groups_ = datasets.num_read_groups();
   num_reads_.resize(num_datasets_,0);
   bam_filename_.resize(num_datasets_);
 
-  map_barcode_to_dataset_.clear();
+  save_filtered_reads_ = save_filtered_reads;
+
+  read_group_name_.resize(num_read_groups_);
+  read_group_dataset_.assign(num_read_groups_, -1);
+  read_group_num_Q20_bases_.assign(num_read_groups_,0);
+  read_group_num_barcode_errors_.resize(num_read_groups_);
+
+  for (int rg = 0; rg < num_read_groups_; ++rg) {
+    read_group_name_[rg] = datasets.read_group_name(rg);
+    read_group_num_barcode_errors_[rg].assign(3,0);
+  }
+
+  // New filtering and trimming accounting (per read group)
+
+  read_group_stats_.resize(num_read_groups_);
 
   bam_writer_.resize(num_datasets_, NULL);
 
@@ -71,13 +95,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       string read_group_name = (*rg).asString();
       Json::Value& read_group_json = datasets.read_groups()[read_group_name];
 
-      int rg_index = datasets.read_group_name_to_id(read_group_name);
-      map_barcode_id_to_rg_[rg_index] = read_group_name;
-      map_barcode_to_dataset_[rg_index] = ds;
-      num_reads_per_barcode_[rg_index] = 0;
-      num_bases_per_barcode_[rg_index] = 0;
-      num_Q20_bases_per_barcode_[rg_index] = 0;
-      num_barcode_errors_[rg_index].assign(3,0);
+      read_group_dataset_[datasets.read_group_name_to_id(read_group_name)] = ds;
 
       SamReadGroup read_group (read_group_name);
       read_group.FlowOrder = flow_order.full_nucs();
@@ -111,11 +129,13 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
 
 
-void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, bool quiet)
+void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& dataset_nickname)
 {
 
-  for (;num_regions_written_ < num_regions_; num_regions_written_++)
+  for (;num_regions_written_ < num_regions_; num_regions_written_++) {
     PhysicalWriteRegion(num_regions_written_);
+    region_dropbox_[num_regions_written_].clear();
+  }
 
   for (int ds = 0; ds < num_datasets_; ++ds) {
     if (bam_writer_[ds]) {
@@ -128,129 +148,94 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, bool quiet)
       string read_group_name = (*rg).asString();
       Json::Value& read_group_json = datasets.read_groups()[read_group_name];
       int rg_index = datasets.read_group_name_to_id(read_group_name);
-      read_group_json["read_count"] = num_reads_per_barcode_[rg_index];
-      read_group_json["total_bases"] = num_bases_per_barcode_[rg_index];
-      read_group_json["Q20_bases"] = num_Q20_bases_per_barcode_[rg_index];
-      read_group_json["barcode_errors_hist"][0] = num_barcode_errors_[rg_index][0];
-      read_group_json["barcode_errors_hist"][1] = num_barcode_errors_[rg_index][1];
-      read_group_json["barcode_errors_hist"][2] = num_barcode_errors_[rg_index][2];
+      read_group_json["read_count"]  = (Json::UInt64)read_group_stats_[rg_index].num_reads_final_;
+      read_group_json["total_bases"] = (Json::UInt64)read_group_stats_[rg_index].num_bases_final_;
+      read_group_json["Q20_bases"]   = (Json::UInt64)read_group_num_Q20_bases_[rg_index];
+      read_group_json["barcode_errors_hist"][0] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][0];
+      read_group_json["barcode_errors_hist"][1] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][1];
+      read_group_json["barcode_errors_hist"][2] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][2];
     }
 
-    if (!quiet)
-      printf("Generated %s with %d reads\n", bam_filename_[ds].c_str(), num_reads_[ds]);
-
+    if (!dataset_nickname.empty())
+      printf("%s: Generated %s with %d reads\n", dataset_nickname.c_str(), bam_filename_[ds].c_str(), num_reads_[ds]);
   }
+
+  for (int rg = 0; rg < num_read_groups_; ++rg)
+    combined_stats_.MergeFrom(read_group_stats_[rg]);
+  if (!dataset_nickname.empty())
+    combined_stats_.PrettyPrint(dataset_nickname);
 }
 
 
-void OrderedDatasetWriter::WriteRegion(int region, deque<SFFEntry> &region_reads)
+void OrderedDatasetWriter::WriteRegion(int region, deque<ProcessedRead> &region_reads)
 {
   // Deposit results in the dropbox
-  pthread_mutex_lock(&dropbox_write_mutex_);
+  pthread_mutex_lock(&dropbox_mutex_);
   region_dropbox_[region].swap(region_reads);
   region_ready_[region] = true;
-  pthread_mutex_unlock(&dropbox_write_mutex_);
+  pthread_mutex_unlock(&dropbox_mutex_);
 
   // Attempt writing duty
-  if (pthread_mutex_trylock(&sff_write_mutex_))
+  if (pthread_mutex_trylock(&write_mutex_))
     return;
+  int num_regions_deleted = num_regions_written_;
   while (true) {
-    pthread_mutex_lock(&dropbox_write_mutex_);
+    pthread_mutex_lock(&dropbox_mutex_);
     bool cannot_write = !region_ready_[num_regions_written_];
-    pthread_mutex_unlock(&dropbox_write_mutex_);
+    pthread_mutex_unlock(&dropbox_mutex_);
     if (cannot_write)
       break;
     PhysicalWriteRegion(num_regions_written_);
     num_regions_written_++;
   }
-  pthread_mutex_unlock(&sff_write_mutex_);
+  pthread_mutex_unlock(&write_mutex_);
+
+  // Destroy written reads, outside of mutex block
+  if (pthread_mutex_trylock(&delete_mutex_))
+    return;
+  while (num_regions_deleted < num_regions_written_)
+    region_dropbox_[num_regions_deleted++].clear();
+  pthread_mutex_unlock(&delete_mutex_);
 }
 
 
 void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 {
-  for (deque<SFFEntry>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); entry++) {
+  for (deque<ProcessedRead>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); entry++) {
 
-    // write
+    // Step 1: Read filtering and trimming accounting
 
-    int target_file_idx = map_barcode_to_dataset_[entry->barcode_id];
+    read_group_stats_[entry->read_group_index].AddRead(entry->filter);
+
+    // Step 2: Should this read be saved?
+
+    if (entry->filter.is_filtered and not save_filtered_reads_)
+      continue;
+
+    int target_file_idx = read_group_dataset_[entry->read_group_index];
+    if (target_file_idx < 0) // Read group not assigned to a dataset?
+      continue;
+
+    // Step 3: Other misc stats
+
     num_reads_[target_file_idx]++;
-    num_reads_per_barcode_[entry->barcode_id]++;
 
-    BamAlignment bam_alignment;
-
-    int clip_start = 0;
-    if (entry->clip_qual_left > 0)
-      clip_start = max(clip_start,(int)entry->clip_qual_left-1);
-    if (entry->clip_adapter_left > 0)
-      clip_start = max(clip_start,(int)entry->clip_adapter_left-1);
-
-    int clip_end = entry->n_bases;
-    if (entry->clip_qual_right > 0)
-      clip_end = min(clip_end,(int)entry->clip_qual_right);
-    if (entry->clip_adapter_right > 0)
-      clip_end = min(clip_end,(int)entry->clip_adapter_right);
-
-    bam_alignment.SetIsMapped(false);
-    bam_alignment.Name = entry->name;
-    bam_alignment.QueryBases.reserve(entry->n_bases);
-    bam_alignment.Qualities.reserve(entry->n_bases);
-    for (int base = clip_start; base < clip_end; ++base) {
-      bam_alignment.QueryBases.push_back(entry->bases[base]);
-      bam_alignment.Qualities.push_back(entry->quality[base] + 33);
-      num_bases_per_barcode_[entry->barcode_id]++;
-      if (entry->quality[base]>=20)
-        num_Q20_bases_per_barcode_[entry->barcode_id]++;
-      int clipped_quality = min((int)entry->quality[base],49);
-      qv_histogram_[clipped_quality]++;
+    for (int base = 0; base < (int)entry->bam.Qualities.length(); ++base) {
+      int quality = entry->bam.Qualities[base] - 33;
+      if (quality >= 20)
+        read_group_num_Q20_bases_[entry->read_group_index]++;
+      qv_histogram_[min(quality,49)]++;
     }
-
-    int clip_flow = 0;
-    for (int base = 0; base <= clip_start and base < entry->n_bases; ++base)
-      clip_flow += entry->flow_index[base];
-    if (clip_flow > 0)
-      clip_flow--;
-
-    bam_alignment.AddTag("RG","Z", map_barcode_id_to_rg_[entry->barcode_id]);
-    bam_alignment.AddTag("PG","Z", string("bc"));
-    bam_alignment.AddTag("ZF","i", clip_flow);
-    bam_alignment.AddTag("FZ", entry->flowgram);
-
-    // This should be optional
-    if (entry->clip_adapter_right > 0) {
-      bam_alignment.AddTag("ZA", "i", entry->clip_adapter_right - clip_start);
-      bam_alignment.AddTag("ZG", "i", entry->clip_adapter_flow);
-    }
-
-    bam_writer_[target_file_idx]->SaveAlignment(bam_alignment);
 
     int n_errors = max(0,min(2,entry->barcode_n_errors));
-    num_barcode_errors_[entry->barcode_id][n_errors]++;
+    read_group_num_barcode_errors_[entry->read_group_index][n_errors]++;
 
+    // Actually write out the read
 
+    entry->bam.AddTag("RG","Z", read_group_name_[entry->read_group_index]);
+    entry->bam.AddTag("PG","Z", string("bc"));
+    bam_writer_[target_file_idx]->SaveAlignment(entry->bam);
   }
-  region_dropbox_[region].clear();
-}
-
-
-
-
-void  SFFEntry::swap(SFFEntry &w)
-{
-  int x;
-  int32_t y;
-  x = n_bases; n_bases = w.n_bases; w.n_bases = x;
-  y = clip_qual_left; clip_qual_left = w.clip_qual_left; w.clip_qual_left = y;
-  y = clip_qual_right; clip_qual_right = w.clip_qual_right; w.clip_qual_right = y;
-  y = clip_adapter_left; clip_adapter_left = w.clip_adapter_left; w.clip_adapter_left = y;
-  y = clip_adapter_right; clip_adapter_right = w.clip_adapter_right; w.clip_adapter_right = y;
-  x = clip_adapter_flow; clip_adapter_flow = w.clip_adapter_flow; w.clip_adapter_flow = x;
-  x = barcode_id; barcode_id = w.barcode_id; w.barcode_id = x;
-  name.swap(w.name);
-  flowgram.swap(w.flowgram);
-  flow_index.swap(w.flow_index);
-  bases.swap(w.bases);
-  quality.swap(w.quality);
 }
 
 

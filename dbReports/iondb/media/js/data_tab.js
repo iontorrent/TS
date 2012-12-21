@@ -1,3 +1,7 @@
+String.prototype.endsWith = function(suffix) {
+    return this.indexOf(suffix, this.length - suffix.length) !== -1;
+};
+
 var mainRuns = null;
 var storage_choices = {
     "KI": "Keep",
@@ -54,7 +58,12 @@ $(function () {
                 "read_length": function(){
                     return this.quality_metrics && Math.round(this.quality_metrics.q0_mean_read_length);
                 },
-                "date_string": kendo.toString(this.model.get("timeStamp"),"yyyy/MM/dd hh:mm tt")
+                "date_string": kendo.toString(this.model.get("timeStamp"),"yyyy/MM/dd hh:mm tt"),
+                "isArchivable": function(){
+                    return this.status == "Completed" 
+                            && this.reportStatus != 'Archived' 
+                            && (this.reportStatus == 'Nothing' || !this.reportStatus.endsWith('ing'));
+                }
             }));
         },
 
@@ -71,55 +80,69 @@ $(function () {
         export_report: function(e) {
         	e.preventDefault();
         	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('E', 'Export');
+            return this.post_action('E', 'Export', true);
         },
 
         prune: function(e) {
         	e.preventDefault();
         	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('P', 'Prune');
+            return this.post_action('P', 'Prune', true);
         },
 
         archive: function(e) {
         	e.preventDefault();
         	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('A', 'Archive');
+            return this.post_action('A', 'Archive', true);
         },
 
         delete_report: function(e) {
         	e.preventDefault();
         	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('D', 'Delete');
+            return this.post_action('D', 'Delete', true);
         },
         
         exempt: function(e) {
         	e.preventDefault();
         	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-        	return this.post_action('Z', 'Exempt');
+        	return this.post_action('Z', 'Exempt', false);
         },
 
-        post_action: function (setstr, message) {
+        post_action: function (setstr, message, showModal) {
         	console.log("Creating Dialog")
-            var url = '/rundb/report/' + this.model.id + '/' + setstr;
+            var url = '/report/action/' + this.model.id + '/' + setstr;
             var currentPage = window.location.href;
             var refreshPage = function() {
-            	window.location.href = currentPage;
-            	window.location.reload(true);
+                window.location.href = currentPage;
+                window.location.reload(true);
             }
-            $('#modal_data_management .modal-header h3').text("Report " 
-            	+ this.model.get("resultsName") + " will now " 
-            	+ message + ". Proceed?");
-            $("#modal_data_management .btn-primary").click(function() {
-            	var data = {};
-            	data.comment = $.trim($("#data_management_comments").val()) || 'noComment';
-            	
-                $.post(url, data, refreshPage).fail(function() {
-                    	alert('Error: could not complete task. Check the report log for more details.');
-						refreshPage();
+            var post_action_helper = function(url, data, refreshPage) {
+                $.post(url, data, refreshPage).error(function() {
+                    $('#modal_data_management_errors').empty().append('<p>Unable to complete task. Check the report log for more details.</p>').removeClass('hide');
+                    setTimeout(function() {
+                        refreshPage();
+                    }, 2000);
                 });
-            });
-			
-			$('#modal_data_management').modal('show');
+            }
+            if (showModal) {
+                $('#modal_data_management .modal-header h3').text("Report " 
+                    + this.model.get("resultsName") + " will now " 
+                    + message + ". Proceed?");
+                $('#modal_data_management_errors').addClass('hide').empty();
+                $("#modal_data_management .btn-primary").click(function(e) {
+                    e.preventDefault();
+                    $(e.target).addClass('disabled');
+                    $(e.target).unbind('click');
+                    
+                    var data = {};
+                    data.comment = $.trim($("#data_management_comments").val()) || 'No Comment';
+                    post_action_helper(url, data, refreshPage);
+                });
+                $('#modal_data_management').modal('show');
+            } else {
+                data = {}
+                post_action_helper(url, data, refreshPage);
+            }
+
             return false;
         },
 
@@ -260,7 +283,7 @@ $(function () {
             var status = this.model.get("ftpStatus");
             $(this.el).html(this.template.render({
                 "exp": this.model.toJSON(),
-                "prettyExpName": tb.prettyPrintRunName(this.model.get('expName')),
+                "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
                 "date_string": kendo.toString(this.model.get("date"),"yyyy/MM/dd hh:mm tt"),
                 "king_report": this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null,
                 "progress_flows": Math.round((status == "Complete" ? 1: status / 100.0) * this.model.get('flows')),
@@ -397,6 +420,8 @@ $(function () {
                 'toggle_live_update', 'clear_update', 'poll_update', 
                 'csv_download', 'countdown_update', 'appendRun');
             $(".chzn-select").chosen({no_results_text:"No results matched", "allow_single_deselect":true});
+            $('.chzn-drop').css('width', $(".chzn-select").outerWidth()-2);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
+            $('.chzn-search input').css('width', $(".chzn-select").outerWidth()*.815);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
             $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
             this.table_view = null;
             this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
@@ -406,7 +431,8 @@ $(function () {
             this.router = this.options.router;
             this.router.on("route:full_view", this.view_full);
             this.router.on("route:table_view", this.view_table);
-            this.countdown_update();
+            this.live_update = null;
+            //this.countdown_update();
         },
 
         render: function () {
@@ -532,16 +558,16 @@ $(function () {
 					field : "expName",
 					width : '10%',
 					title : "Run Name",
-					template: '<span rel="tooltip" title="#= expName#">#=tb.prettyPrintRunName(expName) # </span>'
+					template: '<span rel="tooltip" title="#= expName#">#=TB.prettyPrintRunName(expName) # </span>'
 				}, {
 					field : "sample",
 					width : '10%',
 					title : "Sample",
-					template : '<span rel="tooltip" title="#= tb.toString(sample)#">#= tb.toString(sample) #<span>'
+					template : '<span rel="tooltip" title="#= TB.toString(sample)#">#= TB.toString(sample) #<span>'
 				}, {
 					title : "Application",
 					sortable : false, 
-            		template: '# if (plan) { # <span class="#=plan.runType#" rel="tooltip" title="#=tb.runTypeDescription(plan.runType)#"></span> # } #'
+            		template: '# if (plan) { # <span class="#=plan.runType#" rel="tooltip" title="#=TB.runTypeDescription(plan.runType)#"></span> # } #'
 				}, {
 					field : "date",
 					title : "Run Date",
@@ -568,11 +594,11 @@ $(function () {
 					field : "library",
 					title : "Ref Genome",
 					width : '5%',
-					template : '<span rel="tooltip" title="#= tb.toString(library)#">#= tb.toString(library) #</span>'
+					template : '<span rel="tooltip" title="#= TB.toString(library)#">#= TB.toString(library) #</span>'
 				}, {
 					field : "barcodeId",
 					title : "Barcode",
-					template : '<span rel="tooltip" title="#= tb.toString(barcodeId)#">#= tb.toString(barcodeId) #</span>'
+					template : '<span rel="tooltip" title="#= TB.toString(barcodeId)#">#= TB.toString(barcodeId) #</span>'
 				}, {
 					field : "flows",
 					width : '3%',
@@ -663,7 +689,7 @@ $(function () {
 
         countdown_update: function () {
             clearTimeout(this.live_update);
-            this.live_update = setTimeout(this.poll_update, 10000);
+            this.live_update = setTimeout(this.poll_update, 20000);
         },
 
         poll_update: function () {
@@ -681,11 +707,13 @@ $(function () {
         toggle_live_update: function() {
         	if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").removeClass('active').text('Live Update Off');
+                this.$("#live_button").addClass('btn-success').text('Auto Update');
+                this.$("#update_status").text('Page is static until refreshed');
                 
             } else {
                 this.start_update();
-                this.$("#live_button").addClass('active').text('Live Update On');
+                this.$("#live_button").removeClass('btn-success').text('Stop Updates');
+                this.$("#update_status").text('Page is updating automatically');
             }
         },
         

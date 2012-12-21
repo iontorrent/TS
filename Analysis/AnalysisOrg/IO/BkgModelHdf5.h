@@ -98,7 +98,7 @@ class BkgParamH5
     void CloseRegion();
 
 
-    void TryInitBeads ( H5File &h5_local_ref );
+    void TryInitBeads ( H5File &h5_local_ref, int verbosity );
 
     void InitRegionEmphasisVector ( H5File &h5_local_ref );
 

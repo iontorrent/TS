@@ -16,20 +16,13 @@ remote procedure call framework.
 # python standard lib
 import json
 from os import path
-import sys
-import traceback
 import re
-import socket
-import traceback
 import urlparse
 import logging
-import tasks
-from twisted.web.xmlrpc import Proxy
-import xmlrpclib
-import time
+from django.core.urlresolvers import reverse
 
 # django
-from django import http,template,shortcuts
+from django import http,shortcuts
 from django.conf import settings
 from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
@@ -39,7 +32,6 @@ from django.views.decorators.cache import never_cache
 # local
 import models
 from iondb.anaserve import  client as anaclient
-import tooltips
 
 _http_re = re.compile(r'^HTTP/1\.\d\s+(\d{3}) [a-zA-Z0-9_ ]+$')
 _http404 = http.HttpResponseNotFound
@@ -111,7 +103,7 @@ def analysis_liveness(request, pk):
     save_path = result.web_root_path(loc)
 
     if web_path:
-        log = path.join(web_path,"log.html")
+        log = reverse("report_log", args=(pk,))
         report_exists = result.report_exist()
     else:
         log = False
@@ -141,26 +133,6 @@ def starRun(request, pk, set):
     return http.HttpResponse()
 
 @login_required
-def change_storage(request, pk, value):
-    """changes the storage option for run raw data"""
-    if request.method == 'POST':
-        try:
-            pk = int(pk)
-        except (TypeError, ValueError):
-            return http.HttpResponseNotFound
-
-        exp = shortcuts.get_object_or_404(models.Experiment, pk=pk)
-        
-        # When changing from Archive option to Delete option, need to reset
-        # the user acknowledge field
-        if exp.storage_options == 'A' and value == 'D':
-            exp.user_ack = 'U'
-            
-        exp.storage_options = value
-        exp.save()
-        return http.HttpResponse()
-
-@login_required
 def change_library(request, pk):
     """changes the library for a run """
     if request.method == 'POST':
@@ -183,67 +155,6 @@ def change_library(request, pk):
     elif request.method == 'GET':
         return http.HttpResponse()
 
-@login_required
-def reportAction(request, pk, option):
-    logger.info("reportAction: request '%s' on report: %s" % (option, pk))
-
-    comment = request.POST.get("comment", "No Comment")
-    
-    try:
-        proxy = xmlrpclib.ServerProxy('http://127.0.0.1:%d' % settings.IARCHIVE_PORT, allow_none=True)
-        if option == 'A':
-            proxy.archive_report(pk, comment)
-        elif option == 'E':
-            proxy.export_report(pk, comment)
-        elif option == "P":
-            proxy.prune_report(pk, comment)
-        elif option == "D":
-            proxy.delete_report(pk, comment)
-        elif option == 'Z':
-            ret = shortcuts.get_object_or_404(models.Results, pk=pk)
-            if ret.autoExempt:
-                ret.autoExempt = False
-            else:
-                ret.autoExempt = True
-            ret.save()
-    except:
-        logger.exception(traceback.format_exc())
-        
-    return http.HttpResponse()
-
-@login_required
-def autorunPlugin(request, pk):
-    """
-    toogle autorun for a plugin
-    """
-    if request.method == 'POST':
-        try:
-            pk = int(pk)
-        except (TypeError, ValueError):
-            return http.HttpResponseNotFound
-
-        p = shortcuts.get_object_or_404(models.Plugin, pk=pk)
-
-        # Ignore request if marked AUTORUNDISABLE
-        if not p.autorunMutable:
-            # aka autorun disable, so make sure it is off
-            if p.autorun:
-                p.autorun = False
-                p.save()
-            return http.HttpResponse() # NotModified, Invalid, Conflict?
-
-        checked = request.POST.get('checked',"false").lower()
-
-        if checked == "false":
-            p.autorun = False
-        if checked == "true":
-            p.autorun = True
-
-        p.save()
-
-        return http.HttpResponse()
-    else:
-        return http.HttpResponseNotAllowed(['POST'])
 
 @login_required
 def delete_barcode(request, pk):
@@ -328,32 +239,6 @@ def progressbox(request,pk):
 
     return render_to_json({"value":ret, "status": res.status})
 
-@login_required
-def control_job(request, pk, signal):
-    """Send ``signal`` to the job denoted by ``pk``, where ``signal``
-    is one of
-    
-    * ``"term"`` - terminate (permanently stop) the job.
-    * ``"stop"`` - stop (pause) the job.
-    * ``"cont"`` - continue (resume) the job.
-    """
-    pk = int(pk)
-    if signal not in set(("term", "stop", "cont")):
-        return http.HttpResponseNotFound("No such signal")
-    result = shortcuts.get_object_or_404(models.Results, pk=pk)
-    loc = result.server_and_location()
-    ip = '127.0.0.1'  #assume, webserver and jobserver on same appliance 
-    conn = anaclient.connect(ip, settings.JOBSERVER_PORT)
-    result.status = 'TERMINATED'
-    result.save()
-    return render_to_json(conn.control_job(pk,signal))
-
-@login_required
-def tooltip(request,tipname):
-    """Return the tooltip with key ``tipname``, or an error message
-    if no such tooltip as found."""
-    raw,encoded = tooltips.tip(tipname)
-    return render_to_json(raw,encoded)
 
 # JSON API stuff
 @login_required
@@ -427,54 +312,3 @@ def last_report():
         ret = None
     return render_to_json(ret)
 
-@login_required
-def enablePlugin(request, pk, set):
-    """Allow user to enable a plugin for use in the analysis"""
-    try:
-        pk = int(pk)
-    except (TypeError,ValueError):
-        return http.HttpResponseNotFound
-
-    plugin = shortcuts.get_object_or_404(models.Plugin, pk=pk)
-    plugin.selected = bool(int(set))
-    plugin.save()
-    return http.HttpResponse()
-
-@login_required
-def enableTestFrag(request, pk, set):
-    """Allow user to enable test fragment for use in the analysis"""
-    try:
-        pk = int(pk)
-    except (TypeError,ValueError):
-        return http.HttpResponseNotFound
-
-    temp = shortcuts.get_object_or_404(models.Template, pk=pk)
-    temp.isofficial = bool(int(set))
-    temp.save()
-    return http.HttpResponse()
-
-@login_required
-def enableEmail(request, pk, set):
-    """Allow user to enable a email"""
-    try:
-        pk = int(pk)
-    except (TypeError,ValueError):
-        return http.HttpResponseNotFound
-
-    email = shortcuts.get_object_or_404(models.EmailAddress, pk=pk)
-    email.selected = bool(int(set))
-    email.save()
-    return http.HttpResponse()
-
-@login_required
-def enableArchive(request, pk, set):
-    """Allow user to enable the archive tool"""
-    try:
-        pk = int(pk)
-    except (TypeError,ValueError):
-        return http.HttpResponseNotFound
-
-    archive = shortcuts.get_object_or_404(models.BackupConfig, pk=pk)
-    archive.online = bool(int(set))
-    archive.save()
-    return http.HttpResponse()

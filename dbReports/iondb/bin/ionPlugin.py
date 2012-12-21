@@ -17,7 +17,7 @@ from iondb.plugins.manager import pluginmanager
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 40777 $")
+__version__ = filter(str.isdigit, "$Revision: 47186 $")
 
 # Setup log file logging
 try:
@@ -115,7 +115,7 @@ def SGEPluginJob(start_json):
 
         #Make sure the dirs exist
         if not os.path.exists(plugin_output):
-            os.makedirs(plugin_output, 0755)
+            os.makedirs(plugin_output, 0775)
 
         # Write start_json to startplugin.json file.
         startpluginjson = os.path.join(plugin_output,'startplugin.json')

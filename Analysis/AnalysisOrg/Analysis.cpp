@@ -3,8 +3,8 @@
 // Ion Torrent Systems, Inc.
 // Analysis Pipeline
 // (c) 2009
-// $Rev: 43200 $
-//  $Date: 2012-09-24 10:33:48 -0700 (Mon, 24 Sep 2012) $
+// $Rev: 47540 $
+//  $Date: 2012-11-24 13:25:22 -0800 (Sat, 24 Nov 2012) $
 //
 
 #include <stdio.h>
@@ -48,7 +48,6 @@
 
 #include "ReservoirSample.h"
 #include "IonErr.h"
-#include "RegionAnalysis.h"
 #include "ChipIdDecoder.h"
 #include "SetUpForProcessing.h"
 #include "TrackProgress.h"

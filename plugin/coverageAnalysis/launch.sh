@@ -3,7 +3,7 @@
 
 #MAJOR_BLOCK
 
-VERSION="3.2.1-44445"
+VERSION="3.4.49291"
 
 # Disable excess debug output for test machine
 #set +o xtrace
@@ -12,7 +12,12 @@ VERSION="3.2.1-44445"
 # NOTE: the following should be set to 0 in production mode
 PLUGIN_DEV_FULL_LOG=0;          # 1 for coverage analysis log, 2 for additional xtrace (not recommended)
 CONTINUE_AFTER_BARCODE_ERROR=1;	# 0 to have plugin fail after first barcode failure
-TWO_SETS_OUTPUT=0;		# 1 to revert to 2.2 style of barcode summary report
+
+# Get the (non-bc) run name from the BAM file - should be the same as ${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}
+PLUGIN_BAM_FILE=`echo "$TSP_FILEPATH_BAM" | sed -e 's/^.*\///'`
+PLUGIN_BAM_NAME=`echo $PLUGIN_BAM_FILE | sed -e 's/\.[^.]*$//'`
+PLUGIN_RUN_NAME="$TSP_FILEPATH_OUTPUT_STEM"
+REFERENCE="$TSP_FILEPATH_GENOME_FASTA"
 
 # Check for by-pass PUI
 if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
@@ -22,6 +27,10 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
   IFS=$OLD_IFS
   PLUGINCONFIG__LIBRARYTYPE=${PLAN_INFO[0]}
   PLUGINCONFIG__TARGETREGIONS=${PLAN_INFO[1]}
+  PLUGINCONFIG__TRIMREADS="No"
+  PLUGINCONFIG__PADTARGETS=0
+  PLUGINCONFIG__UNIQUEMAPS="Yes"
+  PLUGINCONFIG__NONDUPS="Yes"
   if [ -z "$PLUGINCONFIG__LIBRARYTYPE" ]; then
     rm -f "${TSP_FILEPATH_PLUGIN_DIR}/results.json"
     HTML="${TSP_FILEPATH_PLUGIN_DIR}/${PLUGINNAME}.html"
@@ -37,10 +46,12 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     exit
   elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "ampliseq" ]; then
     PLUGINCONFIG__LIBRARYTYPE_ID="Ion AmpliSeq"
+    PLUGINCONFIG__TRIMREADS="Yes"
+    PLUGINCONFIG__NONDUPS="No"
   elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "targetseq" ]; then
     PLUGINCONFIG__LIBRARYTYPE_ID="Ion TargetSeq"
-  elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "fullgenome" ]; then
-    PLUGINCONFIG__LIBRARYTYPE_ID="Full Genome"
+  elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "wholegenome" ]; then
+    PLUGINCONFIG__LIBRARYTYPE_ID="Whole Genome"
   else
     echo "ERROR: Unexpected Library Type: $PLUGINCONFIG__LIBRARYTYPE" >&2
     exit 1
@@ -49,15 +60,16 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     PLUGINCONFIG__TARGETREGIONS_ID=""
   else
     PLUGINCONFIG__TARGETREGIONS_ID=`echo "$PLUGINCONFIG__TARGETREGIONS" | sed -e 's/^.*\///' | sed -e 's/\.bed$//'`
-    PLUGINCONFIG__TARGETREGIONS=`echo "$PLUGINCONFIG__TARGETREGIONS" | sed -e 's/\/unmerged\/detail\//\/merged\/plain\//'`
   fi
-  PLUGINCONFIG__PADTARGETS=0
-  PLUGINCONFIG__UNIQUEMAPS="No"
-  PLUGINCONFIG__NONDUPS="No"
 else
   # Grab PUI parameters
   PLUGINCONFIG__LIBRARYTYPE_ID=`echo "$PLUGINCONFIG__LIBRARYTYPE_ID" | sed -e 's/_/ /g'`
   PLUGINCONFIG__TARGETREGIONS_ID=`echo "$PLUGINCONFIG__TARGETREGIONS_ID" | sed -e 's/_/ /g'`
+  if [ -n "$PLUGINCONFIG__TRIMREADS" ]; then
+    PLUGINCONFIG__TRIMREADS="Yes"
+  else
+    PLUGINCONFIG__TRIMREADS="No"
+  fi
   if [ -n "$PLUGINCONFIG__UNIQUEMAPS" ]; then
     PLUGINCONFIG__UNIQUEMAPS="Yes"
   else
@@ -70,49 +82,63 @@ else
   fi
 fi
 
-PLUGIN_TARGETS=$PLUGINCONFIG__UNPTARGETS
+# Customize analysis options based on library type
+PLUGIN_DETAIL_TARGETS=$PLUGINCONFIG__TARGETREGIONS
+if [ "$PLUGIN_DETAIL_TARGETS" = "none" ]; then
+  PLUGIN_DETAIL_TARGETS=""
+fi
+PLUGIN_RUNTYPE=$PLUGINCONFIG__LIBRARYTYPE
+PLUGIN_TARGETS=`echo "$PLUGIN_DETAIL_TARGETS" | sed -e 's/\/unmerged\/detail\//\/merged\/plain\//'`
+PLUGIN_ANNOFIELDS=""
+AMPOPT=""
+if [ "$PLUGIN_RUNTYPE" = "ampliseq" ]; then
+  PLUGIN_ANNOFIELDS="-f 4,8"
+  AMPOPT="-a"
+elif [ "$PLUGIN_RUNTYPE" = "targetseq" ]; then
+  # used merged detail target for base coverage to assigned targets
+  PLUGIN_DETAIL_TARGETS=`echo "$PLUGIN_DETAIL_TARGETS" | sed -e 's/\/unmerged\//\/merged\//'`
+  PLUGIN_ANNOFIELDS="-f 4,8"
+fi
+PLUGIN_TRIMREADS=$PLUGINCONFIG__TRIMREADS
 PLUGIN_PADSIZE=$PLUGINCONFIG__PADTARGETS
 PLUGIN_UMAPS=$PLUGINCONFIG__UNIQUEMAPS
 PLUGIN_NONDUPS=$PLUGINCONFIG__NONDUPLICATES
+PLUGIN_TRGSID=`echo "$PLUGIN_TARGETS" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
 
-# Override possible non-sense parameter combinations
-if [ "$PLUGINCONFIG__LIBRARYTYPE" == "ampliseq" ]; then
-  PLUGIN_UMAPS="Yes"
-  PLUGIN_NONDUPS="No"
-elif [ "$PLUGINCONFIG__LIBRARYTYPE" == "fullgenome" ]; then
-  PLUGIN_PADSIZE=0
-fi
+# Override possible non-sense parameter combinations (?)
+#if [ "$PLUGINCONFIG__LIBRARYTYPE" == "ampliseq" ]; then
+#  PLUGIN_UMAPS="Yes"
+#  PLUGIN_NONDUPS="No"
+#elif [ "$PLUGINCONFIG__LIBRARYTYPE" == "wholegenome" ]; then
+#  PLUGIN_PADSIZE=0
+#fi
 
-# Check for merged BAM file override
+# Used to check for for merged BAM file override here
 PLUGIN_CHECKBC=1
-if [ -n "$PLUGINCONFIG__MERGEDBAM" ]; then
-    TSP_FILEPATH_BAM=$PLUGINCONFIG__MERGEDBAM
-    PLUGIN_CHECKBC=0
-else
-    PLUGINCONFIG__MERGEDBAM_ID='Current Report'
-fi
 
 echo "Selected run options:" >&2
-echo "  Aligned Reads:   $PLUGINCONFIG__MERGEDBAM_ID" >&2
 echo "  Library Type:    $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
-echo "  Target regions:  $PLUGINCONFIG__TARGETREGIONS_ID" >&2
-echo "  Target padding:  $PLUGINCONFIG__PADTARGETS" >&2
-echo "  Uniquely mapped: $PLUGINCONFIG__UNIQUEMAPS" >&2
+echo "  Target Regions:  $PLUGINCONFIG__TARGETREGIONS_ID" >&2
+echo "  Target Padding:  $PLUGINCONFIG__PADTARGETS" >&2
+echo "  Trim Reads:      $PLUGINCONFIG__TRIMREADS" >&2
+echo "  Uniquely Mapped: $PLUGINCONFIG__UNIQUEMAPS" >&2
 echo "  Non-duplicate:   $PLUGINCONFIG__NONDUPLICATES" >&2
 
 echo "Employed run options:" >&2
-echo "  Reference Genome: $TSP_FILEPATH_GENOME_FASTA" >&2
+echo "  Reference Genome: $REFERENCE" >&2
 echo "  Aligned Reads:    $TSP_FILEPATH_BAM" >&2
-echo "  Library Type:     $PLUGINCONFIG__LIBRARYTYPE" >&2
-echo "  Target Regions:   $PLUGIN_TARGETS" >&2
-echo "  Target padding:   $PLUGIN_PADSIZE" >&2
-echo "  Uniquely mapped:  $PLUGIN_UMAPS" >&2
+echo "  Library Type:     $PLUGIN_RUNTYPE" >&2
+echo "  Target Regions:   $PLUGIN_DETAIL_TARGETS" >&2
+echo "  Merged Regions:   $PLUGIN_TARGETS" >&2
+echo "  Target Padding:   $PLUGIN_PADSIZE" >&2
+echo "  Trim Reads:       $PLUGIN_TRIMREADS" >&2
+echo "  Uniquely Mapped:  $PLUGIN_UMAPS" >&2
 echo "  Non-duplicate:    $PLUGIN_NONDUPS" >&2
 
 # Check for missing files
-if [ -n "$PLUGIN_TARGETS" ]; then
-  if [ ! -f "$PLUGIN_TARGETS" ]; then
-    echo "ERROR: Cannot locate target regions file: ${PLUGIN_TARGETS}" >&2
+if [ -n "$PLUGIN_DETAIL_TARGETS" ]; then
+  if [ ! -e "$PLUGIN_DETAIL_TARGETS" ]; then
+    echo "ERROR: Cannot locate target regions file: ${PLUGIN_DETAIL_TARGETS}" >&2
     exit 1
   fi
 fi
@@ -122,18 +148,18 @@ if ! [ -d "$TSP_FILEPATH_PLUGIN_DIR" ]; then
 fi
 
 # Definition of file names, etc.
-PLUGIN_BAM_FILE=`echo "$TSP_FILEPATH_BAM" | sed -e 's/^.*\///'`
-PLUGIN_BAM_NAME=`echo $PLUGIN_BAM_FILE | sed -e 's/\.[^.]*$//'`
-PLUGIN_RUN_NAME="$TSP_RUN_NAME"
+LIFECHART="${DIRNAME}/lifechart"
+PLUGIN_OUT_COVERAGE_HTML="COVERAGE_html"
 BARCODES_LIST="${TSP_FILEPATH_PLUGIN_DIR}/barcodeList.txt"
 SCRIPTSDIR="${DIRNAME}/scripts"
 JSON_RESULTS="${TSP_FILEPATH_PLUGIN_DIR}/results.json"
 HTML_RESULTS="${PLUGINNAME}.html"
 HTML_BLOCK="${PLUGINNAME}_block.html"
 HTML_ROWSUMS="${PLUGINNAME}_rowsum"
-HTML_TORRENT_WRAPPER=1
+PLUGIN_OUT_FILELINKS="filelinks.xls"
 
 # Definition of fields displayed in barcode link/summary table
+HTML_TORRENT_WRAPPER=1
 PLUGIN_FILTER_READS=0
 PLUGIN_INFO_FILTERED="Coverage statistics for uniquely mapped non-duplicate reads."
 if [ $PLUGIN_UMAPS = "Yes" ];then
@@ -146,61 +172,31 @@ elif [ $PLUGIN_NONDUPS = "Yes" ];then
   PLUGIN_INFO_FILTERED="Coverage statistics for non-duplicate reads."
 fi
 PLUGIN_INFO_ALLREADS="Coverage statistics for all (unfiltered) aligned reads."
+
 BC_COL_TITLE[0]="Mapped Reads"
+BC_COL_HELP[0]="Number of reads that were mapped to the full reference genome."
 BC_COL_TITLE[1]="On Target"
-BC_COL_TITLE[2]="Mean Depth"
-BC_COL_HELP[0]="Number of reads that were mapped to the full."
 BC_COL_HELP[1]="Percentage of mapped reads that were aligned over a target region."
+BC_COL_TITLE[2]="Mean Depth"
 BC_COL_HELP[2]="Mean average target base read depth, including non-covered target bases."
-if [ $TWO_SETS_OUTPUT -ne 0 ]; then
-  BC_COL_TITLE[3]="Coverage"
-  BC_COL_TITLE[4]="Mapped Reads"
-  BC_COL_TITLE[5]="On Target"
-  BC_COL_TITLE[6]="Mean Depth"
-  BC_COL_TITLE[7]="Coverage"
-  BC_COL_HELP[3]="Percentage of target bases that were covered by at least one read."
-  BC_COL_HELP[4]="Number of unique starts reads that were mapped to the full reference."
-  BC_COL_HELP[5]="Percentage of unique starts that were aligned over a target region."
-  BC_COL_HELP[6]="Mean average target base read depth using unique starts, including non-covered target bases."
-  BC_COL_HELP[7]="Percentage of target bases that were covered by at least one read using unique starts."
-else
-  BC_COL_TITLE[3]="Uniformity"
-  BC_COL_TITLE[4]="1x Coverage"
-  BC_COL_TITLE[5]="20x Coverage"
-  BC_COL_TITLE[6]="100x Coverage"
-  BC_COL_TITLE[7]="500x Coverage"
-  BC_COL_HELP[3]="Percentage of target bases covered by at least 0.2x the average base coverage depth."
-  BC_COL_HELP[4]="Percentage of target bases that were covered by at least one read."
-  BC_COL_HELP[5]="Percentage of target bases covered by at least twenty reads."
-  BC_COL_HELP[6]="Percentage of target bases covered by at least one hundred reads."
-  BC_COL_HELP[7]="Percentage of target bases covered by at least five hundred reads."
-fi
+BC_COL_HELP[3]="Percentage of target bases covered by at least 0.2x the average base read depth."
+BC_COL_TITLE[3]="Uniformity"
 
 # Set up report page layout and help text
-BC_COV_PAGE_WIDTH="960px"
-COV_PAGE_WIDTH="480px"
-BC_SUM_ROWS=7
-RUNCOV_OPTS="-s"
+COV_PAGE_WIDTH="700px"
+BC_SUM_ROWS=4
+FILTOPTS=""
 if [ $PLUGIN_FILTER_READS -eq 1 ];then
   # Option to run twice with and w/o filters, producing old-style report
-  if [ $TWO_SETS_OUTPUT -ne 0 ]; then
-    RUNCOV_OPTS=""
-    BC_TITLE_INFO="Coverage summary statistics for all and filtered sampled barcoded reads."
-    BC_SUM_ROWS=8
-    COV_PAGE_WIDTH="960px"
-  else
-    BC_TITLE_INFO="Coverage summary statistics for filtered aligned barcoded reads."
-  fi
+  BC_TITLE_INFO="Coverage summary statistics for filtered aligned barcoded reads."
   if [ $PLUGIN_NONDUPS = "Yes" ];then
-    RUNCOV_OPTS="$RUNCOV_OPTS -d"
+    FILTOPTS="$FILTOPTS -d"
   fi
   if [ $PLUGIN_UMAPS = "Yes" ];then
-    RUNCOV_OPTS="$RUNCOV_OPTS -u"
+    FILTOPTS="$FILTOPTS -u"
   fi
 else
   BC_TITLE_INFO="Coverage summary statistics for all (un-filtered) aligned barcoded reads."
-  #BC_SUM_ROWS=4
-  #BC_COV_PAGE_WIDTH="620px"
 fi
 
 # Set up log options
@@ -212,10 +208,16 @@ if [ "$PLUGIN_DEV_FULL_LOG" -gt 0 ]; then
   fi
 fi
 
+# Direct PLUGIN_TRIMREADS to direct cmd option
+TRIMOPT=""
+if [ "$PLUGIN_TRIMREADS" = "Yes" ]; then
+  TRIMOPT="-t"
+fi
+
 # Source the HTML files for shell functions and define others below
-for HTML_FILE in `find ${DIRNAME}/html/ | grep .sh$`
+for BASH_FILE in `find ${DIRNAME}/functions/ | grep .sh$`
 do
-  source ${HTML_FILE};
+  source ${BASH_FILE};
 done
 
 # --------- Start processing the data ----------
@@ -229,7 +231,7 @@ if [ $PLUGIN_CHECKBC -eq 1 ]; then
   run "sort -t ' ' -k 2n,2 \"$TSP_FILEPATH_BARCODE_TXT\" > \"$BARCODES_LIST\"";
 fi
 
-# Link local copy of js and css
+# Create links to files required for (barcode) report summary table
 run "ln -sf ${DIRNAME}/js ${TSP_FILEPATH_PLUGIN_DIR}/.";
 run "ln -sf ${DIRNAME}/css ${TSP_FILEPATH_PLUGIN_DIR}/.";
 
@@ -243,7 +245,7 @@ fi
 PLUGIN_EFF_TARGETS="$PLUGIN_TARGETS"
 PADDED_TARGETS=""
 if [ $PLUGIN_PADSIZE -gt 0 ];then
-  GENOME="${TSP_FILEPATH_GENOME_FASTA}.fai"
+  GENOME="${REFERENCE}.fai"
   if ! [ -f "$GENOME" ]; then
     echo "WARNING: Could not create padded targets file; genome (.fai) file does not exist at $GENOME" >&2
     echo "- Continuing without padded targets analysis." >&2
@@ -265,38 +267,101 @@ if [ $PLUGIN_PADSIZE -gt 0 ];then
   echo >&2
 fi
 
-# Generate header.html and footer.html for use in secondary results pages
-#  -uses COV_PAGE_WIDTH to specify the inner page width
-write_html_header
-write_html_footer
-
-# Reset COV_PAGE_WIDTH to specify the inner page width for barcode table
-COV_PAGE_WIDTH=$BC_COV_PAGE_WIDTH
+# Create GC annotated BED file for read-to-target assignment
+GCANNOBED=""
+if [ -n "$PLUGIN_DETAIL_TARGETS" ]; then
+  if [ $PLUGIN_DEV_FULL_LOG -gt 0 ]; then
+    echo "Adding GC count information to annotated targets file..." >&2
+  fi
+  GCANNOBED="${TSP_FILEPATH_PLUGIN_DIR}/tca_auxiliary.gc.bed"
+  GCANNOCMD="${SCRIPTSDIR}/gcAnnoBed.pl -s -w -t \"$TSP_FILEPATH_PLUGIN_DIR\" $PLUGIN_ANNOFIELDS \"$PLUGIN_DETAIL_TARGETS\" \"$REFERENCE\" > \"$GCANNOBED\""
+  eval "$GCANNOCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: gcAnnoBed.pl failed." >&2
+    echo "\$ $GCANNOCMD" >&2
+    exit 1;
+  elif [ $PLUGIN_DEV_FULL_LOG -gt 0 ]; then
+    echo "> $GCANNOBED" >&2
+  fi
+fi
 
 # Remove previous results to avoid displaying old before ready
+PLUGIN_OUT_STATSFILE="${PLUGIN_BAM_NAME}.stats.cov.txt"
+
 rm -f "${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}" "${TSP_FILEPATH_PLUGIN_DIR}/$HTML_BLOCK" "$JSON_RESULTS"
+rm -f "$PLUGIN_OUT_COVERAGE_HTML"
+rm -f ${TSP_FILEPATH_PLUGIN_DIR}/*.stats.cov.txt ${TSP_FILEPATH_PLUGIN_DIR}/*.xls ${TSP_FILEPATH_PLUGIN_DIR}/*.png
+rm -f ${TSP_FILEPATH_PLUGIN_DIR}/*.bam*
+
+PLUGIN_OUT_STATSFILE=""
+
+# Creates the body of the detailed report post-analysis
+write_html_results ()
+{
+  local RUNID=${1}
+  local OUTDIR=${2}
+  local OUTURL=${3}
+  local BAMFILE=${4}
+
+  # test for trimmed bam file based results
+  local BAMROOT="$RUNID"
+  if [ "$PLUGIN_TRIMREADS" = "Yes" ]; then
+    PLUGIN_OUT_TRIMPBAM=`echo $BAMFILE | sed -e 's/.bam$/\.trim\.bam/'`
+    if [ -e "${OUTDIR}/$PLUGIN_OUT_TRIMPBAM" ]; then
+      PLUGIN_OUT_TRIMPBAI="${PLUGIN_OUT_TRIMPBAM}.bai"
+      BAMROOT="${RUNID}.trim";
+    else
+      PLUGIN_OUT_TRIMPBAM=""
+    fi
+  fi
+  # Definition of coverage output file names expected in the file links table
+  PLUGIN_OUT_BAMFILE="${RUNID}.bam"
+  PLUGIN_OUT_BAIFILE="${PLUGIN_OUT_BAMFILE}.bai"
+  PLUGIN_OUT_STATSFILE="${BAMROOT}.stats.cov.txt" ; # also needed for json output
+  PLUGIN_OUT_DOCFILE="${BAMROOT}.base.cov.xls"
+  PLUGIN_OUT_AMPCOVFILE="${BAMROOT}.amplicon.cov.xls"
+  PLUGIN_OUT_TRGCOVFILE="${BAMROOT}.target.cov.xls"
+  PLUGIN_OUT_CHRCOVFILE="${BAMROOT}.chr.cov.xls"
+  PLUGIN_OUT_WGNCOVFILE="${BAMROOT}.wgn.cov.xls"
+
+  # Links to folders/files required for html report pages (inside firewall)
+  run "ln -sf \"${DIRNAME}/flot\" \"${OUTDIR}/\"";
+  run "ln -sf \"${LIFECHART}\" \"${OUTDIR}/\"";
+  run "ln -sf \"${SCRIPTSDIR}/igv.php3\" \"${OUTDIR}/\"";
+
+  # Create the html report page
+  echo "(`date`) Publishing HTML report page..." >&2
+  write_file_links "$OUTDIR" "$PLUGIN_OUT_FILELINKS";
+  local HTMLOUT="${OUTDIR}/${HTML_RESULTS}";
+  write_page_header "$LIFECHART/TCA.head.html" "$HTMLOUT";
+  cat "${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML" >> "$HTMLOUT"
+  write_page_footer "$HTMLOUT";
+
+  # Remove temporary files (in each barcode folder)
+  run "rm -f ${OUTDIR}/${PLUGIN_OUT_COVERAGE_HTML}"
+}
 
 # Check for barcodes
 if [ $PLUGIN_CHECKBC -eq 1 ]; then
   barcode;
 else
-  # Link BAM to here for download links - hard link if using a report merged bam
-  if [ -n "$PLUGINCONFIG__MERGEDBAM" ]; then
-    ln -f "$TSP_FILEPATH_BAM" .
-    ln -f "${TSP_FILEPATH_BAM}.bai" .
-  else
-    ln -sf "$TSP_FILEPATH_BAM" .
-    ln -sf "${TSP_FILEPATH_BAM}.bai" .
-  fi
   # Write a front page for non-barcode run
   HTML="${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}"
   write_html_header "$HTML" 15;
   echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
   display_static_progress "$HTML";
   write_html_footer "$HTML";
+  # need to create link early so the correct name gets used if a PTRIM file is created
+  if [ -e "$TSP_FILEPATH_BAM" ]; then
+    TESTBAM=$TSP_FILEPATH_BAM  
+  else
+    TESTBAM="${ANALYSIS_DIR}/${PLUGIN_RUN_NAME}.bam"
+  fi
+  run "ln -sf \"${TESTBAM}\" \"${PLUGIN_RUN_NAME}.bam\""
+  run "ln -sf \"${TESTBAM}.bai\" \"${PLUGIN_RUN_NAME}.bam.bai\""
   # Run on single bam
   RT=0
-  eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $RUNCOV_OPTS -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -H \"${TSP_FILEPATH_PLUGIN_DIR}\" -D \"$TSP_FILEPATH_PLUGIN_DIR\" -B \"$PLUGIN_EFF_TARGETS\" -P \"$PADDED_TARGETS\" -Q \"$HTML_BLOCK\" \"$TSP_FILEPATH_GENOME_FASTA\" \"${TSP_FILEPATH_BAM}\"" || RT=$?
+  eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $FILTOPTS $AMPOPT $TRIMOPT -R \"$HTML_RESULTS\" -D \"$TSP_FILEPATH_PLUGIN_DIR\" -A \"$GCANNOBED\" -B \"$PLUGIN_EFF_TARGETS\" -C \"$PLUGIN_TRGSID\" -P \"$PADDED_TARGETS\" -p $PLUGIN_PADSIZE -Q \"$HTML_BLOCK\" \"$REFERENCE\" \"${PLUGIN_RUN_NAME}.bam\"" || RT=$?
   if [ $RT -ne 0 ]; then
     write_html_header "$HTML";
     echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
@@ -304,24 +369,15 @@ else
     write_html_footer "$HTML";
     exit 1
   fi
+  # Collect results for detail html report and clean up - also sets $PLUGIN_OUT_STATSFILE
+  write_html_results "$PLUGIN_RUN_NAME" "$TSP_FILEPATH_PLUGIN_DIR" "." "${PLUGIN_RUN_NAME}.bam"
   # Write json output
   write_json_header;
-  if [ $TWO_SETS_OUTPUT -ne 0 ]; then
-    write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "all_reads" 2;
-    if [ "$PLUGIN_FILTER_READS" -eq 1 ];then
-      echo "," >> "$JSON_RESULTS"
-      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/filtered_reads" "summary.txt" "filtered_reads" 2;
-    fi
-  else
-    if [ "$PLUGIN_FILTER_READS" -eq 1 ];then
-      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/filtered_reads" "summary.txt" "" 2;
-    else
-      write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}/all_reads" "summary.txt" "" 2;
-    fi
-  fi
+  write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}" "$PLUGIN_OUT_STATSFILE" "" 2;
   write_json_footer;
-  rm -f "${TSP_FILEPATH_PLUGIN_DIR}/$HTML_ROWSUMS"
 fi
 # Remove after successful completion
 rm -f "${TSP_FILEPATH_PLUGIN_DIR}/header" "${TSP_FILEPATH_PLUGIN_DIR}/footer" "$PADDED_TARGETS" "$BARCODES_LIST"
+echo "(`date`) Completed with statitics output to results.json."
+
 

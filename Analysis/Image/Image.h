@@ -29,8 +29,6 @@ enum InterlaceType {
     InterlacedComp = 4
 };
 
-
-
 class Image;
 class ImageCropping; // forward declaration of this global state
 class SynchDat;
@@ -43,6 +41,15 @@ class AcqMovie {
   virtual int GetFrames() const = 0;
   virtual short At ( int well, int frame ) = 0;
 };
+
+
+/* shared mem sem.h */
+typedef struct Image_semaphore {
+    pthread_mutex_t lock;
+    pthread_cond_t nonzero;
+    unsigned count;
+    pthread_t owner;
+}Image_semaphore_t;
 
 class Image : public AcqMovie
 {
@@ -158,6 +165,8 @@ public:
     }
 
     void CalcBeadfindMetric_1 ( Mask *mask, Region r, char *tr, int frameStart=-1, int frameEnd=-1 );
+    void CalcBeadfindMetricIntegral (Mask *mask, Region region, char *idStr, int frameStart, int frameEnd);
+    void CalcBeadfindMetricRegionMean ( Mask *mask, Region region, char *idStr, int frameStart, int frameEnd);
     void FindPeak ( Mask *mask, MaskType these );
     void SetMaxFrames ( int max ) {
         maxFrames = max;
@@ -187,6 +196,9 @@ public:
     double DumpStep ( int c, int r, int w, int h, std::string regionName, char nucChar, std::string nucStepDir, Mask *mask, PinnedInFlow *pinnedInFlow, int flowNumber );
     int DumpDcOffset ( int nSample, std::string dcOffsetDir, char nucChar, int flowNumber );
     void Cleanup();
+    void JustCacheOneImage(const char *name);
+    static void ImageSemGive();
+    static void ImageSemTake();
 
     const double *GetResults() {
         return results;
@@ -259,6 +271,7 @@ public:
 
     RawImage *raw;    // the raw image
     char   *results_folder;  // really the directory
+    static Image_semaphore_t *Image_SemPtr;
 
 protected:
     double  *results;   // working memory filled with results from various methods

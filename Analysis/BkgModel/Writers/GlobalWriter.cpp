@@ -197,7 +197,7 @@ void extern_links::DumpTimeAndEmphasisByRegionH5 ( int reg, TimeCompression &tim
   if ( mPtrs->mEmphasisParam!=NULL )
   {
 
-    ION_ASSERT ( emphasis_data.numEv <= MAX_HPLEN+1, "emphasis_data.numEv > MAX_HPLEN+1" );
+    ION_ASSERT ( emphasis_data.numEv <= MAX_POISSON_TABLE_COL, "emphasis_data.numEv > MAX_HPLEN+1" );
     //ION_ASSERT(time_c.npts <= MAX_COMPRESSED_FRAMES, "time_c.npts > MAX_COMPRESSED_FRAMES");
     int npts = std::min ( time_c.npts(), MAX_COMPRESSED_FRAMES );
 
@@ -212,7 +212,7 @@ void extern_links::DumpTimeAndEmphasisByRegionH5 ( int reg, TimeCompression &tim
           mPtrs->copyCube_element ( mPtrs->mEmphasisParam,reg,hp,t,0 ); // pad 0's, memset faster here?
       }
 
-      for ( int hp=emphasis_data.numEv; hp<MAX_HPLEN+1; hp++ )
+      for ( int hp=emphasis_data.numEv; hp<MAX_POISSON_TABLE_COL; hp++ )
       {
         for ( int t=0; t< MAX_COMPRESSED_FRAMES; t++ )
         {

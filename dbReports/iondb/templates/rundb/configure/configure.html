@@ -1,11 +1,12 @@
 {% extends "rundb/configure/base.html" %}
 {% load pagetools %}
 {% block sub-nav %}
-    <li><a href="{% url configure_about %}">About</a></li>
-    <li><a href="{% url configure_references %}">References</a></li>
-    <li><a href="{% url configure_services %}">Services</a></li>
-    <li><a href="{% url configure_plugins %}">Plugins</a></li>
-    <li class="active"><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li class="active"><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 	<div class="content clearfix">
@@ -132,7 +133,7 @@
 		<div class="clearfix">
 			<h1>Database Administration</h1>
 			<br>
-			<p>The Django <a href="/admin">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
+			<p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
 		</div>
 	</div>
 	</div>
@@ -182,7 +183,7 @@ $('#contacts_form').submit(function(e){
 <script>
 $(document).ready(function(){
     $("#email_table").kendoGrid({
-        dataSourcde: {
+        dataSource: {
             pageSize: 5
         },
         height: 'auto',

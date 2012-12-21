@@ -1,8 +1,10 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
 from django.conf import settings
-from django.conf.urls.defaults import *
-from django.http import HttpResponsePermanentRedirect
+from django.conf.urls.defaults import patterns, include
+
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+
 
 # Uncomment the next two lines to enable the admin:
 from django.contrib import admin
@@ -10,6 +12,7 @@ admin.autodiscover()
 #admin.site.login_template = "rundb/login.html"
 
 from iondb.rundb.login.urls import urlpatterns as login_patterns
+from iondb.servelocation import serve_wsgi_location
 
 urlpatterns = patterns(
     r'',
@@ -27,15 +30,17 @@ urlpatterns = patterns(
     (r'^admin/network/how_is/(?P<host>[\w\.]+):(?P<port>\d+)/feeling$', 'iondb.rundb.admin.how_are_you'),
     (r'^admin/update/$', 'iondb.rundb.admin.update'),
     (r'^admin/update/check/$', 'iondb.rundb.admin.run_update_check'),
-    (r'^admin/restoreDefaultGC/$', 'iondb.rundb.admin.restoreDefaultGC'),
-    (r'^admin/setDefaultGC/(?P<instrument>\w+)/$', 'iondb.rundb.admin.setDefaultGC'),
+    (r'^admin/update/tsconfig_log/$', 'iondb.rundb.admin.tsconfig_log'),
+    (r'^admin/update/download_logs/$', 'iondb.rundb.admin.get_zip_logs'),
     (r'^admin/updateOneTouch/$', 'iondb.rundb.admin.updateOneTouch'),
     (r'^admin/updateOneTouch/ot_log$', 'iondb.rundb.admin.ot_log'),
     (r'^admin/update/install_log$', 'iondb.rundb.admin.install_log'),
     (r'^admin/update/install_lock$', 'iondb.rundb.admin.install_lock'),
     (r'^admin/', include(admin.site.urls)),
+    (r'^(?P<urlpath>output.*)$', serve_wsgi_location),
 )
 urlpatterns.extend(login_patterns)
+urlpatterns.extend(staticfiles_urlpatterns())
 
 if settings.TEST_INSTALL:
     from os import path

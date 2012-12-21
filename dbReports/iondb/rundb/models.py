@@ -19,24 +19,14 @@ the data gathering and analysis.
 from os import path
 import datetime
 import re
-import os
 import os.path
-import traceback
-import xmlrpclib
-from twisted.web.xmlrpc import Proxy
-import time
 
 from django.core.exceptions import ValidationError
-from django.core.exceptions import ObjectDoesNotExist
 
 import iondb.settings
 
-from django import forms
 
-from django.conf import settings
-from django.contrib import admin
 from django.db import models
-from django.db.models.query import QuerySet
 from iondb.backup import devices
 import json
 
@@ -58,7 +48,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User, Group
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
@@ -80,7 +69,7 @@ models.signals.post_save.connect(create_api_key, sender=User)
 class Project(models.Model):
     #TODO The name should not be uniq because there can be a public one
     #and a private one with the same name and that would not work
-    name = models.CharField(max_length=32, unique = True)
+    name = models.CharField(max_length=64, unique = True)
     creator = models.ForeignKey(User)
     public = models.BooleanField(default=True)
     # This will be set to the time a new record is created
@@ -111,13 +100,17 @@ class Project(models.Model):
             user = User.objects.order_by('pk')[0]
         if isinstance(projects, basestring):
             projects = [projects]
+        projects = filter(None, projects)
+        projects = [name.strip() for name in projects]
+        projects = filter(None, projects)
+        projects = [name.replace(' ', '_') for name in projects]
         return [Project.objects.get_or_create(name__iexact=name, defaults={'name':name,'creator':user})[0] for name in projects]
 
-class KitInfoManager(models.Manager):
-    def get_by_natural_key(self, kitType, kitName):
-        return self.get(kitType = kitType, name = kitName)
-    
 
+class KitInfoManager(models.Manager):
+    def get_by_natural_key(self, uid):
+        return self.get(uid = uid)
+    
 class KitInfo(models.Model):
     
     ALLOWED_KIT_TYPES = (
@@ -161,16 +154,19 @@ class KitInfo(models.Model):
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
 
-    objects = KitInfoManager()
-            
-    def __unicode__(self):
-        return u'%s' % self.name
+    uid = models.CharField(max_length=10, unique=True, blank=False)
     
-    def natural_key(self):
-        return (self.kitType, self.name)       
+    objects = KitInfoManager()
+             
+    def __unicode__(self):
+        return u'%s' % self.name     
 
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
+    
     class Meta:
         unique_together = (('kitType', 'name'),)
+        #unique_together = (('uid'),)
 
 
 class KitPartManager(models.Manager):
@@ -181,18 +177,23 @@ class KitPartManager(models.Manager):
 class KitPart(models.Model):
     kit = models.ForeignKey(KitInfo, null=False)
     barcode = models.CharField(max_length=7, unique=True, blank=False)
-    
+
     objects = KitPartManager()
 
     def __unicode__(self):
         return u'%s' % self.barcode
 
     def natural_key(self):
-        return (self.barcode)  
+        return (self.barcode, )  # must return a tuple
          
     class Meta:
-        unique_together = (('barcode'),)    
+        unique_together = (('barcode'),)
+    
 
+class RunTypeManager(models.Manager):
+    def get_by_natural_key(self, runType):
+        return self.get(runType = runType)
+    
 class RunType(models.Model):
     runType = models.CharField(max_length=512)
     barcode = models.CharField(max_length=512, blank=True)
@@ -206,11 +207,19 @@ class RunType(models.Model):
     )
 
     nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='dna', blank=True)
+
+    objects = RunTypeManager()
     
     def __unicode__(self):
         return self.runType
+
+    def natural_key(self):
+        return (self.runType, )  # must return a tuple
     
 
+class ApplProductManager(models.Manager):
+    def get_by_natural_key(self, productCode):
+        return self.get(productCode = productCode)
 
 class ApplProduct(models.Model):
     #application with no product will have a default product pre-loaded to db to hang all the
@@ -249,10 +258,15 @@ class ApplProduct(models.Model):
     #sample preparation kit
     defaultSamplePrepKit = models.ForeignKey(KitInfo, related_name='samplePrepKit_applProduct_set', null=True)
     
+    isHotspotRegionBEDFileSuppported = models.BooleanField(default = True)
 
+    
     def __unicode__(self):
         return u'%s' % self.productName  
 
+    def natural_key(self):
+        return (self.productCode, )    # must return a tuple
+    
 
 class QCType(models.Model):
     qcName = models.CharField(max_length=512, blank=False, unique=True)
@@ -528,33 +542,8 @@ class PlannedExperiment(models.Model):
         else:
             return self.forward3primeadapter
         
-                        
-
-    def getReverseLibraryKeyForSave(self):
-        if self.reverselibrarykey:
-            newReverseLibraryKey = ''.join(self.reverselibrarykey)
-        else:
-            newReverseLibraryKey = None
-        return newReverseLibraryKey
-                  
-
-    def getReverse3primeAdapterForSave(self):
-        if self.reverse3primeadapter:
-            newReverse3PrimeAdapter = ''.join(self.reverse3primeadapter)
-        else:
-            newReverse3PrimeAdapter = None
-        return newReverse3PrimeAdapter        
-
         
-    def save(self):
-        #if runMode = 'pe', 1 paired-end plan for template and 3 paired-end plans for plan run (1 parent, 2 children)
-        #20120609-TODO
-        #after the pre3.0 plan creation ui is gone, it would be nice to refactor TS for child plans to
-        #have minimum data, and retrieve missing values from the parent plan instead.
-        #for now, we're pushing parent plan values to child plana for attributes that already pre-exist in db 
-        #prior to v3.0.  However, for projects, qc thresholds and plugins, since they are new to v3.0,
-        #they will stay with the parent plan and won't be replicated in the child plan
-         
+    def save(self):            
         #if user uses the old ui to save a plan directly, planDisplayedName will have no user input
         if not self.planDisplayedName:
             self.planDisplayedName = self.planName;
@@ -574,18 +563,7 @@ class PlannedExperiment(models.Model):
 
         self.sequencekitname = self.getSeqKitBarcodeForSave()      
               
-        #If user is CREATING a new plan or CHANGING a forward to a plan that is marked for paired-end run,
-        #behind the scene, we'll create 2 plans; one for forward and one reverse with
-        #_rev appended to the user input plan name for the "reverse" plan.
-        #
-        isToCreate2Plans = False
-        isToCreateChildPlans = False
-        isToUpdateAndCreatePlan = False
-        isToUpdateChildPlans = False
-        isToDeleteChildPlans = False
         isToSkipPlanUpdate = False
-        
-        parentOid = 0
         
         #for backward and non-gui compatibility if user is not using the v3.0 plan/template wizard to create a plan
         if (self.isReverseRun == True):
@@ -600,255 +578,36 @@ class PlannedExperiment(models.Model):
             self.librarykitname = self.getLibraryKitForSave() 
                                                 
             #scenario: change from PE to PE or non-PE to PE
-            if (self.runMode == "pe"):
-                if (dbPlan.runMode == "pe"):                    
-                    super(PlannedExperiment, self).save() 
-                    if (not self.isReusable):
-                        isToUpdateChildPlans = True                    
-                else:
-                    super(PlannedExperiment, self).save()
-                    if (not self.isReusable):
-                        isToCreateChildPlans = True      
+            if (self.runMode == "pe" or self.isReverseRun):
+                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)     
             else:
                 #scenario: change from PE to non-PE
-                if (dbPlan.runMode == "pe"):
-                    #this should have been caught in views.editplanexperiment. but just in case...
-                    childPlans = self.childPlan_set.all()
-                    for childPlan in childPlans:         
-                        if (childPlan.planExecuted):
-
-                            logger.info("models.PlannedExperiment.save() Cannot change the run mode of a paired-end plan that has already been used")
-                            logger.info("models.PlannedExperiment.save() plan.oid=%s; planDisplayedName=%s; childPlan.oid=%s;" % (str(self.id), self.planDisplayedName, str(childPlan.id)))
-                            isToSkipPlanUpdate = True
-
-                            raise ValidationError("Error: Cannot change the run mode of paired-end plan: %s that has already been used." % self.planDisplayedName)
-        
-                    if not isToSkipPlanUpdate:
-                        isToDeleteChildPlans = True
-                        super(PlannedExperiment, self).save()                    
+                if (dbPlan.runMode == "pe" or dbPlan.isReverseRun):
+                    raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be updated." % self.planDisplayedName)     
+                  
                 else:  
-                    #scenario: change from non-PE to non-PE (for plans created from old ui, runMode will be single
-                    #if user has not clicked on the isPairedEnd checkbox
-                    if (dbPlan.isReverseRun == self.isReverseRun):
-                        #logger.info('Going to call super.save() to UPDATE PlannedExperiment id=%s' % self.id)
+                    if (self.isReverseRun == False):
+                        self.reverselibrarykey = None
+                        self.reverse3primeadapter = None
                     
-                        if (self.isReverseRun):
-                            self.libraryKey = None
-                            self.forward3primeadapter = None                
-                        else:
-                            self.reverselibrarykey = None
-                            self.reverse3primeadapter = None   
-                    
-                        super(PlannedExperiment, self).save()                 
-                    else:
-                        #scenario: change from isPairedEnd checkbox checked to unchecked
-                        #for the old PE, forward and reverse are 2 separate plans with no parents
-                        if (self.isReverseRun == False):
-                            self.reverselibrarykey = None
-                            self.reverse3primeadapter = None
-                    
-                            super(PlannedExperiment, self).save()
-                        else:
-                            #scenario: change from isPairedEnd checkbox unchecked 
-                            #user has clicked the isPairedEnd checkbox, update the current record and create a counterpart                
-                            isToUpdateAndCreatePlan = True                
-
+                        super(PlannedExperiment, self).save()
+                    else:              
+                        raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)     
         else:                
             #if user creates a new forward plan
-            if (self.isReverseRun == False):
-                #if pairedEnd runMode
-                if (self.runMode == "pe"):
-                    if (not self.isReusable):    
-                        isToCreateChildPlans = True
-                else:
-                    #do not blank out the reverse info for a PE plan template               
-                    self.reverselibrarykey = None
-                    self.reverse3primeadapter = None
+            if (self.runMode == "pe" or self.isReverseRun):
+                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName) 
+            else:
+                #do not blank out the reverse info for a PE plan template               
+                self.reverselibrarykey = None
+                self.reverse3primeadapter = None
                              
                 if PlannedExperiment.objects.filter(planShortID=self.planShortID, planExecuted=False):
                     self.planShortID = self.findShortID()
-
-                             
+                            
                 #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName) 
-                super(PlannedExperiment, self).save() 
-                parentOid = self.id
-                
-                ##logger.debug("models.plannedExperiment CREATE parentOid=%s" % str(parentOid))               
-            else:
-
-                isToCreate2Plans = True
-        
-        #backward compatible with old ui 
-        if isToCreate2Plans or isToCreateChildPlans or isToUpdateAndCreatePlan:         
-            #prepare for the FORWARD plan
-            selfForward = copy.copy(self)
-            
-            if not isToUpdateAndCreatePlan:
-                selfForward.pk = None
-                selfForward.isPlanGroup = False
-            else:
-                selfForward.isReverseRun = False
-                
-            if (selfForward.isReverseRun or selfForward.runMode == "pe"):
-                origPlanName = copy.copy(selfForward.planName)
-
-                #planName's db max length is 512. User is not likely to create such a long name, but just in case...
-                name = selfForward.planName
-                if len(selfForward.planName) > 504:
-                    name = selfForward.planName[:503]
-                
-                #if either one of the constructed plan names already exists, insert a 3-char random code to the plan name                                 
-                pairedEndForwardPlanName = ''.join([name, '_fwd'])
-                pairedEndReversePlanName = ''.join([name, '_rev'])
-            
-                if (PlannedExperiment.objects.filter(planName = pairedEndForwardPlanName).count() > 0) or (PlannedExperiment.objects.filter(planName = pairedEndReversePlanName).count() > 0):                    
-                    uniqueCode = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(3))      
-                    pairedEndForwardPlanName = ''.join([name, '_', uniqueCode, '_fwd'])
-                    pairedEndReversePlanName = ''.join([name, '_', uniqueCode,'_rev'])
-                                                
-                selfForward.isReverseRun = False
-
-                selfForward.forward3primeadapter = selfForward.getForward3primeAdapterForSave()
-                newReverseLibraryKey = selfForward.getReverseLibraryKeyForSave()
-                newReverse3PrimeAdapter = selfForward.getReverse3primeAdapterForSave()
-                
-                selfForward.reverselibrarykey = None
-                selfForward.reverse3primeadapter = None
-                
-                selfForward.planName = pairedEndForwardPlanName
-                
-                if isToCreateChildPlans:
-                    selfForward.parentPlan = self
-                    selfForward.planShortID = selfForward.findShortID()
-                    selfForward.planGUID = str(uuid.uuid4()) 
-                else:
-                    if not isToUpdateAndCreatePlan:
-                        #avoid plan short id collision: for users using the old ui with no parent PE plan concept
-                        if PlannedExperiment.objects.filter(planShortID=selfForward.planShortID, planExecuted=False):
-                            selfForward.planShortID = selfForward.findShortID()
-              
-                #logger.info('Going to CREATE the FORWARD plan with name=%s' % self.planName)                
-                super(PlannedExperiment, selfForward).save()
-
-                selfForward.projects = self.projects.all()
-                                
-                ##logger.debug("models.plannedExperiment CREATE/UPDATE child.forward.oid=%s" % str(selfForward.id))       
-                
-                
-                #prepare for the REVERSE plan
-                selfReverse = copy.copy(selfForward)
-                selfReverse.pk = None
-                selfReverse.planGUID = None
-                selfReverse.planShortID = None
-                
-                selfReverse.libraryKey = None
-                selfReverse.forward3primeadapter = None                        
-                selfReverse.reverselibrarykey = newReverseLibraryKey
-                selfReverse.reverse3primeadapter = newReverse3PrimeAdapter
-                 
-                #logger.info('CREATING the REVERSE plan with reverse adapter=%s' % selfReverse.reverse3primeadapter)   
-                
-                selfReverse.planName = pairedEndReversePlanName                         
-                selfReverse.isReverseRun = True
-                
-                selfReverse.date = datetime.datetime.now()
-                if not selfReverse.planShortID:
-                    selfReverse.planShortID = selfReverse.findShortID()
-                if not selfReverse.planGUID:
-                    selfReverse.planGUID = str(uuid.uuid4()) 
-                
-
-                if isToCreateChildPlans:
-                    selfReverse.parentPlan = self
-                                        
-                #logger.info('Going to CREATE the REVERSE plan with name=%s' % selfReverse.planName)                 
-                super(PlannedExperiment, selfReverse).save()                    
-                selfReverse.projects = self.projects.all()
-
-                ##logger.debug("models.plannedExperiment CREATE/UPDATE child.reverse.oid=%s" % str(selfReverse.id)) 
-
-
-        if isToUpdateChildPlans:
-            childPlans = self.childPlan_set.all()
-            for childPlan in childPlans:
-                #for partially completed PE plan, its executed child plan should stay frozen
-                if (childPlan.planExecuted):
-                    continue
-                else:                                         
-                    parentDisplayedName = copy.copy(self.planDisplayedName)
-                    
-                    parentPlanName = copy.copy(self.planName)               
-                                    
-                    #planName's db max length is 512. User is not likely to create such a long name, but just in case...
-                    name = parentPlanName
-                    
-                    if len(parentPlanName) > 504:
-                        name = parentPlanName[:503]
-                
-                    #if either one of the constructed plan names already exists, insert a 3-char random code to the plan name
-                    childPlanName = name
-                    if (childPlan.isReverseRun):                               
-                        childPlanName = ''.join([name, '_rev'])
-                    else:
-                        childPlanName = ''.join([name, '_rev'])
-                                
-                    if (PlannedExperiment.objects.filter(planName = childPlanName).count() > 0):                    
-                        uniqueCode = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(3))     
-                        if (childPlan.isReverseRun):  
-                            childPlanName = ''.join([name, '_', uniqueCode,'_rev'])
-                        else:
-                            childPlanName = ''.join([name, '_', uniqueCode, '_fwd'])
-                    
-                    childPlan.planDisplayedName = parentDisplayedName
-                    childPlan.planName = childPlanName
-                    childPlan.chipType = self.chipType
-                    childPlan.usePreBeadfind = self.usePostBeadfind
-                    childPlan.usePostBeadfind = self.usePostBeadfind
-                    childPlan.flows = self.flows
-                    childPlan.autoAnalyze = self.autoAnalyze
-                    childPlan.preAnalyze = self.preAnalysis
-                    childPlan.runType = self.runType
-                    childPlan.library = self.library
-                    childPlan.notes = self.notes
-                    childPlan.bedfile = self.bedfile
-                    childPlan.regionfile = self.regionfile
-                    childPlan.variantfrequency = self.variantfrequency
-                    childPlan.librarykitname = self.librarykitname
-                    childPlan.sequencekitname = self.sequencekitname
-                    childPlan.barcodeId = self.barcodeId                    
-                                                                                                         
-                    childPlan.runMode = self.runMode
-                    childPlan.isSystem = self.isSystem
-                    childPlan.isReusable = self.isReusable
-                    childPlan.sample = self.sample
-                    childPlan.sampleDisplayedName = self.sampleDisplayedName
-                    childPlan.username = self.username
-                    childPlan.templatingKitName = self.templatingKitName 
-                    childPlan.controlSequencekitname = self.controlSequencekitname
-                    childPlan.barcodedSamples = self.barcodedSamples                              
-                    childPlan.libraryKey = self.libraryKey
-                    childPlan.forward3primeadapter = self.forward3primeadapter
-                    childPlan.reverselibrarykey = self.reverselibrarykey
-                    childPlan.reverse3primeadapter = self.reverse3primeadapter
-                    childPlan.pairedEndLibraryAdapterName = self.pairedEndLibraryAdapterName 
-
-                    #20120703-TODO-Until we have implemented capability for user to input library key & 3' adapter,
-                    #don't bother to try to update here
-
-                    childPlan.save()    
-                    childPlan.projects = self.projects.all()
-
-                    logger.debug("models.plannedExperiment UPDATED self.oid=%s; child.oid=%s" % (str(self.id), str(childPlan.id)))
-
-                
-        #partially executed parent PE plan will have been blocked upstream
-        if isToDeleteChildPlans:
-            childPlans = self.childPlan_set.all()
-            for childPlan in childPlans:             
-                logger.debug("models.plannedExperiment DELETE child plan.oid=%s; planName=%s" % (str(childPlan.id), childPlan.planName))
-                
-                childPlan.delete()
-
+                super(PlannedExperiment, self).save()                
+         
 
     class Meta:
         ordering = [ '-id' ]
@@ -933,6 +692,7 @@ class Experiment(models.Model):
     #for forward run, 3' adapter specific to this plan
     forward3primeadapter = models.CharField("3' adapter for forward run", max_length=512, blank=True, null=True)
     isReverseRun = models.BooleanField(default=False)
+    diskusage = models.IntegerField(blank=True, null=True)
     
     #progress_flows = models.IntegerField(default=0)
     #progress_status = 
@@ -949,13 +709,9 @@ class Experiment(models.Model):
     #run mode
     runMode = models.CharField(max_length=64, choices=ALLOWED_RUN_MODES, default='', blank=True)
     
-    #selected plan info
-    selectedPlanGUID = models.CharField(max_length=512,blank=True,null=True)
-    selectedPlanShortID = models.CharField(max_length=5,blank=True,null=True)
-
     # plan may be null because Experiments do not Have to have a plan
     # and it may be blank for the same reason.
-    plan = models.ForeignKey(PlannedExperiment, blank=True, null=True)
+    plan = models.OneToOneField(PlannedExperiment, blank=True, null=True, related_name='experiment')
     
     def __unicode__(self): return self.expName
 
@@ -1165,6 +921,7 @@ class Results(models.Model, Lookup):
     resultsType = models.CharField(max_length=512, blank=True)
     #ids of parent reports separated by colon (e.g :1:32:3:)
     parentIDs = models.CharField(max_length=512, blank=True)
+    diskusage = models.IntegerField(blank=True, null=True)
     
     #metaData
     metaData = json_field.JSONField(blank=True)
@@ -1221,34 +978,31 @@ class Results(models.Model, Lookup):
 
     def bamLink(self):
         """a method to used by the API to provide a link to the bam file"""
-        reportStorage = self._findReportStorage()
         location = self.server_and_location()
 
-        if reportStorage is not None and location is not False:
-            logging.info(reportStorage)
-            logging.info(location)
+        if location is not False:
             bamFile = self.experiment.expName + "_" + self.resultsName + ".bam"
             webPath = self.web_path(location)
             if not webPath:
-                logging.error("webpath missing for " + bamFile)
+                logger.warning("Bam link, webpath missing for " + bamFile)
                 return False
             return os.path.join(webPath , bamFile)
         else:
+            logger.warning("Bam link, Report Storage: %s, Location: %s", self.reportstorage, location)
             return False
 
     def reportWebLink(self):
         """a method to used get the web url with no fuss"""
-        reportStorage = self._findReportStorage()
         location = self.server_and_location()
 
-        if reportStorage is not None and location is not False:
-            logging.info(reportStorage)
-            logging.info(location)
+        if location is not False:
             webPath = self.web_path(location)
             if not webPath:
+                logger.warning("Web link, webpath missing for %s" % self)
                 return False
             return webPath
         else:
+            logger.warning("Web link, Report %s has no storage location")
             return False
 
 
@@ -1275,6 +1029,7 @@ class Results(models.Model, Lookup):
         try:
             loc = Rig.objects.get(name=self.experiment.pgmName).location
         except Rig.DoesNotExist:
+            logger.error("Rerport %s references Rig %s which does not exist." % (self, self.experiment.pgmName))
             loc = Location.objects.filter(defaultlocation=True)
             if not loc:
                 #if there is not a default, just take the first one
@@ -1282,7 +1037,8 @@ class Results(models.Model, Lookup):
             if loc:
                 loc = loc[0]
             else:
-                return false    
+                logger.critical("Report %s is requesting the location of PGM %s and no locations exist!" % (self, self.experiment.pgmName))
+                return False    
         return loc
 
     def _findReportStorage(self):
@@ -1294,11 +1050,13 @@ class Results(models.Model, Lookup):
         Algorithm for determining path from report link:
         strip off the first directory from report link and prepend the dirPath
         """
+        logger.warning("Report %s is looking for it's storage." % self)
         storages = ReportStorage.objects.all()
         for storage in storages:
-            tmpPath = self.reportLink.split('/')
-            index = len(tmpPath) - 4
-            linkstub = self.reportLink.split('/' + tmpPath[index])
+            link = os.path.dirname(self.reportLink)
+            tmpPath = link.split('/')
+            index = len(tmpPath) - 3
+            linkstub = link.split('/' + tmpPath[index])
             new_path = storage.dirPath + linkstub[1]
             if os.path.exists(new_path):
                 return storage
@@ -1321,7 +1079,7 @@ class Results(models.Model, Lookup):
         """check to see if a report exists inside of the report path"""
         fs_path = self.get_report_path()
         #TODO: is this operation slowing down page loading?  on thousands of reports?
-        return os.path.exists(fs_path)
+        return fs_path and os.path.exists(fs_path)
 
     def get_report_storage(self):
         """Returns reportstorage object"""
@@ -1343,15 +1101,25 @@ class Results(models.Model, Lookup):
         index = len(tmpPath) - 4
         linkstub = self.reportLink.split('/' + tmpPath[index])
         if self.reportstorage is not None:
-            return self.reportstorage.dirPath + linkstub[1]
+            return self.reportstorage.dirPath + linkstub[1] 
         else:
+            logger.error("Cannot find the path to %s" % self)
             return None
 
     def get_report_dir(self):
         """Returns filesystem path to results directory"""
         fs_path = self.get_report_path()
-        fs_path = path.split(fs_path)[0]
+        if fs_path:
+            fs_path = path.split(fs_path)[0]
         return fs_path
+
+    def is_archived(self):
+        archived_contents = set(['report.pdf', "%s.support.zip" % os.path.basename(self.get_report_dir())])
+        contents = set([])
+        if self.get_report_dir():
+            if os.path.isdir(self.get_report_dir()):
+                contents = set(os.listdir(self.get_report_dir()))
+        return archived_contents.issubset(contents) and archived_contents.issuperset(contents)
 
     def web_path(self, location):
         basename = self._basename()
@@ -1572,66 +1340,37 @@ class TFMetrics(models.Model, Lookup):
         ("TF Name", "name"),
         ("Q10 Mean", "Q10Mean"),
         ("Q17 Mean", "Q17Mean"),
-        ("Q10 Mode", "Q10Mode"),
-        ("Q17 Mode", "Q17Mode"),
         ("System SNR", "SysSNR"),
         ("50Q10 Reads", "Q10ReadCount"),
         ("50Q17 Reads", "Q17ReadCount"),
         ("Keypass Reads", "keypass"),
-        ("CF", "CF"),
-        ("IE", "IE"),
-        ("DR", "DR"),
         ("TF Key Peak Counts", 'aveKeyCount'),
         )
     _ALIASES = {
         "tfname":"name",
         "q17mean":"Q17Mean",
-        "q17mode":"Q17Mode",
         "systemsnr":"SysSNR",
         "50q17reads":"Q17ReadCount",
         "keypassreads": "keypass",
-        "CF":"cf",
-        "IE":"ie",
-        "DR":"dr",
         "tfkeypeakcounts":'aveKeyCount'
         }
-    TABLE_FIELDS = ("TF Name", "Q17 Mean", "Q17 Mode",
+    TABLE_FIELDS = ("TF Name", "Q17 Mean", 
                     "System SNR", "50Q17 Reads", "Keypass Reads",
-                    "CF", "IE", "DR", " TF Key Peak Counts")
+                    "TF Key Peak Counts")    
     report = models.ForeignKey(Results, db_index=True, related_name='tfmetrics_set')
     name = models.CharField(max_length=128, db_index=True)
-    matchMismatchHisto = models.TextField(blank=True)
-    matchMismatchMean = models.FloatField()
-    matchMismatchMode = models.FloatField()
     Q10Histo = models.TextField(blank=True)
     Q10Mean = models.FloatField()
-    Q10Mode = models.FloatField()
     Q17Histo = models.TextField(blank=True)
     Q17Mean = models.FloatField()
-    Q17Mode = models.FloatField()
     SysSNR = models.FloatField()
-    HPSNR = models.TextField(blank=True)
     corrHPSNR = models.TextField(blank=True)
     HPAccuracy = models.TextField(blank=True)
-    rawOverlap = models.TextField(blank=True)
-    corOverlap = models.TextField(blank=True)
-    hqReadCount = models.FloatField()
-    aveHqReadCount = models.FloatField()
     Q10ReadCount = models.FloatField()
-    aveQ10ReadCount = models.FloatField()
     Q17ReadCount = models.FloatField()
-    aveQ17ReadCount = models.FloatField()
     sequence = models.CharField(max_length=512)#ambitious
     keypass = models.FloatField()
-    preCorrSNR = models.FloatField()
-    postCorrSNR = models.FloatField()
     ####CAFIE#####
-    rawIonogram = models.TextField(blank=True)
-    corrIonogram = models.TextField(blank=True)
-    CF = models.FloatField()
-    IE = models.FloatField()
-    DR = models.FloatField()
-    error = models.FloatField()
     number = models.FloatField()
     aveKeyCount = models.FloatField()
     def __unicode__(self):
@@ -1658,7 +1397,7 @@ class Location(models.Model):
         super(Location, self).save(*args, **kwargs)
         if self.defaultlocation:
             # If self is marked as default, mark all others as not default
-            others = Location.objects.all().exclude(name=self.name)
+            others = Location.objects.all().exclude(id=self.id)
             for other in others:
                 other.defaultlocation = False
                 super(Location, other).save(*args, **kwargs)
@@ -1708,7 +1447,7 @@ class ReportStorage(models.Model):
         super(ReportStorage, self).save(*args, **kwargs)
         if self.default:
             # If self is marked as default, mark all others as not default
-            others = ReportStorage.objects.all().exclude(name=self.name)
+            others = ReportStorage.objects.all().exclude(pk=self.id)
             for other in others:
                 other.default = False
                 super(ReportStorage, other).save(*args, **kwargs)
@@ -1827,6 +1566,8 @@ class LibMetrics(models.Model):
     sysSNR = models.FloatField()
     aveKeyCounts = models.FloatField()
     totalNumReads = models.IntegerField()
+    total_mapped_reads = models.BigIntegerField()
+    total_mapped_target_bases = models.BigIntegerField()
     genomelength = models.IntegerField()
     rNumAlignments = models.IntegerField()
     rMeanAlignLen = models.IntegerField()
@@ -2088,7 +1829,7 @@ class QualityMetrics(models.Model):
     q0_mean_read_length = models.FloatField()
     q0_50bp_reads = models.IntegerField()
     q0_100bp_reads = models.IntegerField()
-    q0_15bp_reads = models.IntegerField()
+    q0_150bp_reads = models.IntegerField(default=0)
     q17_bases = models.BigIntegerField()
     q17_reads = models.IntegerField()
     q17_max_read_length = models.IntegerField()
@@ -2140,6 +1881,7 @@ class BackupConfig(models.Model):
     online = models.BooleanField()
     comments = models.TextField(blank=True)
     email = models.EmailField(blank=True)
+    keepTN = models.BooleanField(default=True)
     def __unicode__(self):
         return self.name
 
@@ -2154,6 +1896,16 @@ class BackupConfig(models.Model):
             return True
         else:
             return False
+    
+    @classmethod
+    def get(cls):
+        """This represents pretty much the only query on this entire
+        table, find the 'canonical' BackupConfig record.  The primary
+        key order is used in all cases as the tie breaker.
+        Since there is *always* supposed to be one of these in the DB,
+        this call to get will properly raises a DoesNotExist error.
+        """
+        return cls.objects.order_by('pk')[:1].get()
 
 class dm_reports(models.Model):
     '''This object holds the options for report actions.
@@ -2168,7 +1920,18 @@ class dm_reports(models.Model):
         
     def __unicode__(self):
         return self.location
-
+    
+    @classmethod
+    def get(cls):
+        """This represents pretty much the only query on this entire
+        table, find the 'canonical' dm_reports record.  The primary
+        key order is used in all cases as the tie breaker.
+        Since there is *always* supposed to be one of these in the DB,
+        this call to get will properly raises a DoesNotExist error.
+        """
+        return cls.objects.order_by('pk')[:1].get()
+        
+        
 class dm_prune_group(models.Model):
     name = models.CharField(max_length=128, default="")
     editable = models.BooleanField(default=True)    # This actually signifies "deletable by customer"
@@ -2187,8 +1950,15 @@ class dm_prune_field(models.Model):
 class Chip(models.Model):
     name = models.CharField(max_length=128)
     slots = models.IntegerField()
-    args = models.CharField(max_length=512, blank=True)
     description = models.CharField(max_length=128, default="")
+    
+    # Default cmdline args
+    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Analysis args")
+    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
+    beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
+    thumbnailanalysisargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
+    thumbnailbasecallerargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
+    thumbnailbeadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Beadfind args")
     
     def getChipDisplayedName(self):
         if self.description:
@@ -2201,17 +1971,6 @@ class GlobalConfig(models.Model):
     name = models.CharField(max_length=512)
     selected = models.BooleanField()
     plugin_folder = models.CharField(max_length=512, blank=True)
-
-    #Analysis args
-    default_command_line = models.CharField(max_length=512, blank=True, verbose_name="Analysis args")
-    #Basecaller args
-    basecallerargs = models.CharField(max_length=512, blank=True, verbose_name="Basecaller args")
-
-    #Analysis Thumbnail args
-    analysisthumbnailargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
-
-    #Basecaller Thumbnail args
-    basecallerthumbnailargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
 
     fasta_path = models.CharField(max_length=512, blank=True)
     reference_path = models.CharField(max_length=1000, blank=True)
@@ -2234,9 +1993,6 @@ class GlobalConfig(models.Model):
     # Controls analysis pipeline alternate processing path
     base_recalibrate = models.BooleanField(default=True)
 
-    def get_default_command(self):
-        return str(self.default_command_line)
-        
     def set_TS_update_status(self,inputstr):
         self.ts_update_status = inputstr
         
@@ -2288,49 +2044,67 @@ class EmailAddress(models.Model):
 
 
 class Plugin(models.Model):
-    name = models.CharField(max_length=512,db_index=True)
+    name = models.CharField(max_length=512, db_index=True)
     version = models.CharField(max_length=256)
+    description = models.TextField(blank=True, default="")
+
     date = models.DateTimeField(default=datetime.datetime.now)
     selected = models.BooleanField(default=False)
     path = models.CharField(max_length=512)
-    project = models.CharField(max_length=512, blank=True, default="")
-    sample = models.CharField(max_length=512, blank=True, default="")
-    libraryName = models.CharField(max_length=512, blank=True, default="")
-    chipType = models.CharField(max_length=512, blank=True, default="")
     autorun = models.BooleanField(default=False)
     majorBlock = models.BooleanField(default=False)
-    config = json_field.JSONField(blank=True, null=True, default = "")
-    #status
-    status = json_field.JSONField(blank=True, null=True, default = "")
+    config = json_field.JSONField(blank=True, null=True, default="")
+    #status -- install messages, install status
+    status = json_field.JSONField(blank=True, null=True, default="")
 
     # Store and mask inactive (uninstalled) plugins
     active = models.BooleanField(default=True)
 
-    # Plugin Feed URL
+    # Plugin Feed URL - 0install xml
     url = models.URLField(verify_exists=False, max_length=256, blank=True, default="")
 
-    pluginsettings = json_field.JSONField(blank=True, null=True, default = "") 
+    # pluginsettings.json or python class features, runtype, runlevel attributes
+    pluginsettings = json_field.JSONField(blank=True, null=True, default="")
+
+    # Cached getUserConfig  / getUserSettings function
+    # plan time alternative to instance.html
+    userinputfields = json_field.JSONField(blank=True, null=True)
 
     # These were functions, but make more sense to cache in db
     autorunMutable = models.BooleanField(default=True)
+
     ## file containing plugin definition. launch.sh or PluginName.py
     script = models.CharField(max_length=256, blank=True, default="")
 
     def addSettings(self, settings_dict):
       # Allow only fixed values for runtype and runlevel
-      #TODO: this definition needs to be shared     
+      #TODO: this definition needs to be shared, ion.plugin.constants
       runtypes = dict(COMPOSITE='composite', THUMB='thumbnail', FULLCHIP='wholechip')
-      runlevels = dict(PRE='pre', DEFAULT='default', BLOCK='block', POST='post')            
-      if 'runtype' in settings_dict.keys():
-          self.pluginsettings['runtype'] = [value for value in settings_dict['runtype'] if value in runtypes.values()]
-      if 'runlevel' in settings_dict.keys():
-          self.pluginsettings['runlevel'] = [value for value in settings_dict['runlevel'] if value in runlevels.values()]
+      runlevels = dict(PRE='pre', DEFAULT='default', BLOCK='block', POST='post')
+      features = dict(EXPORT='export',)
+      pluginsettings = self.pluginsettings or {}
+      if 'runtype' in settings_dict and settings_dict['runtype']:
+          pluginsettings['runtype'] = [value for value in settings_dict['runtype'] if value in runtypes.values()]
+      if 'runlevel' in settings_dict and settings_dict['runlevel']:
+          pluginsettings['runlevel'] = [value for value in settings_dict['runlevel'] if value in runlevels.values()]
+      if 'features' in settings_dict and settings_dict['features']:
+          pluginsettings['features'] = [value for value in settings_dict['features'] if value in features.values()]
+      self.pluginsettings = pluginsettings
 
     def isConfig(self):
         try:
             if os.path.exists(os.path.join(self.path, "config.html")):
                 #provide a link to load the plugins html
-                return "/rundb/plugininput/" + str(self.pk) + "/"
+                return urlresolvers.reverse('configure_plugins_plugin_configure', kwargs = {'pk':self.pk, 'action':'config'})
+        except OSError:
+            pass
+        return False
+
+    def isPlanConfig(self):
+        try:
+            if os.path.exists(os.path.join(self.path, "plan.html")):
+                #provide a link to load the plugins html
+                return urlresolvers.reverse('configure_plugins_plugin_configure', kwargs = {'pk':self.pk, 'action':'plan'})
         except OSError:
             pass
         return False
@@ -2339,7 +2113,7 @@ class Plugin(models.Model):
         try:
             if os.path.exists(os.path.join(self.path, "about.html")):
                 #provide a link to load the plugins html
-                return "/rundb/plugininput/" + str(self.pk) + "/"
+                return urlresolvers.reverse('configure_plugins_plugin_configure', kwargs = {'pk':self.pk, 'action':'about'})
         except OSError:
             pass
         return False
@@ -2367,15 +2141,88 @@ class Plugin(models.Model):
             from iondb.plugins.manager import pluginmanager
             self.script, _ = pluginmanager.find_pluginscript(self.path, self.name)
         if not self.script:
-            self.script = '' ## field is not NULL, needs empty string
+            self.script = '' # Avoid Null value in db column. find_pluginscript can return None.
             return None
         return os.path.join(self.path, self.script)
 
     def info(self, use_cache=True):
-        """ This requires external process call. Can be expensive. Avoid in API calls, only fetch when necessary. """
+        """ This requires external process call when use_cache=False.
+            Can be expensive. Avoid in API calls, only fetch when necessary. """
+        if use_cache:
+            return self.info_from_model()
+
         context = { 'plugin': self }
         from iondb.plugins.manager import pluginmanager
-        return pluginmanager.get_plugininfo(self.name, self.pluginscript(), context, use_cache)
+        info = pluginmanager.get_plugininfo(self.name, self.pluginscript(), context, use_cache)
+        # Cache is updated in background task.
+        if info is not None:
+            self.updateFromInfo(info)  # update persistent db cache
+        else:
+            logger.error("Failed to get info from plugin: %s", self.name)
+
+        return self.info_from_model()
+
+    def updateFromInfo(self, info):
+        version = info.get('version', None)
+        if version and version != self.version:
+            logger.warning("Queried plugin but got version mismatch. Plugin: %s has been updated from %s to %s", self.name, self.version, version)
+            return False
+
+        changed = False
+        # User Input Fields from info config
+        userinputfields = info.get('config', None)
+        if userinputfields is not None and self.userinputfields != userinputfields:
+            self.userinputfields = userinputfields
+            changed = True
+
+        # Plugin settings is only refreshed if empty, never auto updated
+        pluginsettings = {
+            'features': info.get('features'),
+            'runtype': info.get('runtypes'),
+            'runlevel': info.get('runlevels'),
+        }
+        oldsettings = self.pluginsettings
+        self.addSettings(pluginsettings)
+        if self.pluginsettings != oldsettings:
+            changed = True
+
+        majorBlock = info.get('major_block', False)
+        if self.majorBlock != majorBlock:
+            self.majorBlock = majorBlock
+            changed = True
+
+        allow_autorun = info.get('allow_autorun', True)
+        if self.autorunMutable != allow_autorun:
+            self.autorunMutable = allow_autorun
+            if not self.autorunMutable:
+                self.autorun = False
+            changed = True
+
+        docs = info.get('docs', None)
+        if docs and self.description != docs:
+            self.description = docs
+            changed = True
+
+        if changed:
+            self.save()
+
+        return changed
+
+    def info_from_model(self):
+        info = {
+            'name': self.name,
+            'version': self.version,
+            'runtypes': self.pluginsettings.get('runtype', []),
+            'runlevels': self.pluginsettings.get('runlevel', []),
+            'features': self.pluginsettings.get('features', []),
+            'config': self.userinputfields,
+            'allow_autorun': self.autorunMutable,
+            'docs': self.description,
+            'major_block' : self.majorBlock,
+            'pluginorm': self.pk,
+        }
+        from ion.plugin.info import PluginInfo
+        return PluginInfo(info).todict()
 
     class Meta:
         unique_together=( ('name','version'), )
@@ -2466,7 +2313,7 @@ class PluginResult(models.Model):
         self.starttime = datetime.datetime.now()
         if self.jobid:
             if self.jobid != jobid:
-                logging.warn("(Re-)started as different queue jobid: '%d' was '%d'", jobid, self.jobid)
+                logger.warn("(Re-)started as different queue jobid: '%d' was '%d'", jobid, self.jobid)
             self.jobid = jobid
 
     def complete(self, state='Completed'):
@@ -2629,11 +2476,6 @@ class ThreePrimeadapter(models.Model):
     name = models.CharField(max_length=256, blank=False, unique=True)
     sequence = models.CharField(max_length=512, blank=False)
     description = models.CharField(max_length=1024, blank=True)
-    #20120307: actually, qual_cutoff and qual_window have nothing to do with 3' adapter.
-    #it is just a convenient place to keep these values
-    qual_cutoff = models.IntegerField()
-    qual_window = models.IntegerField()
-    adapter_cutoff = models.IntegerField()
 
     isDefault = models.BooleanField("use this by default", default=False)
 
@@ -2790,7 +2632,7 @@ class UserEventLog(models.Model):
 
 class UserProfile(models.Model):
     # This field is required.
-    user = models.ForeignKey(User, unique=True)
+    user = models.OneToOneField(User, unique=True)
 
     # Optional fields here
     name = models.CharField(max_length=93)
@@ -2803,6 +2645,11 @@ class UserProfile(models.Model):
     # This is a simple, plain-text dumping ground for whatever the user might
     # want to document about themselves that isn't captured in the above.
     note = models.TextField(default="", blank=True)
+
+    def save(self, *args, **kwargs):
+        if self.user and not self.name:
+            self.name = self.user.get_full_name()
+        super(UserProfile, self).save(*args, **kwargs)
 
     def __unicode__(self):
         return u'profile: %s' % self.user.username
@@ -3039,41 +2886,5 @@ class EventLog (models.Model):
 
     def __unicode__(self):
         return self.text
-
-class PEMetrics(models.Model):
-
-    pereport = models.ForeignKey(Results, db_index=True, related_name='pemetrics_set')
-    pefwdreport = models.ForeignKey(Results, db_index=True, related_name='pefwdreport_set')
-    perevreport = models.ForeignKey(Results, db_index=True, related_name='perevreport_set')
-    pairingrate = models.FloatField(blank=True, null=True)
-    fwdandrevcorrected = models.FloatField(blank=True, null=True)
-    fwdandrevuncorrected = models.FloatField(blank=True, null=True)
-    fwdnotrev = models.FloatField(blank=True, null=True)
-    totalbasesunion = models.FloatField(blank=True, null=True)
-    totalbasescorrected = models.FloatField(blank=True, null=True)
-    totalbasesunpairedfwd = models.FloatField(blank=True, null=True)
-    totalbasesunpairedrev = models.FloatField(blank=True, null=True)
-    totalq17basesunpairedrev = models.FloatField(blank=True, null=True)
-    totalq17basesunpairedfwd = models.FloatField(blank=True, null=True)
-    totalq17basescorrected = models.FloatField(blank=True, null=True)
-    totalq17basesunion = models.FloatField(blank=True, null=True)
-    totalq20basesunion = models.FloatField(blank=True, null=True)
-    totalq20basescorrected = models.FloatField(blank=True, null=True)
-    totalq20basesunpairedfwd = models.FloatField(blank=True, null=True)
-    totalq20basesunpairedrev = models.FloatField(blank=True, null=True)
-    totalreadsbasesunpairedrev = models.FloatField(blank=True, null=True)
-    totalreadsbasesunpairedfwd = models.FloatField(blank=True, null=True)
-    totalreadsbasescorrected = models.FloatField(blank=True, null=True)
-    totalreadsbasesunion = models.FloatField(blank=True, null=True)
-    meanlengthunion = models.FloatField(blank=True, null=True)
-    meanlengthcorrected = models.FloatField(blank=True, null=True)
-    meanlengthunpairedfwd = models.FloatField(blank=True, null=True)
-    meanlengthunpairedrev = models.FloatField(blank=True, null=True)
-
-    def __unicode__(self):
-        return self.pereport.resultsName
-
-    class Meta:
-        verbose_name_plural = "PE metrics"
 
 

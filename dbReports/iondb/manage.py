@@ -10,7 +10,7 @@ except ImportError:
     sys.exit(1)
 
 if __name__ == "__main__":
-    execute_manager(settings)
     import logging
     logger = logging.getLogger(__name__)
-    logger.info("Django main running.")
+    logger.info("WARNING: Legacy manage script running. Please use /opt/ion/manage.py instead.")
+    execute_manager(settings)

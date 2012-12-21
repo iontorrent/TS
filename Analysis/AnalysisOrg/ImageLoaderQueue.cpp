@@ -4,7 +4,10 @@
 #include "FlowBuffer.h"
 #include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
+#include <sys/fcntl.h>
+#include <sys/prctl.h>
 
+void JustLoadOneImageWithPinnedUpdate(ImageLoadWorkInfo *cur_image_loader);
 
 // handle our fake mutex flags
 void SetReadCompleted(ImageLoadWorkInfo *one_img_loader)
@@ -36,6 +39,9 @@ void *FileLoadWorker ( void *arg )
 
     ClockTimer timer;
 
+    if (one_img_loader->inception_state->img_control.threaded_file_access)
+        JustLoadOneImageWithPinnedUpdate(one_img_loader);
+
     // col noise correction
     if ( one_img_loader->inception_state->img_control.col_flicker_correct )
     {
@@ -58,7 +64,6 @@ void *FileLoadWorker ( void *arg )
 
     // correct in-channel electrical cross-talk
     ImageTransformer::XTChannelCorrect ( one_img_loader->img[flow_buffer_for_flow].raw, one_img_loader->img[flow_buffer_for_flow].results_folder );
-
     // calculate the smooth pH step amplitude in empty wells across the whole image
     if ( one_img_loader->doEmptyWellNormalization )
     {
@@ -89,7 +94,6 @@ void *FileLoadWorker ( void *arg )
 
     // dump pH step debug one_img_loader to file (its really fast, don't worry)
     DumpStep ( one_img_loader );
-
     if ( one_img_loader->doRawBkgSubtract )
     {
       one_img_loader->img[flow_buffer_for_flow].SubtractLocalReferenceTrace ( one_img_loader->mask, MaskBead, MaskReference, one_img_loader->NNinnerx,
@@ -130,14 +134,29 @@ void *FileSDatLoadWorker ( void *arg )
       q->DecrementDone();
       continue;
     }
-
-    ImageLoadWorkInfo *one_img_loader = ( ImageLoadWorkInfo * ) item.private_data;
-    //    int flow_buffer_for_flow = one_img_loader->cur_buffer;
-
-    // TraceChunkSerializer serializer;
-    // serializer.Read ( one_img_loader->name, one_img_loader->sdat[flow_buffer_for_flow] );
-
     ClockTimer timer;
+    ImageLoadWorkInfo *one_img_loader = ( ImageLoadWorkInfo * ) item.private_data;
+    SynchDat &sdat = one_img_loader->sdat[one_img_loader->cur_buffer];
+
+    //    int flow_buffer_for_flow = one_img_loader->cur_buffer;
+    if ( one_img_loader->inception_state->img_control.col_flicker_correct ) {
+      ComparatorNoiseCorrector cnc;
+      Mask &mask = *(one_img_loader->mask);
+      for (size_t rIx = 0; rIx < sdat.GetNumBin(); rIx++) {
+        TraceChunk &chunk = sdat.GetChunk(rIx);
+        // Copy over temp mask for normalization
+        Mask m(chunk.mWidth, chunk.mHeight);
+        for (size_t r = 0; r < chunk.mHeight; r++) {
+          for (size_t c = 0; c < chunk.mWidth; c++) {
+            m[r*chunk.mWidth+c] = mask[(r+chunk.mRowStart) * mask.W() + (c+chunk.mColStart)];
+          }
+        }
+        cnc.CorrectComparatorNoise(&chunk.mData[0], chunk.mHeight, chunk.mWidth, chunk.mDepth, 
+                                   &m, one_img_loader->inception_state->img_control.col_flicker_correct_verbose);
+      } 
+    }
+    // @todo output trace and dc offset info
+    sdat.SubDcOffset();
     SetReadCompleted(one_img_loader);
     size_t usec = timer.GetMicroSec();
     fprintf ( stdout, "FileLoadWorker: ImageProcessing time for flow %d: %0.5lf sec\n", one_img_loader->flow, usec / 1.0e6);
@@ -201,6 +220,29 @@ void PauseForLongCompute ( int cur_flow,  ImageLoadWorkInfo *info )
     sleep ( 1 );
 }
 
+void JustCacheOneImage(ImageLoadWorkInfo *cur_image_loader)
+{
+
+	// make sure and take the semaphore
+
+    // just read the file in...  It will be stored in cache
+    int fd = open(cur_image_loader->name,O_RDONLY);
+    if(fd >= 0)
+    {
+        char buf[1024*1024];
+	int len;
+	int totalLen=0;
+	while((len = read(fd,&buf[0],sizeof(buf))) > 0)
+	    totalLen += len;
+	printf("read %d bytes from %s\n",totalLen,cur_image_loader->name);
+	close(fd);
+    }
+    else
+    {
+	printf("failed to open %s\n",cur_image_loader->name);
+    }
+}
+
 
 
 void JustLoadOneImageWithPinnedUpdate(ImageLoadWorkInfo *cur_image_loader)
@@ -217,7 +259,7 @@ void JustLoadOneImageWithPinnedUpdate(ImageLoadWorkInfo *cur_image_loader)
   // @TODO: is this correctly done before pinning status is calculated, or after like XTCorrect?
     if ( ImageTransformer::gain_correction != NULL )
       ImageTransformer::GainCorrectImage ( cur_image_loader->img[cur_image_loader->cur_buffer].raw );
-  
+    
     // pinning updates only need to be complete to remove indeterminacy
     // in values dumped in DumpStep in FileLoadWorker
     cur_image_loader->pinnedInFlow->Update ( cur_image_loader->flow, &cur_image_loader->img[cur_image_loader->cur_buffer] );
@@ -270,7 +312,12 @@ void *FileLoader ( void *arg )
     DontReadAheadOfSignalProcessing (cur_image_loader, master_img_loader->lead);
     //***We are doing this on this thread so we >load< in sequential order that pinned in Flow updates in sequential order
     timer_file_access.restart();
-    JustLoadOneImageWithPinnedUpdate(cur_image_loader);
+    if (!cur_image_loader->inception_state->img_control.threaded_file_access) {
+      JustLoadOneImageWithPinnedUpdate(cur_image_loader);
+    }
+    else {
+//      JustCacheOneImage(cur_image_loader);
+    }
     file_access_time += timer_file_access.elapsed();
     //*** now we can do the rest of the computation for an image, including dumping in a multiply threaded fashion
 
@@ -309,8 +356,8 @@ void *FileSDatLoader ( void *arg )
   ImageLoadWorkInfo *n_image_loaders = new ImageLoadWorkInfo[master_img_loader->flow_buffer_size];
   SetUpIndividualImageLoaders ( n_image_loaders,master_img_loader );
 
-  //int numWorkers = numCores() /2; // @TODO - this should be subject to inception_state options
-  int numWorkers = 1;
+  int numWorkers = numCores() /2; // @TODO - this should be subject to inception_state options
+  //int numWorkers = 1;
   numWorkers = ( numWorkers < 1 ? 1:numWorkers );
   fprintf ( stdout, "FileLoader: numWorkers threads = %d\n", numWorkers );
   {
@@ -329,7 +376,7 @@ void *FileSDatLoader ( void *arg )
 
   WorkerInfoQueueItem item;
   Timer timer_file_access;
-  double file_access_time = 0;
+  //double file_access_time = 0;
   int flow_buffer_size = master_img_loader->flow_buffer_size;
   for ( int i_buffer = 0; i_buffer < flow_buffer_size;i_buffer++ )
   {
@@ -344,7 +391,11 @@ void *FileSDatLoader ( void *arg )
     if (!ok) {
       ION_ABORT("Couldn't load file: " + ToStr(cur_image_loader->name));
     }
-    file_access_time += timer_file_access.elapsed();
+    // if ( ImageTransformer::gain_correction != NULL )
+    //   ImageTransformer::GainCorrectImage ( &cur_image_loader->sdat[cur_image_loader->cur_buffer] );
+  
+    //file_access_time += timer_file_access.elapsed();
+    fprintf ( stdout, "File access = %0.2lf sec.\n", timer_file_access.elapsed() );
     cur_image_loader->pinnedInFlow->Update ( cur_image_loader->flow, &cur_image_loader->sdat[cur_image_loader->cur_buffer] );
     cur_image_loader->sdat[cur_image_loader->cur_buffer].AdjustForDrift();
     cur_image_loader->sdat[cur_image_loader->cur_buffer].SubDcOffset();
@@ -355,11 +406,11 @@ void *FileSDatLoader ( void *arg )
     if (ChipIdDecoder::GetGlobalChipId() != ChipId900)
       PauseForLongCompute ( cur_flow,cur_image_loader );
 
-    if ( CheckFlowForWrite ( cur_flow,false ) )
+    /*if ( CheckFlowForWrite ( cur_flow,false ) )
     {
       fprintf (stdout, "File access Time for flow %d to %d: %.1f sec\n", ( ( cur_flow+1 ) - NUMFB ), cur_flow, file_access_time);
       file_access_time = 0;
-    }
+    }*/
   }
 
   // wait for all of the images to be processed

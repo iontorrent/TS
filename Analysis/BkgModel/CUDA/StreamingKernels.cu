@@ -141,7 +141,6 @@ ResidualCalculationPerFlow(
   float frac, 
   float* err, 
   float& residual,
-//  int ibd,
   int num_beads,
   int num_frames); 
 
@@ -151,7 +150,6 @@ CalculateMeanResidualErrorPerFlow(
   float* fval, 
   float* weight,
   float& residual,
-//  int ibd,
   int num_beads,
   int num_frames); 
 
@@ -429,8 +427,8 @@ ModelFuncEvaluationForSingleFlowFit(
     sens = -sens;
   }
 
-  else if (A > MAX_HPLEN)
-    A = MAX_HPLEN;
+  else if (A > LAST_POISSON_TABLE_COL)
+    A = LAST_POISSON_TABLE_COL;
 
   if ( A<0.0001f )
     A = 0.0001f; // safety
@@ -471,7 +469,7 @@ ModelFuncEvaluationForSingleFlowFit(
     ileft = 0;
   }
 
-  if (iright == MAX_HPLEN)
+  if (iright == LAST_POISSON_TABLE_COL)
   {
     iright = ileft;
     occ_r = occ_l;
@@ -576,7 +574,7 @@ ModelFuncEvaluationForSingleFlowFit(
 #ifndef TRANSPOSED_EMPH
       float weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
 #else
-      float weight = emRight != NULL ? frac*emLeft[i*(MAX_HPLEN+1)] + (1.0f - frac)*emRight[i*(MAX_HPLEN+1)] : emLeft[i*(MAX_HPLEN+1)];
+      float weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
 #endif
       int bxi = num_beads * i;
       float jac_tmp =  weight * (fval_local*gain - fval_in[bxi]) * 1000.0f;
@@ -626,8 +624,8 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
     A = -A;
     sens = -sens;
   }
-  else if (A > MAX_HPLEN)
-    A = MAX_HPLEN;
+  else if (A > LAST_POISSON_TABLE_COL)
+    A = LAST_POISSON_TABLE_COL;
 
 
   int ileft, iright;
@@ -662,7 +660,7 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
     occ_l = 0.0;
   }
 
-  if (iright == MAX_HPLEN)
+  if (iright == LAST_POISSON_TABLE_COL)
   {
     iright = ileft;
     occ_r = occ_l;
@@ -764,7 +762,7 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
 #ifndef TRANSPOSED_EMPH
       float weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
 #else
-      float weight = emRight != NULL ? frac*emLeft[i*(MAX_HPLEN+1)] + (1.0f - frac)*emRight[i*(MAX_HPLEN+1)] : emLeft[i*(MAX_HPLEN+1)];
+      float weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
  #endif
 
      delta = (fval_local*gain) - fval[i*num_beads];
@@ -797,8 +795,8 @@ ComputeHydrogenForMultiFlowFit_dev(
     A = -A;
     sens = -sens;
   }
-  else if (A > MAX_HPLEN)
-    A = MAX_HPLEN;
+  else if (A > LAST_POISSON_TABLE_COL)
+    A = LAST_POISSON_TABLE_COL;
 
   if ( A<0.0001f )
     A = 0.0001f; // safety
@@ -836,9 +834,9 @@ ComputeHydrogenForMultiFlowFit_dev(
     ileft = 0;
   }
 
-  if (iright >= MAX_HPLEN)
+  if (iright >= LAST_POISSON_TABLE_COL)
   {
-    iright = ileft = MAX_HPLEN-1;
+    iright = ileft = LAST_POISSON_TABLE_COL-1;
     occ_r = occ_l;
     occ_l = 0;
   }
@@ -1026,7 +1024,6 @@ ResidualCalculationPerFlow(
   float frac, 
   float* err, 
   float& residual,
-//  int ibd,
   int num_beads,
   int num_frames) {
   int i;
@@ -1040,8 +1037,8 @@ ResidualCalculationPerFlow(
 #ifndef TRANSPOSED_EMPH
     weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
 #else
-    weight = emRight != NULL ? frac* (*emLeft) + (1.0f - frac)*emRight[i*(MAX_HPLEN+1)] : (*emLeft); //[i*(MAX_HPLEN+1)];
-    emLeft += (MAX_HPLEN+1);
+    weight = emRight != NULL ? frac* (*emLeft) + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : (*emLeft); //[i*(MAX_POISSON_TABLE_COL)];
+    emLeft += (MAX_POISSON_TABLE_COL);
 #endif
     *err = e = weight * (*fg_buffers - *fval);
     residual += e*e;
@@ -1076,7 +1073,7 @@ ResidualForAlternatingFit(
 #ifndef TRANSPOSED_EMPH
     weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
 #else
-    weight = emRight != NULL ? frac*emLeft[i*(MAX_HPLEN+1)] + (1.0f - frac)*emRight[i*(MAX_HPLEN+1)] : emLeft[i*(MAX_HPLEN+1)];
+    weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
 #endif
     e = fg_buffers[num_beads*i] - fval[num_beads*i];
     err[num_beads*i] = e;
@@ -1093,7 +1090,6 @@ CalculateMeanResidualErrorPerFlow(
   float* fval, 
   float* weight, // highest hp weighting emphasis vector
   float& residual,
-//  int ibd,
   int num_beads,
   int num_frames) 
 {
@@ -1102,17 +1098,15 @@ CalculateMeanResidualErrorPerFlow(
   float wtScale = 0.0f;
 
   residual = 0;
-  
   for (i=0; i<num_frames; ++i) {
     wtScale += *weight * *weight;
     e = *weight * 
           (*fg_buffers - *fval);
     residual += e*e;
 
-    weight += (MAX_HPLEN + 1);
+    weight += (LAST_POISSON_TABLE_COL + 1);
     fg_buffers+=num_beads;
     fval += num_beads;
-    
   }
   residual = sqrtf(residual/wtScale);
 }
@@ -1627,7 +1621,7 @@ __device__ void DecideOnEmphasisVectorsForInterpolation(
   int num_frames
 )
 {
-  if (Ampl < MAX_HPLEN) {
+  if (Ampl < LAST_POISSON_TABLE_COL) {
     int left = (int) Ampl;
     frac = (left + 1.0f - Ampl);
     if (left < 0) {
@@ -1638,12 +1632,12 @@ __device__ void DecideOnEmphasisVectorsForInterpolation(
     *emLeft = &emphasis[left*num_frames];
     *emRight = &emphasis[(left + 1)*num_frames];
   }else{
-    *emLeft = &emphasis[MAX_HPLEN*num_frames];
+    *emLeft = &emphasis[LAST_POISSON_TABLE_COL*num_frames];
 #else
     *emLeft = &emphasis[left];
     *emRight = &emphasis[left + 1];
   }else{
-    *emLeft = &emphasis[MAX_HPLEN]; 
+    *emLeft = &emphasis[LAST_POISSON_TABLE_COL]; 
 #endif
     *emRight = NULL;
     frac = 1.0f;
@@ -1692,13 +1686,6 @@ PerFlowLevMarFit_k(
   float* fg_buffers, // NxF
   float* emphasisVec, 
   float* nucRise, 
-  // bead params
-  //float* pAmpl, // NxNUMFB
-  //float* pKmult, // NxNUMFB
-  //float* pdmult, // N
-  //float* pR, // N
-  //float* pgain, // N
-//  float* pSP, // N
   float * pBeadParamsBase, //N
   bead_state* pState,
 
@@ -1716,14 +1703,13 @@ PerFlowLevMarFit_k(
   int num_beads, // 4
   int num_frames, // 4
   bool useDynamicEmphasis,
-//  int * pMonitor,
   int sId
 ) 
 {
   extern __shared__ float emphasis[];
 
 #ifndef TRANSPOSED_EMPH
-  for (int i=0; i<(MAX_HPLEN + 1)*num_frames; i+=num_frames)
+  for (int i=0; i<MAX_POISSON_TABLE_COL*num_frames; i+=num_frames)
   {
     if (threadIdx.x < num_frames)
       emphasis[i + threadIdx.x] = emphasisVec[i + threadIdx.x];
@@ -1733,8 +1719,8 @@ PerFlowLevMarFit_k(
   
 /*  for(int i=0; i<num_frames; i ++)
   {
-     if (threadIdx.x < MAX_HPLEN+1)
-      emphasis[(MAX_HPLEN+1)*i + threadIdx.x] = emphasisVec[num_frames*threadIdx.x + i ];
+     if (threadIdx.x < MAX_POISSON_TABLE_COL)
+      emphasis[(MAX_POISSON_TABLE_COL)*i + threadIdx.x] = emphasisVec[num_frames*threadIdx.x + i ];
   }
 */
   int numWarps = blockDim.x/32;
@@ -1742,8 +1728,8 @@ PerFlowLevMarFit_k(
   int warpIdx = threadIdx.x/32; 
   for(int i=warpIdx; i<num_frames; i += numWarps)
   {
-     if (threadWarpIdx < MAX_HPLEN+1)
-      emphasis[(MAX_HPLEN+1)*i + threadWarpIdx ] = emphasisVec[num_frames*threadWarpIdx + i ];
+     if (threadWarpIdx < MAX_POISSON_TABLE_COL)
+      emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[num_frames*threadWarpIdx + i ];
   }
   
 #endif
@@ -1755,19 +1741,6 @@ PerFlowLevMarFit_k(
   if(ibd >= num_beads) return;
 
   num_beads = ((num_beads+31)/32) * 32;
-
-/*
-  pAmpl += ibd;
-  pKmult += ibd;
-  pR += ibd;
-  //pSP += ibd;  
-  //float2 * pTauBSP = (float2*) ptauB;
-  //pTauBSP += ibd;
-  pCopies += ibd;
-  pgain += ibd;
-  pdmult += ibd;
-*/
-
   pBeadParamsBase += ibd;
   pState += ibd; 
   
@@ -1806,11 +1779,9 @@ PerFlowLevMarFit_k(
 
     //offset for next value gets added to address at end of fnum loop
     
-//    float krate = *(pAmpl + num_beads*NUMFB); // *pKmult;
     float krate = *pKmult;
 
     float Ampl = *pAmpl;
-    //float2 tmp = *pTauBSP;
     float etbR;
     float tauB; // = tmp.x; // *ptauB;
     float SP; //= tmp.y; //*pSP;  
@@ -1891,7 +1862,7 @@ PerFlowLevMarFit_k(
         newAmpl = Ampl + delta0;
         if(twoParamFit)newKrate = krate + delta1;
 
-        clamp_streaming(newAmpl, minAmpl, (float)MAXAMPL);
+        clamp_streaming(newAmpl, minAmpl, (float)LAST_POISSON_TABLE_COL);
         if(twoParamFit)clamp_streaming(newKrate, minKmult, maxKmult);
 
         // Evaluate using new params
@@ -1929,23 +1900,16 @@ PerFlowLevMarFit_k(
 
     if(fnum==0) avg_err = pState->avg_err * realFnum;  
 
-    if(twoParamFit) *pKmult = krate;//*(pAmpl + num_beads*NUMFB)= krate;
+    if(twoParamFit) *pKmult = krate;
     *pAmpl= Ampl;
  
-    //CalculateMeanResidualErrorPerFlow(fg_buffers, fval, emphasis+MAX_HPLEN*num_frames, residual, 
-    //  num_beads, num_frames); 
-    CalculateMeanResidualErrorPerFlow(fg_buffers, fval, emphasis+MAX_HPLEN, residual, 
+    CalculateMeanResidualErrorPerFlow(fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL, residual, 
       num_beads, num_frames); 
   
     avg_err += residual;
     meanErr[num_beads * fnum] = residual;
 
-    //pKmult += num_beads;  //[offset];
-    pAmpl += num_beads; //[offset];
-    //ptauB += num_beads; //[offset];
-    //pSP += num_beads; //[offset];  
-    //pTauBSP += num_beads;
-
+    pAmpl += num_beads;
     fg_buffers += num_frames*num_beads;
   } // end fnum loop
 
@@ -2109,7 +2073,7 @@ PerFlowAlternatingFit_k(
 {
   extern __shared__ float emphasis[];
 
-  for (int i=0; i<(MAX_HPLEN + 1)*num_frames; i+=num_frames)
+  for (int i=0; i<(MAX_POISSON_TABLE_COL)*num_frames; i+=num_frames)
   {
     if (threadIdx.x < num_frames)
       emphasis[i + threadIdx.x] = emphasisVec[i + threadIdx.x];
@@ -2185,7 +2149,7 @@ PerFlowAlternatingFit_k(
         // try change in amplitude
         residual = start_res;
         float epsilon = 0.01f;
-        if ((Ampl + epsilon) > (float)MAXAMPL)
+        if ((Ampl + epsilon) > (float)LAST_POISSON_TABLE_COL)
           epsilon = -1.0f*epsilon;
      
         float newAmpl = Ampl + epsilon;
@@ -2199,7 +2163,7 @@ PerFlowAlternatingFit_k(
           frac, err, delta);
       
         newAmpl = Ampl + delta;
-        clamp_streaming(newAmpl, minAmpl, (float)MAXAMPL);
+        clamp_streaming(newAmpl, minAmpl, (float)LAST_POISSON_TABLE_COL);
         DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,newAmpl,emphasis, num_frames);
         DynamicConstraintKrate(copies, newAmpl, krate, twoParamFit);
     
@@ -2285,7 +2249,7 @@ PerFlowAlternatingFit_k(
     pKmult[fnum*num_beads]= krate;
     pAmpl[fnum*num_beads]= Ampl;
  
-    CalculateMeanResidualErrorPerFlowForAlternatingFit(err, emphasis+MAX_HPLEN*num_frames, residual, 
+    CalculateMeanResidualErrorPerFlowForAlternatingFit(err, emphasis+LAST_POISSON_TABLE_COL*num_frames, residual, 
       num_beads, num_frames); 
   
     avg_err += residual;
@@ -2322,7 +2286,7 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
   float* pscratch_ival, // FLxNxF
   float* pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* psbg, // FLxF
-  float* pemphasis, // MAX_HPLEN+1 xF 
+  float* pemphasis, // MAX_POISSON_TABLE_COL xF 
   float* pnon_integer_penalty, // MAX_HPLEN
   float* pdarkMatterComp, // NUMNUC * F  
   float* pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -2342,7 +2306,7 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
 {
   extern __shared__ float emphasisVec[];
 
-  for (int i=0; i<(MAX_HPLEN + 1)*num_frames; i+=num_frames)
+  for (int i=0; i<MAX_POISSON_TABLE_COL*num_frames; i+=num_frames)
   {
     if (threadIdx.x < num_frames)
       emphasisVec[i + threadIdx.x] = pemphasis[i + threadIdx.x];
@@ -2514,7 +2478,7 @@ __global__ void MultiFlowLevMarFit_k(
   float* pfval,
   float* pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* psbg, // FLxF
-  float* pemphasis, // MAX_HPLEN+1 xF // needs precomputation
+  float* pemphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
   float* pnon_integer_penalty, // MAX_HPLEN
   float* pdarkMatterComp, // NUMNUC * F  
   float* pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -2535,7 +2499,7 @@ __global__ void MultiFlowLevMarFit_k(
 {
   extern __shared__ float emphasisVec[];
 
-  for (int i=0; i<(MAX_HPLEN + 1)*num_frames; i+=num_frames)
+  for (int i=0; i<MAX_POISSON_TABLE_COL*num_frames; i+=num_frames)
   {
     if (threadIdx.x < num_frames)
       emphasisVec[i + threadIdx.x] = pemphasis[i + threadIdx.x];
@@ -2981,7 +2945,7 @@ extern "C"
 void  PerFlowAlternatingFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
-  float* emphasis, // (MAX_HPLEN+1)xF
+  float* emphasis, // (MAX_POISSON_TABLE_COL)xF
   float* nucRise, 
   // bead params
   float* pAmpl, // N
@@ -3054,7 +3018,7 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
   float* pscratch_ival, // FLxNxF
   float* pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* psbg, // FLxF
-  float* pemphasis, // MAX_HPLEN+1 xF // needs precomputation
+  float* pemphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
   float* pnon_integer_penalty, // MAX_HPLEN
   float* pdarkMatterComp, // NUMNUC * F  
   float* pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -3082,7 +3046,7 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
   pscratch_ival, // FLxNxF
   pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   psbg, // FLxF
-  pemphasis, // MAX_HPLEN+1 xF // needs precomputation
+  pemphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
   pnon_integer_penalty, // MAX_HPLEN
   pdarkMatterComp, // NUMNUC * F  
   pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -3180,7 +3144,7 @@ void MultiFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t st
   float* pfval, // FLxNxFx2  //scratch for both ival and fval
   float* pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* psbg, // FLxF
-  float* pemphasis, // MAX_HPLEN+1 xF // needs precomputation
+  float* pemphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
   float* pnon_integer_penalty, // MAX_HPLEN
   float* pdarkMatterComp, // NUMNUC * F  
   float* pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -3208,7 +3172,7 @@ void MultiFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t st
     pfval, // FLxNxFx2  //scratch for both ival and fval
     pnucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
     psbg, // FLxF
-    pemphasis, // MAX_HPLEN+1 xF // needs precomputation
+    pemphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
     pnon_integer_penalty, // MAX_HPLEN
     pdarkMatterComp, // NUMNUC * F  
     pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
@@ -3250,11 +3214,11 @@ void initPoissonTables(int device, float ** poiss_cdf)
   cudaSetDevice(device);
 
   ///////// regular float version
-  int poissTableSize = (MAX_HPLEN + 1) * MAX_POISSON_TABLE_ROW * sizeof(float);
+  int poissTableSize = MAX_POISSON_TABLE_COL * MAX_POISSON_TABLE_ROW * sizeof(float);
   float * devPtr =NULL;
   cudaMalloc(&devPtr, poissTableSize); CUDA_ALLOC_CHECK(devPtr);
   cudaMemcpyToSymbol(POISS_APPROX_TABLE_CUDA_BASE , &devPtr  , sizeof (float*)); CUDA_ERROR_CHECK();
-  for(int i = 0; i< (MAX_HPLEN+1); i++)
+  for(int i = 0; i< (MAX_POISSON_TABLE_COL); i++)
   {
     cudaMemcpy(devPtr, poiss_cdf[i], sizeof(float)*MAX_POISSON_TABLE_ROW, cudaMemcpyHostToDevice ); CUDA_ERROR_CHECK();
     devPtr += MAX_POISSON_TABLE_ROW;
@@ -3277,23 +3241,24 @@ void initPoissonTablesLUT(int device, void ** poissLUT)
 //  float4 ** pPoissLUT = (float4**) poissLUT;
 #ifdef POISS_FLOAT4
 
-  int poissTableSize =  (MAX_HPLEN + 2) * MAX_POISSON_TABLE_ROW * sizeof(float4);
+  int poissTableSize =  MAX_LUT_TABLE_COL * MAX_POISSON_TABLE_ROW * sizeof(float4);
   float4 * devPtrLUT = NULL;  
   cudaMalloc(&devPtrLUT, poissTableSize); CUDA_ALLOC_CHECK(devPtrLUT);
+  cudaMemset(devPtrLUT, 0, poissTableSize); CUDA_ERROR_CHECK();
   cudaMemcpyToSymbol(POISS_APPROX_LUT_CUDA_BASE, &devPtrLUT  , sizeof (float4*)); CUDA_ERROR_CHECK();
 
 #ifdef CREATE_POISSON_LUT_ON_DEVICE
   // run kernel to create LUT table from CDF tables on device
   dim3 block(512,1);
-  dim3 grid (MAX_HPLEN+1, 1);
+  dim3 grid (MAX_POISSON_TABLE_COL, 1);
   build_poiss_LUT_k<<<grid, block >>>( ); 
   CUDA_ERROR_CHECK();
 #else  
   // cast and copy host side __m128 SSE/AVX data to float4
   float4** pPoissLUT =(float4**)poissLUT;
-  for(int i = 0; i< (MAX_HPLEN+2); i++)
+  for(int i = 0; i< MAX_LUT_TABLE_COL; i++)
   {
-    cudaMemcpy(devPtrLUT, (float*)&pPoissLUT[i][0], sizeof(float4)*MAX_POISSON_TABLE_ROW, cudaMemcpyHostToDevice ); CUDA_ERROR_CHECK();
+    cudaMemcpy(devPtrLUT, &pPoissLUT[i][0], sizeof(float4)*MAX_POISSON_TABLE_ROW, cudaMemcpyHostToDevice ); CUDA_ERROR_CHECK();
     devPtrLUT += MAX_POISSON_TABLE_ROW;
   }
 #endif

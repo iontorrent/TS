@@ -11,6 +11,7 @@ from django.template import RequestContext
 from django.template.defaultfilters import filesizeformat
 from django.shortcuts import render_to_response
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.sessions.models import Session
 
 from django import http
 
@@ -27,7 +28,7 @@ import re
 import logging
 import urllib
 
-from iondb.bin import setGlobalConfigDefaults
+from ion.utils.TSversion import findVersions
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,38 @@ def install_lock(request):
     return response
 
 
+def tsconfig_log(request):
+    """ Display tsconfig log """
+    log = open("/var/log/ion/tsconfig_gui.log").readlines()
+    return http.HttpResponse(log, content_type="text/plain;charset=utf-8")
+
+
+def get_zip_logs(request):
+    ''' Make an archive of logs available to download '''
+    from django.core.servers.basehttp import FileWrapper
+    import zipfile
+    try:
+        compression = zipfile.ZIP_DEFLATED
+    except:
+        compression = zipfile.ZIP_STORED
+    
+    zipPath = '/tmp/logs.zip'    
+    zipfile = zipfile.ZipFile(zipPath, mode='w', allowZip64=True)
+    files = ['tsconfig_gui.log','django.log','celery_w1.log']
+    for afile in files:
+        fullpath = os.path.join('/var/log/ion',afile)
+        if os.path.exists(fullpath):
+            zipfile.write(fullpath, arcname=afile, compress_type=compression)
+    zipfile.close()
+    
+    #TODO: Include the server serial number in the archive filename.
+    #One possible source is /etc/torrentserver/tsconf.conf, serialnumber:XXXXXX
+    archive_filename = 'ts_update_logs.zip'
+    response = http.HttpResponse(FileWrapper (open(zipPath)), mimetype='application/zip')
+    response['Content-Disposition'] = 'attachment; filename=%s' % archive_filename
+    return response
+        
+
 def run_update_check(request):
     tasks.check_updates.delay()
     return http.HttpResponse()
@@ -213,7 +246,7 @@ def update(request):
         data = json.dumps({"lockBlocked" : updateLocked })
         return http.HttpResponse(data, content_type="application/json")
     elif request.method=="GET":
-        about, meta_version = views.findVersions()
+        about, meta_version = findVersions()
         config = GlobalConfig.get()
         from iondb.rundb.api import GlobalConfigResource
         resource = GlobalConfigResource()
@@ -249,30 +282,6 @@ def ot_log(request):
     response = http.HttpResponse(log, content_type=mime)
     return response
     
-def setDefaultGC(request, instrument):
-    if instrument == 'pgm':
-        gc = setGlobalConfigDefaults.getPGMDefaults()
-    elif instrument == 'proton':
-        gc = setGlobalConfigDefaults.getProtonDefaults()
-    gc.save()    
-    logger.debug("GlobalConfig reset to '%s' default values" % instrument)
-            
-    return http.HttpResponse()
-    
-@staff_member_required
-def restoreDefaultGC(request):
-    gc = GlobalConfig.objects.get()
-    
-    global_defaults = { 
-            'current': gc,
-            'pgm': setGlobalConfigDefaults.getPGMDefaults(),
-            'proton': setGlobalConfigDefaults.getProtonDefaults()
-        }    
-    gc_fields = {}
-    for name, item in global_defaults.items():       
-        gc_fields[name] = [(field.verbose_name, field.value_to_string(item)) for field in GlobalConfig._meta.fields if field.name not in ['id','name','selected']]   
-    
-    return render_to_response("admin/restoreDefaultGC.html",{},RequestContext(request, {'gc_fields': gc_fields, 'gcID': gc.pk}))
     
 @staff_member_required
 def updateOneTouch(request):
@@ -314,6 +323,7 @@ def updateOneTouch(request):
 class ExperimentAdmin(admin.ModelAdmin):
     list_display = ('expName', 'date')
     search_fields = ['expName' ]
+    ordering = ('-date', 'expName', )
 
 class PluginResultAdmin(admin.ModelAdmin):
     def total_size(self,obj):
@@ -350,6 +360,7 @@ class ResultsAdmin(admin.ModelAdmin):
     list_display = ('resultsName','experiment','timeStamp')
     date_hierarchy = 'timeStamp'
     search_fields = ['resultsName']
+    filter_horizontal = ('projects',)
     inlines = [ PluginResultsInline, ]
     ordering = ( "-id", )
 
@@ -385,7 +396,6 @@ class GlobalConfigAdmin(admin.ModelAdmin):
     list_display = ('name','web_root',
                     'site_name',
                     'plugin_folder',
-                    'default_command_line',
                     'records_to_display',
                     'default_test_fragment_key',
                     'default_library_key',
@@ -400,7 +410,10 @@ class GlobalConfigAdmin(admin.ModelAdmin):
 
 
 class ChipAdmin(admin.ModelAdmin):
-    list_display = ('name','slots','args')
+    list_display = ('name','description','slots')
+    formfield_overrides = {
+        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+    }
 
 
 class dnaBarcodeAdmin(admin.ModelAdmin):
@@ -424,13 +437,37 @@ class LibraryKeyAdmin(admin.ModelAdmin):
     list_display = ('direction', 'name','sequence','description', 'isDefault')
 
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'creator', 'public')
+    list_display = ('name', 'creator', 'public', 'modified')
 
+class PlannedExperimentQCInline(admin.TabularInline):
+    model = PlannedExperiment.qcValues.through
+
+    verbose_name = "Planned Experiment QC Thresholds"
+    can_delete = False
+    can_add = False
+    
+    def has_add_permission(self, request):
+        return False
+
+    
 class PlannedExperimentAdmin(admin.ModelAdmin):
     list_display = ('planName','planShortID','date','isReverseRun','planExecuted')
     list_filter = ('planExecuted',)
     search_fields = ['planShortID',]
     filter_horizontal = ('projects',)
+
+    inlines = [PlannedExperimentQCInline,]
+
+class PlannedExperimentQCAdmin(admin.ModelAdmin):
+    ##pass
+
+    def has_add_permission(self, request):
+        return False
+
+class QCTypeAdmin(admin.ModelAdmin):
+        
+    def has_add_permission(self, request):
+        return False
 
 class DM_Reports(admin.ModelAdmin):
 	list_display = ("location","pruneLevel")
@@ -443,6 +480,8 @@ class DM_PruneRule(admin.ModelAdmin):
 
 class ReportStorageAdmin(admin.ModelAdmin):
     list_display = ("name", "default")
+
+#logger.exception("Registering admin site pages")
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
@@ -487,7 +526,15 @@ admin.site.register(KitInfo)
 admin.site.register(KitPart)
 admin.site.register(LibraryKey, LibraryKeyAdmin)
 
-admin.site.register(QCType)
+admin.site.register(QCType, QCTypeAdmin)
 admin.site.register(ApplProduct)
-admin.site.register(PEMetrics)
 
+admin.site.register(PlannedExperimentQC, PlannedExperimentQCAdmin)
+
+
+# Add sessions to admin
+class SessionAdmin(admin.ModelAdmin):
+    def _session_data(self, obj):
+        return obj.get_decoded()
+    list_display = ['session_key', '_session_data', 'expire_date']
+admin.site.register(Session, SessionAdmin)

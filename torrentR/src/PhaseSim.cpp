@@ -7,7 +7,6 @@
 #include <limits>
 #include <numeric>
 #include "PhaseSim.h"
-#include "min_interval.h"
 #include "IonErr.h"
 
 using namespace std;

@@ -23,10 +23,6 @@ class EmptyTrace
     void  FillEmptyTraceFromBuffer ( short *bkg, int flow );
     void  RezeroReference ( float t_start, float t_end, int fnum );
     void  RezeroReferenceAllFlows ( float t_start, float t_end );
-    void RezeroCompressedReferenceAllFlows ( BkgTrace *bgTrace );
-    void RezeroCompressedReference ( BkgTrace *bgTrace, int flow );
-    void RezeroCompressedReference (TimeCompression *time_cp, float t_start, float t_end, int fnum);
-    void RezeroCompressedReferenceAllFlows (TimeCompression *time_cp, float t_start, float t_end );
     void  GetShiftedBkg ( float tshift,TimeCompression &time_cp, float *bkg );
     void  GetShiftedSlope ( float tshift, TimeCompression &time_cp, float *bkg );
     void  T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *region, Mask *bfmask );
@@ -52,7 +48,12 @@ class EmptyTrace
                                    float _nuc_flow_frame_width );
 
     void SetTime(float frames_per_second);
-    void SetTimeFromSdatChunk(Region& region, TraceChunk &chunk);
+    void SetTimeFromSdatChunk(Region& region, SynchDat &sdat);
+
+    // track whether this emptytrace object is used, if it is not then
+    // the buffers may be allocated but not contain valid data
+    bool SetUsed(bool arg) { trace_used=arg; return trace_used; }
+    bool GetUsed() { return trace_used; }
 
   protected:
     int numfb; // number of flow buffers 
@@ -61,8 +62,6 @@ class EmptyTrace
     float *neg_bg_buffers_slope;
     std::vector<float> t0_map;  //@TODO: timing map across all regions
     std::vector<float> timePoints; // timing for start and stop of acquisition time for frame.
-    bool doingSdat;
-    bool regionAndTimingMatchesSdat;
     float secondsPerFrame;
     MaskType referenceMask;
     BkgTrace zeroTrace;
@@ -73,6 +72,7 @@ class EmptyTrace
     float cutoff_quantile;
     float nuc_flow_frame_width;
     std::vector<int> sampleIndex;
+    bool trace_used;
 
 //@TODO: this is not a safe way of accessing buffers - need flow buffer object reference
     int flowToBuffer ( int flow )
@@ -118,8 +118,6 @@ class EmptyTrace
       regionIndices &
       t0_map &
       timePoints &
-      doingSdat &
-      regionAndTimingMatchesSdat &
       secondsPerFrame &
       referenceMask &
       do_ref_trace_trim &
@@ -127,7 +125,8 @@ class EmptyTrace
       span_inflator_mult &
       cutoff_quantile &
       nuc_flow_frame_width &
-      sampleIndex;
+      sampleIndex &
+      trace_used;
 
       //fprintf(stdout, "done\n");
     }
@@ -145,8 +144,6 @@ class EmptyTrace
       regionIndices &
       t0_map &
       timePoints &
-      doingSdat &
-      regionAndTimingMatchesSdat &
       secondsPerFrame &
       referenceMask &
       do_ref_trace_trim &
@@ -154,7 +151,8 @@ class EmptyTrace
       span_inflator_mult &
       cutoff_quantile &
       nuc_flow_frame_width &
-      sampleIndex;
+      sampleIndex &
+      trace_used;
 
       AllocateScratch();
       // fprintf(stdout, "done\n");

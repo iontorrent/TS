@@ -1,28 +1,22 @@
 {% extends "rundb/configure/base.html" %}
 {% load pagetools %}
 {% block sub-nav %}
-	<li><a href="{% url configure_about %}">About</a></li>			
-	<li class="active"><a href="{% url configure_references %}">References</a></li>
-	<li><a href="{% url configure_services %}">Services</a></li>
-	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
-	<li><a href="{% url configure_configure %}">Configure</a></li>	
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li class="active"><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
 	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
 	<script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
-	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />
-	<script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>  	
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+	<script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>  	
 	
-	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-transition.min.js"></script>
-	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.min.js"></script>
-	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.css" />
-	
-	<style>
-	body .modal-wrapper {
-	  width: 830px;
-	  margin-left: -415px;
-	}
-	</style>
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
 	
 	<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script> <!-- Using updated uni-form JS -->
 	<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script> <!-- for ajaxForm -->
@@ -40,7 +34,7 @@
 		<div class="content clearfix">
 			<div class="clearfix">
 				<h1 style="float:left;">Reference Sequences</h1>
-				<a href="{% url references_add_genome %}" class="btn btn-primary pull-right add_genome">Add Reference Sequence</a>
+				<a href="{% url references_genome_add %}" class="btn btn-primary pull-right add_genome">Add Reference Sequence</a>
 			</div>
 			<div id="referenceSequences"></div>
 		</div>
@@ -163,7 +157,7 @@ $(document).ready(function(){
 			{
                 field: "short_name"
                 , title: "Name"
-                , template: "<a href='/rundb/editgenome/${id}' class='edit_genome'>${short_name}</a>"
+                , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
                 , title: "Description"
@@ -238,7 +232,7 @@ $(document).ready(function(){
 			{
                 field: "short_name"
                 , title: "Name"
-                , template: "<a href='/rundb/editgenome/${id}' class='edit_genome'>${short_name}</a>"
+                , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
                 , title: "Description"
@@ -268,7 +262,7 @@ $(document).ready(function(){
 				$('#sys_messages').html(encodingTemplate({}));
 				$("#rebuild_all").click(function(e){
 					e.preventDefault();
-			        $.get("/rundb/rebuild_index/all", function(data){
+			        $.get("/configure/references/genome/rebuild/all", function(data){
 			          	$("#rebuild_alert").hide();
 						var rebuildingTemplate = kendo.template($("#rebuildingAlertTemplate").html());
 			          	$("#sys_messages").append(rebuildingTemplate({data:data})).fadeIn('slow');
@@ -459,6 +453,7 @@ $(document).ready(function(){
 		
 		url = $(this).attr('href');
 		// alert(url);
+		$('body #modal_references_add_barcodeset').remove();
 		$.get(url, function(data) {
 			console.log(data);
 		    return false;

@@ -52,6 +52,7 @@ def get_runinfo(env,plugin,primary_key,basefolder,plugin_out,url_root):
             "plugin": plugin, # name,version,id,pluginresult_id,path
             "pk":primary_key,
             "tmap_version":env['tmap_version'],
+            "library": env.get('libraryName'),
             "chipType": env.get('chipType',''),
             "barcodeId": env.get('barcodeId','')
         }
@@ -67,6 +68,45 @@ def get_runplugin(env):
     }             
     return d  
       
+def get_expmeta(env):
+    from datetime import datetime
+    exp_json = json.loads(env.get('exp_json','{}'))
+    
+    # compatibility fallback: expMeta.dat
+    if not exp_json:        
+        expmeta_file = os.path.join(env['report_root_dir'],'expMeta.dat')
+        try:
+          with open(expmeta_file, 'r') as f:
+              expmeta = dict(line.replace(' ','').strip().split('=') for line in f)
+              exp_json['expName'] = expmeta['RunName']
+              exp_json['date'] = expmeta['RunDate']
+              exp_json['flows'] = expmeta['RunFlows']
+              exp_json['sample'] = expmeta['Sample']
+              exp_json['pgmName'] = expmeta['PGM']
+              exp_json['chipType'] = expmeta['ChipType']
+              exp_json['notes'] = expmeta['Notes']
+        except:
+          pass
+
+    ion_params_path = os.path.join(env['report_root_dir'],'ion_params_00.json')
+    d = {
+        "run_name": exp_json.get('expName'),
+        "run_date": exp_json.get('date'),
+        "run_flows": exp_json.get('flows'),
+        "sample": exp_json.get('sample'),        
+        "pgm": exp_json.get('pgmName'),        
+        "chiptype": exp_json.get('chipType'),
+        "notes": exp_json.get('notes'),
+        
+        "barcodeId": env.get('barcodeId'),
+        "results_name": env.get('resultsName'),
+        "flowOrder": env.get('flowOrder'),
+        "project": env.get('project'),
+        "runid": env.get('runID',''),
+        
+        "analysis_date": str(datetime.date(datetime.fromtimestamp(os.path.getmtime(ion_params_path)))),
+    }
+    return d
 
 def get_pluginconfig(plugin):    
     d = plugin.get('pluginconfig',{})
@@ -92,14 +132,16 @@ def make_plugin_json(env,plugin,primary_key,basefolder,url_root):
     json_obj={
         "runinfo":get_runinfo(env,plugin,primary_key,basefolder,plugin['name']+"_out",url_root),
         "runplugin":get_runplugin(env),
+        "expmeta": get_expmeta(env),
         "pluginconfig":get_pluginconfig(plugin),
         "globalconfig":get_globalconfig(),
         "plan":{},
     }
     if "plan" in env:
         json_obj["plan"] = env["plan"]
-        if plugin.get("userInput","") and "Workflow" in plugin["userInput"][0].keys():
-            json_obj["plan"]["irworkflow"] = plugin["userInput"][0]["Workflow"]
+        # IonReporterUploader_V1_0 compatibility shim
+        if plugin["name"] == "IonReporterUploader_V1_0" and plugin.get("userInput",""):
+            json_obj["plan"]["irworkflow"] = plugin["userInput"][0].get("Workflow")
         
     if DEBUG:
         print json.dumps(json_obj,indent=2)

@@ -7,7 +7,7 @@
   Given a DNA sequence and a flow order, returns the flow-space signal that would be observed under ideal circumstances - i.e. in the absence of phase errors or signal decay.
 }
 \usage{
-  seqToFlow(sequence,flowOrder,nFlow=NA,finishAtSeqEnd=FALSE)
+  seqToFlow(sequence,flowOrder,nFlow=NA,finishAtSeqEnd=FALSE,flowOffset=0)
   
 }
 \arguments{
@@ -25,6 +25,11 @@
     If true, returned flow sequence will end if/when the supplied template completes,
     otherwise the returned sequence will continue out to the number of flows.
   }
+  \item{flowOffset}{
+    If positive, specifies a number of initial flows that will be skipped, the corresponding flow
+    values will be set to NA.  Designed to work with the value stored in the ZF tag in Ion BAM files,
+    returned as flowOffset by readIonBam()
+  }
 }
 \value{
   The return value is an integer vector representing the flow values expected under ideal circumstances.
@@ -41,4 +46,5 @@ flowVals2  <- seqToFlow(mySeq2,flowOrder,nFlow=16)
 }
 \seealso{
   \code{\link{flowToSeq}},
+  \code{\link{readIonBam}},
 }

@@ -1,29 +1,29 @@
 {% extends "rundb/configure/base.html" %}
 {% load pagetools %}
-{% block extra_head %}
-	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-transition.min.js"></script>
-	<script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.min.js"></script>
-	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.css" />
-	<style>
-	body .modal-wrapper {
-	    width: 1030px;
-	    margin-left: -515px;
-    }
-    .errorlist {
-    	margin-left: 0;
-  		list-style: none;
-    }
-	</style>
+{% block extra_head_js %}
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
 	<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script>
-{% endblock extra_head %}
+
+	<script type="text/javascript" src="/site_media/resources/scripts/configure/plugins/modal_configure_report_data_mgmt_edit_pruning_config.js"></script>
+{% endblock extra_head_js %}
+{% block extra_head_styles %}
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+	<style>
+	.errorlist {
+	    margin-left: 0;
+	    list-style: none;
+	}
+	</style>
+{% endblock extra_head_styles %}
 {% block sub-nav %}
-	<li><a href="{% url configure_about %}">About</a></li>			
-	<li><a href="{% url configure_references %}">References</a></li>
-	<li><a href="{% url configure_services %}">Services</a></li>
-	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
-	<li class="active"><a href="{% url configure_configure %}">Configure</a></li>	
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li class="active"><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
-<link href='site_media/css/jquery-ui.css' type="text/css" rel="stylesheet" />
 {% block content %}
 <script type="text/javascript">
 function add_prune_group() {
@@ -105,7 +105,7 @@ function loadPruneGroups() {
 		$('#pruning_groups').find('input[type="radio"][value="' + checkedVal + '"]').attr('checked',true);
 		$('input[name="pruneLevel"]:checked').parent().parent().parent().addClass('alert-success');
 		
-		tb.toggleContent();
+		TB.toggleContent();
 		add_prune_group();
 		delete_prune_group();
 		edit_prune_groups();
@@ -177,7 +177,7 @@ function loadPruneGroups() {
     			</div>
     		</div>
     		<div class="control-group">
-    			<label class="control-label">Disc space saved</label>
+    			<label class="control-label">Disk space saved</label>
     			<div class="controls">
     				<div class="help-block">
     					<table class="table">

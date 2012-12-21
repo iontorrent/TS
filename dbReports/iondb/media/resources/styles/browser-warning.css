@@ -1,0 +1,7 @@
+#browser-warning {
+	position: fixed;
+	top: 15px;
+	height: 137px;
+	width: 100%;
+	z-index: 3000;
+}

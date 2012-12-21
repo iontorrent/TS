@@ -1,0 +1,39 @@
+<!-- PROJECT -->
+<div id="ws-6" class="workflow-step " style="display: none;">
+    <div class="workflow-step-content">
+        <table class="plan-grid">
+            <tr>
+                <td>
+                    <p class="form-label">Select the project(s) that will receive output:</p>
+                    <div style="border:1px solid #0981d2;overflow: auto;width:350px;height:125px;padding:5px">
+                        <span class="option-group">
+                        {% for project in planTemplateData.projects %}
+                            {% if selectedProjectNames %}
+                                {% if project.name in selectedProjectNames %}
+                                    <p><input id="projects" name="projects" checked="checked" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+                                {% else %}
+                                    <p><input id="projects" name="projects" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+                                {% endif %}
+                            {% else %}
+                                <p><input id="projects" name="projects" type="checkbox" value="{{project.id}}|{{project.name}}">{{project.name}}</p>
+                            {% endif %}
+                        {% endfor %}
+                        </span>
+                    </div>
+                    <div style="padding:5px 0;width:350px;text-align:right">
+                        <div class="input-append search-field pull-left">
+                            <label for="projects_search_text" class="hide">Search Names</label>
+                            <input id="projects_search_text" type="text" placeholder="Search names" style="width: 150px;" /><button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+                        </div>
+                        <a href="#" class="btn add_project_inline">Add Project...</a>
+                    </div>
+                    <div id="ws-6_addProjects" class="ws-6_addProjects" style="display: none;">
+                        <p class="form-label">Enter project name(s) (comma-separated):</p>
+                        <textarea id="newProjects" name="newProjects" style="width:70%;height:40px;"></textarea>
+                        <p id="newProjects-error"></p>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</div>

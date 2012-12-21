@@ -182,20 +182,9 @@
 						</p>
 					</div>
 				</div>
-				<div class="control-group"> 
-					<label for="isReverseRun" class="control-label">Reverse Run?</label>
-					<div class="controls">
-						<label class="checkbox">
-							<input type="checkbox" value="option1" id="isReverseRun" {{ exp.isReverseRun|boxChecked }}>
-							Is this a paired-end reverse run? </label>
-						<p class="help-block">
-							Check if this is a paired-end reverse run
-						</p>
-					</div>
-				</div>
 
 				<div class="control-group">
-					<label for="libraryKey" class="control-label">Forward Library Key</label>
+					<label for="libraryKey" class="control-label">Library Key</label>
 					<div class="controls">
 						<select id="libraryKey" name="libraryKey">
 							<option value=""></option>
@@ -229,7 +218,7 @@
 				</div>
 
 				<div class="control-group">
-					<label for="forward3primeadapter" class="control-label">Forward 3' Adapter</label>
+					<label for="forward3primeadapter" class="control-label">3' Adapter</label>
 					<div class="controls">
 						<select id="forward3primeadapter" name="forward3primeadapter">
 							<option value=""></option>
@@ -263,73 +252,6 @@
 				</div>
 
 				<div class="control-group">
-					<label for="reverselibrarykey" class="control-label">Reverse Library Key</label>
-					<div class="controls">
-						<select id="reverselibrarykey" name="reverselibrarykey">
-							<option value=""></option>
-							{% for reverseLibKey in reverseLibKeys %}
-	
-							{% ifequal reverseLibKey.sequence exp.reverselibrarykey %}
-							{% if reverseLibKey.isDefault %}
-							<option SELECTED value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ reverseLibKey.sequence }}">{{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }})
-								{% endif %}
-								{% else %}
-								{% if reverseLibKey.isDefault %}
-								{% if exp.reverselibrarykey and exp.reverselibrarykey.strip %} <option value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key: {{ reverseLibKey.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ reverseLibKey.sequence }}">Default* - {{ reverseLibKey.name }}  (Key:  {{ reverseLibKey.sequence }}) </option>
-							{% endif %}
-							{% else %}
-							<option value="{{ reverseLibKey.sequence }}">{{ reverseLibKey.name }}  (Key: {{ reverseLibKey.sequence }}) </option>
-							{% endif %}
-							{% endifequal %}
-	
-							{% endfor %}
-						</select>
-	
-						<p class="help-block">
-							Leave as blank if to use the current default. </br>Select specific reverse library key otherwise
-						</p>
-					</div>
-				</div>
-
-				<div class="control-group">
-					<label for="reverse3primeadapter" class="control-label">Reverse 3' Adapter</label>
-					<div class="controls">
-						<select id="reverse3primeadapter" name="reverse3primeadapter">
-							<option value=""></option>
-							{% for reverseAdapter in reverse3Adapters %}
-	
-							{% ifequal reverseAdapter.sequence exp.reverse3primeadapter %}
-							{% if reverseAdapter.isDefault %}
-							<option SELECTED value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ reverseAdapter.sequence }}">{{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }})
-								{% endif %} </option>
-							{% else %}
-							{% if reverseAdapter.isDefault %}
-							{% if exp.reverse3primeadapter and exp.reverse3primeadapter.strip %}
-							<option value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq:  {{ reverseAdapter.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ reverseAdapter.sequence }}">Default* - {{ reverseAdapter.name }}  (Seq: {{ reverseAdapter.sequence }}) </option>
-							{% endif %}
-							{% else %}
-							<option value="{{ reverseAdapter.sequence }}">{{ reverseAdapter.name }}  (Seq: {{ reverseAdapter.sequence }}) </option>
-							{% endif %}
-							{% endifequal %}
-	
-							{% endfor %}
-						</select>
-	
-						<p class="help-block">
-							Leave as blank if to use the current default. </br>Select specific reverse 3' adapter otherwise
-						</p>
-					</div>
-				</div>
-
-				<div class="control-group">
 					<label for="notes" class="control-label">Notes</label>
 					<div class="controls">
 						<input value="{{ exp.notes|blankIfNone }}" name="notes" id="notes"
@@ -349,28 +271,14 @@
 <script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
 <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
 <script type="text/javascript">
+/** TS-4640,TS-5327: IE6,7,8 long text within fixed width <select> is clipped, set width:auto temporarily */
+TB.utilities.browser.selectAutoExpand();
+
 $('#modal_experiment_edit_form').uniform({
 	holder_class : 'control-group'
 	, msg_selector: 'p.help-block'
 	, error_class : 'alert alert-error'
 });
-function displayReverseRun(value) {
-	value = value 
-		|| $("#isReverseRun").attr('checked') == 'checked';
-	//hide when value == true
-	$("#libraryKey").parent().parent().toggle(!value);
-	$("#forward3primeadapter").parent().parent().toggle(!value);
-	//hide when value == false
-	$("#reverselibrarykey").parent().parent().toggle(value);
-	$("#reverse3primeadapter").parent().parent().toggle(value);
-}
-
-$("#isReverseRun").change(function() {
-	displayReverseRun();
-});
-
-$("#isReverseRun").attr('checked', '{{exp.isReverseRun}}'.toLowerCase() == 'true');
-displayReverseRun('{{exp.isReverseRun}}'.toLowerCase() == 'true');
 
 $.ajaxSetup({
 	async : false

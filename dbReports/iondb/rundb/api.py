@@ -6,9 +6,9 @@ import StringIO
 import csv
 from tastypie.utils.timezone import make_naive
 from tastypie.utils.formatting import format_datetime
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 from tastypie.resources import ModelResource as _ModelResource, Resource, ModelDeclarativeMetaclass
 from tastypie.constants import ALL, ALL_WITH_RELATIONS
+from tastypie.cache import SimpleCache
 from tastypie import fields
 import glob
 
@@ -17,7 +17,7 @@ from iondb.rundb import models
 
 from tastypie.serializers import Serializer
 
-from django.core import serializers
+from django.core import serializers, urlresolvers
 
 import json
 
@@ -35,6 +35,8 @@ from tastypie.exceptions import NotFound, BadRequest, InvalidFilterError, Hydrat
 
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login
+
 from django.utils.decorators import method_decorator
 from tastypie.validation import Validation, FormValidation
 from tastypie.resources import ModelResource
@@ -62,6 +64,7 @@ import datetime
 import logging
 
 import httplib2
+from iondb.utils import toBoolean
 
 try:
     import lxml
@@ -85,7 +88,7 @@ from iondb.plugins.manager import pluginmanager
 
 # shared functions for making startplugin json
 from ion.utils.explogparser import getparameter, getparameter_minimal
-from iondb.rundb.views import get_plugins_dict
+from iondb.rundb.report.views import get_plugins_dict
 
 logger = logging.getLogger(__name__)
 
@@ -108,17 +111,50 @@ def JSONconvert(self, value):
 #replace the tastypie CharField
 CharField.convert = JSONconvert
 
+class InternalBasicAuthentication(BasicAuthentication):
+    def is_authenticated(self, request, **kwargs):
+        if not request.META.get('HTTP_AUTHORIZATION'):
+            return False
+
+        try:
+            (auth_type, data) = request.META['HTTP_AUTHORIZATION'].split()
+            if auth_type.lower() != 'basic':
+                return False
+            user_pass = base64.b64decode(data)
+        except:
+            return False
+
+        bits = user_pass.split(':', 1)
+        if len(bits) != 2:
+            return False
+
+        import base64
+        username, password = base64.b64decode(bits[0], bits[1])
+
+        from django.contrib.auth import authenticate
+        user = authenticate(username=bits[0], password=bits[1])
+        if user is None:
+            return False
+
+        if not self.check_active(user):
+            return False
+
+        request.user = user
+        return True
+
 # Custom Authorization Class
 class IonAuthentication(object):
     """
         Derived from MultiAuthentication, but with Auth Schemes hardcoded
     """
-    def __init__(self):
+    def __init__(self, allow_get=True):
         self.backends = [
             # Basic must be first, so it sets WWW-Authenticate header in 401.
             BasicAuthentication(realm='Torrent Browser'), ## Apache Basic Auth
+            InternalBasicAuthentication(realm='Torrent Browser'),
             ApiKeyAuthentication(),
         ]
+        self.allow_get = allow_get
         # NB: If BasicAuthentication is last, will return WWW-Authorize header and prompt for credentials
 
     def is_authenticated(self, request, **kwargs):
@@ -142,10 +178,18 @@ class IonAuthentication(object):
                     unauthorized = unauthorized or check
                 else:
                     request._authentication_backend = backend
+
+                    # Did not have a session, but set and send back session cookie
+                    if hasattr(request, 'user'):
+                        try:
+                            login(request, request.user)
+                        except:
+                            logger.exception("Unable to login user: '%s'", request.user.username)
+
                     return check
 
         # Allow GET OPTIONS HEAD without auth
-        if request.method in ('GET', 'OPTIONS', 'HEAD'):
+        if self.allow_get and request.method in ('GET', 'OPTIONS', 'HEAD'):
             return True
 
         return unauthorized
@@ -235,6 +279,7 @@ class GlobalConfigResource(ModelResource):
 
 
 class TFMetricsResource(ModelResource):
+    report = fields.ToOneField("iondb.rundb.api.ResultsResource", 'report', full=False)
     class Meta:
         queryset = models.TFMetrics.objects.all()
 
@@ -246,6 +291,7 @@ class TFMetricsResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class LibMetricsResource(ModelResource):
+    report = fields.ToOneField("iondb.rundb.api.ResultsResource", 'report', full=False)
     class Meta:
         queryset = models.LibMetrics.objects.all()
 
@@ -257,6 +303,7 @@ class LibMetricsResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class AnalysisMetricsResource(ModelResource):
+    report = fields.ToOneField("iondb.rundb.api.ResultsResource", 'report', full=False)
     class Meta:
         queryset = models.AnalysisMetrics.objects.all()
 
@@ -268,6 +315,7 @@ class AnalysisMetricsResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class QualityMetricsResource(ModelResource):
+    report = fields.ToOneField("iondb.rundb.api.ResultsResource", 'report', full=False)
     class Meta:
         queryset = models.QualityMetrics.objects.all()
 
@@ -278,21 +326,6 @@ class QualityMetricsResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
-class PEMetricsResource(ModelResource):
-
-    #pereport = fields.ToOneField(ResultsResource, 'pereport', full=False)
-    #pefwdreport = fields.ToOneField(ResultsResource, 'pefwdreport', full=False)
-    #perevreport = fields.ToOneField(ResultsResource, 'perevreport', full=False)
-
-    class Meta:
-        queryset = models.PEMetrics.objects.all()
-
-        #allow ordering and filtering by all fields
-        field_list = models.PEMetrics._meta.get_all_field_names()
-        ordering = field_list
-        filtering = field_dict(field_list)
-        authentication = IonAuthentication()
-        authorization = DjangoAuthorization()
 
 class ReportStorageResource(ModelResource):
     class Meta:
@@ -326,20 +359,75 @@ class BaseMetadataResource(ModelResource):
         if "remove" in data:
             for key in data["remove"]:
                 results.metaData.pop(key, None)
-        if "metadata" in data:            
+        if "metadata" in data:
             results.metaData.update(data["metadata"])
         results.save()
         return HttpAccepted()
 
     class Meta:
         metadata_allowed_methods = ['get','post']
-        
+
+
+## Stub only for embedding in User
+class UserProfileResource(ModelResource):
+    class Meta:
+        queryset = models.UserProfile.objects.all()
+        allowed_methods = []
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
 class UserResource(ModelResource):
+    profile = fields.ToOneField(UserProfileResource, 'userprofile', full=True)
+    full_name = fields.CharField()
+    
+    def dehydrate(self, bundle):
+        bundle.data['full_name'] = bundle.obj.get_full_name()
+        return bundle
+    def prepend_urls(self):
+        urls = [
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/activate%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('dispatch_activate'), name="api_dispatch_activate"),
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/reject%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('dispatch_reject'), name="api_dispatch_reject"),
+        ]
+        return urls
+
+    def dispatch_activate(self, request, **kwargs):
+        return self.dispatch('activate', request, **kwargs)
+    
+    def dispatch_reject(self, request, **kwargs):
+        return self.dispatch('reject', request, **kwargs)
+
+    def post_reject(self, request, **kwargs):
+        if not request.user.is_superuser:
+            raise HttpUnauthorized()
+        user = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        if user is None:
+            return HttpGone()
+
+        user.delete()
+        return HttpAccepted()
+
+    def post_activate(self, request, **kwargs):
+        if not request.user.is_superuser:
+            raise HttpUnauthorized()
+        user = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        if user is None:
+            return HttpGone()
+
+        if not user.is_active:
+            user.is_active=True
+            user.save()
+        return HttpAccepted()
+
     class Meta:
         queryset = User.objects.all()
         resource_name = 'user'
-        excludes = ['password', 'is_active', 'is_staff', 'is_superuser']
+        excludes = ['password', 'is_staff', 'is_superuser']
         allowed_methods = ['get']
+        activate_allowed_methods = ['post']
+        reject_allowed_methods = ['post']
 
         # allow ordering and filtering by all fields
         field_list = models.User._meta.get_all_field_names()
@@ -384,6 +472,7 @@ class ProjectResource(ModelResource):
         authorization = DjangoAuthorization()
         
 class ResultsResource(BaseMetadataResource):
+
 
     def prepend_urls(self):
        urls = [
@@ -565,7 +654,7 @@ class ResultsResource(BaseMetadataResource):
                                   env['blockId'] = blockId
                                   block_pluginbasefolder = os.path.join(block_dir,plugin_basefolder)
                                   start_json_block = make_plugin_json(env,plugin,result.pk,block_pluginbasefolder,url_root)
-                                  start_json["pluginconfig"].update(config)
+                                  start_json_block["pluginconfig"].update(config)
                                   plugin, msg = remote.runPlugin(plugin, start_json_block, runlevel, pluginserver)
                                   logger.info(msg)                              
                         else: 
@@ -816,7 +905,6 @@ class ResultsResource(BaseMetadataResource):
     tfmetrics = ToManyField(TFMetricsResource, 'tfmetrics_set', full=False)
     analysismetrics = ToManyField(AnalysisMetricsResource, 'analysismetrics_set', full=False)
     qualitymetrics = ToManyField(QualityMetricsResource, 'qualitymetrics_set', full=False)
-    pemetrics = ToManyField(PEMetricsResource, 'pemetrics_set', full=False)
     reportstorage = fields.ToOneField(ReportStorageResource, 'reportstorage', full=True)
 
     sffLink = CharField('sffLinkPatch')
@@ -887,6 +975,8 @@ class ExperimentResource(BaseMetadataResource):
 
         return urls
     results = fields.ToManyField(ResultsResource, 'results_set')
+    plan = fields.ToOneField('iondb.rundb.api.PlannedExperimentResource', 'plan', blank=True, null=True)
+
     runtype = CharField('runtype')
 
     def dispatch_projects(self, request, **kwargs):
@@ -1073,6 +1163,7 @@ class RigResource(ModelResource):
 class PluginResource(ModelResource):
     """Get a list of plugins"""
     isConfig = fields.BooleanField(readonly=True, attribute='isConfig')
+    isPlanConfig = fields.BooleanField(readonly=True, attribute='isPlanConfig')
     hasAbout = fields.BooleanField(readonly=True, attribute='hasAbout')
     versionedName = fields.CharField(readonly=True, attribute='versionedName')
 
@@ -1126,7 +1217,7 @@ class PluginResource(ModelResource):
 
         #provide a link to load the plugins html
         if "instance.html" in files:
-            type["input"] = "/rundb/plugininput/" + str(plugin.pk) + "/"
+            type["input"] =  urlresolvers.reverse('configure_plugins_plugin_configure', kwargs = {'pk':plugin.pk, 'action':'report'})
 
         return type
 
@@ -1219,7 +1310,7 @@ class PluginResource(ModelResource):
         plugin = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
         if not plugin:
             return HttpGone()
-        info = plugin.info(use_cache=request.GET.get('use_cache', True))
+        info = plugin.info(use_cache=toBoolean(request.GET.get('use_cache', True)))
         if not info:
             return HttpGone()
         return self.create_response(request, info)
@@ -1322,7 +1413,8 @@ class PlannedExperimentResource(ModelResource):
     qcValues = fields.ToManyField('iondb.rundb.api.PlannedExperimentQCResource', 'plannedexperimentqc_set', full=True, null=True, blank=True)
     parentPlan = fields.ToOneField('iondb.rundb.api.PlannedExperimentResource', 'parentPlan', full=False, null=True)
     childPlans = fields.ToManyField('iondb.rundb.api.PlannedExperimentResource', 'childPlan_set', full=False, null=True)
-    
+    experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
+
     def hydrate_m2m(self, bundle):
         # Promote projects from names to something tastypie recognizes in hydrate_m2m
         projects_list = []
@@ -1930,6 +2022,9 @@ class MonitorExperimentResource(ModelResource):
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+        cache = SimpleCache(timeout=9)
+
+
 class CompositePlannedExperimentResource(ModelResource):
     class Meta:
         queryset = models.PlannedExperiment.objects.all()
@@ -2071,6 +2166,9 @@ class CompositeExperimentResource(ModelResource):
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+        # This query is expensive, and used on main data tab.
+        # Cache frequent access
+        cache = SimpleCache(timeout=17)
 
 
 class TemplateResource(ModelResource):
@@ -2157,3 +2255,47 @@ class ChipResource(ModelResource):
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+
+
+class AccountObject(object):
+    def __init__(self, user=None):
+        self.uid = user.pk
+        self.username = user.username
+        self.admin = user.is_superuser
+        self.api_key = None
+        if user.is_authenticated():
+            self.api_key = user.api_key.key
+
+    def to_dict(self):
+        return self.__dict__
+
+class AccountResource(Resource):
+    username = fields.CharField(attribute='username', blank=True, null=True)
+    uid = fields.CharField(attribute='uid', blank=True, null=True)
+    api_key = fields.CharField(attribute='api_key', blank=True, null=True)
+    admin = fields.BooleanField(attribute='admin', blank=True)
+
+    class Meta:
+        resource_name = 'account'
+        object_class = AccountObject
+        authentication = IonAuthentication(allow_get=False)
+        authorization = DjangoAuthorization()
+
+    def detail_uri_kwargs(self, bundle_or_obj):
+        kwargs = {}
+        if isinstance(bundle_or_obj, Bundle):
+            kwargs['pk'] = bundle_or_obj.obj.uid
+        else:
+            kwargs['pk'] = bundle_or_obj.uid
+        return kwargs
+
+    def get_object_list(self, request):
+        # Return a list of one element for current user
+        return [ AccountObject(request.user) ]
+
+    def obj_get_list(self, request=None, **kwargs):
+        return self.get_object_list(request)
+
+    def obj_get(self, request=None, **kwargs):
+        return AccountObject(request.user)
+

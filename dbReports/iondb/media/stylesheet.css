@@ -96,26 +96,6 @@ a:hover {
     float: left;
 }
 
-.tooltip {
-    display: none;
-}
-
-.tooltip_parent {
-    cursor: pointer;
-    border-bottom: 1px dotted black;
-    padding-bottom: -1px;
-    margin-bottom: 1px;
-}
-
-.tooltip_highlighted {
-    border-bottom: 1px solid black;
-}
-
-.tooltip_summary {
-    font-size: 9pt;
-    margin-bottom: 4px;
-}
-
 .star {
     margin-left: 3px;
 }

@@ -374,6 +374,18 @@ bool H5File::Open ( bool overwrite )
   }
   return true;
 }
+
+bool H5File::OpenNew()
+{
+  mHFile = H5Fcreate ( mName.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT );
+  if ( mHFile < 0 )
+  {
+    //ION_ABORT("Couldn't open file: " + mName);
+    return false;
+  }
+  return true;
+}
+
 bool H5File::OpenForReading ( void )
 {
   mHFile = H5Fopen ( mName.c_str(), H5F_ACC_RDONLY,  H5P_DEFAULT );

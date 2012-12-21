@@ -168,7 +168,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
     features = []
     allow_autorun = True
     major_block = False
-    requires = [ 'SFF', 'BAM', ]
+    requires = [ 'BAM', ]
     output = {}
     results = {}
 
@@ -196,19 +196,26 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
 
     ## Introspection methods - FIXME - wrap functions instead
     def _get_runtypes(self):
+        rt = []
         if hasattr(self, 'runtypes'):
             if callable(self.runtypes):
-                return self.runtypes()
-            return self.runtypes
-        # Infer supported RunTypes from implemented methods
-        defaults = [ ion.plugin.constants.RunType.FULLCHIP ]
-        if hasattr(self, 'block'):
-            defaults.append(ion.plugin.constants.RunType.BLOCK )
-        if hasattr(self, 'thumbnail'):
-            defaults.append(ion.plugin.constants.RunType.THUMB )
+                rt = self.runtypes()
+            else:
+                rt = self.runtypes
+
+        # If plugin reported value is empty,
+        if not rt:
+            # PGM runs and Proton Thumbnails
+            rt = [ ion.plugin.constants.RunType.FULLCHIP,
+                   ion.plugin.constants.RunType.THUMB ]
+            # Infer supported RunTypes from implemented methods
+            if hasattr(self, 'block'):
+                rt.append(ion.plugin.constants.RunType.BLOCK )
+            if hasattr(self, 'thumbnail'):
+                rt.append(ion.plugin.constants.RunType.THUMB )
 
         # vars(ion.plugin.constants.RunType).keys() ## all RunTypes
-        return defaults
+        return rt
 
     @classmethod
     def _metadata(cls):

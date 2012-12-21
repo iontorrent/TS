@@ -7,6 +7,7 @@ Various plotting classes, used to generate analysis summary plot elements.
 import base64
 from datetime import datetime, timedelta
 import math
+from matplotlib import pyplot
 import pylab
 import random
 import re
@@ -44,17 +45,15 @@ class Plotter:
     def _nuc2ndx(self,ndx):
         # get nuc from ndx
         nuc = self.floworder[ndx % self.numflows]
-        # get index of nuc (ok python gods, help me out here, this is really ugly!)
-        nucindex = 0
-        if nuc == 'T':
-            nucindex = 0
-        if nuc == 'A':
-            nucindex = 1
-        if nuc == 'C':
-            nucindex = 2
-        if nuc == 'G':
-            nucindex = 3
-        return nucindex
+        # Let there be nuc indices
+        nuc_indices = {
+            'T': 0,
+            'A': 1,
+            'C': 2,
+            'G': 3
+        }
+        return nuc_indices.get(nuc, 0)
+
     def _ndx2clr(self,ndx):
         # return color from index
         return self.colors[ndx % self.numcolors]
@@ -175,7 +174,9 @@ class Ionogram(Plotter):
             pylab.xlabel('Flow')
             pylab.ylabel('Bases')
             return axisargs
+        pylab.clf()
         pylab.close()
+        pylab.figure()
         labelScale = self.getLabelScale(self.heights)
         quads = zip(self.labels, self.expected, self.heights, range(0, len(self.heights)))
         plotXLen = 100
@@ -212,6 +213,10 @@ class Ionogram(Plotter):
         self.setOptions(figbounds=(width,height*nplots))
         self._prepFigure()
         return self._renderArgs(kwargs)
+
+    def save(self, name):
+        pylab.savefig(name)
+
 
 class Errorgram(Ionogram):
     def __init__(self, flowlabels, expected, heights, errors, title=None):
@@ -289,6 +294,7 @@ class SignalOverlap(Plotter):
 
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         #pylab.figure(figsize=(8,4))
         extremum = lambda func, choose: reduce(lambda prev, curr: (func(curr,prev) and curr) or prev,
             [choose(lst) for k,lst in self.signalgroups if lst])
@@ -379,6 +385,7 @@ class Iontrace(Ionogram):
             pylab.xlabel("Flows")
             return axisargs
         pylab.close()
+        pylab.figure()
         if len(self.traces) != 0:
             quints = zip(self.labels, self.expected, self.offsets, range(0, self.numflows))
             fontsize = 9
@@ -499,6 +506,7 @@ class SparseTracePlot(Plotter):
         return (v, nuc, cycle, expected)
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         for tr,nuc,cycle,ex in self.toplot:
             pylab.plot(self.timing,tr, label="%s%d(%d)" % (nuc,cycle,ex))
         if self.use_legend:
@@ -543,6 +551,7 @@ class TransferPlot(SignalOverlap):
         del self.numbins
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         pylab.figure(figsize=(8,4))
         try:
             sgi = self.signalgroups.items
@@ -592,6 +601,7 @@ class MatchedBasesPlot(Plotter):
         self.alignments.sort()
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         if len(self.alignments) > 1:
             bins = [int(self.alignments[0] == self.alignments[1]) - 1]
             self.alignments.insert(0,0)
@@ -673,6 +683,7 @@ class QPlot(Plotter):
         return (1.0/(10.0**(float(q)/10.0)))
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         small_font = pylab.mpl.font_manager.FontProperties(size='xx-small')
         nbins = max(self.alignments) + 1
         if nbins < 100:
@@ -758,6 +769,7 @@ class ChipPlot(Plotter):
         self.no_cbar = bool(kwargs.pop('disallow_cbar', False))
     def generic_render(self, im, kwargs, cbar=False, interp='nearest'):
         pylab.close()
+        pylab.figure()
         if self.ncols > 200:
             interp=None
         pylab.imshow(im, origin='lower',
@@ -860,6 +872,7 @@ class BeadfindHist(Plotter):
         self.clusters = clusters
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         all = self.empty + self.weak + self.bead
         hist_kwargs = {}
         if NUMPY_VERSION <= 121:
@@ -973,6 +986,7 @@ class PerFlowErrorPlot(Plotter):
         bottom = self.bottom
 
         pylab.close()
+        pylab.figure()
 
         if self.simple: # simple line plot of error rates
             pylab.plot(self.top-self.bottom, "b", alpha=0.75, lw=2, label="Correct")
@@ -1079,6 +1093,7 @@ class HomopolymerErrorPlot(Plotter):
         self.title = title or "HP Error Plot"
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         items = self.correct.items()
         items.sort()
         lefts = [a for a,b in items]
@@ -1157,6 +1172,7 @@ class RminPlot(Plotter):
 
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         self._prepFigure()
         talpha = self.getTAlpha(.95, self.window)
         halfSize = int(self.window / 2)
@@ -1254,6 +1270,7 @@ class LiveDudHist(Plotter):
         self.clusters = clusters
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         all = self.live + self.dud
         hist_kwargs = {}
         if NUMPY_VERSION <= 121:
@@ -1393,6 +1410,7 @@ class IonogramJMR(Plotter):
             pylab.ylabel('Bases')
             return axisargs
         pylab.close()
+        pylab.figure()
         labelScale = self.getLabelScale(self.heights)
         quads = zip(self.labels, self.expected, self.heights, range(0, len(self.heights)))
         plotXLen = 100
@@ -1488,6 +1506,7 @@ class IonogramPretty(Plotter):
             pylab.ylabel('Bases')
             return axisargs
         pylab.close()
+        pylab.figure()
         labelScale = self.getLabelScale(self.heights)
         quads = zip(self.labels, self.expected, self.heights, range(0, len(self.heights)))
         plotXLen = 200
@@ -1499,7 +1518,7 @@ class IonogramPretty(Plotter):
                 if axisargs is not None:
                     pylab.axis(axisargs)
                 plotIndex = ndx/plotXLen
-                pylab.subplot(100*nplots + 10 + (plotIndex+1))
+                pylab.subplot(nplots, 1, (plotIndex+1))
                 axisargs = prepSubplot(plotIndex)
             cndx = self._nuc2ndx(ndx)
             clr = self._ndx2clr(cndx)
@@ -1554,6 +1573,7 @@ class QPlot2(Plotter):
         self.maxlen = len(self.heights)
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         small_font = pylab.mpl.font_manager.FontProperties(size='xx-small')
         fc = self.QCOLORS.get(self.q, 'b')
         pylab.bar(left=range(len(self.heights)), height=self.heights, fc=fc, alpha='0.8', width=1.0)
@@ -1659,6 +1679,7 @@ class JBSignalOverlap(Plotter):
         return ret
     def render(self, **kwargs):
         pylab.close()
+        pylab.figure()
         #extremum = lambda func, choose: reduce(lambda prev, curr: (func(curr,prev) and curr) or prev,
             #[choose(lst) for k,lst in self.signalgroups if lst])
         #minVal = extremum(lambda a,b: a < b, min)

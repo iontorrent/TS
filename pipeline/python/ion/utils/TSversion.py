@@ -16,6 +16,7 @@ def findVersions():
                  "ion-docs",
                  "ion-gpu",
                  "ion-pgmupdates",
+                 "ion-protonupdates",
                  "ion-plugins",
                  "ion-referencelibrary",
                  "ion-rsmts",
@@ -27,7 +28,7 @@ def findVersions():
                  "ion-pipeline",
                  "ion-usbmount",
                  "tmap",
-                 "ion-torrentR"]
+                 "ion-torrentr"]
 
     packages = sorted(packages)
 

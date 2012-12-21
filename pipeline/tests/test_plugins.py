@@ -17,7 +17,7 @@ sys.path.insert(0,os.path.join(os.path.dirname(__file__), '../python'))
 
 def check_plugin(cls):
     assert(cls.name)
-    assert(cls.__name__ ==  cls.name)
+    #assert(cls.__name__ ==  cls.name)
     #assert(cls.__version__)
     #assert(cls.version)
 

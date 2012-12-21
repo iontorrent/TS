@@ -37,8 +37,6 @@ add_custom_target(compileall ALL
     COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
 )
 
-install(FILES "${PROJECT_SOURCE_DIR}/web/db/writers/systemStatsZip.php" DESTINATION /var/www)
-
 install(FILES "${PROJECT_SOURCE_DIR}/oia/oia.config" DESTINATION /usr/share/ion/oia)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oiad.py" DESTINATION /usr/share/ion/oia)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oia" DESTINATION /etc/init.d)
@@ -84,7 +82,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-django,
     python-guppy,
     python-imaging,
+    python-argparse,
     python-dev")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
+    "python-markdown,
+    python-pygments")
 set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-dbreports (<= 2.1.6)")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-dbreports (<= 2.1.6)")
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Suite pipeline.")

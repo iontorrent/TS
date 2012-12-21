@@ -22,6 +22,7 @@
 using namespace std;
 
 
+
 //! @brief    Filtering+trimming algorithms, configuration, and accounting
 //! @ingroup  BaseCaller
 //! @details
@@ -59,12 +60,6 @@ public:
   //! @param    mask                Mask object to which filtering results will be added
   void TransferFilteringResultsToMask(Mask &mask) const;
 
-  //! @brief    Compute filtering statistics, store them in json object and print pretty table.
-  //!
-  //! @param    json                Json value object, to be populated by filtering statistics
-  //! @param    mask                Mask object, needed to separate library from TFs
-  void GenerateFilteringStatistics(Json::Value &json, const Mask& mask) const;
-
   //! @brief    Helper function calculating median absolute value of residuals, over a range of flows.
   //!
   //! @param    residual            Vector of residual values
@@ -82,77 +77,68 @@ public:
   //! @param    read_index          Read index
   void SetValid                     (int read_index);
 
-  //! @brief    Set the read length. Allows keeping track of bases lost to filtering and trimming
-  //! @param    read_index          Read index
-  //! @param    sff_entry           Basecalling results for this read
-  void SetReadLength                (int read_index, const SFFEntry& sff_entry);
-
   //! @brief    Unconditionally mark a valid read as polyclonal, as determined in background model.
   //! @param    read_index          Read index
-  void SetBkgmodelPolyclonal        (int read_index);
+  void SetBkgmodelPolyclonal        (int read_index, ReadFilteringHistory& filter_history);
 
   //! @brief    Unconditionally mark a valid read as high percent positive flows, as determined in background model.
   //! @param    read_index          Read index
-  void SetBkgmodelHighPPF           (int read_index);
+  void SetBkgmodelHighPPF           (int read_index, ReadFilteringHistory& filter_history);
 
   //! @brief    Unconditionally mark a valid read as failed keypass, as determined in background model.
   //! @param    read_index          Read index
-  void SetBkgmodelFailedKeypass     (int read_index);
+  void SetBkgmodelFailedKeypass     (int read_index, ReadFilteringHistory& filter_history);
 
   //! @brief    Apply polyclonal and ppf filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    measurements        Key-normalized flow signal from wells
-  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, const vector<float>& measurements);
+  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements);
 
   //! @brief    Apply zero-length filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
-  void FilterZeroBases              (int read_index, int read_class, const SFFEntry& sff_entry);
+  void FilterZeroBases              (int read_index, int read_class, ReadFilteringHistory& filter_history);
 
   //! @brief    Apply short-length filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
-  void FilterShortRead              (int read_index, int read_class, const SFFEntry& sff_entry);
+  void FilterShortRead              (int read_index, int read_class, ReadFilteringHistory& filter_history);
 
   //! @brief    Apply keypass filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    solution            Homopolymer calls for this read
-  void FilterFailedKeypass          (int read_index, int read_class, const vector<char> &solution);
+  void FilterFailedKeypass          (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<char>& sequence);
 
   //! @brief    Apply high-residual filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    residual            Vector of phasing residuals
-  void FilterHighResidual           (int read_index, int read_class, const vector<float>& residual);
+  void FilterHighResidual           (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& residual);
 
   //! @brief    Apply Beverly trimmer and filter to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    read                Signals for this read
   //! @param    sff_entry           Basecalling results for this read
-  void FilterBeverly                (int read_index, int read_class, const BasecallerRead &read, SFFEntry& sff_entry);
+  void FilterBeverly                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
+                                     const vector<int>& base_to_flow);
 
   //! @brief    Apply quality trimmer to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
-  void TrimQuality                  (int read_index, int read_class, SFFEntry& sff_entry);
+  void TrimQuality                  (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
 
   //! @brief    Apply adapter trimmer to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
-  void TrimAdapter                  (int read_index, int read_class, SFFEntry& sff_entry);
-
-  //! @brief    New modified adapter trimmer with better trim point identification.
-  //! @param    read_index          Read index
-  //! @param    read_class          Read class, 0=library, 1=TFs
-  //! @param    sff_entry           Basecalling results for this read
-  void TrimAdapter2                  (int read_index, int read_class, SFFEntry& sff_entry);
+  void TrimAdapter                  (int read_index, int read_class, ProcessedRead& processed_read, const vector<float>& scaled_residual,
+                                     const vector<int>& base_to_flow, DPTreephaser& treephaser, const BasecallerRead& read);
 
   //! @brief    Check if a read is marked as valid.
   //! @param    read_index          Read index
@@ -189,26 +175,15 @@ protected:
   float               filter_beverly_trim_ratio_;         //!< Fraction of onemer outliers before Beverly filter trims
   int                 filter_beverly_min_read_length_;    //!< If Beverly filter trims and makes the read shorter than this, the read is filtered
 
-  // SFFTrim
+  // Adapter and quality trimming
   string              trim_adapter_;                      //!< Adapter sequence
   double              trim_adapter_cutoff_;               //!< Adapter detection threshold
-  bool                trim_adapter_closest_;              //!< If true, adapter detector picks closest match. If false - longest match
+  int                 trim_adapter_min_match_;            //!< Minimum number of overlapping adapter bases for detection
+  int                 trim_adapter_mode_;                 //!< Selects algorithm and metric used for adapter detection
   int                 trim_qual_window_size_;             //!< Size of averaging window used by quality trimmer
   double              trim_qual_cutoff_;                  //!< Quality cutoff used by quality trimmer
   int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
 
-  int                 trim_adapter_min_match_;            //!< Minimum number of overlapping adapter bases for detection
-
-  vector<int>         bases_initial_;                     //!< Starting read length for each well
-  vector<int>         bases_final_;                       //!< Final read length for each well, zero mean filtered out
-  vector<int>         bases_removed_key_trim_;            //!< Bases lost to key trimming
-  vector<int>         bases_removed_barcode_trim_;        //!< Bases lost to barcode trimming
-  vector<int>         bases_removed_short_;               //!< Bases lost to short read filter
-  vector<int>         bases_removed_keypass_;             //!< Bases lost to keypass filter
-  vector<int>         bases_removed_residual_;            //!< Bases lost to high-residual filter
-  vector<int>         bases_removed_beverly_;             //!< Bases lost to Beverly trimming and filtering
-  vector<int>         bases_removed_adapter_trim_;        //!< Bases lost to adapter trimming and filtering
-  vector<int>         bases_removed_quality_trim_;        //!< Bases lost to quality trimming and filtering
 };
 
 

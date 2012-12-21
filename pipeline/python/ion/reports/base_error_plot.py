@@ -2,6 +2,7 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 import json
+import traceback
 
 from matplotlib import use
 use("Agg",warn=False)

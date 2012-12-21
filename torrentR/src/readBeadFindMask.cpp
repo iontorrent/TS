@@ -130,34 +130,17 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			    }
 			}
 
-			// Check if there are any non-zero values for Keypass and Exclude.  If
-			// not then it is likely that this is a legacy bfmask.bin file and we won't return
+			// Check if there are any non-zero values for Keypass and Exclude and filtered data.
+			// If not then it is likely that this is a legacy bfmask.bin file and we won't return
 			// these fields.
-			bool haveExcludeMask=0;
-			for (uint64_t i=0; i < nX; i++) {
-			    if(maskExclude(i)) {
-				haveExcludeMask=1;
-				break;
-			    }
-			}
-			bool haveKeypassMask=0;
-			for (uint64_t i=0; i < nX; i++) {
-			    if(maskKeypass(i)) {
-				haveKeypassMask=1;
-				break;
-			    }
-			}
-
-			// Check if there are any non-zero values for Keypass and Exclude.  If
-			// not then it is likely that this is a legacy bfmask.bin file and we won't return
-			// these fields.
-			bool haveFiltered=0;
-			for (uint64_t i=0; i < nX; i++) {
-			    if(maskFilteredBadKey(i) || maskFilteredShort(i) || maskFilteredBadPPF(i) || maskFilteredBadResidual(i)) {
-				haveFiltered=1;
-				break;
-			    }
-			}
+			//bool haveFiltered=0;
+			//for (uint64_t i=0; i < nX; i++) {
+			//    if(maskKeypass(i) || maskExclude(i) || maskFilteredBadKey(i) || maskFilteredShort(i) ||
+            //       maskFilteredBadPPF(i) || maskFilteredBadResidual(i)) {
+			//	haveFiltered=1;
+			//	break;
+			//    }
+			//}
 
 			// Build result set to be returned as a list to R.
 			RcppResultSet rs;
@@ -175,17 +158,15 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			rs.add("maskLib",          maskLib);
 			rs.add("maskPinned",       maskPinned);
 			rs.add("maskIgnore",       maskIgnore);
-			rs.add("maskWashout",      maskWashout);
-			if(haveExcludeMask)
-			    rs.add("maskExclude",      maskExclude);
-			if(haveKeypassMask)
-			    rs.add("maskKeypass",      maskKeypass);
-			if(haveFiltered) {
+			rs.add("maskWashout",      maskWashout);   
+			//if(haveFiltered) {
+                rs.add("maskExclude",      maskExclude);
+                rs.add("maskKeypass",      maskKeypass);
 			    rs.add("maskFilteredBadKey",       maskFilteredBadKey);
 			    rs.add("maskFilteredShort",        maskFilteredShort);
 			    rs.add("maskFilteredBadPPF",       maskFilteredBadPPF);
 			    rs.add("maskFilteredBadResidual",  maskFilteredBadResidual);
-			}
+			//}
 
 
 			// Get the list to be returned to R.

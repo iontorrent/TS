@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
-import os, re, sys, pysam, string
+import os, sys, string
 from optparse import OptionParser
 
 def reformat_header(header):

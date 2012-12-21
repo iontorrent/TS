@@ -4,7 +4,6 @@ from json_utils import PluginWrapper, AnalysisDir, ReferenceLibrary
 import os
 import sys
 from alignment_qc import AlignmentQC
-import pysam
 import samutils
 
 class DiBayes(PluginWrapper):

@@ -1,0 +1,40 @@
+<div id="modal_batch_planning" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3 id="modal_batch_plan_title">Plan Runs from Template: {{selectedPlanTemplate.planDisplayedName}}</h3>
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages"></div>
+        <form class="form-horizontal" id="modalBatchPlanning" method="GET">
+            <fieldset>
+                <div class="control-group">
+                    <label for="name" class="control-label">Number of plans to create<i>(required)</i></label>
+                    <div class="controls">
+                        <input name="planCount" id="planCount" placeholder='enter a whole number greater than 2' maxlength="500" type="text" class="input-xlarge uint required"/>
+                        <p class="help-block">
+                            Number of plans to create offline
+                        </p>
+                        <p class="planCountError" id="planCountError">
+                        </p>
+                        <input value="{{selectedPlanTemplate.pk}}"  id="selectedTemplateId" name="selectedTemplateId" type="hidden"/>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+        <div class="bump">
+            <div id="loadingstatus"></div>
+            <div id="return"></div>
+            <div id="error"></div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a href="#" id="submitDownload" class="btn btn-primary submitDownload" >Download CSV for batch planning</a></div>
+    </div>
+
+
+<script type="text/javascript">
+TB.plan.batchdownload.ready();
+</script>
+</div>
+

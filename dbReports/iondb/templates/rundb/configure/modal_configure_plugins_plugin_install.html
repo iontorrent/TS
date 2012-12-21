@@ -181,7 +181,7 @@ var uploader = new plupload.Uploader({
         {title : "Zip files", extensions : "zip"}
     ],
     browse_button: 'pickfile',
-  	url: '/rundb/upload_plugin_zip/',
+  	url: '{% url configure_plugins_plugin_zip_upload %}',
     chunk_size: '15mb',
     unique_names: true,
     multi_selection: false,

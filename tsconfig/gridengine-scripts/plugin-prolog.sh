@@ -5,7 +5,7 @@
 # Rotate drmaa_stdout.txt file to numbered backup
 if [ -e "${SGE_STDOUT_PATH}" ]; then
     TMPFILE="${SGE_STDOUT_PATH}.new.${JOB_ID}"
-    touch ${TMPFILE}
-    mv --backup=numbered ${TMPFILE} ${SGE_STDOUT_PATH}
+    touch "${TMPFILE}"
+    mv --backup=numbered "${TMPFILE}" "${SGE_STDOUT_PATH}"
 fi
 

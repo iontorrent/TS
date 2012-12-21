@@ -11,7 +11,7 @@ PoissonCDFApproxMemo::PoissonCDFApproxMemo()
   dpoiss_cdf = NULL;
   ipoiss_cdf = NULL;
   poissLUT = NULL;
-  max_events = MAX_HPLEN;
+  max_events = MAX_POISSON_TABLE_COL;
   max_dim = 0;
   scale = 0.05f;
   t = NULL;

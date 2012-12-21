@@ -44,9 +44,9 @@
 
 #pragma pack(push, 1)
 struct PathRec {
-  int idx;
-  int beg;
-  int end;
+  int flow;
+  int window_start;
+  int window_end;
   float res;
   float metr;
   float flowMetr;
@@ -54,7 +54,9 @@ struct PathRec {
   float penalty;
   float state[MAX_VALS];
   float pred[MAX_VALS];
-  char sol[MAX_VALS];
+  char sequence[2*MAX_VALS + 12]; // +12 makes the enitre struct align well
+  int  sequence_length;
+  int last_hp;
   int nuc;
 };
 #pragma pack(pop)
@@ -67,6 +69,8 @@ public:
   void SetModelParameters(double cf, double ie);
 
   void NormalizeAndSolve(BasecallerRead& read);
+    PathRec* parent;
+    int best;
 
 protected:
 

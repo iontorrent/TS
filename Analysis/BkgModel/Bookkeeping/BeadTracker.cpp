@@ -5,6 +5,7 @@
 #include "ImageLoader.h"
 #include "MathUtil.h"
 #include "LevMarState.h"
+#include "GlobalWriter.h"
 
 using namespace std;
 
@@ -578,7 +579,7 @@ float BeadTracker::FindMeanDmultFromSample (bool skip_beads)
 }
 
 
-void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask)
+void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask, int16_t *washout_state, int flow)
 {
   if (region!=NULL)
     for (int ibd=0; ibd<numLBeads ; ibd++)
@@ -586,6 +587,10 @@ void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask)
       {
         ndx_map[params_nn[ibd].y*region->w+params_nn[ibd].x] = -1; // ignore this neighbor from now on to avoid contaminating xtalk
         bfmask->Set (params_nn[ibd].x+region->col,params_nn[ibd].y+region->row,MaskWashout);
+        int well = params_nn[ibd].y+region->row * bfmask->W() + params_nn[ibd].x+region->col;
+        if (washout_state != NULL && washout_state[well] < 0) {
+          washout_state[well] = flow;
+        }
       }
 }
 

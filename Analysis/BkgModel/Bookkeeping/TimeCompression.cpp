@@ -313,22 +313,25 @@ void TimeCompression::CompressionFromFramesPerPoint()
         // do not shift real bead wells at all
         int cur_frame=0;
         float  last_fnum = 0.0;
+
         for (;npt < npts();npt++)   // real data
         {
             float avg;
             avg=0.0;
-            float last = npt == 0 ? 0 : mTimePoints[npt-1];
-            mTimePoints[npt] = (float) frames_per_point[npt] / frames_per_second + last;
+
             for (int i=0;i<frames_per_point[npt];i++)
             {
                 avg += i+cur_frame;
             }
             frameNumber[npt] = (avg / frames_per_point[npt]);
+
             deltaFrame[npt] = frameNumber[npt] - last_fnum;
             deltaFrameSeconds[npt] = deltaFrame[npt]/frames_per_second; // cache for hydrogen generation
 
             last_fnum = frameNumber[npt];            
             cur_frame+=frames_per_point[npt];
+            mTimePoints[npt] = (float) (cur_frame-1) / frames_per_second;
+
         }
 	// char buff[10000];
 	// int n = 0;
@@ -368,47 +371,20 @@ void TimeCompression::CompressionFromFramesPerPoint()
 
 
 void TimeCompression::SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep) {
-
-// These member variables are only used by depreciated methods
-//  mWeight.resize(frames);
-//  mTotalWeight.resize(frames);
-//  fill(mWeight.begin(), mWeight.end(), 0.0f);
-//  fill(mTotalWeight.begin(), mTotalWeight.end(), 0.0f);
-//  mVFCFlush.resize(frames);
-//  fill(mVFCFlush.begin(), mVFCFlush.end(), 0);
-
   std::vector<int> vfc_time(&timestamps[0], &timestamps[0] + frames);
-  /* Cumulative sum of time bg alg wants. */
+  // std::vector<int> vfc_time(frames);
+  // float last_timestamp = 0.0;
+  // for ( int j=0; j < frames; j++) {
+  //     vfc_time[j] = ( timestamps[j] + last_timestamp ) /2.0;
+  //     last_timestamp = timestamps[j];
+  //   }
+          origTimeStamps = vfc_time;
+        
+        /* Cumulative sum of time bg alg wants. */
   std::vector<int> bg_time(_npts, 0);
   for (size_t i = 0;  i < (size_t)_npts; i++) {
     bg_time[i] = mTimePoints[i] * 1000.0f;
   }
-// These results are only used by depreciated methods
-//  int bgIx = 0;
-//  float currentWeight = 0.0f;
-//  int flushFrames = 0;
-//  for (int f = 0; f < frames; f++) {
-//    int vfc_start = (f == 0 ? 0 : timestamps[f-1]);
-//    int bg_start = (bgIx == 0 ? 0 : bg_time[bgIx - 1]);
-//    float overlap = Coverage(bg_start, bg_time[bgIx], vfc_start, timestamps[f]);
-//    float weight = overlap / (timestamps[f] - vfc_start);
-//    mWeight[f] = weight;
-//    currentWeight += weight;
-//    if (timestamps[f] >= bg_time[bgIx])  {
-//      mVFCFlush[f] = 1;
-//      flushFrames++;
-//      mTotalWeight[f] = currentWeight;
-//      currentWeight = 1.0f - mWeight[f];
-//      bgIx++;
-//    }
-//  }
-  //  cout << "Flushing frames: " << flushFrames << " times." <<endl;
-  // mVFCFlush.back() = true;
-  // mTotalWeight.back() = currentWeight;
-  // cout << "Frame\tWeight\tFlush\tTotalWeight" << endl;
-  // for (size_t i = 0; i < mVFCFlush.size(); i++) {
-  //   cout << i << "\t" << mWeight[i] << "\t" << mVFCFlush[i] << "\t" << mTotalWeight[i] << endl;
-  // }
   mVfcAverage.resize(_npts);
   mVfcTotalWeight.resize(_npts);
   
@@ -420,7 +396,6 @@ void TimeCompression::SetupConvertVfcTimeSegments(int frames, int *timestamps, i
    * points coming from datacollect that should be averaged together to best etimate that 
    * point. */
   for (size_t i = 0; i < (size_t)_npts; i++) {
-//    mVfcTotalWeight[i] = 0;
     int bg_start = i == 0 ? 0 : bg_time[i-1];
     tstart = std::upper_bound(vfc_time.begin(), vfc_time.end(), bg_start);
     for (; tstart < vfc_time.end(); ++tstart) {
@@ -431,7 +406,7 @@ void TimeCompression::SetupConvertVfcTimeSegments(int frames, int *timestamps, i
         float weight = (float)overlap / (*tstart - vfc_start);
         std::pair<float,int> p;
         p.first = weight;
-        p.second = (tstart - vfc_time.begin()) * frameStep;
+        p.second = (tstart - vfc_time.begin());
         mVfcAverage[i].push_back(p);
         mVfcTotalWeight[i] += weight;
       }
@@ -445,99 +420,38 @@ void TimeCompression::SetupConvertVfcTimeSegments(int frames, int *timestamps, i
       mVfcAverage[i][j].first /= mVfcTotalWeight[i];
     }
   }
-  // cout << "Averaging: " << endl;
-  // cout << "frame\tbg_time\tsec\tvfc_st\tframes" << endl;
-  // int numFrames = 0;
-  // for (size_t i = 0; i < mVfcAverage.size(); i++) {
-  //   double last = i == 0 ? 0 : bg_time[i-1];
-  //   float stime = numFrames / frames_per_second;
-  //   float etime = (frames_per_point[i] + numFrames) / frames_per_second;
-  //   numFrames += frames_per_point[i];
-  //   cout << i << "\t" << last << "," << bg_time[i] << "\t" << stime << "," << etime << "\t" << mVfcAverage[i].front().second/frameStep << "," << mVfcAverage[i].back().second/frameStep << "\t";
-  //   for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
-  //     cout << mVfcAverage[i][j].second / frameStep << ",";
-  //   }
-  //   cout << "\t";
-  //   for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
-  //     cout << timestamps[mVfcAverage[i][j].second / frameStep] / 1000.0 << ",";
-  //     //      mVfcAverage[i][j].first /= mVfcTotalWeight[i];
-  //   }
-  //   cout << "\t";
-  //   for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
-  //     cout << mVfcAverage[i][j].first << ",";
-  //   }
-  //   cout << endl;
-  // }
-  // cout << "Done." << endl;
+
 }
 
 
-/* don't use - deprecated experiment. */
-void TimeCompression::ConvertVfcSegmentsVec(size_t rowStart, size_t rowEnd, size_t colStart, size_t colEnd, 
-                            size_t nRow, size_t nCol, size_t nFrame, short *source, uint16_t *output) {
-  size_t outFrameStep = (colEnd - colStart) * (rowEnd-rowStart);
-  int numWells = (colEnd - colStart) * (rowEnd - rowStart);
-  float aligned_acc[numWells] __attribute__ ( (aligned (16) ) );
-  memset(aligned_acc, 0, sizeof(float) * numWells);
-  size_t wellOffset = rowStart * nCol + colStart;
-  size_t frameStep = nRow * nCol;
-  size_t wellEnd = (nFrame -1) * frameStep + rowEnd * nCol + colEnd;
-  size_t numCols = colEnd - colStart;
-  size_t frame = 0;
-  size_t wellsSeen = 0;
-  size_t row = rowStart;
-  float *weights = &mWeight[0];
-  float *totalWeights = &mTotalWeight[0];
-  int *flushes = &mVFCFlush[0];
-  f4vec weight;
-  f4vec totalweight;  
-  f4vec ones;
-  f4vec oweight;
-  for (int i = 0; i < VEC_INC; i++) {
-    ones.f[i] = 1.0f;
-    totalweight.f[i] = totalWeights[frame];
-    weight.f[i] = weights[frame];
+void TimeCompression::WriteLinearTransformation(int frameStep) {
+  std::vector<int> bg_time(_npts, 0);
+  for (size_t i = 0;  i < (size_t)_npts; i++) {
+    bg_time[i] = mTimePoints[i] * 1000.0f;
   }
-  f4vec acq, s;
-  for (wellOffset = rowStart * nCol + colStart; wellOffset < wellEnd; wellOffset += nCol) {
-    for (size_t col = 0; col < numCols; col+=VEC_INC) {
-      for (int i = 0; i < VEC_INC; i++) {
-        s.f[i] = source[wellOffset + col + i];
-        acq.f[i] = aligned_acc[wellsSeen+i];
-      }
-      s.v = s.v * weight.v;
-      acq.v = acq.v + s.v;
-      if (flushes[frame] == 1) {
-        acq.v = acq.v / totalweight.v;
-        oweight.v = ones.v - weight.v;
-        for (int i = 0; i < VEC_INC; i++) {
-          output[wellsSeen+i] = acq.f[i];
-          acq.f[i] = source[wellOffset + col + i]; 
-        }
-        acq.v = acq.v * oweight.v;
-      }
-      for (int i = 0; i < VEC_INC; i++) {
-        aligned_acc[wellsSeen+i] = acq.f[i];
-      }
-      wellsSeen+=VEC_INC;
+  cout << "Averaging: " << endl;
+  cout << "frame\tbg_time\tsec\tvfc_st\tframes" << endl;
+  int numFrames = 0;
+  for (size_t i = 0; i < mVfcAverage.size(); i++) {
+    double last = i == 0 ? 0 : bg_time[i-1];
+    float stime = numFrames / frames_per_second;
+    float etime = (frames_per_point[i] + numFrames) / frames_per_second;
+    numFrames += frames_per_point[i];
+    cout << i << "\t" << last << "," << bg_time[i] << "\t" << stime << "," << etime << "\t" << mVfcAverage[i].front().second/frameStep << "," << mVfcAverage[i].back().second/frameStep << "\t";
+    for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
+      cout << mVfcAverage[i][j].second / frameStep << ",";
     }
-    if (wellsSeen == outFrameStep) {
-      if (flushes[frame] == 1) { 
-        output += outFrameStep;
-      }
-      frame++;
-      for (int i = 0; i < VEC_INC; i++) {
-        totalweight.f[i] = totalWeights[frame];
-        weight.f[i] = weights[frame];
-      }
-      wellOffset = frame * frameStep + (rowStart) * nCol + colStart - nCol;
-      wellsSeen = 0;
-      row = rowStart;
+    cout << "\t";
+    for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
+      cout << origTimeStamps[mVfcAverage[i][j].second / frameStep] << ",";
     }
-    else {
-      row++;
+    cout << "\t";
+    for (size_t j = 0; j < mVfcAverage[i].size(); j++) {
+      cout << mVfcAverage[i][j].first << ",";
     }
+    cout << endl;
   }
+  cout << "Done." << endl;
 }
 
 void TimeCompression::ReportVfcConversion(int frames, int *timestamps, int baseFrameRate, std::ostream &out) {

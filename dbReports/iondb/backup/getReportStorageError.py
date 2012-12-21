@@ -18,11 +18,11 @@ if __name__ == '__main__':
             print "* * * Report Storage is undefined!* * *"
             print ("Report Name: %s" % Report.resultsName)
             print ("Date: %s" % Report.timeStamp)
-            
-            reportpath = os.path.join("/results/analysis/output/Home","%s_%03d" % (Report.resultsName,int(Report.pk)))
-            if os.path.isdir (reportpath):
+
+            reportpath = os.path.join("/results/analysis/output/Home", "%s_%03d" % (Report.resultsName, int(Report.pk)))
+            if os.path.isdir(reportpath):
                 print "Report Path exists: %s" % reportpath
-                reportfile = os.path.join(reportpath,"Default_Report.php")
+                reportfile = os.path.join(reportpath, "Default_Report.php")
                 if os.path.isfile(reportfile):
                     print "Report File exists: %s" % reportfile
                 else:

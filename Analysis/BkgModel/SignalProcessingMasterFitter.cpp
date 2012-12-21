@@ -51,7 +51,7 @@ bool SignalProcessingMasterFitter::ProcessImage ( Image *img, int flow )
     img->LocalRescaleRegionByEmptyWells ( region_data->region );
 
   // Calculate average background for each well
-  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( *img, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t_mid_nuc_start );
+  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( *img, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t_mid_nuc_start);
 
 
   if ( region_data->LoadOneFlow ( img,global_defaults,flow ) )
@@ -77,7 +77,7 @@ bool SignalProcessingMasterFitter::ProcessImage ( SynchDat &data, int flow )
   AllocateRegionDataIfNeeded ( data );
 
   // Calculate average background for each well
-  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( data, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t_mid_nuc_start );
+  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( data, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, GetTypicalMidNucTime (& (region_data->my_regions.rp.nuc_shape)) ,region_data->my_regions.rp.nuc_shape.sigma, region_data->time_c.time_start, &region_data->time_c ); 
 
   if ( region_data->LoadOneFlow ( data,global_defaults,flow ) )
   {
@@ -93,8 +93,8 @@ void SignalProcessingMasterFitter::AllocateRegionDataIfNeeded ( SynchDat &data )
   {
     TraceChunk &chunk = data.GetItemByRowCol ( get_region_row(), get_region_col() );
     // timing initialized to match chunk timing
-    SetupTimeAndBuffers ( chunk.mSigma, chunk.mTMidNuc, chunk.mTMidNuc );
-    region_data->SetTshiftLimitsForSynchDat();
+    SetupTimeAndBuffers ( chunk.mSigma, chunk.mTMidNuc, chunk.mT0 );
+    //    SetupTimeAndBuffers ( chunk.mSigma, chunk.mTMidNuc, chunk.mT0 );
     if ( chunk.RegionMatch ( *region_data->region ) )
     {
       if ( chunk.TimingMatch ( region_data->time_c.mTimePoints ) )
@@ -192,7 +192,7 @@ void SignalProcessingMasterFitter::ExportAllAndReset ( int flow, bool last )
   {
     UpdateClonalFilterData ( flow ); // export to "clonal filter" within regional data
 
-    ExportStatusToMask(); // export status to bf mask
+    ExportStatusToMask(flow); // export status to bf mask
 
     ExportDataToWells(); // export condensed data to wells - note we munged the amplitude values in Proton data
     ExportDataToDataCubes ( last ); // export hdf5 data if writing out - may want to put >this< before Proton wells correction
@@ -203,9 +203,9 @@ void SignalProcessingMasterFitter::ExportAllAndReset ( int flow, bool last )
   }
 }
 
-void SignalProcessingMasterFitter::ExportStatusToMask()
+void SignalProcessingMasterFitter::ExportStatusToMask(int flow)
 {
-  region_data->my_beads.WriteCorruptedToMask ( region_data->region, global_state.bfmask );
+  region_data->my_beads.WriteCorruptedToMask ( region_data->region, global_state.bfmask, global_state.washout_flow, flow );
 }
 
 void SignalProcessingMasterFitter::UpdateClonalFilterData ( int flow )
@@ -314,17 +314,17 @@ void SignalProcessingMasterFitter::SetComputeControlFlags ( bool enable_xtalk_co
 
 // constructor used by Analysis pipeline
 SignalProcessingMasterFitter::SignalProcessingMasterFitter ( RegionalizedData *local_patch, GlobalDefaultsForBkgModel &_global_defaults, char *_results_folder, Mask *_mask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, Region *_region, set<int>& sample,
-    vector<float>& sep_t0_est, bool debug_trace_enable,
-    int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,
-    EmptyTraceTracker *_emptyTraceTracker,
-    float sigma_guess,float t_mid_nuc_guess,
-    SequenceItem* _seqList,int _numSeqListItems, bool restart )
-    : global_defaults ( _global_defaults )
+                                                             vector<float>& sep_t0_est, bool debug_trace_enable,
+                                                             int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,
+                                                             EmptyTraceTracker *_emptyTraceTracker,
+                                                             float sigma_guess,float t_mid_nuc_guess,
+                                                             SequenceItem* _seqList,int _numSeqListItems, bool restart, int16_t *_washout_flow )
+  : global_defaults ( _global_defaults )
 {
   NothingInit();
 
 
-  global_state.FillExternalLinks ( _mask,_pinnedInFlow,_rawWells );
+  global_state.FillExternalLinks ( _mask,_pinnedInFlow,_rawWells, _washout_flow );
   global_state.MakeDirName ( _results_folder );
 
   region_data=local_patch;
@@ -491,7 +491,7 @@ void SignalProcessingMasterFitter::PostKeyFit ( double &elapsed_time, Timer &fit
   region_data->LimitedEmphasis();
 
   fit_timer.restart();
-  region_data->RezeroByCurrentTiming();
+  region_data->RezeroByCurrentTiming(); // rezeroing??
 
   if ( !global_defaults.signal_process_control.regional_sampling )
     lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, 8, lev_mar_fit->fit_control.FitWellPostKey, lev_mar_fit->fit_control.FitRegionInit2, LARGER_LAMBDA , NO_NONCLONAL_PENALTY );

@@ -1,0 +1,48 @@
+# django==1.4
+# celery==2.4.0  #http://docs.celeryproject.org/en/2.4/index.html
+# django-celery==2.4.0  #http://docs.celeryproject.org/en/2.4/index.html
+# 
+# # matplotlib==0.99.1.1  #fails
+# South==0.7.3
+# # scipy==0.7.0  #fails
+# # psycopg2==2.0.13  #fails
+# Twisted==10.0.0
+# 
+# lxml==2.2.4
+# docutils==0.6
+# setuptools==0.6.28
+# httplib2==0.7.2
+# python-dateutil==1.5
+# argparse==1.1
+# drmaa==0.4b3
+# # django-tastypie==0.9.12-alpha  #does not exist
+# 
+# ion-pipeline (>= 3.0.2),
+# texlive-latex-base,
+# zeroinstall-injector (>= 1.5),
+# postgresql,
+# php5,
+# libapache2-mod-wsgi,
+# python-celery (>= 2.4.0),
+# python-django (>= 1.4),
+# python-django-celery,
+# python-django-south (>=0.7.3),
+# python-matplotlib,
+# python-scipy,
+# python-psycopg2, 
+# python-twisted-core, 
+# python-central, 
+# python-twisted, 
+# python-support,
+# python-lxml,
+# python-docutils,
+# python-setuptools,
+# python-httplib2,
+# python-dateutil,
+# python-argparse,
+# python-tastypie (>= 0.9.11+ion1),
+# python-drmaa,
+# samtools (>= 0.1.18),
+# python-dev,
+# rabbitmq-server,
+# tmap (>=0.3.7)"

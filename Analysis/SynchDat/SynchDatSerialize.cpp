@@ -28,6 +28,8 @@ TraceChunkSerializer::TraceChunkSerializer() {
   mRetryInterval = 15;  // 15 seconds wait time.
   mTotalTimeout = 100;  // 100 seconds before giving up.
   mDebugMsg = false;
+  mUseSemaphore = false;
+  computeMicroSec = ioMicroSec = openMicroSec = compressMicroSec = 0;
 }
 
 TraceChunkSerializer::~TraceChunkSerializer() {
@@ -41,6 +43,7 @@ TraceChunkSerializer::~TraceChunkSerializer() {
 }
 
 void TraceChunkSerializer::DecompressFromReading(const struct FlowChunk *chunks, GridMesh<TraceChunk> &dataMesh) {
+  compressMicroSec = 0;
   for (size_t bIx = 0; bIx < dataMesh.GetNumBin(); bIx++) {
     TraceChunk &tc = dataMesh.GetItem(bIx);
     const struct FlowChunk &fc = chunks[bIx];
@@ -72,7 +75,9 @@ void TraceChunkSerializer::DecompressFromReading(const struct FlowChunk *chunks,
     tc.mTimePoints.resize(tc.mDepth);
     float * tmp = (float *)fc.DeltaFrame.p;
     copy(tmp,tmp+fc.Depth, tc.mTimePoints.begin());
+    ClockTimer timer;
     mCompressor->Decompress(tc, (int8_t *)fc.Data.p, fc.Data.len);
+    compressMicroSec += timer.GetMicroSec();
     outsize = fc.Height * fc.Width * fc.Depth;
   }
 }
@@ -84,6 +89,7 @@ void TraceChunkSerializer::ArrangeDataForWriting(GridMesh<TraceChunk> &dataMesh,
   }
   size_t maxSize = dataMesh.mBins[0].mDepth * dataMesh.mBins[0].mHeight * dataMesh.mBins[1].mWidth * 3;
   int8_t *compressed = new int8_t[maxSize];
+  compressMicroSec = 0;
   for (size_t bIx = 0; bIx < dataMesh.GetNumBin(); bIx++) {
     TraceChunk &tc = dataMesh.GetItem(bIx);
     struct FlowChunk &fc = chunks[bIx];
@@ -107,7 +113,9 @@ void TraceChunkSerializer::ArrangeDataForWriting(GridMesh<TraceChunk> &dataMesh,
     fc.Depth = tc.mDepth;
     fc.BaseFrameRate = tc.mBaseFrameRate;
     size_t outsize;
+    ClockTimer timer;
     mCompressor->Compress(tc, &compressed, &outsize, &maxSize);
+    compressMicroSec += timer.GetMicroSec();
     //cout <<"Doing: " << fc.CompressionType << " Bytes per wells: " << outsize/(float) (tc.mHeight * tc.mWidth) <<" Compression ratio: "<< tc.mData.size()*2/(float)outsize << endl;
     fc.Data.p = (int8_t *)malloc(outsize*sizeof(int8_t));
     memcpy(fc.Data.p, compressed, outsize*sizeof(int8_t));
@@ -120,6 +128,7 @@ void TraceChunkSerializer::ArrangeDataForWriting(GridMesh<TraceChunk> &dataMesh,
     fc.DeltaFrame.p = tmp;
     fc.DeltaFrame.len = tc.mTimePoints.size() * sizeof(float);
   }
+  delete [] compressed;
 }
 
 bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
@@ -160,12 +169,16 @@ bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   H5Tinsert(fcType, "BaseFrameRate", HOFFSET(struct FlowChunk, BaseFrameRate), H5T_NATIVE_FLOAT);
   H5Tinsert(fcType, "DeltaFrame", HOFFSET(struct FlowChunk, DeltaFrame), charArrayType2);
   H5Tinsert(fcType, "Data", HOFFSET(struct FlowChunk, Data), charArrayType);
-  
+  ClockTimer timer;
   status = H5Dread(dataset, fcType, H5S_ALL, H5S_ALL, H5P_DEFAULT, mChunks);
+  ioMicroSec = timer.GetMicroSec();
   ION_ASSERT(status == 0, "Couldn' read dataset");
+  timer.StartTimer();
   dataMesh.Init(mChunks[0].ChipRow, mChunks[0].ChipCol, mChunks[0].Height, mChunks[0].Width);
   ION_ASSERT(dataMesh.GetNumBin() == mNumChunks, "Didn't get number of chunks expected");
   DecompressFromReading(mChunks, dataMesh);
+  computeMicroSec = timer.GetMicroSec();
+  timer.StartTimer();
   status = H5Dvlen_reclaim(fcType, fcDataSpace, H5P_DEFAULT, mChunks);
   delete [] mChunks;
   mChunks = NULL;
@@ -174,17 +187,19 @@ bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   H5Tclose(charArrayType2);
   H5Sclose(fcDataSpace);
   H5Dclose(dataset);
+  ioMicroSec += timer.GetMicroSec();
   return status == 0;
 }
 
 bool TraceChunkSerializer::Write(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
 
   mNumChunks = dataMesh.GetNumBin();
+    ClockTimer timer;
   mChunks = (struct FlowChunk *) malloc(sizeof(struct FlowChunk) * mNumChunks);
   ArrangeDataForWriting(dataMesh, mChunks);
+  computeMicroSec = timer.GetMicroSec();
   hsize_t dims1[1];
   dims1[0] = mNumChunks;
-     
   hid_t fcDataSpace = H5Screate_simple(1, dims1, NULL);
   hid_t charArrayType = H5Tvlen_create (H5T_NATIVE_CHAR);
   hid_t charArrayType2 = H5Tvlen_create (H5T_NATIVE_CHAR);
@@ -210,6 +225,7 @@ bool TraceChunkSerializer::Write(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   H5Tinsert(fcType, "BaseFrameRate", HOFFSET(struct FlowChunk, BaseFrameRate), H5T_NATIVE_FLOAT);
   H5Tinsert(fcType, "DeltaFrame", HOFFSET(struct FlowChunk, DeltaFrame), charArrayType2);
   H5Tinsert(fcType, "Data", HOFFSET(struct FlowChunk, Data), charArrayType);
+  timer.StartTimer();
   hid_t dataset = H5Dcreate2(h5.GetFileId(), "FlowChunk", fcType, fcDataSpace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   herr_t status = H5Dwrite(dataset, fcType, H5S_ALL, H5S_ALL, H5P_DEFAULT, mChunks);
   status = H5Dvlen_reclaim(fcType, fcDataSpace, H5P_DEFAULT, mChunks);
@@ -222,10 +238,12 @@ bool TraceChunkSerializer::Write(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   H5Tclose(charArrayType2);
   H5Sclose(fcDataSpace);
   H5Dclose(dataset);
+  ioMicroSec += timer.GetMicroSec();
   return status == 0;
 }
 
 bool TraceChunkSerializer::Read(const char *filename, SynchDat &data) {
+  data.Clear();
   if (!H5File::IsH5File(filename)) {
     return false;
   }
@@ -249,7 +267,7 @@ bool TraceChunkSerializer::Read(const char *filename, SynchDat &data) {
     }
     /* Turn off error printing as we're not sure this is actually an hdf5 file. */
     H5File h5(filename);
-    result = h5.Open(false);
+    result = h5.OpenForReading();
 
     if (result) {
       h5.SetReadOnly(true);
@@ -291,13 +309,19 @@ bool TraceChunkSerializer::Write(const char *filename, SynchDat &data) {
     keysBuff[i] = keys[i].c_str();
     valuesBuff[i] = values[i].c_str();
   }
+  ClockTimer timer;
   H5File h5(filename);
-  bool ok = h5.Open(true);
+  bool ok = h5.OpenNew();
+  openMicroSec = timer.GetMicroSec();
   if (!ok) { return ok; }
+  timer.StartTimer();
   h5.WriteStringVector(INFO_KEYS, &keysBuff[0], keysBuff.size());
   h5.WriteStringVector(INFO_VALUES, &valuesBuff[0], keysBuff.size());
+  ioMicroSec = timer.GetMicroSec();
   ok =  Write(h5, data.GetMesh());
+  timer.StartTimer();
   h5.Close();
+  ioMicroSec += timer.GetMicroSec();
   return ok;
 }
 

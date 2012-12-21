@@ -2,7 +2,6 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 from ion.utils.blockprocessing import printtime
-from ion.utils.blockprocessing import MyConfigParser
 
 import ConfigParser
 import StringIO
@@ -17,22 +16,18 @@ import dateutil
 from shutil import move
 import glob
 import math
-
-# for barcode handling, TODO
-from ion.utils.aggregate_alignment import *
-
-from ion.reports import trimmedReadLenHisto
+import shlex
 
 from ion.utils import TFPipeline
 from ion.utils.blockprocessing import isbadblock
-from ion.reports import MaskMerge, \
-    StatsMerge, plotRawRegions, plotKey
+from ion.reports import MaskMerge
+
 from ion.reports import mergeBaseCallerJson
 from ion.utils import blockprocessing
+from ion.utils import ionstats
 
-from ion.reports import quality_histogram
 from ion.reports import wells_beadogram
-from ion.reports import read_length_sparkline
+from ion.utils import ionstats_plots
 
 def basecalling(
       SIGPROC_RESULTS,
@@ -44,6 +39,7 @@ def basecalling(
       reverse_primer_dict,
       BASECALLER_RESULTS,
       barcodeId,
+      barcodeSamples,
       barcodesplit_filter,
       DIR_BC_FILES,
       barcodeList_path,
@@ -78,6 +74,7 @@ def basecalling(
     try:
         generate_datasets_json(
             barcodeId,
+            barcodeSamples,
             barcodeList_path,
             datasets_pipeline_path,
             runID,
@@ -129,27 +126,39 @@ def basecalling(
         cmd += " --datasets=%s" % (datasets_pipeline_path)
 
         # 3' adapter details
-        qual_cutoff = reverse_primer_dict['qual_cutoff']
-        qual_window = reverse_primer_dict['qual_window']
-        adapter_cutoff = reverse_primer_dict['adapter_cutoff']
         adapter = reverse_primer_dict['sequence']
-        cmd += " --flow-order %s" % (floworder)
-        cmd += " --trim-qual-cutoff %s" % (qual_cutoff)
-        cmd += " --trim-qual-window-size %s" % (qual_window)
-        cmd += " --trim-adapter-cutoff %s" % (adapter_cutoff)
         cmd += " --trim-adapter %s" % (adapter)
         # TODO: provide via datasets.json
         if barcodesplit_filter:
             cmd += " --barcode-filter %s" % barcodesplit_filter
 
-        cmd += " >> %s 2>&1" % os.path.join(BASECALLER_RESULTS, 'basecaller.log')
-
         printtime("DEBUG: Calling '%s':" % cmd)
-        ret = subprocess.call(cmd,shell=True)
-        blockprocessing.add_status("BaseCaller", ret)
+        proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        stdout_value, stderr_value = proc.communicate()
+        ret = proc.returncode
+        sys.stdout.write("%s" % stdout_value)
+        sys.stderr.write("%s" % stderr_value)
+
+        # Ion Reporter
+        try:
+            basecaller_log_path = os.path.join(BASECALLER_RESULTS, 'basecaller.log')
+            with open(basecaller_log_path, 'a') as f:
+                if stdout_value: f.write(stdout_value)
+                if stderr_value: f.write(stderr_value)
+        except IOError:
+            traceback.print_exc()
+
+        if ret != 0:
+            printtime('ERROR: BaseCaller failed with exit code: %d' % ret)
+            raise
+        #ignore rest of operations
+        if '--calibration-training' in basecallerArgs:
+            printtime('training mode: ignore filtering')
+            return
     except:
         printtime('ERROR: BaseCaller failed')
         traceback.print_exc()
+        raise
 
 
 
@@ -188,14 +197,6 @@ def basecalling(
     
     
     try:
-        quality_histogram.generate_quality_histogram(
-            os.path.join(BASECALLER_RESULTS,'BaseCaller.json'),
-            os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
-    except:
-        printtime ("Quality histogram generation failed")
-        traceback.print_exc()
-
-    try:
         wells_beadogram.generate_wells_beadogram(BASECALLER_RESULTS, SIGPROC_RESULTS)
     except:
         printtime ("Wells beadogram generation failed")
@@ -231,102 +232,54 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
     except:
         graph_max_x = 400
 
-    input_prefix_list = []
+    quality_file_list = []
     for dataset in datasets_basecaller["datasets"]:
         if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
             continue
-        
-        dataset['sff'] = dataset['file_prefix']+'.sff'
-        dataset['fastq'] = dataset['file_prefix']+'.fastq'
-
-        try:
-            com = "bam2sff"
-            com += " -o %s"  % os.path.join(BASECALLER_RESULTS, dataset['sff'])
-            com += " %s"     % os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
-            printtime("DEBUG: Calling '%s'" % com)
-            subprocess.call(com,shell=True)
-        except:
-            printtime('Failed bam2sff')
-
-        try:
-            com = "SFFSummary"
-            com += " -o %s"         % os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.quality.summary')
-            com += " --sff-file %s" % os.path.join(BASECALLER_RESULTS, dataset['sff'])
-            com += " --read-length 50,100,150"
-            com += " --min-length 0,0,0"
-            com += " --qual 0,17,20"
-            com += " -d %s"         % os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.readLen.txt')
-            printtime("DEBUG: Calling '%s'" % com)
-            ret = subprocess.call(com,shell=True)
-            input_prefix_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.'))
-            #blockprocessing.add_status("SFFSummary", ret)
-        except:
-            printtime('Failed SFFSummary')
-
-        # In the future, make fastq from bam
-        # Tried picard, but its suspiciously slow. Need to test bamtools
-        # java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar I=IonXpress_033_rawlib.basecaller.bam F=result.fastq
-            
-        try:
-            com = "SFFRead"
-            com += " -q %s"         % os.path.join(BASECALLER_RESULTS, dataset['fastq'])
-            com += " %s"            % os.path.join(BASECALLER_RESULTS, dataset['sff'])
-    
-            printtime("DEBUG: Calling '%s'" % com)
-            ret = subprocess.call(com,shell=True)
-            #blockprocessing.add_status("SFFRead", ret)
-        except:
-            printtime('Failed SFFRead')
-        
-        # Creating links to legacy names
-
-        if dataset.has_key('legacy_prefix'):
-            
-            link_src = [
+                
+        # Call ionstats utility to generate alignment-independent metrics for current unmapped BAM
+        ionstats.generate_ionstats_basecaller(
                 os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                os.path.join(BASECALLER_RESULTS, dataset['sff']),
-                os.path.join(BASECALLER_RESULTS, dataset['fastq'])]
-            link_dst = [
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.basecaller.bam'),
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.sff'),
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.fastq')]
-            for (src,dst) in zip(link_src,link_dst):
-                try:
-                    os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-                except:
-                    printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
-                    
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
+                graph_max_x)
+        
         # Plot read length sparkline
+        ionstats_plots.read_length_sparkline(
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png'),
+                graph_max_x)
         
-        try:
-            readlen_path = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.readLen.txt')
-            sparkline_path = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png')
-            read_length_sparkline.read_length_sparkline(readlen_path,sparkline_path,graph_max_x)
-        except:
-            printtime("Failed to create %s" % sparkline_path)
-
-    try:
-        merge_quality_summary(input_prefix_list, BASECALLER_RESULTS+'/')
-    except:
-        traceback.print_exc()
-
-    printtime("make the read length histogram")
-    try:
-        filepath_readLenHistogram = os.path.join(BASECALLER_RESULTS,'readLenHisto.png')
-        filepath_readlentxt = os.path.join(BASECALLER_RESULTS,'readLen.txt')
-        trimmedReadLenHisto.trimmedReadLenHisto(filepath_readlentxt,filepath_readLenHistogram)
-        filepath_readLenHistogram2 = os.path.join(BASECALLER_RESULTS,'readLenHisto2.png')
-        read_length_sparkline.read_length_histogram(filepath_readlentxt,filepath_readLenHistogram2,graph_max_x)
+        quality_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
         
-    except:
-        printtime("Failed to create %s" % filepath_readLenHistogram)
+    # Merge ionstats_basecaller files from individual barcodes/dataset
+    ionstats.reduce_stats(quality_file_list,os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
+
+    # Generate legacy stats file: quality.summary
+    ionstats.generate_legacy_basecaller_files(
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+            os.path.join(BASECALLER_RESULTS,''))
+
+    # Plot classic read length histogram
+    ionstats_plots.old_read_length_histogram(
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+            os.path.join(BASECALLER_RESULTS,'readLenHisto.png'),
+            graph_max_x)
+    
+    # Plot new read length histogram
+    ionstats_plots.read_length_histogram(
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+            os.path.join(BASECALLER_RESULTS,'readLenHisto2.png'),
+            graph_max_x)
+
+    # Plot quality value histogram
+    ionstats_plots.quality_histogram(
+        os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+        os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
 
 
-    # Special legacy post-processing.
-    # Generate merged rawlib.basecaller.bam and rawlib.sff on barcoded runs
+    # Generate merged rawlib.basecaller.bam on barcoded runs, TODO, can this be removed?
 
-    composite_bam_filename = os.path.join(BASECALLER_RESULTS,'%s_%s.basecaller.bam'%(expName,resultsName))
-    composite_bam_legacy_name = os.path.join(BASECALLER_RESULTS,'rawlib.basecaller.bam')
+    composite_bam_filename = os.path.join(BASECALLER_RESULTS,'rawlib.basecaller.bam')
     if not os.path.exists(composite_bam_filename):
 
         bam_file_list = []
@@ -335,53 +288,12 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
                 bam_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']))
 
         blockprocessing.merge_bam_files(bam_file_list,composite_bam_filename,composite_bam_filename+'.bai',False)
-        
-        composite_sff_filename = os.path.join(BASECALLER_RESULTS,'%s_%s.sff'%(expName,resultsName))
-        composite_sff_legacy_name = os.path.join(BASECALLER_RESULTS,'rawlib.sff')
-        composite_fastq_filename = os.path.join(BASECALLER_RESULTS,'%s_%s.fastq'%(expName,resultsName))
-        composite_fastq_legacy_name = os.path.join(BASECALLER_RESULTS,'rawlib.fastq')
-
-        try:
-            com = "bam2sff"
-            com += " -o %s"  % composite_sff_filename
-            com += " %s"     % composite_bam_filename
-            printtime("DEBUG: Calling '%s'" % com)
-            subprocess.call(com,shell=True)
-        except:
-            printtime('Failed bam2sff')
-
-        try:
-            com = "SFFRead"
-            com += " -q %s"         % composite_fastq_filename
-            com += " %s"            % composite_sff_filename
-            printtime("DEBUG: Calling '%s'" % com)
-            ret = subprocess.call(com,shell=True)
-        except:
-            printtime('Failed SFFRead')
-
-        link_src = [
-            composite_bam_filename,
-            composite_sff_filename,
-            composite_fastq_filename]
-        link_dst = [
-            composite_bam_legacy_name,
-            composite_sff_legacy_name,
-            composite_fastq_legacy_name]
-        for (src,dst) in zip(link_src,link_dst):
-            try:
-                os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-            except:
-                printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
 
     printtime("Finished basecaller post processing")
 
 
-
-
 def tf_processing(
-      SIGPROC_RESULTS,
       tf_basecaller_bam_path,
-      libKey,
       tfKey,
       floworder,
       BASECALLER_RESULTS,
@@ -392,198 +304,12 @@ def tf_processing(
     #generate TF Metrics                             #
     ##################################################
 
-    if os.path.exists(os.path.join(BASECALLER_RESULTS, 'rawtf.sff')):
-        os.rename(os.path.join(BASECALLER_RESULTS, 'rawtf.sff'), os.path.join(BASECALLER_RESULTS, 'rawtf.old.sff'))
-
-    try:
-        com = "bam2sff"
-        com += " -o %s"  % os.path.join(BASECALLER_RESULTS, 'rawtf.sff')
-        com += " %s"     % os.path.join(BASECALLER_RESULTS, 'rawtf.basecaller.bam')
-        printtime("DEBUG: Calling '%s'" % com)
-        subprocess.call(com,shell=True)
-    except:
-        printtime('Failed bam2sff')
-
-
     printtime("Calling TFPipeline.processBlock")
     TFPipeline.processBlock(tf_basecaller_bam_path, BASECALLER_RESULTS, tfKey, floworder, analysis_dir)
     printtime("Completed TFPipeline.processBlock")
 
-
-
-    ########################################################
-    #Generate Raw Data Traces for lib and TF keys          #
-    ########################################################
-    printtime("Generate Raw Data Traces for lib and TF keys(iontrace_Test_Fragment.png, iontrace_Library.png)")
-
-    tfRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % tfKey)
-    libRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % libKey)
-    peakOut = 'raw_peak_signal'
-
-    if os.path.exists(tfRawPath):
-        try:
-            kp = plotKey.KeyPlot(tfKey, floworder, 'Test Fragment')
-            kp.parse(tfRawPath)
-            kp.dump_max(os.path.join('.',peakOut))
-            kp.plot()
-        except:
-            printtime("TF key graph didn't render")
-            traceback.print_exc()
-    else:
-        printtime("ERROR: %s is missing" % tfRawPath)
-
-    if os.path.exists(libRawPath):
-        try:
-            kp = plotKey.KeyPlot(libKey, floworder, 'Library')
-            kp.parse(libRawPath)
-            kp.dump_max(os.path.join('.',peakOut))
-            kp.plot()
-        except:
-            printtime("Lib key graph didn't render")
-            traceback.print_exc()
-    else:
-        printtime("ERROR: %s is missing" % libRawPath)
-
-
-    ########################################################
-    # Make per region key incorporation traces             #
-    ########################################################
-    printtime("Make per region key incorporation traces")
-    perRegionTF = "averagedKeyTraces_TF.txt"
-    perRegionLib = "averagedKeyTraces_Lib.txt"
-    if os.path.exists(perRegionTF):
-        pr = plotRawRegions.PerRegionKey(tfKey, floworder,'TFTracePerRegion.png')
-        pr.parse(perRegionTF)
-        pr.plot()
-
-    if os.path.exists(perRegionLib):
-        pr = plotRawRegions.PerRegionKey(libKey, floworder,'LibTracePerRegion.png')
-        pr.parse(perRegionLib)
-        pr.plot()
-
     printtime("Finished tf processing")
 
-
-
-''' Merge quality.summary and also readLen.txt '''
-
-def merge_quality_summary(input_prefix_list, output_prefix):
-
-    printtime("Merging quality.summary and readLen.txt files: %s..." % output_prefix)
-
-    summary_file_list = [input_prefix+'quality.summary' for input_prefix in input_prefix_list]
-    readlen_file_list = [input_prefix+'readLen.txt' for input_prefix in input_prefix_list]
-
-    try:
-        config_out = ConfigParser.RawConfigParser()
-        config_out.optionxform = str # don't convert to lowercase
-        config_out.add_section('global')
-
-        numberkeys = ['Number of 50BP Reads',
-                      'Number of 100BP Reads',
-                      'Number of 150BP Reads',
-                      'Number of Reads at Q0',
-                      'Number of Bases at Q0',
-                      'Number of 50BP Reads at Q0',
-                      'Number of 100BP Reads at Q0',
-                      'Number of 150BP Reads at Q0',
-                      'Number of Reads at Q17',
-                      'Number of Bases at Q17',
-                      'Number of 50BP Reads at Q17',
-                      'Number of 150BP Reads at Q17',
-                      'Number of 100BP Reads at Q17',
-                      'Number of Reads at Q20',
-                      'Number of Bases at Q20',
-                      'Number of 50BP Reads at Q20',
-                      'Number of 100BP Reads at Q20',
-                      'Number of 150BP Reads at Q20']
-
-        maxkeys = ['Max Read Length at Q0',
-                   'Max Read Length at Q17',
-                   'Max Read Length at Q20']
-
-        meankeys = ['System SNR']
-#                    'Mean Read Length at Q0',
-#                    'Mean Read Length at Q17',
-#                    'Mean Read Length at Q20']
-
-        config_in = MyConfigParser()
-        config_in.optionxform = str # don't convert to lowercase
-
-        # initialize
-        for key in numberkeys + maxkeys + meankeys:
-            config_out.set('global',key,0)
-
-        adict={}
-        for summary_file in summary_file_list:
-            try:
-                if os.path.exists(summary_file):
-                    printtime("INFO: process %s" % summary_file)
-                    # make sure all values are there
-                    try:
-                        config_in.read(summary_file)
-                        for key in numberkeys + maxkeys + meankeys:
-                            adict[key] = config_in.get('global',key)
-                    except:
-                        printtime("INFO: missing key(s) in %s" % summary_file)
-                        traceback.print_exc()
-                        continue
-
-                    for key in numberkeys:
-                        value_out = config_out.getint('global', key) + int(adict[key])
-                        config_out.set('global', key, value_out)
-
-                    for key in maxkeys:
-                        value_out = max (config_out.getint('global', key), int(adict[key]))
-                        config_out.set('global', key, value_out)
-
-                    for key in meankeys:
-                        if len(input_prefix_list) > 0:
-                            value_out = float(config_out.get('global', key)) + float(adict[key])/len(input_prefix_list)
-                        else:
-                            value_out = 0
-                        config_out.set('global', key, value_out)
-                else:
-                    printtime("ERROR: %s doesn't exist" % summary_file)
-            except:
-                traceback.print_exc()
-                continue
-
-        # Metrics that need more careful merging, see meankeys which is returning floats 
-        for quality in ['Q0','Q17','Q20']:
-            total_reads = config_out.getint('global','Number of Reads at %s' % quality)
-            total_bases = config_out.getint('global','Number of Bases at %s' % quality)
-            if total_reads == 0:
-                value_out = 0
-            else:
-                value_out = total_bases / total_reads
-            config_out.set('global','Mean Read Length at %s' % quality, value_out)
-
-
-        with open(output_prefix + "quality.summary", 'wb') as configfile:
-            config_out.write(configfile)
-
-    except:
-        traceback.print_exc()
-
-
-    try:
-        # merge readLen.txt, essentially concatenate
-        rl_out = open(output_prefix+"readLen.txt",'w')
-        rl_out.write("read\ttrimLen\n")
-        for readlen_file in readlen_file_list:
-            if os.path.exists(readlen_file):
-                printtime("INFO: process %s" % readlen_file)
-                rl_in = open(readlen_file,'r')
-                first_line = rl_in.readline()
-                for line in rl_in:
-                    rl_out.write(line)
-                rl_in.close()
-            else:
-                printtime("ERROR: skipped %s" % readlen_file)
-        rl_out.close()
-    except:
-        traceback.print_exc()
 
 
 def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, floworder):
@@ -635,25 +361,30 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
         traceback.print_exc()
 
 
+
     ########################################################
-    # Merge quality.summary and readLen.txt:               #
+    # Merge ionstats_basecaller.json:                      #
     # First across blocks, then across barcodes            #
     ########################################################
 
-    composite_prefix_list = []
-    for dataset in combined_datasets_json["datasets"]:
+    try:
+        composite_filename_list = []
+        for dataset in combined_datasets_json["datasets"]:
+            composite_filename = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json')
+            barcode_filename_list = [os.path.join(dir,BASECALLER_RESULTS,dataset['file_prefix']+'.ionstats_basecaller.json') for dir in dirs]
+            barcode_filename_list = [filename for filename in barcode_filename_list if os.path.exists(filename)]
+            ionstats.reduce_stats(barcode_filename_list,composite_filename)
+            if os.path.exists(composite_filename):
+                composite_filename_list.append(composite_filename)
 
-        # Create barcode.quality.summary and barcode.readLen.txt by merging across blocks
-        composite_prefix = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.')
-        barcode_prefix_list = [os.path.join(dir,BASECALLER_RESULTS,dataset['file_prefix']+'.') for dir in dirs]
-        barcode_prefix_list = [prefix for prefix in barcode_prefix_list if os.path.exists(prefix+"quality.summary")]
-        merge_quality_summary(barcode_prefix_list, composite_prefix)
-        
-        if os.path.exists(composite_prefix+"quality.summary"):
-            composite_prefix_list.append(composite_prefix)
+        ionstats.reduce_stats(composite_filename_list,os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
+        ionstats.generate_legacy_basecaller_files(
+                os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+                os.path.join(BASECALLER_RESULTS,''))
+    except:
+        printtime("ERROR: Failed to merge ionstats_basecaller.json")
+        traceback.print_exc()
 
-    # Create quality.summary and readLen.txt by merging across barcodes
-    merge_quality_summary(composite_prefix_list, BASECALLER_RESULTS+'/')
 
 
     ########################################################
@@ -670,7 +401,7 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
 
                     with open(blockstatus_return_code_file, 'r') as f:
                         text = f.read()
-                        if 'BaseCaller=0' in text:
+                        if 'Basecaller=0' in text:
                             composite_return_code-=1
 
             composite_return_code_file = os.path.join(BASECALLER_RESULTS,"composite_return_code.txt")
@@ -720,6 +451,7 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
     except:
         printtime("Merging BaseCaller.json files failed")
 
+
     ###############################################
     # Generate composite plots
     ###############################################
@@ -730,31 +462,30 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
     except:
         graph_max_x = 400
 
+    # Plot read length sparkline
     for dataset in combined_datasets_json["datasets"]:
-        try:
-            readlen_path = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.readLen.txt')
-            sparkline_path = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png')
-            read_length_sparkline.read_length_sparkline(readlen_path,sparkline_path,graph_max_x)
-        except:
-            printtime("ERROR: Failed to create %s" % sparkline_path)
+        ionstats_plots.read_length_sparkline(
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png'),
+                graph_max_x)
 
-    try:
-        filepath_readLenHistogram = os.path.join(BASECALLER_RESULTS,'readLenHisto.png')
-        filepath_readlentxt = os.path.join(BASECALLER_RESULTS,'readLen.txt')
-        trimmedReadLenHisto.trimmedReadLenHisto(filepath_readlentxt,filepath_readLenHistogram)
-        filepath_readLenHistogram2 = os.path.join(BASECALLER_RESULTS,'readLenHisto2.png')
-        read_length_sparkline.read_length_histogram(filepath_readlentxt,filepath_readLenHistogram2,graph_max_x)
-    except:
-        printtime("ERROR: Failed to create %s" % filepath_readLenHistogram)
-        traceback.print_exc()
+    # Plot classic read length histogram
+    ionstats_plots.old_read_length_histogram(
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+            os.path.join(BASECALLER_RESULTS,'readLenHisto.png'),
+            graph_max_x)
     
-    try:
-        quality_histogram.generate_quality_histogram(
-            os.path.join(BASECALLER_RESULTS,'BaseCaller.json'),
-            os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
-    except:
-        printtime ("ERROR: Quality histogram generation failed")
-        traceback.print_exc()
+    # Plot new read length histogram
+    ionstats_plots.read_length_histogram(
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+            os.path.join(BASECALLER_RESULTS,'readLenHisto2.png'),
+            graph_max_x)
+
+    # Plot quality value histogram
+    ionstats_plots.quality_histogram(
+        os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
+        os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
+    
 
     try:
         wells_beadogram.generate_wells_beadogram(BASECALLER_RESULTS, SIGPROC_RESULTS)
@@ -764,7 +495,7 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
 
     printtime("Finished merging basecaller stats")
 
-def merge_basecaller_bam_only(dirs, BASECALLER_RESULTS):
+def merge_basecaller_bam(dirs, BASECALLER_RESULTS):
 
     datasets_basecaller = {}
     try:
@@ -794,116 +525,16 @@ def merge_basecaller_bam_only(dirs, BASECALLER_RESULTS):
                 blockprocessing.merge_bam_files(block_bam_list,composite_bam_filename,composite_bam_filename+'.bai',False)    
         except:
             printtime("ERROR: merging %s unsuccessful" % dataset['basecaller_bam'])
-
-        ###############################################
-        # Provide symlinks for legacy naming conv.    #
-        ###############################################
-
-        if dataset.has_key('legacy_prefix'):
-            src = os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
-            dst = os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.basecaller.bam')
-            try:
-                os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-            except:
-                printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
 
     ## Note! on barcoded runs, barcode files are NOT subsequently merged into one multi-barcode BAM. 
 
     printtime("Finished merging basecaller BAM files")
-        
-
-def merge_basecaller_bigdata(dirs, BASECALLER_RESULTS):
-
-    datasets_basecaller = {}
-    try:
-        f = open(os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json"),'r')
-        datasets_basecaller = json.load(f);
-        f.close()
-    except:
-        printtime("ERROR: problem parsing %s" % os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json"))
-        traceback.print_exc()
-        return
-
-    # Iterate over datasets. Could be one for non-barcoded runs or multiple for barcoded runs
-    
-    for dataset in datasets_basecaller['datasets']:
-        if 'basecaller_bam' not in dataset:
-            continue
-        
-        ###############################################
-        # Merge Per-barcode Unmapped BAMs             #
-        ###############################################
-        
-        try:
-            block_bam_list = [os.path.join(dir,BASECALLER_RESULTS, dataset['basecaller_bam']) for dir in dirs]
-            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
-            composite_bam_filename = os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
-            if block_bam_list:
-                blockprocessing.merge_bam_files(block_bam_list,composite_bam_filename,composite_bam_filename+'.bai',False)    
-        except:
-            printtime("ERROR: merging %s unsuccessful" % dataset['basecaller_bam'])
-
-        ###############################################
-        # Generate Per-barcode SFF                    #
-        ###############################################
-    
-        if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
-            continue
-
-        dataset['sff'] = dataset['file_prefix']+'.sff'
-        dataset['fastq'] = dataset['file_prefix']+'.fastq'
-
-        try:
-            com = "bam2sff"
-            com += " -o %s"  % os.path.join(BASECALLER_RESULTS, dataset['sff'])
-            com += " %s"     % os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
-            printtime("DEBUG: Calling '%s'" % com)
-            subprocess.call(com,shell=True)
-        except:
-            printtime('Failed bam2sff')
-
-        ###############################################
-        # Generate Per-barcode FASTQ                  #
-        ###############################################
-
-        try:
-            com = "SFFRead"
-            com += " -q %s"         % os.path.join(BASECALLER_RESULTS, dataset['fastq'])
-            com += " %s"            % os.path.join(BASECALLER_RESULTS, dataset['sff'])
-    
-            printtime("DEBUG: Calling '%s'" % com)
-            ret = subprocess.call(com,shell=True)
-            #blockprocessing.add_status("SFFRead", ret)
-        except:
-            printtime('Failed SFFRead')
-        
-        ###############################################
-        # Provide symlinks for legacy naming conv.    #
-        ###############################################
-
-        if dataset.has_key('legacy_prefix'):
-            link_src = [
-                os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                os.path.join(BASECALLER_RESULTS, dataset['sff']),
-                os.path.join(BASECALLER_RESULTS, dataset['fastq'])]
-            link_dst = [
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.basecaller.bam'),
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.sff'),
-                os.path.join(BASECALLER_RESULTS, dataset['legacy_prefix']+'.fastq')]
-            for (src,dst) in zip(link_src,link_dst):
-                try:
-                    os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-                except:
-                    printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
-
-    ## Note! on barcoded runs, barcode files are NOT subsequently merged into one multi-barcode BAM. 
-
-    printtime("Finished merging basecaller big files")
 
 
 
 def generate_datasets_json(
         barcodeId,
+        barcodeSamples,
         barcodeList_path,
         datasets_json_path,
         runID,
@@ -950,10 +581,16 @@ def generate_datasets_json(
                     datasets["barcode_config"]["score_cutoff"] = float(line.lstrip("score_cutoff "))
                 if line.startswith('barcode'):
                     record = line.lstrip("barcode ").rstrip().split(",")
+                    # use any per barcode sample names entered during Planning
+                    bcsample = [k for k,v in barcodeSamples.items() if record[1] in v.get('barcodes',[])]
+                    if len(bcsample) == 1:
+                        bcsample = bcsample[0]
+                    else:
+                        bcsample = sample
+                        
                     datasets["datasets"].append({
-                        "dataset_name"      : sample + "/" + record[1],
-                        "legacy_prefix"     : "bc_files/%s_rawlib" % record[1],
-                        "file_prefix"       : '%s_%s_%s' % (record[1],expName,resultsName),
+                        "dataset_name"      : bcsample + "/" + record[1],
+                        "file_prefix"       : '%s_rawlib' % record[1],
                         "read_groups"       : [runID+"."+record[1],]
                     })
                     datasets["read_groups"][runID+"."+record[1]] = {
@@ -961,7 +598,7 @@ def generate_datasets_json(
                         "barcode_sequence"  : record[2],
                         "barcode_adapter"   : record[3],
                         "index"             : int(record[0]),
-                        "sample"            : sample,
+                        "sample"            : bcsample,
                         "library"           : libraryName+"/"+record[1],
                         "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
                         "platform_unit"     :  "PGM/%s/%s" % (chipType.replace('"',""),record[1])
@@ -970,8 +607,7 @@ def generate_datasets_json(
 
             datasets["datasets"].append({
                 "dataset_name"      : sample + "/No_barcode_match",
-                "legacy_prefix"     : "bc_files/%s_rawlib" % "nomatch",
-                "file_prefix"       : "%s_%s_%s" % ("nomatch",expName,resultsName),
+                "file_prefix"       : "nomatch_rawlib",
                 "read_groups"       : [runID+".nomatch",]
             })
             datasets["read_groups"][runID+".nomatch"] = {
@@ -993,8 +629,7 @@ def generate_datasets_json(
     if not datasets["datasets"]:
         datasets["datasets"].append({
             "dataset_name"      : sample,
-            "legacy_prefix"     : "rawlib",
-            "file_prefix"       : "%s_%s" % (expName,resultsName),
+            "file_prefix"       : "rawlib",
             "read_groups"       : [runID,]
         })
         datasets["read_groups"][runID] = {
@@ -1024,7 +659,6 @@ if __name__=="__main__":
         'flowOrder'             : 'TACGTACGTCTGAGCATCGATCGATGTACAGC',
         'reverse_primer_dict'   : {'adapter_cutoff':16,'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC','qual_window':30,'qual_cutoff':9},
         'BASECALLER_RESULTS'    : 'basecaller_results',
-        'sfftrim_args'          : '',
         'barcodeId'             : 'IonExpress',
         #'barcodeId'             : '',
         'barcodesplit_filter'   : 0.01,
@@ -1057,6 +691,7 @@ if __name__=="__main__":
         env['reverse_primer_dict'],
         env['BASECALLER_RESULTS'],
         env['barcodeId'],
+        env.get('barcodeSamples',''),
         env['barcodesplit_filter'],
         env['DIR_BC_FILES'],
         os.path.join("barcodeList.txt"),
@@ -1076,9 +711,7 @@ if __name__=="__main__":
 
     
     tf_processing(
-        env['SIGPROC_RESULTS'],
         os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
-        env['libraryKey'],
         env['tfKey'],
         env['flowOrder'],
         env['BASECALLER_RESULTS'])

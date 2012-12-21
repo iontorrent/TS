@@ -2,7 +2,7 @@
 {% load pagetools %}
 {% block extra_head %}
 <link href="/site_media/css/chosen.css" rel="stylesheet"/>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -45,30 +45,14 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    #update_status {
+        color: gray;
+        padding: 5px 0;
+        vertical-align: middle;
+    }
 </style>
 <script type="text/javascript">
   $(document).ready(function () {
-    $(".reportLog").live('click',function(e){
-	e.preventDefault();
-	pk = $(this).data("pk");
-	url = "/rundb/metaDataLog/" + pk;
-	$('body #modal_report_log').remove();
-
-	$.get(url, function(data) {
-	   $('body').append(data);
-	   $('#modal_report_log').modal("show");
-	   return false;
-	}).done(function(data) { 
-    	  console.log("success:", url);
-	})
-        .fail(function(data) {
-    	  $('#error-messages').empty();
-    	  $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-    	  console.log("error:", data);
-    	 
-        })
-        .always(function(data) { /*console.log("complete:", data);*/ });
-    });
     $('.send_to_project').live('click',function (e) {        
 		    e.preventDefault();
 		    e.stopPropagation();				
@@ -102,7 +86,7 @@
 {% block content %}
 <div id="data_view" class="content group">
     <div class="pull-right">
-		<a id='live_button' class="btn btn-primary active">Live Update On</a>
+		<small id="update_status">Page is static until refreshed</small> <a id='live_button' class="btn btn-success">Auto Update</a>
 	</div>
     <h1>Completed Runs &amp; Results</h1>
 	<div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
@@ -243,8 +227,19 @@
 			<h3>Title</h3>
 		</div>
 		<div class="modal-body">
-			<p>Update comment:</p>
-			<input id="data_management_comments" type="text"/>
+            <div id="modal_data_management_errors" class="alert alert-error hide"></div>
+            <form class="form-horizontal" id="modal_data_management_form" method="POST">
+                <fieldset>
+                    <div class="control-group">
+                        <label for="data_management_comments" class="control-label">Comment:</label>
+                        <div class="controls">
+                            <input id="data_management_comments" type="text"/>
+                            <p class="help-block">
+                            </p>
+                        </div>
+                    </div>
+                </fieldset>
+            </form>
 		</div>
 		<div class="modal-footer">
 			<a href="#" class="btn" data-dismiss="modal">Cancel</a>
@@ -263,7 +258,7 @@
 <script src="/site_media/js/underscore.min.js"></script>
 <script src="/site_media/js/backbone.min.js"></script>
 <script src="/site_media/js/chosen.jquery.min.js"></script>
-<script src="/site_media/js/jquery-ui-1.8.17.custom.min.js"></script>
+<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing 
 	iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
 <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
@@ -385,15 +380,17 @@
                     <li><a class="send_to_project" href="/data/results/{{id}}/project/"> Add Report to Project</a></li>
                     <li class="divider"></li>
                     <li>
-                        <a href="/rundb/metaDataLog/{{id}}" class="reportLog" data-pk={{id}}>
+                        <a href="/rundb/metaDataLog/{{id}}" class="reportLog" data-pk={{id}} data-toggle="modal" data-target="#modal_report_log">
                             View Log
                             {{#reportStatus}}<img src="/site_media/images/{{reportStatus}}.png" alt="{{reportStatus}}"/>{{/reportStatus}}
                         </a>
                     </li>
+                    {{#isArchivable}}
                     <li class="divider"></li>
                     <li><a href="#" class="export">Export</a></li>
                     <li><a href="#" class="archive">Archive</a></li>
                     <li><a href="#" class="prune">Prune</a></li>
+                    {{/isArchivable}}
 					<li class="divider"></li>
 					<li><a href="#" class="exempt"><input type="checkbox" {{#autoExempt}}checked="checked"{{/autoExempt}}/> Auto-Action Exempt</a></li>
                 </ul>

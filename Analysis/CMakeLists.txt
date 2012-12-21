@@ -16,7 +16,7 @@ mark_as_advanced(ION_USE_SYSTEM_CUDA)
 option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 
-option(ION_USE_SYSTEM_SAMTOOLS "Use bamtools system libraries" OFF)
+option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
 option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
@@ -223,16 +223,11 @@ if (NOT ION_USE_SYSTEM_SAMTOOLS)
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-0.1.18.tar.gz"
     #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
-    # in source build
-    BINARY_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
-    SOURCE_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version} -DBUILD_SHARED_LIBS:BOOL=OFF
     PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.18.patch"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND "/usr/bin/make" "CFLAGS=-fPIC" "<SOURCE_DIR>/Makefile" "lib"
-    INSTALL_COMMAND ""
   )
-  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}")
-  set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/libbam.a")
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
+  set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libbam.a")
 else()
     set(ION_SAMTOOLS_LIBS libbam.a)
     include_directories("/usr/include/samtools")
@@ -241,14 +236,16 @@ endif()
 
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
-    set(proj_version "2.1.1.20120920+gite235c55")
+    set(revision_tag be1727d1e5)#set date below accordingly
+    set(proj_version "2.1.1.20121113+git${revision_tag}")
     set(proj_name_version "${proj_name}-${proj_version}")
     ExternalProject_add(${proj_name}
-        PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
-        URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.1.1.20120920+gite235c55.tar.gz"
-        #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
-        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
-        PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/bamtools-2.1.1.20120920+gite235c55.patch"
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.1.1.20121113+gitbe1727d1e5.tar.gz"
+#      GIT_REPOSITORY "https://github.com/iontorrent/bamtools.git"
+#      GIT_TAG ${revision_tag}
+      CMAKE_ARGS
+        -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
+      PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
     )
     include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include/bamtools")
     set(ION_BAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/bamtools/libbamtools.a")
@@ -303,9 +300,6 @@ add_library(ion-analysis
     ${LIBKMEANSFILE}
 
     ${PROJECT_BINARY_DIR}/IonVersion.cpp
-
-    Barcode/BarCode.cpp
-
 
     Wells/RawWells.cpp
     Wells/RawWellsV1.cpp
@@ -387,8 +381,6 @@ add_library(ion-analysis
     
     mixed.cpp
     # T0CalcMt.cpp
-
-    Histogram.cpp
     
     BaseCaller/DPTreephaser.cpp
     
@@ -511,14 +503,6 @@ endif( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
 install(TARGETS ion-analysis DESTINATION lib)
 
 
-add_executable( SFFExtract SFFExtract.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies( SFFExtract IONVERSION)
-target_link_libraries( SFFExtract ion-analysis pthread)
-
-add_executable( SFFExtract_sam SFFExtract_sam.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies( SFFExtract_sam IONVERSION)
-target_link_libraries( SFFExtract_sam ion-analysis pthread)
-
 add_executable(Crop crop/Crop.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Crop IONVERSION)
 target_link_libraries(Crop ion-analysis pthread)
@@ -528,6 +512,11 @@ add_executable(ChkDat crop/ChkDat.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_
 add_dependencies(ChkDat IONVERSION)
 target_link_libraries(ChkDat ion-analysis pthread)
 install(TARGETS ChkDat DESTINATION bin)
+
+add_executable(CmpDat crop/CmpDat.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(CmpDat IONVERSION)
+target_link_libraries(CmpDat ion-analysis pthread)
+install(TARGETS CmpDat DESTINATION bin)
 
 add_executable(Blocks crop/Blocks.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Blocks IONVERSION)
@@ -580,34 +569,28 @@ add_executable(BaseCaller
     BaseCaller/BaseCaller.cpp
     BaseCaller/BaseCallerFilters.cpp
     BaseCaller/PerBaseQual.cpp
-    BaseCaller/RegionWellsReader.cpp
-    BaseCaller/RegionAnalysis.cpp
     BaseCaller/PhaseEstimator.cpp
-#    BaseCaller/OrderedRegionSFFWriter.cpp
     BaseCaller/BaseCallerMetricSaver.cpp
     BaseCaller/TreephaserSSE.cpp
     BaseCaller/BarcodeClassifier.cpp
     BaseCaller/BarcodeDatasets.cpp
     BaseCaller/OrderedDatasetWriter.cpp
+    BaseCaller/BaseCallerRecalibration.cpp
     ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BaseCaller IONVERSION bamtools)
 target_link_libraries(BaseCaller ion-analysis gsl gslcblas pthread lapack_atlas atlas ${ION_BAMTOOLS_LIBS})
 install(TARGETS BaseCaller DESTINATION bin)
 
-## Standalone BaseCaller - Lite
-#add_executable(BaseCallerLite
-#    BaseCaller/BaseCallerLite.cpp 
-#    BaseCaller/OrderedRegionSFFWriter.cpp
-#    ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-#add_dependencies(BaseCallerLite IONVERSION)
-#target_link_libraries(BaseCallerLite ion-analysis gsl gslcblas pthread lapack_atlas atlas)
 
-
-add_executable(TFMapper TestFragments/TFMapper.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(TFMapper IONVERSION)
-target_link_libraries(TFMapper ion-analysis ${ION_SAMTOOLS_LIBS} pthread)
-install(TARGETS TFMapper DESTINATION bin)
-
+add_executable(ionstats 
+    ionstats/ionstats.cpp
+    ionstats/ionstats_basecaller.cpp
+    ionstats/ionstats_alignment.cpp
+    ionstats/ionstats_tf.cpp
+    ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(ionstats IONVERSION bamtools)
+target_link_libraries(ionstats ion-analysis ${ION_BAMTOOLS_LIBS} pthread)
+install(TARGETS ionstats DESTINATION bin)
 
 add_executable(PairedEndErrorCorrection
    ${PROJECT_BINARY_DIR}/IonVersion.cpp
@@ -696,12 +679,12 @@ target_link_libraries(SFFSummary ion-analysis file-io pthread)
 add_dependencies(SFFSummary IONVERSION)
 install(TARGETS SFFSummary DESTINATION bin)
 
-add_executable(BeadmaskParse BeadmaskParse.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(BeadmaskParse Mask/BeadmaskParse.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskParse IONVERSION)
 target_link_libraries(BeadmaskParse ion-analysis pthread)
 install(TARGETS BeadmaskParse DESTINATION bin)
 
-add_executable(BeadmaskMerge BeadmaskMerge.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(BeadmaskMerge Mask/BeadmaskMerge.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskMerge IONVERSION)
 target_link_libraries(BeadmaskMerge ion-analysis pthread)
 install(TARGETS BeadmaskMerge DESTINATION bin)
@@ -809,6 +792,11 @@ add_executable(DumpSynchDat SynchDat/DumpSynchDat.cpp ../buildTools/dbgmem.cpp $
 add_dependencies(DumpSynchDat IONVERSION)
 target_link_libraries(DumpSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS})
 
+add_executable(GrindSynchDat SynchDat/GrindSynchDat.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(GrindSynchDat IONVERSION)
+target_link_libraries(GrindSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS})
+
+
 add_executable(TraceDriver SynchDat/TraceDriver.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TraceDriver IONVERSION)
 target_link_libraries(TraceDriver ion-analysis pthread )
@@ -849,28 +837,10 @@ add_dependencies(iontools IONVERSION)
 target_link_libraries(iontools ion-analysis file-io pthread)
 install(TARGETS iontools DESTINATION bin)
 
-add_executable(barcodeSplit Barcode/barcodeSplit.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(barcodeSplit IONVERSION)
-target_link_libraries(barcodeSplit ion-analysis)
-install(TARGETS barcodeSplit DESTINATION bin)
-
-add_executable(barcodeMaskParse Barcode/barcodeMaskParse.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_executable(barcodeMaskParse Mask/barcodeMaskParse.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(barcodeMaskParse IONVERSION)
 target_link_libraries(barcodeMaskParse ion-analysis)
 install(TARGETS barcodeMaskParse DESTINATION bin)
-
-
-add_executable(SFFUtils
-  SFFUtils/SFFUtils.cpp
-  SFFUtils/SFFUtilsSummary.cpp
-  SFFSummary/SFFSummary.cpp
-  SFFUtils/SFFUtilsRead.cpp
-  ../buildTools/dbgmem.cpp
-  ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(SFFUtils IONVERSION)
-target_link_libraries(SFFUtils ion-analysis file-io pthread)
-install(TARGETS SFFUtils DESTINATION bin)
-
 
 
 # Setup for testing and gtest in particular, only needed once in file before tests.

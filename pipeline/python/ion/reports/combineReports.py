@@ -78,6 +78,28 @@ def wait_on_jobs(jobIds, jobName, status = "Processing"):
         printtime("waiting for %s job(s) to finish ..." % jobName)    
         time.sleep(10)    
 
+def get_barcode_files(parent_folder, datasets_path, bcSetName):
+    # try to get barcode names from datasets json, fallback on globbing for older reports
+    datasetsFile = os.path.join(parent_folder,datasets_path)
+    barcode_bams = []
+    try:
+        with open(datasetsFile, 'r') as f:
+            datasets_json = json.loads(f.read())
+        for dataset in datasets_json.get("datasets",[]):
+            bamfile = os.path.join(parent_folder, dataset["legacy_prefix"]+'.bam')
+            if os.path.exists(bamfile):
+                barcode_bams.append(bamfile)
+    except:
+        pass  
+    
+    if len(barcode_bams) == 0:
+        barcode_bams = glob( os.path.join(parent_folder, bcSetName+'*_rawlib.bam') )
+        barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )    
+        barcode_bams.sort()
+        
+    printtime("DEBUG: found %i barcodes in %s" % (len(barcode_bams), parent_folder) )
+    return barcode_bams
+
 if __name__ == '__main__':
   
   with open('ion_params_00.json', 'r') as f:
@@ -105,36 +127,34 @@ if __name__ == '__main__':
   #  *** Barcodes ***
   do_barcodes = False
   barcodelist_path = 'barcodeList.txt'
+  datasets_path = 'basecaller_results/datasets_basecaller.json'
   bcSetName = ""
   csvfilename = 'alignment_barcode_summary.csv'
   bcfile_count = {}
   bcfile_files = {}
+  
   # get barcoded files to process  
   for bamfile in env['parentBAMs']:
     parent_folder = os.path.dirname(bamfile)
     if os.path.exists(os.path.join(parent_folder,barcodelist_path)): 
       do_barcodes = True      
       bcList_file = os.path.join(parent_folder,barcodelist_path)      
-      bcSetName = open(bcList_file, 'r').readline().split()[1]
+      bcSetName_new = open(bcList_file, 'r').readline().split()[1]
+      
+      # merge barcodes only if they are from the same barcode set
       if not bcSetName:
-          bcSetName = bcSetName.split('_')[0]
-      elif bcSetName != bcSetName.split('_')[0]:
+          bcSetName = bcSetName_new
+      elif bcSetName != bcSetName_new:
           do_barcodes = False
           break
-      barcode_bams = glob( os.path.join(parent_folder, bcSetName+'*_rawlib.bam') )
-      barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )
-      barcode_bams.sort()
-      printtime("DEBUG: found %i barcodes in %s" % (len(barcode_bams), parent_folder) )
-      
+          
+      # get barcode files          
+      barcode_bams = get_barcode_files(parent_folder, datasets_path, bcSetName)
       for bc in barcode_bams:
-        bcname = os.path.basename(bc)
-        if bcname in bcfile_count.keys():
-          bcfile_count[bcname] = bcfile_count[bcname] + 1 
-        else:  
-          bcfile_count[bcname] = 1
-          bcfile_files[bcname] = []          
-        bcfile_files[bcname].append(bc)  
-  
+          bcname = os.path.basename(bc)
+          bcfile_count[bcname] = bcfile_count.get(bcname, 0) + 1 
+          bcfile_files[bcname] = bcfile_files.get(bcname, [])+ [bc]
+
   if do_barcodes:
     try:
       shutil.copy(bcList_file, barcodelist_path)
@@ -143,15 +163,12 @@ if __name__ == '__main__':
     
     bc_jobs = []    
     zipname = '_'+ env['resultsName']+ '.barcode.bam.zip'
-    zip_args = ['--zip', zipname]
-    new_file_name =  env['run_name'] + '_'+ env['resultsName']
-    # launch merge, alignstats jobs, one per barcode  
-    for filename in bcfile_count.keys():
-        # merge multiple files, copy if only 1 file in barcode
+    zip_args = ['--zip', zipname]    
+    # launch merge and alignstats jobs, one per barcode  
+    for filename in bcfile_count.keys():        
         jobId = ""
-        if bcfile_count[filename] > 1:          
+        if bcfile_count[filename] > 1:
             printtime("DEBUG: merge barcode %s" % filename)
-    #        merge_bam_files(bcfile_files[filename], filename, filename.replace('.bam','.bam.bai'), '') 
             merge_args = ['--merge-bams', filename]
             if env['mark_duplicates']:
                 merge_args.append('--mark-duplicates')
@@ -175,13 +192,6 @@ if __name__ == '__main__':
             jobId = submit_job(script, ['--align-stats', filename, '--genomeinfo', env['genomeinfo']], 'plugin.q')    
         printtime("DEBUG: Submitted %s job %s for %s" % ('alignStats', jobId, filename))
         bc_jobs.append(jobId) 
-
-        # link to expected filename        
-        try:
-          os.symlink(filename, filename.replace('rawlib',new_file_name))
-          os.symlink(filename + '.bai', filename.replace('rawlib',new_file_name) + '.bai')  
-        except:
-          traceback.print_exc()  
 
     # zip barcoded files        
     jobId = submit_job(script, zip_args, 'all.q', bc_jobs)  
@@ -226,16 +236,25 @@ if __name__ == '__main__':
     
   status = 'Completed'
   
-  # make meaningful BAM filename
-  bamname = env['run_name'] + '_'+ env['resultsName']+ '.bam'
+  # make downloadable BAM filenames
+  mycwd = os.getcwd() 
+  download_links = 'download_links'
+  newname = env['run_name'] + '_'+ env['resultsName']
   try:
-    os.symlink(bamfile,bamname)
-    os.symlink(bamfile + '.bai',bamname + '.bai')  
+    os.mkdir(download_links)
+    filename = os.path.join(mycwd, bamfile)
+    os.symlink(filename, os.path.join(download_links, newname+'.bam'))
+    os.symlink(filename+'.bai', os.path.join(download_links, newname + '.bam.bai'))
+    # barcodes:
+    for bcfile in bcfile_count.keys():
+        filename = os.path.join(mycwd, bcfile)
+        os.symlink(filename, os.path.join(download_links, newname+'.'+bcfile ) )
+        os.symlink(filename+'.bai', os.path.join(download_links, newname+'.'+bcfile+'.bai' ) ) 
   except:
-    traceback.print_exc()  
-  
+    traceback.print_exc()
+
+  # upload metrics
   printtime("Upload metrics.")
-  mycwd = os.getcwd()  
   reportLink = True
   ret_message = jobserver.uploadmetrics(
         "",#    os.path.join(mycwd,tfmapperstats_outputfile),
@@ -246,7 +265,6 @@ if __name__ == '__main__':
         "",#    os.path.join(mycwd,"raw_peak_signal"),
         "",#    os.path.join(mycwd,"quality.summary"),
         "",#    os.path.join(mycwd,BaseCallerJsonPath),
-        "",#    os.path.join(mycwd,pe.json),
         os.path.join(mycwd,'primary.key'),
         os.path.join(mycwd,'uploadStatus'),
         status,
@@ -261,8 +279,6 @@ if __name__ == '__main__':
     # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
         (TMPL_DIR, "report_layout.json", None),
         (TMPL_DIR, "parsefiles.php", None),
-        (TMPL_DIR, "log.html", None),
-        (TMPL_DIR, "alignment_summary.html", None),
         (TMPL_DIR, "combinedReport.php", "Default_Report.php",), ## Renamed during copy
     ]
   for (d,s,f) in templates:

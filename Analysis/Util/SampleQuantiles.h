@@ -78,7 +78,9 @@ public:
   double GetQuantile(float quantile) {
     SortData();
     std::vector<T> & data = mSample.GetData();
-    assert(data.size() > 0);
+    if (data.empty()) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
     return ionStats::quantile_sorted(data, quantile);
   }
 

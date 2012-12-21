@@ -203,7 +203,7 @@ int WorkSet::getRegionParamsSize(bool padded)
 
 int WorkSet::getEmphVecSize(bool padded)
 {
-	int size = sizeof(float)*(MAX_HPLEN+1)*getNumFrames();
+	int size = sizeof(float)*(MAX_POISSON_TABLE_COL)*getNumFrames();
 	return (!padded)?(size):(padTo128Bytes(size));
 }
  

@@ -1,6 +1,11 @@
 @import "variables.less";
 @import "../bootstrap/less/mixins.less";
 @import "signal.less";
+
+@alertWarningText:             @warningText;
+@alertWarningBackground:       @btnWarningBackground;
+@alertWarningBorder:           darken(spin(@alertWarningBackground, -10), 3%);
+
 // HEADINGS
 // --------
 
@@ -168,17 +173,25 @@ a.btn-danger {
 .gear() {
   margin: auto auto;
   padding-left: 30px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .gear-inactive {
   .gear();
   background: url("../../resources/img/gear-inactive.png") no-repeat center top transparent;
+  .caret {
+    border-top-color: #FFF;
+    border-bottom-color: #FFF;
+  }
 }
 .gear-active {
   .gear();
   background: url("../../resources/img/gear-active.png") no-repeat center top transparent;
+  .caret {
+    border-top-color: #233873;
+    border-bottom-color: #233873;
+  }
 }
 
 
@@ -200,7 +213,7 @@ a.btn-danger {
     > li {
       > a {
         text-align: center;
-		background: #233873;
+        background: #233873;
         // background: -moz-linear-gradient(center top , #485987 0%, #2F447C 49%, #283E78 51%, #233973 100%);
         background-image: linear-gradient(top, #485987 17%, #2F447C 59%, #283D78 80%, #233873 90%);
         background-image: -o-linear-gradient(top, #485987 17%, #2F447C 59%, #283D78 80%, #233873 90%);
@@ -453,6 +466,13 @@ body .modal-1000 {
   border-bottom: 1px solid #d6d6d6;
   margin-bottom: 15px;
 }
+
+.dna_applications {
+  padding-bottom: 20px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #d6d6d6;
+}
+
 .application-template img, .application-template h3 { float: left }
 .application-template img { width: 44px; }
 .application-template img.favorite_star {
@@ -1088,7 +1108,10 @@ tr.new_plan td {
   .runTypeImage();
   background: url('../../resources/img/appl_rnaSeq.png') no-repeat center center;
 }
-
+.AMPS_RNA {
+  .runTypeImage();
+  background: url('../../resources/img/appl_ampliSeqRna.png') no-repeat center center;
+}
 /* =============================================================================
    Ion plugin report
    ========================================================================== */

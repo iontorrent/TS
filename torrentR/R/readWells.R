@@ -53,17 +53,23 @@ readWells <- function(
 	  data.bf <- readBeadFindMask(bfMaskFile,colrow$col,colrow$row)
 	    val$beadFindMaskFile <- data.bf$beadFindMaskFile
 	    val$mask <- list(
-		empty     = data.bf$maskEmpty,
-		bead      = data.bf$maskBead,
-		live      = data.bf$maskLive,
-		dud       = data.bf$maskDud,
-		ambiguous = data.bf$maskAmbiguous,
-		tf        = data.bf$maskTF,
-		lib       = data.bf$maskLib,
-		pinned    = data.bf$maskPinned,
-		ignore    = data.bf$maskIgnore,
-		washout   = data.bf$maskWashout
-	    )
+		empty               = data.bf$maskEmpty,
+		bead                = data.bf$maskBead,
+		live                = data.bf$maskLive,
+		dud                 = data.bf$maskDud,
+		reference           = data.bf$maskReference,
+		tf                  = data.bf$maskTF,
+		lib                 = data.bf$maskLib,
+		pinned              = data.bf$maskPinned,
+		ignore              = data.bf$maskIgnore,
+		washout             = data.bf$maskWashout,
+        exclude             = data.bf$maskExclude,
+        keypass             = data.bf$maskKeypass,
+        filteredBadKey      = data.bf$maskFilteredBadKey,
+        filteredShort       = data.bf$maskFilteredShort,
+        filteredBadPPF      = data.bf$maskFilteredBadPPF,
+        filteredBadResidual = data.bf$maskFilteredBadResidual
+        )
 	}
 
 	# read data from 1.wells file and populate into return object

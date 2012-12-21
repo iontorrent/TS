@@ -60,7 +60,7 @@ class LevMarBeadAssistant{
     // more lev-mar state
     int nonclonal_call_penalty_enforcement;
     float restrict_clonal;
-    float non_integer_penalty[MAX_HPLEN];
+    float non_integer_penalty[MAX_POISSON_TABLE_COL];
     bool  skip_beads; // skip individual wells when doing regional optimization, pick up well parameters later
     
     float shrink_factor;

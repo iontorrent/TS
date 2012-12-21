@@ -18,6 +18,7 @@
 #include "OptArgs.h"
 #include "OrderedDatasetWriter.h"
 #include "Mask.h"
+#include "DPTreephaser.h"
 
 using namespace std;
 
@@ -28,6 +29,9 @@ struct Barcode {
   int           num_flows;    // number of flows for the flow-space representation, includes 5' adapter
   int           start_flow;   // calculated from the start base & end base, used for scoring/matching
   int           end_flow;
+  string        full_barcode;
+  vector<float> predicted_signal;
+  int           last_homopolymer;
 };
 
 
@@ -40,12 +44,14 @@ public:
 
   ~BarcodeClassifier();
 
+  void BuildPredictedSignals(float cf, float ie, float dr);
+
   static void PrintHelp();
 
   bool has_barcodes() const { return num_barcodes_ > 0; }
   int  num_barcodes() const { return num_barcodes_; }
 
-  void ClassifyAndTrimBarcode(int read_index, SFFEntry &sffentry);
+  void ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read, const vector<int>& base_to_flow);
 
   void Close(BarcodeDatasets& datasets);
 
@@ -65,9 +71,11 @@ protected:
 
   int                       score_mode_;
   double                    score_cutoff_;
+  double                    score_separation_;
 
-  deque<Barcode>            barcode_;
+  vector<Barcode>           barcode_;
 
+public:
   int                       no_barcode_read_group_;
 
 };

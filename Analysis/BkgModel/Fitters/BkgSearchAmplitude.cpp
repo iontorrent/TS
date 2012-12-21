@@ -24,7 +24,7 @@ void InitializeBinarySearch ( bead_params *p, bool restart, float *ac, float *ub
     for ( int fnum=0;fnum<NUMFB;fnum++ )
     {
       ac[fnum] = 0.5;
-      ub[fnum] = 1.5*MAX_HPLEN; // top value that has been rejected
+      ub[fnum] = 1.5*LAST_POISSON_TABLE_COL; // top value that has been rejected
       lb[fnum] = -0.5; // lowest value that has been rejected
       done[fnum] = false;
       step[fnum] = 1.0;
@@ -134,7 +134,7 @@ void SearchAmplitude::BinarySearchOneBead ( bead_params *p, float min_step, bool
   float lb[NUMFB];
   float step[NUMFB] __attribute__ ( ( aligned ( 16 ) ) );
   float min_a = 0.001;
-  float max_a = ( MAX_HPLEN - 1 )-0.001;
+  float max_a = ( LAST_POISSON_TABLE_COL )-0.001;
   bool done[NUMFB];
   int done_cnt;
   int iter;
@@ -311,8 +311,8 @@ void ProjectAmplitude ( bead_params *p, float *observed, float **model_trace, fl
     // bounds check
     if ( p->Ampl[fnum]<negative_amplitude_limit )
       p->Ampl[fnum] = negative_amplitude_limit; // Projection onto zero returns potentially large number, but we may want negative values here
-    if ( p->Ampl[fnum]>MAX_HPLEN )
-      p->Ampl[fnum]=MAX_HPLEN; // we limit this everywhere else, so keep from explosion
+    if ( p->Ampl[fnum]>LAST_POISSON_TABLE_COL )
+      p->Ampl[fnum]=LAST_POISSON_TABLE_COL; // we limit this everywhere else, so keep from explosion
   }
 }
 

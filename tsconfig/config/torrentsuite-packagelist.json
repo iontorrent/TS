@@ -48,6 +48,7 @@
                 "python-simplejson",
                 "python-calabash",
                 "python-jsonpipe",
+                "python-rpy2",
                 "perl",
                 "perl-doc",
                 "emboss-data",
@@ -57,7 +58,8 @@
                 "openjdk-6-jre",
                 "gnuplot-x11",
                 "putty-tools",
-                "gawk"
+                "gawk",
+                "tmpreaper"
             ],
             "master": [
                 "gridengine-master",
@@ -65,9 +67,9 @@
                 "rabbitmq-server",
                 "vsftpd",
                 "postgresql",
-                "apache2",
                 "apache2-mpm-prefork",
-                "libapache2-mod-python",
+                "apache2",
+                "libapache2-mod-wsgi",
                 "libapache2-mod-php5",
                 "dnsmasq",
                 "dhcp3-server",
@@ -93,15 +95,22 @@
                 "ion-usbmount"
             ],
             "master": [
+                "ion-tsconfig",
                 "ion-plugins",
+                "ion-jk",
                 "ion-igv",
-                "ion-pgmupdates",
                 "ion-docs",
                 "ion-referencelibrary",
                 "ion-sampledata",
                 "ion-publishers",
                 "ion-onetouchupdater",
                 "ion-dbreports"
+            ],
+            "proton": [
+                "ion-protonupdates"
+            ],
+            "pgm": [
+                "ion-pgmupdates"
             ],
             "compute": []
         }

@@ -29,7 +29,8 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
     hsize_t dims[ndims];
     hsize_t maxDims[ndims];
     int result = H5Sget_simple_extent_dims(space, dims, maxDims);
-    assert(result);
+    assert(result != 0);
+    if (result==0) {result=0;}; // soak up error message for never using result
 
     int numFlows  = dims[0];
     int maxReadHP = dims[1];

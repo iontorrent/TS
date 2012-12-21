@@ -49,6 +49,9 @@ case "$1" in
 	    latticeExtra_0.6-19.tar.gz \
 	    hwriter_1.3.tar.gz \
 	    ShortRead_1.14.4.tar.gz \
+	    hdf5_1.6.9.tar.gz \
+	    getopt_1.17.tar.gz \
+	    optparse_0.9.5.tar.gz \
     )
     
     # force removal of packages
@@ -99,7 +102,7 @@ case "$1" in
             fi
             rm -rf $DIR/$LIBNAME # remove previously-installed library
             R CMD INSTALL /tmp/$LIB
-            rm -f $LIB
+            rm -f /tmp/$LIB
         fi
     done
     

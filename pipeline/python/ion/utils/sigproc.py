@@ -2,116 +2,117 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 import os
+import sys
 import subprocess
 import traceback
-import shutil
 import time
+import shlex
 
-from ion.reports import beadDensityPlot, StatsMerge
+from ion.reports import beadDensityPlot, StatsMerge, plotKey
 from ion.utils.blockprocessing import printtime, isbadblock
 from ion.utils import blockprocessing
 
 
-def update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title):
-    import xmlrpclib
-    from torrentserver import cluster_settings
-    print("Starting Upload Analysis Metrics")
-    cwd = os.getcwd()
-    bfmaskstatspath = os.path.join(cwd, bfmaskstatspath)
-    print(bfmaskPath)
-    print(bfmaskstatspath)
+
+def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+
+    if beadfindArgs:
+        cmd = beadfindArgs  # e.g /home/user/Beadfind -xyz
+    else:
+        cmd = "justBeadFind"
+        printtime("ERROR: Beadfind command not specified, using default: 'justBeadFind'")
+
+    cmd += " --librarykey=%s" % (libKey)
+    cmd += " --tfkey=%s" % (tfKey)
+    cmd += " --no-subdir"
+    cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
+    cmd += " %s" % pathtorawblock
+
+    printtime("Beadfind command: " + cmd)
+    proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout_value, stderr_value = proc.communicate()
+    status = proc.returncode
+    sys.stdout.write("%s" % stdout_value)
+    sys.stderr.write("%s" % stderr_value)
+
+    # Ion Reporter
     try:
-        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % 
-            (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT), 
-            verbose=False, allow_none=True)
-        primary_key_file = os.path.join(cwd,'primary.key')
-
-        result = jobserver.uploadanalysismetrics(bfmaskstatspath, primary_key_file)
-        print(result)
-        print("Compelted Upload Analysis Metrics")
-    except Exception as err:
-        print("Error during analysis metrics upload %s" % err)
-        traceback.print_exc()
-
-    printtime("Make Bead Density Plots")
-    try:
-        beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
-    except IOError as err:
-        printtime("Bead Density Plot file error: %s" % err)
-    except Exception as err:
-        printtime("Bead Density Plot generation failure: %s" % err)
-        traceback.print_exc()
-
-
-
-def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS, plot_title, oninstrumentanalysis):
-    printtime("RUNNING SINGLE BLOCK ANALYSIS")
-
-    if not oninstrumentanalysis:
-        if analysisArgs:
-            cmd = analysisArgs  # e.g /home/user/Analysis --flowlimit 80
-        else:
-            cmd = "Analysis"
-            printtime("ERROR: Analysis command not specified, using default: 'Analysis'")
-
         sigproc_log_path = os.path.join(SIGPROC_RESULTS, 'sigproc.log')
-        open(sigproc_log_path, 'w').close()
-        
-        sigproc_log = open(sigproc_log_path)
+        with open(sigproc_log_path, 'a') as f:
+            if stdout_value: f.write(stdout_value)
+            if stderr_value: f.write(stderr_value)
+    except IOError:
+        traceback.print_exc()
 
-        cmd += " --librarykey=%s" % (libKey)
-        cmd += " --tfkey=%s" % (tfKey)
-        cmd += " --no-subdir"
-        cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
-        cmd += " %s" % pathtorawblock
-        cmd += " >> %s 2>&1" % sigproc_log_path
+    return status
 
-        printtime("Analysis command: " + cmd)
-        proc = subprocess.Popen(cmd, shell=True)
-        while proc.poll() is None:  
-            where = sigproc_log.tell()
-            lines = sigproc_log.readlines()
-            if lines:
-                if any(l.startswith("Beadfind Complete") for l in lines):
-                    printtime("Beadfind is complete.")
-                    bfmaskPath = os.path.join(SIGPROC_RESULTS,"bfmask.bin")
-                    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,"bfmask.stats")
-                    update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
-            else:
-                sigproc_log.seek(where)
-                time.sleep(1)
-        sigproc_log.close()
-        status = proc.wait()
 
-        blockprocessing.add_status("Analysis", status)
+def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
-        # write return code into file
+    if analysisArgs:
+        cmd = analysisArgs  # e.g /home/user/Analysis --flowlimit 80
+    else:
+        cmd = "Analysis"
+        printtime("ERROR: Analysis command not specified, using default: 'Analysis'")
+
+    cmd += " --librarykey=%s" % (libKey)
+    cmd += " --tfkey=%s" % (tfKey)
+    cmd += " --no-subdir"
+    cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
+    cmd += " %s" % pathtorawblock
+
+    printtime("Analysis command: " + cmd)
+    proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout_value, stderr_value = proc.communicate()
+    status = proc.returncode
+    sys.stdout.write("%s" % stdout_value)
+    sys.stderr.write("%s" % stderr_value)
+
+    # Ion Reporter
+    try:
+        sigproc_log_path = os.path.join(SIGPROC_RESULTS, 'sigproc.log')
+        with open(sigproc_log_path, 'a') as f:
+            if stdout_value: f.write(stdout_value)
+            if stderr_value: f.write(stderr_value)
+    except IOError:
+        traceback.print_exc()
+
+    return status
+
+
+def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
+    ########################################################
+    #Generate Raw Data Traces for lib and TF keys          #
+    ########################################################
+    printtime("Generate Raw Data Traces for lib and TF keys(iontrace_Test_Fragment.png, iontrace_Library.png)")
+
+    tfRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % tfKey)
+    libRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % libKey)
+    peakOut = 'raw_peak_signal'
+
+    if os.path.exists(tfRawPath):
         try:
-            os.umask(0002)
-            f = open(os.path.join(SIGPROC_RESULTS,"analysis_return_code.txt"), 'w')
-            f.write(str(status))
-            f.close()
+            kp = plotKey.KeyPlot(tfKey, floworder, 'Test Fragment')
+            kp.parse(tfRawPath)
+            kp.dump_max(os.path.join('.',peakOut))
+            kp.plot()
         except:
+            printtime("TF key graph didn't render")
             traceback.print_exc()
+    else:
+        printtime("ERROR: %s is missing" % tfRawPath)
 
-        if status == 2:
-            printtime("Analysis finished with status '%s'" % status)
-            try:
-                com = "ChkDat"
-                com += " -r %s" % (pathtorawblock)
-#                printtime("DEBUG: Calling '%s':" % com)
-#                ret = subprocess.call(com,shell=True)
-            except:
-                traceback.print_exc()
-
-    ########################################################
-    #Make Bead Density Plots                               #
-    ########################################################
-    bfmaskPath = os.path.join(SIGPROC_RESULTS,"analysis.bfmask.bin")
-    bfmaskstatspath = os.path.join(SIGPROC_RESULTS,"analysis.bfmask.stats")
-    update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
-    printtime("Finished single block analysis")
-
+    if os.path.exists(libRawPath):
+        try:
+            kp = plotKey.KeyPlot(libKey, floworder, 'Library')
+            kp.parse(libRawPath)
+            kp.dump_max(os.path.join('.',peakOut))
+            kp.plot()
+        except:
+            printtime("Lib key graph didn't render")
+            traceback.print_exc()
+    else:
+        printtime("ERROR: %s is missing" % libRawPath)
 
 
 def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
@@ -208,5 +209,28 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
             traceback.print_exc()
     else:
         printtime("Warning: no heatmap generated.")
+
+
+    ###############################################
+    # Merge raw_peak_signal files                 #
+    ###############################################
+    printtime("Merging raw_peak_signal files")
+
+    try:
+        raw_peak_signal_files = []
+        for subdir in dirs:
+            printtime("DEBUG: %s:" % subdir)
+            if isbadblock(subdir, "Merging raw_peak_signal files"):
+                continue
+            raw_peak_signal_file = os.path.join(subdir,'raw_peak_signal')
+            if os.path.exists(raw_peak_signal_file):
+                raw_peak_signal_files.append(raw_peak_signal_file)
+            else:
+                printtime("ERROR: Merging raw_peak_signal files: skipped %s" % raw_peak_signal_file)
+        composite_raw_peak_signal_file = "raw_peak_signal"
+        blockprocessing.merge_raw_key_signals(raw_peak_signal_files, composite_raw_peak_signal_file)
+    except:
+        printtime("Merging raw_peak_signal files failed")
+
 
     printtime("Finished sigproc merging")

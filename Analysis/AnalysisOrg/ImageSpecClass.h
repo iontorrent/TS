@@ -4,7 +4,7 @@
 
 
 #include "CommandLineOpts.h"
-
+#include "Image.h"
 
 class ImageSpecClass
 {

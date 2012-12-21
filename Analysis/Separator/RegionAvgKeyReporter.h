@@ -16,10 +16,10 @@
 template <class T>
 class RegionAvgKeyReporter : public KeyReporter<T> {
   
- public:
+public:
   void Init(const std::string &prefix, int nRows, int nCols,
-			 int rowStep, int colStep, const std::vector<KeySeq> &keys,
-			 const std::vector<float> &t0) {
+            int rowStep, int colStep, const std::vector<KeySeq> &keys,
+            const std::vector<float> &t0) {
     mPrefix = prefix;
     pthread_mutex_init(&mLock, NULL);
     mRegionAvgTraces.Init(nRows, nCols, rowStep, colStep);
@@ -68,11 +68,11 @@ class RegionAvgKeyReporter : public KeyReporter<T> {
     }
     for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
       if (mKeys[fit.keyIndex].flows[flowIx] == 1) {
-				for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
-					float d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
-					regionTrace[frameIx].AddValue(d);
-					mGlobalAvg[frameIx].AddValue(d);
-				}
+        for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
+          float d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
+          regionTrace[frameIx].AddValue(d);
+          mGlobalAvg[frameIx].AddValue(d);
+        }
       }
     }
     pthread_mutex_unlock(&mLock);
@@ -81,57 +81,57 @@ class RegionAvgKeyReporter : public KeyReporter<T> {
   void Finish() {
     std::string  s = mPrefix  + ".region-avg-traces.txt";
     mTraces.open(s.c_str());
-		mRegionTraces.resize(mRegionAvgTraces.GetNumBin());
+    mRegionTraces.resize(mRegionAvgTraces.GetNumBin());
     for (size_t binIx = 0; binIx < mRegionAvgTraces.GetNumBin(); binIx++) {
       vector<SampleStats<float> > &regionTrace = mRegionAvgTraces.GetItem(binIx);
-			mRegionTraces[binIx].resize(regionTrace.size(), 0);
+      mRegionTraces[binIx].resize(regionTrace.size(), 0);
       int rowBin, colBin;
       mRegionAvgTraces.IndexToXY((int)binIx, rowBin, colBin); 
       if (regionTrace.size() > 0 && regionTrace[0].GetCount() > 50) {
-				mTraces << binIx << "\t" << rowBin * mRegionAvgTraces.GetRowStep() << "\t" << colBin * mRegionAvgTraces.GetColStep() 
-								<< "\t" << regionTrace[0].GetCount() << "\t" << mT0[binIx];
-				for (size_t frameIx = 0; frameIx < regionTrace.size(); frameIx++) {
-					mRegionTraces[binIx][frameIx] = regionTrace[frameIx].GetMean();
-					mTraces << "\t" << regionTrace[frameIx].GetMean();
-				} 
-				mTraces << endl;
-			}
-			else {
-				mRegionTraces[binIx].resize(mGlobalAvg.size(), 0);
-				for (size_t frameIx = 0; frameIx < mGlobalAvg.size(); frameIx++) {
-					mRegionTraces[binIx][frameIx] = mGlobalAvg[frameIx].GetMean();
-				}
-			}
+        mTraces << binIx << "\t" << rowBin * mRegionAvgTraces.GetRowStep() << "\t" << colBin * mRegionAvgTraces.GetColStep() 
+                << "\t" << regionTrace[0].GetCount() << "\t" << mT0[binIx];
+        for (size_t frameIx = 0; frameIx < regionTrace.size(); frameIx++) {
+          mRegionTraces[binIx][frameIx] = regionTrace[frameIx].GetMean();
+          mTraces << "\t" << regionTrace[frameIx].GetMean();
+        } 
+        mTraces << endl;
+      }
+      else {
+        mRegionTraces[binIx].resize(mGlobalAvg.size(), 0);
+        for (size_t frameIx = 0; frameIx < mGlobalAvg.size(); frameIx++) {
+          mRegionTraces[binIx][frameIx] = mGlobalAvg[frameIx].GetMean();
+        }
+      }
     }
     mTraces.close();
   }
 
-	float *GetAvgKeySig(int region, int rStart, int rEnd, int cStart, int cEnd) {
-		region++;
-	// Don't use region num as they are row major for some reason in analysis...
-		int binIx = mRegionAvgTraces.GetBin((rEnd+rStart)/2, (cEnd+cStart)/2);
-		assert(binIx >=0 && binIx < (int)mRegionTraces.size());
-		return &mRegionTraces[binIx][0];
-	}
+  float *GetAvgKeySig(int region, int rStart, int rEnd, int cStart, int cEnd) {
+    region++;
+    // Don't use region num as they are row major for some reason in analysis...
+    int binIx = mRegionAvgTraces.GetBin((rEnd+rStart)/2, (cEnd+cStart)/2);
+    assert(binIx >=0 && binIx < (int)mRegionTraces.size());
+    return &mRegionTraces[binIx][0];
+  }
 
-	double GetAvgKeySigLen() {
-		size_t maxCount = 0;
-		for (size_t i = 0; i < mRegionTraces.size(); i++) {
-			maxCount = max(mRegionTraces[i].size(), maxCount);
-		}
-		return (double) maxCount;
-	}
+  double GetAvgKeySigLen() {
+    size_t maxCount = 0;
+    for (size_t i = 0; i < mRegionTraces.size(); i++) {
+      maxCount = max(mRegionTraces[i].size(), maxCount);
+    }
+    return (double) maxCount;
+  }
   
-	int GetStart(int regionNum, int rStart, int rEnd, int cStart, int cEnd) {
-		regionNum++;
-		// Don't use region num as they are row major for some reason in analysis...
-		int binIx = mRegionAvgTraces.GetBin((rEnd+rStart)/2, (cEnd+cStart)/2);
-		assert(binIx >=0 && binIx < (int)mRegionTraces.size());
-		return mT0[binIx];
-	}
+  int GetStart(int regionNum, int rStart, int rEnd, int cStart, int cEnd) {
+    regionNum++;
+    // Don't use region num as they are row major for some reason in analysis...
+    int binIx = mRegionAvgTraces.GetBin((rEnd+rStart)/2, (cEnd+cStart)/2);
+    assert(binIx >=0 && binIx < (int)mRegionTraces.size());
+    return mT0[binIx];
+  }
 
- private:
-	std::vector<std::vector<float> > mRegionTraces;
+private:
+  std::vector<std::vector<float> > mRegionTraces;
   GridMesh<std::vector<SampleStats<float> > >  mRegionAvgTraces;
   std::vector<SampleStats<float> > mGlobalAvg;
   std::vector<double> mMinPeakSig;

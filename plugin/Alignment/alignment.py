@@ -8,6 +8,7 @@ import dateutil.parser
 import zipfile
 import stat
 import traceback
+from glob import glob
 
 
 class Alignment(object):
@@ -25,6 +26,7 @@ class Alignment(object):
         self.fastq = None
         self.fastq_link = None
         self.sff = None
+        self.unmapped_bam = None
         self.analysis_dir = None
         self.basecaller_dir = None
         self.analysis_params = None
@@ -39,20 +41,20 @@ class Alignment(object):
         SAM_META = {}
         
         # id - this hash comes from the fastq file
-        try:
-            #read the first line of the fastq file
-            fastqFile = open(self.fastq,'r')
-            id_hash = fastqFile.readline()
-            fastqFile.close()
+        #try:
+        #    #read the first line of the fastq file
+        #    fastqFile = open(self.fastq,'r')
+        #    id_hash = fastqFile.readline()
+        #    fastqFile.close()
             
-            #now just pull out the hash
-            id_hash = id_hash[1:6]
+        #    #now just pull out the hash
+        #    id_hash = id_hash[1:6]
             
-            SAM_META['ID'] = id_hash
+        #    SAM_META['ID'] = id_hash
             
-        except IOError:
-            print "Could not read fastq file.  The ID for the SAM file could not be found. Ignoring."
-            traceback.print_exc()
+        #except IOError:
+        #    print "Could not read fastq file.  The ID for the SAM file could not be found. Ignoring."
+        #    traceback.print_exc()
         
         # sm - name for reads - project name
         SAM_META['SM'] = self.analysis_params['project']
@@ -118,17 +120,18 @@ class Alignment(object):
 
     def construct_command(self):
         self.file_prefix = "%s/%s_%s" % (alignment.output_dir, alignment.analysis_params['expName'], alignment.analysis_params['resultsName'])
-        self.fastq_link = "%s.fastq" % (self.file_prefix)
+        #self.fastq_link = "%s.fastq" % (self.file_prefix)
         
-        if not os.path.exists(self.fastq_link):
-            os.symlink(alignment.fastq, self.fastq_link)
+        #if not os.path.exists(self.fastq_link):
+        #    os.symlink(alignment.fastq, self.fastq_link)
         
-        sam_meta_args = self.get_sam_meta()
-        self.sff = "%s/%s_%s.sff" % (self.basecaller_dir, self.analysis_params['expName'], self.analysis_params['resultsName'])
+        #sam_meta_args = self.get_sam_meta()
+        sam_meta_args = ""
+        #self.sff = "%s/%s_%s.sff" % (self.basecaller_dir, self.analysis_params['expName'], self.analysis_params['resultsName'])
         if self.sampling:
-            self.program_params = "--out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.sff, sam_meta_args, self.log_file)
+            self.program_params = "--out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.unmapped_bam, sam_meta_args, self.log_file)
         else:
-            self.program_params = "--align-all-reads --out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.sff, sam_meta_args, self.log_file)
+            self.program_params = "--align-all-reads --out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.unmapped_bam, sam_meta_args, self.log_file)
         self.cmd = "%s %s" % (self.program, self.program_params)
 
 
@@ -293,15 +296,22 @@ if __name__ == '__main__':
     #sys.exit()
     #get fastq file
     list = os.listdir(alignment.basecaller_dir)
-    list = fnmatch.filter(list, "*.fastq")[0]
-    if len(list) > 0:
-        alignment.fastq = "%s/%s" % (alignment.basecaller_dir, str(list))
-        print "[alignment.py] alignment.fastq: ", alignment.fastq
-    else:
-        print "[alignment.py] fastq doesn't exist.  exiting.."
-        sys.exit(1)
+    #list = fnmatch.filter(list, "*.fastq")[0]
+    #if len(list) > 0:
+    #    alignment.fastq = "%s/%s" % (alignment.basecaller_dir, str(list))
+    #    print "[alignment.py] alignment.fastq: ", alignment.fastq
+    #else:
+    #    print "[alignment.py] fastq doesn't exist.  exiting.."
+    #    sys.exit(1)
+
+    #set unmapped bam file
+
     #set alignment output dir
-   
+    alignment.unmapped_bam = sys.argv[3]
+    if not os.path.exists(alignment.unmapped_bam):
+      print "[alignment.py] unmapped bam doesn't exist.  exiting.."
+      sys.exit(1)
+
     alignment.log_file = alignment.output_dir + "/alignment_log.txt"
     
     #setup igv input

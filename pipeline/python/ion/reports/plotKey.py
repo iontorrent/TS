@@ -5,7 +5,6 @@ import os
 from operator import itemgetter
 from subprocess import *
 import numpy 
-import pylab
 from ion.reports.plotters import plotters
 from os import path
 from scipy import stats, signal
@@ -27,7 +26,7 @@ class KeyPlot:
                                       self.data, 
                                       title="Consensus Key 1-Mer - %s Ave. Peak = %s" % (self.title,self.average_peak))
         tracePlot.render()
-        pylab.savefig(path.join(os.getcwd(), 'iontrace_%s' % self.title.replace(" ","_")))
+        tracePlot.save(path.join(os.getcwd(), 'iontrace_%s' % self.title.replace(" ","_")))
 
     def parse(self, fileIn):
         d = open(fileIn, 'r')

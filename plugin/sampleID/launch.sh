@@ -3,7 +3,7 @@
 
 #MAJOR_BLOCK
 
-VERSION="3.2.43647"
+VERSION="3.4.47670"
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should all be set to 0 in production mode

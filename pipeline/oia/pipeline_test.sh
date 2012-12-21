@@ -57,8 +57,8 @@ AL="alignmentQC.pl --genome hg19 --max-plot-read-len 400 -p 1"
 function run_block {
   time $JBF $EXTRA_JBF_OPTIONS --output-dir=$TEMPDIR $BLOCK >  test1.log
   time $ANA $EXTRA_ANA_OPTIONS --output-dir=$TEMPDIR $BLOCK >> test1.log
-  time $BC                     --input-dir=$TEMPDIR --output-dir=$TEMPDIR >> test1.log
-  time $AL                     --input $TEMPDIR/*basecaller.bam  --output-dir=$TEMPDIR >>  test1.log
+  time $BC                     --input-dir=$TEMPDIR --output-dir=$TEMPDIR/BC >> test1.log
+  time $AL                     --input $TEMPDIR/BC/rawlib.basecaller.bam  --output-dir=$TEMPDIR >>  test1.log
   grep -e "Filtered Mapped Bases in Q17 Alignments" -e "Filtered Mapped Bases in Q20 Alignments" $TEMPDIR/alignment.summary
 }
 
@@ -88,7 +88,7 @@ drop_caches
 EXTRA_JBF_OPTIONS=""
 EXTRA_ANA_OPTIONS=""
 init_block
-run_block
+#run_block
 
 #5
 drop_caches

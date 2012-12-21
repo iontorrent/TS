@@ -65,42 +65,32 @@ class DataSelect(djangoWidget.Widget):
         return u'\n'.join(output)
 
 class RunParamsForm(forms.Form):
-    try:
-        gc = models.GlobalConfig.objects.all()[0]
-        defaultArg = gc.get_default_command()
-        defaultBasecallerArg = gc.basecallerargs
-        defaultThumbAnalysisArg = gc.analysisthumbnailargs
-        defaultThumbBasecallerArg = gc.basecallerthumbnailargs
-        defaultBaseRecal = gc.base_recalibrate
-    except:
-        defaultArg = ""
-        defaultBasecallerArg = ""
-        defaultThumbAnalysisArg = ""
-        defaultThumbBasecallerArg = ""
-        defaultBaseRecal = True
 
     report_name = forms.CharField(max_length=128,
                                 widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}) )
     path = forms.CharField(max_length=512,widget=forms.HiddenInput)
 
+    beadfindArgs = forms.CharField(max_length=1024,
+                           required=False,
+                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
-    args = forms.CharField(max_length=1024,
-                           initial=defaultArg,
+    analysisArgs = forms.CharField(max_length=1024,
                            required=False,
                            widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
     basecallerArgs = forms.CharField(max_length=1024,
-                           initial=defaultBasecallerArg,
                            required=False,
                            widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
+    thumbnailBeadfindArgs = forms.CharField(max_length=1024,
+                                     required=False,
+                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+
     thumbnailAnalysisArgs = forms.CharField(max_length=1024,
-                                          initial=defaultThumbAnalysisArg,
                                           required=False,
                                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
     thumbnailBasecallerArgs = forms.CharField(max_length=1024,
-                                     initial=defaultThumbBasecallerArg,
                                      required=False,
                                      widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
@@ -122,18 +112,17 @@ class RunParamsForm(forms.Form):
                                 widget=forms.FileInput(attrs={'size':'60', 'class':'input-file'}))
     align_full = forms.BooleanField(required=False, initial=False)
     do_thumbnail = forms.BooleanField(required=False, initial=True, label="Thumbnail only")
-    do_base_recal = forms.BooleanField(required=False, initial=defaultBaseRecal, label="Enable Base Recalibration")
+    do_base_recal = forms.BooleanField(required=False, label="Enable Base Recalibration")
     aligner_opts_extra = forms.CharField(max_length=100000,
                                          required=False,
                                          widget=forms.Textarea(attrs={'cols': 50, 'rows': 4, 'class': 'input-xlarge'}))
     mark_duplicates = forms.BooleanField(required=False, initial=False)
-    forward_list = forms.CharField(required=False,widget=forms.Select(attrs={'class': 'input-xlarge'}
-                                                                      ))
-    reverse_list = forms.CharField(required=False,widget=forms.Select(attrs={'class': 'input-xlarge'}
-                                                                      ))
 
     previousReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}
                                                                       ))
+
+    previousThumbReport = forms.CharField(required=False,widget=DataSelect(
+        attrs={'class': 'input-xlarge'}))
 
     project_names = forms.CharField(max_length=1024,                           
                            required=False,
@@ -183,26 +172,15 @@ class RunParamsForm(forms.Form):
         for name in projectNames.split(','):
             if name:
               names.append(name)
-              if len(name) > 32:
-                  raise forms.ValidationError(("Project Name needs to be less than 32 characters long. Please separate different projects with a comma."))                  
+              if len(name) > 64:
+                  raise forms.ValidationError(("Project Name needs to be less than 64 characters long. Please separate different projects with a comma."))                  
               if not set(name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
                   logger.error("Project name has invalid characters. The valid values are letters, numbers, underscore and period.")
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
             
-
-class BugReportForm(forms.Form):
-    CATEGORY_CHOICES = (
-        ("LINK", "Broken Link"),
-        ("UI", "Clunky/Confusing Interface"),
-        ("MISSING", "Missing Data"),
-        ("OTHER", "Other"),)
-    email = forms.EmailField(min_length=3, max_length=256,
-                             label="Your Email")
-    category = forms.ChoiceField(choices=CATEGORY_CHOICES)
-    description = forms.CharField(widget=forms.Textarea)
-    src_url = forms.CharField(widget=forms.HiddenInput)
-    
+  
+# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
 class ExperimentFilter(forms.Form):
     CHOICES=()
     YEARS = range(2008, datetime.date.today().year+2)
@@ -259,14 +237,17 @@ class ExperimentFilter(forms.Form):
         choices.extend(i for i in s_choices)
         self.fields['storage'].choices = choices
 
+# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
 class SearchForm(forms.Form):
     SEARCHBOX_WIDGET = forms.TextInput(attrs={"class":"searchbox"})
     searchterms = forms.CharField(widget=SEARCHBOX_WIDGET)
 
+# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
 class SortForm(forms.Form):
     SORT_WIDGET=forms.HiddenInput(attrs={"class":"sortfield"})
     sortfield = forms.CharField(widget=SORT_WIDGET)
        
+# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
 class ReportFilter(forms.Form):
     CHOICES=()
     YEARS = range(2008, datetime.date.today().year+2)
@@ -327,58 +308,6 @@ class ReportFilter(forms.Form):
         for field,field_name in zip(selfFields,fields):
             self.fields[field].choices = choicify(field_name, choice_model)
         
-
-class AddTemplate(forms.Form):
-    def clean_name(self):
-        """
-        Verify that the user input doesn't have chars that we don't want
-        """
-        name = self.cleaned_data.get("name")
-        templates = models.Template.objects.all()
-
-        #only exclude pk if it is a new reference
-        pk = self.data.getlist("pk")[0]
-        if pk:
-            templates = models.Template.objects.all().exclude(pk=pk)
-
-        if not set(name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_. "):
-            raise forms.ValidationError(("This name has invalid characters. The valid values are letters, numbers, underscore and period."))
-        
-        for sequence in templates:
-            if name == sequence.name:
-                raise forms.ValidationError(("A template with the name %s already exists" % name))
-        return name
-
-    def clean_sequence(self):
-        seq = self.cleaned_data.get('sequence')
-        if not set(seq).issubset("ATCG"):
-            raise forms.ValidationError(("This sequence has invalid characters. The valid values are TACG."))
-
-        templates = models.Template.objects.all()
-
-        #only exclude pk if it is a new reference
-        pk = self.data.getlist("pk")[0]
-        if pk:
-            templates = models.Template.objects.all().exclude(pk=pk)
-
-        for sequence in templates:
-            if seq == sequence.sequence:
-                raise forms.ValidationError(("This sequence already exists with name %s" % sequence.name))
-        return seq
-    
-    def clean_key(self):
-        key = self.cleaned_data.get('key')
-        if not set(key).issubset("ATCG"):
-            raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
-        else:
-            return key
-
-    name = forms.CharField(max_length=64)
-    sequence = forms.CharField(max_length=2048, required=True)
-    key = forms.CharField(max_length=64, required=True)
-    isofficial = forms.BooleanField(required=False, initial=True)
-    comments = forms.CharField(required=False)
-    pk = forms.IntegerField(widget=forms.HiddenInput(), required=True)
 
 class EditBackup(forms.Form):
     def get_dir_choices():
@@ -460,14 +389,6 @@ class EditReportBackup(forms.Form):
         self.fields['location'].choices = get_dir_choices()
         
 class bigPruneEdit(forms.Form):
-    # This function never gets called?
-    #def get_selections(pkTarget):
-    #    ruleList = models.dm_prune_field.objects.all().order_by('pk')
-    #    choices = []
-    #    for field in ruleList:
-    #        choices.append(('', field.pk))
-    #    ch = forms.MultipleChoiceField(choices=tuple(choices), widget=forms.CheckboxSelectMultiple())
-    #    return ch
 
     checkField = forms.MultipleChoiceField(choices=tuple([('x','y')]), widget=forms.CheckboxSelectMultiple())
     newField = forms.CharField(widget=forms.TextInput(attrs = {'class':'textInput validateFilenameRegex'}))
@@ -494,16 +415,6 @@ class bigPruneEdit(forms.Form):
         
         self.fields['checkField'].choices = get_selections(target)
         self.fields['remField'].choices = get_removeIDs()
-'''
-class editPruneGroup(forms.Form):
-    #rules = forms.CharField()
-    editable = forms.BooleanField(required = False)
-    
-    def __init__(self,*args,**kwargs):
-        super(editPruneGroup,self).__init__(*args,**kwargs)
-        #rules = forms.CharField()
-        editable = forms.BooleanField(required = False)
-'''       
 
 class EditPruneLevels(forms.Form):
     def get_dir_choices():
@@ -555,27 +466,13 @@ class EditPruneLevels(forms.Form):
         self.fields['editChoice'].choices = getLevelChoices() 
         self.fields['location'].choices = get_dir_choices()
 
-class StorageOptions(forms.Form):
-    ex = models.Experiment()
-    storage_options = forms.ChoiceField(choices=ex.get_storage_choices(), required=False)
-
-class EditEmail(forms.Form):
-    email_address = forms.EmailField(required=True)
-    selected = forms.BooleanField(required=False, initial=False)
 
 class EmailAddress(forms.ModelForm):
     "Made to have full symetry with the EmailAddress model fields"
     class Meta:
         model = models.EmailAddress
 
-class BestRunsSort(forms.Form):
-    library_metrics = forms.ChoiceField(choices=(),initial='i100Q17_reads')
-
-    def __init__(self,*args,**kwargs):
-        super(BestRunsSort,self).__init__(*args,**kwargs)
-        met = models.LibMetrics._meta.get_all_field_names()
-        self.fields['library_metrics'].choices = ((m,m) for m in met)
-    
+   
 class EditReferenceGenome(forms.Form):
     name = forms.CharField(max_length=512,required=True)
     NCBI_name = forms.CharField(max_length=512,required=True)
@@ -745,52 +642,4 @@ class NetworkConfigForm(forms.Form):
         if dns_task:
             dns_task.get()
         self.set_to_current_values()
-
-
-
-class UserRegistrationForm(forms.Form):
-    """
-    Form for registering a new user account.
-
-    Validates that the requested username is not already in use, and
-    requires the password to be entered twice to catch typos.
-
-    """
-    username = forms.RegexField(
-        regex=r'^[\w.@+-]+$',
-        max_length=30,
-        widget=forms.TextInput(),
-        label="Username",
-        error_messages={'invalid': 
-            "This value may contain only letters, numbers and @/./+/-/_ characters."})
-
-    email = forms.EmailField(widget=forms.TextInput(attrs={'maxlength':75}),
-                             label="E-mail")
-    password1 = forms.CharField(widget=forms.PasswordInput(render_value=False),
-                                label="Password")
-    password2 = forms.CharField(widget=forms.PasswordInput(render_value=False),
-                                label="Password (again)")
-
-    def clean_username(self):
-        """
-        Validate that the username is alphanumeric and is not already
-        in use.
-        """
-        existing = models.User.objects.filter(username__iexact=self.cleaned_data['username'])
-        if existing.exists():
-            raise forms.ValidationError("A user with that username already exists.")
-        else:
-            return self.cleaned_data['username']
-
-    def clean(self):
-        """
-        Verify that the values entered into the two password fields
-        match. Note that an error here will end up in
-        ``non_field_errors()`` because it doesn't apply to a single
-        field.
-        """
-        if 'password1' in self.cleaned_data and 'password2' in self.cleaned_data:
-            if self.cleaned_data['password1'] != self.cleaned_data['password2']:
-                raise forms.ValidationError("The two password fields didn't match.")
-        return self.cleaned_data
 

@@ -1,0 +1,90 @@
+[
+    {
+        "pk": 2,
+        "model": "auth.user",
+        "fields": {
+            "username": "ionuser",
+            "first_name": "",
+            "last_name": "",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": true,
+            "last_login": "2011-04-11T23:30:25.818Z",
+            "groups": [
+                [
+                    "ionusers"
+                ]
+            ],
+            "user_permissions": [],
+            "password": "sha1$d2cf7$8657d83c1de5bd26f9e49d155c01e97852f4cbd8",
+            "email": "ionuser@iontorrent.com",
+            "date_joined": "2011-04-11T23:30:25.818Z"
+        }
+    },
+    {
+        "pk": 3,
+        "model": "auth.user",
+        "fields": {
+            "username": "lab_contact",
+            "first_name": "",
+            "last_name": "",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": true,
+            "last_login": "2012-01-30T17:04:10.421Z",
+            "groups": [
+                [
+                    "ionusers"
+                ]
+            ],
+            "user_permissions": [],
+            "password": "sha1$18740$cf19d66d005cc73fe6a5a1cd1d0e4c3dfb831e00",
+            "email": "ionuser@iontorrent.com",
+            "date_joined": "2012-01-30T17:04:10.421Z"
+        }
+    },
+    {
+        "pk": 4,
+        "model": "auth.user",
+        "fields": {
+            "username": "it_contact",
+            "first_name": "",
+            "last_name": "",
+            "is_active": true,
+            "is_superuser": false,
+            "is_staff": true,
+            "last_login": "2012-01-30T17:04:10.481Z",
+            "groups": [
+                [
+                    "ionusers"
+                ]
+            ],
+            "user_permissions": [],
+            "password": "sha1$f830e$a29bdb10fc6accf3930536b891a0ec9f2ddfec85",
+            "email": "ionuser@iontorrent.com",
+            "date_joined": "2012-01-30T17:04:10.481Z"
+        }
+    },
+    {
+        "pk": 1,
+        "model": "auth.user",
+        "fields": {
+            "username": "ionadmin",
+            "first_name": "",
+            "last_name": "",
+            "is_active": true,
+            "is_superuser": true,
+            "is_staff": true,
+            "last_login": "2012-02-01T23:01:39.175Z",
+            "groups": [
+                [
+                    "ionusers"
+                ]
+            ],
+            "user_permissions": [],
+            "password": "sha1$142d4$4a58676692c15324a915046ef6cf100f910952e5",
+            "email": "ionadmin@iontorrent.com",
+            "date_joined": "2011-04-11T23:30:24.551Z"
+        }
+    }
+]

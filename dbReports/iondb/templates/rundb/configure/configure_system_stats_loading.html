@@ -1,21 +1,28 @@
 {% extends "rundb/configure/base.html" %}
 {% block sub-nav %}
-	<li class="active"><a href="{% url configure_about %}">About</a></li>			
-	<li><a href="{% url configure_references %}">References</a></li>
-	<li><a href="{% url configure_services %}">Services</a></li>
-	<li><a href="{% url configure_plugins %}">Plugins</a></li>			
-	<li><a href="{% url configure_configure %}">Configure</a></li>	
+  <li class="active"><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
-<div id='loading' class="modal-backdrop in k-loading-image"></div>
+<div id="main" class="content clearfix">
+  <h1>System Diagnostics <small>Results from: /usr/bin/ion_netinfo and /usr/bin/ion_sysinfo</small></h1>
+    <p>
+      <a href="{% url configure_support_archive %}">System Status Support Archive</a>
+    </p>
+    <div id='loading' class="modal-backdrop in k-loading-image"></div>
+</div>
 <script type="text/javascript">
 $(document).ready(function(){
 	$.ajax({
 		url: '{{url}}'
 		, type: '{{type}}'
 	}).done(function(data) {
-		$('#loading').parent().append(data);	
-		$('#loading').remove();
+    $('#loading').remove();
+		$('#main').append(data);	
 	}).fail(function(data) {
     	console.log("error:", data);
     }).always(function(data) { /*console.log("complete:", data);*/ });	;

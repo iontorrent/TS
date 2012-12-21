@@ -2,6 +2,7 @@ QUICK START on Ubuntu 10.04 (=Lucid)
 
     apt-get install \
         build-essential \
+        git-core \
         cmake \
         liblapack-dev \
         liblapack3gf \
@@ -17,7 +18,7 @@ QUICK START on Ubuntu 10.04 (=Lucid)
 
 
 
-QUICK START on Ubuntu 11.04 (=Natty) (EXPERIMENTAL)
+QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
 
      Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
 
@@ -26,6 +27,7 @@ QUICK START on Ubuntu 11.04 (=Natty) (EXPERIMENTAL)
      apt-get install \
         build-essential \
         cmake \
+        git \
         liblapack-dev \
         liblapack3gf \
         libblas-dev \
@@ -37,8 +39,6 @@ QUICK START on Ubuntu 11.04 (=Natty) (EXPERIMENTAL)
         libarmadillo-dev \
         libboost-serialization-dev \
         libgsl0-dev
-
-   set ION_USE_CUDA:BOOL=OFF and ION_USE_SYSTEM_ARMADILLO:BOOL=ON
 
    ./buildTools/build.sh
 

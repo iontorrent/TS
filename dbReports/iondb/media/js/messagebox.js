@@ -36,6 +36,15 @@ MessageList = Backbone.Collection.extend({
         return  -1 * msg.get('id');
     }
 });
+UserMessageList = MessageList.extend({
+    url: function() {
+        var route = "&route=";
+        if (this.binding) {
+            route = "&route=" + this.binding;
+        }
+        return "/rundb/api/v1/message/?status=unread&id__gt=" + this.max_id() + route;
+    }
+});
 
 MessageView = Backbone.View.extend({
     className: "alert",
@@ -64,9 +73,11 @@ MessageView = Backbone.View.extend({
 });
 
 MessageBox = Backbone.View.extend({
+    container: "#global_messages",
+    
     initialize: function() {
         _.bindAll(this, 'render', 'addOne', 'addAll', 'poll', 'update');
-        this.setElement($("#global_messages"));
+        this.setElement($(this.container));
         this.collection = new MessageList(this.options.models);
         this.collection.bind('add', this.addOne, this);
         this.collection.bind('reset', this.addAll, this);
@@ -104,6 +115,21 @@ MessageBox = Backbone.View.extend({
 
     update: function() {
         this.collection.fetch({add: true, success: this.poll, error: this.poll});
+    }
+});
+
+UserMessageBox = MessageBox.extend({
+    container: "#user_messages",
+    initialize: function() {
+        _.bindAll(this, 'render', 'addOne', 'addAll', 'poll', 'update');
+        this.setElement($(this.container));
+        this.collection = new UserMessageList(this.options.models);
+        this.collection.binding = this.options.user;
+        this.collection.bind('add', this.addOne, this);
+        this.collection.bind('reset', this.addAll, this);
+        this.render();
+        this.poll_interval = 10000;
+        this.poll_clock = setTimeout(this.update, this.poll_interval);
     }
 });
 

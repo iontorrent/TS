@@ -24,6 +24,7 @@ import subprocess
 import datetime
 import shutil
 from django.conf import settings
+from django.utils import timezone
 import zipfile
 import os.path
 import sys
@@ -34,6 +35,7 @@ from datetime import timedelta
 import pytz
 
 import urlparse
+from ion.utils.timeout import timeout
 
 def call(*cmd, **kwargs):
     if "stdout" not in kwargs:
@@ -86,21 +88,38 @@ def run_as_daemon(callback, *args, **kwargs):
     callback(*args, **kwargs)
     sys.exit()
 
+# ZipFile doesn't provide a context manager until 2.7/3.2
+if hasattr(zipfile.ZipFile, '__exit__'):
+    ZipContextManager = zipfile.ZipFile
+else:
+    class ZipContextManager():
+        def __init__(self, *args, **kwargs):
+            self.zobj = zipfile.ZipFile(*args, **kwargs)
+        def __enter__(self):
+            return self.zobj
+        def __exit__(self, type, value, traceback):
+            self.zobj.close()
 
-def unzipPlugin(file):
-    """Unzip a file and return the common prefix name, which should be the plugin name"""
+# Unified unzip function
+def extract_zip(archive, dest, prefix=None, auto_prefix=False):
+    """ unzip files in archive to destination folder
+    extracting only files in prefix and omitting prefix from output path.
+    """
     logger = logging.getLogger(__name__)
-    zfobj = zipfile.ZipFile(file)
-    namelist = zfobj.namelist()
-    prefix, files = get_common_prefix(namelist)
-    file_name = file.split(".")[0]
+    # Normalize, clear out or create dest path
+    dest = os.path.normpath(dest)
+    if os.path.exists(dest):
+        if not os.path.isdir(dest):
+            raise OSError("Must extract zip file to a directory. File already exists: '%s'", dest)
+        if dest.find(settings.PLUGIN_PATH) == 0:
+            ## Only delete content under PLUGIN_PATH.
+            delete_that_folder(dest, "Deleting content at destination path '%s'" % dest)
+        else:
+            raise OSError("Unable to extract ZIP - directory '%s' already exists", dest)
+    os.makedirs(dest, 0777)
 
-    scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch",file_name)
+    logger.info("Extracting ZIP '%s' to '%s'", archive, dest)
 
-    if not os.path.exists(scratch_path):
-        os.mkdir(scratch_path, 0755)
-
-    # Force plugin owner and group to ionadmin, fallback to current user
     try:
         import pwd, grp
         uid = pwd.getpwnam('ionadmin')[2]
@@ -109,97 +128,150 @@ def unzipPlugin(file):
         uid = os.getuid()
         gid = os.getgid()
 
-    for member in zfobj.infolist():
-        if member.filename[0] == '/':
-            name = member.filename[1:]
-        else:
-            name = member.filename
+    extracted_files = []
+    with ZipContextManager(archive, 'r') as zfobj:
+        ## prefix is a string to extract from zipfile
+        offset = 0
+        if auto_prefix and not prefix:
+            prefix, _ = get_common_prefix(zfobj.namelist())
+        if prefix is not None:
+            offset = len(prefix) + 1
+            logger.debug("ZIP extract prefix '%s'", prefix)
 
-        targetpath = os.path.join(scratch_path, name)
-        targetpath = os.path.normpath(targetpath)
+        for member in zfobj.infolist():
+            if member.filename[0] == '/':
+                filename = member.filename[1:]
+            else:
+                filename = member.filename
 
-        if name.endswith('/'):
-            if '__MACOSX' in name:
-                # Skip, we have no use for these
+            if prefix:
+                if filename.startswith(prefix):
+                    logger.debug("Extracting '%s' as '%s'", filename, filename[offset:])
+                    #filename = filename[offset:]
+                else:
+                    logging.debug("Skipping file outside '%s' prefix: '%s'", filename, prefix)
+                    continue
+
+            targetpath = os.path.join(dest, filename)
+            targetpath = os.path.normpath(targetpath)
+
+            # Catch files we can't handle properly.
+            if targetpath.find(dest) != 0:
+                ## Path is no longer under dest after normalization. Prevent extraction (eg. ../../../etc/passwd)
+                logging.error("ZIP archive contains file '%s' outside destination path: '%s'. Skipping.", filename, dest)
                 continue
-            if not os.path.exists(targetpath):
-                os.makedirs(targetpath, 0755)
-            continue
-        else:
-            parent_dir = os.path.dirname(targetpath)
-            if not os.path.exists(parent_dir):
-                os.makedirs(parent_path, 0755)
 
-        perm = ((member.external_attr >> 16L) & 0777 ) or 0755
-        try:
-            with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm), 'w') as targetfh:
-                zipfh = zfobj.open(member)
-                shutil.copyfileobj(zipfh, targetfh)
-                zipfh.close()
-        except (OSError, IOError):
-            logger.exception("For zip's '%s', could not open '%s'" % (name, targetpath))
-            continue
-        try:
-            #os.utime(targetpath, (member.date_time, member.date_time))
-            os.chown(targetpath, uid, gid)
-        except (OSError, IOError):
-            logger.warn("Unable to set owner/perm on '%s'",targetpath)
+            # ZIP archives can have symlinks. Nope.
+            if ((member.external_attr <<16L) & 0120000):
+                logging.error("ZIP archive contains symlink: '%s'. Skipping.", member.filename)
+                continue
+
+            if "__MACOSX" in filename:
+                logging.warn("ZIP archive contains __MACOSX meta folder. Skipping", member.filename)
+                continue
+
+            # Get permission set inside archive
+            perm = ((member.external_attr >> 16L) & 0777 ) or 0755
+
+            # Create all upper directories if necessary.
+            upperdirs = os.path.dirname(targetpath)
+            if upperdirs and not os.path.exists(upperdirs):
+                logger.debug("Creating tree for '%s'", upperdirs)
+                os.makedirs(upperdirs, perm | 0555)
+
+            if filename[-1] == '/':
+                # upper bits of external_attr should be 04 for folders... ignoring this for now
+                if not os.path.isdir(targetpath):
+                    logger.debug("ZIP extract dir: '%s'", targetpath)
+                    os.mkdir(targetpath, perm | 0555)
+                continue
+
+            try:
+                with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm),'wb') as targetfh:
+                    zipfh = zfobj.open(member)
+                    shutil.copyfileobj(zipfh, targetfh)
+                    zipfh.close()
+                logger.debug("ZIP extract file: '%s' to '%s'", filename, targetpath)
+            except (OSError, IOError):
+                logger.exception("Failed to extract '%s':'%s' to '%s'", archive, filename, targetpath)
+                continue
+            # Set folder or file last modified time (ctime) to date of file in archive.
+            try:
+                #os.utime(targetpath, member.date_time)
+                os.chown(targetpath, uid, gid)
+            except (OSError, IOError) as e:
+                # Non fatal if time and owner fail.
+                logger.warn("Failed to set time/owner attributes on '%s': %s", targetpath , e)
+
+            extracted_files.append(targetpath)
+
+    return (prefix, extracted_files)
+
+def unzipPlugin(zipfile):
+    logger = logging.getLogger(__name__)
+    ## Extract plugin to scratch folder. When complete, move to final location.
+    plugin_path, ext = os.path.splitext(zipfile)
+    plugin_name = os.path.basename(plugin_path)
+
+    # ZIP file must named with plugin name - fragile
+    # FIXME - handle (1) additions (common for multiple downloads via browser)
+    # FIXME - handle version string in ZIP archive name
+
+    scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch","install-temp",plugin_name)
+    (prefix, files) = extract_zip(zipfile, scratch_path, auto_prefix=True)
+    if prefix:
+        plugin_name = os.path.basename(prefix)
+
+    plugin_temp_home = os.path.join(scratch_path, prefix)
+    try:
+        # Convert script into PluginClass, get info by introspection
+        from iondb.plugins.manager import pluginmanager
+        script, islaunch = pluginmanager.find_pluginscript(plugin_temp_home, plugin_name)
+        logger.debug("Got script: %s", script)
+        from ion.plugin.loader import cache
+        ret = cache.load_module(plugin_name, script)
+        cls = cache.get_plugin(plugin_name)
+        p = cls()
+        final_name = p.name # what the plugin calls itself, regardless of ZIP file name
+        logger.info("Plugin calls itself: '%s'", final_name)
+    except:
+        logger.exception("Unable to interrogate plugin name from: '%s'", zipfile)
+        final_name = plugin_name
 
     #move to the plugin dir
-    final_name = os.path.split(prefix)[-1] or file_name
-    assert(final_name)
-    final_install_dir =  os.path.join(settings.PLUGIN_PATH, final_name)
-    if os.path.exists(final_install_dir) and (final_install_dir != settings.PLUGIN_PATH):
-        delete_that_folder(final_install_dir, "Deleting old copy of plugin at '%s'" % final_install_dir)
-
-    shutil.move(os.path.join(scratch_path,file_name,prefix), final_install_dir )
-
-    # ZIP extraction now sets owner to ionadmin:ionadmin
-    # And preserves permissions and timestamps stored in zip archive
-    return prefix
-
-
-def unzip_archive(root, data):
-    logger = logging.getLogger(__name__)
-    if not os.path.exists(root):
-        os.mkdir( root, 0777)
-    zip_file = zipfile.ZipFile(data, 'r', allowZip64=True)
-    namelist = zip_file.namelist()
-    namelist = valid_files(namelist)
-    prefix, files = get_common_prefix(namelist)
-    make_relative_directories(root, files)
-    out_names = [(n, f) for n, f in zip(namelist, files) if
-                        os.path.basename(f) != '']
+    # New extract_zip removes prefix from extracted files.
+    # But still writes to file_name
     try:
-        import pwd, grp
-        uid = pwd.getpwnam('ionadmin')[2]
-        gid = grp.getgrnam('ionadmin')[2]
-    except OSError:
-        uid = os.getuid()
-        gid = os.getgid()
+        final_install_dir =  os.path.join(settings.PLUGIN_PATH, final_name)
+        if os.path.exists(final_install_dir) and (final_install_dir != settings.PLUGIN_PATH):
+            logger.info("Deleting old copy of plugin at '%s'", final_install_dir)
+            delete_that_folder(final_install_dir, "Error Deleting old copy of plugin at '%s'" % final_install_dir)
+        parent_folder = os.path.dirname(final_install_dir)
+        if not os.path.exists(parent_folder):
+            logger.info("Creating path for plugin '%s' for '%s'", parent_folder, final_install_dir)
+            os.makedirs(parent_folder, 0555)
 
-    for key, out_name in out_names:
-        if os.path.basename(out_name) == "":
-            continue
-        targetpath = os.path.join(root, out_name)
-        member = zip_file.getinfo(key)
-        perm = ((member.external_attr >> 16L) & 0777 ) or 0755
-        try:
-            with os.fdopen(os.open(targetpath, os.O_CREAT|os.O_TRUNC|os.O_WRONLY, perm), 'w') as targetfh:
-                zipfh = zip_file.open(member)
-                shutil.copyfileobj(zipfh, targetfh)
-                zipfh.close()
-        except (OSError, IOError):
-            logger.exception("For zip's '%s', could not write '%s'" % (member.filename, targetpath))
-            continue
-        try:
-            os.ctime(targetpath, member.date_time)
-            os.chown(targetpath, uid, gid)
-        except (OSError, IOError):
-            logger.warn("Unable to set owner/perm on '%s'",targetpath)
+        logger.info("Moving plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
+        shutil.move(plugin_temp_home, final_install_dir)
+        delete_that_folder(scratch_path, "Deleting plugin install scratch folder")
+    except (IOError, OSError):
+        logger.exception("Failed to move plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
+        raise
 
-    return [f for n, f in out_names]
+    # Now that it has been downloaded,
+    # convert pre-plugin into real db plugin object
+    try:
+        from iondb.plugins.manager import pluginmanager
+        (new_plugin, updated) = pluginmanager.install(final_name, final_install_dir)
+    except ValueError:
+        logger.exception("Failed to install plugin")
+        #delete_that_folder(final_install_dir)
 
+    return {
+        "plugin": final_name,
+        "path": final_install_dir,
+        "files": files,
+    }
 
 def get_common_prefix(files):
     """For a list of files, a common path prefix and a list file names with
@@ -216,21 +288,13 @@ def get_common_prefix(files):
     if not files or not any(files):
         return '', []
     # find the common prefix in the directory names.
-    directories = [os.path.dirname(f) for f in files]
+    directories = [os.path.dirname(f) for f in files if '__MACOSX' not in f]
     prefix = os.path.commonprefix(directories)
     start = len(prefix)
     if all(f[start] == "/" for f in files):
         start += 1
     relative_files = [f[start:] for f in files]
     return prefix, relative_files
-
-
-def valid_files(files):
-    black_list = [lambda f: "__MACOSX" in f]
-    absolute_paths = [os.path.isabs(d) for d in files]
-    if any(absolute_paths) and not all(absolute_paths):
-        raise ValueError("Archive contains a mix of absolute and relative paths.")
-    return [f for f in files if not any(reject(f) for reject in black_list)]
 
 
 def make_relative_directories(root, files):
@@ -247,6 +311,19 @@ def delete_that_folder(directory, message):
         logger.error("Failed to delete %s: %s", path, message)
     logger.info("Deleting %s", directory)
     shutil.rmtree(directory, onerror=delete_error)
+
+#N.B. Run as celery task because celery runs with root permissions
+@task
+def removeDirContents(folder_path):
+    logger = removeDirContents.get_logger()
+    for file_object in os.listdir(folder_path):
+        file_object_path = os.path.join(folder_path, file_object)
+        if os.path.isfile(file_object_path):
+            os.unlink(file_object_path)
+        elif os.path.islink(file_object_path):
+            os.unlink(file_object_path)
+        else:
+            shutil.rmtree(file_object_path)
 
 def downloadChunks(url):
     """Helper to download large files"""
@@ -311,6 +388,7 @@ def downloadPluginZeroInstall(url, plugin):
 
     # The url field stores the zeroinstall feed url
     plugin.url = url
+    plugin.name = feedName.replace(" ","")
 
     if not downloaded:
         plugin.status["installStatus"] = "failed"
@@ -331,13 +409,15 @@ def downloadPluginZeroInstall(url, plugin):
         if os.path.exists(os.path.join(nestedpath, 'launch.sh')):
             plugin.path = os.path.normpath(nestedpath)
             break
+        if os.path.exists(os.path.join(nestedpath, plugin.name + '.py')):
+            plugin.path = os.path.normpath(nestedpath)
+            break
     else:
         # Plugin expanded without top level folder
         plugin.path = downloaded
         # assert launch.sh exists?
 
     plugin.status["result"] = "0install"
-    plugin.name = feedName.replace(" ","")
     # Other fields we can get from zeroinstall feed?
 
     # Version is parsed during install - from launch.sh, ignoring feed value
@@ -352,16 +432,10 @@ def downloadPluginArchive(url, plugin):
         return False
     downloaded, url = ret
 
-    # ZIP file must named with plugin name - fragile
-    # FIXME - handle (1) additions (common for multiple downloads via browser)
-    # FIXME - handle version string in ZIP archive name
-    #     Suggested fix - extract to temporary directory, find plugin name,
-    #     rename to final location
+    pdata = unzipPlugin(downloaded)
 
-    plugin.name = os.path.splitext(os.path.basename(url))[0]
-    plugin.path = os.path.join(settings.PLUGIN_PATH, plugin.name )
-
-    unzipStatus = unzip_archive(plugin.path, downloaded)
+    plugin.name = pdata['plugin'] or os.path.splitext(os.path.basename(url))[0]
+    plugin.path = pdata['path'] or os.path.join(settings.PLUGIN_PATH, plugin.name )
 
     #clean up archive file and temp dir (archive should be only file in dir)
     os.unlink(downloaded)
@@ -413,13 +487,15 @@ def downloadPlugin(url, plugin=None, zipFile=None):
         zip_file = os.path.join(scratch_path, zipFile)
         plugin.status["installStatus"] = "extracting zip"
 
-        plugin.name = unzipPlugin(zip_file)
+        try:
+            ret = unzipPlugin(zip_file)
+        finally:
+            #remove the zip file
+            os.unlink(zip_file)
 
-        plugin.path = os.path.join(settings.PLUGIN_PATH, plugin.name)
+        plugin.name = ret['plugin']
+        plugin.path = ret['path']
         plugin.status["installStatus"] = "installing from zip"
-
-        #remove the zip file
-        os.unlink(zip_file)
 
     # Now that it has been downloaded,
     # convert pre-plugin into real db plugin object
@@ -649,7 +725,7 @@ def IonReporterWorkflows(autorun=True):
         logging.info(url)
     except KeyError:
         error = "IonReporterUploader V1.0 Plugin Config is missing needed data."
-        logging.error(error)
+        logging.exception(error)
         return False, error
 
     try:
@@ -660,9 +736,14 @@ def IonReporterWorkflows(autorun=True):
         content = json.loads(content)
         workflows = content["workflows"]
         return True, workflows
+    except urllib2.HTTPError, e:
+        error = "IonReporterUploader V1.0 could not contact the server."
+        content = e.read()
+        logging.error("Error: %s\n%s", error, content)
+        return False, error
     except:
         error = "IonReporterUploader V1.0 could not contact the server."
-        logging.error(error)
+        logging.exception(error)
         return False, error
 
 def IonReporterVersion(plugin):
@@ -682,7 +763,7 @@ def IonReporterVersion(plugin):
         config = IonReporterUploader.config
     except models.Plugin.DoesNotExist:
         error = plugin + " Plugin Not Found."
-        logging.error(error)
+        logging.exception(error)
         return False, error
 
     try:
@@ -692,7 +773,7 @@ def IonReporterVersion(plugin):
     except KeyError:
         error = plugin + " Plugin Config is missing needed data."
         logging.debug(plugin +" config: " + config)
-        logging.error(error)
+        logging.exception(error)
         return False, error
 
     try:
@@ -703,9 +784,13 @@ def IonReporterVersion(plugin):
         content = json.loads(content)
         versions = content["Version List"]
         return True, versions
+    except urllib2.HTTPError, e:
+        error = plugin + " could not contact the server. No versions will be returned"
+        content = e.read()
+        logging.error("Error: %s\n%s", error, content)
     except:
         error = plugin + " could not contact the server. No versions will be returned"
-        logging.error(error)
+        logging.exception(error)
         return False, error
 
 @periodic_task(run_every=timedelta(days=1))
@@ -728,20 +813,22 @@ def autoAction_report():
     import xmlrpclib
     logger = autoAction_report.get_logger()
     logger.info("Checking for Auto-action Report Data Management")
+
     try:
-        #TODO: would be good to be able to filter this list somehow
-        retList = models.Results.objects.all()
-        bkL = models.dm_reports.objects.all().order_by('pk').reverse()
-        bk = bkL[0]
+        bk = models.dm_reports.get()
     except:
-        logger.exception(traceback.format_exc())
-        raise
+        logger.error("dm_reports configuration object does not exist in database")
+        raise 
         
     if bk.autoPrune:
         logger.info("Auto-action enabled")
         proxy = xmlrpclib.ServerProxy('http://127.0.0.1:%d' % settings.IARCHIVE_PORT, allow_none=True)
+        #TODO: would be good to be able to filter this list somehow
+        retList = models.Results.objects.all()
         for ret in retList:
             date1 = ret.timeStamp
+            if timezone.is_naive(date1):
+                date1 = date1.replace(tzinfo = pytz.utc)
             date2 = datetime.datetime.now(pytz.UTC)
             try:
                 #Fix for TS-4983
@@ -751,19 +838,20 @@ def autoAction_report():
                     continue
                 
                 timesUp = True if (date2 - date1) > timedelta(days=bk.autoAge) else False
+                # N.B. the word "auto-action" in the comment is required in order to disable useless comments in the Report Log
                 if not ret.autoExempt and timesUp:
                     if bk.autoType == 'P':
                         comment = '%s Pruned via auto-action' % ret.resultsName
                         proxy.prune_report(ret.pk, comment)
-                        logger.info(comment)
+                        logger.debug(comment)
                     elif bk.autoType == 'A':
                         comment = '%s Archived via auto-action' % ret.resultsName
                         proxy.archive_report(ret.pk, comment)
-                        logger.info(comment)
+                        logger.debug(comment)
                     elif bk.autoType == 'E':
                         comment = '%s Exported via auto-action' % ret.resultsName
                         proxy.export_report(ret.pk, comment)
-                        logger.info(comment)
+                        logger.debug(comment)
                     #elif bk.autoType == 'D':
                     #    comment = '%s Deleted via auto-action' % ret.resultsName
                     #    proxy.delete_report(ret.pk, comment)
@@ -780,6 +868,7 @@ def autoAction_report():
                         logger.info("%s has not reached time threshold" % ret.resultsName)
             except:
                 logger.exception(traceback.format_exc())
+        logger.info("Auto-action complete")
     else:
         logger.info("Auto-action disabled")
         
@@ -862,17 +951,20 @@ def install_updates():
         models.GlobalConfig.objects.update(ts_update_status="Install failure")
         raise
 
+# Times out after 60 seconds
+@timeout(60,None)
 def free_percent(path):
+    '''Returns percent of disk space that is free'''
     resDir = os.statvfs(path)
     totalSpace = resDir.f_blocks
     freeSpace = resDir.f_bavail
     if not (totalSpace > 0):
         logging.error("Path: %s : Zero TotalSpace? %d / %d", path, freeSpace, totalSpace)
-        #print "Path: %s : Zero TotalSpace? %d / %d" % (path, freeSpace, totalSpace)
         return 0
     return 100-(float(freeSpace)/float(totalSpace)*100)
 
-@periodic_task(run_every=timedelta(minutes=10))
+# Expires after 5 minutes; is scheduled every 10 minutes
+@periodic_task(run_every=timedelta(minutes=10),expires=300)
 def check_disk_space():
     '''For every FileServer object, get percentage of used disk space'''
     logger = check_disk_space.get_logger()
@@ -893,6 +985,7 @@ def check_disk_space():
             except:
                 logger.exception("Failed to compute free_percent")
                 fs.percentfull = None
+                
             if fs.percentfull is not None:
                 fs.save()
                 logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
@@ -901,3 +994,102 @@ def check_disk_space():
         else:
             logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
 
+@task
+def setRunDiskspace(experimentpk):
+    '''Sets diskusage field in Experiment record with data returned from du command'''
+    try:
+        from iondb.rundb import models
+        from django.core.exceptions import ObjectDoesNotExist
+        # Get Experiment record
+        exp = models.Experiment.objects.get(pk=experimentpk)
+    except ObjectDoesNotExist:
+        pass
+    except:
+        raise
+    else:
+        # Get filesystem location of given Experiment record
+        directory = exp.expDir
+        
+        if not os.path.isdir(directory):
+            used = 0
+        else:
+            # Get disk space used by the contents of the given directory in megabytes
+            du = subprocess.Popen(['du', '-sm', directory], stdout=subprocess.PIPE)
+            output = du.communicate()[0]
+            used = output.split()[0]
+        
+        # Update database entry for the given Experiment record
+        try:
+            used = used if used != None else "0"
+            exp.diskusage = int(used)
+            exp.save()
+        except:
+            # field does not exist, cannot update
+            pass
+    
+    
+@task
+def setResultDiskspace(resultpk):
+    '''Sets diskusage field in Results record with data returned from du command'''
+    log = setResultDiskspace.get_logger()
+    try:
+        from iondb.rundb import models
+        from django.core.exceptions import ObjectDoesNotExist
+        # Get Results record
+        result = models.Results.objects.get(pk=resultpk)
+        
+        # Get filesystem location of given Results record
+        directory = result.get_report_path()
+        
+        # Get disk space used by the contents of the given directory in megabytes
+        du = subprocess.Popen(['du', '-sm', directory], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = du.communicate()
+        if du.returncode == 0:
+            output = stdout[0]
+            log.info("%s -- %s" %(directory,output))
+            used = output.split()[0]
+        else:
+            log.warning(stderr)
+        
+        # Update database entry for the given Experiment record
+        try:
+            used = used if used != None else "0"
+            result.diskusage = int(used)
+            result.save()
+        except:
+            # field does not exist, cannot update
+            pass
+    except ObjectDoesNotExist:
+        pass
+    except:
+        raise
+
+@task
+def backfill_exp_diskusage():
+    '''
+    For every Experiment object in database, scan filesystem and determine disk usage.
+    Intended to be run at package installation to populate existing databases.
+    '''
+    from django.db.models import Q
+    from iondb.rundb import models
+    
+    # Setup log file logging
+    filename = '/var/log/ion/%s.log' % 'backfill_exp_diskusage'
+    log = logging.getLogger('backfill_diskusage')
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+    
+    log.info("")
+    log.info("===== New Run =====")
+            
+    log.info("EXPERIMENTS:") 
+    query = Q(diskusage=None) | Q(diskusage=0)
+    experiment_list = models.Experiment.objects.filter(query)
+    for experiment in experiment_list:
+        log.info("%s" % experiment.expName)
+        setRunDiskspace.delay(experiment.pk)

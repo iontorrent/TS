@@ -33,6 +33,8 @@
 #include "api/BamWriter.h"
 #include "boost/scoped_array.hpp"
 
+#include "json/json.h"
+
 #include "IonVersion.h"
 
 #include <sys/time.h>
@@ -98,6 +100,15 @@ struct Stratification{
   }
 };
 
+void saveJson(const Json::Value & json, const string& filename_json)
+{
+  ofstream out(filename_json.c_str(), ios::out);
+  if (out.good())
+    out << json.toStyledString();
+  else
+    cout << "Error: unable to write JSON file " << filename_json << endl;
+}
+
 const uint32_t MAX_BASES = 10000;
 const int NUMTHREADS = 8;
 sem_t semLoadNull[NUMTHREADS];
@@ -125,7 +136,7 @@ Stratification *stratification = NULL;
 // Each line starts with nuc Type (A, C, G, T)
 // Every nuc contains two lines, first of which corresponds to tailed homo-polymer call (left tailed is negative) and second of which corresponds to un-rounded QVs
 // assume flow signal starts from 0 and increments by 1 for now; TODO: parse flow signal explicitly to create map
-void parseFlowQVTable(string flowQVTableFile) {
+void parseFlowQVTable(string flowQVTableFile, bool rb) {
   ifstream flowQVReader;
   flowQVReader.open(flowQVTableFile.c_str());
   if(!flowQVReader){
@@ -256,6 +267,42 @@ void parseFlowQVTable(string flowQVTableFile) {
     }
     hpsList.push_back(hps);
 
+	if(rb)
+	{
+		Json::Value json(Json::objectValue);
+		char buf1[100];
+		char buf2[100];
+		for(int hp = 0; hp < 12; ++hp)
+		{
+			  sprintf(buf1, "%d", hp);
+			  sprintf(buf2, "%d", rightBoundaryList[hp]);
+			  json["RightBoundary"][buf1] = buf2;
+		} 
+
+		string filename_json("all_flow_whole_chip_");
+		
+		if(offset == 7)
+		{		
+			filename_json = "flow_";
+			filename_json += strs[1];
+			filename_json += "-";
+			filename_json += strs[2];
+			filename_json += "_y_";
+			filename_json += strs[5];	
+			filename_json += "-";
+			filename_json += strs[6];	
+			filename_json += "_x_";
+			filename_json += strs[3];
+			filename_json += "-";
+			filename_json += strs[4];
+			filename_json += "_";
+		}
+
+		filename_json += strs[0];
+		filename_json += "_right_boundary.json";
+
+		saveJson(json, filename_json);
+	}
   }
 
 //  for(unsigned int ind = 0; ind < std::min((size_t)4, leftBoundaryLists.size()); ++ind){
@@ -926,6 +973,7 @@ void* RecallFunc(void* arg0)
 
 			nZA = -1;
 			nZG = -1;
+
             if(bamAlignmentIn[arg->threadIndex].HasTag("ZA"))
 			{
                 bamAlignmentIn[arg->threadIndex].GetTag("ZA", nZA);
@@ -934,6 +982,19 @@ void* RecallFunc(void* arg0)
 			{
                 bamAlignmentIn[arg->threadIndex].GetTag("ZG", nZG);
 			}
+
+            std::vector<float> fieldZM;
+            if (bamAlignmentIn[arg->threadIndex].HasTag("ZM"))
+            {
+                bamAlignmentIn[arg->threadIndex].GetTag("ZM", fieldZM);
+            }
+
+
+            std::vector<float> fieldZP;
+            if (bamAlignmentIn[arg->threadIndex].HasTag("ZP"))
+            {
+                bamAlignmentIn[arg->threadIndex].GetTag("ZP", fieldZP);
+            }
 
 			sem_post(&semLoadNull[arg->threadIndex]);
 
@@ -955,6 +1016,16 @@ void* RecallFunc(void* arg0)
 			  {		  
 				  bamAlignmentOut[arg->threadIndex].RemoveTag("ZG");
 			  }
+
+              if(bamAlignmentOut[arg->threadIndex].HasTag("ZM"))
+              {
+                  bamAlignmentOut[arg->threadIndex].RemoveTag("ZM");
+              }
+
+              if(bamAlignmentOut[arg->threadIndex].HasTag("ZP"))
+              {
+                  bamAlignmentOut[arg->threadIndex].RemoveTag("ZP");
+              }
 
 			bamAlignmentOut[arg->threadIndex].SetIsMapped(false);
 			bamAlignmentOut[arg->threadIndex].Name = rname;
@@ -1011,6 +1082,16 @@ void* RecallFunc(void* arg0)
                 bamAlignmentOut[arg->threadIndex].AddTag("ZG","i", nZG);
 			}
 
+            if (fieldZP.size() > 0)
+            {
+                bamAlignmentOut[arg->threadIndex].AddTag("ZP", fieldZP);
+            }
+
+            if (fieldZM.size() > 0)
+            {
+                bamAlignmentOut[arg->threadIndex].AddTag("ZM", fieldZM);
+            }
+
 			++(*(arg->nReads)); 
 
 			sem_post(&semSaveFull[arg->threadIndex]);
@@ -1043,7 +1124,8 @@ void usage() {
        << "  -i,--input-type        input file type (sff or bam), which overrides the implicit naming convention" << endl
        << "  -h,--help              this message" << endl
        << "  -o,--out               file path to recalibrated SFF/BAM (default same as input file with a suffix of '.rc.sff' or '.rc.bam')" << endl
-       << "  -t,--flow-QV-Table     file produced by HPTableParser that produces flow QV out of per flow hp table" << endl;
+       << "  -t,--flow-QV-Table     file produced by HPTableParser that produces flow QV out of per flow hp table" << endl
+       << "  -j,--right-boundary   output right boundary json files" << endl;
   exit(1);
 }
 
@@ -1056,6 +1138,7 @@ int main(int argc, const char *argv[]) {
   string flowQVFile;
   string outputFile;
   bool flowOrderCheck;
+  bool rb = false;
   string inputType;
   vector<string> inputFiles;
 
@@ -1064,6 +1147,7 @@ int main(int argc, const char *argv[]) {
   opts.GetOption(inputType,"",'i',"input-type");
   opts.GetOption(flowOrderCheck, "false", 'f', "flow-order-check");
   opts.GetOption(outputFile,"",'o',"out-sff");
+    opts.GetOption(rb,"false",'j',"right-boundary");
   opts.GetLeftoverArguments(inputFiles); //process first element in the vector
 
   if (help || flowQVFile.empty() || inputFiles.size() != 1)
@@ -1074,7 +1158,7 @@ int main(int argc, const char *argv[]) {
       IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
 
   string inputFile = inputFiles[0];
-  parseFlowQVTable(flowQVFile);
+  parseFlowQVTable(flowQVFile, rb);
   int maxFlowSignal = hpsList[0].size();
 
   //assume input ends with .sff
@@ -1203,7 +1287,7 @@ int main(int argc, const char *argv[]) {
 	  RefVector refvec = bamReader.GetReferenceData();
       BamWriter bamWriter;
 	  bamWriter.SetCompressionMode(BamWriter::Compressed);
-	  bamWriter.SetNumThreads(8);
+      bamWriter.SetNumThreads(8);
               
       if(!bamWriter.Open(outputFile, samHeader, refvec))
       {

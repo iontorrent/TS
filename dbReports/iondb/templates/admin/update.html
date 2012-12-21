@@ -91,15 +91,21 @@
           <div id="update_failure" style="display: none;">
             <p>There was a problem checking for updates.
               Try again or check you network settings.</p>
+              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
+              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>
           </div>
           <div id="download_failure" style="display: none;">
             <p>The upgrade did not download completely.
               Click Update Server to try again or check your network settings.</p>
+              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
+              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>
           </div>
           <div id="install_failure" style="display: none;">
             <p>There were errors during installation.
               You may click Update Server to try again: contact support,
               if this does not work.</p>
+              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
+              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>              
           </div>
           <div id="unknown" style="display: none;">
             <p>The status of your system is unknown at this time.
@@ -108,16 +114,16 @@
         </div>
       </div>
       <div id="release_memo">
-        <h3>Torrent Suite 3.2.1 is now installed</h3>
-        <p>Here are some helpful videos explaining how to perform some common tasks using this software.</p>
+        <h3>Welcome to the Torrent Suite 3.4</h3>
+        <p>Here are some helpful videos explaining how to perform some common tasks using the new version.</p>
         <ul>
-          <li><a href="http://ioncommunity.lifetechnologies.com/docs/DOC-3230">Overview</a> of the Torrent Suite software</li>
+          <li><a href="http://ioncommunity.lifetechnologies.com/docs/DOC-3230">Overview</a> of the software</li>
           <li><a href="http://ioncommunity.lifetechnologies.com/videos/1693">Finding your data</a></li>
           <li><a href="http://ioncommunity.lifetechnologies.com/videos/1691">Planning new runs</a></li>
           <li><a href="http://ioncommunity.lifetechnologies.com/videos/1692">Monitoring new runs</a></li>
         </ul>
         <p>Please check the Release Notes on the <a href="http://lifetech-it.hosted.jivesoftware.com/index.jspa">Ion Community</a> for more details.</p>
-        <p>Check release notes to see if an instrument software upgrade is required for this release.<ep>
+        <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
     </div>
   </div>

@@ -14,7 +14,7 @@ from iondb.rundb import models
 import subprocess
 from ion.reports import parseBeadfind
 from ion.utils.blockprocessing import parse_metrics
-from ion.utils.textTo import textToDict
+from ion.utils.textTo import fileToDict
 import logging
 
 def getCurrentAnalysis(procMetrics, res):
@@ -47,11 +47,8 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
 
     for tf, metrics in tfMetrics.iteritems():
         
-        HPSNR = metrics.get('Raw HP SNR',[0])
         hpAccNum = metrics.get('Per HP accuracy NUM',[0])
         hpAccDen = metrics.get('Per HP accuracy DEN',[0])
-        avgIonogram = [a/float(b) for a,b in zip(metrics.get('Avg Ionogram NUM',[0]),metrics.get('Avg Ionogram DEN',[0]))]
-        corIonogram = [a/float(b) for a,b in zip(metrics.get('Corrected Avg Ionogram NUM',[0]),metrics.get('Corrected Avg Ionogram DEN',[0]))]
         
         kwargs = {'report'                  : res,
                   'name'                    : tf,
@@ -63,41 +60,14 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
 
                   'Q10Histo'                : ' '.join(map(str,metrics.get('Q10',[0]))),
                   'Q10Mean'                 : metrics.get('Q10 Mean',0.0),
-                  'Q10Mode'                 : metrics.get('Q10 Mean',0.0), # Deprecated, populating by next best thing
                   'Q10ReadCount'            : metrics.get('50Q10',0.0),
                   
                   'Q17Histo'                : ' '.join(map(str,metrics.get('Q17',[0]))),
                   'Q17Mean'                 : metrics.get('Q17 Mean',0.0),
-                  'Q17Mode'                 : metrics.get('Q17 Mean',0.0), # Deprecated, populating by next best thing
                   'Q17ReadCount'            : metrics.get('50Q17',0.0),
 
                   'HPAccuracy'              : ', '.join('%d : %d/%d' % (x,y[0],y[1]) for x,y in enumerate(zip(hpAccNum,hpAccDen))),
-                  'HPSNR'                   : ', '.join('%d : %f' % x for x in enumerate(HPSNR)),
-                  'rawIonogram'             : ' '.join(map(str,avgIonogram)),
-                  'corrIonogram'            : ' '.join(map(str,corIonogram)),
-                  
-                  'aveHqReadCount'          : 0.0,      # Deprecated
-                  'preCorrSNR'              : 0.0,      # Deprecated
-                  'postCorrSNR'             : 0.0,      # Deprecated 
-                  'rawOverlap'              : '0',      # Deprecated
-                  'corOverlap'              : '0',      # Deprecated
-                  'error'                   : 0.0,      # Deprecated
-                  'matchMismatchHisto'      : '0',      # Deprecated
-                  'matchMismatchMean'       : 0.0,      # Deprecated
-                  'matchMismatchMode'       : 0.0,      # Deprecated
-                  'hqReadCount'             : 0.0,      # Deprecated
-                  'aveQ10ReadCount'         : 0.0,      # Deprecated
-                  'aveQ17ReadCount'         : 0.0,      # Deprecated
                   }
-        
-        try:
-            kwargs['CF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']   # Deprecated, populating by next best thing
-            kwargs['IE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']   # Deprecated, populating by next best thing
-            kwargs['DR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']   # Deprecated, populating by next best thing
-        except:
-            kwargs['CF'] = 0.0
-            kwargs['IE'] = 0.0
-            kwargs['DR'] = 0.0
         
         tfm, created = models.TFMetrics.objects.get_or_create(report=res, name=tf,
                                                                 defaults=kwargs)
@@ -105,57 +75,6 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
             for key, value in kwargs.items():
                 setattr(tfm, key, value)
             tfm.save()
-
-
-def addPeMetrics(peMetrics, res):
-    
-    if peMetrics == None:
-        return
-
-    pe_metrics_map = {
-     'pairingrate' : 'pairingrate',
-     'fwdandrevcorrected' : 'fwdandrevcorrected',
-     'fwdandrevuncorrected' : 'fwdandrevuncorrected',
-     'fwdnotrev' : 'fwdnotrev',
-     'totalbasesunion' : 'totalbasesunion',
-     'totalbasescorrected' : 'totalbasescorrected',
-     'totalbasesunpairedfwd' : 'totalbasesunpairedfwd',
-     'totalbasesunpairedrev' : 'totalbasesunpairedrev',
-     'totalq17basesunpairedrev' : 'totalq17basesunpairedrev',
-     'totalq17basesunpairedfwd' : 'totalq17basesunpairedfwd',
-     'totalq17basescorrected' : 'totalq17basescorrected',
-     'totalq17basesunion' : 'totalq17basesunion',
-     'totalq20basesunion' : 'totalq20basesunion',
-     'totalq20basescorrected' : 'totalq20basescorrected',
-     'totalq20basesunpairedfwd' : 'totalq20basesunpairedfwd',
-     'totalq20basesunpairedrev' : 'totalq20basesunpairedrev',
-     'totalreadsbasesunpairedrev' : 'totalreadsbasesunpairedrev',
-     'totalreadsbasesunpairedfwd' : 'totalreadsbasesunpairedfwd',
-     'totalreadsbasescorrected' : 'totalreadsbasescorrected',
-     'totalreadsbasesunion' : 'totalreadsbasesunion',
-     'meanlengthunion' : 'meanlengthunion',
-     'meanlengthcorrected' : 'meanlengthcorrected',
-     'meanlengthunpairedfwd' : 'meanlengthunpairedfwd',
-     'meanlengthunpairedrev' : 'meanlengthunpairedrev',
-                    }
-        
-    kwargs = {'pereport'               : res,
-              'pefwdreport'            : res,
-              'perevreport'            : res,
-             }
-
-    for dbname, key in pe_metrics_map.iteritems():
-        try:
-            kwargs[dbname]=peMetrics[key]
-        except:
-            kwargs[dbname]='0'
-
-    pem, created = models.PEMetrics.objects.get_or_create(pereport=res, 
-                                                            defaults=kwargs)
-    if not created:
-        for key, value in kwargs.items():
-            setattr(pem, key, value)
-        pem.save()
 
 
 def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
@@ -257,6 +176,8 @@ def set_type(num_string):
 def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
     #print 'addlibmetrics'
     metric_map = {'totalNumReads':'Total number of Reads', 
+    'total_mapped_reads':'Total Mapped Reads',
+    'total_mapped_target_bases':'Total Mapped Target Bases',
     'genomelength':'Genomelength',
     'rNumAlignments':'Filtered relaxed BLAST Alignments',
     'rMeanAlignLen':'Filtered relaxed BLAST Mean Alignment Length',
@@ -498,8 +419,6 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
     'extrapolated_400q47_reads':'Extrapolated Filtered 400Q47 Reads'
     }
 
-    quality_metrics_map = {'sysSNR':'System SNR'}
-
     if keyPeak != None:
         aveKeyCount = float(keyPeak.get('Library',0.0))
     else:
@@ -517,11 +436,6 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
 
     kwargs = {'report':res, 'aveKeyCounts':aveKeyCount, 'align_sample': align_sample }
 
-    for dbname, key in quality_metrics_map.iteritems():
-        if qualityMetrics != None:
-            kwargs[dbname] = set_type(qualityMetrics.get(key, '0'))
-        else:
-            kwargs[dbname] = set_type('0')
     for dbname, key in metric_map.iteritems():
         if libMetrics != None:
             # convert all "N/A" values to 0, e.g. 20_coverage_percentage=N/A, see TS-5044
@@ -534,6 +448,7 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
             kwargs[dbname] = set_type('0')
         
     try:
+        kwargs['sysSNR'] = qualityMetrics['system_snr']
         kwargs['cf'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
         kwargs['ie'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
         kwargs['dr'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
@@ -551,45 +466,66 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
 
 
 def addQualityMetrics(QualityMetrics, res):
-    # print ' add quality metrics'
-    metric_map = {'q0_bases' : 'Number of Bases at Q0',
-                    'q0_reads' : 'Number of Reads at Q0',
-                    'q0_max_read_length' : 'Max Read Length at Q0',
-                    'q0_mean_read_length' : 'Mean Read Length at Q0',
-                    'q0_50bp_reads' : 'Number of 50BP Reads at Q0',
-                    'q0_100bp_reads' : 'Number of 100BP Reads at Q0',
-                    'q0_15bp_reads' : 'Number of 150BP Reads at Q0',
-                    'q17_bases' : 'Number of Bases at Q17',
-                    'q17_reads' : 'Number of Reads at Q17',
-                    'q17_max_read_length' :  'Max Read Length at Q17',
-                    'q17_mean_read_length' : 'Mean Read Length at Q17',
-                    'q17_50bp_reads' : 'Number of 50BP Reads at Q17',
-                    'q17_100bp_reads' : 'Number of 100BP Reads at Q17',
-                    'q17_150bp_reads' : 'Number of 150BP Reads at Q17',
-                    'q20_bases' : 'Number of Bases at Q20',
-                    'q20_reads' : 'Number of Reads at Q20',
-                    'q20_max_read_length' :  'Max Read Length at Q20',
-                    'q20_mean_read_length' :  'Mean Read Length at Q20',
-                    'q20_50bp_reads' : 'Number of 50BP Reads at Q20',
-                    'q20_100bp_reads' : 'Number of 100BP Reads at Q20',
-                    'q20_150bp_reads' : 'Number of 150BP Reads at Q20'
-                  }
 
     kwargs = {'report':res }
 
-    for dbname, key in metric_map.iteritems():
-        if QualityMetrics != None:
-            kwargs[dbname] = set_type(QualityMetrics.get(key, '0'))
-        else:
-            kwargs[dbname] = set_type('0')
+    try:
+        kwargs["q0_50bp_reads"]        = 0
+        kwargs["q0_100bp_reads"]       = 0
+        kwargs["q0_150bp_reads"]       = 0
+        kwargs["q0_bases"]             = sum(QualityMetrics["qv_histogram"])
+        kwargs["q0_reads"]             = QualityMetrics["full"]["num_reads"]
+        kwargs["q0_max_read_length"]   = QualityMetrics["full"]["max_read_length"]
+        kwargs["q0_mean_read_length"]  = QualityMetrics["full"]["mean_read_length"]
+        kwargs["q17_50bp_reads"]       = 0
+        kwargs["q17_100bp_reads"]      = 0
+        kwargs["q17_150bp_reads"]      = 0
+        kwargs["q17_bases"]            = sum(QualityMetrics["qv_histogram"][17:])
+        kwargs["q17_reads"]            = QualityMetrics["Q17"]["num_reads"]
+        kwargs["q17_max_read_length"]  = QualityMetrics["Q17"]["max_read_length"]
+        kwargs["q17_mean_read_length"] = QualityMetrics["Q17"]["mean_read_length"]
+        kwargs["q20_50bp_reads"]       = 0
+        kwargs["q20_100bp_reads"]      = 0
+        kwargs["q20_150bp_reads"]      = 0
+        kwargs["q20_bases"]            = sum(QualityMetrics["qv_histogram"][20:])
+        kwargs["q20_reads"]            = QualityMetrics["Q20"]["num_reads"]
+        kwargs["q20_max_read_length"]  = QualityMetrics["Q20"]["max_read_length"]
+        kwargs["q20_mean_read_length"] = QualityMetrics["Q20"]["mean_read_length"]
+
+        read_length_histogram = QualityMetrics['full']['read_length_histogram']
+        if len(read_length_histogram) > 50:
+            kwargs["q0_50bp_reads"] = sum(read_length_histogram[50:])
+        if len(read_length_histogram) > 100:
+            kwargs["q0_100bp_reads"] = sum(read_length_histogram[100:])
+        if len(read_length_histogram) > 150:
+            kwargs["q0_150bp_reads"] = sum(read_length_histogram[150:])
+
+        read_length_histogram = QualityMetrics['Q17']['read_length_histogram']
+        if len(read_length_histogram) > 50:
+            kwargs["q17_50bp_reads"] = sum(read_length_histogram[50:])
+        if len(read_length_histogram) > 100:
+            kwargs["q17_100bp_reads"] = sum(read_length_histogram[100:])
+        if len(read_length_histogram) > 150:
+            kwargs["q17_150bp_reads"] = sum(read_length_histogram[150:])
+
+        read_length_histogram = QualityMetrics['Q20']['read_length_histogram']
+        if len(read_length_histogram) > 50:
+            kwargs["q20_50bp_reads"] = sum(read_length_histogram[50:])
+        if len(read_length_histogram) > 100:
+            kwargs["q20_100bp_reads"] = sum(read_length_histogram[100:])
+        if len(read_length_histogram) > 150:
+            kwargs["q20_150bp_reads"] = sum(read_length_histogram[150:])
+
+
+    except Exception as err:
+        print("During QualityMetrics creation: %s", err)
+
     quality, created = models.QualityMetrics.objects.get_or_create(report=res, 
                                                             defaults=kwargs)
     if not created:
         for key, value in kwargs.items():
             setattr(quality, key, value)
         quality.save()
-
-
 
 
 def pluginStoreInsert(pluginDict):
@@ -642,7 +578,7 @@ def updateStatus(primarykeyPath, status, reportLink = False):
 
     res.save()
 
-def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, peJsonPath, primarykeyPath, uploadStatusPath):
+def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, primarykeyPath, uploadStatusPath):
 
     return_message = ""
     tfMetrics = None
@@ -671,19 +607,6 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
         BaseCallerMetrics = None
         return_message += 'ERROR: generating BaseCallerMetrics failed - file %s is missing' % BaseCallerJsonPath
 
-    peMetrics = None
-    if os.path.exists(peJsonPath):
-        try:
-            afile = open(peJsonPath, 'r')
-            peMetrics = json.load(afile)
-            afile.close()
-        except:
-            peMetrics = None
-            return_message += traceback.print_exc()
-    else:
-        peMetrics = None
-        return_message += 'INFO: generating peMetrics failed - file %s is missing' % peJsonPath
-
     beadMetrics = None
     if os.path.isfile(beadPath):
         try:
@@ -703,10 +626,16 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
 
     QualityMetrics = None
     if os.path.exists(QualityPath):
-        #if the quality metrics exist, make a dict out of them
-        QualityMetrics = parse_metrics(QualityPath)
+        try:
+            afile = open(QualityPath, 'r')
+            QualityMetrics = json.load(afile)
+            afile.close()
+        except:
+            QualityMetrics = None
+            return_message += traceback.print_exc()
     else:
         QualityMetrics = None
+        return_message += 'ERROR: generating QualityMetrics failed - file %s is missing' % QualityPath
 
     if os.path.exists(keyPath):
         keyPeak = parse_metrics(keyPath)
@@ -717,13 +646,13 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
 
     procParams = None
     if os.path.exists(procPath):
-        procParams = textToDict(procPath)
+        procParams = fileToDict(procPath)
 
-    writeDbFromDict(tfMetrics, procParams, beadMetrics, None, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, peMetrics, primarykeyPath, uploadStatusPath)
+    writeDbFromDict(tfMetrics, procParams, beadMetrics, None, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath)
 
     return return_message
 
-def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, peMetrics, primarykeyPath, uploadStatusPath):
+def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath):
     print "writeDbFromDict"
 
     # We think this will fix "DatabaseError: server closed the connection unexpectedly"
@@ -746,7 +675,7 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
     res = models.Results.objects.get(pk=rpk)
     if status != None:
         res.status = status
-        if status != 'Completed':
+        if not 'Completed' in status:
            res.reportLink = res.log
     res.timeStamp = datetime.datetime.now()
     res.save()
@@ -763,13 +692,6 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
         addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res)
     except:
         e.write("Failed addTfMetrics\n")
-        print traceback.format_exc()
-        print sys.exc_info()[0]
-    try:
-        e.write('Adding PE Metrics\n')
-        addPeMetrics(peMetrics, res)
-    except:
-        e.write("Failed addpeMetrics\n")
         print traceback.format_exc()
         print sys.exc_info()[0]
     try:
@@ -818,8 +740,7 @@ if __name__=='__main__':
     alignmentSummaryPath = os.path.join(folderPath, ALIGNMENT_RESULTS, 'alignment.summary')
     primarykeyPath = os.path.join(folderPath, 'primary.key')
     BaseCallerJsonPath = os.path.join(folderPath, BASECALLER_RESULTS, 'BaseCaller.json')
-    peJsonPath = os.path.join(folderPath, 'pe.json')
-    QualityPath = os.path.join(folderPath, BASECALLER_RESULTS, 'quality.summary')
+    QualityPath = os.path.join(folderPath, BASECALLER_RESULTS, 'ionstats_basecaller.json')
     keyPath = os.path.join(folderPath, 'raw_peak_signal')
     uploadStatusPath = os.path.join(folderPath, 'status.txt')
 
@@ -832,7 +753,6 @@ if __name__=='__main__':
                      keyPath,
                      QualityPath,
                      BaseCallerJsonPath,
-                     peJsonPath,
                      primarykeyPath,
                      uploadStatusPath)
 

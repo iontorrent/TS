@@ -51,9 +51,14 @@ void usage() {
 
 void GenerateDataChunks(TraceConfig &config, T0Calc &t0, const struct RawImage *raw, 
                         int rowStep, int colStep, GridMesh<SigmaEst> &sigmaTMid,
-                        GridMesh<TraceChunk> &mTraceChunks) {
+                        GridMesh<TraceChunk> &mTraceChunks, Image &img) {
   mTraceChunks.Init(raw->rows, raw->cols, rowStep, colStep);
   int rowStart,rowEnd,colStart, colEnd;
+  size_t frameStep = raw->rows * raw->cols;
+  int16_t *frameBuff[raw->frames];
+  for (int i = 0; i < raw->frames; i++) {
+    frameBuff[i] = raw->image + (i * frameStep);
+  }
   for (size_t bIx = 0; bIx < t0.GetNumRegions(); bIx++) {
     SigmaEst &est = sigmaTMid.GetItem(bIx);
     t0.GetRegionCoords(bIx, rowStart, rowEnd, colStart, colEnd);
@@ -68,41 +73,29 @@ void GenerateDataChunks(TraceConfig &config, T0Calc &t0, const struct RawImage *
     chunk.mOrigFrames = raw->frames;
     chunk.mT0 = t0Time/raw->baseFrameRate;
     // Old style using t0 instead of tmid nuc
-    //    chunk.mTime.SetUpTime(raw->uncompFrames, chunk.mT0, chunk.mStartDetailedTime, chunk.mStopDetailedTime, chunk.mLeftAvg);
-    chunk.mTime.SetUpTime(raw->uncompFrames, chunk.mTMidNuc, chunk.mStartDetailedTime, chunk.mStopDetailedTime, chunk.mLeftAvg);
+    chunk.mTime.SetUpTime(raw->uncompFrames, chunk.mT0, chunk.mStartDetailedTime, chunk.mStopDetailedTime, chunk.mLeftAvg);
     chunk.mBaseFrameRate = raw->baseFrameRate;
     chunk.mTimePoints.resize(chunk.mTime.mTimePoints.size());
     copy(chunk.mTime.mTimePoints.begin(), chunk.mTime.mTimePoints.end(), chunk.mTimePoints.begin());
     chunk.mTime.SetupConvertVfcTimeSegments(raw->frames, raw->timestamps, raw->baseFrameRate, raw->rows * raw->cols);
+    //    if (bIx == t0.GetNumRegions() /2) {
+      // cout << "Setup Frames: ";
+      // float deltaFrame = 0;
+      // for (int i = 0; i < chunk.mTime.npts(); i++) {
+      //   deltaFrame += chunk.mTime.deltaFrame[i];
+      //   cout << "\t" << deltaFrame;
+      // }
+      // cout << endl;
+      // chunk.mTime.WriteLinearTransformation(raw->rows * raw->cols);
+      //    }
     chunk.SetChipInfo(raw->rows, raw->cols, raw->frames);
     chunk.SetDimensions(rowStart, rowEnd-rowStart, colStart, colEnd-colStart, 0, chunk.mTime.npts());
     chunk.ZeroData();
     chunk.mTime.ConvertVfcSegmentsOpt(rowStart, rowEnd, colStart, colEnd, 
                                       raw->rows, raw->cols, raw->frames,
-                                      raw->image, &chunk.mData[0]);
+                                      frameBuff, &chunk.mData[0]);
   }
 }
-
-// void EstimateSigma(T0Calc &t0, SigmaTMidNucEstimation &sigmaEst, GridMesh<SigmaEst> &sigmaTMid) {
-//   t0.CalculateSlopePostT0(2);
-//   for (size_t i = 0; i < t0.GetNumRegions(); i++) {
-//     float slopeEst = t0.GetSlope(i);
-//     float t0Est = t0.GetT0(i);
-//     SigmaEst &est = sigmaTMid.GetItem(i);
-//     est.mSigma = 0;
-//     est.mTMidNuc = 0;
-//     if (t0Est > 0 && slopeEst > 0) {
-//       est.mT0 = t0Est;
-//       est.mRate = slopeEst;
-//       sigmaEst.Predict(t0Est, slopeEst, est.mSigma, est.mTMidNuc);
-//     }
-//     else {
-//       int rowStart,rowEnd,colStart, colEnd;
-//       t0.GetRegionCoords(i, rowStart, rowEnd, colStart, colEnd);
-//       cout << "Couldn't estimate sigma for region: " << rowStart << "," << colStart << endl;
-//     }
-//   }
-// }
 
 void ShiftWell(size_t wellIdx, int frames, float shift, size_t frameStep, short *scratch, short *image) {
 
@@ -197,6 +190,27 @@ void OutputSigmaTmidEstimates(GridMesh<SigmaEst> &sigmaTMid, const char *fileNam
   out.close();
 }
 
+
+  void AddMetaData(SynchDat &sdat, const RawImage *raw, int acqNum) {
+    string s = ToStr(raw->timestamps[0]);
+    for (int i = 1; i < raw->frames; i++) {
+      s = s + "," + ToStr(raw->timestamps[i]);
+    }
+    sdat.SetValue("x_block", "0");
+    sdat.SetValue("y_block", "0");
+    sdat.SetValue("base_frame_rate","66");
+    sdat.SetValue("experiment_name","unknown");
+    sdat.SetValue("machine_name", "dat");
+    sdat.SetValue("serial_number","0");
+    sdat.SetValue("oversampling", "0");
+    sdat.SetValue("overclocking", "0");
+    sdat.SetValue("overclocking", "0");
+    sdat.SetValue("acq_num", ToStr(acqNum+1));  // +1 as dats are 0 based and acqs are 1 based
+    sdat.SetValue("orig_timestamps", ToStr(s));
+    sdat.SetValue("uncompressed_frames", ToStr(raw->uncompFrames));
+  }
+
+
 void OutputTraceChunks(GridMesh<TraceChunk> &traceChunks, const char *fileName) {
   //ofstream out("flow_0_data_chunks.txt");
   ofstream out(fileName);
@@ -230,14 +244,16 @@ public:
     wellT0 = NULL;
     bfT0 = NULL;
     sigmaTMid = NULL;
+    acqNum = -1;
   }
-  void Init(TraceConfig *_config, const std::string &_input, const std::string &_output, vector<float> *_wellT0, T0Calc *_bfT0, GridMesh<SigmaEst> *_sigmaTMid) {
+  void Init(TraceConfig *_config, const std::string &_input, const std::string &_output, vector<float> *_wellT0, T0Calc *_bfT0, GridMesh<SigmaEst> *_sigmaTMid, int _acqNum) {
     config = _config;
     input = _input;
     output = _output;
     wellT0 = _wellT0;
     bfT0 = _bfT0;
     sigmaTMid = _sigmaTMid;
+    acqNum = _acqNum;
 
     if (config->compressionType == "svd") {
       SvdDatCompress *dc = new SvdDatCompress(config->precision, config->numEvec);
@@ -296,7 +312,8 @@ public:
     const RawImage *datRaw = datImg.GetImage(); 
     //    ShiftTraces(*bfT0, *wellT0, datRaw->frames, datRaw->baseFrameRate, datRaw->timestamps, datRaw->image);
     SynchDat sdat; //GridMesh<TraceChunk> traceChunks;
-    GenerateDataChunks(*config, *bfT0, datRaw, config->row_step, config->col_step, *sigmaTMid, sdat.mChunks);
+    AddMetaData(sdat, datRaw, acqNum);
+    GenerateDataChunks(*config, *bfT0, datRaw, config->row_step, config->col_step, *sigmaTMid, sdat.mChunks, datImg);
     serializer.Write(output.c_str(), sdat);
 
     if (config->doDebug) {
@@ -318,6 +335,7 @@ public:
   TraceConfig *config;
   std::string input;
   std::string output;
+  int acqNum;
   vector<float> *wellT0;
   T0Calc *bfT0;
   GridMesh<SigmaEst> *sigmaTMid;
@@ -330,6 +348,7 @@ int main(int argc, const char *argv[]) {
   string inputDir;
   string outputDir;
   bool help;
+
   opts.ParseCmdLine(argc, argv);
   opts.GetOption(inputDir, "", '-', "source-dir");
   opts.GetOption(outputDir, "", '-', "output-dir");
@@ -338,18 +357,19 @@ int main(int argc, const char *argv[]) {
   opts.GetOption(config.doDebug, "false", '-', "debug-files");
   opts.GetOption(config.compressionType, "delta", '-', "compression");
   opts.GetOption(config.numFlows, "-1", '-', "num-flows");
-  opts.GetOption(config.numCores, "4", '-', "num-cores");
+  opts.GetOption(config.numCores, "6", '-', "num-cores");
   opts.GetOption(config.errCon,"0",'-',"err-con");
   opts.GetOption(config.rankGood,"0",'-',"rank-good");
   opts.GetOption(config.pivot,"0",'-',"pivot");
   opts.GetOption(help, "false", 'h', "help");
+  opts.GetOption(config.isThumbnail, "false", '-', "thumbnail");
   opts.GetOption(config.use_hard_est, "false",'-', "use-hard-est");
   opts.GetOption(config.t0_hard, "0", '-', "t0-hard");
   opts.GetOption(config.tmid_hard, "0", '-', "tmid-hard");
   opts.GetOption(config.sigma_hard, "0", '-', "sigma-hard");
   opts.GetOption(config.row_step, "100", '-', "row-step");
   opts.GetOption(config.col_step, "100", '-', "col-step");
-  opts.GetOption(config.bg_param, "", '-', "bg-param");
+  opts.GetOption(config.bg_param, "", '-', "region-param");
   opts.GetOption(config.grind_acq_0, "0", '-', "grind-acq0");
   if(help || inputDir.empty() || outputDir.empty()) {
     usage();
@@ -401,7 +421,7 @@ int main(int argc, const char *argv[]) {
     cout << "Doing lossless delta plain fast compression. (" << serializer.GetCompressionType() << ")" << endl;
   }
   else if (config.compressionType == "delta-plain-fst-smx") {
-    DeltaCompFstSmX *delta = new DeltaCompFstSmX();
+   DeltaCompFstSmX *delta = new DeltaCompFstSmX();
     serializer.SetCompressor(delta);
     cout << "Doing lossless delta plain fast compression. (" << serializer.GetCompressionType() << ")" << endl;
   }
@@ -501,6 +521,7 @@ int main(int argc, const char *argv[]) {
     /* Estimate sigma and t_mid_nuc */
     if (datIx == 0) {
       cout << "Doing acquisition t0" << endl;
+
       GenerateAcqT0Prior(config, datRaw->image, datRaw->baseFrameRate, datRaw->rows, datRaw->cols,
                          datRaw->frames, datRaw->timestamps,
                          config.row_step, config.col_step, &mask, t0, t0Prior);
@@ -511,7 +532,12 @@ int main(int argc, const char *argv[]) {
       for (size_t bIx = 0; bIx < t0.GetNumRegions(); bIx++) {
         t0.SetT0(bIx, bfT0.GetT0(bIx));
       }
-      EstimateSigmaValue(t0, sigmaEst, sigmaTMid);
+      int neighbors = 2;
+      if (config.isThumbnail) {
+        cout << "Doing thumbnail version of slope." << endl;
+        neighbors = 1;
+      }
+      EstimateSigmaValue(t0, sigmaEst, sigmaTMid, neighbors);
       timer.PrintMilliSeconds(cout,"Sigma Est took:");
       string sigmaFile = outputDir + "/sigma_tmid_est.txt";
       OutputSigmaTmidEstimates(sigmaTMid, sigmaFile.c_str());
@@ -524,44 +550,44 @@ int main(int argc, const char *argv[]) {
     //    ShiftTraces(bfT0, wellT0, datRaw->frames, datRaw->baseFrameRate, datRaw->timestamps, datRaw->image);
     timer.PrintMilliSeconds(cout,"Shift took:");
     if (!config.bg_param.empty()) {
-      Mat<int> rowsCols;
-      Mat<float> tmidSigma;
-      Mat<float> fitTmidSigma;
-      string path = config.bg_param + ":/region/region_offset_RowCol";
-      if (!H5File::ReadMatrix(path, rowsCols)) {
+      DataCube<int> rowsCols;
+      DataCube<float> tmidSigma;
+      DataCube<float> fitTmidSigma;
+      string path = config.bg_param + ":/region/region_location";
+      if (!H5File::ReadDataCube(path, rowsCols)) {
         ION_ABORT("Couldn't read file: " + path);
       }
-      path = config.bg_param + ":/region/region_param/flow_0020";
-      if (!H5File::ReadMatrix(path, fitTmidSigma)) {
+      path = config.bg_param + ":/region/region_init_param";
+      if (!H5File::ReadDataCube(path, fitTmidSigma)) {
         ION_ABORT("Couldn't read file: " + path);
       }
-      for (size_t i = 0; i < rowsCols.n_rows; i++) {
-        int row = rowsCols.at(i,0);
-        int col = rowsCols.at(i,1);
+      for (size_t i = 0; i < rowsCols.GetNumX(); i++) {
+        int row = rowsCols.At(i,1,0);
+        int col = rowsCols.At(i,0,0);
         SigmaEst &est = sigmaTMid.GetItemByRowCol(row, col);
-        float tmid_est =  fitTmidSigma.at(i,61);
-        float sigma_est = fitTmidSigma.at(i,66);
+        float tmid_est =  fitTmidSigma.At(i,0,0);
+        float sigma_est = fitTmidSigma.At(i,1,0);
         est.mTMidNuc = tmid_est;
         est.mSigma = sigma_est;
       }
       string fitSigmaFile = outputDir + "/bg_fit_sigma_tmid_est.txt";
       OutputSigmaTmidEstimates(sigmaTMid, fitSigmaFile.c_str());
 
-      path = config.bg_param + ":/region/region_init_param";
-      if (!H5File::ReadMatrix(path, tmidSigma)) {
-        ION_ABORT("Couldn't read file: " + path);
-      }
-      for (size_t i = 0; i < rowsCols.n_rows; i++) {
-        int row = rowsCols.at(i,0);
-        int col = rowsCols.at(i,1);
-        SigmaEst &est = sigmaTMid.GetItemByRowCol(row, col);
-        float tmid_est =  tmidSigma.at(i,0);
-        float sigma_est = tmidSigma.at(i,1);
-        est.mTMidNuc = tmid_est;
-        est.mSigma = sigma_est;
-      }
-      string sigmaFile = outputDir + "/supplied_sigma_tmid_est.txt";
-      OutputSigmaTmidEstimates(sigmaTMid, sigmaFile.c_str());
+      // path = config.bg_param + ":/region/region_init_param";
+      // if (!H5File::ReadMatrix(path, tmidSigma)) {
+      //   ION_ABORT("Couldn't read file: " + path);
+      // }
+      // for (size_t i = 0; i < rowsCols.n_rows; i++) {
+      //   int row = rowsCols.at(i,0);
+      //   int col = rowsCols.at(i,1);
+      //   SigmaEst &est = sigmaTMid.GetItemByRowCol(row, col);
+      //   float tmid_est =  tmidSigma.at(i,0);
+      //   float sigma_est = tmidSigma.at(i,1);
+      //   est.mTMidNuc = tmid_est;
+      //   est.mSigma = sigma_est;
+      // }
+      // string sigmaFile = outputDir + "/supplied_sigma_tmid_est.txt";
+      // OutputSigmaTmidEstimates(sigmaTMid, sigmaFile.c_str());
     }
     else if (config.use_hard_est) {
       for (size_t i = 0; i < bfT0.GetNumRegions(); i++) {
@@ -581,25 +607,40 @@ int main(int argc, const char *argv[]) {
     if (datIx == 0  && config.grind_acq_0 > 0) {
       int nTimes = config.grind_acq_0;
       timer.StartTimer();
+      size_t processMicroSec = 0;
+      size_t hdf5MicroSec = 0;
+      size_t compressMicroSec = 0;
+      size_t convertMicroSec = 0;
       for (int i = 0; i <nTimes; i++) {
         //GridMesh<TraceChunk> traceChunken;
         SynchDat sdatIn;
-        GenerateDataChunks(config, bfT0, datRaw, config.row_step, config.col_step, sigmaTMid, sdatIn.mChunks);
+        AddMetaData(sdat, datRaw, datIx);
+	ClockTimer convTimer;
+        GenerateDataChunks(config, bfT0, datRaw, config.row_step, config.col_step, sigmaTMid, sdatIn.mChunks,datImg);
+	convertMicroSec += convTimer.GetMicroSec();
         snprintf(buffer, sizeof(buffer), "%s/acq_%.4d.sdat", outputDir.c_str(), (int)datIx);
         serializer.Write(buffer, sdatIn);
+	processMicroSec += serializer.computeMicroSec;
+	hdf5MicroSec += serializer.ioMicroSec;
+	compressMicroSec += serializer.compressMicroSec;
       }
       size_t usec = timer.GetMicroSec();
-      cout << "Took: " << usec / 1.0e6 << " seconds, " << usec / (nTimes * 1.0f) << " usec per load." << endl;
+      cout << "Took: " << usec / 1.0e6 << " seconds, " << usec / (nTimes * 1.0f) << " usec per write." << endl;
       timer.PrintMilliSeconds(cout,"Chunks took:");
+      cout << "Read took: " << processMicroSec / (1e3 * nTimes) << " milli seconds per sdat compute." << endl;
+      cout << "Read took: " << hdf5MicroSec / (1e3 * nTimes) << " milli seconds per sdat hdf5." << endl;
+      cout << "Read took: " << compressMicroSec / (1e3 * nTimes) << " milli seconds per sdat compressing." << endl;
+      cout << "Read took: " << convertMicroSec / (1e3 * nTimes) << " milli seconds per sdat converting." << endl;
       exit(0);
     }
     else {
       timer.StartTimer();
+      AddMetaData(sdat, datRaw, datIx);
+      GenerateDataChunks(config, bfT0, datRaw, config.row_step, config.col_step, sigmaTMid, sdat.mChunks,datImg);
+      timer.PrintMilliSeconds(cout,"Chunks took:");
         if (datIx == 0 && config.doDebug) {
           OutputTraceChunks(sdat.mChunks,"flow_0_data_chunks.txt");
         }
-      GenerateDataChunks(config, bfT0, datRaw, config.row_step, config.col_step, sigmaTMid, sdat.mChunks);
-      timer.PrintMilliSeconds(cout,"Chunks took:");
     }
     datImg.Close();    
 
@@ -669,7 +710,7 @@ int main(int argc, const char *argv[]) {
       string input = buffer;
       snprintf(buffer, sizeof(buffer), "%s/acq_%.4d.sdat", outputDir.c_str(), (int)i);
       string output = buffer;
-      jobs[i-1].Init(&config, input, output, &wellT0, &bfT0, &sigmaTMid);
+      jobs[i-1].Init(&config, input, output, &wellT0, &bfT0, &sigmaTMid, i);
       jQueue.AddJob(jobs[i-1]);
     }
     jQueue.WaitUntilDone();

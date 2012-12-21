@@ -51,7 +51,7 @@ RcppExport SEXP CalculateCumulativeIncorporationHydrogensR(
 
     
     PoissonCDFApproxMemo my_math;
-    my_math.Allocate(MAX_HPLEN+1,512,0.05);
+    my_math.Allocate(MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
     my_math.GenerateValues();
     
     // output in frames synchronized

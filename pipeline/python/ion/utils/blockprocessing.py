@@ -42,11 +42,6 @@ class MyConfigParser(ConfigParser.RawConfigParser):
             afile = StringIO.StringIO("[global]\n" + text)
             self.readfp(afile, filename)
 
-def add_status(process, status, message=""):
-    f = open("blockstatus.txt", 'a')
-    f.write(process+"="+str(status)+" "+str(message)+"\n")
-    f.close()
-
 def printtime(message, *args):
     if args:
         message = message % args
@@ -92,8 +87,6 @@ def initTLReport(basefolder):
         # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
         (TMPL_DIR, "report_layout.json", None),
         (TMPL_DIR, "parsefiles.php", None),
-        (TMPL_DIR, "log.html", None),
-        (TMPL_DIR, "alignment_summary.html", None),
         (TMPL_DIR, "format_whole.php", "Default_Report.php",), ## Renamed during copy
         #(os.path.join(distutils.sysconfig.get_python_lib(), 'ion', 'reports',  "BlockTLScript.py", None)
     ]
@@ -104,7 +97,7 @@ def initTLReport(basefolder):
             os.remove(f)
         shutil.copy(os.path.join(d,s), f)
 
-def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULTS,oninstranalysis=False):
+def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULTS,pluginbasefolder,oninstranalysis=False):
     """Performs initialization for both report writing and background report generation."""
 
     printtime("INIT BLOCK REPORT")
@@ -118,6 +111,12 @@ def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULT
 
         if not os.path.exists(resultDir):
             os.mkdir(resultDir)
+        
+        block_pluginbasefolder = os.path.join(resultDir,pluginbasefolder)    
+        if not os.path.isdir(block_pluginbasefolder):
+            oldmask = os.umask(0000)   #grant write permission to plugin user
+            os.mkdir(block_pluginbasefolder)
+            os.umask(oldmask)  
 
         _SIGPROC_RESULTS = os.path.join(SIGPROC_RESULTS, resultDir)
         _BASECALLER_RESULTS = os.path.join(BASECALLER_RESULTS, resultDir)
@@ -165,11 +164,6 @@ def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULT
 
         try:
             os.symlink(os.path.join(cwd,"parsefiles.php"), os.path.join(resultDir,"parsefiles.php"))
-        except:
-            printtime("couldn't create symbolic link")
-
-        try:
-            os.symlink(os.path.join(cwd,"log.html"), os.path.join(resultDir,"log.html"))
         except:
             printtime("couldn't create symbolic link")
 
@@ -222,26 +216,8 @@ def get_plugins_to_run(plugins, report_type):
   printtime("Gettings plugins to run, report type = %s" % report_type)
   plugin_list=[]
   for plugin in sorted(plugins, key=lambda plugin: plugin["name"],reverse=True):  
-
-    runPlug = True
- #   printtime("Plugin %s is enabled, AutoRun is %s" % (plugin['name'], plugin['autorun']))
-    if not plugin['autorun']:
-      continue    #skip to next plugin
-
-    # Exclude this plugin if non-blank entry does not match run info:
-    for label in ['project','sample','libraryName','chipType']:
-      if plugin[label] != None and plugin[label] != "":
-        runPlug = False
-        for i in plugin[label].split(','):
-            i = i.strip()
-            if i in env[label]:
-                runPlug = True
-                break
-            if not runPlug:              
-              continue    #skip to next plugin
-  
-  
     # check if this plugin was selected to run for this run type
+    # default is run on wholechip and thumbnail, but not composite
     if report_type == 'wholechip' or report_type == 'thumbnail':
       selected = True
     else:
@@ -342,6 +318,8 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,ma
         cmd = cmd + ' ASSUME_SORTED=true'
         cmd = cmd + ' CREATE_INDEX=true'
         cmd = cmd + ' USE_THREADING=true'
+        cmd = cmd + ' VERBOSITY=WARNING' # suppress INFO on stderr
+        cmd = cmd + ' QUIET=true' # suppress job-summary on stderr
         cmd = cmd + ' VALIDATION_STRINGENCY=SILENT'
         printtime("DEBUG: Calling '%s'" % cmd)
         subprocess.call(cmd,shell=True)
@@ -361,15 +339,39 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,ma
         traceback.print_exc()
         return 1
 
-def merge_sff_files(sfffilelist,composite_sff_filepath):
+
+def bam2fastq_command(BAMName,FASTQName):
+    com = "java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar"
+    com += " I=%s" % BAMName
+    com += " F=%s" % FASTQName
+    return com
+
+def merge_raw_key_signals(filelist,composite_file):
+
+    mergedKeyPeak = {}
+    mergedKeyPeak['Test Fragment'] = 0
+    mergedKeyPeak['Library'] = 0
+
+    N = 0
+    merged_key_signal_sum = 0
+    for xfile in filelist:
+        try:
+            keyPeak = parse_metrics(xfile)
+            library_key_signal = int(keyPeak['Library'])
+            merged_key_signal_sum += library_key_signal
+            N += 1
+        except:
+            printtime(traceback.format_exc())
+            continue
+    if N > 0:
+        mergedKeyPeak['Library'] = merged_key_signal_sum/N
+
     try:
-        cmd = 'SFFMerge'
-        cmd += ' -o %s ' % composite_sff_filepath
-        for sfffile in sfffilelist:
-            cmd += ' %s' % sfffile
-        printtime("DEBUG: Calling '%s'" % cmd)
-        subprocess.call(cmd,shell=True)
+        f = open(composite_file,'w')
+        f.write('Test Fragment = %s\n' % mergedKeyPeak['Test Fragment'])
+        f.write('Library = %s\n' % mergedKeyPeak['Library'])
+        f.close()
     except:
-        printtime("SFFMerge failed")
+        printtime(traceback.format_exc())
 
     return 0

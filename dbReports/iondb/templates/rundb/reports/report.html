@@ -15,27 +15,32 @@
 	<script type="text/javascript" src="/site_media/resources/scripts/report.js"></script>
 	<script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
 	<script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
-
-	<script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+    <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
 	<script type="text/javascript" src="/site_media/resources/scripts/signal.min.js"></script>
 	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
 	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
 	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
-	<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" media="screen" />
+    <link type="text/css" rel="stylesheet" media="screen" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+
 	{%if not noheader  %}
 	 	<link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
 	{%endif%}
-
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
+	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
 {% endblock extra_head %}
 		
 {% block report-header %}
 <div class="page-nav">
 	<div class="container-fluid">
 		<div class="row-fluid">
-			<div class="span10">
+			<div class="span6">
 			<ul class="nav nav-pills dynamic-navbar"><li><a href="#top" class="navitem">Top</a></li></ul>
 			</div>
-				<a href="/report/getPDF/{{report.pk}}.pdf" class="btn pull-right" style="margin-top: 3px;">Download as PDF</a>
+			<div style="margin-top: 3px;" class="btn-group pull-right">
+				<a href="/report/latex/{{report.pk}}.pdf" class="btn">Summary PDF</a>
+				<a href="/report/getPlugins/{{report.pk}}.pdf" class="btn">Plugins PDF</a>
+			</div>
 		</div>
 	</div>		
 </div>
@@ -44,7 +49,17 @@
     <div class="container-fluid">
         <div class="row-fluid">
             <div id="nameRow" class="span6">
-                <h1 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">Run: {{report.experiment.expName}}</h1>
+                <h1 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">
+                	Run: {{report.experiment.expName}}
+                	<span rel='tooltip' title="Reanalyze experiment">
+	                	<a class="btn" href="/report/analyze/{{report.experiment.pk}}/0/">
+	                		<img src="/site_media/resources/img/gear-active.png" border="0">
+	            		</a>
+            		</span>
+                </h1>
+
+
+
             </div>
             <div id="resultSet" class="span6 form-inline" style="text-align: right;">
             	<a href="{{report.reportLink}}" class="btn pull-right" style="margin-top: 0px;margin-left: 5px;">Classic Report</a>
@@ -71,16 +86,30 @@ report
 			<div>
 
 			</div>
-
+			{% if noplugins %}
+				<div class="alert alert-error">
+				  <button type="button" class="close" data-dismiss="alert">&times;</button>
+				  <strong>Plugin PDF could not be generated because there is no Plugin output!</strong> 
+				</div>
+			{% endif %}
 
 			{#barcodes#}
 			{% include "rundb/reports/blocks/barcodes.html" %}
 
-			{% if plan %}
+			{% if plan or report.experiment.notes %}
 				<div class="row-fluid">
-					<div class="span12">
-						<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Run Plan</a>
+					{%if plan %}
+						<div class="span2">
+							<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Run Plan</a>
+						</div>
+					{% endif %}
+					{% if report.experiment.notes %}
+					<div class="span10">
+						<p>	
+							<span class="label label-info">Notes</span> {{report.experiment.notes}}
+						</p>
 					</div>
+					{%endif%}
 				</div>
 			{% endif %}
 
@@ -140,6 +169,10 @@ report
 
 						{#raw accuracy#}
 						{% include "rundb/reports/blocks/raw.html" %}
+
+						{#alignment#}
+						{% include "rundb/reports/blocks/alignment.html" %}
+
 					</div><!-- row-fluid -->
           {% else %}
           <h3><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
@@ -155,10 +188,13 @@ report
 {%endif%}
 
 	{%if report.isProton %}
-		<h2>Proton ISP Map</h2>
+	{%if isInternalServer %}
+		<h2>Proton ISP Map</h2> (on internal server only)
 		<div id="proton">
 
 		</div>
+		{% include "rundb/reports/blocks/proton_isp_map.html" %}
+	{%endif%}
 	{%endif%}
 
 	{#output files#}

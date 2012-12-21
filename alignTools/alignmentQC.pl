@@ -180,10 +180,10 @@ if($opt->{"aligner"} eq "tmap") {
   $command .= " ".$opt->{"aligner-opts-extra"};
   $command .= " 2>> ".$opt->{"logfile"};
   if(0 == $opt->{"mark-duplicates"}) {
-      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile QUIET=TRUE SO=coordinate";
+      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   else {
-      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile.tmp QUIET=TRUE SO=coordinate";
+      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile.tmp VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));

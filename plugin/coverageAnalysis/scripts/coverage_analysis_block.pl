@@ -9,18 +9,17 @@ use FindBin qw($Bin);
 #--------- Begin command arg parsing ---------
 
 (my $CMD = $0) =~ s{^(.*/)+}{};
-my $DESCR = "Format the output from a double_coverage_analysis run to an html page.
-The two required arguments are the path to the result files and original mapped reads file.
-The results directory is relative to the top level directory (specified by -D option) for HMTL.";
-my $USAGE = "Usage:\n\t$CMD [options] <results directory> <data link file name>";
+my $DESCR = "Collect output from coverageAnalysis run for block/summary HTML page.";
+my $USAGE = "Usage:\n\t$CMD [options] <bam file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
-  -O <file> Output file name (relative to output directory). Should have .html extension. Default: block.html
+  -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
+  -O <file> Output file name (relative to output directory). Should have .html extension. Default: ./block.html
   -D <dirpath> Path to Directory where html page is written. Default: '' (=> use path given by Output file name)
   -S <file> Input Statistics file name. Default: '-' (no summary file)
-  -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt
-  -p <title> Primary table header text. Default 'All Reads'.
-  -t <title> Secondary title for report. Default: ''";
+  -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: ./help_tags.txt
+  -s <title> Stats table header text (Plain text. Fly-over help added if <title> is matched to help text.) Default 'All Reads'.
+  -t <title> Title for report. (Plain text or HTML.) Default: ''";
 
 my $outfile = "block.html";
 my $workdir=".";
@@ -28,7 +27,8 @@ my $statsfile = "";
 my $plotsize = 400;
 my $title = "";
 my $helpfile ="";
-my $thead1 = "All Reads";
+my $tabhead = "All Reads";
+my $genome = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -39,7 +39,8 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-D') {$workdir = shift;}
     elsif($opt eq '-S') {$statsfile = shift;}
     elsif($opt eq '-A') {$helpfile = shift;}
-    elsif($opt eq '-p') {$thead1 = shift;}
+    elsif($opt eq '-g') {$genome = 1;}
+    elsif($opt eq '-s') {$tabhead = shift;}
     elsif($opt eq '-t') {$title = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
@@ -56,28 +57,24 @@ if( $help )
     print STDERR "$OPTIONS\n";
     exit 1;
 }
-elsif( scalar @ARGV != 2 )
+elsif( scalar @ARGV != 1 )
 {
     print STDERR "$CMD: Invalid number of arguments.";
     print STDERR "$USAGE\n";
     exit 1;
 }
 
-my $results1 = shift;
-my $bamfile1 = shift;
+my $bamfile = shift;
 
 $statsfile = "" if( $statsfile eq "-" );
 
 # extract root name for output files from bam file names
-my($runid1,$folder,$ext) = fileparse($bamfile1, qr/\.[^.]*$/);
+my($runid,$folder,$ext) = fileparse($bamfile, qr/\.[^.]*$/);
 
 #--------- End command arg parsing ---------
 
-my $workdir1 = "$workdir/$results1";
-
 # check data folders
 die "No output directory found at $workdir" unless( -d "$workdir" );
-die "No results directory found at $workdir1" unless( -d "$workdir1" );
 
 my %helptext;
 loadHelpText( "$helpfile" );
@@ -108,17 +105,22 @@ print OUTFILE "</style>\n";
 
 print OUTFILE "<center><table><tr>\n";
 displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
-my @keylist = ( "Number of mapped reads", "Percent reads on target", "Percent base reads on target" );
-print OUTFILE "<td>";
-print OUTFILE subTable( "$workdir1/$statsfile", \@keylist );
-print OUTFILE "</td></tr><tr>\n";
-displayResults( "coverage.png", "coverage.xls", "Target Coverage" );
-@keylist = ( "Average base coverage depth", "Uniformity of coverage",
-    "Target coverage at 1x", "Target coverage at 20x", "Target coverage at 100x", "Target coverage at 500x" );
-print OUTFILE "<td>";
-print OUTFILE subTable( "$workdir1/$statsfile", \@keylist );
+my @keylist = ( "Number of mapped reads" );
+if( !$genome )
+{
+  push @keylist, "Percent reads on target";
+}
+push @keylist, ("Average base coverage depth", "Uniformity of base coverage" );
+print OUTFILE "<td><div class=\"statsdata\" style=\"width:350px\">\n";
+print OUTFILE subTable( "$workdir/$statsfile", \@keylist );
+print OUTFILE "</div></td></tr><tr>\n";
+#displayResults( "coverage.png", "coverage.xls", "Target Coverage" );
+#@keylist = ( "Average base coverage depth", "Target base coverage at 1x", "Target base coverage at 30x",
+#  "Target base coverage at 100x", "Target base coverage at 500x" );
+#print OUTFILE "<td><div class=\"statsdata\" style=\"width:350px\">\n";
+#print OUTFILE subTable( "$workdir/$statsfile", \@keylist );
+#print OUTFILE "</div>";
 print OUTFILE "</td></tr></table></center>\n";
-
 print OUTFILE "</div></body></html>\n";
 close( OUTFILE );
 
@@ -147,6 +149,12 @@ sub subTable
     my $htmlText = "<table>\n";
     foreach $keystr (@keylist)
     {
+        if( $keystr eq "" )
+        {
+            # treat empty string as spacer
+            $htmlText .= "  <tr><td class=\"inleft\">&nbsp;</td><td class=\"inright\">&nbsp;</td></tr>\n";
+            next;
+        }
         my $foundKey = 0;
         foreach( @statlist )
         {
@@ -164,7 +172,7 @@ sub subTable
         }
         if( $foundKey == 0 )
         {
-            $htmlText .= "<td>N/A</td>";
+            $htmlText .= "  <tr><td class=\"inleft\">$keystr</td><td class=\"inright\">?</td></tr>\n";
             print STDERR "No value found for statistic '$keystr'\n";
         }
     }
@@ -178,10 +186,10 @@ sub displayResults
     # i.e. it is expected for this set of data to be missing and therefore skipped
     if( $skip != 0 )
     {
-	return unless( -e "$workdir/$results1/$runid1.$tsv" );
+	return unless( -e "$workdir/$runid.$tsv" );
     }
     my $desc = getHelp($alt);
-    writeLinksToFiles( "$results1/$runid1.$pic", "$results1/$runid1.$tsv", $alt, $desc, $style );
+    writeLinksToFiles( "$runid.$pic", "$runid.$tsv", $alt, $desc, $style );
 }
 
 sub loadHelpText
@@ -229,7 +237,6 @@ sub writeLinksToFiles
     $style = " style=\"$style\"" if( $style ne "" );
     if( -f "$workdir/$pic" )
     {
-        #print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\">$alt<br/><img class=\"frm\"$style src=\"$pic\" alt=\"$alt\"/></a> ";
         print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\"><img class=\"frm\"$style src=\"$pic\" alt=\"$alt\"/></a> ";
     }
     else
@@ -237,14 +244,5 @@ sub writeLinksToFiles
         print STDERR "WARNING: Could not locate plot file $workdir/$pic\n";
         print OUTFILE "<td $style>$alt plot unavailable.<br/>";
     }
-#    if( -f "$workdir/$tsv" )
-#    {
-#        print OUTFILE "<a href=\"$tsv\">Download data file</a></td>";
-#    }
-#    else
-#    {
-#        print STDERR "WARNING: Could not locate data file $workdir/$tsv\n";
-#        print OUTFILE "Data file unavailable.</td>";
-#    }
 }
 

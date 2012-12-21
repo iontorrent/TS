@@ -76,7 +76,7 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
 
 
 ## Query all plugins for their info/inspect json block
-@task
+@task(queue="plugins")
 def scan_all_plugins(pluginlist):
     """
     Pass in list of (plugin, scriptpath) pairs, and all will be instantiated an interrogated.
@@ -84,7 +84,6 @@ def scan_all_plugins(pluginlist):
     """
     ret = {}
     logger = scan_all_plugins.get_logger()
-    drop_privileges('ionian', 'ionian')
 
     count = 0
     for data in pluginlist:
@@ -109,11 +108,21 @@ def scan_all_plugins(pluginlist):
         ret[path] = info
         count += 1
 
+        if info and context and 'plugin' in context:
+            ppk = context["plugin"].pk
+            try:
+                from iondb.rundb.models import Plugin
+                p = Plugin.objects.get(pk=ppk)
+                p.updateFromInfo(info)
+                p.save()
+            except:
+                logger.exception("Failed to save info to plugin db cache")
+
     logger.info("Rescanned %d plugins", count)
     return ret
 
 # Helper task to invoke PluginManager rescan, used to rescan after a delay
-@task
+@task(queue="plugins")
 def add_remove_plugins():
     from iondb.plugins.manager import pluginmanager
     pluginmanager.rescan()

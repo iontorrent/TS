@@ -1,0 +1,326 @@
+{% load humanize %}
+{% load pagetools %}
+{% load ion_readable %}
+\documentclass[letterpaper,10pt]{article}
+\usepackage[left=1in,right=1in,top=1.1in,bottom=1.1in]{geometry}
+\usepackage[x11names]{xcolor}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{ctable}
+\usepackage{longtable}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{E}[1]{>{\raggedright\arraybackslash}p{#1}}
+\usepackage{anyfontsize}
+
+\batchmode
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%							   %
+% name your report			   %
+%							   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\ReportTitle}{
+Run Report for {{report.resultsName|latexsafe}}
+}
+
+
+%define custom header style starts
+\fancypagestyle{mystyle}{%
+\fancyhead{}                                                    % clears all header fields.
+\fancyhead[C]{\large\ReportTitle}                               % title of the report, centered
+\fancyfoot{}                                                    % clear all footer fields
+\fancyfoot[L]{\thepage}
+\fancyfoot[R]{\includegraphics[width=20mm]{/opt/ion/iondb/media/IonLogo.png}}
+\renewcommand{\headrulewidth}{1pt}								% the header rule
+\renewcommand{\footrulewidth}{0pt}
+}
+%define custom header style ends
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% document starts			   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\setlength{\parindent}{0pt}
+%%first page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\pagestyle{mystyle}
+ \section*{%
+ Run Summary						
+ }
+%%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+ \begin{minipage}[t]{55.25mm}
+ \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%
+ \begin{tabular}{P{20mm}P{20mm}}
+ %column1									&   column2
+ \bfseries\small {{dbr.total_Q0_bases|ion_readable}}		&   \bfseries\small {{key_signal|slugify}} \\
+ \footnotesize Total Bases					&	\footnotesize Key Signal
+ \end{tabular}
+ \rule{40mm}{0.5pt}\\
+ {\bfseries%
+ {{bead_loading}}\%%
+ }\\
+ Bead Loading
+ \\[1.5mm]
+ {\bfseries
+ ISP Density
+ }
+ \\[1.5mm]
+ \includegraphics[width=44mm]{sigproc_results/Bead_density_contour.png} 		%UL %insert your figure-filename here{}
+ }}
+ \end{minipage}
+%%%%%%%%%%first column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[t]{55.25mm}
+ \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%
+ \begin{tabular}{P{40mm}}
+ %column1
+ \bfseries {{basecaller.total_reads|intcomma}} \\
+ \footnotesize Total Reads
+ \end{tabular} 
+ \rule{40mm}{0.5pt}\\
+ {\bfseries%
+{{usable_sequence}}\%%
+ }
+ \\
+ Usable Sequence
+ \\[1.5mm]
+ {\bfseries
+ ISP Summary
+ }
+ \\[1.5mm]
+  \includegraphics[width=48mm]{basecaller_results/wells_beadogram.png}
+ }}
+ \end{minipage}
+%%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%third column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+ \begin{minipage}[t]{55mm}
+ \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%%
+ \begin{tabular}{P{40mm}}
+ %column1
+ \bfseries {{quality|bracket:"Mean Read Length at Q0"|float2int}} bp \\
+ \footnotesize Mean Read Length
+ \end{tabular} 
+ \rule{40mm}{0.5pt}\\
+ \bfseries\small
+ Read Length
+ \\
+ \includegraphics[width=50mm]{basecaller_results/readLenHisto.png}
+ }}
+ \end{minipage}
+
+%%%%%%%%%%third column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%first column of row2 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[c]{83.5mm}
+ \fcolorbox{gray}{white}{\parbox[t][50mm]{78mm}{\setlength{\parindent}{0mm}\small\centering%%
+ \hspace*{-7mm}\includegraphics[width=93.5mm]{iontrace_Library.png}
+ }}
+ \end{minipage}
+%%%%%%%%%%first column of row2 ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second column of row2 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[c]{82mm}
+ \fcolorbox{gray}{white}{\parbox[t][50mm]{78mm}{\setlength{\parindent}{0mm}\small\centering%%
+ \begin{tabular}{lrl}
+ \bf Addressable Wells			& \bf {{beadsummary.total_addressable_wells|intcomma}}	& {}\\
+ \midrule
+ With ISPs						& {{beadsummary.bead_wells|intcomma}}		& {{ beadsummary.p_bead_wells|latexsafe }}	 \\
+ Live							& {{ beadsummary.live_beads|intcomma }}	& {{ beadsummary.p_live_beads|latexsafe }}\\
+ Test Fragment					& {{ beadsummary.test_fragment_beads|intcomma }}			& {{ beadsummary.p_test_fragment_beads|latexsafe }}\\
+ Library						& {{ beadsummary.library_beads|intcomma }}	& {{ beadsummary.p_library_beads|latexsafe }}\\
+ \bottomrule
+ \end{tabular}%
+ \bigskip
+ 
+ \begin{tabular}{lrl}
+ \bf Library ISPs				& \bf {{ beadsummary.library_beads|intcomma }}	& {}\\
+ \midrule
+ Filtered: Polyclonal 			& {{ basecaller.polyclonal|intcomma }}	& {{ basecaller.p_polyclonal|latexsafe}}\\
+ Filtered: Low Quality			& {{ basecaller.low_quality|intcomma }}		& {{ basecaller.p_low_quality|latexsafe }}\\
+ Filtered: Primer Dimer			& {{ basecaller.primer_dimer|intcomma }}			& {{ basecaller.p_primer_dimer|latexsafe }}\\
+ \bf Final Library ISPs			& \bf {{ basecaller.total_reads|intcomma }}	& \bf {{ basecaller.p_total_reads|latexsafe }}\\
+ \bottomrule
+ \end{tabular}
+ }}
+ \end{minipage}
+ {% if report.experiment.notes %}
+ \smallskip
+ Notes: {{report.experiment.notes|latexsafe}}
+ {% endif %}
+%%%%%%%%%%second column of row2 ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%part row3 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{% if datasets.barcode_config %}
+ \begin{longtable}{E{28mm}E{47mm}E{13mm}E{13mm}E{13mm}E{30mm}}
+ Barcode Name		& Sample	& Bases					& \geq Q20	& Reads		& Mean Read Length\\
+ \midrule
+ {% for barcode in barcodes %}
+ {% if not barcode.filtered %} 
+{{barcode.barcode_name|default:"No barcode"|latexsafe}} & {{barcode.sample|latexsafe}}	& {{barcode.total_bases|ion_readable}} 		&  {{barcode.Q20_bases|ion_readable}}	& {{barcode.read_count}}		& {{barcode.mean_read_length}} \\[2.5mm]
+{% endif %}
+{% endfor %}
+ \bottomrule
+ \end{longtable}
+ {%endif%}
+%%%%%%%%%%part row3 ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%part row4 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ {%if testfragments %}
+ \begin{longtable}{E{30mm}E{30mm}E{30mm}E{52mm}}
+ Test Fragment		& Reads			& Percent 50AQ17	& Read Length Histogram \\
+ \midrule
+ {% for tf_name,tf_data in testfragments.items %}
+ \bf {{tf_name|latexsafe}} & \bf {{tf_data.num_reads|intcomma}} 	& \bf {{tf_data.conversion_50AQ17}}\%	& \includegraphics[width=50mm]{{tf_data.histogram_filename|bracewrap}}\\[2.5mm]
+ {% endfor %}
+ \bottomrule
+ \end{longtable}
+{%endif%}
+%%first page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%second page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage %%starts new page
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Alignment Summary \textit{(aligned to {{reference.name|latexsafe}}) } } 
+ \begin{minipage}[t]{70mm}
+ \fcolorbox{gray}{white}{\parbox[t][70mm]{66.5mm}{\setlength{\parindent}{0mm}\small\centering%
+ \begin{tabular}{P{30mm}P{30mm}}
+ %column1									&   column2
+ \bfseries\small {{alignStats|bracket:"total_mapped_target_bases"|ion_readable}}						&   \bfseries\small {{avg_coverage_depth_of_target}} \\
+ \footnotesize Total Alignment Bases		&	\footnotesize Average Coverage Depth of Reference
+ \end{tabular}
+ \rule{62.5mm}{0.5pt}\\[8mm]
+ \includegraphics[width=65mm]{alignment_rate_plot.png} 		%UL %insert your figure-filename here{}
+ }}
+ \end{minipage}
+%%%%%%%%%%first column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[t]{70mm}
+ \fcolorbox{gray}{white}{\parbox[t][70mm]{66.5mm}{\setlength{\parindent}{0mm}\small\centering%
+ \begin{tabular}{P{40mm}}
+ %column1
+ \bfseries {{raw_accuracy}}\%
+ \\
+ \footnotesize Mean Raw Accuracy 1x\\[3.25mm]
+ \end{tabular}
+ \rule{62.5mm}{0.5pt}\\[-5mm]
+ \includegraphics[width=60mm]{base_error_plot.png} 		%UL %insert your figure-filename here{}
+ }}
+ \end{minipage}
+ 
+%%%%%%%%%%second column of top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[c]{125mm}
+ \fcolorbox{gray}{white}{\parbox[t][30mm]{120mm}{\setlength{\parindent}{0mm}\small\centering%%
+ \begin{tabular}{lrrr}
+ \bf {}								& \bf AQ17 &\bf AQ20		& \bf Perfect\\
+ \midrule
+ \bf Total Number of Bases [Mbp]	& {{ alignment.Filtered_Mapped_Bases_in_Q17_Alignments|ion_readable }}  &	{{ alignment.Filtered_Mapped_Bases_in_Q20_Alignments|ion_readable }}		& {{ alignment.Filtered_Mapped_Bases_in_Q47_Alignments|ion_readable }}\\
+ \bf Mean Length [bp]				& {{ alignment.Filtered_Q17_Mean_Alignment_Length }}  &	{{ alignment.Filtered_Q20_Mean_Alignment_Length }}			& {{ alignment.Filtered_Q47_Mean_Alignment_Length }} \\
+ \bf Longest Alignment [bp]			& {{ alignment.Filtered_Q17_Longest_Alignment }} &	{{ alignment.Filtered_Q20_Longest_Alignment }} 			& {{ alignment.Filtered_Q47_Longest_Alignment }} \\
+ \bf Mean Coverage Depth			& {{ alignment.Filtered_Q17_Mean_Coverage_Depth }} &   {{ alignment.Filtered_Q20_Mean_Coverage_Depth }} 			& {{ alignment.Filtered_Q47_Mean_Coverage_Depth }} \\
+ \bottomrule
+ \end{tabular}%
+ }}
+ \end{minipage}
+ 
+%%%%%%%%%%second row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%third% row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ \begin{minipage}[h]{0.985\textwidth}
+ \fcolorbox{gray}{white}{\parbox[t]{\textwidth}{\setlength{\parindent}{0mm}\centering\small%%
+ \begin{tabular}{E{80mm}E{80mm}}
+ \includegraphics[width=80mm]{Filtered_Alignments_Q10.png}		&  \includegraphics[width=80mm]{Filtered_Alignments_Q17.png} \\[2.5mm]
+ \includegraphics[width=80mm]{Filtered_Alignments_Q20.png}		&  \includegraphics[width=80mm]{Filtered_Alignments_Q47.png}
+ \end{tabular}
+ }}
+ \end{minipage}
+ 
+%%second page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%third page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
+%\section*{Variant Caller Summary}
+{% if has_major_plugins %}
+\newpage 
+{% endif %}
+
+{% for key, value in major_plugins.items %}
+    {% if value %}
+    	\subsection*{ {{key}} }
+    	  \noindent\includegraphics[width=\paperwidth,keepaspectratio]{pdf/{{key}}.png}
+    {% endif %}
+{% endfor %}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%third page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%fourth page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage %%starts new page
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Analysis Details}
+
+	\begin{tabular}{l|l}
+	\bf Run Name & {{experiment.expName|latexsafe}} \\ 
+	\bf Run Date & {{experiment.date}} \\ 
+	\bf Run Flows & {{experiment.flows}} \\ 
+	\bf Projects & 
+			{% spaceless %}
+			{% for project in report.projects.all %}
+				{% if not forloop.first %}, {% endif %}
+				{{project.name|latexsafe}}
+			{% endfor %}
+			{% endspaceless %} \\
+	\bf Sample & {{experiment.sample|latexsafe}} \\ 
+	\bf Library & {{report.reference|latexsafe}} \\ 
+	\bf PGM & {{experiment.pgmName|latexsafe}} \\ 
+	\bf Flow Order & {{experiment.flowsInOrder}} \\ 
+	\bf Library Key & {{experiment.libraryKey}} \\ 
+	\bf TF Key & ATCG \\ 
+	\bf Chip Check & {% spaceless %} {% if experiment.log.calibratepassed %} Passed {% else %}Failed{% endif %}{% endspaceless %} \\
+	\bf Chip Type & {{experiment.chipType}} \\ 
+	\bf Chip Data & {{experiment.rawdatastyle}} \\ 
+	\bf Barcode Set & {{experiment.barcodeId|latexsafe}} \\ 
+	\bf Analysis Name & {{report.resultsName|latexsafe}} \\ 
+	\bf Analysis Date & {{report.timeStamp}} \\ 
+	\bf Analysis Flows & {{report.processedflows}} \\ 
+	\bf runID & {{report.runid}} \\ 
+\end{tabular}%
+
+
+
+ 
+%%%%%%%%%%top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Software Version}
+
+ \begin{tabular}{l|l}
+	{% for item, version in software_versions %}
+		\bf {{item|latexsafe}} & {{version}} \\
+	{% endfor %}
+ \end{tabular}
+ 
+\end{document}

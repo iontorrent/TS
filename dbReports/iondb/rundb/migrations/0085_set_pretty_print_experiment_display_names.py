@@ -1,3 +1,4 @@
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 # encoding: utf-8
 import datetime
 from south.db import db
@@ -11,7 +12,7 @@ class Migration(DataMigration):
         PRETTY_PRINT_RE = re.compile(r'R_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_')
         Experiment = orm['rundb.Experiment']
         #set the display name on pre-existing experiments.
-        for experiment in Experiment.objects.all():
+        for experiment in Experiment.objects.filter(displayName=""):
             nodate = PRETTY_PRINT_RE.sub("", experiment.expName)
             joined = " ".join(nodate.split('_')).strip()
             experiment.displayName = joined or nodate

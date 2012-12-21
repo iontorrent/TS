@@ -49,6 +49,9 @@ class KeyFit {
     param.at(1) = 0;
     flag = -1;
     bfMetric = -1;
+    bufferMetric = -1;
+    goodLive = false;
+    isRef = false;
   }
   
   int wellIdx;
@@ -66,8 +69,10 @@ class KeyFit {
   float peakSig;
   int8_t ok;
   float bfMetric;
+  float bufferMetric;
   int flag;
-
+  bool goodLive;
+  bool isRef;
 };
 
 

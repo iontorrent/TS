@@ -80,6 +80,9 @@
   #global_messages > div.alert{
     margin: 10px 0 6px 0;
   }
+  #main_site {
+    padding: 0 10px;
+  }
 </style>
 <script src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
   <script src="/site_media/js/underscore.js"></script>
@@ -93,7 +96,7 @@
   <h1 id="site-name">{% trans 'Ion Web' %}</h1>
 {% endblock %}
 
-{% block nav-global %}{% endblock %}
+{% block nav-global %}<a id="main_site" href="{% url data %}">Back to Main Site</a>{% endblock %}
 
 {% block pretitle %}
 <div id="global_messages"></div>

@@ -1,155 +1,154 @@
-<div id="modal_references_edit_TF" title="" class="modal modal-550 hide">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		{% if id %}
-		    <h3>Edit Test Fragment</h3>
-		{% else %}
-		    <h3>Add New Test Fragment</h3>
-		{% endif %}
-	</div>
-	<div class="modal-body">
-		<div id="modal-error-messages"></div>
-					
-		<form  class="form-horizontal" id="modal_references_edit_TF_form" action="{{action}}" enctype="multipart/form-data">
-			<fieldset>
-				<div class="control-group">
-					<label for="name" class="control-label">Name</label>
-					<div class="controls">
-						<input value="{{tf.name}}" name="name" id="name" class="input-xlarge textInput required" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="key" class="control-label">Key</label>
-					<div class="controls">
-						<input value="{{tf.key}}" name="key" id="key" class="input-xlarge textInput required validateNuc" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="sequence" class="control-label">Sequence</label>
-					<div class="controls">
-						<input value="{{tf.sequence}}" name="sequence" id="sequence" class="input-xlarge textInput validateNuc" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="isofficial" class="control-label">Enabled</label>
-					<div class="controls">
-						<label class="checkbox">
-						  {% if tf.isofficial %}
-							  <input checked="{{tf.isofficial}}" name="isofficial" id="isofficial" type="checkbox">
-							{% else %}
-							  <input name="isofficial" id="isofficial" type="checkbox">  
-							{% endif %}  
-						</label>
-					</div>
-				</div>				
-				<div class="control-group">
-					<label for="comments" class="control-label">Comments</label>
-					<div class="controls">
-						<input value="{{tf.comments}}" name="comments" id="comments" class="input-xlarge" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-			</fieldset>			
-	  	</form>		
-	</div>
-	<div class="modal-footer">
-	    {% if id %}
-	        <a id="delete" class="btn" href="{% url references_TF_delete id %}" style="float:left;">Delete</a>
-      {% endif %}
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-		<a id="save" class="btn btn-primary" href="#">Save</a>
-	</div>
-	
-	<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
-  <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
-  <script type="text/javascript">
-  $('#modal_references_edit_TF_form').uniform({
-	  holder_class : 'control-group'
-	  , msg_selector: 'p.help-block'
-	  , error_class : 'alert alert-error'
-  });
-  
-	$('#modal_references_edit_TF').on('hidden', function () {
-    		$('body #modal_references_edit_TF').remove();
-   		});	
-   	$('#modal_references_edit_TF_form').submit(function(e){
-			e.preventDefault();
-			return false;
-		});
-		
-		$('#delete').click(function (e) {
-				e.preventDefault();
-				e.stopPropagation();
-				var that = this;
-				$('body #modal_confirm_delete').remove();
-				$.get($(this).attr('href'), function(data) {
-				  	$('body').append(data);
-				    $( "#modal_confirm_delete" ).modal("show");				    
-				    
-				    $('body #modal_confirm_delete').on('modal_confirm_delete_done', function () {
-				      console.log("here");
-			    	  $(that).trigger('modal_references_edit_TF_done', {values: e.values});
-			    	  $('#modal_references_edit_TF').modal("hide");					    
-				    });				    
-				    return false;
-				  });
-			});
-	
-		$('#modal_references_edit_TF .btn-primary').click(function(e) {
-		  $("#sequence").val($("#sequence").val().toUpperCase());
-		  $("#key").val($("#key").val().toUpperCase());
-		
-			var that = this;
-			e.preventDefault();
-			$(".textInput").blur();			
+<div id="modal_references_edit_TF" title="" class="modal hide" data-width="550">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        {% if id %}
+        <h3>Edit Test Fragment</h3>
+        {% else %}
+        <h3>Add New Test Fragment</h3>
+        {% endif %}
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages"></div>
 
-      if ($("#modal_references_edit_TF_form *").hasClass("error")) {
-		    $("#modal_references_edit_TF_form").animate({scrollTop : 0}, "slow");
-		    $(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
-		    return false;
-	    }
+        <form  class="form-horizontal" id="modal_references_edit_TF_form" action="{{action}}" enctype="multipart/form-data">
+            <fieldset>
+                <div class="control-group">
+                    <label for="name" class="control-label">Name</label>
+                    <div class="controls">
+                        <input value="{{tf.name}}" name="name" id="name" class="input-xlarge textInput required" maxlength="512" type="text">
+                        <p class="help-block">
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="key" class="control-label">Key</label>
+                    <div class="controls">
+                        <input value="{{tf.key}}" name="key" id="key" class="input-xlarge textInput required validateNuc" maxlength="512" type="text">
+                        <p class="help-block">
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="sequence" class="control-label">Sequence</label>
+                    <div class="controls">
+                        <input value="{{tf.sequence}}" name="sequence" id="sequence" class="input-xlarge textInput validateNuc" maxlength="512" type="text">
+                        <p class="help-block">
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="isofficial" class="control-label">Enabled</label>
+                    <div class="controls">
+                        <label class="checkbox"> {% if tf.isofficial %}
+                            <input checked="{{tf.isofficial}}" name="isofficial" id="isofficial" type="checkbox">
+                            {% else %}
+                            <input name="isofficial" id="isofficial" type="checkbox">
+                            {% endif %} </label>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="comments" class="control-label">Comments</label>
+                    <div class="controls">
+                        <input value="{{tf.comments}}" name="comments" id="comments" class="input-xlarge" maxlength="512" type="text">
+                        <p class="help-block">
+                        </p>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+    </div>
+    <div class="modal-footer">
+        {% if id %}
+        <a id="delete" class="btn" href="{% url references_TF_delete id %}" style="float:left;">Delete</a>
+        {% endif %}
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a id="save" class="btn btn-primary" href="#">Save</a>
+    </div>
 
-			var json = $('#modal_references_edit_TF_form').serializeJSON()
-				, url = $('#modal_references_edit_TF_form').attr('action')
-				, type = '{{method}}';
-			json.isofficial = $("#isofficial").is(":checked");
-			alert(type);
-			
-			json = JSON.stringify(json);					
-				
-			console.log('transmitting :', type, url, json );
-			// data2 = JSON.stringfy(data);
-	   		var jqxhr = $.ajax(url, {  
-	   						 type: '{{method}}'
-	   						, data: json
-	   						, contentType: 'application/json'
-	   						, dataType: 'json'	
-	   						, processData: false
-			    }).done(function(data) { 
-			    	console.log("success:",  data);
-			    	$('#modal_references_edit_TF').trigger('modal_references_edit_TF_done', {values: e.values});
-			    	$('#modal_references_edit_TF').modal("hide");			    	
-		    	})
-			    .fail(function(data) {
-			    	$('#modal-error-messages').empty();
-			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    	 
-			    })
-			    .always(function(data) { /*console.log("complete:", data);*/ });
-		});
-				
-	</script>
+    <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script>
+    <script type="text/javascript">
+        $('#modal_references_edit_TF_form').uniform({
+            holder_class : 'control-group',
+            msg_selector : 'p.help-block',
+            error_class : 'alert alert-error'
+        });
+
+        $('#modal_references_edit_TF').on('hidden', function() {
+            $('body #modal_references_edit_TF').remove();
+        });
+
+        $('#modal_references_edit_TF_form').submit(function(e) {
+            e.preventDefault();
+            return false;
+        });
+
+        $('#delete').click(function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var that = this;
+            $('body #modal_confirm_delete').remove();
+            $.get($(this).attr('href'), function(data) {
+                $('body').append(data);
+                $("#modal_confirm_delete").modal("show");
+
+                $('body #modal_confirm_delete').on('modal_confirm_delete_done', function() {
+                    console.log("here");
+                    $(that).trigger('modal_references_edit_TF_done', {
+                        values : e.values
+                    });
+                    $('#modal_references_edit_TF').modal("hide");
+                });
+                return false;
+            });
+        });
+
+        $('#modal_references_edit_TF .btn-primary').click(function(e) {
+            $("#sequence").val($("#sequence").val().toUpperCase());
+            $("#key").val($("#key").val().toUpperCase());
+
+            var that = this;
+            e.preventDefault();
+            $(".textInput").blur();
+
+            if ($("#modal_references_edit_TF_form *").hasClass("error")) {
+                $("#modal_references_edit_TF_form").animate({
+                    scrollTop : 0
+                }, "slow");
+                $(".error").effect("highlight", {
+                    "color" : "#F20C18"
+                }, 2000);
+                return false;
+            }
+
+            var json = $('#modal_references_edit_TF_form').serializeJSON(), 
+                url = $('#modal_references_edit_TF_form').attr('action'), 
+                type = '{{method}}';
+            json.isofficial = $("#isofficial").is(":checked");
+            // alert(type);
+
+            json = JSON.stringify(json);
+
+            console.log('transmitting :', type, url, json);
+            // data2 = JSON.stringfy(data);
+            var jqxhr = $.ajax(url, {
+                type : '{{method}}',
+                data : json,
+                contentType : 'application/json',
+                dataType : 'json',
+                processData : false
+            }).done(function(data) {
+                console.log("success:", data);
+                $('#modal_references_edit_TF').trigger('modal_references_edit_TF_done', {
+                    values : e.values
+                });
+                $('#modal_references_edit_TF').modal("hide");
+            }).fail(function(data) {
+                $('#modal-error-messages').empty();
+                $('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                console.log("error:", data);
+            }).always(function(data) {/*console.log("complete:", data);*/
+            });
+        });
+    </script>
 </div>
 

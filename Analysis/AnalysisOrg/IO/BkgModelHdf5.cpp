@@ -161,7 +161,7 @@ void RotatingCube::InitRotatingCube ( H5File &h5_local_ref, int x, int y, int z,
   RotateMyCube ( h5_local_ref, total_blocks, cube_name, cube_description );
 }
 
-void BkgParamH5::TryInitBeads ( H5File &h5_local_ref )
+void BkgParamH5::TryInitBeads ( H5File &h5_local_ref, int verbosity )
 {
   ///------------------------------------------------------------------------------------------------------------
   /// bead parameters
@@ -172,18 +172,18 @@ void BkgParamH5::TryInitBeads ( H5File &h5_local_ref )
     bead_base_parameter.InitBasicCube ( h5_local_ref, bead_col, bead_row, 5, 5,
                                         "/bead/bead_base_parameters","basic 5: copies, etbR, dmult, gain, deltaTime", "Copies,etbR,dmult,gain,deltaTime" );
 
+    if( verbosity>1 ){ //per flow parameters are only included when debug flag is set
+        Amplitude.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
+                                  "/bead/amplitude", "mean hydrogens per molecule per flow", "" );
+        krate_multiplier.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
+                                         "/bead/kmult", "adjustment to krate", "" );
+        // less important?
+        bead_dc.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
+                                "/bead/trace_dc_offset", "additive factor for trace", "" );
 
-    Amplitude.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
-                              "/bead/amplitude", "mean hydrogens per molecule per flow", "" );
-    krate_multiplier.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
-                                     "/bead/kmult", "adjustment to krate", "" );
-
-    // less important?
-    bead_dc.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
-                            "/bead/trace_dc_offset", "additive factor for trace", "" );
-
-    residual_error.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
-                                   "/bead/residual_error", "residual_error", "" );
+        residual_error.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
+                                       "/bead/residual_error", "residual_error", "" );
+    }
 
     // still less important?
     average_error_flow_block.InitBasicCube ( h5_local_ref, bead_col, bead_row, nFlowBlks, 1,
@@ -192,8 +192,6 @@ void BkgParamH5::TryInitBeads ( H5File &h5_local_ref )
         "/bead/clonal_status_per_block", "clonal_status_by_block", "" );
     bead_corrupt_compute_block.InitBasicCube ( h5_local_ref, bead_col, bead_row, nFlowBlks, 1,
         "/bead/corrupt_status_per_block", "corrupt_status_by_block", "" );   // status markers for beads
-
-
 
   }
   catch ( char * str )
@@ -404,7 +402,7 @@ void BkgParamH5::TryInitRegionParams ( H5File &h5_local_ref, ImageSpecClass &my_
                                       "/region/region_location", "smallest corner of region aka offset of beads", "col,row" );
 
     //this is a data-cube per compute block, so need the 'rotating cube' formulation
-    emphasis_val.InitRotatingCube ( h5_local_ref, region_total, MAX_HPLEN+1,MAX_COMPRESSED_FRAMES,nFlowBlks,
+    emphasis_val.InitRotatingCube ( h5_local_ref, region_total, MAX_POISSON_TABLE_COL,MAX_COMPRESSED_FRAMES,nFlowBlks,
                                     "/region/emphasis","Emphasis vector by HPLen in compute blocks" );
 
     InitRegionalParamCube ( h5_local_ref );
@@ -446,12 +444,9 @@ void BkgParamH5::Init ( char *results_folder, SpatialContext &loc_context, Image
     bead_row = loc_context.rows;
     region_total = loc_context.numRegions;
 
-    if ( write_params_flag>1 ) // 2 = give me everything for all beads
-    {
-      ConstructOneFile ( h5BeadDbg, hgBeadDbgFile,local_results_directory, "bead_param.h5" );
+    ConstructOneFile ( h5BeadDbg, hgBeadDbgFile,local_results_directory, "bead_param.h5" );
 
-      TryInitBeads ( h5BeadDbg );
-    }
+    TryInitBeads ( h5BeadDbg, write_params_flag ); //write_params_flag: 1-only important params, small file; 2-all params (very large file, use for debugging only)
 
     ConstructOneFile ( h5RegionDbg, hgRegionDbgFile,local_results_directory, "region_param.h5" );
 

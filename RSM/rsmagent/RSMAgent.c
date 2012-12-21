@@ -250,7 +250,7 @@ static void SendHardwareName(AeDRMDataItem *dataItem, const char* nameFile)
 {
 	char buf[256];
 	int ret;
-	ret = GetConfigEntry(nameFile, ':', "hardwarename", buf, sizeof(buf));
+	ret = GetConfigEntry((char*) nameFile, ':', "hardwarename", buf, sizeof(buf));
 	if (ret == 0)
 	{
 		AeGetCurrentTime(&dataItem->value.timeStamp);
@@ -265,7 +265,7 @@ static void SendBiosVersion(AeDRMDataItem *dataItem, const char* nameFile)
 {
 	char buf[256];
 	int ret;
-	ret = GetConfigEntry(nameFile, ':', "biosversion", buf, sizeof(buf));
+	ret = GetConfigEntry((char*) nameFile, ':', "biosversion", buf, sizeof(buf));
 	if (ret == 0)
 	{
 		AeGetCurrentTime(&dataItem->value.timeStamp);
@@ -451,17 +451,16 @@ int main(int argc, char *argv[])
 printf ("ALARM!\n");
 					}
 */
-if (verbose > 0) {
-	printf("Item: %s Value: ", dataItem.pName);
-	if (dataItem.value.iType == AeDRMDataAnalog)
-		printf("%.4lf\n", dataItem.value.data.dAnalog);
-	else if (dataItem.value.iType == AeDRMDataString)
-		printf("%s\n", dataItem.value.data.pString);
-	else
-		printf("?\n");
-}
+					if (verbose > 0) {
+						printf("Item: %s Value: ", dataItem.pName);
+						if (dataItem.value.iType == AeDRMDataAnalog)
+							printf("%.4lf\n", dataItem.value.data.dAnalog);
+						else if (dataItem.value.iType == AeDRMDataString)
+							printf("%s\n", dataItem.value.data.pString);
+						else
+							printf("?\n");
+					}
 				}
-
 			}
 		}
 
@@ -603,7 +602,7 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 		case STATUS_EXPERIMENT:
 		{
 			// torrent server writes out the experiment metrics files at the end of analysis
-			// (see /opt/ion/iondb/TLScript.py and RSM_TS/createExperimentMetrics.py)
+			// (see TLScript.py)
 			// if we see any experiment metrics files send them to DRM server
 			// SendExperimentMetrics deletes the files when it is done with them.
 			if (0 == system("ls -tr1 TSexperiment-*.txt > TSexperiments.txt"))

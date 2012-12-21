@@ -7,7 +7,7 @@
 #ulimit -s 8192
 #$ -l mem_free=22G,h_vmem=22G,s_vmem=22G
 #normal plugin script
-VERSION="3.2.45211"
+VERSION="3.4.49252"
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should all be set to 0 in production mode
@@ -15,8 +15,9 @@ export PLUGIN_DEV_KEEP_INTERMEDIATE_FILES=0;   # use prior to PLUGIN_DEV_RECALL_
 export PLUGIN_DEV_SKIP_VARIANT_CALLING=0;      # 1 to skip variant calling - use previous calls
 export PLUGIN_DEV_FULL_LOG=0;          # 1 for variant calling log, 2 for additional xtrace (not recommended)
 
-export CONTINUE_AFTER_BARCODE_ERROR=1;
+export SKIP_BAMFILE_VERSION_CHECK=0;
 export ENABLE_HOTSPOT_LEFT_ALIGNMENT=1;
+export SKIP_INDEL_CALLING=0;
 
 # Minimum barcode BAM size required for variant calling. 50,000 bytes ~ 100-400 reads.
 export BCFILE_MIN_SIZE="50000"
@@ -99,7 +100,9 @@ else
 fi
 
 # Convert library type and variant type to parameter file names
-export INPUT_VC_PARAMFILE="${DIRNAME}/paramFiles/${PLUGINCONFIG__LIBRARYTYPE}.${PLUGINCONFIG__VARIATIONTYPE}.json"
+export INPUT_VC_PARAMFILE="${DIRNAME}/pluginMedia/${PLUGINCONFIG__LIBRARYTYPE}.${PLUGINCONFIG__VARIATIONTYPE}.json"
+export START_PLUGIN_JSON="${TSP_FILEPATH_PLUGIN_DIR}/startplugin.json"
+
 
 # Check for merged BAM file override
 SNPSOPT=""
@@ -213,6 +216,7 @@ export PLUGIN_OUT_INDELS="indel_variants.xls"
 export PLUGIN_OUT_ALLVARS="variants.xls"
 export PLUGIN_OUT_CHRVARS="variants_per_chromosome.xls"
 export PLUGIN_OUT_FILELINKS="filelinks.xls"
+export PLUGIN_OUT_PARAM_SETTINGS="variantCaller_Params.xls"
 
 export PLUGIN_OUT_LOCI_SNPS="hotspot_SNP_variants.xls"
 export PLUGIN_OUT_LOCI_INDELS="hotspot_indel_variants.xls"
@@ -416,6 +420,20 @@ else
     echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
     display_static_progress "$HTML";
     write_html_footer "$HTML";
+    
+    #check for BAM file compatibility
+    if [ "$SKIP_BAMFILE_VERSION_CHECK" -eq 0 ]; then
+    RTBAM=0
+    eval "java -Xmx500m -cp ${DIRNAME}/TVC/jar/GenomeAnalysisTK.jar org.iontorrent.vc.locusWalkerAttributes.validateBamFile \"$TSP_FILEPATH_BAM\"" >&2 || RTBAM=$?
+    if [ $RTBAM -ne 0 ]; then
+        write_html_header "$HTML";
+        echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
+        echo "<br/><h3 style=\"text-align:center;color:red\">*** Incorrect BAM file format, ZM tag containg flow signals is missing. Re-generate BAM with new TS.***</h3><br/>" >> "$HTML"
+        write_html_footer "$HTML";
+        exit 1
+    fi
+    fi
+    
     # Perform the analysis
     RT=0
     eval "${SCRIPTSDIR}/call_variants.sh \"${PLUGIN_RUN_NAME}\" \"$TSP_FILEPATH_PLUGIN_DIR\" . \"$TSP_FILEPATH_BAM\"" >&2 || RT=$?

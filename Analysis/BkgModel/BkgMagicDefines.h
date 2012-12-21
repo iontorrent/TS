@@ -3,13 +3,19 @@
 #define BKGMAGICDEFINES_H
 
 #include <sys/types.h>
+#include "SystemMagicDefines.h"
 
 // the single most widely abused macro
 // chunk size of number of flows
 #define NUMFB                   20
 
-// define this here to make sure it is consistent across codebase
-#define MAX_HPLEN 11
+
+// when handling >tables< use the table values
+// plus one for table size
+#define MAX_POISSON_TABLE_COL (MAX_HPXLEN+1) 
+#define MAX_LUT_TABLE_COL (MAX_POISSON_TABLE_COL+1)
+// when used to index into the last column
+#define LAST_POISSON_TABLE_COL (MAX_HPXLEN)
 #define MAX_POISSON_TABLE_ROW 512
 #define POISSON_TABLE_STEP 0.05f
 
@@ -46,7 +52,10 @@
 #define MINAMPL 0.001f
 // TODO: this is what I want for proton, but it breaks the GPU right now
 // #define MINAMPL -0.5f
-#define MAXAMPL MAX_HPLEN-1
+
+// >must be less than the poisson table size<
+// >can be any float smaller than this<
+//#define MAXAMPL LAST_POISSON_TABLE_COL
 
 #define NUMSINGLEFLOWITER 40
 

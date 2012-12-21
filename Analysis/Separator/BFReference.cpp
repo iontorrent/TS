@@ -43,6 +43,8 @@ void BFReference::Init(int nRow, int nCol,
   
   mWells.resize(nRow * nCol);
   fill(mWells.begin(), mWells.end(), Unknown);
+  mBfMetric.resize(nRow * nCol);
+  fill(mBfMetric.begin(), mBfMetric.end(), 1.0f);
 }
 
 bool BFReference::InSpan(size_t rowIx, size_t colIx,
@@ -258,35 +260,52 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vec
   // bfImg.XTChannelCorrect(&mask);
   ImageTransformer::XTChannelCorrect(bfImg.raw, bfImg.results_folder);
   FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
-  int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
-  if (mDoRegionalBgSub) {
-    GridMesh<float> grid;
-    grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
-    int numBin = grid.GetNumBin();
-    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    for (int binIx = 0; binIx < numBin; binIx++) {
-      grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
-      Region reg;
-      reg.row = rowStart;
-      reg.h = rowEnd - rowStart;
-      reg.col = colStart;
-      reg.w = colEnd - colStart;
-      bfImg.SubtractLocalReferenceTraceInRegion(reg, &mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
-    }
-  }
-  else {
-    bfImg.SubtractLocalReferenceTrace(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
-  }
+  // int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
+  // if (mDoRegionalBgSub) {
+  //   GridMesh<float> grid;
+  //   grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
+  //   int numBin = grid.GetNumBin();
+  //   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+  //   for (int binIx = 0; binIx < numBin; binIx++) {
+  //     grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
+  //     Region reg;
+  //     reg.row = rowStart;
+  //     reg.h = rowEnd - rowStart;
+  //     reg.col = colStart;
+  //     reg.w = colEnd - colStart;
+  //     bfImg.SubtractLocalReferenceTraceInRegion(reg, &mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
+  //   }
+  // }
+  // else {
+  //   bfImg.SubtractLocalReferenceTrace(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
+  // }
   Region region;
   region.col = 0;
   region.row = 0;
   region.w = GetNumCol(); //mGrid.GetColStep();
   region.h = GetNumRow(); // mGrid.GetRowStep();
 
-  int startFrame = bfImg.GetFrame(12); // frame 15 on uncompressed 314
+  int startFrame = bfImg.GetFrame(0); // frame 15 on uncompressed 314
   //  int endFrame = bfImg.GetFrame(raw->timestamps[bfImg.Ge]5300); // frame 77 or so
   int endFrame = bfImg.GetFrame(5000); // frame 77 or so
-  bfImg.CalcBeadfindMetric_1(&mask, region, "pre", startFrame, endFrame);
+  //int endFrame = bfImg.GetFrame(5000); // frame 77 or so
+  //  bfImg.CalcBeadfindMetric_1(&mask, region, "pre", startFrame, endFrame);
+  //  bfImg.CalcBeadfindMetricIntegral(&mask, region, "pre", startFrame, endFrame);
+  //  bfImg.CalcBeadfindMetricRegionMean(&mask, region, "pre", startFrame, endFrame);
+  GridMesh<float> grid;
+  grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
+  int numBin = grid.GetNumBin();
+  int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+  for (int binIx = 0; binIx < numBin; binIx++) {
+    grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
+    Region reg;
+    reg.row = rowStart;
+    reg.h = rowEnd - rowStart;
+    reg.col = colStart;
+    reg.w = colEnd - colStart;
+    //    bfImg.SubtractLocalReferenceTraceInRegion(reg, &mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
+    bfImg.CalcBeadfindMetricRegionMean(&mask, reg, "pre",startFrame, endFrame);
+  }
   const double *results = bfImg.GetResults();
 
   int length = GetNumRow() * GetNumCol();

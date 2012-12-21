@@ -140,7 +140,6 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       bg.ZeromerPrediction(fit.wellIdx, flowIx, store, refFlows.unsafe_col(flowIx),p);
       double sig = 0;
       SampleStats<double> mad;
-      //      double zeroSum = 0;
       diff = wellFlows.unsafe_col(flowIx) - p;
       for (size_t frameIx = frameStart; frameIx < frameEnd; frameIx++) {
         sig += diff.at(frameIx);
@@ -152,9 +151,6 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       if (incorp.n_rows == diff.n_rows) {
         pSig =  GetProjection(diff, incorp);
       }
-      // else {
-      //   cout << "why not?" << endl;
-      // }
       projSignal.at(flowIx) = pSig;
       sigVar.AddValue(sig);
 
@@ -167,6 +163,12 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       }
       else if (keys[keyIx].flows[flowIx] == 1 && flowIx < keys[keyIx].usableKeyFlows) {
         onemerSig.AddValue(sig);
+        // double maxValue = 0;
+        // for (size_t fIx = frameStart; fIx < frameEnd-1; fIx++) {
+        //   maxValue = max(maxValue, (diff.at(fIx)+diff.at(fIx+1))/2);
+        // }
+        // projSignal.at(flowIx) = maxValue;
+        // onemerProjMax.AddValue(maxValue);
         if (isfinite(pSig) && incorp.n_rows == p.n_rows) {
           onemerProj.AddValue(pSig);
           double maxSig = 0;

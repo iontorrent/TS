@@ -38,7 +38,7 @@ public:
   //! @param[in]  opts                Command line options
   //! @param[in]  chip_type           Chip type, may determine default phred table
   //! @param[in]  output_directory    Directory where predictor dump file may be saved
-  void Init(OptArgs& opts, const string& chip_type, const string &output_directory);
+  void Init(OptArgs& opts, const string& chip_type, const string &output_directory, bool recalib);
 
   //! @brief  Generate quality values for all bases in a read.
   //! @param[in]  read_name           Read name used in predictor dump
@@ -53,40 +53,48 @@ public:
   //! @param[in]  base_to_flow        Flow number corresponding to each called base
   //! @param[out] quality             Quality values
   void GenerateBaseQualities(const string& read_name, int num_bases, int num_flows,
-      const vector<float> &predictor1, const vector<float> &predictor2,
-      const vector<float> &predictor3, const vector<float> &predictor4,
-      const vector<float> &predictor5, const vector<float> &predictor6,
+      const vector<float> &predictor1, const vector<float> &predictor2, const vector<float> &predictor3,
+      const vector<float> &predictor4, const vector<float> &predictor5, const vector<float> &predictor6,
       const vector<int>& base_to_flow, vector<uint8_t> &quality,
-      const vector<float> &candidate1,
-      const vector<float> &candidate2,
-      const vector<float> &candidate3);
+      const vector<float> &candidate1, const vector<float> &candidate2, const vector<float> &candidate3);
 
   //! @brief  Calculate Local Noise predictor for all bases in a read
-  //! @param[out] local_noise         Local Noise predictor
-  //! @param[in]  max_base            Number of bases for which predictor should be calculated
-  //! @param[in]  base_to_flow        Flow number corresponding to each called base
-  //! @param[in]  corrected_ionogram  Estimated ionogram after dephasing
+  //! @param[out] local_noise               Local Noise predictor
+  //! @param[in]  max_base                  Number of bases for which predictor should be calculated
+  //! @param[in]  base_to_flow              Flow number corresponding to each called base
+  //! @param[in]  normalized_measurements   Normalized flow signal from wells file
+  //! @param[in]  prediction                Model-predicted flow signal
   static void PredictorLocalNoise(vector<float>& local_noise, int max_base, const vector<int>& base_to_flow,
-      const vector<float>& corrected_ionogram);
+      const vector<float>& normalized_measurements, const vector<float>& prediction);
 
   //! @brief  Calculate Noise Overlap predictor shared by all bases in a read
-  //! @param[in]  corrected_ionogram  Estimated ionogram after dephasing
+  //! @param[out] minus_noise_overlap       Noise Overlap predictor
+  //! @param[in]  max_base                  Number of bases for which predictor should be calculated
+  //! @param[in]  normalized_measurements   Normalized flow signal from wells file
+  //! @param[in]  prediction                Model-predicted flow signal
   //! @return Noise Overlap predictor
-  static void PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int max_base, const vector<float>& corrected_ionogram);
+  static void PredictorNoiseOverlap(vector<float>& minus_noise_overlap, int max_base,
+      const vector<float>& normalized_measurements, const vector<float>& prediction);
 
   //! @brief  Calculate Homopolymer Rank predictor for all bases in a read
-  //! @param[out] homopolymer_rank    Homopolymer Rank predictor
-  //! @param[in]  max_base            Number of bases for which predictor should be calculated
-  //! @param[in]  flow_index          Flow increment for each base
-  static void PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector< uint8_t >& flow_index);
+  //! @param[out] homopolymer_rank          Homopolymer Rank predictor
+  //! @param[in]  max_base                  Number of bases for which predictor should be calculated
+  //! @param[in]  sequence                  Called bases
+  static void PredictorHomopolymerRank(vector<float>& homopolymer_rank, int max_base, const vector<char>& sequence);
 
   //! @brief  Calculate Neighborhood Noise predictor for all bases in a read
-  //! @param[out] neighborhood_noise  Neighborhood Noise predictor
-  //! @param[in]  max_base            Number of bases for which predictor should be calculated
-  //! @param[in]  base_to_flow        Flow number corresponding to each called base
-  //! @param[in]  corrected_ionogram  Estimated ionogram after dephasing
+  //! @param[out] neighborhood_noise        Neighborhood Noise predictor
+  //! @param[in]  max_base                  Number of bases for which predictor should be calculated
+  //! @param[in]  base_to_flow              Flow number corresponding to each called base
+  //! @param[in]  normalized_measurements   Normalized flow signal from wells file
+  //! @param[in]  prediction                Model-predicted flow signal
   static void PredictorNeighborhoodNoise(vector<float>& neighborhood_noise, int max_base, const vector<int>& base_to_flow,
-      const vector<float>& corrected_ionogram);
+      const vector<float>& normalized_measurements, const vector<float>& prediction);
+
+
+  static void PredictorBeverlyEvents(vector<float>& beverly_events, int max_base, const vector<int>& base_to_flow,
+      const vector<float>& scaled_residual);
+
 
 protected:
 
@@ -109,7 +117,9 @@ protected:
 
 private:
   float transform_P1(float p);
+  float transform_P2(float p);
   float transform_P5(float p);
+  float transform_P5_v34(float p);
   float transform_P6(float p);
   float transform_P7(float p);
   float transform_P8(float p);

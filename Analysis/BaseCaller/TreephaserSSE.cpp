@@ -167,10 +167,11 @@ void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
   }
   Solve(ts_StepBeg[ts_StepCnt], ts_StepEnd[ts_StepCnt]);
 
-  copySSE(&read.solution[0], sv_PathPtr[MAX_PATHS]->sol, num_flows_*sizeof(char));
+  read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
+  copySSE(&read.sequence[0], sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
   copySSE(&read.normalized_measurements[0], rd_NormMeasure, num_flows_*sizeof(float));
   setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
-  copySSE(&read.prediction[0], sv_PathPtr[MAX_PATHS]->pred, sv_PathPtr[MAX_PATHS]->end*sizeof(float));
+  copySSE(&read.prediction[0], sv_PathPtr[MAX_PATHS]->pred, sv_PathPtr[MAX_PATHS]->window_end*sizeof(float));
 
 }
 
@@ -179,16 +180,16 @@ void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
 // nextState is only used for the simulation step.
 
 void TreephaserSSE::nextState(PathRec RESTRICT_PTR path, int nuc, int end) {
-  int idx = ts_NextNuc[nuc][path->idx];
+  int idx = ts_NextNuc[nuc][path->flow];
   if(idx > end)
     idx = end;
-  if(path->idx != idx) {
-    path->idx = idx;
-    idx = path->end;
+  if(path->flow != idx) {
+    path->flow = idx;
+    idx = path->window_end;
     float alive = 0.0f;
     float RESTRICT_PTR trans = ts_Transition[nuc];
     const float minFrac = 1e-6f;
-    int b = path->beg;
+    int b = path->window_start;
     int e = idx--;
     int i = b;
     while(i < idx) {
@@ -232,8 +233,8 @@ void TreephaserSSE::nextState(PathRec RESTRICT_PTR path, int nuc, int end) {
           path->pred[e++] = 0.0f;
       }
     }
-    path->beg = b;
-    path->end = e;
+    path->window_start = b;
+    path->window_end = e;
   }
 }
 
@@ -242,7 +243,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
 {
   // This computation was formerly an ALWAYS_INLINE fct. getParentCopyNucMask
 //  {
-    int idx = parent->idx;
+    int idx = parent->flow;
     __m128i rFlowEnd = _mm_cvtsi32_si128(end);
     __m128i rNucCpy = _mm_cvtsi32_si128(idx);
     __m128i rNucIdx = _mm_load_si128((__m128i RESTRICT_PTR)(ts_NextNuc4[idx]));
@@ -262,13 +263,13 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
   __m128 rPenNeg = rAlive;
   __m128 rPenPos = rAlive;
 
-  int parLast = parent->end;
+  int parLast = parent->window_end;
   __m128i rEnd = _mm_cvtsi32_si128(parLast--);
-  __m128i rBeg = _mm_cvtsi32_si128(parent->beg);
+  __m128i rBeg = _mm_cvtsi32_si128(parent->window_start);
   rEnd = _mm_shuffle_epi32(rEnd, _MM_SHUFFLE(0, 0, 0, 0));
   rBeg = _mm_shuffle_epi32(rBeg, _MM_SHUFFLE(0, 0, 0, 0));
 
-  int i = parent->beg;
+  int i = parent->window_start;
   int j = 0;
   ad_Adv = 1;
 
@@ -620,63 +621,65 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
   PathRec RESTRICT_PTR parent = sv_PathPtr[0];
   PathRec RESTRICT_PTR best = sv_PathPtr[MAX_PATHS];
 
-  parent->idx = 0;
-  parent->beg = 0;
-  parent->end = 1;
+  parent->flow = 0;
+  parent->window_start = 0;
+  parent->window_end = 1;
   parent->res = 0.0f;
   parent->metr = 0.0f;
   parent->flowMetr = 0.0f;
   parent->dotCnt = 0;
   parent->state[0] = 1.0f;
-  setZeroSSE(parent->sol, num_flows_);
+  parent->sequence_length = 0;
+  parent->last_hp = 0;
   parent->pred[0] = 0.0f;
 
   int pathCnt = 1;
   float bestDist = 1e20; //float(endFlow);
 
   if(begin_flow > 0) {
-    int lastFlow = 0;
-    for(int i = 0; i < begin_flow; ++i) {
-      int n = (parent->sol[i] = best->sol[i]);
-      for(int j = 0; j < n; ++j) {
-        nextState(parent, flow_order_.int_at(i), end_flow);
-        for(int k = parent->beg; k < parent->end; ++k) {
-          if((k & 3) == 0) {
-            sumVectFloatSSE(&parent->pred[k], &parent->state[k], parent->end-k);
-            break;
-          }
-          parent->pred[k] += parent->state[k];
+    static const int char_to_nuc[8] = {-1, 0, -1, 1, 3, -1, -1, 2};
+    for (int base = 0; base < best->sequence_length; ++base) {
+      parent->sequence_length++;
+      parent->sequence[base] = best->sequence[base];
+      if (base and parent->sequence[base] != parent->sequence[base-1])
+        parent->last_hp = 0;
+      parent->last_hp++;
+      nextState(parent, char_to_nuc[best->sequence[base]&7], end_flow);
+      for(int k = parent->window_start; k < parent->window_end; ++k) {
+        if((k & 3) == 0) {
+          sumVectFloatSSE(&parent->pred[k], &parent->state[k], parent->window_end-k);
+          break;
         }
-        //lastFlow = i;
-        lastFlow = parent->end;
+        parent->pred[k] += parent->state[k];
       }
+      if (parent->flow >= begin_flow)
+        break;
     }
-//    if(lastFlow+10 < begin_flow) {
-    if(lastFlow < begin_flow) {
+    if(parent->window_end < begin_flow) {
       sv_PathPtr[MAX_PATHS] = parent;
       sv_PathPtr[0] = best;
       return true;
     }
     parent->res = sumOfSquaredDiffsFloatSSE(
-      (float RESTRICT_PTR)rd_NormMeasure, (float RESTRICT_PTR)parent->pred, parent->beg);
+      (float RESTRICT_PTR)rd_NormMeasure, (float RESTRICT_PTR)parent->pred, parent->window_start);
   }
 
-  best->end = 0;
-  setZeroSSE(best->sol, num_flows_);
+  best->window_end = 0;
+  best->sequence_length = 0;
 
   do {
 
     if(pathCnt > 3) {
-      int m = sv_PathPtr[0]->idx;
+      int m = sv_PathPtr[0]->flow;
       int i = 1;
       do {
-        int n = sv_PathPtr[i]->idx;
+        int n = sv_PathPtr[i]->flow;
         if(m < n)
           m = n;
       } while(++i < pathCnt);
       if((m -= MAX_PATH_DELAY) > 0) {
         do {
-          if(sv_PathPtr[--i]->idx < m)
+          if(sv_PathPtr[--i]->flow < m)
             swap(sv_PathPtr[i], sv_PathPtr[--pathCnt]);
         } while(i > 0);
       }
@@ -713,18 +716,18 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
     for(int nuc = 0; nuc < 4; ++nuc) {
       PathRec RESTRICT_PTR child = sv_PathPtr[n];
 
-      child->idx = ad_Idx[nuc];
-      child->beg = ad_Beg[nuc];
-      child->end = ad_End[nuc];
+      child->flow = ad_Idx[nuc];
+      child->window_start = ad_Beg[nuc];
+      child->window_end = ad_End[nuc];
 
-      if((child->idx >= end_flow) || (parent->sol[child->idx] == char(11)))
+      if(child->flow >= end_flow or parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)
         continue;
 
-      char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->beg*16;
-      float metr = parent->res + *((float RESTRICT_PTR)(pn+child->beg*16+(AD_PRES_OFS-AD_NRES_OFS)));
-      float penPar = *((float RESTRICT_PTR)(pn+child->idx*16+(AD_PRES_OFS-AD_NRES_OFS)));
-      float penNeg = *((float RESTRICT_PTR)(pn+child->end*16));
-      child->res = metr + *((float RESTRICT_PTR)(pn+child->beg*16));
+      char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
+      float metr = parent->res + *((float RESTRICT_PTR)(pn+child->window_start*16+(AD_PRES_OFS-AD_NRES_OFS)));
+      float penPar = *((float RESTRICT_PTR)(pn+child->flow*16+(AD_PRES_OFS-AD_NRES_OFS)));
+      float penNeg = *((float RESTRICT_PTR)(pn+child->window_end*16));
+      child->res = metr + *((float RESTRICT_PTR)(pn+child->window_start*16));
       metr += penNeg;
 
       penPar += penNeg;
@@ -737,10 +740,10 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
         continue;
       if(metr > bestDist)
         continue;
-      float newSignal = rd_NormMeasure[child->idx];
-      if(child->idx < parent->end)
-        newSignal -= parent->pred[child->idx];
-      newSignal /= *((float RESTRICT_PTR)(pn+child->idx*16+(AD_STATE_OFS-AD_NRES_OFS+16)));
+      float newSignal = rd_NormMeasure[child->flow];
+      if(child->flow < parent->window_end)
+        newSignal -= parent->pred[child->flow];
+      newSignal /= *((float RESTRICT_PTR)(pn+child->flow*16+(AD_STATE_OFS-AD_NRES_OFS+16)));
       child->dotCnt = 0;
       if(newSignal < 0.3f) {
         if(parent->dotCnt > 0)
@@ -754,11 +757,11 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       ++n;
     }
 
-    float dist = parent->res+(rd_SqNormMeasureSum[parent->end]-rd_SqNormMeasureSum[end_flow]);
-    for(int i = parent->beg; i < parent->end; ++i) {
+    float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
+    for(int i = parent->window_start; i < parent->window_end; ++i) {
       if((i & 3) == 0) {
         dist += sumOfSquaredDiffsFloatSSE((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
-          (float RESTRICT_PTR)(&(parent->pred[i])), parent->end-i);
+          (float RESTRICT_PTR)(&(parent->pred[i])), parent->window_end-i);
         break;
       }
       dist += Sqr(rd_NormMeasure[i]-parent->pred[i]);
@@ -780,34 +783,48 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
         sv_PathPtr[n] = child;
         childPathIdx = n;
       } else {
-        child->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->idx; // ??
+        child->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow; // ??
         char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-        for(int i = parent->beg, j = 0, e = child->end; i < e; ++i, j += 16) {
+        for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
           child->state[i] = *((float*)(p+j));
           child->pred[i] = *((float*)(p+j+(AD_PRED_OFS-AD_STATE_OFS)));
         }
-        copySSE(child->pred, parent->pred, parent->beg << 2);
-        copySSE(child->sol, parent->sol, num_flows_);
-        child->sol[child->idx]++;
+        copySSE(child->pred, parent->pred, parent->window_start << 2);
+
+        copySSE(child->sequence, parent->sequence, parent->sequence_length);
+        child->sequence_length = parent->sequence_length + 1;
+        child->sequence[parent->sequence_length] = flow_order_[child->flow];
+        if (parent->sequence_length and child->sequence[parent->sequence_length] != child->sequence[parent->sequence_length-1])
+          child->last_hp = 0;
+        else
+          child->last_hp = parent->last_hp;
+        child->last_hp++;
+
         ++pathCnt;
       }
     }
 
     if(childPathIdx >= 0) {
       PathRec RESTRICT_PTR child = sv_PathPtr[childPathIdx];
-      parent->idx = child->idx;
-      parent->end = child->end;
+      parent->flow = child->flow;
+      parent->window_end = child->window_end;
       parent->res = child->res;
       parent->metr = child->metr;
-      parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->idx; // ??
+      parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow; // ??
       parent->dotCnt = child->dotCnt;
       char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-      for(int i = parent->beg, j = 0, e = child->end; i < e; ++i, j += 16) {
+      for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
         parent->state[i] = *((float*)(p+j));
         parent->pred[i] = *((float*)(p+j+(AD_PRED_OFS-AD_STATE_OFS)));
       }
-      parent->sol[child->idx]++;
-      parent->beg = child->beg;
+
+      parent->sequence[parent->sequence_length] = flow_order_[parent->flow];
+      if (parent->sequence_length and parent->sequence[parent->sequence_length] != parent->sequence[parent->sequence_length-1])
+        parent->last_hp = 0;
+      parent->last_hp++;
+      parent->sequence_length++;
+
+      parent->window_start = child->window_start;
       parentPathIdx = -1;
     }
 
@@ -851,7 +868,7 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
     float normalizer = next_normalizer;
 
     int median_set_size = 0;
-    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->end; ++estim_flow)
+    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->window_end; ++estim_flow)
       if (sv_PathPtr[MAX_PATHS]->pred[estim_flow] < 0.3)
         median_set[median_set_size++] = read.raw_measurements[estim_flow] - sv_PathPtr[MAX_PATHS]->pred[estim_flow];
 
@@ -892,7 +909,7 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
     float normalizer = next_normalizer;
 
     int median_set_size = 0;
-    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->end; ++estim_flow)
+    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->window_end; ++estim_flow)
       if (sv_PathPtr[MAX_PATHS]->pred[estim_flow] > 0.5 and rd_NormMeasure[estim_flow] > 0)
         median_set[median_set_size++] = rd_NormMeasure[estim_flow] / sv_PathPtr[MAX_PATHS]->pred[estim_flow];
 

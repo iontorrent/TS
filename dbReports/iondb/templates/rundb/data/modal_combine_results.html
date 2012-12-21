@@ -1,226 +1,88 @@
 <div id="modal_combine_results" title="" class="modal hide">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		<h3>Combine Selected</h3>
-	</div>
-	<div class="modal-body" style="max-height: 500px;">
-		<div id="modal-error-messages"></div>
-		<form class="form-horizontal" id="modal_combine_results_form" action="{{action}}">
-			<fieldset>
-				<div class="control-group">
-					<label for="input01" class="control-label">New Report Name</label>
-					<div class="controls">
-						<input value="" name="name" id="name" class="input-xlarge textInput required validateAlphaNumNoSpace" maxlength="32" type="text">	
-						<p class="help-block"></p>						
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="mark_duplicates" class="control-label"> Mark PCR duplicates <br>(beta feature)</label>
-					<div class="controls">									  
-					  <input name="mark_duplicates" id="mark_duplicates" type="checkbox">  
-					</div>
-				</div>
-				{% if warnings %}
-				<div id="warnings">
-				  <font color=red>
-				  <p class="form-label" > WARNINGS </p>
-				  <ul>
-				    {% for warning in warnings %}
-				      <li>{{warning}}</li>				    
-				    {% endfor %}
-				  </ul>
-				  </font>  
-				</div>
-				{% endif %}								
-				<div>
-				      <table id="results_table">			        
-				        <thead>
-				          <tr>
-						        <th data-field="selected" width=5%></th>
-						        <th data-field="name" width=50%>Name</th>
-						        <th data-field="tmap">TMAP</th>
-						        <th data-field="alignment">Alignment</th>
-						        <th data-field="barcode">Barcode</th>
-						      </tr>
-						    </thead>
-						    <tbody>  		
-					        {% for result in selected_results %}
-					        <tr>	
-  		              <td><input type="checkbox" id="selected_results" name="selected_results" checked="checked" value="{{result.id}}"> </td> 
-  		              <td>{{result.resultsName}}</td>
-  		              <td>{{result.tmap_version}}</td>
-  		              <td>{{result.alignment_version}}</td>	
-  		              <td>{{result.barcodeId}}</td>
-  		            </tr>  
-					        {% endfor %}						        					                            
-					     </tbody>    
-      			  </table>				
-				</div>				
-				<br><b><p>Please check the project page after launching.</p><p> Combined reports are NOT accessible from Completed Runs & Results page.</p></b>
-			</fieldset>
-		</form>				
-	</div>
-	<div class="modal-footer">
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-	    <a class="btn btn-primary hide" href="#">Launch</a>
-	</div>
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Combine Selected</h3>
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages"></div>
+        <form class="form-horizontal" id="modal_combine_results_form" action="{{action}}">
+            <fieldset>
+                <div class="control-group">
+                    <label for="input01" class="control-label">New Report Name</label>
+                    <div class="controls">
+                        <input value="" name="name" id="name" class="input-xlarge textInput required validateAlphaNumNoSpace" maxlength="128" type="text">
+                        <p class="help-block"></p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="mark_duplicates" class="control-label"> Mark PCR duplicates
+                        <br>
+                        (beta feature)</label>
+                    <div class="controls">
+                        <input name="mark_duplicates" id="mark_duplicates" type="checkbox">
+                    </div>
+                </div>
+                {% if warnings %}
+                <div id="warnings" class="alert alert-error">
+                    <font color="red">
+                        <p class="form-label">
+                            WARNINGS
+                        </p>
+                        <ul>
+                            {% for warning in warnings %}
+                            <li>
+                                {{warning}}
+                            </li>
+                            {% endfor %}
+                        </ul> </font>
+                </div>
+                {% endif %}
+                <div>
+                    <table id="results_table">
+                        <thead>
+                            <tr>
+                                <th data-field="selected" width=5%></th>
+                                <th data-field="name" width=50%>Name</th>
+                                <th data-field="tmap">TMAP</th>
+                                <th data-field="alignment">Alignment</th>
+                                <th data-field="barcode">Barcode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in selected_results %}
+                            <tr>
+                                <td>
+                                <input type="checkbox" id="selected_results" name="selected_results" checked="checked" value="{{result.id}}">
+                                </td>
+                                <td>{{result.resultsName}}</td>
+                                <td>{{result.tmap_version}}</td>
+                                <td>{{result.alignment_version}}</td>
+                                <td>{{result.barcodeId}}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <br>
+                <b>
+                <p>
+                    Please check the project page after launching.
+                </p>
+                <p>
+                    Combined reports are NOT accessible from Completed Runs & Results page.
+                </p></b>
+            </fieldset>
+        </form>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a class="btn btn-primary hide" href="#">Launch</a>
+    </div>
 
-  <script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
-  <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
-  <script language="javascript" type="text/javascript" src="/site_media/runliveness.min.js"></script>
-  <script type="text/javascript">
-    $("#results_table").kendoGrid({
-        sortable: true,
-        scrollable: false,
-    });
-
-    $('#modal_combine_results_form').uniform({
-	    holder_class : 'control-group'
-	    , msg_selector: 'p.help-block'
-	    , error_class : 'alert alert-error'
-    });
-
-		$('#modal_combine_results').on('hidden', function () {
-    		$('body #modal_combine_results').remove();
-   		});	
-		$('#modal_combine_results_form').submit(function(e){
-			e.preventDefault();
-			return false;
-		});
-	
-   		$('#modal_combine_results .btn-primary').click(function(e) {
-   			var that = this;
-   			e.preventDefault();
-   			
-   			var selected = []
-			  $('input:checkbox[name=selected_results]:checked').each(function() {                 
-				   selected.push($(this).val().split("|")[0]);
-	      });
-			  if (selected.length < 2){
-			      alert("Please select 2 or more results to combine.");
-   			    return;
-   			}    
-   			
-   			if ($("#modal_combine_results_form *").hasClass("error")) {
-		    $("#modal_combine_results_form").animate({scrollTop : 0}, "slow");
-		    $(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
-		    return false;
-	    }			
-   			
-   //			console.log($('#modal_combine_results_form').serializeArray());
-   			var json = $('#modal_combine_results_form').serializeJSON()
-   				, url = $('#modal_combine_results_form').attr('action')
-   				, type = '{{method}}';
-   				
-					    
-			json.mark_duplicates = $("#mark_duplicates").is(":checked");
-      json.selected_pks = selected;
-      
-			json = JSON.stringify(json);
-   			console.log('transmitting :', type, url, json );
-   			// data2 = JSON.stringfy(data);
-       		var jqxhr = $.ajax(url, {  
-       						 type: type
-       						, data: json
-       						, contentType: 'application/json'
-       						, dataType: 'html'
-       						, processData: false
-                  , success : function(data, textStatus, jqXHR) {
-					            var found = $(data).find('#modal_report_analyze_started')
-					            if (found.exists()) {
-						            $('body').append(data);
-						            $('#modal_report_analyze_started').modal("show");
-						            $('#modal_report_analyze_started').on('hidden', function(){
-							            $('body #modal_report_analyze_started').parent().remove();
-							            window.location.reload(true);
-						            });
-						            analysis_live_ready_cb();
-					            }
-					            return true;
-					        }
-			    }).done(function(data) { 
-			    	$('#modal-error-messages').empty();
-			//    	console.log("success:",  data);
-			    	$(that).trigger('modal_combine_results_done', {values: e.values});
-			    	$('#modal_combine_results').modal("hide");
-		    	})
-			    .fail(function(data) {
-			    	$('#modal-error-messages').empty();
-			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    	 
-			    })
-			    .always(function(data) { /*console.log("complete:", data);*/ });
-   		});
-		function buildParameterMap(options) {
-			map = {
-				offset: (options.page - 1) * options.pageSize,
-				limit: options.pageSize,
-			};
-			if (options.sort != null && options.sort.length != 0)
-				map.order_by = format_order_by(options.sort[0]);
-				
-			return map;
-		}
-		function format_order_by(sortObj) {
-			return (sortObj.dir == 'desc') ? '-' + sortObj.field : sortObj.field; 
-		}
-		$('#modal_combine_results .btn-primary').removeClass('hide'); //If display a kendo-grid then you'll want to removeClass('hide') on dataBound event
-		
-		// var grid = $("#modal_combine_results-grid").kendoGrid({
-            // dataSource: {
-            	// type: "json",
-				// transport: {
-                    // read: {
-                    	// url: "/rundb/api/v1/project/",
-                    	// contentType: 'application/json; charset=utf-8',
-					    // type: 'GET',
-					    // dataType: 'json'
-                    // },
-					// parameterMap: function(options) {
-						// return buildParameterMap(options)
-					// }
-//                         
-                // },
-                // schema: {
-                	// data: "objects",
-                	// total: "meta.total_count",
-                    // model: {
-                        // fields: {
-                            // id: { type: "number" },
-                            // name: { type: "string" },
-                            // resultsCount: { type: "number" }
-                        // }
-                    // }
-                // },
-                // serverSorting: true,
-                // // sort: { field: "modified", dir: "desc" },
-                // serverPaging: true,                        	
-            	// pageSize: 10
-            // },
-            // height: 'auto',
-            // groupable: false,
-            // scrollable: true,
-            // selectable: false,
-            // sortable: true,
-            // pageable: true,
-			// columns: [ {
-                    // field: "id",
-                    // title: "Selected",
-                    // sortable:false,
-                    // template: "<input id='${id}' name='projects' type='checkbox'>"
-                // } , {
-                    // field: "name",
-                    // title: "Name"
-                // } , {
-                    // field: "resultsCount",
-                    // title: "Results",
-                    // sortable: false
-                // }
-            // ],
-            // dataBound: function(e) {
-				// $('#modal_combine_results .btn-primary').removeClass('hide');
-			// }                        
-        // });			       		
-	</script>
+    <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script> <!-- Using updated uni-form JS -->
+    <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+    <script type="text/javascript" src="/site_media/runliveness.min.js"></script>
+    <script type="text/javascript">
+    TB.data.modal_combine_results.ready('{{method}}');
+    </script>
 </div>

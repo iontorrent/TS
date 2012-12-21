@@ -5,6 +5,7 @@
 .clearfix:before,
 .clearfix:after {
   display: table;
+  line-height: 0;
   content: "";
 }
 
@@ -23,10 +24,9 @@
 .input-block-level {
   display: block;
   width: 100%;
-  min-height: 28px;
+  min-height: 30px;
   -webkit-box-sizing: border-box;
      -moz-box-sizing: border-box;
-      -ms-box-sizing: border-box;
           box-sizing: border-box;
 }
 
@@ -280,6 +280,10 @@ page-loading,
 .page-loading.fade.in {
   opacity: 0.8;
   filter: alpha(opacity=80);
+}
+
+.tooltip {
+  z-index: 1060;
 }
 
 /**

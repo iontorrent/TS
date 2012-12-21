@@ -11,7 +11,15 @@
 
 using namespace std;
 // col, row, and flow are zero-based in this function, info read out include both borders.
-RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP Rflow, SEXP RminCol, SEXP RmaxCol, SEXP RminRow, SEXP RmaxRow,SEXP RminFlow, SEXP RmaxFlow, SEXP RreturnResErr,SEXP RregXSize, SEXP RregYSize,SEXP RreturnRegStats, SEXP RreturnRegFlowStats) {
+RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile,
+				   SEXP Rcol, SEXP Rrow, SEXP Rflow,
+				   SEXP RminCol, SEXP RmaxCol,
+				   SEXP RminRow, SEXP RmaxRow,
+				   SEXP RminFlow, SEXP RmaxFlow, 
+				   SEXP RreturnResErr,
+				   SEXP RregXSize, SEXP RregYSize,
+				   SEXP RreturnRegStats,
+				   SEXP RreturnRegFlowStats) {
   SEXP ret = R_NilValue;
   char *exceptionMesg = NULL;
 
@@ -36,15 +44,16 @@ RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SE
 
     // Outputs
 
-    unsigned int nCol = maxCol - minCol;
-    unsigned int nRow = maxRow - minRow ;
-    unsigned int nFlow = maxFlow - minFlow;
+    unsigned int nCol = maxCol - minCol + 1;
+    unsigned int nRow = maxRow - minRow + 1 ;
+    unsigned int nFlow = maxFlow - minFlow + 1;
     vector<unsigned int> colOut,rowOut,flowOut;
     vector< double > resErr;
     
     resErr.reserve(nCol * nRow * nFlow);
-    colOut.reserve(nCol * nRow * nFlow);
-    rowOut.reserve(nCol * nRow * nFlow);
+    colOut.reserve(nCol * nRow );
+    rowOut.reserve(nCol * nRow );
+    flowOut.reserve(nFlow);
     // Recast int to unsigned int
     vector<unsigned int> col, row, flow;
     col.resize(colInt.size());
@@ -59,7 +68,8 @@ RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SE
 
     H5File beadParam;
     beadParam.SetFile(beadParamFile);
-    beadParam.Open();
+    //beadParam.Open();
+    beadParam.OpenForReading();
     H5DataSet *resErrDS = beadParam.OpenDataSet("/bead/residual_error");
     size_t starts[3];
     size_t ends[3];
@@ -71,9 +81,9 @@ RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SE
     starts[0] = minCol;
     starts[1] = minRow;
     starts[2] = minFlow;
-    ends[0] = maxCol;
-    ends[1] = maxRow;
-    ends[2] = maxFlow;
+    ends[0] = maxCol+1;
+    ends[1] = maxRow+1;
+    ends[2] = maxFlow+1;
     // Check if the starts and ends are out of range.
     try {
       resErrDS->ReadRangeData(starts, ends, sizeof(tresErr),tresErr);
@@ -82,42 +92,49 @@ RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SE
       exceptionMesg = copyMessageToR(ex.what());
     }    
     // Compute number of regions
-    int nRegRow = nRow/regXSize;
-    int nRegCol =  nCol/regYSize;
+    int nRegRow = nRow/regXSize + 1 ;
+    int nRegCol =  nCol/regYSize + 1;
     int nReg = nRegRow * nRegCol;
     // Compute stats
     vector < int > regRow(nReg,0),regCol(nReg,0);
     //regRow.reserve(nReg);
     //regCol.reserve(nReg);
-    
+
+    RcppMatrix< double > resErrMat(nRow*nCol,nFlow);        
     vector< SampleQuantiles<float> > regStats (nReg, SampleQuantiles<float>(nFlow * nRow * nCol)) ; 
     vector< SampleStats<float>  > regMeanStats (nReg,SampleStats<float>()) ; 
     vector< SampleQuantiles<float>  > regFlowStats (nReg * nFlow,SampleQuantiles<float>(nRow * nCol)) ; 
     vector< SampleStats<float>  > regFlowMeanStats (nReg * nFlow, SampleStats<float>()) ; 
+    int count = 0;
+
+    for(size_t iflow=0;iflow<nFlow;++iflow)
+      flowOut.push_back(iflow + minFlow);
 
     for(size_t icol=0;icol<nCol;++icol)
       for(size_t irow=0;irow<nRow;++irow)
-	for(size_t iflow=0;iflow<nFlow;++iflow)
-	  {
-	    int regId = (nRegCol)*(int)(irow/regYSize) + (int) icol/regXSize;
-	    regCol[regId] = regXSize * ((int)icol/regXSize);
-	    regRow[regId] = regYSize * ((int)irow/regYSize);
-	    
-	    if(tresErr[icol * nRow * nFlow + irow * nFlow +iflow] > 0)
-	      {
-		colOut.push_back(icol + minCol);
-		rowOut.push_back(irow + minRow);
-		flowOut.push_back(iflow + minFlow);
-		resErr.push_back(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
-		regStats.at(regId).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
-		regMeanStats.at(regId).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
-		regFlowStats.at(regId * nFlow + iflow).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
-		regFlowMeanStats.at(regId * nFlow + iflow).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
-	      }
-	  }
+	{
+	  colOut.push_back(icol + minCol);
+	  rowOut.push_back(irow + minRow);
+	  int regId = (nRegCol)*(int)(irow/regYSize) + (int) icol/regXSize;
+	  regCol[regId] = regXSize * ((int)icol/regXSize);
+	  regRow[regId] = regYSize * ((int)irow/regYSize);
+	  for(size_t iflow=0;iflow<nFlow;++iflow)
+	    {
+	      resErrMat(count,iflow) = (double) tresErr[icol*nRow*nFlow + irow*nFlow+iflow];
+	      if(tresErr[icol * nRow * nFlow + irow * nFlow +iflow] > 0)
+	        {
+		  //resErr.push_back(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
+		  regStats.at(regId).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
+		  regMeanStats.at(regId).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
+		  regFlowStats.at(regId * nFlow + iflow).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
+		  regFlowMeanStats.at(regId * nFlow + iflow).AddValue(tresErr[icol * nRow * nFlow + irow * nFlow + iflow]);
+		}
+	    }
+	  count++;
+	}
     beadParam.Close();
     
-    //RcppMatrix< double > resErrMat(nRow*nCol,nonZeroFlow);    
+
     vector<int> colOutInt,rowOutInt,flowOutInt;
     colOutInt.resize(colOut.size());
     for(unsigned int i=0;i<colOutInt.size();++i)
@@ -184,7 +201,7 @@ RcppExport SEXP readFitResidualRV2(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SE
     rs.add("regRow",regRow);
     rs.add("regCol",regCol);
     if ( returnResErr ) 
-      rs.add("res_error",resErr);
+      rs.add("res_error",resErrMat);
     if(returnRegStats)
       {
 	vector<double> dregMean(regMean.begin(),regMean.end());

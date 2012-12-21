@@ -41,7 +41,7 @@ SingleFitStream::SingleFitStream(WorkerInfoQueue * Q) : cudaStreamExecutionUnit(
   _BeadBaseAllocSize += padN * sizeof(bead_params); //bead params
   _BeadBaseAllocSize += padN * sizeof(bead_state);  // bead state
 	_BeadBaseAllocSize += sizeof(float) * NUMNUC*F +128; //darkmatter  
-  _BeadBaseAllocSize += sizeof(float) * (MAX_HPLEN+1)*F +128;  // EmphVec 
+  _BeadBaseAllocSize += sizeof(float) * (MAX_POISSON_TABLE_COL)*F +128;  // EmphVec 
 	_BeadBaseAllocSize += sizeof(float) * bft + 128; //shifted background
   _BeadBaseAllocSize += sizeof(float) * ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB + 128; // nucRise
 
@@ -192,7 +192,7 @@ void SingleFitStream::resetPointers()
   _h_pEmphVector = (float*)(_HostBeadBase + offsetBytes); // (MAX_HPLEN+1)*F 
   _d_pEmphVector= (float*)(_DevBeadBase + offsetBytes); // (MAX_HPLEN+1)*F
 
-  offsetBytes += sizeof(float)*(MAX_HPLEN+1)*_F;
+  offsetBytes += sizeof(float)*(MAX_POISSON_TABLE_COL)*_F;
   offsetBytes += 128 - (offsetBytes%128); 
 
   _h_pNucRise = (float*)(_HostBeadBase + offsetBytes); // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB 
@@ -238,7 +238,7 @@ void SingleFitStream::serializeInputs()
   memcpy(_h_pBeadState, _myJob.getState(), sizeof(bead_state)*_N); 
   memcpy(_h_pDarkMatter, _myJob.getDarkMatter(), sizeof(float)*NUMNUC*_F); 
   memcpy(_h_pShiftedBkg, _myJob.getShiftedBackground(), sizeof(float)*NUMFB*_F); 
-  memcpy(_h_pEmphVector, _myJob.getEmphVec(), sizeof(float)*(MAX_HPLEN+1)*_F);
+  memcpy(_h_pEmphVector, _myJob.getEmphVec(), sizeof(float)*(MAX_POISSON_TABLE_COL)*_F);
   memcpy(_h_pNucRise, _myJob.getCalculateNucRise(), sizeof(float) * ISIG_SUB_STEPS_SINGLE_FLOW * _F * NUMFB);  
 
   //cout << getId() <<" collect data for async const mem copy" << endl;
@@ -337,7 +337,7 @@ void SingleFitStream::executeKernel()
    _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
   _N, // 4
   _F, // 4
-  MAX_HPLEN+1, // 4
+  MAX_POISSON_TABLE_COL, // 4
   // outputs
 //  _d_pSP, // FLxN
 //  _d_pTauB, 
@@ -379,21 +379,14 @@ void SingleFitStream::executeKernel()
       getId()  // stream id for offset in const memory
     );
 }
-*/
+else {*/
   
-int sharedMem = sizeof(float) * (MAX_HPLEN + 1) * _myJob.getNumFrames();
+int sharedMem = sizeof(float) * (MAX_POISSON_TABLE_COL) * _myJob.getNumFrames();
 PerFlowLevMarFit_Wrapper( grid, block, sharedMem, _stream,
       // inputs
       _DevFgBufferFloat, 
       _d_pEmphVector,
       _d_pNucRise,
-      // bead params
-//      _d_pAmpl, // N
-//      _d_pKmult, // N
-//      _d_pDmult, // N
-//      _d_pR, // FNUM * N
-//      _d_pGain, // N
-//      _d_pSP, // FNUM * N
       _d_pCopies,
       _d_pBeadState,
       
@@ -414,6 +407,7 @@ PerFlowLevMarFit_Wrapper( grid, block, sharedMem, _stream,
 //      _DevMonitor,
       getId()  // stream id for offset in const memory
     );
+//}
 
   block.x = 32;
   block.y = 32;

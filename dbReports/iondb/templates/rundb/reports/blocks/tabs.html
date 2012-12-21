@@ -15,6 +15,7 @@
 		<li>
 			<a data-toggle="tab" href="#SoftwareVersion">Software Version</a>
 		</li>
+		<div class="pull-right"><a style="color:gray; font-weight:normal" href="metal/">H+</a></div>
 	</ul>				
 	<div id="ReportDetailsTabContent" class="tab-content">
 		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
@@ -24,31 +25,89 @@
 
 
 			<div id="pluginStatus" >
-			    <div>
-			        <div id="pluginStatusLoad"></div>
+				<div>
+					<div id="pluginStatusLoad"></div>
 
-			        <div id="pluginStatusTable">
-			        </div>
-			    </div><!--plugin status wrapper -->
+					<div id="pluginStatusTable">
+					</div>
+				</div><!--plugin status wrapper -->
 			</div>
 
-			<pre id="logBox" style="display:none"></pre>
-
+			<div id="modal_plugin_log" class="modal container hide">
+			    <div class="modal-header">
+			        <button type="button" class="close" data-dismiss="modal">&times;</button>
+			        <h3></h3>
+			    </div>
+			    <div class="modal-body"></div>
+			    <div class="modal-footer">
+			        <a href="#" class="btn" data-dismiss="modal">Close</a>
+			    </div>
+			    <script>
+			        $('#modal_plugin_log').on('hidden', function() {
+			            $(this).removeData('modal').find('.modal-body').empty();
+			            $(this).removeData('modal').find('.modal-header h3').empty();
+			        });
+			    </script>
+			</div>
 		</div>
 		
 	  {% include "rundb/reports/blocks/testfragments.html" %}  
 		
 		<div id="AnalysisDetails" data-title="Analysis Details" class="tab-pane">
+			<table class="table table-striped">
+				<tr><td>Run Name</td><td>{{experiment.expName}}</td></tr>
+				<tr><td>Run Date</td><td>{{experiment.date}}</td></tr>
+				<tr><td>Run Flows</td><td>{{experiment.flows}}</td></tr>
+				<tr>
+					<td>Projects</td>
+					<td>
+						{% spaceless %}
+						{% for project in report.projects.all %}
+							{% if not forloop.first %}, {% endif %}
+							<a href="{% url project_results project.id">{{project.name}}</a>
+						{% endfor %}
+						{% endspaceless %}
+					</td>
+				</tr>
+				<tr><td>Sample</td><td>{{experiment.sample}}</td></tr>
+				<tr><td>Library</td><td>{{report.reference}}</td></tr>
+				<tr><td>PGM</td><td>{{experiment.pgmName}}</td></tr>
+				<tr><td>Flow Order</td><td>{{experiment.flowsInOrder}}</td></tr>
+				<tr><td>Library Key</td><td>{{experiment.libraryKey}}</td></tr>
+				<tr><td>TF Key</td><td>ATCG</td></tr>
+				<tr>
+					<td>Chip Check</td>
+					<td>
+						{% if experiment.log.calibratepassed %}
+							Passed
+						{% else %}
+							Failed
+						{% endif %}
+					</td>
+				</tr>
+				<tr><td>Chip Type</td><td>{{experiment.chipType}}</td></tr>
+				<tr><td>Chip Data</td><td>{{experiment.rawdatastyle}}</td></tr>
+				<tr><td>Barcode Set</td><td>{{experiment.barcodeId}}</td></tr>
+				<tr><td>Analysis Name</td><td>{{report.resultsName}}</td></tr>
+				<tr><td>Analysis Date</td><td>{{report.timeStamp}}</td></tr>
+				<tr><td>Analysis Flows</td><td>{{report.processedflows}}</td></tr>
+				<tr><td>runID</td><td>{{report.runid}}</td></tr>
+			</table>
 		</div>
 		
 		<div id="Support" data-title="Support" class="tab-pane">
 			<ul>
-				<li>Download the <a href="/rundb/getCSA/{{report.pk}}.zip">Customer Support Archive</li>
+				<li>Download the <a href="{% url report_csa report.pk %}">Customer Support Archive</li>
 				<li><a href="log">View the report log</a></li>
 			<ul>
 		</div>
 		
 		<div id="SoftwareVersion" data-title="Software Version" class="tab-pane">
+			<table class="table table-striped">
+				{% for item, version in software_versions %}
+					<tr><td>{{item}}</td><td>{{version}}</td></tr>
+				{% endfor %}
+			</table>
 		</div>
 		
 	</div>
@@ -57,12 +116,12 @@
 
 <div class="modal hide" id="plugin-modal">
   <div class="modal-header">
-    <a class="close" data-dismiss="modal">&times;</a>
-    <h3 id="modal-header"></h3>
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3 id="modal-header"></h3>
   </div>
   <div class="modal-body" id="modal-body">
   </div>
   <div class="modal-footer">
-    <a href="#" class="btn" data-dismiss="modal">Close</a>
+	<a href="#" class="btn" data-dismiss="modal">Close</a>
   </div>
 </div>

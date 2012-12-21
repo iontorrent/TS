@@ -18,6 +18,7 @@
 #include "PJobQueue.h"
 
 using namespace arma;
+using namespace std;
 #define NUM_ZMODELBULK_FRAMES 23u
 /**
  * Class holding the result of fitting a Nuc specific bulk stabilized
@@ -55,8 +56,8 @@ class ZeromerModelBulkAlg
 {
 
   public:
-    const static int mLiveSampleN = 200;
-    const static int mEmptySampleN = 50;
+    const static int mLiveSampleN = 300;
+    const static int mEmptySampleN = 300;
     static double PointFcn (const Col<T> &trace,
                             const Col<T> &traceIntegral,
                             const Col<T> &weights,
@@ -290,33 +291,32 @@ class ZeromerModelBulkAlg
                                 vector<double> &tauE,
                                 size_t minLiveSampleSize,
                                 size_t minEmptySampleSize,
-                                std::vector<char> &filtered)
-    {
+                                std::vector<char> &filtered) {
       ReservoirSample<size_t> live (mLiveSampleN);
       ReservoirSample<size_t> empties (mEmptySampleN);
       fill (tauE.begin(), tauE.end(), -1.0);
       // @todo - Make a big matrix here for zeros & nucs rather than just doing a single key
-      for (int rIx = rowStart; rIx < rowEnd; rIx++)
-      {
-        for (int cIx = colStart; cIx < colEnd; cIx++)
-        {
+      for (int rIx = rowStart; rIx < rowEnd; rIx++) {
+        for (int cIx = colStart; cIx < colEnd; cIx++) {
           size_t idx = traceStore.WellIndex (rIx, cIx);
           if (filtered[idx] != 1) {
             continue;
           }
-          if (traceStore.HaveWell (idx) && keyAssignments[idx] == keyIx)
-          {
-            live.Add (idx);
+          if (traceStore.IsReference(idx)) {
+            empties.Add(idx);
           }
-          else if (traceStore.HaveWell (idx) && keyAssignments[idx] == -1)
-          {
-            empties.Add (idx);
-          }
+          /* if (traceStore.HaveWell (idx) && keyAssignments[idx] == keyIx) */
+          /* { */
+          /*   live.Add (idx); */
+          /* } */
+          /* else if (traceStore.HaveWell (idx) && keyAssignments[idx] == -1) */
+          /* { */
+          /*   empties.Add (idx); */
+          /* } */
         }
       }
-
-      if (live.GetNumSeen() < minLiveSampleSize || empties.GetNumSeen() < minEmptySampleSize)
-      {
+      //      cout << "Doing tauE fitting with: " << live.GetNumSeen() << " live and " << empties.GetNumSeen() << " empty wells." << endl;
+      if (live.GetNumSeen() < minLiveSampleSize && empties.GetNumSeen() < minEmptySampleSize) {
         return false;
       }
       live.Finished();
@@ -330,14 +330,13 @@ class ZeromerModelBulkAlg
       std::vector<size_t> sample (liveSample.size() + emptySample.size(), -1);
       copy (liveSample.begin(), liveSample.end(), sample.begin());
       copy (emptySample.begin(), emptySample.end(), sample.begin() + liveSample.size());
+      //      cout << "Doing tauE sample: " << sample.size() << " wells." << endl;
       // @todo - set nuc weigts for averaging
-      for (size_t flowIx = 0; flowIx < keys[keyIx].usableKeyFlows; flowIx++)
-      {
-        if (keys[keyIx].flows[flowIx] == 0)
-        {
+      for (size_t flowIx = 0; flowIx < keys[keyIx].usableKeyFlows; flowIx++) {
+        if (keys[keyIx].flows[flowIx] == 0) {
           // @todo - handle missing nucs in key flows
           int nucIx = traceStore.GetNucForFlow (flowIx);
-
+          
           double diff = 0;
           int steps = 0;
           double tauENuc = 0;
@@ -350,6 +349,11 @@ class ZeromerModelBulkAlg
           tauE[nucIx] += tauENuc;
         }
       }
+      /* std::cout << "Taue for " << rowStart << " " << colStart << " "; */
+      /* for (size_t i = 0; i < tauE.size(); i++) { */
+      /*   std::cout << tauE[i] << ","; */
+      /* } */
+      /* std::cout << std::endl; */
       return true;
     }
 };
@@ -407,7 +411,7 @@ class ZeromerModelBulkJob : public PJob
                             *traceStore);
         if (numOkWells > .25 * (rowEnd - rowStart) * (colEnd - colStart))
         {
-          //      ION_WARN("Library didn't converge. trying TFs.");
+          ION_WARN("Library didn't converge. trying TFs.");
 
           /* This should work as there should be TFs...  */
           converged = ZeromerModelBulkAlg<double>::CalcRegionTauE (rowStart, rowEnd, colStart, colEnd,
@@ -434,8 +438,8 @@ class ZeromerModelBulkJob : public PJob
           {
             if (i != nucIx)
             {
-              tau += .3 * nucWeights.at (i) * tauX[i];
-              w += nucWeights.at (i) * 3;
+              tau += 0.1 * nucWeights.at (i) * tauX[i];
+              w += nucWeights.at (i) * 0.1;
             }
             else
             {
@@ -581,23 +585,23 @@ class ZeromerModelBulk : public ZeromerModel<T>
       {
         if (fit.param.at (nucIx, 0) == -1)
         {
-          double tauB = 0;
-          double tauE = 0;
+          double tauBAvg = 0;
+          double tauEAvg = 0;
           int count = 0;
           for (size_t i = 0; i < store.GetNumNucs(); i++)
           {
             if (fit.param.at (i, 0) >= 0)
             {
-              tauB += fit.param.at (i, 0);
-              tauE += fit.param.at (i, 1);
+              tauBAvg += fit.param.at (i, 0);
+              tauEAvg += fit.param.at (i, 1);
               count++;
             }
           }
-          fit.param.at (nucIx, 0) = tauB / count;
-          fit.param.at (nucIx, 1) = tauE / count;
+          fit.param.at (nucIx, 0) = tauBAvg / count;
+          fit.param.at (nucIx, 1) = tauEAvg / count;
         }
       }
-
+      //      @todo - Do we need Nuc specific params?
       Mat<float> param = fit.param;
       for (size_t nucIx = 0; nucIx < store.GetNumNucs(); nucIx++)
       {
@@ -612,8 +616,8 @@ class ZeromerModelBulk : public ZeromerModel<T>
           }
           else
           {
-            sum += param (i,0) * .2;
-            w += .2;
+            sum += param (i,0) * .1;
+            w += .1;
           }
         }
         fit.param (nucIx, 0) = sum/w;
@@ -762,8 +766,8 @@ class ZeromerModelBulk : public ZeromerModel<T>
   public:
     int mRowStep;
     int mColStep;
-    const static int mLiveSampleN = 200;
-    const static int mEmptySampleN = 50;
+    const static int mLiveSampleN = 300;
+    const static int mEmptySampleN = 300;
     int mCores;
     int mQSize;
     Col<T>  mTime;

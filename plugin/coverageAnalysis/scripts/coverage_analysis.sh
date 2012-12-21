@@ -10,16 +10,18 @@ USAGE="USAGE:
 OPTIONS="OPTIONS:
   -h --help Report usage and help.
   -l Log progress to STDERR.
+  -a Customize output for Amplicon targets - use assigned reads rather than bases
   -d Ignore Duplicate reads.
   -u Include only Uniquely mapped reads (MAPQ > 1).
-  -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -p <number> Padding value used (for report). Default: 0.
+  -s <text> Single line of text reflecting user options selected. Default: 'All Reads'.
+  -A <file> Annotated (non-merged) targets BED file for per-target coverage analysis.
+  -B <file> General BED file specifying (merged) target regions for on-target base coverage analysis.
+  -C <name> Original name for BED targets selected for reporting (pre-padding, etc.)
   -D <dirpath> Path to Directory where results are written.
-  -O <file> Output file name for text data (per analysis). Use '-' for STDOUT. Default: 'summary.txt'.
-  -B <file> Limit coverage to targets specified in this BED file.
-  -P <file> Padded targets BED file for padded target coverage analysis.
-  -0 Include 0x coverage in (binned) plots.
-  -H <N> Set maximum coverage for Histogram plot to N. Default: 0.
-      0 => Full bar plot (not linear)"
+  -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -O <file> Output file name for text data (per analysis). Default: '' => <BAMROOT>.stats.cov.txt.
+  -P <file> Padded targets BED file for padded target coverage analysis."
 
 # should scan all args first for --X options
 if [ "$1" = "--help" ]; then
@@ -28,28 +30,36 @@ if [ "$1" = "--help" ]; then
 fi
 
 SHOWLOG=0
-PLOT0=0
-MAXCOV=0
+TRACK=1
+ANNOBED=""
 BEDFILE=""
 GENOME=""
 WORKDIR="."
-BINSIZE=0
-OUTFILE="summary.txt"
+PADVAL=0
+OUTFILE=""
 PADBED=""
+RUNOPTS="All Reads"
 NONDUPREADS=0
 UNIQUEREADS=0
+AMPLICONS=0
+PROPPLOTS=1
+TRGSIG=""
+PLOTREPLEN=0
 
-while getopts "hldu0B:H:G:D:O:P:" opt
+while getopts "hladup:s:A:B:C:G:D:O:P:" opt
 do
   case $opt in
+    a) AMPLICONS=1;;
     d) NONDUPREADS=1;;
     u) UNIQUEREADS=1;;
     l) SHOWLOG=1;;
-    0) PLOT0=1;;
+    p) PADVAL=$OPTARG;;
+    s) USROPTS=$OPTARG;;
+    A) ANNOBED=$OPTARG;;
     B) BEDFILE=$OPTARG;;
-    H) MAXCOV=$OPTARG;;
-    G) GENOME=$OPTARG;;
+    C) TRGSID=$OPTARG;;
     D) WORKDIR=$OPTARG;;
+    G) GENOME=$OPTARG;;
     O) OUTFILE=$OPTARG;;
     P) PADBED=$OPTARG;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
@@ -80,7 +90,6 @@ fi
 
 RUNPTH=`readlink -n -f $0`
 RUNDIR=`dirname $RUNPTH`
-#echo -e "RUNDIR=$RUNDIR\n" >&2
 
 # Check environment
 
@@ -88,7 +97,7 @@ BAMROOT=`echo $BAMFILE | sed -e 's/^.*\///'`
 BAMNAME=`echo $BAMROOT | sed -e 's/\.[^.]*$//'`
 
 if [ $SHOWLOG -eq 1 ]; then
-  echo "$CMD BEGIN:" `date` >&2
+  echo "(`date`) $CMD started." >&2
   echo "REFERENCE: $REFERENCE" >&2
   echo "MAPPINGS:  $BAMROOT" >&2
   echo "GENOME:    $GENOME" >&2
@@ -97,9 +106,7 @@ if [ $SHOWLOG -eq 1 ]; then
   fi
   echo "WORKDIR:   $WORKDIR" >&2
   if [ -n "$OUTFILE" ];then
-    echo "TEXT OUT:  $OUTFILE" >&2
-  else
-    echo "TEXT OUT:  <STDOUT>" >&2
+    echo "STATS OUT:  $OUTFILE" >&2
   fi
   echo >&2
 fi
@@ -119,6 +126,9 @@ elif ! [ -f "$REFERENCE" ]; then
 elif ! [ -f "$BAMFILE" ]; then
   echo "ERROR: Mapped reads (bam) file does not exist at $BAMFILE" >&2
   exit 1
+elif [ -n "$ANNOBED" -a ! -f "$ANNOBED" ]; then
+  echo "ERROR: Annotated targets (bed) file does not exist at $ANNOBED" >&2
+  exit 1
 elif [ -n "$BEDFILE" -a ! -f "$BEDFILE" ]; then
   echo "ERROR: Reference targets (bed) file does not exist at $BEDFILE" >&2
   exit 1
@@ -134,306 +144,345 @@ REFERENCE=`readlink -n -f "$REFERENCE"`
 GENOME=`readlink -n -f "$GENOME"`
 
 ROOTNAME="$WORKDIR/$BAMNAME"
-if [ -n "$OUTFILE" ];then
-  touch "$WORKDIR/$OUTFILE"
-  OUTFILE=">> \"$WORKDIR/$OUTFILE\""
+AUXFILEROOT="$WORKDIR/tca_auxiliary"
+
+if [ -z "$OUTFILE" ];then
+  OUTFILE="${ROOTNAME}.stats.cov.txt"
 fi
+OUTFILE="$WORKDIR/$OUTFILE"
 
-# delete old run data
-rm -f "$WORKDIR"/*
-
-PASSFILTER=""
+FILTOPTS=""
+SAMVIEWOPT="-F 4"
 if [ $NONDUPREADS -eq 1 ];then
-  PASSFILTER="-d"
+  FILTOPTS="-d"
+  SAMVIEWOPT="-F 0x404"
 fi
 if [ $UNIQUEREADS -eq 1 ];then
-  PASSFILTER="$PASSFILTER -u"
+  FILTOPTS="$FILTOPTS -u"
+  SAMVIEWOPT="$SAMVIEWOPT -q 1"
 fi
 
-############
-
-COVOVR_XLS=$ROOTNAME.covoverview.xls
-
+# BEDFILE and ANNOFILE become the same if only one is defined
+BEDOPT=''
 if [ -n "$BEDFILE" ]; then
-  COVERAGE_ANALYSIS="perl $RUNDIR/cover_over.pl $PASSFILTER -B \"$BEDFILE\" -G \"$GENOME\" \"$BAMFILE\" > \"$COVOVR_XLS\""
+  BEDOPT="-B \"$BEDFILE\""
+fi
+if [ -n "$ANNOBED" ]; then
+  ANNOBEDOPT="-B \"$ANNOBED\""
+  if [ -z "$BEDFILE" ]; then
+    BEDFILE=$ANNOBED
+    BEDOPT=$ANNOBEDOPT
+  fi
 else
-  COVERAGE_ANALYSIS="perl $RUNDIR/cover_over.pl $PASSFILTER -G \"$GENOME\" \"$BAMFILE\" > \"$COVOVR_XLS\""
+  ANNOBED=$BEDFILE
+  ANNOBEDOPT=$BEDOPT
 fi
 
-if [ $SHOWLOG -eq 1 ]; then
-  echo "Calculating effective reference coverage overview..." >&2
+REPLENPLOT=$AMPLICONS
+
+PLOTERROR=0
+
+########### Capture Title & User Options to Summary Text #########
+
+echo -e "Coverage Analysis Report\n" > "$OUTFILE"
+REFNAME=`echo "$REFERENCE" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
+echo "Reference (File): $REFNAME" >> "$OUTFILE"
+if [ -n "$BEDFILE" ]; then
+  if [ -n "$TRGSID" ]; then
+    TRGNAME=$TRGSID
+  else
+    TRGNAME=`echo "$BEDFILE" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
+  fi
+  echo "Targeted Regions: $TRGNAME" >> "$OUTFILE"
+  if [ $PADVAL -gt 0 ]; then
+    echo "Target Padding: $PADVAL" >> "$OUTFILE"
+  fi
 fi
-eval "$COVERAGE_ANALYSIS" >&2
+ALMNAME=`echo "$BAMNAME" | sed -e 's/\.trim$//'`
+echo "Alignments: $ALMNAME" >> "$OUTFILE"
+echo -e "Using: $USROPTS\n" >> "$OUTFILE"
+
+########### Create BBC files #########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Creating base coverage files..." >&2
+fi
+BASEREADS="${AUXFILEROOT}.rds"
+BBCFILE="${AUXFILEROOT}.bbc"
+BBCMD="$RUNDIR/bbcCreate.pl $FILTOPTS $BEDOPT -p -O \"$BBCFILE\" \"$GENOME\" \"$BAMFILE\" > \"$BASEREADS\""
+eval "$BBCMD" >&2
 if [ $? -ne 0 ]; then
-  echo -e "\nERROR: cover_over.pl failed." >&2
-  echo "\$ $COVERAGE_ANALYSIS" >&2
+  echo -e "\nERROR: bbcCreate.pl failed." >&2
+  echo "\$ $BBCMD" >&2
   exit 1;
+elif [ "$SHOWLOG" -eq 1 ]; then
+  echo "> $BBCFILE" >&2
+  echo ">" `cat $BASEREADS` "base reads" >&2
 fi
 
-if [ "$SHOWLOG" -eq 1 ]; then
+BBCMD="$RUNDIR/bbcIndex.pl \"$BBCFILE\""
+eval "$BBCMD" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nERROR: bbcIndex.pl failed." >&2
+  echo "\$ $BBCMD" >&2
+  exit 1;
+elif [ "$SHOWLOG" -eq 1 ]; then
+  echo "> ${AUXFILEROOT}.bci" >&2
+fi
+
+########### Generate the Coverage Overview Plot #########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Calculating effective reference coverage overview plot..." >&2
+fi
+COVOVR_XLS="$ROOTNAME.covoverview.xls"
+COVCMD="$RUNDIR/bbcOverview.pl $BEDOPT \"$BBCFILE\" > \"$COVOVR_XLS\""
+eval "$COVCMD" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nERROR: bbcOverview.pl failed." >&2
+  echo "\$ $COVCMD" >&2
+  exit 1;
+elif [ $SHOWLOG -eq 1 ]; then
   echo "> $COVOVR_XLS" >&2
 fi
 
-CHRCNT_XLS=$ROOTNAME.coverage_by_chrom.xls
-CHRMAP_XLS=$ROOTNAME.coverage_map_by_chrom.xls
-
-# Note: supplying genome is useful for getting overriding the chromosome order in the bed file
-if [ -n "$BEDFILE" ]; then
-  COVERAGE_ANALYSIS="perl $RUNDIR/chart_by_chrom.pl $PASSFILTER -o -B \"$BEDFILE\" -F \"$CHRMAP_XLS\" -G \"$GENOME\" \"$BAMFILE\" \"$CHRCNT_XLS\""
-else
-  COVERAGE_ANALYSIS="perl $RUNDIR/chart_by_chrom.pl $PASSFILTER -o -F \"$CHRMAP_XLS\" -G \"$GENOME\" \"$BAMFILE\" \"$CHRCNT_XLS\""
-fi
-
-if [ $SHOWLOG -eq 1 ]; then
-  echo "Calculating read distribution by chromosome..." >&2
-fi
-eval "$COVERAGE_ANALYSIS $OUTFILE" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: chart_by_chrom.pl failed." >&2
-  echo "\$ $COVERAGE_ANALYSIS $OUTFILE" >&2
-  exit 1;
-fi
-if [ $SHOWLOG -eq 1 ]; then
-  echo "> $CHRCNT_XLS" >&2
-  echo "> $CHRMAP_XLS" >&2
-fi
-
-CHRPAD_XLS=$ROOTNAME.coverage_by_chrom_padded_target.xls
-if [ -n "$PADBED" ]; then
-  COVERAGE_ANALYSIS="perl $RUNDIR/chart_by_chrom.pl $PASSFILTER -p -B \"$PADBED\" -G \"$GENOME\" \"$BAMFILE\" \"$CHRPAD_XLS\""
-  eval "$COVERAGE_ANALYSIS $OUTFILE" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: chart_by_chrom.pl failed for padded targets." >&2
-    echo "\$ $COVERAGE_ANALYSIS $OUTFILE" >&2
-    exit 1;
-  fi
-  if [ $SHOWLOG -eq 1 ]; then
-    echo "> $CHRPAD_XLS" >&2
-  fi
-fi
-if [ $SHOWLOG -eq 1 ]; then
-  echo "Chromosome coverage analysis done:" `date` >&2
-fi
-
-############
-
-SAMOPT=""
-if [ $NONDUPREADS -eq 0 ];then
-  # explicit option to ignore filtering of non-duplicates
-  SAMOPT="-F 0x304"
-fi
-if [ $UNIQUEREADS -eq 1 ];then
-  SAMOPT="$SAMOPT -Q 1"
-fi
-
-FPILEUP="$ROOTNAME.starts.pileup"
-if [ -n "$BEDFILE" ]; then
-  PILEUP_STARTS="samtools depth $SAMOPT -b \"$BEDFILE\" \"$BAMFILE\" 2> /dev/null > \"$FPILEUP\""
-else
-  PILEUP_STARTS="samtools depth $SAMOPT \"$BAMFILE\" 2> /dev/null > \"$FPILEUP\""
-fi
-
-if [ $SHOWLOG -eq 1 ]; then
-  echo -e "\nCounting base read depths..." >&2
-  echo "\$ $PILEUP_STARTS" >&2
-fi
-eval "$PILEUP_STARTS" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: samtools depth failed." >&2
-  echo "\$ $PILEUP_STARTS" >&2
-  exit 1;
-fi
-if [ $SHOWLOG -eq 1 ]; then
-  echo "Base read depth counting done:" `date` >&2
-fi
-
-############
-
-TARGCOV_XLS=$ROOTNAME.fine_coverage.xls
-
-if [ -n "$BEDFILE" ]; then
-  FINE_COVERAGE_ANALYSIS="perl $RUNDIR/bed_covers.pl -G \"$GENOME\" \"$FPILEUP\" \"$BEDFILE\" > \"$TARGCOV_XLS\""
-  if [ $SHOWLOG -eq 1 ]; then
-    echo -e "\nCreating individual targets coverage..." >&2
-  fi
-  eval "$FINE_COVERAGE_ANALYSIS" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: bed_covers.pl failed." >&2
-    echo "\$ $FINE_COVERAGE_ANALYSIS" >&2
-    exit 1;
-  fi
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $TARGCOV_XLS >&2
-    echo "Individual targets coverage done:" `date` >&2
-  fi
-fi
-
-############
-
-OUTCOV_XLS=$ROOTNAME.coverage.xls
-OUTCOV_BIN_XLS=$ROOTNAME.coverage_binned.xls
-
-if [ $SHOWLOG -eq 1 ]; then
-  echo -e "\nCalculating coverage..." >&2
-fi
-
-if [ -n "$BEDFILE" ]; then
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
-else
-  gnm_size=`awk 'BEGIN {gs = 0} {gs += $2} END {printf "%.0f",gs+0}' "$GENOME"`
-fi
-
-base_reads=0
-if [ -n "$BEDFILE" ]; then
-  # find total number of mapped bases for % on-target
-  base_reads=`samtools depth "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
-else
-  # should always result in 100% where there are no targets
-  base_reads=`awk '{c+=$3} END {printf "%.0f",c+0}' "$FPILEUP"`
-fi
-
-COVERAGE_ANALYSIS="awk -f $RUNDIR/coverage_analysis.awk -v basereads=$base_reads -v genome=$gnm_size -v outfile=\"$OUTCOV_BIN_XLS\" -v x1cover=\"$OUTCOV_XLS\" -v plot0x=$PLOT0 -v showlevels=$MAXCOV -v binsize=$BINSIZE \"$FPILEUP\""
-
-if [ $SHOWLOG -eq 1 ]; then
-echo "\$ $COVERAGE_ANALYSIS" >&2
-fi
-eval "$COVERAGE_ANALYSIS $OUTFILE" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: awk command failed." >&2
-  echo "\$ $COVERAGE_ANALYSIS $OUTFILE" >&2
-  exit 1;
-fi
-if [ $SHOWLOG -eq 1 ]; then
-  echo ">" $OUTCOV_XLS >&2
-  echo ">" $OUTCOV_BIN_XLS >&2
-  echo "Coverage analysis done:" `date` >&2
-fi
-
-############
-
-if [ $SHOWLOG -eq 1 ]; then
-  echo -e "\nCreating coverage plots..." >&2
-fi
-plotError=0
-
-COVOVR_PNG=$ROOTNAME.covoverview.png
+COVOVR_PNG="$ROOTNAME.covoverview.png"
 PLOTCMD="R --no-save --slave --vanilla --args \"$COVOVR_XLS\" \"$COVOVR_PNG\" < $RUNDIR/plot_overview.R"
 eval "$PLOTCMD" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: plot_overview.R failed." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $COVOVR_PNG >&2
-  fi
+  PLOTERROR=1
+elif [ $SHOWLOG -eq 1 ]; then
+  echo "> $COVOVR_PNG" >&2
 fi
 
-OUTCOV_PNG=$ROOTNAME.coverage.png
-PLOTCMD="R --no-save --slave --vanilla --args \"$OUTCOV_XLS\" \"$OUTCOV_PNG\" < $RUNDIR/plot_coverage.R"
-eval "$PLOTCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_coverage.R failed." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $OUTCOV_PNG >&2
+########### Read Coverage Analysis #########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Generating basic reads stats..." >&2
+fi
+MAPPED_READS=`samtools view -c $SAMVIEWOPT "$BAMFILE"`
+echo -e "Number of mapped reads:         $MAPPED_READS" >> "$OUTFILE"
+
+if [ -n "$BEDOPT" ]; then
+  # switch to flagstat if total #reads wanted (has exact same performance as view -c)
+  TREADS=`samtools view -c $SAMVIEWOPT -L "$BEDFILE" "$BAMFILE"`
+  FREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+  #echo "Number of reads on target:      $TREADS" >> "$OUTFILE"
+  echo "Percent reads on target:        $FREADS%" >> "$OUTFILE"
+  if [ -n "$PADBED" ]; then
+    TREADS=`samtools view -c $SAMVIEWOPT -L "$PADBED" "$BAMFILE"`
+    FREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+    echo "Percent reads on padded target: $FREADS%" >> "$OUTFILE"
   fi
 fi
+echo "" >> "$OUTFILE"
 
-OUTCOV_PNG=$ROOTNAME.coverage_normalized.png
-PLOTCMD="R --no-save --slave --vanilla --args \"$OUTCOV_XLS\" \"$OUTCOV_PNG\" < $RUNDIR/plot_normalized_coverage.R"
-eval "$PLOTCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_normalized_coverage.R failed." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $OUTCOV_PNG >&2
-  fi
-fi
+if [ -n "$ANNOBEDOPT" ]; then
 
-OUTCOV_PNG=$ROOTNAME.coverage_binned.png
-PLOTCMD="R --no-save --slave --vanilla --args \"$OUTCOV_BIN_XLS\" \"$OUTCOV_PNG\" 0 < $RUNDIR/plot_binned_coverage.R"
-eval "$PLOTCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_binned_coverage.R failed for binned read coverage." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $OUTCOV_PNG >&2
-  fi
-fi
-
-# disabled as plot is not considered of use at this time
-#OUTCOV_PNG=$ROOTNAME.coverage_distribution.png
-#PLOTCMD="R --no-save --slave --vanilla --args \"$OUTCOV_BIN_XLS\" \"$OUTCOV_PNG\" 1 < $RUNDIR/plot_binned_coverage.R"
-#eval "$PLOTCMD" >&2
-#if [ $? -ne 0 ]; then
-#  echo -e "\nERROR: plot_binned_coverage.R failed for binned read distribution." >&2
-#  plotError=1
-#else
-#  if [ $SHOWLOG -eq 1 ]; then
-#    echo ">" $OUTCOV_PNG >&2
-#  fi
-#fi
-
-OUTCOV_PNG=$ROOTNAME.coverage_onoff_target.png
-PLOTCMD="R --no-save --slave --vanilla --args \"$CHRCNT_XLS\" \"$OUTCOV_PNG\" < $RUNDIR/plot_onoff_target.R"
-eval "$PLOTCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_onoff_target.R failed." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $OUTCOV_PNG >&2
-  fi
-fi
-
-if [ -n "$PADBED" ]; then
-  OUTCOV_PNG=$ROOTNAME.coverage_onoff_padded_target.png
-  PLOTCMD="R --no-save --slave --vanilla --args \"$CHRPAD_XLS\" \"$OUTCOV_PNG\" < $RUNDIR/plot_onoff_padded_target.R"
-  eval "$PLOTCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: plot_onoff_padded_target.R failed." >&2
-    plotError=1
+  if [ $AMPLICONS -eq 0 ]; then
+    TARGETCOVFILE="$ROOTNAME.target.cov.xls"
+    COVCMD="$RUNDIR/bbcTargetAnno.pl \"$BBCFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
+    TARGETMSG='target base'
   else
-    if [ $SHOWLOG -eq 1 ]; then
-      echo ">" $OUTCOV_PNG >&2
+    TARGETCOVFILE="$ROOTNAME.amplicon.cov.xls"
+    COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
+    TARGETMSG='amplicon read'
+  fi
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Analyzing $TARGETMSG coverage..." >&2
+  fi
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: $TARGETMSG analysis failed." >&2
+    echo "\$ $COVCMD" >&2
+    exit 1;
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $TARGETCOVFILE" >&2
+  fi
+
+  if [ $SHOWLOG -eq 1 ]; then
+    echo "(`date`) Sorting $TARGETMSG coverage results to increasing read depth order..." >&2
+  fi
+  TMPFILE="$AUXFILEROOT.sort.tmp"
+  COVCMD="head -1 \"$TARGETCOVFILE\" > \"$TMPFILE\"; tail --lines +2 \"$TARGETCOVFILE\" | sort -t \$'\t' -k 10n,10 -k 1d,1 -n -k 2n,2 -k 3n,3 >> \"$TMPFILE\""
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: bash sort failed." >&2
+    echo "\$ $COVCMD" >&2
+    exit 1;
+  fi
+  mv "$TMPFILE" "$TARGETCOVFILE"
+  if [ $SHOWLOG -eq 1 ]; then
+    echo "> $TARGETCOVFILE (sorted)" >&2
+  fi
+
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Generating start-up $TARGETMSG Coverage Chart data..." >&2
+  fi
+  TCCINITFILE="$AUXFILEROOT.ttc.xls"
+  COVCMD="$RUNDIR/target_coverage.pl -G \"$GENOME\" \"$TARGETCOVFILE\" - - 0 100000000 100 0 100 -1 > \"$TCCINITFILE\""
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: target_coverage.pl failed." >&2
+    echo "\$ $COVCMD" >&2
+    exit 1;
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $TCCINITFILE" >&2
+  fi
+
+  if [ $PROPPLOTS -eq 1 ]; then
+    if [ $TRACK -eq 1 ]; then
+      echo "(`date`) Generating static representation plots..." >&2
+    fi
+    TARGETCOV_GC_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.gc.png/'`
+    TARGETCOV_LEN_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.len.png/'`
+    TARGETCOV_REP_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.fedora.png/'`
+    TARGETCOV_RPL_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.fedlen.png/'`
+    PLOTOPT="FG"
+    if [ $REPLENPLOT -eq 1 ]; then
+      PLOTOPT="FGKL"
+    fi
+    if [ $AMPLICONS -ne 0 ]; then
+      PLOTOPT="${PLOTOPT}a"
+    fi
+    PLOTCMD="R --no-save --slave --vanilla --args \"$TARGETCOVFILE\" $PLOTOPT < $RUNDIR/plot_gc.R"
+    eval "$PLOTCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo "ERROR: plot_gc.R failed." >&2
+      PLOTERROR=1
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $TARGETCOV_REP_PNG" >&2
+      echo "> $TARGETCOV_GC_PNG" >&2
+      if [ $REPLENPLOT -eq 1 ]; then
+        echo "> $TARGETCOV_RPL_PNG" >&2
+        echo "> $TARGETCOV_LEN_PNG" >&2
+      fi
     fi
   fi
+
 fi
- 
+
+########### Depth of Read Coverage Analysis #########
+
+if [ $AMPLICONS -ne 0 ]; then
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Analyzing depth of $TARGETMSG coverage..." >&2
+  fi
+  # For now there is no point in creating the DOC distribution file since this is useless for
+  # Depth of Coverage plots with few amplicons (targets). Most read depths are only covered once
+  # and this information is given in the fine coverage file.
+  COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -a -M $MAPPED_READS \"$TARGETCOVFILE\" >> \"$OUTFILE\""
+  eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: targetReadStats.pl failed." >&2
+    echo "\$ $COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
+    exit 1;
+  fi
+fi
+
+########### Depth of Base Coverage Analysis #########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Analyzing depth of base coverage..." >&2
+fi
+DOCFILE="$ROOTNAME.base.cov.xls"
+TRGOPTS="-g"
 if [ -n "$BEDFILE" ]; then
-  CHRMAP_PNG=$ROOTNAME.coverage_on_target.png
-  PLOTCMD="R --no-save --slave --vanilla --args \"$TARGCOV_XLS\" \"$CHRMAP_PNG\" < $RUNDIR/plot_on_target.R"
-  eval "$PLOTCMD" >&2
-  if [ $? -ne 0 ]; then
-    echo -e "\nERROR: plot_on_target.R failed." >&2
-    plotError=1
-  else
-    if [ $SHOWLOG -eq 1 ]; then
-      echo ">" $CHRMAP_PNG >&2
-    fi
-  fi
+  trgsize=`awk 'BEGIN {gs = 0} {gs += $3-$2} END {printf "%.0f",gs+0}' "$BEDFILE"`
+  basereads=`cat $BASEREADS`
+  TRGOPTS="-C $basereads -T $trgsize"
 fi
-
-CHRMAP_PNG=$ROOTNAME.coverage_map_onoff_target.png
-PLOTCMD="R --no-save --slave --vanilla --args \"$CHRMAP_XLS\" \"$CHRMAP_PNG\" < $RUNDIR/plot_map_onoff_target.R"
-eval "$PLOTCMD" >&2
+COVERAGE_ANALYSIS="$RUNDIR/bbcStats.pl $TRGOPTS -D \"$DOCFILE\" \"$BBCFILE\""
+if [ $AMPLICONS -ne 0 ]; then
+  echo "" >> "$OUTFILE"
+fi
+eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
 if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_map_onoff_target.R failed." >&2
-  plotError=1
-else
-  if [ $SHOWLOG -eq 1 ]; then
-    echo ">" $CHRMAP_PNG >&2
-  fi
+  echo -e "\nERROR: bbcStats.pl failed." >&2
+  echo "\$ $COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
+  exit 1;
+elif [ $SHOWLOG -eq 1 ]; then
+  echo ">" $DOCFILE >&2
 fi
 
-rm -f "$FPILEUP"
-#if [ $plotError -eq 1 ]; then
+########### Chromosome Coverage Analysis #########
+
+if [ $TRACK -eq 1 ]; then
+  echo "(`date`) Generating reference coverage files..." >&2
+fi
+CBCFILE="$AUXFILEROOT.cbc"
+CHRCOVFILE="$ROOTNAME.chr.cov.xls"
+WGNCOVFILE="$ROOTNAME.wgn.cov.xls"
+TRGOPTS=""
+if [ -n "$BEDFILE" ]; then
+  TRGOPTS="-t"
+fi
+COVCMD="$RUNDIR/bbcCoarseCov.pl $TRGOPTS -O \"$CBCFILE\" -C \"$CHRCOVFILE\" -W \"$WGNCOVFILE\" \"$BBCFILE\""
+eval "$COVCMD" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nERROR: bbcCourseCov.pl failed." >&2
+  echo "\$ $COVCMD" >&2
+  exit 1;
+elif [ $SHOWLOG -eq 1 ]; then
+  echo "> $CBCFILE" >&2
+  echo "> $CHRCOVFILE" >&2
+  echo "> $WGNCOVFILE" >&2
+fi
+
+########### Write HTML fragment for table #########
+
+EXTRAHTML="$AUXFILEROOT.htm"
+# files openned directly by the JS have to be with a local path (as opposed to those passed through to perl)
+DOCFILE=`echo $DOCFILE | sed -e 's/^.*\///'`
+echo "<br/> <div id='DepthOfCoverageChart' datafile='$DOCFILE' class='center' style='width:800px;height:300px'></div>" > "$EXTRAHTML"
+REFGEN="genome"
+COLLAPSERCC=""; # RCC will be expanded unless no targets are defined (=> Whole Genome but not necessarily!)
+if [ -n "$BEDFILE" ]; then
+  if [ $PROPPLOTS -eq 1 ]; then
+    TARGETCOV_GC_PNG=`echo $TARGETCOV_GC_PNG | sed -e 's/^.*\///'`
+    TARGETCOV_LEN_PNG=`echo $TARGETCOV_LEN_PNG | sed -e 's/^.*\///'`
+    TARGETCOV_REP_PNG=`echo $TARGETCOV_REP_PNG | sed -e 's/^.*\///'`
+    TARGETCOV_RPL_PNG=`echo $TARGETCOV_RPL_PNG | sed -e 's/^.*\///'`
+    REPOPT="gccovfile='$TARGETCOV_GC_PNG' fedorafile='$TARGETCOV_REP_PNG'"
+    if [ $REPLENPLOT -eq 1 ]; then
+      REPOPT="$REPOPT fedlenfile='$TARGETCOV_RPL_PNG' lencovfile='$TARGETCOV_LEN_PNG'"
+    fi
+    echo "<br/> <div id='PictureFrame' $REPOPT class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
+  fi
+  REFGEN=""
+  COLLAPSERCC="collapse"
+  TCCINITFILE=`echo $TCCINITFILE | sed -e 's/^.*\///'`
+  echo "<br/> <div id='TargetCoverageChart' amplicons=$AMPLICONS datafile='$TARGETCOVFILE' initfile='$TCCINITFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
+fi
+CHRCOVFILE=`echo $CHRCOVFILE | sed -e 's/^.*\///'`
+WGNCOVFILE=`echo $WGNCOVFILE | sed -e 's/^.*\///'`
+echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' cbcfile='$CBCFILE' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
+echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:440px'></div>" >> "$EXTRAHTML"
+echo "<br/>" >> "$EXTRAHTML"
+
+# create local igv session file
+TRACKOPT=''
+if [ -n "$ANNOBEDOPT" ]; then
+  ANNOBED=`echo $ANNOBED | sed -e 's/^.*\///'`
+  TRACKOPT="-a \"$ANNOBED\""
+fi
+BAMFILE=`echo $BAMFILE | sed -e 's/^.*\///'`
+COVCMD="$RUNDIR/create_igv_link.py -r ${WORKDIR} -b ${BAMFILE} $TRACKOPT -g ${TSP_LIBRARY} -s igv_session.xml"
+eval "$COVCMD" >&2
+if [ $? -ne 0 ]; then
+  echo -e "\nWARNING: create_igv_link.py failed." >&2
+  echo "\$ $COVCMD" >&2
+elif [ $SHOWLOG -eq 1 ]; then
+  echo "> igv_session.xml" >&2
+fi
+
+########### Finished #########
+
+#if [ $PLOTERROR -eq 1 ]; then
 #  exit 1;
 #fi
 if [ $SHOWLOG -eq 1 ]; then
-  echo -e "\n$CMD END:" `date` >&2
+  echo -e "\n(`date`) $CMD completed." >&2
 fi
 

@@ -46,6 +46,7 @@ public:
   int num_read_groups() const { return num_read_groups_; }
   Json::Value&    read_group(int idx) { return datasets_json_["read_groups"][read_group_id_to_name_[idx]]; }
   int read_group_name_to_id(const string& rg_name) { return read_group_name_to_id_[rg_name]; }
+  const string& read_group_name(int idx) { return read_group_id_to_name_[idx]; }
 
   // map read_group_name -> dataset_idx
   // map read_group_idx -> dataset_idx

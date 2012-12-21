@@ -8,18 +8,17 @@ import tempfile
 os.environ['HOME'] = tempfile.mkdtemp()
 from matplotlib import use
 use("Agg",warn=False)
+from matplotlib import pyplot
+import matplotlib.cm as cm
 
 import ConfigParser
 import argparse
 import sys
-import pylab
 import struct
 import numpy
 import math
 import scipy.ndimage
 import scipy.misc
-from matplotlib import *
-from matplotlib.ticker import *
 
 
 # This array is convolved with the bead data in bfmask.bin to compute a sum in the range [0-100] of a 10x10 well area.
@@ -87,29 +86,27 @@ def autoGetVmaxFromAverage (average):
 
 def makeRawDataPlot(scores, outputId, outputdir):
     # Writes a png file containing only the data, i.e. no axes, labels, gridlines, ticks, etc.
-    pylab.jet()
-    fig = pylab.figure()
+    fig = pyplot.figure()
     ax1 = fig.add_subplot(111)
     ax1.xaxis.set_ticklabels([None])
     ax1.yaxis.set_ticklabels([None])
     ax1.xaxis.set_ticks([None])
     ax1.yaxis.set_ticks([None])
-    ax1.imshow(scores,vmin=0, vmax=100, origin='lower')
-    pylab.savefig(outputdir+'/'+outputId+'_density_raw.png', dpi=20, transparent=True, bbox_inches='tight', pad_inches=0)
+    ax1.imshow(scores, vmin=0, vmax=100, origin='lower', cmap=cm.jet)
+    fig.savefig(outputdir+'/'+outputId+'_density_raw.png', dpi=20, transparent=True, bbox_inches='tight', pad_inches=0)
     print "Plot saved to %s" % outputId+'_density_raw.png'
 
 
 def makeFullBleed(scores, outputId, outputdir):
     # Writes a png file containing only the data, i.e. no axes, labels, gridlines, ticks, etc.
-    pylab.jet()
-    fig = pylab.figure(figsize=(5,5))
+    fig = pyplot.figure(figsize=(5,5))
     ax1 = fig.add_subplot(111)
     ax1.xaxis.set_ticklabels([None])
     ax1.yaxis.set_ticklabels([None])
     ax1.xaxis.set_ticks([None])
     ax1.yaxis.set_ticks([None])
     ax1.set_frame_on(False)
-    ax1.imshow(scores,vmin=0, vmax=100, origin='lower')
+    ax1.imshow(scores,vmin=0, vmax=100, origin='lower', cmap=cm.jet)
     
     for size in (20, 70, 200, 1000):
         fig_path = os.path.join(outputdir, '%s_density_%d.png' % 
@@ -120,37 +117,23 @@ def makeFullBleed(scores, outputId, outputdir):
 
 
 def makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title, outputdir, barcodeId=-1, vmaxVal=100):
-    pylab.bone()
-    #majorFormatter = FormatStrFormatter('%.f %%')
-    #ax = pylab.gca()
-    #ax.xaxis.set_major_formatter(majorFormatter)
-    
-    pylab.figure()
-    ax = pylab.gca()
+    fig = pyplot.figure()
+    ax = fig.add_subplot(111)
     ax.set_xlabel(str(WIDTH) + ' wells')
     ax.set_ylabel(str(HEIGHT) + ' wells')
-    ax.autoscale_view()
-    pylab.jet()
-    
-    pylab.imshow(scores,vmin=0, vmax=vmaxVal, origin='lower')
-    pylab.vmin = 0.0
-    pylab.vmax = 100.0
-    ticksVal = getTicksForMaxVal(vmaxVal)
-    pylab.colorbar(format='%.0f %%',ticks=ticksVal)
-    print "'%s'" % average
     if(barcodeId!=-1):
         if(barcodeId==0): maskId = "No Barcode Match,"
         else:             maskId = "Barcode Id %d," % barcodeId
-    if plt_title != '': maskId = '%s\n%s' % (plt_title,maskId)
-    print "Checkpoint A"
-    pylab.title('%s Loading Density (Avg ~ %0.f%%)' % (maskId, average))
-    pylab.axis('scaled')
-    print "Checkpoint B"
+    if plt_title != '':
+        maskId = '%s\n%s' % (plt_title,maskId)
+    ax.set_title('%s Loading Density (Avg ~ %0.f%%)' % (maskId, average))
+    ax.autoscale_view()
+    color_axis = ax.imshow(scores, vmin=0, vmax=vmaxVal, origin='lower', cmap=cm.jet)
+    ticksVal = getTicksForMaxVal(vmaxVal)
+    fig.colorbar(color_axis, format='%.0f %%', ticks=ticksVal)
     pngFn = outputdir+'/'+outputId+'_density_contour.png'
-    print "Try save to", pngFn;
-    pylab.savefig(pngFn, bbox_inches='tight')
+    fig.savefig(pngFn, bbox_inches='tight')
     print "Plot saved to", pngFn;
-    #pylab.show()  #Do we want this within a pipeline
 
 
 def extractMaskInfo(filename):
@@ -212,7 +195,6 @@ def genHeatmap(filePath, bfmaskstatspath, outputdir, plot_title):
 
     print total_wells, excluded_wells, bead_wells, average
 
-    pylab.clf()
     beadarr = extractMaskInfo(filePath)
     HEIGHT, WIDTH = beadarr.shape
     # The fact that these are fixed is a clue that we might be able to remove them

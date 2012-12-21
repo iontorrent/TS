@@ -1,4 +1,4 @@
-seqToFlow <- function(sequence,flowOrder,nFlow=NA,finishAtSeqEnd=FALSE) {
+seqToFlow <- function(sequence,flowOrder,nFlow=NA,finishAtSeqEnd=FALSE,flowOffset=0) {
   # Compute homopolymers
   sequence <- gsub("[^(ACGT)]","",sequence) # remove non-ACGT chars
   bases <- strsplit(sequence,"")[[1]]
@@ -15,21 +15,26 @@ seqToFlow <- function(sequence,flowOrder,nFlow=NA,finishAtSeqEnd=FALSE) {
     f <- rep(f,ceiling(nFlow/length(f)))[1:nFlow]
 
   out <- rep(NA,nFlow)
-  hpIndex <- 1
-  for(fIndex in 1:nFlow) {
-    if(hpNuc[hpIndex] == f[fIndex]) {
-      out[fIndex] <- hpLen[hpIndex]
-      hpIndex <- hpIndex + 1
-      if(hpIndex > hpN)
-        break;
-    } else {
-      out[fIndex] <- 0
+  fIndex <- 0
+  if(length(hpNuc)>0) {
+    hpIndex <- 1
+    for(fIndex in (1+flowOffset):nFlow) {
+      if(hpNuc[hpIndex] == f[fIndex]) {
+        out[fIndex] <- hpLen[hpIndex]
+        hpIndex <- hpIndex + 1
+        if(hpIndex > hpN)
+          break;
+      } else {
+        out[fIndex] <- 0
+      }
     }
   }
-  if(finishAtSeqEnd) {
-    out <- out[!is.na(out)]
-  } else {
-    out[is.na(out)] <- 0
+  if(fIndex < nFlow) {
+    if(finishAtSeqEnd) {
+      out <- out[-((fIndex+1):nFlow)]
+    } else {
+      out[(1+fIndex):nFlow] <- 0
+    }
   }
 
   return(out)

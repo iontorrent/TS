@@ -4,7 +4,7 @@
 from djangoinit import *
 
 import datetime
-
+import pytz
 
 from django import template
 from django.core import mail
@@ -80,16 +80,17 @@ def paired_end_stats(pe_path):
 
 def send_nightly():
     # get the list of all results generated in the last 24 hours
-    timerange = datetime.datetime.now() - datetime.timedelta(days=1)
+    timerange = datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=1)
     resultsList = models.Results.objects.filter(timeStamp__gt=timerange)
         
     resultsAll=[]
     rType=[]
     rNew=[]
     rSpecial=[]  
+    info=[]
   
     for result in resultsList:
-        if (result.status == 'Completed'):
+        if (result.status == 'Completed' and 'INJECTED' not in result.resultsName):
             exp = result.experiment
             pstore = result.getPluginStore()            
             [firstPk, firstType] = find_first_result(exp,pstore)
@@ -104,11 +105,23 @@ def send_nightly():
               rSpecial.append(paired_end_stats(result.get_report_path()))
             else:
               rSpecial.append(0)
+
+            try:
+                overclock = exp.log["overclock"]
+                oc = int(overclock)
+                if oc == 1:
+                    info.append("15")
+                elif oc == 2:
+                    info.append("30")
+                else:
+                    info.append("-")
+            except:
+                info.append("-")
        
     #sort by chipType
     if len(resultsAll) > 1:
       try: 
-        resultsAll, rType, rNew, rSpecial = zip(*sorted(zip(resultsAll,rType,rNew,rSpecial), key=lambda r:r[0].experiment.chipType))
+        resultsAll, rType, rNew, rSpecial, info = zip(*sorted(zip(resultsAll,rType,rNew,rSpecial,info), key=lambda r:r[0].experiment.chipType))
       except:
         pass
     
@@ -142,17 +155,17 @@ def send_nightly():
     
     tmpl = loader.get_template(TEMPLATE_NAME)
     ctx = template.Context({"reportsOldThumb":
-                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='thumb' and not n],
+                                [(r,t,lb,l,i) for r,t,lb,l,i,tp,n in zip(resultsAll,tfms,lbms,links,info,rType,rNew) if tp=='thumb' and not n],
                             "reportsOldWhole":
-                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='full' and not n],
+                                [(r,t,lb,l,i) for r,t,lb,l,i,tp,n in zip(resultsAll,tfms,lbms,links,info,rType,rNew) if tp=='full' and not n],
                             "reportsNew":
-                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='full' and n],
+                                [(r,t,lb,l,i) for r,t,lb,l,i,tp,n in zip(resultsAll,tfms,lbms,links,info,rType,rNew) if tp=='full' and n],
                             "reportsThumbsNew":
-                                [(r,t,lb,l) for r,t,lb,l,tp,n in zip(resultsAll,tfms,lbms,links,rType,rNew) if tp=='thumb' and n],
+                                [(r,t,lb,l,i) for r,t,lb,l,i,tp,n in zip(resultsAll,tfms,lbms,links,info,rType,rNew) if tp=='thumb' and n],
                             "reportsAmplNew":
-                                [(r,t,lb,l,s) for r,t,lb,l,tp,n,s in zip(resultsAll,tfms,lbms,links,rType,rNew,rSpecial) if tp=='ampl' and n],
+                                [(r,t,lb,l,i,s) for r,t,lb,l,i,tp,n,s in zip(resultsAll,tfms,lbms,links,info,rType,rNew,rSpecial) if tp=='ampl' and n],
                             "reportsPairNew":
-                                [(r,t,lb,l,s) for r,t,lb,l,tp,n,s in zip(resultsAll,tfms,lbms,links,rType,rNew,rSpecial) if tp=='paired' and n],
+                                [(r,t,lb,l,i,s) for r,t,lb,l,i,tp,n,s in zip(resultsAll,tfms,lbms,links,info,rType,rNew,rSpecial) if tp=='paired' and n],
                             "webroot":web_root,
                             "sitename":site_name,
                             "hq_base_num_new":hqBaseSum,

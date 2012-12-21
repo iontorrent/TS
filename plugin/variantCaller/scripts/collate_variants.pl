@@ -216,7 +216,7 @@ for( my $i = 0; $i < $nchr; ++$i )
                     last if( $hotspot_starts{$c}[$hs] != $spos );
 		    if(($hotspot_infos ne " ") & ($hotspot_infos{$c} ne " ") & ($hotspot_infos{$c}[$hs] ne " ")){
 			my $hotSpotInfo = $hotspot_infos{$c}[$hs];
-		    	if(exact_match($hotSpotInfo, @fields)) {
+			if(exact_match($hotSpotInfo, @fields)) {
 				$hotspot .= $hotspot_ids{$c}[$hs] .";";
 		    	}
 		    }
@@ -256,9 +256,11 @@ sub exact_match
     if($obsAlleleInfo[0] eq "OBS") {
  	$obsAllele = $obsAlleleInfo[1];
     }
-    if($refAlleleInfo eq "NONE" || $obsAllele eq "NONE") {
+    if($refAllele eq "NONE" || $obsAllele eq "NONE") {
 	return 1; #return true 
     }
+    
+    
     my $hotspotType = "";
     if((length($refAllele) == 1) & (length($obsAllele) == 1)) {
 	$hotspotType = "SNP";
@@ -270,9 +272,13 @@ sub exact_match
 	$hotspotType = "INS";
     }
     my $variantType = $variantFields[$vart];
+    
+    $obsAllele =~ s/U|R|Y|M|K|W|S|B|D|H|V|N/\./g;
+    $refAllele =~ s/U|R|Y|M|K|W|S|B|D|H|V|N/\./g;
+    
     if (($variantType eq "SNP") && ($hotspotType eq "SNP") ){
 	my $variantAltAllele =  $variantFields[6];
-	if($variantAltAllele eq $obsAllele) {
+	if($variantAltAllele =~ m/$obsAllele/) {
 		return 1;
 	}
 	else {
@@ -281,7 +287,7 @@ sub exact_match
     }
     if($variantType eq "DEL") {
 	my $variantAllele = substr($variantFields[5], 1);
-	if($variantAllele eq $refAllele) {
+	if($variantAllele =~ m/$refAllele/) {
 		return 1;
 	}
 	else {
@@ -290,7 +296,7 @@ sub exact_match
     }
     if($variantType eq "INS") {
 	my $variantAllele = substr($variantFields[6], 1);
-	if($variantAllele eq $obsAllele) {
+	if($variantAllele =~ m/$obsAllele/) {
 		return 1;
 	}
 	else {

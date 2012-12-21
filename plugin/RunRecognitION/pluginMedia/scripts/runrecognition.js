@@ -1,5 +1,5 @@
 function getGuruBaseUrl() {
-    return 'http://torrentguru.iontorrent.com';
+    return 'https://torrentguru.iontorrent.com';
 }
 
 function getPluginConfigFromDb(successMethod){

@@ -19,18 +19,41 @@
 					</tr>
 				</thead>
 				<tbody>
-          		{% for output_group in output_file_groups %}
+          		{% for out in output_file_groups %}
 					<tr>
-						<td>{{output_group.name}}</td>
+						<td>{{out.name}}</td>
 						<td>
-			              <a class="btn" rel='tooltip' title="Unaligned reads in the BAM format" href="{{output_group.basecaller_bam}}" style="opacity:{{output_group.basecaller_bam_dim}};">BAM</a>
-			              <a class="btn" rel='tooltip' title="Reads in SFF format. SFF format is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{output_group.sff}}" style="opacity:{{output_group.sff_dim}};">SFF</a>
-			              <a class="btn" href="{{output_group.fastq}}" style="opacity:{{output_group.fastq_dim}};">FASTQ</a>
+						{% if out.basecaller_bam.exists %}
+			              <a class="btn" rel="tooltip" title="Unaligned reads in the BAM format" href="{{out.basecaller_bam.link}}">BAM</a>
+						{% else %}
+			              <a class="btn disabled" rel="tooltip" title="For full-chip Proton runs the unmapped BAM is only produced if there is no genomic reference. When there is a reference the mapped BAM contains all the information that would have been present in the unmapped BAM. Producing only one BAM enables faster report generation and reduces storage burden.">BAM</a>
+						{% endif %}
+
+						{% if out.sff.exists %}
+			              <a class="btn" rel="tooltip" title="Reads in SFF format. SFF format is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{out.sff.link}}">SFF</a>
+						{% else %}
+			              <a class="btn disabled" rel="tooltip" title="The SFF file is not produced by default. It can be made with the SFFCreator plugin.">SFF</a>
+						{% endif %}
+
+						{% if out.fastq.exists %}
+			              <a class="btn" rel="tooltip" title="Reads in FASTQ format.  FASTQ is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{out.fastq.link}}">FASTQ</a>
+						{% else %}
+			              <a class="btn disabled" rel="tooltip" title="The FASTQ file is not produced by default. It can be made with the FastqCreator plugin.">FASTQ</a>
+						{% endif %}
 						</td>
 						<td>
 							<span class="btn-group">
-				              <a class="btn" href="{{output_group.bam}}" style="opacity:{{output_group.bam_dim}};">BAM</a>
-				              <a class="btn" rel='tooltip' title="BAM index file"  href="{{output_group.bai}}" style="opacity:{{output_group.bai_dim}};">BAI</a>
+						{% if out.bam.exists %}
+				              <a class="btn" href="{{out.bam.link}}">BAM</a>
+				        {% else %}
+				              <a class="btn disabled">BAM</a>
+						{% endif %}
+
+						{% if out.bai.exists %}
+				              <a class="btn" rel="tooltip" title="BAM index file"  href="{{out.bai.link}}">BAI</a>
+				        {% else %}
+				              <a class="btn disabled" rel="tooltip" title="BAM index file">BAI</a>
+						{% endif %}
 				            </span>
 						</td>
 					</tr>

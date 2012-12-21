@@ -39,9 +39,11 @@ protected :
 TEST_F(DualGaussMixModelTest, MixFit) {
   DualGaussMixModel model(mData.size());
   MixModel m = model.FitDualGaussMixModel(&mData[0], mData.size());
-  ASSERT_NEAR(m.mix, .346, .001);
-  ASSERT_NEAR(m.mu1, .6645, .001);
-  ASSERT_NEAR(m.mu2, 3.15, .01);
-  ASSERT_NEAR(m.var1, 1.34, .01);
-  ASSERT_NEAR(m.var2, .2117, .001);
+  //  char D = ',';
+  //  std::cout << m.mix << D << m.mu1 << D << m.mu2 << D << m.var1 << D << m.var2 << std::endl;
+  ASSERT_NEAR(m.mix, 0.3464, .001);
+  ASSERT_NEAR(m.mu1, 0.664868, .001);
+  ASSERT_NEAR(m.mu2,3.15287, .01);
+  ASSERT_NEAR(m.var1, 1.34253, .01);
+  ASSERT_NEAR(m.var2, 0.211615, .001);
 }

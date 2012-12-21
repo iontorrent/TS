@@ -25,6 +25,14 @@ barcode_load_list ()
             BFSIZE=`stat -Lc%s "$BARCODE_BAM"`
             if [ $BFSIZE -ge ${BCFILE_MIN_SIZE} ]; then
                 BARCODES_OK[${BCN}]=1
+                if [ "$SKIP_BAMFILE_VERSION_CHECK" -eq 1 ]; then
+                #check for BAM file compatibility
+                RTBAM=0
+                eval "java -Xmx500m -cp ${DIRNAME}/TVC/jar/GenomeAnalysisTK.jar org.iontorrent.vc.locusWalkerAttributes.validateBamFile \"$BARCODE_BAM\"" >&2 || RTBAM=$?
+                if [ $RTBAM -ne 0 ]; then
+                    BARCODES_OK[${BCN}]=4
+                fi
+                fi
             else
                 BFSIZE=`samtools view -c -F 4 "$BARCODE_BAM"`
                 BARCODE_ROWSUM[$BCN]="<td>${BFSIZE}</td> $ROWSUM_NODATA"
@@ -132,6 +140,8 @@ barcode_links ()
             echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"Barcode ${BARCODE} was not processed. Check Log File.\" style=\"color:red\">${BARCODE}</span></td>" >> "$HTML"
         elif [ ${BARCODES_OK[$BCN]} -eq 3 ]; then
             echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"Barcode ${BARCODE} was not processed. Number of mapped reads was assumed to be too few for variant calling based on file size.\" style=\"color:grey\">${BARCODE}</span></td>" >> "$HTML"
+        elif [ ${BARCODES_OK[$BCN]} -eq 4 ]; then
+            echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"Barcode ${BARCODE} was not processed. Incorrect BAM file format, ZM tag containg flow signals is missing. Re-generate BAM with new TS.\" style=\"color:red\">${BARCODE}</span></td>" >> "$HTML"
         else
             echo "       <td style=\"text-align:left\"><span class=\"help\" title=\"No Data for barcode ${BARCODE}\" style=\"color:grey\">${BARCODE}</span></td>" >> "$HTML"
         fi

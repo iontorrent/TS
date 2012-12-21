@@ -19,21 +19,20 @@ public:
     start_detailed_time = -5;
     stop_detailed_time = 16;
     left_avg = 5;
-    rate_sigma_intercept = 0.0;
-    rate_sigma_slope = 0.486478292;
+    rate_sigma_intercept = 0;
+    rate_sigma_slope = 0.6;
     // rate_sigma_intercept = 0.9160620;
     // rate_sigma_slope = 0.7400019;
     // rate_sigma_intercept = -0.2577416f;
     // rate_sigma_slope = 1.0195878f;
-    t0_tmid_intercept = 3.0;
-    t0_tmid_slope = 0.98;
-    time_start_slop = 66;
+    t0_tmid_intercept = 1.5;
+    //    t0_tmid_intercept = .5;
+    t0_tmid_slope = 1.0;
+    time_start_slop = 0;
     t0_prior_pre_millis = 333; // about 5 frames at 15fps
     t0_prior_post_millis = 333; // about 5 frames at 15fps
     t0_prior_weight = 0.0f;
-    //row_step = 50;
     row_step = 100;
-    //col_step = 50;
     col_step = 100;
     doTopCoder = false;
     doDebug = false;
@@ -49,6 +48,8 @@ public:
     sigma_hard = 0;
     use_hard_est = false;
     grind_acq_0 = 0;
+    t0_hard_end = 3000;
+    isThumbnail = false;
   }
 
   int start_detailed_time; ///< From TimeCompression::SetUpTime()
@@ -77,27 +78,29 @@ public:
   double t0_hard;
   double tmid_hard;
   double sigma_hard;
+  int t0_hard_end;
   bool use_hard_est;
   std::string bg_param;
   int grind_acq_0;
+  bool isThumbnail;
 };
 
-void GenerateBfT0Prior(TraceConfig &config,
-                       short *img, 
+template <typename shortvec> void GenerateBfT0Prior(TraceConfig &config,
+                       shortvec &img, 
                        int baseFrameRate,
                        size_t numRow,
                        size_t numCol,
                        size_t numFrame,
                        int *timeStamps,
-                       size_t colStep,
                        size_t rowStep,
+		       size_t colStep,
                        Mask *mask,
                        T0Calc &t0,
                        GridMesh<T0Prior> &t0Prior) {
   t0.SetWindowSize(4);
   t0.SetMinFirstHingeSlope(-1/(float) baseFrameRate);
-  t0.SetMaxFirstHingeSlope(35/(float) baseFrameRate);
-  t0.SetMinSecondHingeSlope(-2000/(float) baseFrameRate);
+  t0.SetMaxFirstHingeSlope(100/(float) baseFrameRate);
+  t0.SetMinSecondHingeSlope(-20000/(float) baseFrameRate);
   t0.SetMaxSecondHingeSlope(-10/(float) baseFrameRate);
   t0.Init(numRow, numCol, numFrame, rowStep, colStep, 1);
   t0.SetTimeStamps(timeStamps, numFrame);
@@ -105,27 +108,26 @@ void GenerateBfT0Prior(TraceConfig &config,
     t0.SetMask(mask);
   }
   t0.SetStepSize(10);
+  t0.FillInT0Prior(t0Prior, config.t0_prior_pre_millis, config.t0_prior_post_millis, config.t0_prior_weight, config.t0_hard_end);
   t0.CalcAllSumTrace(img);
   t0.CalcT0FromSum();
-  t0.FillInT0Prior(t0Prior, config.t0_prior_pre_millis, config.t0_prior_post_millis, config.t0_prior_weight);
   if (config.doDebug) { 
     string refFile = "t0_bf_reference.txt";
     ofstream out(refFile.c_str());
-    //  t0.CalculateSlopePostT0(2);
     t0.WriteResults(out);
     out.close();
   }
 }
 
-void GenerateAcqT0Prior(TraceConfig &config,
-                        short *img, 
+template <typename shortvec> void GenerateAcqT0Prior(TraceConfig &config,
+                        shortvec &img, 
                         int baseFrameRate,
                         size_t numRow,
                         size_t numCol,
                         size_t numFrame,
                         int *timeStamps,
-                        size_t colStep,
                         size_t rowStep,
+                        size_t colStep,
                         Mask *mask,
                         T0Calc &t0,
                         GridMesh<T0Prior> &t0Prior) {
@@ -159,9 +161,9 @@ void GenerateAcqT0Prior(TraceConfig &config,
   }
 }
 
-void EstimateSigmaValue(T0Calc &t0, SigmaTMidNucEstimation &sigmaEst, GridMesh<SigmaEst> &sigmaTMid) {
+void EstimateSigmaValue(T0Calc &t0, SigmaTMidNucEstimation &sigmaEst, GridMesh<SigmaEst> &sigmaTMid, int numNeighbors=2) {
   assert(sigmaTMid.GetNumBin() == t0.GetNumRegions());
-  t0.CalculateSlopePostT0(2);
+  t0.CalculateSlopePostT0(numNeighbors);
   for (size_t i = 0; i < t0.GetNumRegions(); i++) {
     float slopeEst = t0.GetSlope(i);
     float t0Est = t0.GetT0(i);

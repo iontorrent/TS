@@ -31,6 +31,8 @@ def software_update_loop(TSconfig):
         #================================
         
         new_files = TSconfig.TSpoll_pkgs()
+        space = TSconfig.freespace('/var/')
+        print "/var partition: %d mbytes" % space
         
         #if new_files:
         #if True:

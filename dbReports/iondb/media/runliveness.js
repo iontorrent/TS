@@ -1,6 +1,7 @@
 var _TRIES = 0;
 var MAX_TRIES = 3;
 var _FOUND_STATUS = false;
+var _LIVENESS = false;	
 
 function analysis_liveness(url, domid) {
     function cb(data) {
@@ -57,7 +58,7 @@ function analysis_liveness(url, domid) {
     }
 
     //wait a few seconds before asking the server if the job started.
-    setTimeout(function () {
+    _LIVENESS = setTimeout(function () {
         $.getJSON(url, null, cb);
     }, 3500);
 
@@ -66,10 +67,15 @@ function analysis_liveness(url, domid) {
 function analysis_live_ready_cb() {
 	_TRIES = 0;
 	_FOUND_STATUS = false;
+	_LIVENESS = true;
     var domid = "analysis_liveness_display";
     var a = $("#analysis_liveness_info > a");
     var url = a.attr("href");
     analysis_liveness(url, domid);
+}
+
+function analysis_liveness_off() {
+	clearTimeout(_LIVENESS);
 }
 
 $(document).ready(analysis_live_ready_cb);

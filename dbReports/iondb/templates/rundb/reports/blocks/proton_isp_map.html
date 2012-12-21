@@ -1,0 +1,24 @@
+{% load humanize %}
+{% load ion_readable %}
+
+<div id="map">
+    <table id="ispMap" border="0" cellpadding="0" cellspacing="0">
+
+        <tr class='slimRow'>
+            {% for block in proton_blocks %}
+            <td class="slim">
+                <a href="{{report.reportWebLink}}/{{block.directory}}">
+                {% if block.status_msg %}
+                    {{block.status_msg}}
+                {% else %}
+                    <img src="{{report.reportWebLink}}/{{block.directory}}/sigproc_results/Bead_density_raw.png" class="show" style="max-height: 350px;">
+                {% endif %}
+                </a>
+            </td>
+            {% if forloop.counter|divisibleby:"12" %}
+        </tr>
+        <tr>
+            {% endif %}
+            {% endfor %}
+    </table>
+</div>

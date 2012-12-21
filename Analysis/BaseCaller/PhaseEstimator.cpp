@@ -20,9 +20,9 @@
 #include "IonErr.h"
 #include "DPTreephaser.h"
 #include "Utils.h"
-#include "RegionAnalysis.h"
 
-
+#include <iostream>
+#include <fstream>
 
 
 void PhaseEstimator::PrintHelp()
@@ -30,7 +30,6 @@ void PhaseEstimator::PrintHelp()
   printf ("Phasing estimation options:\n");
   printf ("     --phasing-estimator     STRING     phasing estimation algorithm [spatial-refiner-2]\n");
   printf ("     --libcf-ie-dr           cf,ie,dr   don't estimate phasing and use specified values [not using]\n");
-  printf ("  -R,--phasing-regions       INTxINT    number of phasing regions (ignored by spatial-refiner) [12x13]\n");
   printf ("     --phasing-residual-filter FLOAT    maximum sum-of-squares residual to keep a read in phasing estimation [1.0]\n");
   printf ("\n");
 }
@@ -63,13 +62,16 @@ PhaseEstimator::PhaseEstimator()
 
   train_subset_count_ = 1;
   train_subset_ = 0;
+
+  average_cf_ = 0;
+  average_ie_ = 0;
+  average_dr_ = 0;
 }
 
 void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts)
 {
   phasing_estimator_      = opts.GetFirstString('-', "phasing-estimator", "spatial-refiner-2");
   string arg_cf_ie_dr     = opts.GetFirstString('-', "libcf-ie-dr", "");
-  string arg_regions      = opts.GetFirstString('R', "phasing-regions", "");
   residual_threshold_     = opts.GetFirstDouble('-', "phasing-residual-filter", 1.0);
 
   if (!arg_cf_ie_dr.empty()) {
@@ -84,13 +86,6 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts)
       exit (EXIT_FAILURE);
     }
     return; // --libcf-ie-dr overrides other phasing-related options
-  }
-
-  if (!arg_regions.empty()) {
-    if (2 != sscanf (arg_regions.c_str(), "%dx%d", &result_regions_x_, &result_regions_y_)) {
-      fprintf (stderr, "Option Error: cfiedr-regions %s\n", arg_regions.c_str());
-      exit (EXIT_FAILURE);
-    }
   }
 }
 
@@ -107,25 +102,10 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
 
   printf("Phase estimation mode = %s\n", phasing_estimator_.c_str());
 
-  if (phasing_estimator_ == "override")
-    return;
+  if (phasing_estimator_ == "override") {
+    // Nothing to do!
 
-  if (phasing_estimator_ == "nel-mead-treephaser") {
-
-    int num_workers = max(numCores(), 2);
-    if (use_single_core)
-      num_workers = 1;
-
-    result_cf_.assign(result_regions_x_*result_regions_y_,0.0);
-    result_ie_.assign(result_regions_x_*result_regions_y_,0.0);
-    result_dr_.assign(result_regions_x_*result_regions_y_,0.0);
-    RegionAnalysis region_analysis;
-    region_analysis.analyze(&result_cf_, &result_ie_, &result_dr_, wells, mask, keys_, flow_order, num_workers,
-        result_regions_x_, result_regions_y_);
-    return;
-  }
-
-  if (phasing_estimator_ == "spatial-refiner") {
+  } else if (phasing_estimator_ == "spatial-refiner") {
 
     int num_workers = max(numCores(), 2);
     if (use_single_core)
@@ -134,10 +114,9 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
     wells->Close();
     wells->OpenForIncrementalRead();
     SpatialRefiner(wells, mask, num_workers);
-    return;
-  }
 
-  if (phasing_estimator_ == "spatial-refiner-2") {
+
+  } else if (phasing_estimator_ == "spatial-refiner-2") {
 
     int num_workers = max(numCores(), 2);
     if (use_single_core)
@@ -163,12 +142,29 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
       train_subset_regions_y_[train_subset_] = result_regions_y_;
     }
 
-    return;
+  } else
+    ION_ABORT("Requested phase estimator is not recognized");
+
+  // Compute mean cf, ie, dr
+
+  average_cf_ = 0;
+  average_ie_ = 0;
+  average_dr_ = 0;
+  int count = 0;
+
+  for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
+    if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
+      average_cf_ += result_cf_[r];
+      average_ie_ += result_ie_[r];
+      average_dr_ += result_dr_[r];
+      count++;
+    }
   }
-
-
-  ION_ABORT("Requested phase estimator is not recognized");
-
+  if (count > 0) {
+    average_cf_ /= count;
+    average_ie_ /= count;
+    average_dr_ /= count;
+  }
 }
 
 
@@ -176,29 +172,17 @@ void PhaseEstimator::ExportResultsToJson(Json::Value &json)
 {
   // Save phase estimates to BaseCaller.json
 
-  float cf_mean = 0;
-  float ie_mean = 0;
-  float dr_mean = 0;
-  int count = 0;
-
   for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
     json["CFbyRegion"][r] = result_cf_[r];
     json["IEbyRegion"][r] = result_ie_[r];
     json["DRbyRegion"][r] = result_dr_[r];
-    if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
-      cf_mean += result_cf_[r];
-      ie_mean += result_ie_[r];
-      dr_mean += result_dr_[r];
-      count++;
-    }
   }
   json["RegionRows"] = result_regions_y_;
   json["RegionCols"] = result_regions_x_;
 
-  json["CF"] = count ? (cf_mean/count) : 0;
-  json["IE"] = count ? (ie_mean/count) : 0;
-  json["DR"] = count ? (dr_mean/count) : 0;
-
+  json["CF"] = average_cf_;
+  json["IE"] = average_ie_;
+  json["DR"] = average_dr_;
 }
 
 
@@ -254,10 +238,6 @@ float PhaseEstimator::GetWellDR(int x, int y) const
     return train_subset_dr_[my_subset][region];
   }
 }
-
-
-
-
 
 void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers)
 {
@@ -348,7 +328,7 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
     s.subblocks[3]->pos_y = (s.pos_y << 1) + 1;
   }
 
-  // Step 3. Populate region searchOrder in lowermost subblocks
+  // Step 3. Populate region search order in lowermost subblocks
 
 
   for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
@@ -364,7 +344,7 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
     sort(s.sorted_regions.begin(), s.sorted_regions.end(), CompareDensity(region_num_reads_));
   }
 
-  // Step 4. Populate region searchOrder in remaining subblocks
+  // Step 4. Populate region search order in remaining subblocks
 
   for (int level = num_levels-1; level >= 1; --level) {
     for (unsigned int idx = 0; idx < subblocks.size(); idx++) {
@@ -497,7 +477,7 @@ size_t PhaseEstimator::LoadRegion(int region)
   int end_x = min(begin_x + region_size_x_, chip_size_x_);
   int end_y = min(begin_y + region_size_y_, chip_size_y_);
 
-  // Mutex needed for wells access, but not needed for regionReads access
+  // Mutex needed for wells access, but not needed for region_reads access
   pthread_mutex_lock(&region_loader_mutex_);
 
   wells_->SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, flow_order_.num_flows());
@@ -625,7 +605,7 @@ void PhaseEstimator::EstimatorWorker()
       treephaser.SetModelParameters(s.cf, s.ie, s.dr);
       useful_reads.clear();
 
-      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); region++) {
+      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); ++region) {
 
 
         iotimer += LoadRegion(*region);
@@ -639,7 +619,7 @@ void PhaseEstimator::EstimatorWorker()
         // Filter. Reads that survive filtering are stored in useful_reads
         //! \todo: Rethink filtering. Maybe a rule that adjusts the threshold to keep at least 20% of candidate reads.
 
-        for (vector<BasecallerRead>::iterator R = region_reads_[*region].begin(); R != region_reads_[*region].end(); R++) {
+        for (vector<BasecallerRead>::iterator R = region_reads_[*region].begin(); R != region_reads_[*region].end(); ++R) {
 
           for (int flow = 0; flow < flow_order_.num_flows(); flow++)
             R->normalized_measurements[flow] = R->raw_measurements[flow];
@@ -661,8 +641,10 @@ void PhaseEstimator::EstimatorWorker()
               metric += 1e10;
           }
 
-          if (metric > residual_threshold_)
+          if (metric > residual_threshold_) {
+            //printf("\nRejecting metric=%1.5f solution=%s", metric, R->sequence.c_str());
             continue;
+          }
           useful_reads.push_back(&(*R));
         }
 
@@ -945,5 +927,107 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
 }
 
 
+void PhaseEstimator::ExportTrainSubsetToJson(Json::Value &json)
+{
+	json["TrainSubsetCount"] = train_subset_count_;
 
+	for(int i = 0; i < train_subset_count_; ++i)
+	{
+		json["RegionRows"][i] = train_subset_regions_y_[i];
+		json["RegionCols"][i] = train_subset_regions_x_[i];
 
+		for (int r = 0; r < result_regions_x_*result_regions_y_; r++)
+		{
+			json["CFbyRegion"][i][r] = train_subset_cf_[i][r];
+			json["IEbyRegion"][i][r] = train_subset_ie_[i][r];
+			json["DRbyRegion"][i][r] = train_subset_dr_[i][r];
+		}
+	}
+}
+
+bool PhaseEstimator::LoadPhaseEstimationTrainSubset(const string& phase_file_name, Mask *mask,
+                                                    int region_size_x, int region_size_y)
+{
+    Json::Value json;
+    chip_size_x_ = mask->W();
+    chip_size_y_ = mask->H();
+    region_size_x_ = region_size_x;
+    region_size_y_ = region_size_y;
+    num_regions_x_ = (chip_size_x_+region_size_x_-1) / region_size_x_;
+    num_regions_y_ = (chip_size_y_+region_size_y_-1) / region_size_y_;
+    num_regions_ = num_regions_x_ * num_regions_y_;
+
+	ifstream ifs(phase_file_name.c_str());
+    if(ifs)
+    {
+		ifs >> json;	
+		ifs.close();
+
+		train_subset_count_ = 0;
+		train_subset_count_ = json["TrainSubset"]["TrainSubsetCount"].asInt();
+		if(train_subset_count_ < 1)
+		{
+			cout << "PhaseEstimator ERROR: train_subset_count_ in file " << phase_file_name << " is less than 1." << endl;
+			return false;
+		}
+
+		train_subset_cf_.resize(train_subset_count_);
+		train_subset_ie_.resize(train_subset_count_);
+		train_subset_dr_.resize(train_subset_count_);
+		train_subset_regions_y_.resize(train_subset_count_);
+		train_subset_regions_x_.resize(train_subset_count_);
+
+		for(int i = 0; i < train_subset_count_; ++i)
+		{
+			train_subset_regions_y_[i] = json["TrainSubset"]["RegionRows"][i].asInt();
+			train_subset_regions_x_[i] = json["TrainSubset"]["RegionCols"][i].asInt();
+			int n = train_subset_regions_y_[i] * train_subset_regions_x_[i];
+
+			vector<float> cf;
+			vector<float> ie;
+			vector<float> dr;
+
+			for(int j = 0; j < n; ++j)
+			{
+				cf.push_back(json["TrainSubset"]["CFbyRegion"][i][j].asFloat());
+				ie.push_back(json["TrainSubset"]["IEbyRegion"][i][j].asFloat());
+				dr.push_back(json["TrainSubset"]["DRbyRegion"][i][j].asFloat());
+			}
+
+			train_subset_cf_[i] = cf;
+			train_subset_ie_[i] = ie;
+			train_subset_dr_[i] = dr;
+		}
+
+		result_regions_y_ = train_subset_regions_y_[train_subset_count_ - 1];
+		result_regions_x_ = train_subset_regions_x_[train_subset_count_ - 1];
+
+		result_cf_ = train_subset_cf_[train_subset_count_ - 1];
+		result_ie_ = train_subset_ie_[train_subset_count_ - 1];
+		result_dr_ = train_subset_dr_[train_subset_count_ - 1];
+        average_cf_ = 0;
+        average_ie_ = 0;
+        average_dr_ = 0;
+        int count = 0;
+
+        for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
+          if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
+            average_cf_ += result_cf_[r];
+            average_ie_ += result_ie_[r];
+            average_dr_ += result_dr_[r];
+            count++;
+          }
+        }
+        if (count > 0) {
+          average_cf_ /= count;
+          average_ie_ /= count;
+          average_dr_ /= count;
+        }
+		
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}

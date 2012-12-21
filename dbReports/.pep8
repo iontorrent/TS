@@ -1,0 +1,6 @@
+[pep8]
+filename=*.py,*.wsgi
+exclude=.svn,CVS,.bzr,.hg,.git,migrations,local-python,debian,reports
+show-source=true
+statistics=true
+ignore=E501

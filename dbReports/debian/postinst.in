@@ -8,7 +8,9 @@ case "$1" in
     configure)
 
     chmod ugo+x @ION_INSTALL_PREFIX@/iondb/bin/*
-    chmod ugo+x @ION_INSTALL_PREFIX@/iondb/manage.py
+
+    DJANGOADMIN=@ION_INSTALL_PREFIX@/manage.py
+    chmod ugo+x ${DJANGOADMIN}
 
     #remove OneTouch update temp files
 	if [ -e /tmp/OTstatus ]; then
@@ -60,22 +62,31 @@ case "$1" in
     fi
     # Default Ubuntu file is empty. Config now in /etc/apache2/conf.d/
     touch /etc/apache2/httpd.conf
-    
+
     #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in  
-	htpasswd -b -c /etc/apache2/users logout logout
+    htpasswd -b -c /etc/apache2/users logout logout
 
     # Enable mod_wsgi, mod_rewrite, mod_expires
     /usr/sbin/a2enmod wsgi
     /usr/sbin/a2enmod rewrite
     /usr/sbin/a2enmod expires
+    /usr/sbin/a2enmod ssl
+    /usr/sbin/a2enmod headers
 
-    # Switch to the torrent-server apache vhost
+    # Switch to the torrent-server apache vhost - remove stock ubuntu vhosts
     /usr/sbin/a2dissite default
+    /usr/sbin/a2dissite default-ssl
 
     # Some machines have files instead of symlinks here, which a2ensite and a2dissite choke on.
-    /bin/rm -f /etc/apache2/sites-enabled/default /etc/apache2/sites-enabled/torrent-server
+    /bin/rm -f /etc/apache2/sites-enabled/default /etc/apache2/sites-enabled/default-ssl
+    /bin/rm -f /etc/apache2/sites-enabled/torrent-server /etc/apache2/sites-enabled/torrent-server-ssl
 
+    # Enable Torrent Suite vhosts - http and https
     /usr/sbin/a2ensite torrent-server
+    # Only enable https if user configured it -
+    #   file is installed as torrent-server-ssl.example and must be edited
+    [ -e /etc/apache2/sites-available/torrent-server-ssl ] && /usr/sbin/a2ensite torrent-server-ssl
+
     # apache2 restarted by invoke-rc.d command below
 
     #	------------------------------------------
@@ -106,7 +117,7 @@ case "$1" in
 
     rm -f /results/analysis/output/tmap-*
     ln -s -f /results/referenceLibrary/tmap-* /results/analysis/output/
-    
+
     rm -f /results/analysis/output/disabled/tmap-*
     ln -s -f /results/referenceLibrary/disabled/tmap-* /results/analysis/output/disabled
 
@@ -144,12 +155,14 @@ case "$1" in
         chmod a+w /var/log/ion/ionPlugin.log || true
     fi
     # touchy code
-    for log_file in django.log iarchive.log crawl.log ionPlugin.log
+    for log_file in django.log iarchive.log crawl.log ionPlugin.log celery_plugins.log reportsLog.log
     do
         touch /var/log/ion/$log_file
         chown :www-data /var/log/ion/$log_file
         chmod g+rw /var/log/ion/$log_file
     done
+    chown ionian:www-data /var/log/ion/django.log
+    chown ionian:www-data /var/log/ion/celery_plugins.log
 
     chown -R www-data:www-data @ION_INSTALL_PREFIX@/iondb
 
@@ -178,21 +191,20 @@ case "$1" in
         /usr/bin/python ./bin/migrate.py
 
         # Django South DB migration - applies changes in rundb/migrations/
-        /usr/bin/python manage.py migrate --all --ignore-ghost-migrations --noinput
+        /usr/bin/python ${DJANGOADMIN} migrate --all --ignore-ghost-migrations --noinput
 
         # Print current db migration state for diagnostic purposes
-        python manage.py migrate --list --noinput
+        /usr/bin/python ${DJANGOADMIN} migrate --list --noinput
 
         # Full syncdb to create ContentTypes and Permissions
-        /usr/bin/python manage.py syncdb --noinput --all
+        /usr/bin/python ${DJANGOADMIN} syncdb --noinput --all
 
         # Backfill tastypie API keys
-        /usr/bin/python manage.py backfill_api_keys
+        /usr/bin/python ${DJANGOADMIN} backfill_api_keys
 
         # Loads Test Fragment entries into database
-        /usr/bin/python manage.py loaddata template_init.json
+        /usr/bin/python ${DJANGOADMIN} loaddata template_init.json
 
- 
         # Creates default report templates with site-specific content
         /usr/bin/python ./bin/base_template.py
         /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
@@ -203,7 +215,7 @@ case "$1" in
 
 
         # Collect static files (eg. admin pages css/js)
-        /usr/bin/python manage.py collectstatic --verbosity=0 --noinput --clear --link
+        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --clear --link
 
         cd -
     )
@@ -227,16 +239,11 @@ case "$1" in
     if [[ ! `rabbitmqctl list_vhosts|grep ion` ]]; then
         echo "Adding RabbitMQ vhost 'ion' and setting permissions for user 'ion'"
         rabbitmqctl add_vhost ion
-        # Ubuntu Precise (12.04) specific
-        if grep -q precise <(lsb_release -c -s); then
-            rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
-        else
-            rabbitmqctl set_permissions -p ion ion "" ".*" ".*"
-        fi
+        rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
     fi
 
     #load the references for a first time
-    (wget -q -O /dev/null http://localhost/rundb/references/ > /dev/null) || \
+    (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
         echo "Loading references failed."
 
     #load the config page to update plugins and publishers
@@ -244,6 +251,13 @@ case "$1" in
     #    echo "Loading plugin config page failed."
     # Schedule plugin rescan task to run after 30 seconds
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=30)'
+
+    #TS-5486: Schedule task to rescan all Results/Reports to ensure reportStatus is set to Archived for archived reports
+    python -c 'import iondb.bin.djangoinit, iondb.backup.tasks as tasks; tasks.sync_filesystem_and_db_report_state.apply_async(countdown=30)'
+    
+    #TS-5598: Schedule task to fill diskusage field for all Experiments
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_exp_diskusage.apply_async(countdown=40)'
+    #python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_rep_diskusage.apply_async(countdown=40)'
 
     # command to execute
     COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"

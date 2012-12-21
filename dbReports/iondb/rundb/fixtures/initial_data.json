@@ -1,0 +1,1718 @@
+[
+  {
+    "pk": 20001,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonSeqKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 260,
+      "uid": "SEQ0001",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "(100bp) Ion Sequencing Kit"
+    }
+  },
+  {
+    "pk": 20002,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonSeq200Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0002",
+      "instrumentType": "pgm",
+      "isActive": false,
+      "description": "(200bp) Ion Sequencing 200 Kit"
+    }
+  },
+  {
+    "pk": 20003,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM200Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0003",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "(200bp) Ion PGM(tm) 200 Sequencing Kit"
+    }
+  },
+  {
+    "pk": 20004,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "IonFragmentLibKit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0001",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Fragment Library Kit"
+    }
+  },
+  {
+    "pk": 20005,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "IonFragmentLibKit2",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0002",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Fragment Library Kit"
+    }
+  },
+  {
+    "pk": 20006,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "IonPlusFragmentLibKit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0003",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Plus Fragment Library Kit"
+    }
+  },
+  {
+    "pk": 20007,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM200Kit-v2-obsolete",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0004",
+      "instrumentType": "pgm",
+      "isActive": false,
+      "description": "(200bp) Ion PGM(tm) 200 Sequencing Kit v2"
+    }
+  },
+  {
+    "pk": 20008,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion Xpress Plus Fragment Library Kit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0004",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Xpress Plus Fragment Library Kit"
+    }
+  },
+  {
+    "pk": 20009,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion Xpress Plus Paired-End Library Kit",
+      "nucleotideType": "dna",
+      "runMode": "pe",
+      "flowCount": 0,
+      "uid": "LIB0005",
+      "instrumentType": "",
+      "isActive": false,
+      "description": "Ion Xpress Plus Paired-End Library Kit"
+    }
+  },
+  {
+    "pk": 20010,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion Plus Paired-End Library Kit",
+      "nucleotideType": "dna",
+      "runMode": "pe",
+      "flowCount": 0,
+      "uid": "LIB0006",
+      "instrumentType": "",
+      "isActive": false,
+      "description": "Ion Plus Paired-End Library Kit"
+    }
+  },
+  {
+    "pk": 20011,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq 2.0 Beta Kit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0007",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq 2.0 Beta Kit"
+    }
+  },
+  {
+    "pk": 20012,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq 2.0 Library Kit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0008",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq 2.0 Library Kit"
+    }
+  },
+  {
+    "pk": 20013,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion Total RNA Seq Kit",
+      "nucleotideType": "rna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0009",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Total RNA Seq Kit"
+    }
+  },
+  {
+    "pk": 20014,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion Total RNA Seq Kit v2",
+      "nucleotideType": "rna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0010",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion Total RNA Seq Kit v2"
+    }
+  },
+  {
+    "pk": 20015,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq Kit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0011",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq Kit"
+    }
+  },
+  {
+    "pk": 20016,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "AdapterKit",
+      "name": "Paired-end library adapter kit",
+      "nucleotideType": "",
+      "runMode": "pe",
+      "flowCount": 0,
+      "uid": "ADAPTR0001",
+      "instrumentType": "",
+      "isActive": false,
+      "description": "Paired-end library adapter kit"
+    }
+  },
+  {
+    "pk": 20017,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM300Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 640,
+      "uid": "SEQ0005",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Sequencing 300 Kit"
+    }
+  },
+  {
+    "pk": 20018,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "ControlSequenceKit",
+      "name": "Ion AmpliSeq Sample ID Panel",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "CONSEQ0001",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq Sample Id panel"
+    }
+  },
+  {
+    "pk": 20019,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion OneTouch 200 Template Kit v2 DL",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0001",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion OneTouch 200 Template Kit v2 DL"
+    }
+  },
+  {
+    "pk": 20020,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMInstallKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 100,
+      "uid": "SEQ0006",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Install Kit"
+    }
+  },
+  {
+    "pk": 20021,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM2x200PEKit",
+      "nucleotideType": "",
+      "runMode": "pe",
+      "flowCount": 520,
+      "uid": "SEQ0007",
+      "instrumentType": "pgm",
+      "isActive": false,
+      "description": "Ion PGM 2x200 paired end sequencing kit"
+    }
+  },
+  {
+    "pk": 20022,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq custom enrichment kits",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0001",
+      "instrumentType": "",
+      "isActive": false,
+      "description": "Ion TargetSeq custom enrichment kits"
+    }
+  },
+  {
+    "pk": 20023,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonIKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 260,
+      "uid": "SEQ0008",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion Proton I Sequencing Kit"
+    }
+  },
+  {
+    "pk": 20024,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion Proton I Template OT2 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0002",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion Proton I Template OT2 Kit"
+    }
+  },
+  {
+    "pk": 20025,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "MuSeek(tm) Library Preparation Kit",
+      "nucleotideType": "dna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0012",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "MuSeek(tm) Library Preparation Kit"
+    }
+  },
+  {
+    "pk": 20026,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Exome Kit (4 rxn)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0002",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Exome Kit (4 rxn)"
+    }
+  },
+  {
+    "pk": 20027,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "ControlSequenceKit",
+      "name": "ERCC RNA Spike-In Mix",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "CONSEQ0002",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "ERCC RNA Spike-In Mix"
+    }
+  },
+  {
+    "pk": 20028,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Exome Kit (12 rxn)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0003",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Exome Kit (12 rxn)"
+    }
+  },
+  {
+    "pk": 20029,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Exome Kit (48 rxn)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0004",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Exome Kit (48 rxn)"
+    }
+  },
+  {
+    "pk": 20030,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Custom Enrichment Kit (100kb-500kb)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0005",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Custom Enrichment Kit (100kb-500kb)"
+    }
+  },
+  {
+    "pk": 20031,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Custom Enrichment Kit (500kb-2Mb)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0006",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Custom Enrichment Kit (500kb-2Mb)"
+    }
+  },
+  {
+    "pk": 20032,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion TargetSeq(tm) Custom Enrichment Kit (2Mb-10Mb)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0007",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion TargetSeq(tm) Custom Enrichment Kit (2Mb-10Mb)"
+    }
+  },
+  {
+    "pk": 20033,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM200Kit-v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0009",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Sequencing 200 Kit v2"
+    }
+  },
+  {
+    "pk": 20034,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Template OT2 200 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0003",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Template OT2 200 Kit"
+    }
+  },
+  {
+    "pk": 20035,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM400Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 850,
+      "uid": "SEQ0010",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Sequencing 400 Kit"
+    }
+  },
+  {
+    "pk": 20036,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Template OT2 400 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0004",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Template OT2 400 Kit"
+    }
+  },
+  {
+    "pk": 20037,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "ControlSequenceKit",
+      "name": "Ion PGM Controls Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "CONSEQ0003",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Controls Kit v2"
+    }
+  },
+  {
+    "pk": 20038,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Template OT2 200 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0005",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Template OT2 200 Kit"
+    }
+  },
+  {
+    "pk": 20039,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "MagMax(tm) FFPE Total Acid Isolation Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0008",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "MagMax(tm) FFPE Total Acid Isolation Kit"
+    }
+  },
+  {
+    "pk": 20040,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq RNA Library Kit",
+      "nucleotideType": "rna",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0013",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq RNA Library Kit"
+    }
+  },
+  {
+    "pk": 20041,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 400,
+      "uid": "SEQ0011",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 Kit"
+    }
+  },  
+  {
+    "pk": 20001,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4468997",
+      "kit": [
+        "SEQ0001"
+      ]
+    }
+  },
+  {
+    "pk": 20002,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4468996",
+      "kit": [
+        "SEQ0001"
+      ]
+    }
+  },
+  {
+    "pk": 20003,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4468995",
+      "kit": [
+        "SEQ0001"
+      ]
+    }
+  },
+  {
+    "pk": 20004,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4468994",
+      "kit": [
+        "SEQ0001"
+      ]
+    }
+  },
+  {
+    "pk": 20005,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471258",
+      "kit": [
+        "SEQ0002"
+      ]
+    }
+  },
+  {
+    "pk": 20006,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471257",
+      "kit": [
+        "SEQ0002"
+      ]
+    }
+  },
+  {
+    "pk": 20007,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471259",
+      "kit": [
+        "SEQ0002"
+      ]
+    }
+  },
+  {
+    "pk": 20008,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471260",
+      "kit": [
+        "SEQ0002"
+      ]
+    }
+  },
+  {
+    "pk": 20009,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4474004",
+      "kit": [
+        "SEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20010,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4474005",
+      "kit": [
+        "SEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20011,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4474006",
+      "kit": [
+        "SEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20012,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4474007",
+      "kit": [
+        "SEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20013,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4462907",
+      "kit": [
+        "LIB0001"
+      ]
+    }
+  },
+  {
+    "pk": 20014,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4466464",
+      "kit": [
+        "LIB0002"
+      ]
+    }
+  },
+  {
+    "pk": 20015,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471252",
+      "kit": [
+        "LIB0003"
+      ]
+    }
+  },
+  {
+    "pk": 20016,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480446",
+      "kit": [
+        "SEQ0005"
+      ]
+    }
+  },
+  {
+    "pk": 20017,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480447",
+      "kit": [
+        "SEQ0005"
+      ]
+    }
+  },
+  {
+    "pk": 20018,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480448",
+      "kit": [
+        "SEQ0005"
+      ]
+    }
+  },
+  {
+    "pk": 20019,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480217",
+      "kit": [
+        "SEQ0006"
+      ]
+    }
+  },
+  {
+    "pk": 20020,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480282",
+      "kit": [
+        "SEQ0006"
+      ]
+    }
+  },
+  {
+    "pk": 20021,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480284",
+      "kit": [
+        "SEQ0006"
+      ]
+    }
+  },
+  {
+    "pk": 20022,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4476341",
+      "kit": [
+        "SEQ0007"
+      ]
+    }
+  },
+  {
+    "pk": 20023,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478850",
+      "kit": [
+        "SEQ0008"
+      ]
+    }
+  },
+  {
+    "pk": 20024,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478307",
+      "kit": [
+        "SEQ0008"
+      ]
+    }
+  },
+  {
+    "pk": 20025,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478308",
+      "kit": [
+        "SEQ0008"
+      ]
+    }
+  },
+  {
+    "pk": 20026,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478321",
+      "kit": [
+        "SEQ0004"
+      ]
+    }
+  },
+  {
+    "pk": 20027,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478322",
+      "kit": [
+        "SEQ0004"
+      ]
+    }
+  },
+  {
+    "pk": 20028,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478323",
+      "kit": [
+        "SEQ0004"
+      ]
+    }
+  },
+  {
+    "pk": 20029,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478324",
+      "kit": [
+        "SEQ0004"
+      ]
+    }
+  },
+  {
+    "pk": 20030,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471269",
+      "kit": [
+        "LIB0004"
+      ]
+    }
+  },
+  {
+    "pk": 20031,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477109",
+      "kit": [
+        "LIB0005"
+      ]
+    }
+  },
+  {
+    "pk": 20032,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477110",
+      "kit": [
+        "LIB0006"
+      ]
+    }
+  },
+  {
+    "pk": 20033,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4467226",
+      "kit": [
+        "LIB0007"
+      ]
+    }
+  },
+  {
+    "pk": 20034,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4475345",
+      "kit": [
+        "LIB0008"
+      ]
+    }
+  },
+  {
+    "pk": 20035,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4466666",
+      "kit": [
+        "LIB0009"
+      ]
+    }
+  },
+  {
+    "pk": 20036,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4475936",
+      "kit": [
+        "LIB0010"
+      ]
+    }
+  },
+  {
+    "pk": 20037,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4471261",
+      "kit": [
+        "LIB0011"
+      ]
+    }
+  },
+  {
+    "pk": 20038,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477111",
+      "kit": [
+        "ADAPTR0001"
+      ]
+    }
+  },
+  {
+    "pk": 20039,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480445",
+      "kit": [
+        "SEQ0005"
+      ]
+    }
+  },
+  {
+    "pk": 20040,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480285",
+      "kit": [
+        "TEMPLT0001"
+      ]
+    }
+  },
+  {
+    "pk": 20041,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478309",
+      "kit": [
+        "SEQ0008"
+      ]
+    }
+  },
+  {
+    "pk": 20042,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478851",
+      "kit": [
+        "TEMPLT0002"
+      ]
+    }
+  },
+  {
+    "pk": 20043,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478864",
+      "kit": [
+        "TEMPLT0002"
+      ]
+    }
+  },
+  {
+    "pk": 20044,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478857",
+      "kit": [
+        "TEMPLT0002"
+      ]
+    }
+  },
+  {
+    "pk": 20045,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478853",
+      "kit": [
+        "TEMPLT0002"
+      ]
+    }
+  },
+  {
+    "pk": 20046,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4478856",
+      "kit": [
+        "TEMPLT0002"
+      ]
+    }
+  },
+  {
+    "pk": 20047,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477742",
+      "kit": [
+        "SPREP0002"
+      ]
+    }
+  },
+  {
+    "pk": 20048,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477743",
+      "kit": [
+        "SPREP0003"
+      ]
+    }
+  },
+  {
+    "pk": 20049,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4477744",
+      "kit": [
+        "SPREP0004"
+      ]
+    }
+  },
+  {
+    "pk": 20050,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A14230",
+      "kit": [
+        "SPREP0005"
+      ]
+    }
+  },
+  {
+    "pk": 20051,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A14229",
+      "kit": [
+        "SPREP0006"
+      ]
+    }
+  },
+  {
+    "pk": 20052,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A14228",
+      "kit": [
+        "SPREP0007"
+      ]
+    }
+  },
+  {
+    "pk": 20053,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4456740",
+      "kit": [
+        "CONSEQ0002"
+      ]
+    }
+  },
+  {
+    "pk": 20054,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482006",
+      "kit": [
+        "SEQ0009"
+      ]
+    }
+  },
+  {
+    "pk": 20055,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482007",
+      "kit": [
+        "SEQ0009"
+      ]
+    }
+  },
+  {
+    "pk": 20056,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482008",
+      "kit": [
+        "SEQ0009"
+      ]
+    }
+  },
+  {
+    "pk": 20057,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482009",
+      "kit": [
+        "SEQ0009"
+      ]
+    }
+  },
+  {
+    "pk": 20058,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480974",
+      "kit": [
+        "TEMPLT0003"
+      ]
+    }
+  },
+  {
+    "pk": 20059,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4480981",
+      "kit": [
+        "TEMPLT0003"
+      ]
+    }
+  },
+  {
+    "pk": 20060,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4481105",
+      "kit": [
+        "TEMPLT0003"
+      ]
+    }
+  },
+  {
+    "pk": 20061,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4481106",
+      "kit": [
+        "TEMPLT0003"
+      ]
+    }
+  },
+  {
+    "pk": 20062,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4481107",
+      "kit": [
+        "TEMPLT0003"
+      ]
+    }
+  },
+  {
+    "pk": 20063,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482002",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": 20064,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482003",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": 20065,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482004",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": 20066,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482005",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": 20067,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479878",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": 20068,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479879",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": 20069,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479880",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": 20070,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479881",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": 20071,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479882",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": 20072,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482010",
+      "kit": [
+        "CONSEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20073,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482011",
+      "kit": [
+        "CONSEQ0003"
+      ]
+    }
+  },
+  {
+    "pk": 20074,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482286",
+      "kit": [
+        "TEMPLT0005"
+      ]
+    }
+  },
+  {
+    "pk": 20075,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4463365",
+      "kit": [
+        "SPREP0008"
+      ]
+    }
+  },
+  {
+    "pk": 20076,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482335",
+      "kit": [
+        "LIB0013"
+      ]
+    }
+  }, 
+  {
+    "pk": 20077,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482283",
+      "kit": [
+        "SEQ0011"
+      ]
+    }
+  }, 
+  {
+    "pk": 20078,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482282",
+      "kit": [
+        "SEQ0011"
+      ]
+    }
+  }, 
+  {
+    "pk": 20079,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482284",
+      "kit": [
+        "SEQ0011"
+      ]
+    }
+  }, 
+  {
+    "pk": 20080,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482285",
+      "kit": [
+        "SEQ0011"
+      ]
+    }
+  },
+  {
+    "pk": 20081,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482287",
+      "kit": [
+        "TEMPLT0005"
+      ]
+    }
+  },
+  {
+    "pk": 20082,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482288",
+      "kit": [
+        "TEMPLT0005"
+      ]
+    }
+  },
+  {
+    "pk": 20083,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482289",
+      "kit": [
+        "TEMPLT0005"
+      ]
+    }
+  },
+  {
+    "pk": 20084,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482297",
+      "kit": [
+        "TEMPLT0005"
+      ]
+    }
+  },
+  
+  {
+    "pk": 20001,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": [
+        "ADAPTR0001"
+      ],
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": [
+        "LIB0008"
+      ],
+      "defaultLibraryKit": [
+        "LIB0008"
+      ],
+      "productCode": "AMPS_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": true,
+      "defaultVariantFrequency": "Germ Line",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS"
+      ],
+      "productName": "AMPS_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0007"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  },
+  {
+    "pk": 20002,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": [
+        "ADAPTR0001"
+      ],
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": [
+        "LIB0004"
+      ],
+      "defaultLibraryKit": [
+        "LIB0004"
+      ],
+      "productCode": "TARS_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": true,
+      "defaultVariantFrequency": "Germ Line",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "TARS"
+      ],
+      "productName": "TARS_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0007"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": [
+        "SPREP0001"
+      ],
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  },
+  {
+    "pk": 20003,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": [
+        "ADAPTR0001"
+      ],
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": [
+        "LIB0004"
+      ],
+      "defaultLibraryKit": [
+        "LIB0004"
+      ],
+      "productCode": "WGNM_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": true,
+      "defaultVariantFrequency": "Germ Line",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "WGNM"
+      ],
+      "productName": "WGNM_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0007"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  },
+  {
+    "pk": 20004,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": [
+        "ADAPTR0001"
+      ],
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": [
+        "LIB0010"
+      ],
+      "defaultLibraryKit": [
+        "LIB0010"
+      ],
+      "productCode": "RNA_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": false,
+      "defaultVariantFrequency": "Germ Line",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "RNA"
+      ],
+      "productName": "RNA_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0005"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  },
+  {
+    "pk": 20005,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0013"
+      ],
+      "productCode": "AMPS_RNA_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": false,
+      "defaultVariantFrequency": "",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": false,
+      "applType": [
+        "AMPS_RNA"
+      ],
+      "productName": "AMPS_RNA_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  },
+  {
+    "pk": 20006,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": [
+        "ADAPTR0001"
+      ],
+      "defaultTemplateKit": [
+        "TEMPLT0001"
+      ],
+      "defaultPairedEndLibraryKit": [
+        "LIB0004"
+      ],
+      "defaultLibraryKit": [
+        "LIB0004"
+      ],
+      "productCode": "GENS_0",
+      "defaultChipType": null,
+      "isPairedEndSupported": true,
+      "defaultVariantFrequency": "Germ Line",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "GENS"
+      ],
+      "productName": "GENS_default",
+      "defaultFlowCount": 500,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0007"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "",
+      "defaultSequencingKit": [
+        "SEQ0003"
+      ],
+      "defaultSamplePrepKit": null,
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false
+    }
+  }
+]

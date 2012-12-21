@@ -2,8 +2,16 @@
 
 #ifndef SYNCHDATSERIALIZE_H
 #define SYNCHDATSERIALIZE_H
-
+#include <semaphore.h>
 #include "SynchDat.h"
+
+/* shared mem sem.h */
+typedef struct sdat_read_semaphore {
+    pthread_mutex_t lock;
+    pthread_cond_t nonzero;
+    unsigned count;
+    pthread_t owner;
+} sdat_read_semaphore_t;
 
 class H5File;
 /** 
@@ -63,24 +71,43 @@ public:
     size_t frames = chunk.mDepth;
     size_t elements = row * col * frames;
     if (elements > *maxSize) { ReallocBuffer(elements * sizeof(short), compressed, maxSize); }
-    elements *= 2;
-    for (size_t i = 0; i < elements; i+=2) {
-      short s = (short) (chunk.At(i/2) + .5);
-      (*compressed)[i] = s & 0x000F;
-      (*compressed)[i+1] = s >> 8;
+    *outSize = elements*2;
+    // memcpy(*compressed, &chunk.mData[0], *outSize);
+    uint8_t *c = (uint8_t *) *compressed;
+    int16_t *s = &chunk.mData[0];
+    for (size_t i = 0; i < elements; i++) {
+      *(c++) = (*s) & 0x00FF;
+      *(c++) = (*s) >> 8;
+      s++;
     }
+    /* size_t pos = 0; */
+    /* for (size_t i = 0; i < elements; i++) { */
+    /*   short s = chunk.mData[i]; */
+    /*   (*compressed)[pos++] = s & 0x000F; */
+    /*   (*compressed)[pos++] = s >> 8; */
+    /* } */
+    /* for (size_t i = 0; i < elements; i+=2) { */
+    /*   short s = (short) (chunk.At(i/2) + .5); */
+    /*   (*compressed)[i] = s & 0x000F; */
+    /*   (*compressed)[i+1] = s >> 8; */
+    /* } */
   }
 
   virtual void Decompress(TraceChunk &chunk, const int8_t *compressed, size_t size) {
     size_t row = chunk.mHeight;
     size_t col = chunk.mWidth;
     size_t frames = chunk.mDepth;
-    size_t elements = row * col * frames * 2;
-    for (size_t i = 0; i < elements; i+=2) {
-      short s = 0;
-      s  = compressed[i+1] << 8;
-      s |= compressed[i];
-      chunk.At(i/2) = s;
+    size_t elements = row * col * frames;
+    chunk.mData.resize(elements);
+    const int8_t *s = compressed;
+    int16_t *c = &chunk.mData[0];
+    //    memcpy(c, s, elements*2);
+    for (size_t i = 0; i < elements; i++) {
+      (*c) = (uint8_t)*s;
+      s++;
+      (*c) |= (((uint8_t)*s) << 8);
+      c++;
+      s++;
     }
   }
 };
@@ -145,6 +172,9 @@ public:
     mRetryInterval = _retry_interval;
     mTotalTimeout = _total_timeout;
   }
+  void SetUseSemaphore(bool use) { mUseSemaphore = use; }
+  static sdat_read_semaphore_t *sdatSemPtr;
+  bool mUseSemaphore;
   TraceCompressor *mCompressor;
   struct FlowChunk *mChunks;
   size_t mNumChunks;
@@ -152,6 +182,10 @@ public:
   int mRetryInterval;
   int mTotalTimeout;
   bool mDebugMsg;
+  size_t computeMicroSec;
+  size_t ioMicroSec;
+  size_t openMicroSec;
+  size_t compressMicroSec;
 };
 
 #endif // SYNCHDATSERIALIZE_H

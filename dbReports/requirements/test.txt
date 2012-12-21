@@ -1,0 +1,10 @@
+fabric==1.4.3  #http://docs.fabfile.org/en/1.4.3/
+unittest2==0.5.1  #http://pypi.python.org/pypi/unittest2
+django_nose==1.1  #https://github.com/jbalogh/django-nose
+nose==1.2.1  #https://nose.readthedocs.org/en/latest/
+coverage==3.5.3  #http://nedbatchelder.com/code/coverage/
+mockito==0.5.1  #http://pypi.python.org/pypi/mockito/0.5.1
+# mock==1.0.1  #http://pypi.python.org/pypi/mock/1.0.1
+fudge==1.0.3  #http://pypi.python.org/pypi/fudge
+nosexcover==1.0.7  #http://github.com/cmheisel/nose-xcover/
+selenium==2.25.0  #http://code.google.com/p/selenium/

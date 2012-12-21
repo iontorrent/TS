@@ -123,7 +123,7 @@ function report_option() {
 	message = 'switch exempt status';
     }
     if (setstr != 'N') {
-	var url = "/rundb/report/" + pk + "/" + setstr;
+	var url = "/report/action/" + pk + "/" + setstr;
 	var r = prompt("Report " + name + " will now " + message + ". Proceed?\nUpdate comment:", "");
 	if(r!=null)
 	{
@@ -145,51 +145,6 @@ function report_option() {
     else {
 	alert("Please select an option to perform an action on report " + name + ".")
     }
-}
-
-function enablePlugin() {
-    var pk = this.id.split("_")[1];
-    var setstr = null;
-    if (this.checked) {
-        setstr = "1";
-    } else {
-        setstr = "0";
-    }
-    $.get("/rundb/enableplugin/" + pk + "/" + setstr, null, null, "text");
-}
-
-function enableEmail() {
-    var pk = this.id.split("_")[1];
-    var setstr = null;
-    if (this.checked) {
-        setstr = "1";
-    } else {
-        setstr = "0";
-    }
-    $.get("/rundb/enableemail/" + pk + "/" + setstr, null, null, "text");
-}
-
-function enableArchive() {
-    var pk = this.id.split("_")[1];
-    var setstr = null;
-    if (this.checked) {
-        setstr = "1";
-    } else {
-        setstr = "0";
-    }
-    $.get("/rundb/enablearchive/" + pk + "/" + setstr, null, null, "text");
-}
-
-function enableTestFrag() {
-    var pk = this.id.split("_")[1];
-    var setstr = null;
-    if (this.checked) {
-        setstr = "1";
-    } else {
-        setstr = "0"
-    }
-    ;
-    $.get("/rundb/enabletestfrag/" + pk + "/" + setstr, null, null, "text");
 }
 
 function get_progress_bar() {
@@ -539,192 +494,6 @@ function docHasSortable() {
     return sf.length == 1;
 }
 
-/* TOOLTIPS */
-
-var TOOLTIP_ELE = null;
-var TOOLTIP_KEYS = {};
-
-function tooltipCbFactory(ele, url) {
-    var DIALOG_WIDTH = 320;
-    var MARGIN = 20;
-
-    function cb(data) {
-        var d = null;
-        if (TOOLTIP_ELE === null) {
-            TOOLTIP_ELE = true;
-            var rawdialog = $("<div />");
-            rawdialog.css("display", "none");
-            d = $(rawdialog).dialog({
-                width: DIALOG_WIDTH,
-                height: "auto",
-                autoOpen: false,
-                resizable: false,
-                title: "Tooltip"
-            });
-            TOOLTIP_ELE = d;
-        } else {
-            d = TOOLTIP_ELE;
-        }
-        if (TOOLTIP_KEYS[url] == null) {
-            TOOLTIP_KEYS[url] = data;
-        }
-        if (typeof(data) == 'object') {
-            d.dialog('option', 'title', data['title']);
-            d.text(data['text']);
-        } else {
-            d.dialog('option', 'title', '');
-            d.text(data);
-        }
-        off = ele.offset();
-        var right = $(window).width() - (off.left + DIALOG_WIDTH + MARGIN);
-        var hidden = Math.min(0, right);
-        var left_pos = off.left + hidden;
-        d.dialog('option', 'position', [left_pos, off.top + ele.height() + 2]);
-        d.dialog('option', 'close', function (event, ui) {
-            ele.removeClass("tooltip_highlighted");
-        });
-        d.dialog('open');
-    }
-
-    return cb;
-}
-
-HOVER_TIMEOUTS = {};
-
-
-function tooltipClose() {
-    var ele = $(this);
-    var url = extractUrl(ele);
-    ele.removeClass("tooltip_highlighted");
-    var timeout = HOVER_TIMEOUTS[url];
-    if (timeout) {
-        clearTimeout(timeout);
-    }
-    if (TOOLTIP_ELE) {
-        TOOLTIP_ELE.dialog('close');
-    }
-}
-
-function extractUrl(ele) {
-    return $(".tooltip", ele).text();
-}
-
-function _tt(url, cb) {
-    var prev = TOOLTIP_KEYS[url];
-    if (prev == null) {
-        $.getJSON(url, null, cb);
-    } else {
-        return cb(prev);
-    }
-}
-
-function retrieveTooltip(no_cb) {
-    var ele = $(this);
-    ele.addClass("tooltip_highlighted");
-    var url = extractUrl(ele);
-
-    function _cb() {
-        var cb = tooltipCbFactory(ele, url);
-        return _tt(url, cb);
-    }
-
-    var t = setTimeout(_cb, MOUSEOVER_DELAY);
-    HOVER_TIMEOUTS[url] = t;
-}
-
-function displaySummary(d, keys) {
-    var out = $("<div />");
-    var ul = $("<ul />");
-
-    function blink(k) {
-        function cb() {
-            var ref = $(".tooltip:contains(" + k + ")").parent();
-            var i = 0;
-            for (i = 0; i < 2; i++) {
-                ref.animate({opacity: 0.0}, 100)
-                    .animate({opacity: 1.0}, 150);
-            }
-        }
-
-        return cb;
-    }
-
-    function addObj(li, data, key) {
-        var h4 = $("<h4 />");
-        h4.click(blink(key));
-        h4.css("cursor", "pointer");
-        h4.css("margin", "2px");
-        var span = $("<span />");
-        span.css("border-bottom", "1px dotted black");
-        span.text(data["title"]);
-        h4.append(span);
-        li.append(h4);
-        var body = $("<div />");
-        body.text(data["text"]);
-        li.append(body);
-    }
-
-    function addStr(li, data, key) {
-        var body = $("<div />");
-        body.text(data);
-        body.click(blink(key));
-        body.css("cursor", "pointer");
-        body.css("border-bottom", "1px dotted black");
-        li.append(body);
-    }
-
-    for (ndx in keys) {
-        var k = keys[ndx];
-        var v = d[k];
-        var li = $("<li />");
-        if (typeof(v) == "object") {
-            addObj(li, v, k);
-        } else {
-            addStr(li, v, k);
-        }
-        li.css("margin-bottom", "8px");
-        ul.append(li);
-    }
-    out.append(ul);
-    out.dialog({width: 800, height: "auto", title: "Help", modal: true});
-    out.dialog('open');
-}
-
-function retrieveAllTooltips(tips) {
-    var d = {};
-    var count = 0;
-
-    function cbFactory(url) {
-        function cb(data) {
-            d[url] = data;
-            count++;
-            if (count == tips.length) {
-                displaySummary(d, keys);
-            }
-        }
-
-        return cb;
-    }
-
-    var ndx;
-    var keys = [];
-    for (ndx = 0; ndx < tips.length; ndx++) {
-        var t = tips.eq(ndx);
-        var url = extractUrl(t);
-        keys.push(url);
-    }
-    for (ndx in keys) {
-        var k = keys[ndx];
-        _tt(k, cbFactory(k));
-    }
-}
-
-function gatherTooltips() {
-    retrieveAllTooltips($(".tooltip").parent());
-}
-
-/* END TOOLTIPS */
-
 /* DOCUMENT READY CALLBACKS */
 
 /* TEMPLATE INITIALIZERS */
@@ -736,18 +505,6 @@ function prep_graphable() {
         var graph = $("#" + pk + "_graph");
         graph_template(seq, graph);
     });
-}
-
-/* TOOLTIP INITIALIZERS */
-function prep_tooltip() {
-    var ps = $(".tooltip").parent();
-    if (ps.length > 0) {
-        ps.addClass("tooltip_parent");
-        ps.hover(retrieveTooltip, tooltipClose);
-    }
-}
-function prep_tooltip_summary() {
-    $(".tooltip_summary").click(gatherTooltips);
 }
 
 /* CONTROL FORM INITIALIZERS */
@@ -781,30 +538,6 @@ function prep_tab_corners() {
     var tablist = $(".tabtext");
     tablist.addClass("ui-corner-tl");
     tablist.addClass("ui-corner-tr");
-}
-
-/* PLUGIN INITIALIZERS */
-function prep_enable_plugin() {
-    $(".enable_plugin_td > input").change(enablePlugin);
-}
-
-//function prep_enable_plugin_autorun() {
-//    $(".enable_plugin_autorun_td > input").change(enablePlugin);
-//}
-
-/* TEST FRAGMENT INITIALIZER */
-function prep_enable_test_fragment() {
-    $(".testfrag_td > input").change(enableTestFrag);
-}
-
-/* EMAIL INITIALIZERS */
-function prep_enable_email() {
-    $(".enable_email_td > input").change(enableEmail);
-}
-
-/* Archive INITIALIZERS */
-function prep_enable_archive() {
-    $(".archive_td > input").change(enableArchive);
 }
 
 /* STAR INITIALIZERS */
@@ -943,8 +676,6 @@ function toggle(myid, alt, target) {
 // Order of jquery callbacks. Callbacks that add styling should be
 // last in the order, so that CSS classes added by previous callbacks
 // are found by styling initializers.
-$(document).ready(prep_tooltip);
-$(document).ready(prep_tooltip_summary);
 $(document).ready(prep_graphable);
 $(document).ready(prep_controlform);
 $(document).ready(prep_tabs);
@@ -969,11 +700,6 @@ $(document).ready(prep_centering_ie6);
 $(document).ready(prep_centering_width);
 $(document).ready(prep_icon_effects);
 $(document).ready(prep_trim_text);
-$(document).ready(prep_enable_plugin);
-//$(document).ready(prep_enable_plugin_autorun);
-$(document).ready(prep_enable_email);
-$(document).ready(prep_enable_test_fragment);
-$(document).ready(prep_enable_archive);
 //$(document).ready(prep_progressbox);
 $(document).ready(function () {
     setInterval(function () {

@@ -5,6 +5,7 @@
 .clearfix:before,
 .clearfix:after {
   display: table;
+  line-height: 0;
   content: "";
 }
 
@@ -23,10 +24,9 @@
 .input-block-level {
   display: block;
   width: 100%;
-  min-height: 28px;
+  min-height: 30px;
   -webkit-box-sizing: border-box;
      -moz-box-sizing: border-box;
-      -ms-box-sizing: border-box;
           box-sizing: border-box;
 }
 
@@ -374,19 +374,29 @@ a.btn-danger:hover {
 }
 
 .gear-inactive {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding-left: 30px;
   margin: auto auto;
   background: url("../../resources/img/gear-inactive.png") no-repeat center top transparent;
 }
 
+.gear-inactive .caret {
+  border-top-color: #FFF;
+  border-bottom-color: #FFF;
+}
+
 .gear-active {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding-left: 30px;
   margin: auto auto;
   background: url("../../resources/img/gear-active.png") no-repeat center top transparent;
+}
+
+.gear-active .caret {
+  border-top-color: #233873;
+  border-bottom-color: #233873;
 }
 
 .header {
@@ -432,11 +442,16 @@ a.btn-danger:hover {
 }
 
 .header .nav-tabs > li > a #gear {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding-left: 30px;
   margin: auto auto;
   background: url("../../resources/img/gear-inactive.png") no-repeat center top transparent;
+}
+
+.header .nav-tabs > li > a #gear .caret {
+  border-top-color: #FFF;
+  border-bottom-color: #FFF;
 }
 
 .header .nav-tabs > li.active > a,
@@ -451,11 +466,17 @@ a.btn-danger:hover {
 
 .header .nav-tabs > li.active > a #gear,
 .header .nav-tabs > li > a:hover #gear {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   padding-left: 30px;
   margin: auto auto;
   background: url("../../resources/img/gear-active.png") no-repeat center top transparent;
+}
+
+.header .nav-tabs > li.active > a #gear .caret,
+.header .nav-tabs > li > a:hover #gear .caret {
+  border-top-color: #233873;
+  border-bottom-color: #233873;
 }
 
 .header .nav-pills > li > span {
@@ -705,6 +726,12 @@ body .modal-1000 {
 }
 
 .favorites_recent {
+  padding-bottom: 20px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #d6d6d6;
+}
+
+.dna_applications {
   padding-bottom: 20px;
   margin-bottom: 15px;
   border-bottom: 1px solid #d6d6d6;
@@ -1577,6 +1604,18 @@ tr.new_plan td {
   background-size: 100% 100%;
 }
 
+.AMPS_RNA {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  *margin-right: .3em;
+  text-indent: 28px;
+  vertical-align: text-top;
+  background: url('../../resources/img/appl_ampliSeqRna.png') no-repeat center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
 /* =============================================================================
    Ion plugin report
    ========================================================================== */
@@ -1726,7 +1765,7 @@ div.valid {
 .noheading {
   width: 100%;
   max-width: 100%;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
   background-color: transparent;
   border-collapse: collapse;
   border-spacing: 0;
@@ -1735,7 +1774,7 @@ div.valid {
 .noheading th,
 .noheading td {
   padding: 8px;
-  line-height: 18px;
+  line-height: 20px;
   text-align: left;
   vertical-align: top;
   border-top: 1px solid #dddddd;

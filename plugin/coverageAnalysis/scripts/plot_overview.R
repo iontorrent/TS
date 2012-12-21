@@ -8,8 +8,8 @@ allContigLabels <- TRUE
 
 if( !file.exists(nFileIn) )
 {
-     write(sprintf("Could not locate input file %s\n",nFileIn),stderr())
-     q()
+  write(sprintf("Could not locate input file %s\n",nFileIn),stderr())
+  q(status=1)
 }
 bcov <- read.table(nFileIn, header=TRUE, as.is=TRUE)
 
@@ -17,8 +17,8 @@ bcov <- read.table(nFileIn, header=TRUE, as.is=TRUE)
 ndata <- length(bcov$reads)
 if( ndata < 2 )
 {
-    write(sprintf("No data output to %s\n",nFileOut),stderr())
-    q()
+  write(sprintf("No data output to %s\n",nFileOut),stderr())
+  q(status=1)
 }
 
 xmax = ndata
@@ -31,25 +31,25 @@ lastChr <- ''
 lastTick <- 0
 for( i in 1:ndata )
 {
-    chr = bcov$contigs[i]
-    # take back end of bin id spanning contigs
+  chr = bcov$contigs[i]
+  # take back end of bin id spanning contigs
+  n <- regexpr('-',chr)
+  while( n > 0 ) {
+    chr <- substring(chr,n+1)
     n <- regexpr('-',chr)
-    while( n > 0 ) {
-      chr <- substring(chr,n+1)
-      n <- regexpr('-',chr)
-    }
-    if( lastChr != chr ) {
-      lastTick = i
-      lastChr = chr
-      useLabels <- append(useLabels,chr)
-      useTicks <- append(useTicks,i)
-    }
+  }
+  if( lastChr != chr ) {
+    lastTick = i
+    lastChr = chr
+    useLabels <- append(useLabels,chr)
+    useTicks <- append(useTicks,i)
+  }
 }
 # force R to draw last part of axis
 if( lastTick < ndata )
 {
-    useLabels <- append(useLabels,'')
-    useTicks <- append(useTicks,ndata)
+  useLabels <- append(useLabels,'')
+  useTicks <- append(useTicks,ndata)
 }
 
 png(nFileOut,width=800,height=200)
@@ -59,7 +59,7 @@ yaxisTitle <- "Log10(Base Reads)"
 logd = log10(1+bcov$reads)
 ymax = as.integer(max(logd))+1
 plot( logd, xaxs = 'i', yaxs = 'i', type='o', pch='.', ylim=c(0,ymax), xlim=c(1,xmax), 
-     xaxt='n', xlab="Reference Position", ylab=yaxisTitle, main=title )
+  xaxt='n', xlab="Reference Position", ylab=yaxisTitle, main=title )
 
 if( allContigLabels && length(useTicks) > 10 ) {
   axis(1, at=useTicks, lab=useLabels, cex.axis=0.8, las=2)

@@ -980,8 +980,7 @@ if (!$PairedEnd) {
 
             print "<h4>Graphs</h4>";
             print "<div id='alignment' style='float:right'>";
-            print "<a class='box' href='Q17_$TF.png'><img src='Q17_$TF.png' width='450' height='225' border='0'/></a>";
-            print "<a class='box' href='Average Corrected Ionogram_$TF.png'><img src='Average Corrected Ionogram_$TF.png' width='450' height='225' border='0'/></a>";
+            print "<a class='box' href='new_Q17_$TF.png'><img src='new_Q17_$TF.png' width='900' height='150' border='0'/></a>";
             print "</div>";
             print "<div style='clear:both;'></div>";
         }
@@ -1013,7 +1012,18 @@ if ($is_proton_composite) {
             print '<td class="slim">';
             print '<a href="' . $needle . '/Default_Report.php">';
             if (file_exists($needle . '/badblock.txt')) {
-                print 'error<br>';
+                if (file_exists($needle . '/sigproc_results/analysis_return_code.txt')) {
+                    $anastatusfile = file_get_contents($needle . "/sigproc_results/analysis_return_code.txt");
+                    if (!preg_match('/0/', $anastatusfile) and !preg_match('/3/', $anastatusfile)) {
+                        print 'SigProc('.$anastatusfile.')<br>';
+                        continue;
+                    } else {
+                        print 'error<br>';
+                        continue;
+                    }
+                } else {
+                    print 'error<br>';
+                }
             } else if (file_exists($needle)) {
                 if (file_exists($needle . '/blockstatus.txt')) {
                     $blockstatusfile = file_get_contents($needle . "/blockstatus.txt");
@@ -1033,9 +1043,6 @@ if ($is_proton_composite) {
                                 echo "SigProc";
                                 break;
                             case "Basecalling":
-                                echo "BaseCall";
-                                break;
-                            case "Creating Fastq":
                                 echo "BaseCall";
                                 break;
                             case "Aligning Reads":
@@ -1281,7 +1288,7 @@ foreach ($bflist as $bfName => $bfFile) {
         printISPTableEntry("Filtered: Polyclonal", "More than one template per ISP", "Polyclonal / Library ISPs", $ISP_polyclonal, $library_isp, "&#8227; ", false);
         printISPTableEntry("Filtered: Primer dimer", "Insert length less than 8 bases", "Primer dimer / Library ISPs", $ISP_clipAdapter, $library_isp, "&#8227; ", false);
         printISPTableEntry("Filtered: Low quality", "Low quality", "Low quality / Library ISPs", $ISP_lowQual, $library_isp, "&#8227; ", false);
-        printISPTableEntry("Final Library Reads", "Reads passing all filters; in SFF/FASTQ", "Final Library Reads / Library ISPs", $ISP_valid, $library_isp, "&#8227; ", true);
+        printISPTableEntry("Final Library Reads", "Reads passing all filters", "Final Library Reads / Library ISPs", $ISP_valid, $library_isp, "&#8227; ", true);
 
         print "</table>";
 
@@ -1352,8 +1359,12 @@ if ($PairedEnd) {
     print '<table class="noheading">';
     print '<col width="325px" />';
     print '<col width="520px" />';
-
+    $analysis_info_blacklist = array(
+        "Run Cycles" => "",
+        "Analysis Flows" => "",
+    );
     if ($meta) {
+        $meta = array_diff_key($meta, $analysis_info_blacklist);
         foreach ($meta AS $key => $value) {
             print "<tr><th>$key</th> <td>$value</td></tr>";
         }
@@ -1386,6 +1397,7 @@ $explogtxt_whitelist  = array(
     "Script" => "",
     "LiveView" => "",
     "Datacollect" => "",
+    "OIA" => "",
     "OS" => "",
     "Graphics" => ""
 );
@@ -1435,64 +1447,12 @@ print '</div>';
 print '<div id="FileLinks" class="report_block"><h2>File Links</h2><div><table class="noheading">';
 
 if ($istoplevel) {
-    if ($PairedEnd) {
-        $postfixsff_corrected           = $alignment_results . $base_name . '_corrected.sff' . '.zip'; //TODO alignment_results -> basecaller_results
-        $bamfile_corrected              = $corrected_path . '/' . $base_name . '_corrected.bam';
-        $baifile_corrected              = $corrected_path . '/' . $base_name . '_corrected.bam.bai';
-        $postfixsff_sampled_corrected   = $corrected_path . '/' . $base_name . '_corrected.sampled.sff' . '.zip';
-        $postfixfastq_corrected         = $corrected_path . '/' . $base_name . '_corrected.fastq' . '.zip';
-        $postfixfastq_sampled_corrected = $corrected_path . '/' . $base_name . '_corrected.sampled.fastq' . '.zip';
-
-        $postfixsff           = $basecaller_results . $base_name . '.sff' . '.zip';
         $bamfile              = $alignment_results . $base_name . '.bam';
         $baifile              = $alignment_results . $base_name . '.bam.bai';
-        $postfixsff_sampled   = $base_name . '.sampled.sff' . '.zip';
-        $postfixfastq         = $basecaller_results . $base_name . '.fastq' . '.zip';
-        $postfixfastq_sampled = $base_name . '.sampled.fastq' . '.zip';
-
-        $postfixsff_fwd    = $basecaller_results . $base_name . '_forward.sff' . '.zip';
-        $tf_postfixsff_fwd = $basecaller_results . $base_name . '_forward.tf.sff' . '.zip';
-        $bamfile_fwd       = $alignment_results . $base_name . '_forward.bam';
-        $baifile_fwd       = $alignment_results . $base_name . '_forward.bam.bai';
-        $postfixfastq_fwd  = $base_name . '_forward.fastq' . '.zip';
-
-        $postfixsff_rev    = $basecaller_results . $base_name . '_reverse.sff' . '.zip';
-        $tf_postfixsff_rev = $basecaller_results . $base_name . '_reverse.tf.sff' . '.zip';
-        $bamfile_rev       = $alignment_results . $base_name . '_reverse.bam';
-        $baifile_rev       = $alignment_results . $base_name . '_reverse.bam.bai';
-        $postfixfastq_rev  = $base_name . '_reverse.fastq' . '.zip';
-
-        $postfixsff_prd_fwd = $basecaller_results . $base_name . '_Paired_Fwd.sff' . '.zip';
-        $postfixsff_prd_rev = $basecaller_results . $base_name . '_Paired_Rev.sff' . '.zip';
-        
-        $postfixsff_singleton_fwd   = $alignment_results . $base_name . '_Singleton_Fwd.sff' . '.zip'; //TODO alignment_results -> basecaller_results
-        $postfixfastq_singleton_fwd = $alignment_results . 'Singleton_Fwd/' . $base_name . '_Singleton_Fwd.fastq' . '.zip'; //TODO alignment_results -> basecaller_results
-        $bamfile_singleton_fwd      = $alignment_results . 'Singleton_Fwd/' . $base_name . '_Singleton_Fwd.bam';
-        $baifile_singleton_fwd      = $alignment_results . 'Singleton_Fwd/' . $base_name . '_Singleton_Fwd.bam.bai';
-        
-        $postfixsff_singleton_rev   = $alignment_results . $base_name . '_Singleton_Rev.sff' . '.zip'; //TODO alignment_results -> basecaller_results
-        $postfixfastq_singleton_rev = $alignment_results . 'Singleton_Rev/' . $base_name . '_Singleton_Rev.fastq' . '.zip'; //TODO alignment_results -> basecaller_results
-        $bamfile_singleton_rev      = $alignment_results . 'Singleton_Rev/' . $base_name . '_Singleton_Rev.bam';
-        $baifile_singleton_rev      = $alignment_results . 'Singleton_Rev/' . $base_name . '_Singleton_Rev.bam.bai';
-        
-    } else {
-        $postfixsff           = $basecaller_results . $base_name . '.sff' . '.zip';
-        $tf_postfixsff        = $basecaller_results . $base_name . '.tf.sff' . '.zip';
-        $postfixfastq         = $basecaller_results . $base_name . '.fastq' . '.zip';
-        $bamfile              = $alignment_results . $base_name . '.bam';
-        $baifile              = $alignment_results . $base_name . '.bam.bai';
-        $postfixsff_sampled   = $base_name . '.sampled.sff' . '.zip';
-        $postfixfastq_sampled = $base_name . '.sampled.fastq' . '.zip';
-    }
 } else {
     //block case
-    $postfixsff           = 'rawlib.sff';
-    $tf_postfixsff        = 'rawtf.sff';
     $bamfile              = 'rawlib.bam';
     $baifile              = 'rawlib.bam.bai';
-    $postfixsff_sampled   = $base_name . '.sampled.sff';
-    $postfixfastq         = $base_name . '.fastq';
-    $postfixfastq_sampled = $base_name . '.sampled.fastq';
 }
 
 //If the Analysis is done, present the files
@@ -1513,44 +1473,6 @@ if (!$progress) {
     } else {
         print "<thead>";
         print "</thead>";
-    }
-
-    if (!$align_full) {
-        print "<tr>";
-        print "<td><a href='$postfixsff'>Library Sequence (SFF)</a></td>";
-        print "</tr>";
-        print "<tr><td><a href='$postfixsff_sampled'>Sampled Library Sequence (SFF) </a> </td> </tr>";
-    } else {
-        print "<tr>";
-        if (!$is_proton_composite) {
-            print "<td><a href='$postfixsff'>Library Sequence (SFF)</a></td> ";
-        }
-        if ($PairedEnd) {
-            print "<td><a href='$postfixsff_corrected'>Library Sequence (SFF)</a></td> ";
-            //                                            print "<td><a href='$postfixsff_fwd'>Library Sequence (SFF)</a></td> ";
-            //                                            print "<td><a href='$postfixsff_rev'>Library Sequence (SFF)</a></td> ";
-            print "<td><a href='$postfixsff_singleton_fwd'>Library Sequence (SFF)</a></td> ";
-            print "<td><a href='$postfixsff_singleton_rev'>Library Sequence (SFF)</a></td> ";
-        }
-        print "</tr>";
-    }
-
-    if (!$align_full) {
-        print "<tr><td><a href='$postfixfastq'>Library Sequence (FASTQ) </a> </td></tr>";
-        print "<tr><td><a href='$postfixfastq_sampled'>Sampled Library Sequence (FASTQ) </a> </td> </tr>";
-    } else {
-        print "<tr>";
-        if (!$is_proton_composite) {
-            print "<td><a href='$postfixfastq'>Library Sequence (FASTQ) </a> </td>";
-        }
-        if ($PairedEnd) {
-            print "<td><a href='$postfixfastq_corrected'>Library Sequence (FASTQ)</a></td>";
-            //                                            print "<td><a href='$postfixfastq_fwd'>Library Sequence (FASTQ)</a></td> ";
-            //                                            print "<td><a href='$postfixfastq_rev'>Library Sequence (FASTQ)</a></td> ";
-            print "<td><a href='$postfixfastq_singleton_fwd'>Library Sequence (FASTQ)</a></td>";
-            print "<td><a href='$postfixfastq_singleton_rev'>Library Sequence (FASTQ)</a></td>";
-        }
-        print "</tr>";
     }
 
     if (!$align_full) {
@@ -1585,9 +1507,6 @@ if (!$progress) {
     }
 
     if (file_exists("barcodeList.txt")) {
-        //barcode sff and fastq files
-        print "<tr><td><a href='$base_name.barcode.sff.zip'>Barcode-specific Library Sequence (SFF)</a></td> </tr>";
-        print "<tr><td><a href='$base_name.barcode.fastq.zip'>Barcode-specific Library Sequence (FASTQ)</a></td> </tr>";
         if (file_exists($basecaller_results."barcodeFilter.txt")) {
             print "<tr><td><a href='$basecaller_results/barcodeFilter.txt'>Barcode read frequency filter</a></td> </tr>";
         }
@@ -1599,16 +1518,6 @@ if (!$progress) {
         print "<tr><td><a href='alignment_barcode_summary.csv'>Barcode Alignment Summary</a ></td> </tr>";
         print "<tr><td><a href='$base_name.barcode.bam.zip'>Barcode-specific Library Alignments (BAM)</a></td> </tr>";
         print "<tr><td><a href='$base_name.barcode.bam.bai.zip'>Barcode-specific Library Alignments (BAI)</a></td> </tr>";
-    }
-    if ($PairedEnd) {
-        //                                    print "<td></td>";
-        //                                    print "<td></td>";
-        //                                    print "<td><a href='$tf_postfixsff_fwd'>Test Fragments (SFF)</a></td> ";
-        //                                    print "<td><a href='$tf_postfixsff_rev'>Test Fragments (SFF)</a></td> ";
-    } else {
-        if (!$is_proton_composite) {
-            print "<tr><td><a href='$tf_postfixsff'>Test Fragments (SFF)</a> </td> </tr> ";
-        }
     }
 
     if ($PairedEnd) {
@@ -1628,23 +1537,18 @@ if (!$progress) {
 
 
 }
-//Remove these lines once old Report is gone for good.  or not, since this file will be deleted entirely
-//if (file_exists("csa.php")) {
-//    print "<tr><td><a href='/rundb/getCSA/$pk.zip'>Customer Support Archive</a> </td> </tr>";
-//}
-if (!file_exists("status.txt")) {
-    print "<tr><td><a href='log.html'>Report Log</a> </td> </tr>";
+
+if (file_exists("drmaa_stdout_block.txt")) {
+    print "<tr><td><a href='drmaa_stdout_block.txt'>Developer link: Block stdout</a> </td> </tr>";
 }
+if (file_exists("drmaa_stderr_block.txt")) {
+    print "<tr><td><a href='drmaa_stderr_block.txt'>Developer link: Block stderr</a> </td> </tr>";
+}
+if (file_exists("drmaa_stdout.txt")) {
+    print "<tr><td><a href='drmaa_stdout.txt'>Developer link: std_out_err</a> </td> </tr>";
+}
+
 if (file_exists("/opt/ion/.developerversion")) {
-    if (file_exists("drmaa_stdout_block.txt")) {
-        print "<tr><td><a href='drmaa_stdout_block.txt'>Developer link: Block stdout</a> </td> </tr>";
-    }
-    if (file_exists("drmaa_stderr_block.txt")) {
-        print "<tr><td><a href='drmaa_stderr_block.txt'>Developer link: Block stderr</a> </td> </tr>";
-    }
-    if (file_exists("drmaa_stdout.txt")) {
-        print "<tr><td><a href='drmaa_stdout.txt'>Developer link: std_out_err</a> </td> </tr>";
-    }
     if ($is_proton_composite) {
         if(file_exists("./sigproc_results/timing.txt")) {
             print "<tr><td><a href='sigproc_results/timing.txt'>Developer link: timing.txt</a> </td> </tr>";

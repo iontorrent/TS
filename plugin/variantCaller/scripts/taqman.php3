@@ -13,7 +13,7 @@ $taqmanFile = "taqManRequest.htm";
 $tqfh = fopen($taqmanFile,"w");
 if( $tqfh == 0 ) {
   fclose($dtfh);
-  print 'Could write to file '.$taqmanFile;
+  print 'ERROR: Unable to write to file '.$taqmanFile;
   exit(0);
 }
 

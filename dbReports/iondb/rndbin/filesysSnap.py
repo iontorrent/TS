@@ -108,7 +108,7 @@ def raw_data_storage_report():
                 storeDict[option[0]].append (experiment.expName)
     
     # get backupConfig object
-    bk = models.BackupConfig.objects.all()[0]
+    bk = models.BackupConfig.get()
     
     # Get number of runs in Grace Period (3 days currently; check backup.py)
     timenow = time.localtime(time.time())

@@ -1,0 +1,157 @@
+[
+  {
+    "pk": null,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGM400Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 850,
+      "uid": "SEQ0010",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM 400 Sequencing Kit"
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Template OT2 400 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0004",      
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Template OT2 400 Kit"
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "ControlSequenceKit",
+      "name": "Ion PGM Controls Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "CONSEQ0003",      
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Controls Kit v2"
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482002",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482003",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482004",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482005",
+      "kit": [
+        "SEQ0010"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479878",
+      "kit": [
+        "TEMPLT0004"
+      ]      
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479879",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479880",
+      "kit": [
+        "TEMPLT0004"
+      ]
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479881",
+      "kit": [
+        "TEMPLT0004"
+      ]      
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4479882",
+      "kit": [
+        "TEMPLT0004"
+      ]      
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482010",
+      "kit": [
+        "CONSEQ0003"
+      ]      
+    }
+  },
+  {
+    "pk": null,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4482011",
+      "kit": [
+        "CONSEQ0003"
+      ]     
+    }
+  }
+]

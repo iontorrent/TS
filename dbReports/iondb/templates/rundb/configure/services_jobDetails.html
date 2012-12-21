@@ -6,6 +6,22 @@
     <h3> Details for TLScript job: <a href="/configure/services/jobStat/{{ TLS_jid }}" class="openJobStat">{{ TLS_jid }}</a></h3>
     </div>
     <br />
+    {% if num_blocks > 1 %}
+    <div id=summary>      
+      <h3> Block summary: </h3>  
+        <table>                
+				    {% for key, value in summary %} 
+				      <tr>
+					      <td>{{key}}</td> <td> {{value}} </td>
+					    </tr>    
+					  {% endfor %}
+					  <tr>
+					      <td> total </td> <td> {{num_blocks}} </td>
+					  </tr>	
+				</table>	  			    
+    </div>
+    <br />
+    {% endif %}
     <div id=jobList>
       <table class="data-table">
 			    <thead>
@@ -26,7 +42,7 @@
                 <td><a href="/configure/services/jobStat/{{ j.sigproc }}" class="openJobStat">{{ j.sigproc }}</a></td>
                 <td><a href="/configure/services/jobStat/{{ j.basecaller  }}" class="openJobStat">{{ j.basecaller }}</a></td>
                 <td><a href="/configure/services/jobStat/{{ j.alignment }}" class="openJobStat">{{ j.alignment }}</a></td>
-              </td>  
+              </tr>  
               {% endspaceless %}
             {% endfor %}
           </tbody>  

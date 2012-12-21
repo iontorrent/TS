@@ -113,7 +113,7 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
 
  
   PoissonCDFApproxMemo poiss_cache; 
-  poiss_cache.Allocate (MAX_HPLEN+1,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
+  poiss_cache.Allocate (MAX_POISSON_TABLE_COL,MAX_POISSON_TABLE_ROW,POISSON_TABLE_STEP);
   poiss_cache.GenerateValues(); // fill out my table
 
 
@@ -148,7 +148,6 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
 
 void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache) {
 #ifdef ION_COMPILE_CUDA
-  initPoissonTables(device, poiss_cache.poiss_cdf);
   initPoissonTablesLUT(device, (void**) poiss_cache.poissLUT);
 #endif
 }

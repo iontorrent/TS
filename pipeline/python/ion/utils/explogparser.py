@@ -59,10 +59,9 @@ def getparameter(parameterfile=None):
     #is it a thumbnail
     env['doThumbnail'] = EXTERNAL_PARAMS.get("doThumbnail")
     # get command line args
+    env['beadfindArgs'] = EXTERNAL_PARAMS.get("beadfindArgs","")
     env['analysisArgs'] = EXTERNAL_PARAMS.get("analysisArgs","")
     env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs","")
-    env['thumbnailAnalysisArgs'] = EXTERNAL_PARAMS.get("thumbnailAnalysisArgs","")
-    env['thumbnailBasecallerArgs'] = EXTERNAL_PARAMS.get("thumbnailBasecallerArgs","")
     env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal",False)
     
     #previousReports
@@ -98,10 +97,6 @@ def getparameter(parameterfile=None):
     env['skipchecksum'] = EXTERNAL_PARAMS.get('skipchecksum',False)
     # Do Full Align?
     env['align_full'] = EXTERNAL_PARAMS.get('align_full')
-    # Check to see if a SFFTrim should be done
-    env['sfftrim'] = EXTERNAL_PARAMS.get('sfftrim')
-    # Get SFFTrim args
-    env['sfftrim_args'] = EXTERNAL_PARAMS.get('sfftrim_args')
 
     env['flowOrder'] = EXTERNAL_PARAMS.get('flowOrder',"0").strip()
     # If flow order is missing, assume classic flow order:
@@ -120,6 +115,9 @@ def getparameter(parameterfile=None):
     env['sample'] = EXTERNAL_PARAMS.get('sample')
     env['chipType'] = EXTERNAL_PARAMS.get('chiptype')
     env['barcodeId'] = EXTERNAL_PARAMS.get('barcodeId','')
+    barcodeSamples = EXTERNAL_PARAMS.get('barcodeSamples','')
+    env['barcodeSamples'] = json.loads(barcodeSamples) if barcodeSamples else {}
+    
     env['reverse_primer_dict'] = EXTERNAL_PARAMS.get('reverse_primer_dict')
     env['rawdatastyle'] = EXTERNAL_PARAMS.get('rawdatastyle', 'single')
 
@@ -131,10 +129,6 @@ def getparameter(parameterfile=None):
 
     #get the name of the site
     env['site_name'] = EXTERNAL_PARAMS.get('site_name')
-
-    env['pe_forward'] = EXTERNAL_PARAMS.get('pe_forward','')
-    env['pe_reverse'] = EXTERNAL_PARAMS.get('pe_reverse','')
-    env['isReverseRun'] = EXTERNAL_PARAMS.get('isReverseRun',False)
 
     env['runID'] = EXTERNAL_PARAMS.get('runid','ABCDE')
 
@@ -148,7 +142,7 @@ def getparameter(parameterfile=None):
     env['BASECALLER_RESULTS'] = "basecaller_results"
     env['ALIGNMENT_RESULTS'] = "./"
 
-    # Sub directory to contain fastq files for barcode enabled runs
+    # Sub directory to contain files for barcode enabled runs
     env['DIR_BC_FILES'] = os.path.join(env['BASECALLER_RESULTS'],'bc_files')
     env['sam_parsed'] = EXTERNAL_PARAMS.get('sam_parsed')
 

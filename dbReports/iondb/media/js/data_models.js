@@ -159,7 +159,7 @@ $(function(){
             if (this.sort_field) {
                 urlparams = $.extend(urlparams, {order_by: this.sort_field});
             }
-            var full_url = this.baseUrl + '/?' + $.param(urlparams);
+            var full_url = this.baseUrl + '?' + $.param(urlparams);
             console.log(full_url);
             return full_url;
         },
@@ -309,13 +309,13 @@ $(function(){
             return this.get("status") == "Complete";
         },
 
-        baseUrl: "/rundb/api/v1/results"
+        baseUrl: "/rundb/api/v1/results/"
     });
 
     ReportList = PaginatedCollection.extend({
         model: Report,
 
-        baseUrl: "/rundb/api/v1/compositeresult"
+        baseUrl: "/rundb/api/v1/compositeresult/"
     });
 
     Run = TastyModel.extend({
@@ -336,13 +336,13 @@ $(function(){
             });
         },
 
-        baseUrl: "/rundb/api/v1/experiment"
+        baseUrl: "/rundb/api/v1/experiment/"
     });
 
     RunList = PaginatedCollection.extend({
         model: Run,
 
-        baseUrl: "/rundb/api/v1/compositeexperiment"
+        baseUrl: "/rundb/api/v1/compositeexperiment/"
     });
 
     RunRouter = Backbone.Router.extend({

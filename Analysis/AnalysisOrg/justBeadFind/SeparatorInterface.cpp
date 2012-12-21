@@ -24,6 +24,8 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.doSdat = inception_state.img_control.doSdat;
   opts.minTfPeakMax = inception_state.bfd_control.minTfPeakMax;
   opts.minLibPeakMax = inception_state.bfd_control.minLibPeakMax;
+  opts.sdAsBf = inception_state.bfd_control.sdAsBf;
+  opts.bfMult = inception_state.bfd_control.bfMult;
   opts.flowOrder = inception_state.flow_context.flowOrder; // 5th duplicated code instance of translating flow order to nucs
   if (!opts.outData.empty())
   {
@@ -48,12 +50,13 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   }
   if (inception_state.bfd_control.beadfindThumbnail == 1)
   {
-    opts.t0MeshStep = inception_state.loc_context.regionXSize;
-    opts.bfMeshStep = inception_state.loc_context.regionXSize;
+    opts.t0MeshStep = 50; // inception_state.loc_context.regionXSize;
+    opts.bfMeshStep = 50; // inception_state.loc_context.regionXSize;
+    opts.clusterMeshStep = 100;
     opts.tauEEstimateStep = inception_state.loc_context.regionXSize;
     opts.useMeshNeighbors = 0;
-    opts.regionXSize = inception_state.loc_context.regionXSize;
-    opts.regionYSize = inception_state.loc_context.regionYSize;
+    opts.regionXSize = 50; //inception_state.loc_context.regionXSize;
+    opts.regionYSize = 50; //inception_state.loc_context.regionYSize;
   }
   diffSeparator->Run (opts);
 }
@@ -173,7 +176,6 @@ void IsolatedBeadFind (
   // Beadfind Section
    *********************************************************************/
   Mask bfmask ( 1, 1 );
-  cout << "**excluded wells 1: " << bfmask.GetCount(MaskExclude) << endl;
   Mask *maskPtr = &bfmask;
   // beadfind has responsibility for defining the exclusion mask
   SetExcludeMask ( inception_state.loc_context,maskPtr,ChipIdDecoder::GetChipType(),my_image_spec.rows,my_image_spec.cols );

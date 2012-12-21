@@ -51,6 +51,7 @@ configure_file (
 
 add_custom_target(compileall ALL
     COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/iondb/"
+	COMMAND rm `/usr/bin/find "${PROJECT_SOURCE_DIR}/iondb/" -name *.pyc -print`
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/../buildTools/terms-of-use.txt" DESTINATION /var/www/licenses)
@@ -76,9 +77,7 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "*.less" EXCLUDE
     PATTERN "iondb/index.html" EXCLUDE
     PATTERN "iondb/docsnotfound.html" EXCLUDE
-    PATTERN "iondb/wsgi/iontorrent.conf.in" EXCLUDE
-    PATTERN "iondb/wsgi/torrent-server.in" EXCLUDE
-    PATTERN "iondb/wsgi/torrent-server-ssl.in" EXCLUDE
+    PATTERN "iondb/wsgi/torrent-server*.in" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "*.pyo" EXCLUDE
 )
@@ -87,7 +86,15 @@ install(PROGRAMS iondb/bin/ionCrawler DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionJobServer DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionPlugin DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/celeryd DESTINATION /etc/init.d)
-install(PROGRAMS iondb/bin/celery.conf DESTINATION config)
+
+install(PROGRAMS manage.py DESTINATION ${ION_INSTALL_PREFIX})
+install(FILES celeryconfig.py DESTINATION ${ION_INSTALL_PREFIX})
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server.conf.in"
+    "${PROJECT_BINARY_DIR}/apache2/torrent-server.conf" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/apache2/torrent-server.conf" DESTINATION /etc/apache2/conf.d/)
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server.in"
@@ -100,6 +107,9 @@ configure_file (
     "${PROJECT_BINARY_DIR}/apache2/torrent-server-ssl.example" @ONLY
 )
 install(FILES "${PROJECT_BINARY_DIR}/apache2/torrent-server-ssl.example" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/wsgi/force-torrent-server-ssl" DESTINATION /etc/apache2/sites-available)
+
+install(FILES "logrotate/ion-dbreports" DESTINATION /etc/logrotate.d/)
 
 # Add ION_INSTALL_PREFIX to system python path so iondb modules can be found
 file(WRITE ${PROJECT_BINARY_DIR}/iondb.pth "${ION_INSTALL_PREFIX}\n")
@@ -120,15 +130,21 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    ion-pipeline (>= 3.0.2),
+    ion-pipeline (>= 3.3.10),
+    texlive-latex-base,
+    texlive-latex-extra,
+    latex-xcolor,
+    pdftk,
     zeroinstall-injector (>= 1.5),
     postgresql,
     php5,
-    libapache2-mod-wsgi,
+    libapache2-mod-wsgi (>= 3.3),
+    libapache2-mod-gnutls,
+    ssl-cert,
     python-celery (>= 2.4.0),
     python-django (>= 1.4),
     python-django-celery,
-    python-django-south (>=0.7.3),
+    python-django-south (>=0.7.6),
 	python-matplotlib,
 	python-scipy,
 	python-psycopg2, 
@@ -139,15 +155,15 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
 	python-lxml,
 	python-docutils,
     python-setuptools,
-    python-httplib2,
+    python-httplib2 (>=0.7.2),
     python-dateutil,
     python-argparse,
     python-tastypie (>= 0.9.11+ion1),
 	python-drmaa,
     samtools (>= 0.1.18),
     python-dev,
-  rabbitmq-server,
-  tmap (>=0.3.7)")
+    rabbitmq-server,
+    tmap (>=0.3.7)")
 
 # Incompatible with older tastypie, remove or upgrade before installing
 set(CPACK_DEBIAN_PACKAGE_BREAKS "python-tastypie (<= 0.9.10)")

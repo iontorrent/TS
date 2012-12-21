@@ -26,31 +26,31 @@ my $blockname = "";
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
 {
-    last if($ARGV[0] !~ /^-/);
-    my $opt = shift;
-    if($opt eq '-a') {$appendJson = 1;}
-    elsif($opt eq '-I') {$indentLvl = shift;}
-    elsif($opt eq '-B') {$blockname = shift;}
-    elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
-    else
-    {
-        print STDERR "$CMD: Invalid option argument: $opt\n";
-        print STDERR "$OPTIONS\n";
-        exit 1;
-    }
+  last if($ARGV[0] !~ /^-/);
+  my $opt = shift;
+  if($opt eq '-a') {$appendJson = 1;}
+  elsif($opt eq '-I') {$indentLvl = shift;}
+  elsif($opt eq '-B') {$blockname = shift;}
+  elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
+  else
+  {
+    print STDERR "$CMD: Invalid option argument: $opt\n";
+    print STDERR "$OPTIONS\n";
+    exit 1;
+  }
 }
 if( $help )
 {
-    print STDERR "$DESCR\n";
-    print STDERR "$USAGE\n";
-    print STDERR "$OPTIONS\n";
-    exit 1;
+  print STDERR "$DESCR\n";
+  print STDERR "$USAGE\n";
+  print STDERR "$OPTIONS\n";
+  exit 1;
 }
 elsif( scalar @ARGV != 2 )
 {
-    print STDERR "$CMD: Invalid number of arguments.";
-    print STDERR "$USAGE\n";
-    exit 1;
+  print STDERR "$CMD: Invalid number of arguments.";
+  print STDERR "$USAGE\n";
+  exit 1;
 }
 
 $indentLvl = 0 if( 0+$indentLvl < 0 );
@@ -62,47 +62,48 @@ my $jsonfile = shift;
 
 unless( open( DATAFILE, "$datafile" ) )
 {
-    print STDERR "Could not locate data file $datafile\n";
-    exit 1;
+  print STDERR "Could not locate data file $datafile\n";
+  exit 1;
 }
 if( $appendJson )
 {
-    unless( open( JSONFILE, ">>$jsonfile" ) ) 
-    {
-	close( DATAFILE );
-	print STDERR "Could not append to json file $jsonfile\n";
-	exit 1;
-    }
+  unless( open( JSONFILE, ">>$jsonfile" ) ) 
+  {
+    close( DATAFILE );
+    print STDERR "Could not append to json file $jsonfile\n";
+    exit 1;
+  }
 }
 else
 {
-    unless( open( JSONFILE, ">$jsonfile" ) ) 
-    {
-	close( DATAFILE );
-	print STDERR "Could not write to json file $jsonfile\n";
-	exit 1;
-    }
-    print JSONFILE "{\n";
+  unless( open( JSONFILE, ">$jsonfile" ) ) 
+  {
+    close( DATAFILE );
+    print STDERR "Could not write to json file $jsonfile\n";
+    exit 1;
+  }
+  print JSONFILE "{\n";
 }
 
 if( $blockname ne "" )
 {
-    print JSONFILE (" " x $indentLvl)."\"$blockname\" : {\n";
-    $indentLvl += 2;
+  print JSONFILE (" " x $indentLvl)."\"$blockname\" : {\n";
+  $indentLvl += 2;
 }
 
 my $linenum = 0;
 while( <DATAFILE> )
 {
-    print JSONFILE ",\n" if( ++$linenum != 1 );
-    print JSONFILE jsonNameValue($_);
+  next unless( /\S/ );
+  print JSONFILE ",\n" if( ++$linenum != 1 );
+  print JSONFILE jsonNameValue($_);
 }
 close( DATAFILE );
 
 if( $blockname ne "" )
 {
-    $indentLvl -= 2;
-    print JSONFILE "\n".(" " x $indentLvl)."}";
+  $indentLvl -= 2;
+  print JSONFILE "\n".(" " x $indentLvl)."}";
 }
 close( JSONFILE );
 
@@ -110,11 +111,11 @@ close( JSONFILE );
 
 sub jsonNameValue
 {
-    my ($n,$v) = split(/:/,$_[0]);
-    $n =~ s/^\s+|\s+$//g;
-    return "" if( $n eq "" );
-    $v =~ s/^\s+|\s+$//g;
-    $v = "N/A" if( $v eq "" );
-    #$n =~ s/\s/_/g;
-    return (" " x $indentLvl)."\"$n\" : \"$v\"";
+  my ($n,$v) = split(/:/,$_[0]);
+  $n =~ s/^\s+|\s+$//g;
+  return "" if( $n eq "" );
+  $v =~ s/^\s+|\s+$//g;
+  $v = "N/A" if( $v eq "" );
+  #$n =~ s/\s/_/g;
+  return (" " x $indentLvl)."\"$n\" : \"$v\"";
 }

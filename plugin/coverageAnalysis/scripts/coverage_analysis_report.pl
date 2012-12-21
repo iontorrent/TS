@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 use File::Basename;
 
@@ -9,52 +9,44 @@ use FindBin qw($Bin);
 #--------- Begin command arg parsing ---------
 
 (my $CMD = $0) =~ s{^(.*/)+}{};
-my $DESCR = "Format the output from a double_coverage_analysis run to an html page.
+my $DESCR = "Format the output for coverage vs. one or two targets to an html page.
 The two required arguments are the path to the result files and original mapped reads file.
 The results directory is relative to the top level directory (specified by -D option) for HMTL.";
-my $USAGE = "Usage:\n\t$CMD [options] <results directory> <bam file>";
+my $USAGE = "Usage:\n\t$CMD [options] <output html file> <stats file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
-  -O <file> Output file name (relative to output directory). Should have .html extension. Default: results.html
-  -D <dirpath> Path to Directory where html page is written. Default: '' (=> use path given by Output file name)
-  -R <dirpath> Path to secondary Results directory for the run. Default: '' (=> only one set of results)
-  -B <file> Filepath to secondary Run ID. Default: '' (=> assume the same run id as given by <run ID>)
-  -S <file> Statistics file name, relative to results directory. Default: '-' (no summary file)
-  -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt
-  -T <file> Name for HTML Table row summary file (in output directory). Default: '' (=> none created)
-  -H <dirpath> Path to directory containing files 'header' and 'footer'. If present, used to wrap the output file name.
-  -p <title> Primary table header text. Default 'All Reads'.
-  -s <title> Secondary table header text. Default 'Filtered Reads'.
-  -t <title> Secondary title for report. Default: ''";
+  -a Extract Amplicon reads coverage information from stats file as a parallel report table
+  -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
+  -D <dir> Directory path for working directory where input files are found and output files saved.
+  -N <title> Name prefix for any output files for display and links. Default: 'tca_auxillary'.
+  -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt.
+  -s <title> Stats table header text (Plain text. Fly-over help added if <title> is matched to help text.) Default 'All Reads'.
+  -T <file> Name for HTML Table row summary file.
+  -t <title> Secondary title for report. Default: ''.";
 
-my $outfile = "results.html";
-my $workdir=".";
-my $results2 = "";
-my $bamfile2 = "";
-my $statsfile = "";
-my $plotsize = 400;
+my $readsfile = "";
 my $rowsumfile = "";
-my $headfoot = "";
-my $title = "";
 my $helpfile ="";
-my $thead1 = "All Reads";
-my $thead2 = "Filtered Reads";
+my $title = "";
+my $workdir = "";
+my $runid = "tca_auxillary";
+my $tabhead = "All Reads";
+my $amplicons = 0;
+my $genome = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
 {
     last if($ARGV[0] !~ /^-/);
     my $opt = shift;
-    if($opt eq '-O') {$outfile = shift;}
+    if($opt eq '-R') {$readsfile = shift;}
     elsif($opt eq '-D') {$workdir = shift;}
-    elsif($opt eq '-R') {$results2 = shift;}
-    elsif($opt eq '-B') {$bamfile2 = shift;}
-    elsif($opt eq '-S') {$statsfile = shift;}
+    elsif($opt eq '-N') {$runid = shift;}
     elsif($opt eq '-A') {$helpfile = shift;}
     elsif($opt eq '-T') {$rowsumfile = shift;}
-    elsif($opt eq '-H') {$headfoot = shift;}
-    elsif($opt eq '-p') {$thead1 = shift;}
-    elsif($opt eq '-q') {$thead2 = shift;}
+    elsif($opt eq '-a') {$amplicons = 1;}
+    elsif($opt eq '-g') {$genome = 1;}
+    elsif($opt eq '-s') {$tabhead = shift;}
     elsif($opt eq '-t') {$title = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
     else
@@ -78,331 +70,326 @@ elsif( scalar @ARGV != 2 )
     exit 1;
 }
 
-my $results1 = shift;
-my $bamfile1 = shift;
+my $outfile = shift;
+my $statsfile = shift;
 
-my $have2runs = ($results2 ne "");
 $statsfile = "" if( $statsfile eq "-" );
+$rowsumfile = "" if( $rowsumfile eq "-" );
 
-# extract root name for output files from bam file names
-my($runid1,$folder,$ext) = fileparse($bamfile1, qr/\.[^.]*$/);
-my $runid2 = $runid1;
-if( $have2runs && $bamfile2 ne "" )
-{
-    ($runid2,$folder,$ext) = fileparse($bamfile2, qr/\.[^.]*$/);
-}
+my $haverowsum = ($rowsumfile ne "");
+my $have2stats = $amplicons;
+
+$workdir = "." if( $workdir eq "" || $workdir eq "-" );
+$statsfile = "$workdir/$statsfile";
+$rowsumfile = "$workdir/$rowsumfile";
 
 #--------- End command arg parsing ---------
 
-my $workdir1 = "$workdir/$results1";
-my $workdir2 = "$workdir/$results2";
+# customize for genome base coverage
+# TO DO modify for genome coverage
+my $tagU = $genome ? "Genome" : "Target";
+my $tagL = lc($tagU);
 
 # check data folders
-die "No output directory found at $workdir" unless( -d "$workdir" );
-die "No results directory found at $workdir1" unless( -d "$workdir1" );
-
-my @rowSumKeyList = (
-  "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Uniformity of coverage",
-  "Target coverage at 1x", "Target coverage at 20x", "Target coverage at 100x" );
-
-if( $have2runs )
-{
-    @rowSumKeyList = (
-      "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Target coverage at 1x" );
-    unless( -d "$workdir2" )
-    {
-	print STDERR "WARNING: Could not locate secondary results directory at $workdir2\nContinuing without...\n";
-	$have2runs = 0;
-    }
-}
+die "No statistics summary file found at $statsfile" unless( -f $statsfile );
 
 my %helptext;
 loadHelpText( "$helpfile" );
 
-$outfile = "$workdir/$outfile" if( $workdir ne "" );
-open( OUTFILE, ">$outfile" ) || die "Cannot open output file $outfile.\n";
+if( $haverowsum )
+{
+    # remove any old file since calls will append to this
+    unlink( $rowsumfile );
+}
 
-# write html header
-if( $headfoot ne "" )
-{
-    if( open( HEADER, "$headfoot/header" ) )
-    {
-        unless( open( FOOTER, "$headfoot/footer" ) )
-        {
-	    close( HEADER );
-	    print STDERR "Could not open $headfoot/footer\n";
-	    $headfoot = "";
-        }
-    }
-    else
-    {
-	print STDERR "Could not open $headfoot/header\n";
-	$headfoot = "";
-    }
-}
-if( $headfoot ne "" )
-{
-    while( <HEADER> )
-    {
-	print OUTFILE;
-    }
-    close( HEADER );
-}
-else
-{
-    print OUTFILE "<html><body>\n";
-    if( $have2runs )
-    {
-	print OUTFILE "<div style=\"width:960px;margin-left:auto;margin-right:auto;\">\n";
-    }
-    else
-    {
-	print OUTFILE "<div style=\"width:480px;margin-left:auto;margin-right:auto;\">\n";
-    }
-    print OUTFILE "<h1><center>Coverage Analysis Report</center></h1>\n";
-}
+open( OUTFILE, ">$workdir/$outfile" ) || die "Cannot open output file $workdir/$outfile.\n";
+
+print OUTFILE "<div style=\"width:860px;margin-left:auto;margin-right:auto;\">\n";
+
 if( $title ne "" )
 {
     # add simple formatting if no html tag indicated
     $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
-    print OUTFILE "$title\n";
-}
-# html has compromises so as to appear almost identical on Firefox vs. IE8
-print OUTFILE "<style type=\"text/css\">\n";
-print OUTFILE "  table {width:100% !important;border-collapse:collapse;margin:0;table-layout:fixed}\n";
-print OUTFILE "  th,td {font-family:\"Lucida Sans Unicode\",\"Lucida Grande\",Sans-Serif;font-size:14px;line-height:1.2em;font-weight:normal}\n";
-print OUTFILE "  th,td {width:50% !important;border:1px solid #bbbbbb;padding:5px;text-align:center}\n";
-print OUTFILE "  td {padding-top:20px;padding-bottom:20px}\n";
-print OUTFILE "  td.inleft  {width:75% !important;border-width:0;text-align:left;padding:2px;padding-left:40px}\n";
-print OUTFILE "  td.inright {width:25% !important;border-width:0;text-align:right;padding:2px;padding-right:40px}\n";
-print OUTFILE "  img.frm {display:block;margin-left:auto;margin-right:auto;margin-top:10px;margin-bottom:10px;width:${plotsize}px;height:${plotsize}px;border-width:0;cursor:help}\n";
-print OUTFILE "  .thelp {cursor:help}\n";
-print OUTFILE "</style>\n";
-
-# table header
-my $hotLable = getHelp($thead1,1);
-print OUTFILE "<center><table>\n<tr><th>$hotLable</th>";
-if( $have2runs )
-{
-  $hotLable = getHelp($thead2,1);
-  print OUTFILE "<th>$hotLable</th>" if( $have2runs );
-}
-print OUTFILE "</tr>\n";
-
-if( $statsfile ne "" )
-{
-    my $txt = readTextAsTableFormat("$workdir1/$statsfile");
-    print OUTFILE "<tr><td>$txt</td>";
-    if( $have2runs )
-    {
-	$txt = readTextAsTableFormat("$workdir2/$statsfile");
-	print OUTFILE "\n<td>$txt</td>";
-    }
-    print OUTFILE "</tr>\n";
-    if( $rowsumfile ne "" )
-    {
-	$rowsumfile = "$workdir/$rowsumfile" if( $workdir ne "" );
-	writeRowSum( "$rowsumfile", "$workdir1/$statsfile", "$workdir2/$statsfile" );
-    }
+     print OUTFILE "$title\n";
 }
 
+# overview plot
+print OUTFILE "<table class=\"center\"><tr>\n";
 displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
-displayResults( "coverage.png", "coverage.xls", "Target Coverage" );
-displayResults( "coverage_binned.png", "coverage_binned.xls", "Binned Target Coverage" );
-displayResults( "coverage_onoff_target.png", "coverage_by_chrom.xls", "Target Coverage by Chromosome" );
-displayResults( "coverage_onoff_padded_target.png", "coverage_by_chrom_padded_target.xls", "Padded Target Coverage by Chromosome", 1 );
-displayResults( "coverage_on_target.png", "fine_coverage.xls", "Individual Target Coverage" );
-displayResults( "coverage_map_onoff_target.png", "coverage_map_by_chrom.xls", "On/Off Target Read Alignment" );
-displayResults( "coverage_normalized.png", "coverage.xls", "Normalized Target Coverage" );
-#displayResults( "coverage_distribution.png", "coverage_binned.xls", "Target Coverage Distribution" );
+print OUTFILE "</td>\n";
+my @keylist = ( "Number of mapped reads" );
+push( @keylist, "Percent reads on target" ) if( !$genome );
+push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage" ) );
+print OUTFILE "<td><div class=\"statsdata\" style=\"width:340px\">\n";
+print OUTFILE subTable( $statsfile, \@keylist );
+print OUTFILE "</div></td></tr>\n";
+print OUTFILE "</table>\n";
+print OUTFILE "<br/>\n";
 
-print OUTFILE "<tr>\n";
-writeBamLinks( "$runid1.bam" );
-writeBamLinks( "$runid2.bam" ) if( $have2runs );
-print OUTFILE "<tr>\n";
-
-# write html footer
-print OUTFILE "</table></center>\n";
-if( $headfoot ne "" )
+# table headers
+printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? 720 : 360);
+print OUTFILE "<table>\n <tr>\n";
+if( $amplicons )
 {
-    while( <FOOTER> )
-    {
-	print OUTFILE;
-    }
-    close( FOOTER );
+  $hotLable = getHelp("Amplicon Read Coverage",1);
+  print OUTFILE "  <th>$hotLable</th>\n";
+}
+my $hotLable = getHelp("$tagU Base Coverage",1);
+print OUTFILE "  <th>$hotLable</th>\n";
+print OUTFILE " </tr>\n <tr>\n";
+my @keylist;
+if( $amplicons )
+{
+  @keylist = ( "Number of amplicons", "Percent assigned amplicon reads", "Average reads per amplicon", "Uniformity of amplicon coverage", 
+    "Amplicons with at least 1 read", "Amplicons with at least 30 reads", "Amplicons with at least 100 reads", "Amplicons with at least 500 reads",
+    "Amplicons with no strand bias", "Amplicons reading end-to-end" );
+  $txt = subTable( $statsfile, \@keylist );
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+}
+if( $genome )
+{
+  @keylist = ( "Bases in reference $tagL" );
 }
 else
 {
-    print OUTFILE "</div></body></html>\n";
-    close( OUTFILE );
+  @keylist = ( "Bases in $tagL regions", "Percent base reads on $tagL" );
 }
+push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage", "$tagU base coverage at 1x",
+  "$tagU base coverage at 30x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
+push( @keylist, '' ) if( $amplicons );
+my $txt = subTable( $statsfile, \@keylist );
+print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+print OUTFILE " </tr>\n</table>\n</div>\n</div>\n";
 
-#print STDERR "> $outfile\n";
+# create table row for separate summary page
+if( $haverowsum )
+{
+  # TO DO - what to do for ampliSeq?
+  @keylist = ( "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Uniformity of base coverage" );
+  writeRowSum( $rowsumfile, $statsfile, \@keylist );
+}
 
 #-------------------------END-------------------------
 
 sub readTextAsTableFormat
 {
-    unless( open( TEXTFILE, "$_[0]" ) )
-    {
-	print STDERR "Could not locate text file $_[0]\n";
-	return "Data unavailable";
-    }
-    my $htmlText = "<table>\n";
-    while( <TEXTFILE> )
-    {
-	my ($n,$v) = split(/:/);
-	$v =~ s/^\s*//;
-	# format leading numeric string using commas
-	my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
-	$n = getHelp($n,1);
-	$htmlText .= "<tr><td class=\"inleft\">$n</td>";
-	$htmlText .= ($v ne "") ? " <td class=\"inright\">$nf</td></tr>\n" : "</td>\n";
-    }
-    close( TEXTFILE );
-    return $htmlText."</table>";
+  unless( open( TEXTFILE, "$_[0]" ) )
+  {
+    print STDERR "Could not locate text file $_[0]\n";
+    return "Data unavailable";
+  }
+  my $htmlText = "<table>\n";
+  while( <TEXTFILE> )
+  {
+    my ($n,$v) = split(/:/);
+    $v =~ s/^\s*//;
+    # format leading numeric string using commas
+    my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
+    $n = getHelp($n,1);
+    $htmlText .= "<tr><td class=\"inleft\">$n</td>";
+    $htmlText .= ($v ne "") ? " <td class=\"inright\">$nf</td></tr>\n" : "</td>\n";
+  }
+  close( TEXTFILE );
+  return $htmlText."</table>";
 }
 
 sub commify
 {
-    (my $num = $_[0]) =~ s/\G(\d{1,3})(?=(?:\d\d\d)+(?:\.|$))/$1,/g;
-    return $num;
+  (my $num = $_[0]) =~ s/\G(\d{1,3})(?=(?:\d\d\d)+(?:\.|$))/$1,/g;
+  return $num;
 }
 
+# args: 0 => output file (append), 1 => input file, 2 => array of keys to read
 sub writeRowSum
 {
-    unless( open( ROWSUM, ">$_[0]" ) )
-    {
-	print STDERR "Could not write to $_[0]\n";
-	return;
-    }
-    print ROWSUM readRowSum($_[1]);
-    if( $have2runs )
-    {
-	print ROWSUM readRowSum($_[2]);
-    }
-    #print STDERR "> $_[0]\n";
+  unless( open( ROWSUM, ">>$_[0]" ) )
+  {
+    print STDERR "Could not file for append at $_[0]\n";
+    return;
+  }
+  print ROWSUM readRowSum($_[1],$_[2]);
+  close( ROWSUM );
 }
 
+# args: 0 => input file, 1 => array of keys to read
 sub readRowSum
 {
-    my $htmlText = "";
-    my $nread = 0;
-    if( open( STATFILE, "$_[0]" ) )
+  return "" unless( open( STATFILE, "$_[0]" ) );
+  my @statlist;
+  while( <STATFILE> )
+  {
+    push( @statlist, $_ );
+  }
+  close( STATFILE );
+  my @keylist = @{$_[1]};
+  my $htmlText = "";
+  foreach $keystr (@keylist)
+  {
+    my $foundKey = 0;
+    foreach( @statlist )
     {
-	while( <STATFILE> )
-	{
-	    my ($n,$v) = split(/:/);
-            foreach $keystr (@rowSumKeyList)
-            {
-	        if( $n eq $keystr )
-	        {
-		    $v =~ s/^\s*//;
-		    my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
-		    $htmlText .= "<td>$nf</td> ";
-		    ++$nread;
-	        }
-            }
-	}
-	close( STATFILE );
+      my ($n,$v) = split(/:/);
+      if( $n eq $keystr )
+      {
+        $v =~ s/^\s*//;
+        my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
+        $htmlText .= "<td>$nf</td> ";
+        ++$foundKey;
+        last;
+      }
     }
-    for( my $i = $nread; $i < 4; ++$i )
+    if( $foundKey == 0 && $keystr != $optionalKeyField )
     {
-        $htmlText .= "<td>N/A</td> ";
+      $htmlText .= "<td>N/A</td>";
+      print STDERR "No value found for statistic '$keystr'\n";
     }
-    return $htmlText;
+  }
+  return $htmlText;
 }
 
-sub displayResults
+# args: 0 => input file, 1 => array of keys to read and sum (if present)
+sub sumRowSum
 {
-    my ($pic,$tsv,$alt,$skip,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
-    # if skip is defined (e.g. 1) do not output anything if the first data file is missing
-    # i.e. it is expected for this set of data to be missing and therefore skipped
-    if( $skip != 0 )
+  return 0 unless( open( STATFILE, "$_[0]" ) );
+  my @statlist;
+  while( <STATFILE> )
+  {
+    push( @statlist, $_ );
+  }
+  close( STATFILE );
+  my @keylist = @{$_[1]};
+  my $sumval = 0;
+  foreach $keystr (@keylist)
+  {
+    my $foundKey = 0;
+    foreach( @statlist )
     {
-	return unless( -e "$workdir/$results1/$runid1.$tsv" );
+      my ($n,$v) = split(/:/);
+      if( $n eq $keystr )
+      {
+        $v =~ s/^\s*//;
+        $v =~ /^\d*\.?\d*/;
+        $sumval += $v+0;
+        ++$foundKey;
+        last;
+      }
     }
-    my $desc = getHelp($alt);
-    print OUTFILE "<tr>\n";
-    writeLinksToFiles( "$results1/$runid1.$pic", "$results1/$runid1.$tsv", $alt, $desc, $style );
-    writeLinksToFiles( "$results2/$runid2.$pic", "$results2/$runid2.$tsv", $alt, $desc, $style ) if( $have2runs );
-    print OUTFILE "\n</tr>\n\n";
-}
-
-sub writeLinksToFiles
-{
-    my ($pic,$tsv,$alt,$desc,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
-    $style = " style=\"$style\"" if( $style ne "" );
-    if( -f "$workdir/$pic" )
-    {
-	print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\">$alt<br/><img class=\"frm\"$style src=\"$pic\" alt=\"$alt\"/></a> ";
-    }
-    else
-    {
-	print STDERR "WARNING: Could not locate plot file $workdir/$pic\n";
-	print OUTFILE "<td $style>$alt plot unavailable.<br/>";
-    }
-    if( -f "$workdir/$tsv" )
-    {
-	print OUTFILE "<a href=\"$tsv\">Download data file</a></td>";
-    }
-    else
-    {
-	print STDERR "WARNING: Could not locate data file $workdir/$tsv\n";
-	print OUTFILE "Data file unavailable.</td>";
-    }
-}
-
-sub writeBamLinks
-{
-    my $bam = $_[0];
-    if( -f "$workdir/$bam" )
-    {
-	print OUTFILE "<td><a href=\"$bam\">Download BAM file</a><br/>\n";
-	print OUTFILE "<a href=\"$bam.bai\">Download BAM index file</a></td>\n";
-    }
-    else
-    {
-	print STDERR "WARNING: Could not locate bam file $workdir/$bam\n";
-	print OUTFILE "<td>BAM file unavailable</td>\n";
-    }
+    #print STDERR "No value found for statistic $keystr\n" if( $foundKey == 0 );
+  }
+  return $sumval;
 }
 
 sub loadHelpText
 {
-    my $hfile = $_[0];
-    $hfile = "$Bin/help_tags.txt" if( $hfile eq "" );
-    unless( open( HELPFILE, $hfile ) )
+  my $hfile = $_[0];
+  $hfile = "$Bin/help_tags.txt" if( $hfile eq "" );
+  unless( open( HELPFILE, $hfile ) )
+  {
+    print STDERR "Warning: no help text file found at $hfile\n";
+    return;
+  }
+  my $title = "";
+  my $text = "";
+  while( <HELPFILE> )
+  {
+    chomp;
+    next if( ! /\S/ );
+    if( s/^@// )
     {
-	print STDERR "Warning: no help text file found at $hfile\n";
-	return;
+      $helptext{$title} = $text if( $title ne "" );
+      $title = $_;
+      $text = "";
     }
-    my $title = "";
-    my $text = "";
-    while( <HELPFILE> )
+    else
     {
-	chomp;
-	next if( ! /\S/ );
-	if( s/^@// )
-	{
-	    $helptext{$title} = $text if( $title ne "" );
-	    $title = $_;
-	    $text = "";
-	}
-	else
-	{
-	    $text .= "$_ ";
-	}
+      $text .= "$_ ";
     }
-    $helptext{$title} = $text if( $title ne "" );
-    close( HELPFILE );
+  }
+  $helptext{$title} = $text if( $title ne "" );
+  close( HELPFILE );
 }
 
 sub getHelp
 {
-    my $help = $helptext{$_[0]};
-    my $htmlWrap = $_[1];
-    $help = $_[0] if( $help eq "" );
-    $help = "<span class=\"thelp\" title=\"$help\">$_[0]</span>" if( $htmlWrap == 1 );
-    return $help;
+  my $help = $helptext{$_[0]};
+  my $htmlWrap = $_[1];
+  $help = $_[0] if( $help eq "" );
+  $help = "<span title=\"$help\">$_[0]</span>" if( $htmlWrap == 1 );
+  return $help;
 }
+
+sub displayResults
+{
+  my ($pic,$tsv,$alt,$skip,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
+  # if skip is defined (e.g. 1) do not output anything if the first data file is missing
+  # i.e. it is expected for this set of data to be missing and therefore skipped
+  if( $skip != 0 )
+  {
+    return unless( -e "$workdir/$runid.$tsv" );
+  }
+  my $desc = getHelp($alt);
+  writeLinksToFiles( "$runid.$pic", "$runid.$tsv", $alt, $desc, $style );
+}
+
+sub writeLinksToFiles
+{
+  my ($pic,$tsv,$alt,$desc,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
+  $style = " style=\"$style\"" if( $style ne "" );
+  if( -f "$workdir/$pic" )
+  {
+    print OUTFILE "<td class=\"imageplot\"><a href=\"$pic\" title=\"$desc\"><img $style src=\"$pic\" alt=\"$alt\"/></a>";
+  }
+  else
+  {
+    print STDERR "WARNING: Could not locate plot file $workdir/$pic\n";
+    print OUTFILE "<td $style>$alt plot unavailable.<br/>";
+  }
+}
+
+sub subTable
+{
+  my @statlist;
+  unless( open( STATFILE, "$_[0]" ) )
+  {
+    print STDERR "Could not locate text file $_[0]\n";
+    return "Data unavailable";
+  }
+  while( <STATFILE> )
+  {
+    push( @statlist, $_ );
+  }
+  close( STATFILE );
+  my @keylist = @{$_[1]};
+  my $htmlText = " <table>\n";
+  foreach $keystr (@keylist)
+  {
+    if( $keystr eq "" )
+    {
+      # treat empty string as spacer
+      $htmlText .= "  <tr><td class=\"inleft\">&nbsp;</td><td class=\"inright\">&nbsp;</td></tr>\n";
+      next;
+    }
+    my $foundKey = 0;
+    foreach( @statlist )
+    {
+      my ($n,$v) = split(/:/);
+      if( $n eq $keystr )
+      {
+        $v =~ s/^\s*//;
+        my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
+        $n = getHelp($n,1);
+        $htmlText .= "  <tr><td class=\"inleft\">$n</td>";
+        $htmlText .= ($v ne "") ? "<td class=\"inright\">$nf</td></tr>\n" : "</td>\n";
+        ++$foundKey;
+        last;
+      }
+    }
+    if( $foundKey == 0 )
+    {
+      $htmlText .= "  <tr><td class=\"inleft\">$keystr</td><td class=\"inright\">?</td></tr>\n";
+      print STDERR "No value found for statistic '$keystr'\n";
+    }
+  }
+  return $htmlText." </table>";
+}
+

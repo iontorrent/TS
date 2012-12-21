@@ -78,7 +78,7 @@ void BkgModelControlOpts::DefaultBkgModelControl()
 
     // diagnostics
     debug_bead_only = 1;  // only debug bead
-
+    region_vfrc_debug = 0; // off
     // emptyTrace outlier (wild trace) removal
     do_ref_trace_trim = false;
     span_inflator_min = 10;

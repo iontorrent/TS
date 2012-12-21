@@ -58,3 +58,11 @@ variableScope:Analysis/server/iPhoneServer/Server.cpp:602 (style) The scope of t
 memleak:Analysis/server/iPhoneServer/Server.cpp:815 (possible error) Memory leak: stats
 resourceLeak:Analysis/server/RegistrationServer/Server.cpp:405 (possible error) Resource leak: lfp
 charArrayIndex:Analysis/BeadmaskParse.cpp:122 (style) Warning - using char variable as array index
+# Topcoder compression. Not a real memory leak.
+memleak:Analysis/SynchDat/SvdDatCompress.cpp:375 (possible error) Memory leak: Huffman::prefix
+memleak:Analysis/SynchDat/VencoLossless.cpp:387 (possible error) Memory leak: Huffman::prefix
+memleak:Analysis/SynchDat/SvdDatCompressPlus.cpp:387 (possible error) Memory leak: Huffman::prefix
+#strandBiasExtractor a pointer to object is added to map and is deleted later when traversing thru the map
+memleak:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:872 (possible error) Memory leak: tempDist
+memleak:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:907 (possible error) Memory leak: tempDist
+

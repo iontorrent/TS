@@ -40,7 +40,7 @@ class LocalhostAuthMiddleware(object):
         if remote not in ['127.0.0.1','127.0.1.1', '::1']:
             return
 
-        logger.info("Allowing access from '%s' as user '%s'", remote, self.localuser)
+        #logger.debug("Allowing access from '%s' as user '%s'", remote, self.localuser)
 
         # We are seeing this user for the first time in this session, attempt
         # to authenticate the user. (via RemoteUser backend)
@@ -65,7 +65,7 @@ class DeleteSessionOnLogoutMiddleware(object):
         try:
             view_name = '.'.join((view_func.__module__, view_func.__name__))
             # flag for deletion if this is a logout view
-            request._delete_session = view_name in ('django.contrib.admin.sites.logout', 'django.contrib.auth.views.logout', 'iondb.rundb.login.views.logout_basic')
+            request._delete_session = view_name in ('django.contrib.admin.sites.logout', 'django.contrib.auth.views.logout', 'iondb.rundb.login.views.logout_view')
             if request._delete_session:
                 logger.info('DeleteSessionOnLogoutMiddleware.process_view: request._delete_session=%s' % request._delete_session)
         except AttributeError:

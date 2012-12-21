@@ -1,3 +1,5 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
 <html>
 <head>
  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
@@ -9,12 +11,12 @@
    margin: 10px;
    padding: 10px;
    height: 500px;
-   text-align: center;
   }
   body {
    font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
    font-size: 14px;
   }
+  .center { margin-left:auto; margin-right:auto; }
   .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
  </style>
 
@@ -29,53 +31,49 @@
     var pluginOutDir;
     $.get( reportUrl, function(data)
     {
-     var rl = data.log;
-     var reportParams = rl.replace("log.html","ion_params_00.json");
      pluginOutDir = data.filesystempath + '/plugin_out/';
-     $.getJSON( reportParams, function(data)
-     {
-      // from report data get the short reference name
-      referenceID = data.libraryName;
-     });
+     referenceID = data.reference;
     });
     document.getElementById('referenceid').innerHTML = referenceID;
 
-    function addBamSelection(dir) {
-      var getBamListCmd = '/pluginMedia/coverageAnalysis/getTargets.php?ext=bam&dir=';
-      $.getJSON( getBamListCmd+dir, function(data) {
-        $.each( data, function( intIndex, objValue ) {
-          var j = objValue.lastIndexOf('.bam')
-          if( j > 0 )
-          {
-            var targfile = dir+'/'+objValue
-            var targ = objValue.substring(0,j)
-            $("#mergedbam").append("<option value='" + targfile + "'>" +  targ + "</option>")
-          }
-        });
-      });
-    }
-
-    addBamSelection(pluginOutDir+'combineBarcodes_out');
-    addBamSelection(pluginOutDir+'combineAlignments_out');
-    addBamSelection('/results/imported/alignment/'+referenceID);
-
-    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + referenceID + '/merged/plain/';
+    var refBedType = '/unmerged/detail/';
+    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/'+referenceID+refBedType;
     $.get( refBedURL, function(data)
     {
       $.each( data.objects, function(intIndex,result)
       {
        var targfile = result.file;
-       var i = targfile.lastIndexOf('/merged/plain/');
+       var i = targfile.lastIndexOf(refBedType);
        if( i < 0 ) return true;
-       var selName = targfile.substr(i+14)
+       var selName = targfile.substr(i+refBedType.length)
        if( selName.substr(0,7) == 'example' ) return true;
        var j = selName.lastIndexOf('.bed');
        if( j > 0 && !result.meta.hotspot )
        {
         selName = selName.substr(0,j);
-        $("#unptargets").append("<option value='" + targfile + "'>" +  selName + "</option>");
+        $("#targetregions").append("<option value='" + targfile + "'>" +  selName + "</option>");
        }
       });
+    });
+
+    $("#librarytype").change(function() {
+      var opt = $("#librarytype option:selected").val();
+      if( opt == "ampliseq" ) {
+        $("#ptrim").show();
+        $("#tpadding").hide();
+        $("#uniquereads").show();
+        $("#nondups").hide();
+      } else if( opt == "targetseq" ) {
+        $("#ptrim").hide();
+        $("#tpadding").show();
+        $("#uniquereads").show();
+        $("#nondups").show();
+      } else {
+        $("#ptrim").hide();
+        $("#tpadding").show();
+        $("#uniquereads").show();
+        $("#nondups").show();
+      }
     });
 
     $.fn.serializeObject = function()
@@ -100,9 +98,17 @@
     {
      $('#postbutton').click(function()
      {
-      var tarn = document.coverage.unptargets.selectedIndex;
+      var libn = document.coverageAnalysis.librarytype.selectedIndex;
+      var libType = document.getElementById('librarytype')[libn].value;
+      var libName = document.getElementById('librarytype')[libn].text;
+      var tarn = document.coverageAnalysis.targetregions.selectedIndex;
+      // in case padding set for a different type
+      if( libType == "ampliseq" )
+      {
+        document.coverageAnalysis.padtargets.value = 0;
+      }
       var regex = /^[0-9]+$/;
-      var padval = document.coverage.padtargets.value;
+      var padval = document.coverageAnalysis.padtargets.value;
       if( !regex.test(padval) )
       {
        alert("Target padding value must be a non-negative integer (>=0).");
@@ -110,13 +116,10 @@
       }
       if( tarn == 0 && padval > 0 )
       {
-       alert("Target padding value must be 0 if no specific Targeted regions value is selected.");
+       alert("Target padding value must be 0 if no specific Targeted Regions value is selected.");
        return false;
       }
-      var libn = document.coverage.librarytype.selectedIndex;
-      var libType = document.getElementById('librarytype')[libn].value;
-      var libName = document.getElementById('librarytype')[libn].text;
-      if( libType == "fullgenome" )
+      if( libType == "wholegenome" )
       {
        if( tarn > 0 )
        {
@@ -130,26 +133,28 @@
       {
        if( tarn == 0 )
        {
-        var msg = "Targeted regions selection is typically appropriate for Library Type: " + libName;
-        msg += ". (Variants may be reported in non-enriched regions where coverage is low.)";
+        var msg = "Targeted Regions selection is typically appropriate for Library Type: " + libName;
+        msg += ". (Coverage may be reported in non-enriched regions where reads are not expected.)";
         msg += "\n\nDo you wish to continue?";
         if( !confirm(msg) ) return false;
        }
       }
-      var nondups = document.coverage.nonduplicates.checked;
-      if( libType == "ampliseq" && nondups == true )
-      {
-       var msg = "The Non-duplicate reads option will be ignored for Library Type: " + libName;
-       msg += ".\n\nDo you wish to continue?";
-       if( !confirm(msg) ) return false;
+      // force invisible options to be unchecked
+      if( libType == "wholegenome" ) {
+       $("#trimreads").attr("checked",false);
+       $("#padtargets").attr("value","0");
+      } else if( libType == "ampliseq" ) {
+       $("#nonduplicates").attr("checked",false);
+       $("#padtargets").attr("value","0");
+      } else if( libType == "targetseq" ) {
+       $("#trimreads").attr("checked",false);
       }
       // pass user selection with spaces translated to underscores
-      document.coverage.mergedbam_id.value = document.getElementById('mergedbam')[document.coverage.mergedbam.selectedIndex].text;
       var usrSel = document.getElementById('librarytype')[libn].text;
-      document.coverage.librarytype_id.value = usrSel.replace(/\s/g,'_');
-      usrSel = document.getElementById('unptargets')[tarn].text;
-      document.coverage.targetregions_id.value = usrSel.replace(/\s/g,'_');
-      obj = $('#coverage').serializeObject();
+      document.coverageAnalysis.librarytype_id.value = usrSel.replace(/\s/g,'_');
+      usrSel = document.getElementById('targetregions')[tarn].text;
+      document.coverageAnalysis.targetregions_id.value = usrSel.replace(/\s/g,'_');
+      obj = $('#coverageAnalysis').serializeObject();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
       pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
@@ -174,86 +179,93 @@
 </head>
 
 <body>
- <div align="center">
-  <form id="coverage" name="coverage" align="center">
+ <form id="coverageAnalysis" name="coverageAnalysis">
+  <div style="text-align:center">
    <h1>Torrent Coverage Analysis Plugin</h1>
    <h3>Genome and Targeted Re-sequencing Coverage Analysis</h3>
-   <table cellpadding="5px">
+  </div>
+   <table class="center" cellpadding="5px">
     <tr>
      <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for coverage analysis.">Reference Genome:</span></td>
      <td><div id="referenceid"></div></td>
     </tr>
     <tr>
-     <td><span class="help"
-       title="Select the reads alignments you wish to analyze. If the combineAlignments plugin has been run in this report then the resulting combined aligmnents will be listed and available for selection. Otherwise the only option is 'Current Report'.">
-       Aligned Reads:</span></td>
-     <td><select id="mergedbam" name="mergedbam"><option value="">Current Report</option></select></td> </tr>
-    <tr>
-    <tr>
      <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
      <td><select id="librarytype" name="librarytype">
-      <option value="fullgenome">Full Genome</option>
-      <option value="ampliseq">Ion AmpliSeq</option>
+      <option value="wholegenome">Whole Genome</option>
+      <option value="ampliseq" selected="selected">Ion AmpliSeq</option>
       <option value="targetseq">Ion TargetSeq</option>
      </select></td>
     </tr>
     <tr>
-    <tr>
      <td><span class="help"
-       title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Notes below.">
-       Targeted regions:</span></td>
-     <td><select id="unptargets" name="unptargets"><option value="">None</option></select></td> </tr>
-    <tr>
+       title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Usage Notes below.">
+       Targeted Regions:</span></td>
+     <td><select id="targetregions" name="targetregions"><option value="">None</option></select></td>
+    </tr>
+    <tr id="ptrim">
      <td><span class="help"
-       title="Specifiy the number of bases for on/off padded targets analysis. See Description and Notes below.">
-       Target padding (bases):</span></td>
+       title="Trim reads to amplicon targets. See Description and Usage Notes below.">
+       Trim Reads:</span></td>
+     <td><input type="checkbox" id="trimreads" name="trimreads" checked="checked" value="Yes"/></td>
+    <tr>
+    <tr id="tpadding" style="display:none">
+     <td><span class="help"
+       title="Specifiy the number of bases for option target padding. See Description and Notes below.">
+       Target Padding:</span></td>
      <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td> </tr>
-    <tr>
+    <tr id="uniquereads">
      <td><span class="help"
-       title="Check to analyze only reads mapped to unique positions in the genome. See Description and Usage Notes below.">
-       Uniquely mapped reads:</span></td>
-     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="No" checked="checked"/></td> </tr>
-    <tr>
+       title="Check to analyze only reads mapped to a specific sequence in the genome. See Description and Usage Notes below.">
+       Use Only Uniquely Mapped Reads:</span></td>
+     <td><input type="checkbox" id="uniquemaps" name="uniquemaps" value="Yes" checked="checked"/></td> </tr>
+    <tr id="nondups" style="display:none">
      <td><span class="help"
        title="Check to analyze only reads that are not demarked as duplicate reads. See Description and Usage Notes below.">
-       Non-duplicate reads:</span></td>
-     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="No" checked="checked"/></td> </tr>
+       Use Only Non-duplicate Reads:</span></td>
+     <td><input type="checkbox" id="nonduplicates" name="nonduplicates" value="Yes" checked="checked"/>
+     &nbsp;(Requires alignments with Mark Duplicates applied.)</td> </tr>
    </table>
    <br/>
-   <div id="json_result">
+   <div align="center" id="json_result">
     <input id="postbutton" type="submit" value="Submit">
    </div>
    <input type="hidden" id="librarytype_id" name="librarytype_id"/>
-   <input type="hidden" id="mergedbam_id" name="mergedbam_id"/>
    <input type="hidden" id="targetregions_id" name="targetregions_id"/>
    <br/>
    <div align="left">
     <h3>Description and Usage Notes</h3>
     <p>
-     This plugin generates statistics, downloadable data and basic visualization of coverage over targeted regions of a
-     reference.</p>
+This plugin generates statistics, downloadable data and interactive visualization of coverage over
+targeted regions of a reference.</p>
     <p>
-     The targeted regions selected should correspond to your reference and enriched fragment library. Coverage will only
-     be reported over the specified target region.</p>
+The targeted regions selected should correspond to your reference and enriched fragment library.
+Coverage will only be reported over the specified target regions.
+Typically for Whole Genome library runs no target regions is specified.</p>
     <p>
-     The Target padding value specifies a number of bases to expand each individual target by at both 3' and 5' ends
-     for analyzing padded target coverage. The recommended value to use for Ion TargetSeq is 100.
-     All statistics and plots will be created using a padded set of (merged) targets.
-     The padding value is ignorred if the selected library type is Full Genome.</p>
+Some options are only presented depending on the Library Type selected.
+The Trim Reads option is only available for Ion AmpliSeq and is a recommended option. 
+This specifies to initially trim all aligned reads to the overlaps with their assigned amplicon targets.
+This avoids considering base reads that from primer sequence (or overlapping proximal targets) and
+result in base coverage statistics that reflect those employed for variant calling (assuming that the
+Uniquely Mapped Reads option is also checked).</p>
     <p>
-     The 'Uniquely Mapped Reads' and 'Non-duplicate Reads' options are used to specify coverage analysis on a filtered
-     subset of reads. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
-     in the whole genome and are typically mapped randomly to one of these locations. Hence, such reads are typically
-     no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
-     For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.
-     Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
-     to use these is only effective if duplicate reads were so marked during the alignment process.
+The Target Padding value is only available for Ion TargetSeq.
+This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is 
+applied to the selected target regions before coverage analysis is performed. A setting more than 0 is
+not recommended for standard coverage analysis but a value of 100 or 150 may be useful for determining
+the degree of near-target base reads.</p>
     <p>
-     A run will fail almost immediately (after queuing) if your selected targeted regions do not appear to match
-     the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
+The 'Uniquely Mapped Reads' and 'Non-duplicate Reads' options are used to specify coverage analysis on a filtered
+subset of reads. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
+in the whole genome and are typically mapped randomly to one of these locations. Hence, such reads are typically
+no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
+For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.
+Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option
+to use these is only effective if duplicate reads were so marked during the alignment process. This option is not
+available for Ion AmpliSeq since (PCR) duplicate reads are anticipated and a necessary requirement for coverage.</p>
    </div>
-  </form>
-  </div>
+ </form>
 </body>
 </html>
 

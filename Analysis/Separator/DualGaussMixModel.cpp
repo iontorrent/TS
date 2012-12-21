@@ -8,7 +8,8 @@
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
 #include "MathOptim.h"
-
+#include "Utils.h"
+#include "IonErr.h"
 using namespace std;
 
 DualGaussMixModel::DualGaussMixModel(int n) {
@@ -83,18 +84,13 @@ MixModel DualGaussMixModel::FitDualGaussMixModel(const float *data, const int8_t
 }
 
 int DualGaussMixModel::PredictCluster(MixModel &m, float data, double threshold, double &p2ownership) {
-    double p1 = DNorm(data, m.mu1, m.var1, m.var1sq2p);
-    p1 = p1 * (1.0 - m.mix);
-      
-    double p2 = DNorm(data, m.mu2, m.var2, m.var2sq2p);
-    p2 = p2 * (m.mix);
-
-    p2ownership = p2 / (p1 + p2);
-      
-    if(p2ownership >= threshold) {
-      return 2;
-    }
-    return 1;
+  if (!m.thresholdSet) {
+    SetThreshold(m);
+  }
+  if (data < m.threshold) { return 1;}
+  else {
+    return 2;
+  }
 }
 
 void DualGaussMixModel::AssignToCluster(int *cluster, MixModel &model, const float *data, 
@@ -124,71 +120,93 @@ double DualGaussMixModel::DNorm(double x, double mu, double var, double varsq2p)
     
   double e = ExpApprox( -1.0 * (x - mu) * (x - mu)/ (2 * var));
   double p = varsq2p * e;
-
   return p;
 }
 
 void DualGaussMixModel::UpdateResponsibility(std::vector<float> &ownership,
 					     const std::vector<float> &data, 
 					     const MixModel &model) {
-//  ownership.resize(data.size());
   for (unsigned int i = 0; i < data.size(); i++) {
-      
-    double p1 = DNorm(data[i], model.mu1, model.var1, model.var1sq2p);
-    p1 = p1 * (1.0 - model.mix);
-      
-    double p2 = DNorm(data[i], model.mu2, model.var2, model.var2sq2p);
-    p2 = p2 * (model.mix);
-
-    assert(p1 >= 0 && p1 <= 1.0 && p2 >= 0 && p2 <= 1.0);
-
-    // as of 11/16/2010, ExpApprox can return exactly zero and this behavior is desired
-    // in other areas of the code where it is used.
-    // This causes a degenerate case here since p1 and p2 can both be exactly zero, 
-    // which in turn causes p2/(p1+p2) to be NaN.
-    // The original behavior (before the modification to ExpApprox) would have
-    // resulted in equally paritioning between p1 and p2 in this case, so this special
-    // case retains that behavior
-    if (p1 == 0 && p2 == 0)
-      ownership[i] = 0.5;
-    else
-      ownership[i] = p2 / (p1 + p2);
+    CalculateResponsibility(model, data[i], ownership[i]);      
   }
+}
+
+void DualGaussMixModel::SetThreshold(MixModel &m) {
+  // Set the threshold at which the responsibility is the same. ignore
+  // cases where higher variance leads to having another decision
+  // boundary on other side of distribution.
+
+  // a = 1/2*r$var1 - 1/(2*var2)
+  // b = r$mu2/r$var2 - r$mu1/r$var1
+  // c = log(.625 * 1/sqrt(2*3.14*r$var1)) - log(.375 * 1/sqrt(2 * 3.14*r$var2)) + (r$mu1*r$mu1)/(2*r$var1) - (r$mu2 *r$mu2)/(2*r$var2)
+  // (-1 * b + sqrt(b*b - 4 * a * c))/(2*a)
+  double a = 1/(2*m.var1) - 1 / (2*m.var2);
+  double b = m.mu2/m.var2 - m.mu1/m.var1;
+  double c = log(m.mix * 1 / (sqrt(2 * DualGaussMixModel::GPI  * m.var1))) - log((1-m.mix) * 1 / (sqrt(2*DualGaussMixModel::GPI * m.var2))) + (m.mu1*m.mu1)/(2*m.var1) - (m.mu2*m.mu2)/(2*m.var2);
+  double t1 = (-1*b + sqrt(b*b - 4 * a * c))/(2 * a);
+  double t2 = (-1*b - sqrt(b*b - 4 * a * c))/(2 * a);
+  double d1 = fabs(m.mu1 - t1) + fabs(m.mu2 - t1);
+  double d2 = fabs(m.mu1 - t2) + fabs(m.mu2 - t2);
+  if (!isfinite(d1) || !isfinite(d2)) {
+    // brute force if not solvable
+    double step = (m.mu2 - m.mu1) / 100;
+    double val = m.mu1;
+    double minDiff = numeric_limits<double>::max();
+    for (size_t i = 0; i < 100; i++) {
+      float d = val + i * step;
+      float owner = -1;
+      bool g = CalculateResponsibility(m, d, owner);
+      if (g && fabs(owner - .5) < minDiff) {
+        m.threshold = val + i * step;
+        minDiff = fabs(owner - .5);
+      }
+    }
+  }
+  else if (d1 > d2) {
+    m.threshold = t2;
+  }
+  else {
+    m.threshold = t1;
+  }
+  m.thresholdSet = true;
+}
+
+bool DualGaussMixModel::CalculateResponsibility(const MixModel &m, float data, float &ownership) {
+  ownership = -1.0f;
+  // Ok we're in a not obvious area calculate a true weight.
+  double p1 = DNorm(data, m.mu1, m.var1, m.var1sq2p);
+  p1 = p1 * (1.0 - m.mix);
+  
+  double p2 = DNorm(data, m.mu2, m.var2, m.var2sq2p);
+  p2 = p2 * (m.mix);
+  
+  if(!(p1 >= 0 && p1 <= 1.0 && p2 >= 0 && p2 <= 1.0)) {
+    return false;
+  }
+  
+  // as of 11/16/2010, ExpApprox can return exactly zero and this behavior is desired
+  // in other areas of the code where it is used.
+  // This causes a degenerate case here since p1 and p2 can both be exactly zero, 
+  // which in turn causes p2/(p1+p2) to be NaN.
+  // The original behavior (before the modification to ExpApprox) would have
+  // resulted in equally paritioning between p1 and p2 in this case, so this special
+  // case retains that behavior
+  if (p1 == 0 && p2 == 0)
+    ownership = 0.5;
+  else
+    ownership = p2 / (p1 + p2);
+  return true;
 }
 
 bool DualGaussMixModel::UpdateResponsibility(std::vector<float> &ownership,
 					     const std::vector<std::pair<float,int8_t> > &data, 
 					     const MixModel &model) {
 //  ownership.resize(data.size());
+  bool flag = true;
   for (unsigned int i = 0; i < data.size(); i++) {
-      
-    double p1 = DNorm(data[i].first, model.mu1, model.var1, model.var1sq2p);
-    p1 = p1 * (1.0 - model.mix);
-      
-    double p2 = DNorm(data[i].first, model.mu2, model.var2, model.var2sq2p);
-    p2 = p2 * (model.mix);
-
-    if(!(p1 >= 0 && p1 <= 1.0 && p2 >= 0 && p2 <= 1.0)) {
-      return false;
-    }
-
-    // as of 11/16/2010, ExpApprox can return exactly zero and this behavior is desired
-    // in other areas of the code where it is used.
-    // This causes a degenerate case here since p1 and p2 can both be exactly zero, 
-    // which in turn causes p2/(p1+p2) to be NaN.
-    // The original behavior (before the modification to ExpApprox) would have
-    // resulted in equally paritioning between p1 and p2 in this case, so this special
-    // case retains that behavior
-    if (p1 == 0 && p2 == 0)
-      ownership[i] = 0.5;
-    else
-      ownership[i] = p2 / (p1 + p2);
-
-    if (data[i].second >= 0) {
-      ownership[i] = .5 * data[i].second + .5 * ownership[i];
-    }
+    flag &= CalculateResponsibility(model, data[i].first, ownership[i]);
   }
-  return true;
+  return flag;
 }
 
 double DualGaussMixModel::CalcWeightedMean(const std::vector<float> &weights,
@@ -324,7 +342,7 @@ void DualGaussMixModel::ConvergeModel(const std::vector<float> &data, MixModel &
   std::vector<float> cluster(data.size(), .5);
   while (!converged && iterationCount++ < mMaxIter) {
     MixModel newModel = model;
-        UpdateResponsibility(cluster, data, model);
+    UpdateResponsibility(cluster, data, model);
     UpdateModel(newModel, data, cluster);
     double mu1Diff = fabs(newModel.mu1 - model.mu1);
     double mu2Diff = fabs(newModel.mu2 - model.mu2);

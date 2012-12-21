@@ -55,6 +55,7 @@
           <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
           <th ALIGN="right" rowspan="2" bgcolor=#D8D8D8>AQ17 bases</th>
           <th ALIGN="right" rowspan="2">SNR</th>
+          <th ALIGN="right" rowspan="2">fps</th>
         </tr>
         <tr>
           <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
@@ -67,7 +68,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link in reportsNew %}{% spaceless %}
+        {% for r,tfm,lbm,link,info in reportsNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
@@ -129,6 +130,7 @@
 
 
             <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
+            <td ALIGN="right">{{ info }}</td>
           </tr>
           <tr colspan="11"
               style="background-color:{%cycle 'inherit' '#AAA' %};">
@@ -173,7 +175,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link,cov in reportsAmplNew %}{% spaceless %}
+        {% for r,tfm,lbm,link,info,cov in reportsAmplNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
@@ -286,7 +288,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link,pe in reportsPairNew %}{% spaceless %}
+        {% for r,tfm,lbm,link,info,pe in reportsPairNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
@@ -375,6 +377,7 @@
           <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ17 Reads</th>
           <th ALIGN="right" rowspan="2"bgcolor=#D8D8D8>AQ17 bases</th>
           <th ALIGN="right" rowspan="2">SNR</th>
+          <th ALIGN="right" rowspan="2">fps</th>
         </tr>
         <tr>
           <th ALIGN="right" bgcolor=#D8D8D8>100 bp</th>
@@ -387,7 +390,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link in reportsThumbsNew %}{% spaceless %}
+        {% for r,tfm,lbm,link,info in reportsThumbsNew %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
@@ -445,6 +448,7 @@
             {% endif %}
 
             <td ALIGN="right">{{ lbm.sysSNR|floatformat:2 }}</td>
+            <td ALIGN="right">{{ info }}</td>
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td colspan="11">Notes: {{ r.experiment.notes }}</td>
@@ -489,7 +493,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link in reportsOldWhole %}{% spaceless %}
+        {% for r,tfm,lbm,link,info in reportsOldWhole %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>
@@ -590,7 +594,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for r,tfm,lbm,link in reportsOldThumb %}{% spaceless %}
+        {% for r,tfm,lbm,link,info in reportsOldThumb %}{% spaceless %}
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
             <td>
               <a href="{{link}}">{{ r.resultsName }}</a>

@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+'''
+Script will search Reports database for all Reports with a Status that is
+NOT Success (or whatever a valid complete report status is)
 
-# Script will search Reports database for all Reports with a Status that is 
-# NOT Success (or whatever a valid complete report status is)
-#
-# This identifies all Reports which could be deleted from database and deleted
-# from the filesystem
-
+This identifies all Reports which could be deleted from database and deleted
+from the filesystem
+'''
 import os
-import sys
 import commands
 
 import iondb.bin.djangoinit
@@ -31,17 +30,16 @@ if __name__ == '__main__':
         if not 'Completed' in result.status and not 'Started' in result.status:
             print result.status
             path = result.get_report_dir()
-            if not os.path.isdir (path):
+            if not os.path.isdir(path):
                 print "Dir %s does not exist" % path
-            else: 
+            else:
                 try:
                     diskusage = commands.getstatusoutput("du -sk %s 2>/dev/null" % path)
                     sum = int(diskusage[1].split()[0])
-                    print ("%dkb %s") % (sum,path)
+                    print ("%dkb %s") % (sum, path)
                     count += 1
                     totalds += sum
                 except:
                     print ("error getting disk space")
     print "Total broken reports: %d" % count
     print "%d kb" % totalds
-    

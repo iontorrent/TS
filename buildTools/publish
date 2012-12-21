@@ -7,9 +7,10 @@ function print_help()
 	echo "Usage: publish [--dev|--alpha|--patch] filename"
     echo
     echo "Default location to publish to is lucid-alpha"
-    echo -e "--dev\tlucid-dev"
-    echo -e "--alpha\tlucid-alpha"
-    echo -e "--patch\tpatchtest"
+    echo -e "--lucid-dev\tlucid-dev"
+    echo -e "--lucid-alpha\tlucid-alpha"
+    echo -e "--lucid-proton-alpha\tlucid-proton-alpha"
+    echo -e "--patchtest\tpatchtest"
     echo
 }
 
@@ -30,13 +31,16 @@ UPDATE_PKGFILE=1
 #---    We convert all arguments to lower case  ---#
 while [ $# != 0 ]; do
     case ${1,,} in
-    '--dev')
+    '--lucid-dev')
     	PUBDIR="lucid-dev"
     ;;
-    '--alpha')
+    '--lucid-alpha')
     	PUBDIR="lucid-alpha"
     ;;
-    '--patch')
+    '--lucid-proton-alpha')
+    	PUBDIR="lucid-proton-alpha"
+    ;;
+    '--patchtest')
     	PUBDIR="patchtest"
     ;;
     '--no-pkgfile')
@@ -78,8 +82,12 @@ if [ "$file" == "" ]; then
 fi
 
 if [ $UPDATE_PKGFILE == 1 ]; then
+    # Create the file in a temporary location, then move it to its final location.  This will minimize the downtime
+    # to accessing the apt repository.  We used to remove the file, then rewrite it - a process that can take several
+    # minutes.
     echo "Writing new Packages.gz file"
-    ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
+    pkgfile=$(mktemp)
+    ssh $USER@$SERVER "cd $PUBPATH/.. && apt-ftparchive packages $PUBDIR | gzip > $pkgfile && mv $pkgfile $PUBDIR/Packages.gz"
     if [ $? -ne 0 ]
     then
         echo "There was an error creating the Packages.gz file"

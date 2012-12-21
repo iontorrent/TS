@@ -20,7 +20,7 @@ if __name__ == '__main__':
      elif ( runtype == 'TARS' ):
         runtype = "targetseq"
      elif ( runtype == 'WGNM' ):
-        runtype = "fullgenome"
+        runtype = "wholegenome"
      else:
         runtype = ""  
      print "%s;%s" % (runtype, regionf)

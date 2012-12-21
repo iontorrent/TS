@@ -25,7 +25,7 @@ class IonLaunchPlugin(IonPlugin):
     _launchsh=None
 
     ## Defaults for Launch Plugins
-    runtypes = [ RunType.FULLCHIP ]
+    runtypes = [ RunType.FULLCHIP, RunType.THUMB ]
     features = []
 
     @classmethod
@@ -58,7 +58,7 @@ class IonLaunchPlugin(IonPlugin):
                     logger.warning("Version in file does not conform to LooseVersion rules: ", v)
                 return str(v)
         else:
-            logger.error("Plugin launch script does not define VERSION '%s'", cls._launchsh)
+            logger.warning("Plugin launch script does not define VERSION '%s'", cls._launchsh)
         return "0"
 
     @classmethod

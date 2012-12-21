@@ -2,12 +2,6 @@
 {% load pagetools %}
 {% block content %}
 <script type="text/javascript">
-	function deleteBlankSelection() {
-		if ($("#id_previousReport option:first").val() === "") {
-			$("#id_previousReport option:first").remove();
-		}
-	}
-
 	$(document).ready(function() {
 		
 		function blockoldfromSFF(){
@@ -70,6 +64,8 @@
 						$(".parentError").parent().parent().addClass("error alert alert-error invalid");
 						$('#report_analyze_form').submit(submitHandler);
 						$("#advancedSec").slideDown();
+						
+						$(data).find('#start_error').prependTo('#report_analyze_form');
 					}
 					return true;
 				},
@@ -99,91 +95,51 @@
 
 		// $("#uploadMethod").buttonset();
 
-		$("#fromRaw").click(function() {
-			$("#id_blockArgs").val("fromRaw");
-			$("#id_args").attr("disabled", false);
-			$("#id_args").css("opacity", 1);
-			$("#id_basecallerArgs").attr("disabled", false);
-			$("#id_basecallerArgs").css("opacity", 1);
-			$("#id_previousReport").attr('disabled', true);
+		change_pipetype = function () {
+			var type = $('input[name=pipetype]:checked').val(),
+				thumb = $('#id_do_thumbnail').prop('checked'),
+				use_args = use_base = use_prev = use_thumb = null;
 
-			$("#id_previousReport").prepend("<option value=''>Not applicable to reanalysis from Signal Processing</option>");
-			$("#id_previousReport").val("");
-			blockoldfromSFF();
-		});
-
-		$("#fromWells").click(function() {
-			$("#id_blockArgs").val("fromWells");
-			$("#id_args").attr("disabled", true);
-			$("#id_args").css("opacity", 0.2);
-			$("#id_basecallerArgs").css("opacity", 1);
-			$("#id_basecallerArgs").attr("disabled", false);
-			$("#id_previousReport").attr('disabled', false);
-			deleteBlankSelection();
-			blockoldfromSFF();
-		});
-
-		$("#fromSFF").click(function() {
-			$("#id_blockArgs").val("fromSFF");
-			$("#id_args").attr("disabled", true);
-			$("#id_args").css("opacity", 0.2);
-			$("#id_basecallerArgs").attr("disabled", true);
-			$("#id_basecallerArgs").css("opacity", 0.2);
-			$("#id_previousReport").attr('disabled', false);
-			deleteBlankSelection();
-			//block the old from sff
-			blockoldfromSFF();
-		});
-
-		$("#fromRaw").click();
-		$("#id_blockArgs").val("fromRaw"); 
-		
-		{{javascript|safe}}
-
-		function boxOff(box) {
-			box.prop("readonly", true);
-			box.css("opacity", 0.2);
-		}
-
-		function boxOn(box) {
-			box.prop("readonly", false);
-			box.css("opacity", 1);
-		}
-
-		{% if isProton %}
-		//assume thumbnail only to be the default
-		boxOff($("#id_args"));
-		boxOff($("#id_basecallerArgs"));
-		{% endif %}
-
-		function oInvert(o) {
-			var o = parseFloat(o);
-			if (o < 0.3) {
-				return 1;
-			} else {
-				return 0.2;
+			switch (type) {
+				case "fromRaw": 
+					use_args = use_base = !(use_targs = use_tbase = thumb);
+					use_prev = use_tprev = false;
+					break;
+				case "fromWells": 
+					use_base = use_prev = !(use_tbase = use_tprev = thumb);
+					use_targs = use_args = false;
+					break;
+				case "fromSFF": 
+					use_prev = !(use_tprev = thumb);
+					use_args = use_base = use_targs = use_tbase = false;
+					break;
 			}
+			$("#id_blockArgs").val(type);
+
+			$("#id_beadfindArgs").attr("disabled", !use_args);
+			$("#id_beadfindArgs").css("opacity", use_args? 1 : 0.2);
+			$("#id_analysisArgs").attr("disabled", !use_args);
+			$("#id_analysisArgs").css("opacity", use_args? 1 : 0.2);
+			$("#id_basecallerArgs").attr("disabled", !use_base);
+			$("#id_basecallerArgs").css("opacity", use_base? 1 : 0.2);
+			$("#id_previousReport").attr('disabled', !use_prev);
+			$("#id_previousReport").css("opacity", use_prev? 1 : 0.2);
+
+			$("#id_thumbnailBeadfindArgs").attr("disabled", !use_targs);
+			$("#id_thumbnailBeadfindArgs").css("opacity", use_targs? 1 : 0.2);
+			$("#id_thumbnailAnalysisArgs").attr("disabled", !use_targs);
+			$("#id_thumbnailAnalysisArgs").css("opacity", use_targs? 1 : 0.2);
+			$("#id_thumbnailBasecallerArgs").attr("disabled", !use_tbase);
+			$("#id_thumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
+			$("#id_previousThumbReport").attr('disabled', !use_tprev);
+			$("#id_previousThumbReport").css("opacity", use_tprev? 1 : 0.2);
+			blockoldfromSFF();
 		}
 
-		function disabledBool(d) {
-			d.prop("readonly", !d.prop("readonly"))
-		}
-
-		function invert(one, two) {
-			//set the states
-			disabledBool(one);
-			disabledBool(two);
-
-			one.css("opacity", oInvert(one.css("opacity")));
-			two.css("opacity", oInvert(two.css("opacity")));
-		}
-
-
-		$("#id_do_thumbnail").change(function() {
-			invert($("#id_basecallerArgs"), $("#id_thumbnailBasecallerArgs"));
-			invert($("#id_args"), $("#id_thumbnailAnalysisArgs"));
-		});
-
+		$("input[name=pipetype]").click(change_pipetype);
+		$("#id_do_thumbnail").click(change_pipetype);
+		change_pipetype();
+		{{javascript|safe}}
 	}); 
 </script>
 <script language="javascript" type="text/javascript" src="/site_media/runliveness.min.js"></script>
@@ -197,7 +153,9 @@
 	    </div>
 	{%endif%}
 	{% if start_error %}
-    <p><b>Error: {{ start_error }}</b></p>
+	<div id="start_error" class="alert alert-block alert-error">
+	    <p><b>Error:</b> {{ start_error }}</p>
+	</div>
 	{% endif %}
 	<div id="report_analyze_form_container">
 	<form id="report_analyze_form" action="{% url report_analyze pk reportpk %}" method='POST' enctype="multipart/form-data" class="form-horizontal">
@@ -215,7 +173,6 @@
 					{% endif %}
 				</div>
 			</div>
-		
 
 		<div id="advancedSec" style="display: none;">
 			<div class="control-group">
@@ -223,18 +180,29 @@
 				<div class="controls">
 					{{ rpf.blockArgs }}
 					<label for="fromRaw" class="checkbox inline">
-						<input type="radio" id="fromRaw" name="pipetype" />
+						<input type="radio" id="fromRaw" name="pipetype" value="fromRaw" checked="checked"/ >
 						Signal Processing</label>
 					<label for="fromWells" class="checkbox inline">
-						<input type="radio" id="fromWells" name="pipetype" />
+						<input type="radio" id="fromWells" name="pipetype" value="fromWells" />
 						Base Calling</label>
 					<p class="help-block">
 						{{ rpf.blockArgs.errors }}
 					</p>
 				</div>
 			</div>
+			{% if isProton %}
+			<div class="control-group">
+				<label for="id_do_thumbnail" class="control-label">Thumbnail only</label>
+				<div class="controls">
+					{{ rpf.do_thumbnail }}
+					<p class="help-block">
+						{{ rpf.do_thumbnail.errors }}
+					</p>
+				</div>
+			</div>
+			{% endif %}
 			<div class="control-group" id="previousReport" >
-				<label for="id_previousReport" class="control-label">Use data from previous report</label>
+				<label for="id_previousReport" class="control-label">Use data from previous result</label>
 				<div class="controls">
 					{{ rpf.previousReport }}
 					<p class="help-block" id="previousReportError">
@@ -243,11 +211,20 @@
 				</div>
 			</div>
 			<div class="control-group">
-				<label for="id_args" class="control-label">Analysis args</label>
+				<label for="id_beadfindArgs" class="control-label">Beadfind args</label>
 				<div class="controls">
-					{{ rpf.args }}
+					{{ rpf.beadfindArgs }}
 					<p class="help-block">
-						{{ rpf.args.errors }}
+						{{ rpf.beadfindArgs.errors }}
+					</p>
+				</div>
+			</div>
+			<div class="control-group">
+				<label for="id_analysisArgs" class="control-label">Analysis args</label>
+				<div class="controls">
+					{{ rpf.analysisArgs }}
+					<p class="help-block">
+						{{ rpf.analysisArgs.errors }}
 					</p>
 				</div>
 			</div>
@@ -262,6 +239,24 @@
 			</div>
 
 			{% if isProton %}
+			<div class="control-group" id="previousThumbReport" >
+				<label for="id_previousThumbReport" class="control-label">Use data from previous thumbnail</label>
+				<div class="controls">
+					{{ rpf.previousThumbReport }}
+					<p class="help-block" id="previousThumbReportError">
+						{{ rpf.previousThumbReport.errors }}
+					</p>
+				</div>
+			</div>
+			<div class="control-group">
+				<label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail Beadfind args</label>
+				<div class="controls">
+					{{ rpf.thumbnailBeadfindArgs }}
+					<p class="help-block">
+						{{ rpf.thumbnailBeadfindArgs.errors }}
+					</p>
+				</div>
+			</div>
 			<div class="control-group">
 				<label for="id_thumbnailAnalysisArgs" class="control-label">Thumbnail Analysis args</label>
 				<div class="controls">
@@ -277,15 +272,6 @@
 					{{ rpf.thumbnailBasecallerArgs }}
 					<p class="help-block">
 						{{ rpf.thumbnailBasecallerArgs.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_do_thumbnail" class="control-label">Thumbnail only</label>
-				<div class="controls">
-					{{ rpf.do_thumbnail }}
-					<p class="help-block">
-						{{ rpf.do_thumbnail.errors }}
 					</p>
 				</div>
 			</div>
@@ -340,15 +326,6 @@
 				</div>
 			</div>
 			<div class="control-group">
-				<label for="id_align_full" class="control-label">Override alignment sampling</label>
-				<div class="controls">
-					{{ rpf.align_full }}
-					<p class="help-block">
-						{{ rpf.align_full.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
 				<label for="id_aligner_opts_extra" class="control-label">TMAP args</label>
 				<div class="controls">
 					{{ rpf.aligner_opts_extra }}
@@ -375,24 +352,6 @@
 						{{ rpf.project_names.errors }}
 					</p>
 					{% endif %}
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_forward_list" class="control-label">Paired-End Forward</label>
-				<div class="controls">
-					{{ rpf.forward_list }}
-					<p class="help-block">
-						Only select a forward run if this is a paired end run
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_reverse_list" class="control-label">Paired-End Reverse</label>
-				<div class="controls">
-					{{ rpf.reverse_list }}
-					<p class="help-block">
-						Only select a reverse run if this is a paired end run
-					</p>
 				</div>
 			</div>
 		</div>

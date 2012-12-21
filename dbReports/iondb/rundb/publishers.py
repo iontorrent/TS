@@ -19,6 +19,8 @@ import logging
 import traceback
 import os
 import os.path
+import httplib
+import mimetypes
 
 from tastypie.bundle import Bundle
 
@@ -230,15 +232,21 @@ def run_script(working_dir, script_path, upload_id, upload_dir, upload_path, met
     """
     script = os.path.basename(script_path)
     cmd = [script_path, upload_id, upload_dir, upload_path, meta_path]
+    print(str(cmd))
     # Spawn the test subprocess and wait for it to complete.
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
-    stdout, stderr = proc.communicate()
-    result = proc.returncode
-    stdout_log = os.path.join(upload_dir, "%s_standard_output.log" % script)
-    stderr_log = os.path.join(upload_dir, "%s_standard_error.log" % script)
-    open(stdout_log, 'w').write(stdout)
-    if stderr:
-        open(stderr_log, 'w').write(stderr)
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
+        stdout, stderr = proc.communicate()
+        result = proc.returncode
+        stdout_log = os.path.join(upload_dir, "%s_standard_output.log" % script)
+        stderr_log = os.path.join(upload_dir, "%s_standard_error.log" % script)
+        open(stdout_log, 'w').write(stdout)
+        if stderr:
+            open(stderr_log, 'w').write(stderr)
+    except Exception as err:
+        print("Publisher error in upload %s: %s" % (upload_id, str(cmd)))
+        raise
+        return False
     return result == 0
 
 
@@ -372,3 +380,54 @@ def list_content(request):
     pubs = dict((p.name, list(p.contents.all())) for p in publishers)
     return render_to_response('rundb/ion_publisher_list_content.html',
                     {"pubs": pubs})
+
+
+def post_multipart(host, selector, fields, files):
+    """Post fields and files to an http host as multipart/form-data.
+    fields is a sequence of (name, value) elements for regular form fields.
+    files is a sequence of (name, filename, value) elements for data to be uploaded as files
+    Return the server's response page.
+    """
+    content_type, body = encode_multipart_formdata(fields, files)
+    h = httplib.HTTP(host)
+    h.putrequest('POST', selector)
+    h.putheader('content-type', content_type)
+    h.putheader('content-length', str(len(body)))
+    h.endheaders()
+    h.send(body)
+    errcode, errmsg, headers = h.getreply()
+    return h.file.read()
+
+
+def encode_multipart_formdata(fields, files):
+    """fields is a sequence of (name, value) elements for regular form fields.
+    files is a sequence of (name, filename, value) elements for data to be uploaded as files
+    Return (content_type, body) ready for httplib.HTTP instance
+    """
+    BOUNDARY = 'GlobalNumberOfPiratesDecreasing-GlobalTemperatureIncreasing'
+    CRLF = '\r\n'
+    request = []
+    for (key, value) in fields:
+        request.extend([
+            '--' + BOUNDARY,
+            'Content-Disposition: form-data; name="%s"' % key,
+            '',
+            value
+        ])
+    for (key, filename, value) in files:
+        request.extend([
+            '--' + BOUNDARY,
+            'Content-Disposition: form-data; name="%s"; filename="%s"' % (key, filename),
+            'Content-Type: %s' % get_content_type(filename),
+            '',
+            value
+        ])
+    request.append('--' + BOUNDARY + '--')
+    request.append('')
+    body = CRLF.join(request)
+    content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
+    return content_type, body
+
+
+def get_content_type(filename):
+    return mimetypes.guess_type(filename)[0] or 'application/octet-stream'

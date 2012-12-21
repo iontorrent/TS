@@ -9,7 +9,7 @@ document.write('\
   </div>\
   <div id="AC-grid" class="grid-body"></div>\
   <div id="AC-pager" class="grid-footer"></div>\
-  <p id="AC-footnote" class="grid-footnote"><sup><b>&dagger;</b></sup>Table does not include coverage for HotSpot insertion variants.</p>\
+  <p id="AC-footnote" class="grid-footnote"><sup><b>&dagger;</b></sup>Table does not include coverage for HotSpot insertion variants. * HotSpot has multiple start positions or start position changed after LeftAlignment.</p>\
   <p id="AC-footnote-close" style="display:none" class="grid-text"><br/></p>\
 </div>\
 <div id="AC-filterpanel" class="filter-panel" style="display:none">\

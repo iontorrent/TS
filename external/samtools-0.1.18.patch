@@ -108,3 +108,134 @@ Index: bam2depth.c
  	n_plp = calloc(n, sizeof(int)); // n_plp[i] is the number of covering reads from the i-th BAM
  	plp = calloc(n, sizeof(void*)); // plp[i] points to the array of covering reads (internal in mplp)
  	while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0) { // come to the next covered position
+Index: Makefile
+===================================================================
+--- Makefile (revision 1011)
++++ Makefile (working copy)
+@@ -77,6 +77,7 @@
+ 
+ libbam.so.1-local:$(LOBJS)
+ 		$(CC) -shared -Wl,-soname,libbam.so -o libbam.so.1 $(LOBJS) -lc -lz
++		ln -s libbam.so.1 libbam.so
+ 
+ dylib:
+ 		@$(MAKE) cleanlocal; \
+Index: CMakeLists.txt
+===================================================================
+--- CMakeLists.txt	2012-09-25 15:46:43.885322798 -0400
++++ CMakeLists.txt	2012-09-25 15:23:04.715843791 -0400
+@@ -0,0 +1,114 @@
++cmake_minimum_required (VERSION 2.6)
++project (samtools) 
++
++OPTION(BUILD_SHARED_LIBS "Build package with shared libraries." ON)
++
++add_definitions(-D_FILE_OFFSET_BITS=64 -D_USE_KNETFILE -DMD5SUM_MAIN -D_CURSES_LIB=1)
++
++add_library (bam
++ bgzf.c
++ kstring.c
++ bam_aux.c
++ bam.c
++ bam_import.c
++ sam.c
++ bam_index.c
++ bam_pileup.c
++ bam_lpileup.c
++ bam_md.c
++ razf.c
++ faidx.c
++ bedidx.c
++ knetfile.c
++ bam_sort.c
++ sam_header.c
++ bam_reheader.c
++ kprobaln.c
++ bam_cat.c) 
++
++add_executable (samtools
++ bam_tview.c
++ bam_plcmd.c
++ sam_view.c
++ bam_rmdup.c
++ bam_rmdupse.c
++ bam_mate.c
++ bam_stat.c
++ bam_color.c
++ bamtk.c
++ kaln.c
++ bam2bcf.c
++ bam2bcf_indel.c
++ errmod.c
++ sample.c
++ cut_target.c
++ phase.c
++ bam2depth.c)
++
++target_link_libraries (samtools curses bam m z bcf)
++
++
++include_directories("./")
++
++add_library(bcf
++ bcftools/bcf.c
++ bcftools/vcf.c
++ bcftools/bcfutils.c
++ bcftools/prob1.c
++ bcftools/em.c
++ bcftools/kfunc.c
++ bcftools/kmin.c
++ bcftools/index.c
++ bcftools/fet.c
++ bcftools/mut.c
++ bcftools/bcf2qcall.c)
++
++
++add_executable(bcftools
++ bcftools/call1.c
++ bcftools/main.c
++ kstring.c
++ bgzf.c
++ knetfile.c
++ bedidx.c)
++
++target_link_libraries (bcftools bcf m z)
++
++add_executable(md5sum-lite misc/md5.c misc/md5.h)
++set_target_properties(md5sum-lite PROPERTIES
++     COMPILE_FLAGS -DMD5SUM_MAIN)
++
++
++#add_executable(md5fa misc/md5fa.c misc/md5.h kseq.h)
++#target_link_libraries (md5fa z)
++
++
++add_executable(wgsim misc/wgsim.c kseq.h)
++target_link_libraries (wgsim m z)
++
++
++add_executable(maq2sam-short misc/maq2sam.c)
++target_link_libraries (maq2sam-short z)
++
++
++add_executable(maq2sam-long misc/maq2sam.c)
++target_link_libraries (maq2sam-long z)
++set_target_properties(maq2sam-long PROPERTIES
++     COMPILE_FLAGS -DMAQ_LONGREADS)
++
++
++add_executable(seqtk misc/seqtk.c khash.h kseq.h)
++target_link_libraries(seqtk m z)
++
++install(TARGETS samtools bcftools DESTINATION bin)
++install(TARGETS bam bcf DESTINATION lib)
++install(
++ FILES
++  bam.h
++  sam.h
++  khash.h
++  faidx.h
++  bgzf.h
++  sam_header.h
++ DESTINATION include)
++

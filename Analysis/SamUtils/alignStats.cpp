@@ -1082,7 +1082,7 @@ void AlignStats::write_alignment_summary() {
 	}
 	
 
-  alignment_stats << "[global]" << endl;
+	alignment_stats << "[global]" << endl;
 	alignment_stats << "Genome = " << genome_name << endl;
 	alignment_stats	<< "Genome Version = " << genome_version << endl;
 	alignment_stats	<< "Index Version = " << index_version << endl;
@@ -1090,6 +1090,8 @@ void AlignStats::write_alignment_summary() {
 	
 	if (opt.sample_size == 0) {
 		alignment_stats << "Total number of Reads = " << get_total_reads() << endl;
+		alignment_stats << "Total Mapped Target Bases = " << mapped_bases << endl;
+		alignment_stats << "Total Mapped Reads = " << mapped_reads << endl;
 		for ( vector<coord_t>::size_type k = 0; k < q_scores.size(); k++) {
 			if (genome_length == 0 || (opt.skip_cov_flag || !is_sorted)) {
 				alignment_stats	<< "Filtered Q" << q_scores[k] << " Coverage Percentage = 0" << endl; 

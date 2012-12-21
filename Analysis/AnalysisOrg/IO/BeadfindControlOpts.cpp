@@ -25,6 +25,9 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   minTfPeakMax = 15.0f;
   minLibPeakMax = 15.0f;
   bfOutputDebug = false;
+  bfMult = 1.0;
+  sdAsBf = true;
+  gainCorrection = true;
   if (isInternalServer()) {
     bfOutputDebug = true;
   }

@@ -2,22 +2,18 @@
 {% load pagetools %}
 {% load humanize %}
 {% block sub-nav %}
-    <li><a href="{% url configure_about %}">About</a></li>          
-    <li class="active"><a href="{% url configure_references %}">References</a></li>
-    <li><a href="{% url configure_services %}">Services</a></li>
-    <li><a href="{% url configure_plugins %}">Plugins</a></li>          
-    <li><a href="{% url configure_configure %}">Configure</a></li>  
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li class="active"><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
     <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
     <script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
-    <link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery/css/jquery-ui-1.8.20.custom.css" />
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery-ui-1.8.20.custom.min.js"></script>
-    
-    <script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-transition.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.min.js"></script>
-    <link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/Bootstrap-Scroll-Modal/bootstrap-scroll-modal.css" />
-    
+    <link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+    <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
     
     <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script> <!-- Using updated uni-form JS -->
     <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script> <!-- for ajaxForm -->
@@ -32,6 +28,9 @@
       display: block;
     }
 
+    #referenceDetails{
+      width: 100%;
+    }
     #referenceDetails th {
       width: 430px;
     }
@@ -152,7 +151,7 @@
           <script src="/site_media/jquery/js/alert.js"></script>
           <script>
             $(function(){ $("#rebuild").click(function(){
-              $.get("/rundb/rebuild_index/{{ key }}", function(){
+              $.get("/configure/references/genome/rebuild/{{ key }}", function(){
                 $("#rebuild_alert").hide();
                 $("#sys_messages").append('<div class="alert alert-block alert-success"><a class="close" data-dismiss="alert">×</a>Now rebuilding {{ name }}!</div>').fadeIn('slow');
               });
@@ -336,6 +335,10 @@
 
                       uploader.bind('FilesAdded', function(up, files) {
                         var file = files[0];
+                        if (up.files.length > 1) {
+                          up.removeFile(up.files[0]);
+                        }
+                        console.log(up.files);
                         $('#file_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
                         $('#file_progress').html('');
                         up.refresh(); // Reposition Flash/Silverlight
@@ -494,7 +497,7 @@
     $("#confirm_delete_genome").click(function () {
       $("#ask_delete_genome").slideUp();
       $("#status_delete_genome").html("<p>Deleting</p>");
-      $.post("{% url rundb.genomes.delete_genome key %}", function (data) {
+      $.post("{% url references_genome_delete key %}", function (data) {
         $("#status_delete_genome").html(data.status);
         setTimeout(function(){window.location = "{% url configure_references %}";}, 1000);
       });
@@ -504,7 +507,7 @@
     $("#confirm_delete_genome_with_dir").click(function () {
       $("#ask_delete_genome").slideUp();
       $("#status_delete_genome").html("<p>Deleting</p>");
-      $.post("{% url rundb.genomes.delete_genome key %}?with_dir=True", function (data) {
+      $.post("{% url references_genome_delete key %}?with_dir=True", function (data) {
         $("#status_delete_genome").html(data.status);
         setTimeout(function(){window.location = "{% url configure_references %}";}, 1000);
       });
@@ -512,7 +515,7 @@
     });
 
     $("#with_dir").click(function () {
-      build_genome_dialogue('{% url rundb.genomes.delete_genome key %}?with_dir=True');
+      build_genome_dialogue('{% url references_genome_delete key %}?with_dir=True');
     });
 
     $(".deleteBed").click(delete_bed);

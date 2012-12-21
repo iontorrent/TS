@@ -3,6 +3,8 @@
 
 import django.core.exceptions
 from iondb.rundb import models
+from iondb.rundb import events
+from django.conf import settings
 import logging
 
 
@@ -31,6 +33,13 @@ def bother_the_user():
 <br/><a href="/rundb/config">Add contact information.</a>""")
 
 
+def events_from_settings():
+    try:
+        event_consumers = getattr(settings, 'EVENTAPI_CONSUMERS', {})
+        events.register_events(event_consumers)
+    except Exception as err:
+        logger.exception("Error during event consumer registration")
+
 class StartupHousekeeping(object):
 
     def __init__(self):
@@ -40,5 +49,6 @@ class StartupHousekeeping(object):
         """
         expire_messages()
         bother_the_user()
+        events_from_settings()
 
         raise django.core.exceptions.MiddlewareNotUsed("End of startup.")

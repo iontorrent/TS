@@ -95,7 +95,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DEST
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Regexp-Common-2011121001.tar.gz" DESTINATION "/tmp/perlModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION "/tmp/perlModIn")
 install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/perlModIn")
-
+# Ignore pending verification that TS-5435 resolves the issue, instead of this fix
+#install(FILES "${PROJECT_SOURCE_DIR}/config/20-disable-ipv6.conf" DESTINATION "/etc/sysctl.d")
+# postgresql-shm config file: configures kernel memory compatible with our postgres memory settings
+install(FILES "${PROJECT_SOURCE_DIR}/config/10-postgresql-shm.conf" DESTINATION "/etc/sysctl.d")
 # Install prolog/epilog scripts
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/gridengine-scripts" DESTINATION share/ion-tsconfig
     USE_SOURCE_PERMISSIONS
@@ -126,7 +129,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
 # TODO: putty-tools is only here so that it gets installed with 3.0 from 2.2 GUI update
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, python-jsonpipe, putty-tools")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

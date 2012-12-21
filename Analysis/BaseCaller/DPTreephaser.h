@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include "BaseCallerUtils.h"
+#include "SystemMagicDefines.h"
 
 using namespace std;
 
@@ -23,8 +24,8 @@ struct BasecallerRead {
   float           key_normalizer;           //!< Scaling factor used for initial key normalization
   vector<float>   raw_measurements;         //!< Measured, key-normalized flow signal
   vector<float>   normalized_measurements;  //!< Measured flow signal with best normalization so far
-  vector<char>    solution;                 //!< HP-sequence determined by the solver. All entries are integer
   vector<float>   prediction;               //!< Model-based phased signal predicted for the "solved" sequence
+  vector<char>    sequence;                 //!< Vector of ACGT bases. Output from Solver, input to Simulator
 
   // For QV metrics
   vector<float>   additive_correction;      //!< Additive correction applied to get normalized measurements
@@ -78,24 +79,32 @@ public:
 
   //! @brief  Tree-search-based dephasing.
   //! @param[in]  read.normalized_measurements    Normalized measurements
-  //! @param[out] read.solution   Predicted base sequence in homopolymer space
+  //! @param[out] read.sequence   Predicted base sequence
   //! @param[out] read.prediction Predicted signal
   //! @param[in]  max_flows       Number of flows to process
   //! @param[in]  restart_flows   Number of flows to simulate, rather than solve
   void  Solve(BasecallerRead& read, int max_flows, int restart_flows = 0);
 
   //! @brief  Generate predicted signal from base sequence
-  //! @param[in]  read.solution     Base sequence in homopolymer space
+  //! @param[in]  read.sequence     Base sequence
   //! @param[out] read.prediction   Predicted signal
   //! @param[in]  max_flows         Number of flows to process
   void  Simulate(BasecallerRead& read, int max_flows);
 
+  //! @brief  Compute state vector at a query main incorporating flow
+  //! @param[in]  read.sequence     Base sequence
+  //! @param[out] query_state       State vector
+  //! @param[out] current_hp        Homopolymer length incorporating at query_flow
+  //! @param[in]  max_flows         Vector size of query_state
+  //! @param[in]  query_flow        Flow at which to compute state vector
+  void QueryState(BasecallerRead& data, vector<float>& query_state, int& current_hp, int max_flows, int query_flow);
+
   //! @brief  Perform a more advanced simulation to generate QV predictors
-  //! @param[in]  read.solution         Base sequence in homopolymer space
+  //! @param[in]  read.sequence         Base sequence
   //! @param[out] read.onemer_height    Expected 1-mer signal, used for scaling residuals
   //! @param[out] read.penalty_residual Absolute score of the called nuc hypothesis
   //! @param[out] read.penalty_mismatch Score difference to second-best nuc hypothesis
-  int   ComputeQVmetrics(BasecallerRead& read); // Computes "oneMerHeight" and "deltaPenalty"
+  void  ComputeQVmetrics(BasecallerRead& read); // Computes "oneMerHeight" and "deltaPenalty"
 
   //! @brief  Correct for uniform multiplicative scaling
   //! @param[in]  read.prediction               Model-predicted signal
@@ -113,7 +122,7 @@ public:
   void  WindowedNormalize(BasecallerRead& read, int num_steps, int window_size) const;
 
 
-protected:
+
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending
   struct TreephaserPath {
     bool              in_use;                   //!< Is this slot in use?
@@ -123,8 +132,9 @@ protected:
     vector<float>     state;                    //!< Histogram of flows at which last base was incorporated
     int               window_start;             //!< Start flow (inclusive) of meaningful state values
     int               window_end;               //!< End flow (noninclusive) of meaningful state values
-    vector<char>      solution;                 //!< Path sequence in homopolymer space
     vector<float>     prediction;               //!< Model-based phased signal predicted for this path
+    vector<char>      sequence;                 //!< Vector of ACGT bases corresponding to this path
+    int               last_hp;                  //!< Length of the last homopolymer in sequence
 
     // Path metrics and related values
     float             path_metric;              //!< Primary tree search metric
@@ -132,6 +142,9 @@ protected:
     float             per_flow_metric;          //!< Auxiliary tree search metric, useful for stack pruning
     int               dot_counter;              //!< Number of extreme mismatch flows encountered so far
   };
+
+  TreephaserPath& path(int idx) { return path_[idx]; }
+
 
   //! @brief  Set path to an empty sequence, a starting point for phasing simulation
   //! @param[out]  state    Path slot
@@ -142,24 +155,27 @@ protected:
   //! @param[in]   parent    Path to be extended
   //! @param[in]   nuc       Nucleotide (integer) to extend the path by
   //! @param[in]   max_flow  Do not read/write past this flow
-  void AdvanceState(TreephaserPath *child, const TreephaserPath *parent, int nuc, int max_flow) const;
+  void AdvanceState(TreephaserPath *child, const TreephaserPath *parent, char nuc, int max_flow) const;
 
   //! @brief  Perform a path extension by one nucleotide
   //! @param[in,out] state     Path to be extended in place
   //! @param[in]     nuc       Nucleotide (integer) to extend the path by
   //! @param[in]     max_flow  Do not read/write past this flow
-  void AdvanceStateInPlace(TreephaserPath *state, int nuc, int max_flow) const;
+  void AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_flow) const;
+
+protected:
 
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows
-  vector<float>       transition_base_[4];        //!< Probability of polymerase incorporating and staying active
-  vector<float>       transition_flow_[4];        //!< Probability of polymerase not incorporating and staying active
+  vector<float>       transition_base_[8];        //!< Probability of polymerase incorporating and staying active
+  vector<float>       transition_flow_[8];        //!< Probability of polymerase not incorporating and staying active
   vector<TreephaserPath> path_;                   //!< Preallocated space for partial path slots
+
 
   const static int    kNumPaths = 8;              //!< Maximum number of paths considered
   const static float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
   const static float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
   const static float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
-  const static int    kMaxHP = 11;                //!< Maximum callable homopolymer length
+  const static int    kMaxHP = MAX_HPXLEN;        //!< Maximum callable homopolymer length
   const static float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
   const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
 

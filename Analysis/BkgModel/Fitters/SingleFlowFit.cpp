@@ -81,7 +81,7 @@ void single_flow_optimizer::AllocLevMar (TimeCompression &time_c, PoissonCDFAppr
     oneFlowFitKrate->SetLambdaThreshold (1.0);
 
     SetLowerLimitAmplFit (AmplLowerLimit,kmult_low_limit);
-    SetUpperLimitAmplFit (MAX_HPLEN-1,kmult_hi_limit);
+    SetUpperLimitAmplFit (LAST_POISSON_TABLE_COL,kmult_hi_limit);
 
     float my_prior[2] = {0.0, 1.0}; // amplitude, kmult
     float my_damper[2] = {0.0,damp_kmult*time_c.npts()}; // must make a difference to change kmult
@@ -91,7 +91,7 @@ void single_flow_optimizer::AllocLevMar (TimeCompression &time_c, PoissonCDFAppr
 
     // boot up the new projection fit >which is not an instance of LevMar<
     ProjectionFit = new ProjectionSearchOneFlow (time_c.npts(), &time_c.deltaFrame[0], &time_c.deltaFrameSeconds[0], math_poiss);
-    ProjectionFit->max_paramA = MAX_HPLEN-1;
+    ProjectionFit->max_paramA = LAST_POISSON_TABLE_COL;
     ProjectionFit->min_paramA = AmplLowerLimit;
 
     AltFit = new AlternatingDirectionOneFlow (time_c.npts(), &time_c.deltaFrame[0], &time_c.deltaFrameSeconds[0], math_poiss);

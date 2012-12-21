@@ -35,6 +35,7 @@ void ImageControlOpts::DefaultImageOpts()
   sdatSuffix = "sdat";
   //if (acqPrefix != NULL) free (acqPrefix);
   acqPrefix = strdup("acq_");
+  threaded_file_access = 0;
 }
 
 ImageControlOpts::~ImageControlOpts()

@@ -1,0 +1,2522 @@
+[
+    {
+        "pk": 13,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_logentry",
+            "name": "Can add log entry",
+            "content_type": [
+                "admin",
+                "logentry"
+            ]
+        }
+    },
+    {
+        "pk": 14,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_logentry",
+            "name": "Can change log entry",
+            "content_type": [
+                "admin",
+                "logentry"
+            ]
+        }
+    },
+    {
+        "pk": 15,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_logentry",
+            "name": "Can delete log entry",
+            "content_type": [
+                "admin",
+                "logentry"
+            ]
+        }
+    },
+    {
+        "pk": 4,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_group",
+            "name": "Can add group",
+            "content_type": [
+                "auth",
+                "group"
+            ]
+        }
+    },
+    {
+        "pk": 5,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_group",
+            "name": "Can change group",
+            "content_type": [
+                "auth",
+                "group"
+            ]
+        }
+    },
+    {
+        "pk": 6,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_group",
+            "name": "Can delete group",
+            "content_type": [
+                "auth",
+                "group"
+            ]
+        }
+    },
+    {
+        "pk": 10,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_message",
+            "name": "Can add message",
+            "content_type": [
+                "auth",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 11,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_message",
+            "name": "Can change message",
+            "content_type": [
+                "auth",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 12,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_message",
+            "name": "Can delete message",
+            "content_type": [
+                "auth",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 1,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_permission",
+            "name": "Can add permission",
+            "content_type": [
+                "auth",
+                "permission"
+            ]
+        }
+    },
+    {
+        "pk": 2,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_permission",
+            "name": "Can change permission",
+            "content_type": [
+                "auth",
+                "permission"
+            ]
+        }
+    },
+    {
+        "pk": 3,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_permission",
+            "name": "Can delete permission",
+            "content_type": [
+                "auth",
+                "permission"
+            ]
+        }
+    },
+    {
+        "pk": 7,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_user",
+            "name": "Can add user",
+            "content_type": [
+                "auth",
+                "user"
+            ]
+        }
+    },
+    {
+        "pk": 8,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_user",
+            "name": "Can change user",
+            "content_type": [
+                "auth",
+                "user"
+            ]
+        }
+    },
+    {
+        "pk": 9,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_user",
+            "name": "Can delete user",
+            "content_type": [
+                "auth",
+                "user"
+            ]
+        }
+    },
+    {
+        "pk": 16,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_contenttype",
+            "name": "Can add content type",
+            "content_type": [
+                "contenttypes",
+                "contenttype"
+            ]
+        }
+    },
+    {
+        "pk": 17,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_contenttype",
+            "name": "Can change content type",
+            "content_type": [
+                "contenttypes",
+                "contenttype"
+            ]
+        }
+    },
+    {
+        "pk": 18,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_contenttype",
+            "name": "Can delete content type",
+            "content_type": [
+                "contenttypes",
+                "contenttype"
+            ]
+        }
+    },
+    {
+        "pk": 145,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_crontabschedule",
+            "name": "Can add crontab",
+            "content_type": [
+                "djcelery",
+                "crontabschedule"
+            ]
+        }
+    },
+    {
+        "pk": 146,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_crontabschedule",
+            "name": "Can change crontab",
+            "content_type": [
+                "djcelery",
+                "crontabschedule"
+            ]
+        }
+    },
+    {
+        "pk": 147,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_crontabschedule",
+            "name": "Can delete crontab",
+            "content_type": [
+                "djcelery",
+                "crontabschedule"
+            ]
+        }
+    },
+    {
+        "pk": 142,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_intervalschedule",
+            "name": "Can add interval",
+            "content_type": [
+                "djcelery",
+                "intervalschedule"
+            ]
+        }
+    },
+    {
+        "pk": 143,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_intervalschedule",
+            "name": "Can change interval",
+            "content_type": [
+                "djcelery",
+                "intervalschedule"
+            ]
+        }
+    },
+    {
+        "pk": 144,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_intervalschedule",
+            "name": "Can delete interval",
+            "content_type": [
+                "djcelery",
+                "intervalschedule"
+            ]
+        }
+    },
+    {
+        "pk": 151,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_periodictask",
+            "name": "Can add periodic task",
+            "content_type": [
+                "djcelery",
+                "periodictask"
+            ]
+        }
+    },
+    {
+        "pk": 152,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_periodictask",
+            "name": "Can change periodic task",
+            "content_type": [
+                "djcelery",
+                "periodictask"
+            ]
+        }
+    },
+    {
+        "pk": 153,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_periodictask",
+            "name": "Can delete periodic task",
+            "content_type": [
+                "djcelery",
+                "periodictask"
+            ]
+        }
+    },
+    {
+        "pk": 148,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_periodictasks",
+            "name": "Can add periodic tasks",
+            "content_type": [
+                "djcelery",
+                "periodictasks"
+            ]
+        }
+    },
+    {
+        "pk": 149,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_periodictasks",
+            "name": "Can change periodic tasks",
+            "content_type": [
+                "djcelery",
+                "periodictasks"
+            ]
+        }
+    },
+    {
+        "pk": 150,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_periodictasks",
+            "name": "Can delete periodic tasks",
+            "content_type": [
+                "djcelery",
+                "periodictasks"
+            ]
+        }
+    },
+    {
+        "pk": 136,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_taskmeta",
+            "name": "Can add task meta",
+            "content_type": [
+                "djcelery",
+                "taskmeta"
+            ]
+        }
+    },
+    {
+        "pk": 137,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_taskmeta",
+            "name": "Can change task meta",
+            "content_type": [
+                "djcelery",
+                "taskmeta"
+            ]
+        }
+    },
+    {
+        "pk": 138,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_taskmeta",
+            "name": "Can delete task meta",
+            "content_type": [
+                "djcelery",
+                "taskmeta"
+            ]
+        }
+    },
+    {
+        "pk": 139,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_tasksetmeta",
+            "name": "Can add taskset meta",
+            "content_type": [
+                "djcelery",
+                "tasksetmeta"
+            ]
+        }
+    },
+    {
+        "pk": 140,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_tasksetmeta",
+            "name": "Can change taskset meta",
+            "content_type": [
+                "djcelery",
+                "tasksetmeta"
+            ]
+        }
+    },
+    {
+        "pk": 141,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_tasksetmeta",
+            "name": "Can delete taskset meta",
+            "content_type": [
+                "djcelery",
+                "tasksetmeta"
+            ]
+        }
+    },
+    {
+        "pk": 157,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_taskstate",
+            "name": "Can add task",
+            "content_type": [
+                "djcelery",
+                "taskstate"
+            ]
+        }
+    },
+    {
+        "pk": 158,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_taskstate",
+            "name": "Can change task",
+            "content_type": [
+                "djcelery",
+                "taskstate"
+            ]
+        }
+    },
+    {
+        "pk": 159,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_taskstate",
+            "name": "Can delete task",
+            "content_type": [
+                "djcelery",
+                "taskstate"
+            ]
+        }
+    },
+    {
+        "pk": 154,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_workerstate",
+            "name": "Can add worker",
+            "content_type": [
+                "djcelery",
+                "workerstate"
+            ]
+        }
+    },
+    {
+        "pk": 155,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_workerstate",
+            "name": "Can change worker",
+            "content_type": [
+                "djcelery",
+                "workerstate"
+            ]
+        }
+    },
+    {
+        "pk": 156,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_workerstate",
+            "name": "Can delete worker",
+            "content_type": [
+                "djcelery",
+                "workerstate"
+            ]
+        }
+    },
+    {
+        "pk": 133,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_message",
+            "name": "Can add message",
+            "content_type": [
+                "djkombu",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 134,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_message",
+            "name": "Can change message",
+            "content_type": [
+                "djkombu",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 135,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_message",
+            "name": "Can delete message",
+            "content_type": [
+                "djkombu",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 130,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_queue",
+            "name": "Can add queue",
+            "content_type": [
+                "djkombu",
+                "queue"
+            ]
+        }
+    },
+    {
+        "pk": 131,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_queue",
+            "name": "Can change queue",
+            "content_type": [
+                "djkombu",
+                "queue"
+            ]
+        }
+    },
+    {
+        "pk": 132,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_queue",
+            "name": "Can delete queue",
+            "content_type": [
+                "djkombu",
+                "queue"
+            ]
+        }
+    },
+    {
+        "pk": 52,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_analysismetrics",
+            "name": "Can add analysis metrics",
+            "content_type": [
+                "rundb",
+                "analysismetrics"
+            ]
+        }
+    },
+    {
+        "pk": 53,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_analysismetrics",
+            "name": "Can change analysis metrics",
+            "content_type": [
+                "rundb",
+                "analysismetrics"
+            ]
+        }
+    },
+    {
+        "pk": 54,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_analysismetrics",
+            "name": "Can delete analysis metrics",
+            "content_type": [
+                "rundb",
+                "analysismetrics"
+            ]
+        }
+    },
+    {
+        "pk": 187,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_applproduct",
+            "name": "Can add appl product",
+            "content_type": [
+                "rundb",
+                "applproduct"
+            ]
+        }
+    },
+    {
+        "pk": 188,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_applproduct",
+            "name": "Can change appl product",
+            "content_type": [
+                "rundb",
+                "applproduct"
+            ]
+        }
+    },
+    {
+        "pk": 189,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_applproduct",
+            "name": "Can delete appl product",
+            "content_type": [
+                "rundb",
+                "applproduct"
+            ]
+        }
+    },
+    {
+        "pk": 64,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_backup",
+            "name": "Can add backup",
+            "content_type": [
+                "rundb",
+                "backup"
+            ]
+        }
+    },
+    {
+        "pk": 65,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_backup",
+            "name": "Can change backup",
+            "content_type": [
+                "rundb",
+                "backup"
+            ]
+        }
+    },
+    {
+        "pk": 66,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_backup",
+            "name": "Can delete backup",
+            "content_type": [
+                "rundb",
+                "backup"
+            ]
+        }
+    },
+    {
+        "pk": 67,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_backupconfig",
+            "name": "Can add backup config",
+            "content_type": [
+                "rundb",
+                "backupconfig"
+            ]
+        }
+    },
+    {
+        "pk": 68,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_backupconfig",
+            "name": "Can change backup config",
+            "content_type": [
+                "rundb",
+                "backupconfig"
+            ]
+        }
+    },
+    {
+        "pk": 69,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_backupconfig",
+            "name": "Can delete backup config",
+            "content_type": [
+                "rundb",
+                "backupconfig"
+            ]
+        }
+    },
+    {
+        "pk": 70,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_chip",
+            "name": "Can add chip",
+            "content_type": [
+                "rundb",
+                "chip"
+            ]
+        }
+    },
+    {
+        "pk": 71,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_chip",
+            "name": "Can change chip",
+            "content_type": [
+                "rundb",
+                "chip"
+            ]
+        }
+    },
+    {
+        "pk": 72,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_chip",
+            "name": "Can delete chip",
+            "content_type": [
+                "rundb",
+                "chip"
+            ]
+        }
+    },
+    {
+        "pk": 112,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_content",
+            "name": "Can add content",
+            "content_type": [
+                "rundb",
+                "content"
+            ]
+        }
+    },
+    {
+        "pk": 113,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_content",
+            "name": "Can change content",
+            "content_type": [
+                "rundb",
+                "content"
+            ]
+        }
+    },
+    {
+        "pk": 114,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_content",
+            "name": "Can delete content",
+            "content_type": [
+                "rundb",
+                "content"
+            ]
+        }
+    },
+    {
+        "pk": 109,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_contentupload",
+            "name": "Can add content upload",
+            "content_type": [
+                "rundb",
+                "contentupload"
+            ]
+        }
+    },
+    {
+        "pk": 110,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_contentupload",
+            "name": "Can change content upload",
+            "content_type": [
+                "rundb",
+                "contentupload"
+            ]
+        }
+    },
+    {
+        "pk": 111,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_contentupload",
+            "name": "Can delete content upload",
+            "content_type": [
+                "rundb",
+                "contentupload"
+            ]
+        }
+    },
+    {
+        "pk": 49,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_cruncher",
+            "name": "Can add cruncher",
+            "content_type": [
+                "rundb",
+                "cruncher"
+            ]
+        }
+    },
+    {
+        "pk": 50,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_cruncher",
+            "name": "Can change cruncher",
+            "content_type": [
+                "rundb",
+                "cruncher"
+            ]
+        }
+    },
+    {
+        "pk": 51,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_cruncher",
+            "name": "Can delete cruncher",
+            "content_type": [
+                "rundb",
+                "cruncher"
+            ]
+        }
+    },
+    {
+        "pk": 202,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_dm_prune_field",
+            "name": "Can add dm_prune_field",
+            "content_type": [
+                "rundb",
+                "dm_prune_field"
+            ]
+        }
+    },
+    {
+        "pk": 203,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_dm_prune_field",
+            "name": "Can change dm_prune_field",
+            "content_type": [
+                "rundb",
+                "dm_prune_field"
+            ]
+        }
+    },
+    {
+        "pk": 204,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_dm_prune_field",
+            "name": "Can delete dm_prune_field",
+            "content_type": [
+                "rundb",
+                "dm_prune_field"
+            ]
+        }
+    },
+    {
+        "pk": 199,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_dm_prune_group",
+            "name": "Can add dm_prune_group",
+            "content_type": [
+                "rundb",
+                "dm_prune_group"
+            ]
+        }
+    },
+    {
+        "pk": 200,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_dm_prune_group",
+            "name": "Can change dm_prune_group",
+            "content_type": [
+                "rundb",
+                "dm_prune_group"
+            ]
+        }
+    },
+    {
+        "pk": 201,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_dm_prune_group",
+            "name": "Can delete dm_prune_group",
+            "content_type": [
+                "rundb",
+                "dm_prune_group"
+            ]
+        }
+    },
+    {
+        "pk": 196,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_dm_reports",
+            "name": "Can add dm_reports",
+            "content_type": [
+                "rundb",
+                "dm_reports"
+            ]
+        }
+    },
+    {
+        "pk": 197,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_dm_reports",
+            "name": "Can change dm_reports",
+            "content_type": [
+                "rundb",
+                "dm_reports"
+            ]
+        }
+    },
+    {
+        "pk": 198,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_dm_reports",
+            "name": "Can delete dm_reports",
+            "content_type": [
+                "rundb",
+                "dm_reports"
+            ]
+        }
+    },
+    {
+        "pk": 82,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_dnabarcode",
+            "name": "Can add dna barcode",
+            "content_type": [
+                "rundb",
+                "dnabarcode"
+            ]
+        }
+    },
+    {
+        "pk": 83,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_dnabarcode",
+            "name": "Can change dna barcode",
+            "content_type": [
+                "rundb",
+                "dnabarcode"
+            ]
+        }
+    },
+    {
+        "pk": 84,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_dnabarcode",
+            "name": "Can delete dna barcode",
+            "content_type": [
+                "rundb",
+                "dnabarcode"
+            ]
+        }
+    },
+    {
+        "pk": 76,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_emailaddress",
+            "name": "Can add email address",
+            "content_type": [
+                "rundb",
+                "emailaddress"
+            ]
+        }
+    },
+    {
+        "pk": 77,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_emailaddress",
+            "name": "Can change email address",
+            "content_type": [
+                "rundb",
+                "emailaddress"
+            ]
+        }
+    },
+    {
+        "pk": 78,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_emailaddress",
+            "name": "Can delete email address",
+            "content_type": [
+                "rundb",
+                "emailaddress"
+            ]
+        }
+    },
+    {
+        "pk": 205,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_eventlog",
+            "name": "Can add event log",
+            "content_type": [
+                "rundb",
+                "eventlog"
+            ]
+        }
+    },
+    {
+        "pk": 206,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_eventlog",
+            "name": "Can change event log",
+            "content_type": [
+                "rundb",
+                "eventlog"
+            ]
+        }
+    },
+    {
+        "pk": 207,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_eventlog",
+            "name": "Can delete event log",
+            "content_type": [
+                "rundb",
+                "eventlog"
+            ]
+        }
+    },
+    {
+        "pk": 25,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_experiment",
+            "name": "Can add experiment",
+            "content_type": [
+                "rundb",
+                "experiment"
+            ]
+        }
+    },
+    {
+        "pk": 26,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_experiment",
+            "name": "Can change experiment",
+            "content_type": [
+                "rundb",
+                "experiment"
+            ]
+        }
+    },
+    {
+        "pk": 27,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_experiment",
+            "name": "Can delete experiment",
+            "content_type": [
+                "rundb",
+                "experiment"
+            ]
+        }
+    },
+    {
+        "pk": 40,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_fileserver",
+            "name": "Can add file server",
+            "content_type": [
+                "rundb",
+                "fileserver"
+            ]
+        }
+    },
+    {
+        "pk": 41,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_fileserver",
+            "name": "Can change file server",
+            "content_type": [
+                "rundb",
+                "fileserver"
+            ]
+        }
+    },
+    {
+        "pk": 42,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_fileserver",
+            "name": "Can delete file server",
+            "content_type": [
+                "rundb",
+                "fileserver"
+            ]
+        }
+    },
+    {
+        "pk": 73,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_globalconfig",
+            "name": "Can add global config",
+            "content_type": [
+                "rundb",
+                "globalconfig"
+            ]
+        }
+    },
+    {
+        "pk": 74,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_globalconfig",
+            "name": "Can change global config",
+            "content_type": [
+                "rundb",
+                "globalconfig"
+            ]
+        }
+    },
+    {
+        "pk": 75,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_globalconfig",
+            "name": "Can delete global config",
+            "content_type": [
+                "rundb",
+                "globalconfig"
+            ]
+        }
+    },
+    {
+        "pk": 163,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_kitinfo",
+            "name": "Can add kit info",
+            "content_type": [
+                "rundb",
+                "kitinfo"
+            ]
+        }
+    },
+    {
+        "pk": 164,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_kitinfo",
+            "name": "Can change kit info",
+            "content_type": [
+                "rundb",
+                "kitinfo"
+            ]
+        }
+    },
+    {
+        "pk": 165,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_kitinfo",
+            "name": "Can delete kit info",
+            "content_type": [
+                "rundb",
+                "kitinfo"
+            ]
+        }
+    },
+    {
+        "pk": 166,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_kitpart",
+            "name": "Can add kit part",
+            "content_type": [
+                "rundb",
+                "kitpart"
+            ]
+        }
+    },
+    {
+        "pk": 167,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_kitpart",
+            "name": "Can change kit part",
+            "content_type": [
+                "rundb",
+                "kitpart"
+            ]
+        }
+    },
+    {
+        "pk": 168,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_kitpart",
+            "name": "Can delete kit part",
+            "content_type": [
+                "rundb",
+                "kitpart"
+            ]
+        }
+    },
+    {
+        "pk": 55,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_libmetrics",
+            "name": "Can add lib metrics",
+            "content_type": [
+                "rundb",
+                "libmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 56,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_libmetrics",
+            "name": "Can change lib metrics",
+            "content_type": [
+                "rundb",
+                "libmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 57,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_libmetrics",
+            "name": "Can delete lib metrics",
+            "content_type": [
+                "rundb",
+                "libmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 169,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_librarykey",
+            "name": "Can add library key",
+            "content_type": [
+                "rundb",
+                "librarykey"
+            ]
+        }
+    },
+    {
+        "pk": 170,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_librarykey",
+            "name": "Can change library key",
+            "content_type": [
+                "rundb",
+                "librarykey"
+            ]
+        }
+    },
+    {
+        "pk": 171,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_librarykey",
+            "name": "Can delete library key",
+            "content_type": [
+                "rundb",
+                "librarykey"
+            ]
+        }
+    },
+    {
+        "pk": 124,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_librarykit",
+            "name": "Can add library kit",
+            "content_type": [
+                "rundb",
+                "librarykit"
+            ]
+        }
+    },
+    {
+        "pk": 125,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_librarykit",
+            "name": "Can change library kit",
+            "content_type": [
+                "rundb",
+                "librarykit"
+            ]
+        }
+    },
+    {
+        "pk": 126,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_librarykit",
+            "name": "Can delete library kit",
+            "content_type": [
+                "rundb",
+                "librarykit"
+            ]
+        }
+    },
+    {
+        "pk": 34,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_location",
+            "name": "Can add location",
+            "content_type": [
+                "rundb",
+                "location"
+            ]
+        }
+    },
+    {
+        "pk": 35,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_location",
+            "name": "Can change location",
+            "content_type": [
+                "rundb",
+                "location"
+            ]
+        }
+    },
+    {
+        "pk": 36,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_location",
+            "name": "Can delete location",
+            "content_type": [
+                "rundb",
+                "location"
+            ]
+        }
+    },
+    {
+        "pk": 172,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_message",
+            "name": "Can add message",
+            "content_type": [
+                "rundb",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 173,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_message",
+            "name": "Can change message",
+            "content_type": [
+                "rundb",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 174,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_message",
+            "name": "Can delete message",
+            "content_type": [
+                "rundb",
+                "message"
+            ]
+        }
+    },
+    {
+        "pk": 208,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_pemetrics",
+            "name": "Can add pe metrics",
+            "content_type": [
+                "rundb",
+                "pemetrics"
+            ]
+        }
+    },
+    {
+        "pk": 209,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_pemetrics",
+            "name": "Can change pe metrics",
+            "content_type": [
+                "rundb",
+                "pemetrics"
+            ]
+        }
+    },
+    {
+        "pk": 210,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_pemetrics",
+            "name": "Can delete pe metrics",
+            "content_type": [
+                "rundb",
+                "pemetrics"
+            ]
+        }
+    },
+    {
+        "pk": 103,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_plannedexperiment",
+            "name": "Can add planned experiment",
+            "content_type": [
+                "rundb",
+                "plannedexperiment"
+            ]
+        }
+    },
+    {
+        "pk": 104,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_plannedexperiment",
+            "name": "Can change planned experiment",
+            "content_type": [
+                "rundb",
+                "plannedexperiment"
+            ]
+        }
+    },
+    {
+        "pk": 105,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_plannedexperiment",
+            "name": "Can delete planned experiment",
+            "content_type": [
+                "rundb",
+                "plannedexperiment"
+            ]
+        }
+    },
+    {
+        "pk": 193,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_plannedexperimentqc",
+            "name": "Can add planned experiment qc",
+            "content_type": [
+                "rundb",
+                "plannedexperimentqc"
+            ]
+        }
+    },
+    {
+        "pk": 194,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_plannedexperimentqc",
+            "name": "Can change planned experiment qc",
+            "content_type": [
+                "rundb",
+                "plannedexperimentqc"
+            ]
+        }
+    },
+    {
+        "pk": 195,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_plannedexperimentqc",
+            "name": "Can delete planned experiment qc",
+            "content_type": [
+                "rundb",
+                "plannedexperimentqc"
+            ]
+        }
+    },
+    {
+        "pk": 79,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_plugin",
+            "name": "Can add plugin",
+            "content_type": [
+                "rundb",
+                "plugin"
+            ]
+        }
+    },
+    {
+        "pk": 80,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_plugin",
+            "name": "Can change plugin",
+            "content_type": [
+                "rundb",
+                "plugin"
+            ]
+        }
+    },
+    {
+        "pk": 81,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_plugin",
+            "name": "Can delete plugin",
+            "content_type": [
+                "rundb",
+                "plugin"
+            ]
+        }
+    },
+    {
+        "pk": 100,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_pluginresult",
+            "name": "Can add plugin result",
+            "content_type": [
+                "rundb",
+                "pluginresult"
+            ]
+        }
+    },
+    {
+        "pk": 101,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_pluginresult",
+            "name": "Can change plugin result",
+            "content_type": [
+                "rundb",
+                "pluginresult"
+            ]
+        }
+    },
+    {
+        "pk": 102,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_pluginresult",
+            "name": "Can delete plugin result",
+            "content_type": [
+                "rundb",
+                "pluginresult"
+            ]
+        }
+    },
+    {
+        "pk": 184,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_project",
+            "name": "Can add project",
+            "content_type": [
+                "rundb",
+                "project"
+            ]
+        }
+    },
+    {
+        "pk": 185,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_project",
+            "name": "Can change project",
+            "content_type": [
+                "rundb",
+                "project"
+            ]
+        }
+    },
+    {
+        "pk": 186,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_project",
+            "name": "Can delete project",
+            "content_type": [
+                "rundb",
+                "project"
+            ]
+        }
+    },
+    {
+        "pk": 181,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_projecteventlog",
+            "name": "Can add project event log",
+            "content_type": [
+                "rundb",
+                "projecteventlog"
+            ]
+        }
+    },
+    {
+        "pk": 182,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_projecteventlog",
+            "name": "Can change project event log",
+            "content_type": [
+                "rundb",
+                "projecteventlog"
+            ]
+        }
+    },
+    {
+        "pk": 183,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_projecteventlog",
+            "name": "Can delete project event log",
+            "content_type": [
+                "rundb",
+                "projecteventlog"
+            ]
+        }
+    },
+    {
+        "pk": 175,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_projecttag",
+            "name": "Can add project tag",
+            "content_type": [
+                "rundb",
+                "projecttag"
+            ]
+        }
+    },
+    {
+        "pk": 176,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_projecttag",
+            "name": "Can change project tag",
+            "content_type": [
+                "rundb",
+                "projecttag"
+            ]
+        }
+    },
+    {
+        "pk": 177,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_projecttag",
+            "name": "Can delete project tag",
+            "content_type": [
+                "rundb",
+                "projecttag"
+            ]
+        }
+    },
+    {
+        "pk": 178,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_projectuservisibility",
+            "name": "Can add project user visibility",
+            "content_type": [
+                "rundb",
+                "projectuservisibility"
+            ]
+        }
+    },
+    {
+        "pk": 179,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_projectuservisibility",
+            "name": "Can change project user visibility",
+            "content_type": [
+                "rundb",
+                "projectuservisibility"
+            ]
+        }
+    },
+    {
+        "pk": 180,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_projectuservisibility",
+            "name": "Can delete project user visibility",
+            "content_type": [
+                "rundb",
+                "projectuservisibility"
+            ]
+        }
+    },
+    {
+        "pk": 106,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_publisher",
+            "name": "Can add publisher",
+            "content_type": [
+                "rundb",
+                "publisher"
+            ]
+        }
+    },
+    {
+        "pk": 107,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_publisher",
+            "name": "Can change publisher",
+            "content_type": [
+                "rundb",
+                "publisher"
+            ]
+        }
+    },
+    {
+        "pk": 108,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_publisher",
+            "name": "Can delete publisher",
+            "content_type": [
+                "rundb",
+                "publisher"
+            ]
+        }
+    },
+    {
+        "pk": 190,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_qctype",
+            "name": "Can add qc type",
+            "content_type": [
+                "rundb",
+                "qctype"
+            ]
+        }
+    },
+    {
+        "pk": 191,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_qctype",
+            "name": "Can change qc type",
+            "content_type": [
+                "rundb",
+                "qctype"
+            ]
+        }
+    },
+    {
+        "pk": 192,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_qctype",
+            "name": "Can delete qc type",
+            "content_type": [
+                "rundb",
+                "qctype"
+            ]
+        }
+    },
+    {
+        "pk": 58,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_qualitymetrics",
+            "name": "Can add quality metrics",
+            "content_type": [
+                "rundb",
+                "qualitymetrics"
+            ]
+        }
+    },
+    {
+        "pk": 59,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_qualitymetrics",
+            "name": "Can change quality metrics",
+            "content_type": [
+                "rundb",
+                "qualitymetrics"
+            ]
+        }
+    },
+    {
+        "pk": 60,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_qualitymetrics",
+            "name": "Can delete quality metrics",
+            "content_type": [
+                "rundb",
+                "qualitymetrics"
+            ]
+        }
+    },
+    {
+        "pk": 85,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_referencegenome",
+            "name": "Can add reference genome",
+            "content_type": [
+                "rundb",
+                "referencegenome"
+            ]
+        }
+    },
+    {
+        "pk": 86,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_referencegenome",
+            "name": "Can change reference genome",
+            "content_type": [
+                "rundb",
+                "referencegenome"
+            ]
+        }
+    },
+    {
+        "pk": 87,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_referencegenome",
+            "name": "Can delete reference genome",
+            "content_type": [
+                "rundb",
+                "referencegenome"
+            ]
+        }
+    },
+    {
+        "pk": 43,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_reportstorage",
+            "name": "Can add report storage",
+            "content_type": [
+                "rundb",
+                "reportstorage"
+            ]
+        }
+    },
+    {
+        "pk": 44,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_reportstorage",
+            "name": "Can change report storage",
+            "content_type": [
+                "rundb",
+                "reportstorage"
+            ]
+        }
+    },
+    {
+        "pk": 45,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_reportstorage",
+            "name": "Can delete report storage",
+            "content_type": [
+                "rundb",
+                "reportstorage"
+            ]
+        }
+    },
+    {
+        "pk": 28,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_results",
+            "name": "Can add results",
+            "content_type": [
+                "rundb",
+                "results"
+            ]
+        }
+    },
+    {
+        "pk": 29,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_results",
+            "name": "Can change results",
+            "content_type": [
+                "rundb",
+                "results"
+            ]
+        }
+    },
+    {
+        "pk": 30,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_results",
+            "name": "Can delete results",
+            "content_type": [
+                "rundb",
+                "results"
+            ]
+        }
+    },
+    {
+        "pk": 37,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_rig",
+            "name": "Can add rig",
+            "content_type": [
+                "rundb",
+                "rig"
+            ]
+        }
+    },
+    {
+        "pk": 38,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_rig",
+            "name": "Can change rig",
+            "content_type": [
+                "rundb",
+                "rig"
+            ]
+        }
+    },
+    {
+        "pk": 39,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_rig",
+            "name": "Can delete rig",
+            "content_type": [
+                "rundb",
+                "rig"
+            ]
+        }
+    },
+    {
+        "pk": 46,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_runscript",
+            "name": "Can add run script",
+            "content_type": [
+                "rundb",
+                "runscript"
+            ]
+        }
+    },
+    {
+        "pk": 47,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_runscript",
+            "name": "Can change run script",
+            "content_type": [
+                "rundb",
+                "runscript"
+            ]
+        }
+    },
+    {
+        "pk": 48,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_runscript",
+            "name": "Can delete run script",
+            "content_type": [
+                "rundb",
+                "runscript"
+            ]
+        }
+    },
+    {
+        "pk": 94,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_runtype",
+            "name": "Can add run type",
+            "content_type": [
+                "rundb",
+                "runtype"
+            ]
+        }
+    },
+    {
+        "pk": 95,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_runtype",
+            "name": "Can change run type",
+            "content_type": [
+                "rundb",
+                "runtype"
+            ]
+        }
+    },
+    {
+        "pk": 96,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_runtype",
+            "name": "Can delete run type",
+            "content_type": [
+                "rundb",
+                "runtype"
+            ]
+        }
+    },
+    {
+        "pk": 121,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_sequencingkit",
+            "name": "Can add sequencing kit",
+            "content_type": [
+                "rundb",
+                "sequencingkit"
+            ]
+        }
+    },
+    {
+        "pk": 122,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_sequencingkit",
+            "name": "Can change sequencing kit",
+            "content_type": [
+                "rundb",
+                "sequencingkit"
+            ]
+        }
+    },
+    {
+        "pk": 123,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_sequencingkit",
+            "name": "Can delete sequencing kit",
+            "content_type": [
+                "rundb",
+                "sequencingkit"
+            ]
+        }
+    },
+    {
+        "pk": 61,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_template",
+            "name": "Can add template",
+            "content_type": [
+                "rundb",
+                "template"
+            ]
+        }
+    },
+    {
+        "pk": 62,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_template",
+            "name": "Can change template",
+            "content_type": [
+                "rundb",
+                "template"
+            ]
+        }
+    },
+    {
+        "pk": 63,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_template",
+            "name": "Can delete template",
+            "content_type": [
+                "rundb",
+                "template"
+            ]
+        }
+    },
+    {
+        "pk": 31,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_tfmetrics",
+            "name": "Can add tf metrics",
+            "content_type": [
+                "rundb",
+                "tfmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 32,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_tfmetrics",
+            "name": "Can change tf metrics",
+            "content_type": [
+                "rundb",
+                "tfmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 33,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_tfmetrics",
+            "name": "Can delete tf metrics",
+            "content_type": [
+                "rundb",
+                "tfmetrics"
+            ]
+        }
+    },
+    {
+        "pk": 97,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_threeprimeadapter",
+            "name": "Can add three primeadapter",
+            "content_type": [
+                "rundb",
+                "threeprimeadapter"
+            ]
+        }
+    },
+    {
+        "pk": 98,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_threeprimeadapter",
+            "name": "Can change three primeadapter",
+            "content_type": [
+                "rundb",
+                "threeprimeadapter"
+            ]
+        }
+    },
+    {
+        "pk": 99,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_threeprimeadapter",
+            "name": "Can delete three primeadapter",
+            "content_type": [
+                "rundb",
+                "threeprimeadapter"
+            ]
+        }
+    },
+    {
+        "pk": 115,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_usereventlog",
+            "name": "Can add user event log",
+            "content_type": [
+                "rundb",
+                "usereventlog"
+            ]
+        }
+    },
+    {
+        "pk": 116,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_usereventlog",
+            "name": "Can change user event log",
+            "content_type": [
+                "rundb",
+                "usereventlog"
+            ]
+        }
+    },
+    {
+        "pk": 117,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_usereventlog",
+            "name": "Can delete user event log",
+            "content_type": [
+                "rundb",
+                "usereventlog"
+            ]
+        }
+    },
+    {
+        "pk": 118,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_userprofile",
+            "name": "Can add user profile",
+            "content_type": [
+                "rundb",
+                "userprofile"
+            ]
+        }
+    },
+    {
+        "pk": 119,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_userprofile",
+            "name": "Can change user profile",
+            "content_type": [
+                "rundb",
+                "userprofile"
+            ]
+        }
+    },
+    {
+        "pk": 120,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_userprofile",
+            "name": "Can delete user profile",
+            "content_type": [
+                "rundb",
+                "userprofile"
+            ]
+        }
+    },
+    {
+        "pk": 127,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_variantfrequencies",
+            "name": "Can add variant frequencies",
+            "content_type": [
+                "rundb",
+                "variantfrequencies"
+            ]
+        }
+    },
+    {
+        "pk": 128,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_variantfrequencies",
+            "name": "Can change variant frequencies",
+            "content_type": [
+                "rundb",
+                "variantfrequencies"
+            ]
+        }
+    },
+    {
+        "pk": 129,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_variantfrequencies",
+            "name": "Can delete variant frequencies",
+            "content_type": [
+                "rundb",
+                "variantfrequencies"
+            ]
+        }
+    },
+    {
+        "pk": 19,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_session",
+            "name": "Can add session",
+            "content_type": [
+                "sessions",
+                "session"
+            ]
+        }
+    },
+    {
+        "pk": 20,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_session",
+            "name": "Can change session",
+            "content_type": [
+                "sessions",
+                "session"
+            ]
+        }
+    },
+    {
+        "pk": 21,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_session",
+            "name": "Can delete session",
+            "content_type": [
+                "sessions",
+                "session"
+            ]
+        }
+    },
+    {
+        "pk": 22,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_site",
+            "name": "Can add site",
+            "content_type": [
+                "sites",
+                "site"
+            ]
+        }
+    },
+    {
+        "pk": 23,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_site",
+            "name": "Can change site",
+            "content_type": [
+                "sites",
+                "site"
+            ]
+        }
+    },
+    {
+        "pk": 24,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_site",
+            "name": "Can delete site",
+            "content_type": [
+                "sites",
+                "site"
+            ]
+        }
+    },
+    {
+        "pk": 160,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_migrationhistory",
+            "name": "Can add migration history",
+            "content_type": [
+                "south",
+                "migrationhistory"
+            ]
+        }
+    },
+    {
+        "pk": 161,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_migrationhistory",
+            "name": "Can change migration history",
+            "content_type": [
+                "south",
+                "migrationhistory"
+            ]
+        }
+    },
+    {
+        "pk": 162,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_migrationhistory",
+            "name": "Can delete migration history",
+            "content_type": [
+                "south",
+                "migrationhistory"
+            ]
+        }
+    },
+    {
+        "pk": 88,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_apiaccess",
+            "name": "Can add api access",
+            "content_type": [
+                "tastypie",
+                "apiaccess"
+            ]
+        }
+    },
+    {
+        "pk": 89,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_apiaccess",
+            "name": "Can change api access",
+            "content_type": [
+                "tastypie",
+                "apiaccess"
+            ]
+        }
+    },
+    {
+        "pk": 90,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_apiaccess",
+            "name": "Can delete api access",
+            "content_type": [
+                "tastypie",
+                "apiaccess"
+            ]
+        }
+    },
+    {
+        "pk": 91,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "add_apikey",
+            "name": "Can add api key",
+            "content_type": [
+                "tastypie",
+                "apikey"
+            ]
+        }
+    },
+    {
+        "pk": 92,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "change_apikey",
+            "name": "Can change api key",
+            "content_type": [
+                "tastypie",
+                "apikey"
+            ]
+        }
+    },
+    {
+        "pk": 93,
+        "model": "auth.permission",
+        "fields": {
+            "codename": "delete_apikey",
+            "name": "Can delete api key",
+            "content_type": [
+                "tastypie",
+                "apikey"
+            ]
+        }
+    }
+]

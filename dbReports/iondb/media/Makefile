@@ -58,12 +58,23 @@ compile-css:
 	@echo "Compiling and Compressing LESS with Recess...               ${CHECK} Done"
 	@echo "${HR}"
 
+FIND_INSPECTJSFILES = ${shell find $(dir) -type f \( -name '*.js' ! -name '*.min.js' ! -name '*-min.js' \)}
+INSPECTJSDIRS := .
+INSPECTJSFILES := $(foreach dir, $(INSPECTJSDIRS), $(FIND_INSPECTJSFILES))
+
 inspect:
 	@echo "\n${HR}"
 	@echo "Inspecting JS using jshint"
 	@echo "${hr}"
+	for file in $(INSPECTJSFILES); do \
+		jshint --config .jshintrc $$file ;\
+	done
 	@jshint js/data*.js js/monitor*.js --config .jshintrc
 	@jshint resources/scripts/*.js --config .jshintrc
+	@jshint resources/scripts/plan/*.js --config .jshintrc
+	@jshint resources/scripts/data/*.js --config .jshintrc
+	@jshint resources/scripts/monitor/*.js --config .jshintrc
+	find iondb/media/ -type f \( -iname "*.js" ! -iname "*.min.js" ! -iname "*-min.js" \) | xargs jshint --config iondb/media/.jshintrc
 	@echo "\n${hr}"
 	@echo "Running JSHint on javascript...             ${CHECK} Done"
 	@echo "${HR}"
@@ -73,7 +84,7 @@ minify-js: | bulk-minify-js
 	@echo "Minify'ing Torrent Browser Bootstrap JS"
 	@echo "${hr}"
 	@uglifyjs -nc resources/bootstrap/js/bootstrap.js > resources/bootstrap/js/bootstrap.min.tmp.js
-	@echo "/**\n* Bootstrap.js v2.0.4 by @fat & @mdo\n* Copyright 2012 Twitter, Inc.\n* http://www.apache.org/licenses/LICENSE-2.0.txt\n*/" > resources/bootstrap/js/copyright.js
+	@echo "/**\n* Bootstrap.js v2.2.1 by @fat & @mdo\n* Copyright 2012 Twitter, Inc.\n* http://www.apache.org/licenses/LICENSE-2.0.txt\n*/" > resources/bootstrap/js/copyright.js
 	@cat resources/bootstrap/js/copyright.js resources/bootstrap/js/bootstrap.min.tmp.js > resources/bootstrap/js/bootstrap.min.js
 	@rm resources/bootstrap/js/bootstrap.min.tmp.js resources/bootstrap/js/copyright.js
 	@echo "\n${hr}"
@@ -84,13 +95,13 @@ minify-js: | bulk-minify-js
 	@echo "Minify'ing Torrent Browser custom Kendo minified JS file" 
 	@echo "${hr}"
 	@echo "/*\n * Kendo UI Web v2012.1.322 (http://kendoui.com)\n* Copyright 2012 Telerik AD. All rights reserved.\n*\n* Kendo UI Web commercial licenses may be obtained at http://kendoui.com/web-license\n* If you do not own a commercial license, this file shall be governed by the\n* GNU General Public License (GPL) version 3.\n* For GPL requirements, please review: http://www.gnu.org/copyleft/gpl.html\n*/" > resources/scripts/kendo.custom.min.js 
-	@cat resources/kendo/source/js/kendo.core.js \
-		resources/kendo/source/js/kendo.data.js \
-		resources/kendo/source/js/kendo.data.odata.js \
-		resources/kendo/source/js/kendo.pager.js \
-		resources/kendo/source/js/kendo.resizable.js \
-		resources/kendo/source/js/kendo.sortable.js \
-		resources/kendo/source/js/kendo.grid.js > resources/scripts/kendo.custom.js
+	@cat resources/kendo/src/js/kendo.core.js \
+		resources/kendo/src/js/kendo.data.js \
+		resources/kendo/src/js/kendo.data.odata.js \
+		resources/kendo/src/js/kendo.pager.js \
+		resources/kendo/src/js/kendo.resizable.js \
+		resources/kendo/src/js/kendo.sortable.js \
+		resources/kendo/src/js/kendo.grid.js > resources/scripts/kendo.custom.js
 	@uglifyjs -nc resources/scripts/kendo.custom.js >> resources/scripts/kendo.custom.min.js
 	@echo "\n${hr}"
 	@echo "Minify'ing Torrent Browser custom Kendo minified JS file...               ${CHECK} Done"
@@ -104,8 +115,8 @@ minify-js: | bulk-minify-js
 	@echo "Minify'ing random Torrent Browser JS...               ${CHECK} Done"
 	@echo "${HR}"
 
-DIRS:= js resources/scripts resources/Bootstrap-Scroll-Modal resources/uni-form/js
-FIND_FILES = ${shell find $(dir) -maxdepth 1 -type f \( -name '*.js' ! -name '*.min.js' \)}
+DIRS:= js resources/scripts resources/bootstrap-modal/js resources/uni-form/js
+FIND_FILES = ${shell find $(dir) -maxdepth 1 -type f \( -name '*.js' ! -name '*.min.js' ! -name '*-min.js' \)}
 JSFILES := $(foreach dir, $(DIRS), $(FIND_FILES))
 
 bulk-minify-js:

@@ -1,0 +1,140 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Changelog for Kendo UI v2012.3.1114</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font: .75em/1.5 Tahoma, sans-serif;
+        }
+
+        h2 {
+            margin: 1em 0 .3em;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: .2em;
+        }
+
+        #page {
+            width: 50em;
+            margin: 0 auto 2em;
+            border-radius: 0 0 1em 1em;
+            box-shadow: 0 0 10px #ccc;
+            padding: 1em 2em 2em;
+        }
+    </style>
+</head>
+<body>
+    <div id="page">
+        <h1>Release notes for Kendo UI v2012.3.1114</h1>
+        <h2>Framework</h2>
+
+        <h4>What's new</h4><ul><li>Add sync event</li><li>Readonly binding</li><li>Readonly inputs should not be validated</li><li>Add support for parsing a value as Date/Number object when Globalize.js is included</li></ul>
+        <h4>What's fixed</h4><ul><li>Add leading zeros to the 'year' if required</li><li>Destroying a DropTarget widget leaks memory through element references</li><li>MVVM raises change event incorrectly when set same value to a property</li><li>Sync after remove does not trigger change event with LocalTransport</li><li>Widgets with popup leak some memory after destroy</li><li>get method does not find child items with custom id field</li><li>Sorting on nullable string or numbers  does not work as expected</li><li>Date are not sort correctly if nulls and dates earlier than 1970 are present</li><li>Step with more than two decimal places does not work as expected</li></ul>
+
+
+        <h2>Web</h2>
+
+        <h4>What's new</h4><ul><li>parseDate returns null if the entered year differs than the format</li><li>Add support for more than three "f" (fraction of the second) specifiers in the time format</li></ul>
+        <h4>What's fixed</h4><ul><li>kendo.parseDate parses incorrectly  0001-01-01 date</li><li>Drag &amp; Drop does not work on touch enabled desktop Chrome</li><li>Nexus 7 not detected as a tablet</li></ul>
+
+
+        <h3>AutoComplete</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>AutoComplete raise change event when the value is set with value() method</li><li>Widget does not persist width of the popup element</li><li>AutoComplete throws an error when call destroy method</li></ul>
+
+        <h3>Calendar</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>Widget renders incorrectly last day of the month if DST occurs</li><li>Calendar renders two equal days in Brazil timezone (DST issue)</li></ul>
+
+        <h3>ComboBox</h3>
+
+        <h4>What's new</h4><ul><li>Clear selection of the child widget if no data</li></ul>
+        <h4>What's fixed</h4><ul><li>ComboBox does not select item after re-bind if the dataSource was filtered with the API</li><li>DropDownList gets hidden if initialized twice</li><li>ComboBox does not persist the custom value on refresh</li><li>ComboBox reverts entered value if filter is not enabled</li><li>Widget does not persist width of the popup element</li><li>Empty ComboBox does not select first highlighted item on key DOWN</li></ul>
+
+        <h3>DatePicker</h3>
+
+        <h4>What's new</h4><ul><li>Widget updates calendar's selection when input value changes before opening</li></ul>
+        <h4>What's fixed</h4><ul><li>Widget renders incorrectly last day of the month if DST occurs</li><li>Widget does not work when inialized after MVVM binding</li><li>Calendar renders two equal days in Brazil timezone (DST issue)</li></ul>
+
+        <h3>DateTimePicker</h3>
+
+        <h4>What's new</h4><ul><li>Widget rebinds TimeView using options.dates when the selected is part of the dates array.</li><li>Widget updates calendar's selection when input value changes before opening</li></ul>
+        <h4>What's fixed</h4><ul><li>Widget renders incorrectly last day of the month if DST occurs</li><li>Widget does not work when inialized after MVVM binding</li><li>Calendar renders two equal days in Brazil timezone (DST issue)</li><li>DateTimePicker does not wire the clock icon after destroy and initialization</li></ul>
+
+        <h3>DropDownList</h3>
+
+        <h4>What's new</h4><ul><li>Clear selection of the child widget if no data</li></ul>
+        <h4>What's fixed</h4><ul><li>DropDownList cannot be bound to empty array</li><li>DropDownList gets hidden if initialized twice</li><li>Widget raises focusout event infinitely</li><li>Widget does not persist width of the popup element</li><li>DropDownLists closes on click if it is still focused</li></ul>
+
+        <h3>Editor</h3>
+
+        <h4>What's new</h4><ul><li>Image dialog localization support</li><li>Introduce keyup and keydown events</li></ul>
+        <h4>What's fixed</h4><ul><li>Serialization is broken for inline styles which contain absolute URLs</li><li>Updating the editor value through the viewHtml dialog does not trigger a change event</li><li>Selection is lost when using asynchronous toolbar buttons on a MVVM-bound editor</li><li>Ordered lists at end of document show numbers as zeroes in IE9</li><li>Editor is not focused by clicking below content in IE</li></ul>
+
+        <h3>Grid</h3>
+
+        <h4>What's new</h4><ul><li>Support for binding by name of radio button elements when set as custom editor</li></ul>
+        <h4>What's fixed</h4><ul><li>Foreign key column values cannot contain apostrophe</li><li>Grid column resizing does not work if browser window is scrolled horizontally</li><li>Grid table layout does not readjust when hiding a column in IE8</li><li>Additional values are displayed in columns context menu when viewed in IE8</li><li>Columns cannot be resized after a previous one is hidden in IE8</li><li>Filtering with "endswith" sometimes returns wrong results.</li><li>Grouping with column reordering does not work if columns are not specifed</li><li>Destroy fails when scrolling is disabled</li><li>Cell cannot be switched to edit mode if the previous one contains a table and batch mode is enabled</li><li>Data is in incorrect order when grouped on a field with same date value and sorted by another.</li></ul>
+
+        <h3>ListView</h3>
+
+        <h4>What's new</h4><ul><li>Improve ListView keyboard navigation</li></ul>
+        <h4>What's fixed</h4><ul><li>Fix ListView item does not set uid attribute when model field change</li></ul>
+
+        <h3>Menu</h3>
+
+        <h4>What's new</h4><ul><li>Add Menu keyboard navigation</li></ul>
+        <h4>What's fixed</h4><ul><li>Root-level links do not get color from k-state-highlighted user rule</li><li>Menu doesn't work in desktop browser with both touch and mouse events</li><li>Widget doesn't work in IE10 Metro.</li></ul>
+
+        <h3>NumericTextBox</h3>
+
+        <h4>What's new</h4><ul><li>NumericTextBox widget allows entering of digits with pressed Shift key</li><li>NumericTextBox copies class names from the input element to the wrapper</li></ul>
+        <h4>What's fixed</h4><ul><li>NumericTextBox requires two presses to focus in mobile device</li></ul>
+
+        <h3>Slider</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>Slider track is invisible in some skins</li></ul>
+
+        <h3>Splitter</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>Adjacent panes are selected when resizing (jQuery 1.8.2)</li><li>Initially collapsed resizable panes cannot be resized after they are expanded</li></ul>
+
+        <h3>TabStrip</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>TabStrip select() method does not work correctly when nesting TabStrips</li></ul>
+
+        <h3>TimePicker</h3>
+
+        
+        <h4>What's fixed</h4><ul><li>Widget does not work when inialized after MVVM binding</li></ul>
+
+        <h3>TreeView</h3>
+
+        <h4>What's new</h4><ul><li>checkboxes.name allows rendering of name attribute on each checkbox</li><li>Allow MVVM binding through kendo.observableHierarchy</li><li>Honor checked field when rendering checkboxes</li></ul>
+        <h4>What's fixed</h4><ul><li>Specifying Checkboxes(false) renders checkboxes</li><li>Changing spriteCssClass and imageUrl fields does not update rendered item</li><li>text() method removes sprites and images from nodes</li><li>Checkboxes cannot be enabled through data-checkboxes</li><li>Double-clicking disabled items expands them</li><li>Drop event does not report proper dropTarget on touch devices</li><li>Child items overlay other items after drag&amp;drop</li></ul>
+
+        <h3>Upload</h3>
+
+        <h4>What's new</h4><ul><li>Add async.batch option</li></ul>
+        
+
+        <h3>Window</h3>
+
+        <h4>What's new</h4><ul><li>Title text gets trimmed with ellipsis</li></ul>
+        
+
+    </div>
+</body>
+</html>

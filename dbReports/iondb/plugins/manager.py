@@ -50,8 +50,8 @@ class PluginManager(object):
     def __init__(self, gc=None):
         if not gc:
             try:
-                gc = iondb.rundb.models.GlobalConfig.objects.all().order_by('pk')
-                default_plugin_script = gc[0].default_plugin_script
+                gc = iondb.rundb.models.GlobalConfig.objects.all().order_by('pk')[0]
+                default_plugin_script = gc.default_plugin_script
             except:
                 default_plugin_script = "launch.sh"
         else:
@@ -59,8 +59,6 @@ class PluginManager(object):
 
         self.default_plugin_script = default_plugin_script
         self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or os.path.join("/results", gc.plugin_folder))
-        self.infocache = {}
-
 
     def rescan(self):
         """ Convenience function to purge missing and find new plugins. Logs info message"""
@@ -119,20 +117,28 @@ class PluginManager(object):
             logger.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
         return (pluginscript, islaunch)
 
-    def get_plugininfo(self, pluginname, pluginscript, context=None, use_cache=True):
+    def get_plugininfo(self, pluginname, pluginscript, context=None, use_cache=True, gettimeout=60):
         """
         Query plugin script for a block of json info.
         Delegated to celery task to isolate python plugins from web server python instance.
+
+        NB: This gettimeout is longer than the default for get_plugininfo_list, because we explicitly asked for data from this plugin with use_cache=False.
+        How long to wait is up to caller. gettimeout=None = wait indefinitely for response.
         """
         if not pluginscript:
             return None
-        if use_cache and (pluginscript in self.infocache):
-            return self.infocache[pluginscript]
 
-        # Else, we need to requery plugin for info
         pluginlist = [ (pluginname, pluginscript, context) ]
+
+        if use_cache and context and 'plugin' in context:
+            # Fire off a background task without waiting for it. It'll at least update for next time.
+            infonext = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[pluginlist],timeout=300) ## no get
+            # But return current content immediately.
+            return context['plugin'].info()
+
+        # Else, we need to requery plugin for info, and wait for it.
         try:
-            info = self.get_plugininfo_list(pluginlist, use_cache=False)
+            info = self.get_plugininfo_list(pluginlist, gettimeout=gettimeout)
             pinfo = info.get(pluginscript, None)
             return pinfo
         except:
@@ -140,27 +146,13 @@ class PluginManager(object):
             return None
 
 
-    def get_plugininfo_list(self, pluginlist, use_cache=True):
-        if use_cache:
-            # Only submit query for plugins we don't have data for
-            updatelist = [(p,s,c) for (p,s,c) in pluginlist if s not in self.infocache or self.infocache[s] is None]
-        else:
-            updatelist = pluginlist
-
+    def get_plugininfo_list(self, updatelist, gettimeout=29):
         info = {}
         if updatelist:
             try:
-                info = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[updatelist]).get(20)
-                # Update cache
-                self.infocache.update(info)
+                info = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[updatelist],timeout=300).get(gettimeout)
             except celery.exceptions.TimeoutError:
                 logger.info("Plugin info query timed out: %s", updatelist, exc_info=True)
-        ## Alternate behavior - Do not cache negative entries
-        #self.infocache.update((k, v) for k,v in info.iteritems() if v is not None)
-
-        # Fill remaining requested items from cache
-        if use_cache:
-            info.update(dict((s,self.infocache[s]) for (p,s,c) in pluginlist if (s not in info) and (s in self.infocache)))
         return info
 
 
@@ -235,8 +227,9 @@ class PluginManager(object):
 
         ## Pre-scan plugins - one big celery task rather than many small ones
         pluginlist = [ (n,s,None) for n,p,s in folder_list ]
+        infocache = {}
         try:
-            self.get_plugininfo_list(pluginlist, use_cache=False)
+            infocache = self.get_plugininfo_list(pluginlist, gettimeout=120) ## longer than usual wait for install.
         except:
             logger.exception("Failed to rescan plugin info in background task")
 
@@ -244,13 +237,21 @@ class PluginManager(object):
         for pname, full_path, plugin_script in folder_list:
             # Do early check to see if plugin script is valid
             # - cannot install without name and version.
-            info = self.get_plugininfo(pname, plugin_script)
+            info = infocache.get(plugin_script)
             if not info:
                 continue
 
+            if 'version' not in info:
+                # Cannot install versionless plugin
+                continue
+
+            # Quick skip of already installed plugins
+            #if iondb.rundb.models.Plugin.objects.filter(pname=pname, version=info.get('version'), active=True).exists():
+            #    continue
+
             # For now, install handles "reinstall" or "refresh" cases.
             try:
-                (newplugin, updated) = self.install(pname, full_path, plugin_script)
+                (newplugin, updated) = self.install(pname, full_path, plugin_script, info)
             except ValueError:
                 logger.exception("Plugin not installable due to error querying name and version '%s'", full_path)
             if updated:
@@ -258,7 +259,7 @@ class PluginManager(object):
         return count
 
 
-    def install(self, pname, full_path, launch_script=None):
+    def install(self, pname, full_path, launch_script=None, info=None):
         """Install (or upgrade) a plugin given a src path.
 
         Safe to use for already installed plugins, with these cautions:
@@ -282,7 +283,9 @@ class PluginManager(object):
         if not launch_script:
             (launch_script, isLaunch) = self.find_pluginscript(full_path, pname)
 
-        info = self.get_plugininfo(pname, launch_script)
+        if not info:
+            # Worst case, should have been pre-fetched above
+            info = self.get_plugininfo(pname, launch_script, use_cache=False, gettimeout=300)
         if info is None:
             raise ValueError("No plugininfo for '%s' in '%s'" % (pname,launch_script))
         version = info.get('version',"0")
@@ -296,6 +299,8 @@ class PluginManager(object):
             'active':True, # auto activate new versions
             'selected': True, # Auto enable new plugins
             'majorBlock': majorBlock,
+            'description': info.get('docs', None),
+            'userinputfields': info.get('config', None),
         }
 
         # needs_save is aka created. Tracks if anything changed.
@@ -312,10 +317,18 @@ class PluginManager(object):
                 logger.info("Loaded new pluginconfig.json values for Plugin %s v%s at '%s'", pname, version, full_path)
             if self.get_pluginsettings(p):
                 logger.info("Loaded new pluginsettings.json values for Plugin %s v%s at '%s'", pname, version, full_path)
+            else:
+                # In the absence of pluginsettings.json, use inspected values
+                pluginsettings = {
+                    'features': info.get('features', []),
+                    'runtype': info.get('runtypes', []),
+                    'runlevel': info.get('runlevels', []),
+                }
+                p.addSettings(pluginsettings)
 
 
         # Handle any upgrade behaviors - deactivating old versions, etc.
-        (count, oldp) = self.upgrade_helper(p)
+        (count, oldp) = self.upgrade_helper(p, current_path=full_path)
 
         # Preserve old selected/autorun state
         if count and oldp:
@@ -387,10 +400,18 @@ class PluginManager(object):
 
         if needs_save:
             p.save()
+
+            # Rescan info - userinput can reference plugin config
+            info = p.info()
+            userinputfields = info.get('config', None)
+            if userinputfields:
+                p.userinputfields = userinputfields
+                p.save()
+
         # Return true if anything changed. Always return plugin object
         return (p, needs_save)
 
-    def upgrade_helper(self, plugin):
+    def upgrade_helper(self, plugin, current_path=None):
         # TODO: Rename this method to be _upgrade_helper
         """ Handle additional tasks during upgrade of plugin.
             Currently deactivates old versions of plugins to avoid version conflicts.
@@ -399,7 +420,6 @@ class PluginManager(object):
         # Some behavior here is just to disable old versions during upgrade.
         count = 0
         oldplugin = None
-        # Upgrade - old plugins must be disabled until multiversion support is implemented
 
         # Get all plugins with the same name and different version
         for oldp in iondb.rundb.models.Plugin.objects.filter(name=plugin.name).exclude(version=plugin.version):
@@ -407,12 +427,14 @@ class PluginManager(object):
             if oldp.active or oldp.path:
                 logger.info("Disabling old version of plugin %s v%s", oldp.name, oldp.version)
                 count+=1
+            else:
+                continue
 
             # Plugins other than our version are disabled
 
             # Uninstall - Allows manual install of plugin previously installed via zeroinstall
             # Careful not to delete new path if installed in-place!!!
-            current_path = plugin.path
+            current_path = current_path or plugin.path
             if oldp.path and oldp.path != current_path:
                 self.uninstall(oldp)
             else:

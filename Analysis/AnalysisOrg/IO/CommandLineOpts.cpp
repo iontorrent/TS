@@ -89,20 +89,11 @@ CommandLineOpts::CommandLineOpts ( int argc, char *argv[] )
 
 }
 
-
-
-
-
-
-
-
 CommandLineOpts::~CommandLineOpts()
 {
   //Destructor
 
 }
-
-
 
 /*
  *  Use getopts to parse command line
@@ -164,6 +155,8 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"beadfind-basis",          required_argument,  NULL,               0},
     {"beadfind-dat",            required_argument,  NULL,               0},
     {"beadfind-bgdat",          required_argument,  NULL,               0},
+    {"beadfind-sdasbf",          required_argument,  NULL,               0},
+    {"beadfind-bfmult",          required_argument,  NULL,               0},
     {"beadfind-minlive",        required_argument,  NULL,               0},
     {"beadfind-minlivesnr",     required_argument,  NULL,               0},
     {"beadfind-min-lib-snr",    required_argument,  NULL,               0},
@@ -178,11 +171,13 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"beadfind-diagnostics",    required_argument,  NULL,               0},
     {"beadfind-num-threads",    required_argument,  NULL,               0},
     {"beadfind-sep-ref",    required_argument,  NULL,               0},
+    {"beadfind-gain-correction",    required_argument,  NULL,               0},
     {"bead-washout",            no_argument,    NULL,       0},
     {"use-beadmask",      required_argument,  NULL,       0},
     {"bkg-use-duds",  required_argument, NULL, 0},
     {"cfiedr-regions-size", required_argument, NULL, 0},
     {"block-size", required_argument, NULL, 0},
+
 
 //---------------signal processing options
     {"readaheadDat",            required_argument,  NULL,             0},
@@ -201,6 +196,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"region-list",    required_argument,    NULL,   0},
     {"bkg-debug-param",     required_argument,    NULL,   0},
     {"debug-all-beads",         no_argument,    &bkg_control.debug_bead_only,              0}, // turn off what is turned on
+    {"region-vfrc-debug",         no_argument,    &bkg_control.region_vfrc_debug,              1}, 
     {"bkg-h5-debug",           required_argument,  NULL,               0},
     {"n-unfiltered-lib",        required_argument,        &bkg_control.unfiltered_library_random_sample,    1},
     {"bkg-dbg-trace",           required_argument,  NULL,               0},
@@ -266,6 +262,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"flowtimeoffset",          required_argument,  NULL,               0},
     {"hilowfilter",             required_argument,  NULL,       0},
     {"total-timeout",           required_argument,  NULL,       0},
+    {"threaded-file-access",    no_argument,  NULL,       0},
 
 
 
@@ -414,7 +411,7 @@ void CommandLineOpts::SetUpProcessing()
   printf ( "Image gain correction enabled       : %s\n",img_control.gain_correct_images ? "yes" : "no" );
   printf ( "Col flicker correction enabled      : %s\n",img_control.col_flicker_correct ? "yes" : "no" );
   printf ( "timeout                             : %d\n",img_control.total_timeout);
-
+  printf ( "Threaded file access for signal processsing : %s\n",img_control.threaded_file_access ? "yes" : "no" );
 }
 
 void CommandLineOpts::SetSysContextLocations ()
@@ -846,6 +843,14 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
   {
     bfd_control.bfBgDat = optarg;
   }
+  if ( strcmp ( original_name, "beadfind-sdasbf" ) == 0 )
+  {
+    bfd_control.sdAsBf = atoi(optarg);
+  }
+  if ( strcmp ( original_name, "beadfind-bfmult" ) == 0 )
+  {
+    bfd_control.bfMult = atof(optarg);
+  }
   if ( strcmp ( original_name, "beadfind-minlive" ) == 0 )
   {
     bfd_control.bfMinLiveRatio = atof ( optarg );
@@ -910,6 +915,10 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
   if ( strcmp ( original_name, "bead-washout" ) == 0 )
   {
     bfd_control.SINGLEBF = false;
+  }
+  if ( strcmp ( original_name, "beadfind-gain-correction" ) == 0 )
+  {
+    bfd_control.gainCorrection = atoi( optarg );
   }
   if ( strcmp ( original_name, "beadfind-num-threads" ) == 0 )
   {
@@ -1685,5 +1694,9 @@ void CommandLineOpts::SetAnyLongImageProcessingOption ( char *lOption, const cha
   if ( strcmp ( lOption, "total-timeout" ) == 0 )
   {
     img_control.total_timeout = atoi ( optarg );
+  }
+  if ( strcmp ( lOption, "threaded-file-access" ) == 0 )
+  {
+    img_control.threaded_file_access = 1;
   }
 }

@@ -51,6 +51,7 @@ class PluginInfo(object):
         self.docs = ""
         self.major_block = ""
         #self.description = ""
+        self.pluginorm = None
         if infojson:
             try:
                 self.parse(infojson)
@@ -80,20 +81,25 @@ class PluginInfo(object):
     def __repr__(self):
         return json.dumps(self.todict(), indent=2)
 
+    # Set attributes of PluginInfo from an instance of an IonPlugin class
+    def load_instance(self, plugin):
+        try:
+            self.config = plugin.getUserInput()
+        except:
+            _logger.exception("Failed to query plugin for getUserInput")
+
+        for a in ('runtypes', 'features', 'allow_autorun', 'major_block'):
+            v = getattr(plugin, a, None)
+            if v:
+                setattr(self, a, v)
+
+        self.docs = getattr(plugin, '__doc__', "")
+        return self
+
+    # Helper method for getting from an instance to a PluginInfo
     @staticmethod
     def from_instance(plugin):
-        info = {
-            'runtypes': plugin.runtypes,
-            'features': plugin.features,
-            'config': plugin.getUserInput(),
-            'allow_autorun': plugin.allow_autorun,
-            'docs': plugin.__doc__,
-            'major_block' : plugin.major_block,
-        }
-        # Version, name, etc.
-        info.update(plugin._metadata())
-
-        return PluginInfo(info)
+        return PluginInfo(plugin._metadata()).load_instance(plugin)
 
     @classmethod
     def from_launch(cls, plugin, launch):

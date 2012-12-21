@@ -49,20 +49,21 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
 
     H5File beadParam;
     beadParam.SetFile(beadParamFile);
-    beadParam.Open();
+    //beadParam.Open();
+    beadParam.OpenForReading();
     H5DataSet *resErrDS = beadParam.OpenDataSet("/bead/res_error");
     H5DataSet *ampMulDS = beadParam.OpenDataSet("bead/ampl_multiplier");
     H5DataSet *krateMulDS = beadParam.OpenDataSet("bead/k_rate_multiplier");
     H5DataSet *beadInitDS = beadParam.OpenDataSet("bead/bead_init_param");
     H5DataSet *beadDCDS = beadParam.OpenDataSet("bead/fg_bead_DC");
-   
+    
     //float  tresErr[nCol * nRow * nFlow];
     float *tresErr;
     float *tamplMul;
     float *tkrateMul;
     float *tbeadInit;
     float *tbeadDC;
-
+   
     tresErr = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
     tamplMul = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
     tkrateMul = (float *) malloc ( sizeof(float) * nCol * nRow * nFlow);
@@ -74,16 +75,16 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
     starts[0] = minCol;
     starts[1] = minRow;
     starts[2] = minFlow;
-    ends[0] = maxCol;
-    ends[1] = maxRow;
-    ends[2] = maxFlow;
+    ends[0] = maxCol+1;
+    ends[1] = maxRow+1;
+    ends[2] = maxFlow+1;
     resErrDS->ReadRangeData(starts, ends, sizeof(tresErr),tresErr);
     ampMulDS->ReadRangeData(starts, ends, sizeof(tamplMul),tamplMul);
     krateMulDS->ReadRangeData(starts, ends, sizeof(tkrateMul),tkrateMul);
     beadDCDS->ReadRangeData(starts, ends, sizeof(tbeadDC),tbeadDC);
 
     starts[2] = 0;
-    ends[2] = 3;
+    ends[2] = 4;
     beadInitDS->ReadRangeData(starts,ends,sizeof(tbeadInit),tbeadInit);
     beadParam.Close();
 

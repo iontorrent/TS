@@ -66,6 +66,7 @@ class BkgModelControlOpts{
     int bkgDebugParam;
     // temporary: dump debugging information for all beads, not just one
     int debug_bead_only;
+    int region_vfrc_debug; // dump a sample region as text file for debugging.
     // commandline options for GPU for background model computation
     float gpuWorkLoad;
     int gpuMultiFlowFit;

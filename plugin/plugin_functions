@@ -182,7 +182,7 @@ makeVarsFromJson()
                 #convert to uppercase
                 var_name=$(echo ${var_name^^}|sed 's:/:__:g')
                 #echo $var_name[$index]=$var_val
-                eval $var_name[$index]="$var_val"
+                eval $var_name[$index]=\""$var_val"\"
                 export ${var_name}
             else
                 #convert slashes to double underscore
@@ -327,25 +327,15 @@ define_local_vars ()
         export TSP_URLPATH_GENOME_FASTA="/output/${fastaweb}"
     fi
 
-    export TSP_FILEPATH_FASTQ=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.fastq
-    export TSP_FILEPATH_FASTQ_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.fastq.zip
-    export TSP_URLPATH_FASTQ=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.fastq
-    export TSP_URLPATH_FASTQ_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.fastq.zip
+    export TSP_FILEPATH_UNMAPPED_BAM=${BASECALLER_DIR}/rawlib.basecaller.bam
+    export TSP_FILEPATH_UNMAPPED_TF_BAM=${BASECALLER_DIR}/rawtf.basecaller.bam
+    export TSP_URLPATH_UNMAPPED_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.rawlib.basecaller.bam
+    export TSP_URLPATH_UNMAPPED_TF_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.rawtf.basecaller.bam
 
-    export TSP_FILEPATH_SFF=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.sff
-    export TSP_FILEPATH_SFF_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.sff.zip
-    export TSP_URLPATH_SFF=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.sff
-    export TSP_URLPATH_SFF_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.sff.zip
-
-    export TSP_FILEPATH_TF_SFF=${BASECALLER_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.tf.sff
-    export TSP_FILEPATH_TF_SFF_ZIP=${TSP_FILEPATH_OUTPUT_STEM}.tf.sff.zip
-    export TSP_URLPATH_TF_SFF=${URL_ROOT}/${BASECALLER_REPORT}/${TSP_URLPATH_OUTPUT_STEM}.tf.sff
-    export TSP_URLPATH_TF_SFF_ZIP=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.tf.sff.zip
-
-    export TSP_FILEPATH_BAM=${ALIGNMENT_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.bam
-    export TSP_FILEPATH_BAI=${ALIGNMENT_DIR}/${TSP_FILEPATH_OUTPUT_STEM}.bam.bai
-    export TSP_URLPATH_BAM=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.bam
-    export TSP_URLPATH_BAI=${URL_ROOT}/${TSP_URLPATH_OUTPUT_STEM}.bam.bai
+    export TSP_FILEPATH_BAM=${ALIGNMENT_DIR}/rawlib.bam
+    export TSP_FILEPATH_BAI=${ALIGNMENT_DIR}/rawlib.bam.bai
+    export TSP_URLPATH_BAM=${URL_ROOT}/download_links/${TSP_URLPATH_OUTPUT_STEM}.bam
+    export TSP_URLPATH_BAI=${URL_ROOT}/download_links/${TSP_URLPATH_OUTPUT_STEM}.bam.bai
 
     export TSP_FILEPATH_PLUGIN_DIR=${RESULTS_DIR}
     export TSP_URLPATH_PLUGIN_DIR=${URL_ROOT}/plugin_out/${PLUGINNAME}_out

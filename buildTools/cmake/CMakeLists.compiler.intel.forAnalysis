@@ -18,6 +18,9 @@ mark_as_advanced(ION_USE_SYSTEM_CUDA)
 option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 
+option(ION_USE_SYSTEM_SAMTOOLS "Use bamtools system libraries" OFF)
+mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
+
 option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_FFTW)
 
@@ -32,6 +35,9 @@ mark_as_advanced(ION_USE_SYSTEM_BOOST)
 
 option(ION_USE_SYSTEM_UNWIND "Use unwind system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_UNWIND)
+
+option(ION_BUILD_STRAND_BIAS "Build samita and Strand_Bias_Extractor" OFF)
+mark_as_advanced(ION_BUILD_STRAND_BIAS)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(ION_DO_BACKGROUND OFF CACHE BOOL "Build with background model")
@@ -50,7 +56,7 @@ endif()
 include(../buildTools/cmake/CMakeLists.version.txt)
 #set(CMAKE_BUILD_TYPE Debug)
 if(ICC)
-#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Debug)
   include(../buildTools/cmake/CMakeLists.compiler.intel.txt)
 else()
   include(../buildTools/cmake/CMakeLists.compiler.txt)
@@ -71,24 +77,8 @@ if(USE_MKL)
   message(STATUS "Using Intel MKL")
 endif()
 
-#custom ExternalProject_add with timeout feature
-IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.1)
-  SET(CMAKE_MODULE_PATH
-    ${CMAKE_MODULE_PATH}
-    ${CMAKE_CURRENT_SOURCE_DIR}/CMake
-  )
-ENDIF ()
-include(ExternalProject)
-
-if(ION_USE_CUDA)
-  message(STATUS "BUILD with CUDA")
-  add_definitions(-DION_COMPILE_CUDA)
-endif()
-
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
-
-set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
 
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
@@ -102,63 +92,21 @@ configure_file (
     "${PROJECT_BINARY_DIR}/debian/prerm" @ONLY
 )
 
-set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
-#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
-
-find_program(LSB_RELEASE_COMMAND lsb_release)
-if(LSB_RELEASE_COMMAND)
-    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
-        OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
-    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
-endif(LSB_RELEASE_COMMAND) 
-
 if(ION_USE_CUDA)
+    message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+    add_definitions(-DION_COMPILE_CUDA)
     if (NOT ION_USE_SYSTEM_CUDA)
 
-        set(proj_name "cudatoolkit")
-        if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
-            set(proj_version "4.2.9-11.04")
-            set(cuda_tar_file "cudatoolkit_4.2.9_linux_64_ubuntu11.04.tar.gz")
-            set(CUDA_VERSION "4.2")
-        else()
-            set(proj_version "4.0.0RC")
-            set(cuda_tar_file "cudatoolkit-4.0.0RC.tar.gz")
-            set(CUDA_VERSION "4.0")
-        endif()
-        set(proj_name_version "${proj_name}-${proj_version}")
-
-        set(CUDA_TOOLKIT_ROOT_DIR "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/")
-        set(CUDA_INCLUDE_DIRS "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/include")
-        set(CUDA_NVCC_EXECUTABLE "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/bin/nvcc")
-        set(CUDA_CUDART_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcudart.so")
-        set(CUDA_TOOLKIT_INCLUDE "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/include")
-        set(CUDA_cublas_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcublas.so")
-        set(CUDA_cufft_LIBRARY "${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64/libcufft.so")
+        set(CUDA_TOOLKIT_ROOT_DIR "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/")
+        set(CUDA_INCLUDE_DIRS "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/include")
+        set(CUDA_NVCC_EXECUTABLE "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/bin/nvcc")
+        set(CUDA_CUDART_LIBRARY "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib64/libcudart.so")
+        set(CUDA_TOOLKIT_INCLUDE "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/include")
+        set(CUDA_cublas_LIBRARY "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib64/libcublas.so")
+        set(CUDA_cufft_LIBRARY "${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib64/libcufft.so")
         set(CUDA_VERBOSE_BUILD OFF)
         set(CUDA_64_BIT_DEVICE_CODE ON)
         include(${CMAKE_ROOT}/Modules/FindCUDA.cmake)
-
-        # wget http://developer.download.nvidia.com/compute/cuda/4_2/rel/toolkit/cudatoolkit_4.2.9_linux_64_ubuntu11.04.run
-        # MYCUDASDK=cudatoolkit_4.2.9_linux_64_ubuntu11.04
-        # bash $MYCUDASDK.run --nox11 --noexec --target $MYCUDASDK
-        # GZIP=--best tar czf $MYCUDASDK.tar.gz $MYCUDASDK
-        ExternalProject_add(${proj_name}
-            PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
-            URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_tar_file}"
-#            URL_MD5 ""
-            TIMEOUT "3600"
-            CONFIGURE_COMMAND ""
-            BUILD_COMMAND ""
-            INSTALL_COMMAND ""
-        )
-
-        install(DIRECTORY ${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(DIRECTORY ${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/lib64 DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(PROGRAMS ${ION_TS_EXTERNAL}/${proj_name_version}/src/cudatoolkit/bin/nvcc DESTINATION /usr/local/cuda/bin)
 
     else()
         find_package(CUDA REQUIRED)
@@ -200,6 +148,7 @@ if(NOT ION_USE_SYSTEM_HDF5)
   )
   include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
   set(ION_HDF5_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libhdf5.a")
+  set(ION_HDF5_HL_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libhdf5_hl.a")
 else()
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
@@ -210,12 +159,19 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
   set(proj_version "3.0.2")
   set(proj_name_version "${proj_name}-${proj_version}")
+
+  if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric" OR ${LSB_RELEASE_CODENAME} STREQUAL "precise")
+        set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0~precise.patch")
+  else()
+        set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0.patch")
+  endif()
+
   ExternalProject_add(${proj_name}_proj
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-3.0.2.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/armadillo-2.4.0.patch"
+    PATCH_COMMAND patch -p1 -t -N < "${ARMADILLO_PATCH}"
   )
   set(ION_ARMADILLO_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libarmadillo.so")
   include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
@@ -225,7 +181,7 @@ else()
 #set(ION_ARMADILLO_LIBS "/home/csugnet/local/src/armadillo-3.0.2/libarmadillo.so")
 endif()
 
-set(LIBKMEANSFILE "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7/libkmeans.so")
+set(LIBKMEANSFILE "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7/libkmeans.a")
 add_custom_command(OUTPUT ${LIBKMEANSFILE}
     COMMAND "make"
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7")
@@ -253,6 +209,8 @@ if(NOT ION_USE_SYSTEM_BOOST)
   include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
   set(ION_BOOST_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libboost_serialization.a")
 else()
+  find_package(Boost REQUIRED)
+  include_directories(${Boost_INCLUDE_DIRS})
   set(ION_BOOST_LIBS "boost_serialization.a")
 endif()
 
@@ -286,7 +244,7 @@ include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}/../buildTools")
 include_directories("${PROJECT_SOURCE_DIR}/../external/tnt-1.2.6")
-include_directories("${PROJECT_SOURCE_DIR}/../external/fstrcmp")
+#include_directories("${PROJECT_SOURCE_DIR}/../external/fstrcmp")
 include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1")
 
 
@@ -298,22 +256,36 @@ if (NOT ION_USE_SYSTEM_SAMTOOLS)
     PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-0.1.18.tar.gz"
     #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
-    # in source build
-    BINARY_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
-    SOURCE_DIR "${ION_TS_EXTERNAL}/${proj_name_version}"
-    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.18.patch"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND "/usr/bin/make" "CFLAGS=-fPIC" "<SOURCE_DIR>/Makefile" "lib"
-    INSTALL_COMMAND ""
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version} -DBUILD_SHARED_LIBS:BOOL=OFF
+    PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.18.patch"
     #INSTALL_COMMAND "/usr/bin/make" "CFLAGS=-fPIC" "<SOURCE_DIR>/Makefile" "libbam.so"
   )
-  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}")
-  #set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/libbam.so")
-  set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/libbam.a")
+  include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include")
+  set(ION_SAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/libbam.a")
 else()
     set(ION_SAMTOOLS_LIBS libbam.a)
     include_directories("/usr/include/samtools")
 endif()
+
+
+if (NOT ION_USE_SYSTEM_BAMTOOLS)
+    set(proj_name "bamtools")
+    set(proj_version "2.1.1.20120920+gite235c55")
+    set(proj_name_version "${proj_name}-${proj_version}")
+    ExternalProject_add(${proj_name}
+        PREFIX ${ION_TS_EXTERNAL}/${proj_name_version}-prefix
+        URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.1.1.20120920+gite235c55.tar.gz"
+        #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
+        CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=${ION_TS_EXTERNAL}/${proj_name_version}
+        PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/bamtools-2.1.1.20120920+gite235c55.patch"
+    )
+    include_directories("${ION_TS_EXTERNAL}/${proj_name_version}/include/bamtools")
+    set(ION_BAMTOOLS_LIBS "${ION_TS_EXTERNAL}/${proj_name_version}/lib/bamtools/libbamtools.a")
+else()
+    set(ION_BAMTOOLS_LIBS libbamtools.a)
+    include_directories("/usr/include/bamtools")
+endif()
+
 
 include_directories("${PROJECT_SOURCE_DIR}/Replay")
 include_directories("${PROJECT_SOURCE_DIR}/AnalysisOrg")
@@ -328,6 +300,7 @@ include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Fitters")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Fitters/Complex")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Writers")
 include_directories("${PROJECT_SOURCE_DIR}/BkgModel/CUDA")
+include_directories("${PROJECT_SOURCE_DIR}/BkgModel/Sampling")
 include_directories("${PROJECT_SOURCE_DIR}/BaseCaller")
 include_directories("${PROJECT_SOURCE_DIR}/Separator")
 include_directories("${PROJECT_SOURCE_DIR}/Util")
@@ -339,11 +312,19 @@ include_directories("${PROJECT_SOURCE_DIR}/Wells")
 
 # CUDA Files
 if(ION_USE_CUDA)
-    SET( CUDA_NVCC_FLAGS "--use_fast_math" "-gencode=arch=compute_20,code=compute_20" "-maxrregcount=48" )
+    ## NOTE: -O2 enables strict-aliasing, and code is not clean
+    SET( CUDA_NVCC_FLAGS "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math" "-gencode=arch=compute_20,code=compute_20" "-maxrregcount=48" )
+    add_definitions(-malign-double) ## See CUDA 4.0 Release Nodes
+    ## If user set CXX on command line, make sure NVCC respects it
+    ## (necessary for compiling on systems where default compiler is not nvcc compatible)
+    if($ENV{CXX} MATCHES ".+")
+        LIST(APPEND CUDA_NVCC_FLAGS "--compiler-bindir=$ENV{CXX}")
+    endif() #($ENV{CXX} MATCHES ".+")
     CUDA_COMPILE(CUDA_TEMP_FILES 
-      BkgModel/CUDA/BkgModel.cu
       BkgModel/CUDA/StreamManager.cu 
       BkgModel/CUDA/SingleFitStream.cu
+      BkgModel/CUDA/MultiFitStream.cu
+      BkgModel/CUDA/StreamingKernels.cu
       SHARED
     )
 endif()
@@ -395,6 +376,7 @@ add_library(ion-analysis
     Util/flow_utils.cpp
     Util/WorkerInfoQueue.cpp
     Util/StackUnwind.cpp
+    Util/SeqUtils.cpp
 
     AnalysisOrg/IO/CommandLineOpts.cpp
     AnalysisOrg/IO/KeyContext.cpp
@@ -442,13 +424,11 @@ add_library(ion-analysis
     BaseCaller/DPTreephaser.cpp
     
     BkgModel/MathModel/MathOptim.cpp
-    BkgModel/MathModel/DualNumber.cpp
     BkgModel/MathModel/PoissonCdf.cpp
     BkgModel/MathModel/DNTPRiseModel.cpp
     BkgModel/MathModel/DiffEqModel.cpp
     BkgModel/MathModel/DiffEqModelVec.cpp
     BkgModel/MathModel/Hydrogen.cpp
-    BkgModel/MathModel/FastTrace.cpp
     BkgModel/MathModel/MathUtil.cpp
     BkgModel/MathModel/MiscVec.cpp
     BkgModel/MathModel/MultiFlowModel.cpp
@@ -496,18 +476,25 @@ add_library(ion-analysis
     BkgModel/RegionalizedData.cpp
 
     BkgModel/CUDA/JobWrapper.cpp 
+    BkgModel/CUDA/GpuMultiFlowFitControl.cpp
+    BkgModel/CUDA/GpuMultiFlowFitMatrixConfig.cpp
+   
+    BkgModel/Sampling/SampleClonality.cpp
 
     SynchDat/BitHandler.cpp
     SynchDat/HuffmanEncode.cpp
     SynchDat/SynchDatSerialize.cpp
     SynchDat/VencoLossless.cpp
+    SynchDat/DeltaComp.cpp
+    SynchDat/DeltaCompFst.cpp
+    SynchDat/DeltaCompFstSmX.cpp
     SynchDat/SvdDatCompress.cpp
     SynchDat/DelicatoCompression.cpp
     SynchDat/compression.cpp
     SynchDat/matrixRounding.cpp
     SynchDat/unpackMatrix.cpp
     SynchDat/packMatrix.cpp
-    SynchDat/SvdDatCompressPlus.cpp
+#    SynchDat/SvdDatCompressPlus.cpp 
 
     Replay/FileBkgReplay.cpp
     Replay/H5Replay.cpp
@@ -515,12 +502,13 @@ add_library(ion-analysis
     Replay/EmptyTraceReplay.cpp
     Replay/RegionTrackerReplay.cpp
     Replay/BkgModelReplay.cpp
+    Replay/BkgTraceReplay.cpp
 
     crop/Acq.cpp
     
     FileEquivalent.cpp
     
-    ${PROJECT_SOURCE_DIR}/../external/fstrcmp/fstrcmp.cpp
+    #${PROJECT_SOURCE_DIR}/../external/fstrcmp/fstrcmp.cpp
     
     SFFWrapper.cpp
     
@@ -541,9 +529,9 @@ if(ICC)
 # compiling fftw separately with icc, should figure it out here...
 # in the fftw-3.2.2 directory
 # ./configure CC=icc CFLAGS=-gcc --with-our-malloc16 --enable-threads --with-combined-threads -enable-sse2
-add_dependencies(ion-analysis IONVERSION samtools armadillo_proj hdf5 boost unwind)
+add_dependencies(ion-analysis IONVERSION bamtools samtools armadillo_proj hdf5 boost unwind)
 else()
-add_dependencies(ion-analysis IONVERSION samtools fftw armadillo_proj hdf5 boost unwind)
+add_dependencies(ion-analysis IONVERSION samtools bamtools fftw armadillo_proj hdf5 boost unwind)
 endif()
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
@@ -624,7 +612,7 @@ if(ION_DO_BACKGROUND)
         target_link_libraries(Analysis ion-analysis pthread) 
     endif()
     if (NOT USE_MKL AND NOT ION_USE_CUDA)
-        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas)
+        target_link_libraries(Analysis ion-analysis gsl gslcblas pthread lapack_atlas atlas )
     endif()
 
     install(TARGETS Analysis DESTINATION bin)
@@ -656,23 +644,30 @@ add_executable(BaseCaller
     BaseCaller/RegionWellsReader.cpp
     BaseCaller/RegionAnalysis.cpp
     BaseCaller/PhaseEstimator.cpp
-    BaseCaller/OrderedRegionSFFWriter.cpp
+#    BaseCaller/OrderedRegionSFFWriter.cpp
     BaseCaller/BaseCallerMetricSaver.cpp
     BaseCaller/TreephaserSSE.cpp
     BaseCaller/BarcodeClassifier.cpp
+    BaseCaller/BarcodeDatasets.cpp
+    BaseCaller/OrderedDatasetWriter.cpp
     ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(BaseCaller IONVERSION)
-target_link_libraries(BaseCaller ion-analysis gsl gslcblas pthread lapack_atlas atlas)
+add_dependencies(BaseCaller IONVERSION bamtools)
+target_link_libraries(BaseCaller ion-analysis gsl gslcblas pthread lapack_atlas atlas ${ION_BAMTOOLS_LIBS})
 install(TARGETS BaseCaller DESTINATION bin)
 
 ## Standalone BaseCaller - Lite
-add_executable(BaseCallerLite
-    BaseCaller/BaseCallerLite.cpp 
-    BaseCaller/OrderedRegionSFFWriter.cpp
-    ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(BaseCallerLite IONVERSION)
-target_link_libraries(BaseCallerLite ion-analysis gsl gslcblas pthread lapack_atlas atlas)
+#add_executable(BaseCallerLite
+#    BaseCaller/BaseCallerLite.cpp 
+#    BaseCaller/OrderedRegionSFFWriter.cpp
+#    ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#add_dependencies(BaseCallerLite IONVERSION)
+#target_link_libraries(BaseCallerLite ion-analysis gsl gslcblas pthread lapack_atlas atlas)
 
+
+add_executable(ionstats ionstats/ionstats.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(ionstats IONVERSION bamtools)
+target_link_libraries(ionstats ion-analysis ${ION_BAMTOOLS_LIBS})
+install(TARGETS ionstats DESTINATION bin)
 
 add_executable(TFMapper TestFragments/TFMapper.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TFMapper IONVERSION)
@@ -689,8 +684,26 @@ add_executable(PairedEndErrorCorrection
    SFFCorrection/sffCorrection.cpp
    SFFCorrection/SmithWaterman.cpp)
 add_dependencies(PairedEndErrorCorrection IONVERSION)
-target_link_libraries(PairedEndErrorCorrection file-io pthread)
+target_link_libraries(PairedEndErrorCorrection ion-analysis file-io pthread ${ION_BAMTOOLS_LIBS})
 install(TARGETS PairedEndErrorCorrection DESTINATION bin)
+
+IF( ION_BUILD_STRAND_BIAS )
+add_custom_command( 
+ TARGET PairedEndErrorCorrection POST_BUILD
+ #COMMAND mkdir -p ${CMAKE_BUILD_TOOL} ${PROJECT_SOURCE_DIR}/../external/samita/build 
+ COMMAND ${CMAKE_COMMAND} ${PROJECT_SOURCE_DIR}/../external/samita 
+ COMMAND ${CMAKE_BUILD_TOOL} ${PROJECT_SOURCE_DIR}/../external/samita/ 
+ COMMAND "make"
+ WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/../external/samita/ 
+ )
+ 
+ include_directories (${ION_TS_EXTERNAL}/samita ${ION_TS_EXTERNAL}/common/c++/lifetech)
+ link_directories ( ${ION_TS_EXTERNAL}/samita/ ${Boost_LIBRARY_DIRS} )
+ add_executable (strandBiasExtractor strandBiasExtractor/semaphore.cpp  strandBiasExtractor/strandBiasExtractor.cpp)
+ add_dependencies(strandBiasExtractor IONVERSION samita )
+ target_link_libraries (strandBiasExtractor samita++.a boost_regex boost_iostreams boost_thread boost_filesystem boost_system ${ION_SAMTOOLS_LIBS} ${ION_HDF5_HL_LIBS} ${ION_HDF5_LIBS} log4cxx pthread )
+ install(TARGETS strandBiasExtractor DESTINATION bin)
+ENDIF(ION_BUILD_STRAND_BIAS )
 
 # add_executable(WellsTimer WellsTimer.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(WellsTimer IONVERSION)
@@ -717,8 +730,22 @@ add_executable(SeqBoost
         Recall/SeqBoost.cpp
         ../buildTools/dbgmem.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(SeqBoost ion-analysis file-io)
+target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread)
 install(TARGETS SeqBoost DESTINATION bin)
+
+add_executable(sff2bam
+        Converter/sff2bam.cpp
+        ../buildTools/dbgmem.cpp
+        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+target_link_libraries(sff2bam ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread)
+install(TARGETS sff2bam DESTINATION bin)
+
+add_executable(bam2sff
+        Converter/bam2sff.cpp
+        ../buildTools/dbgmem.cpp
+        ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+target_link_libraries(bam2sff ion-analysis file-io  ${ION_BAMTOOLS_LIBS} pthread)
+install(TARGETS bam2sff DESTINATION bin)
 
 add_executable(SamVsSam
         SamUtils/SamVsSam.cpp
@@ -750,6 +777,11 @@ add_dependencies(MergeWells IONVERSION)
 target_link_libraries(MergeWells ion-analysis pthread)
 install(TARGETS MergeWells DESTINATION bin)
 
+add_executable(RawWellsCombine Wells/RawWellsCombine.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(RawWellsCombine IONVERSION)
+target_link_libraries(RawWellsCombine ion-analysis pthread)
+install(TARGETS RawWellsCombine DESTINATION bin)
+
 include_directories("${PROJECT_SOURCE_DIR}/file-io")
 add_library(file-io
         file-io/dat_chip.c
@@ -772,9 +804,11 @@ add_library(file-io
         file-io/sff_read_header.c
         file-io/sff_sort.c
         file-io/wells_chip.c
+        file-io/wells_combine.c
         file-io/wells_data.c
         file-io/wells_header.c
         file-io/wells_mask.c
+        file-io/wells_mask_combine.c
 )
 if( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
         set_target_properties(file-io PROPERTIES COMPILE_FLAGS "-fPIC")
@@ -803,6 +837,11 @@ target_link_libraries(alignStats ion-analysis z ${ION_SAMTOOLS_LIBS} pthread)
 add_dependencies(alignStats IONVERSION)
 install(TARGETS alignStats DESTINATION bin)
 
+add_executable(FlowErrTest
+        SamUtils/FlowErrTest.cpp
+)
+target_link_libraries(FlowErrTest ion-analysis z ${ION_SAMTOOLS_LIBS} ${ION_HDF5_LIBS} pthread)
+
 add_executable(SFFRead SFFUtils/SFFRead.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFRead IONVERSION)
 target_link_libraries(SFFRead ion-analysis pthread)
@@ -828,10 +867,22 @@ add_dependencies(DiffSeparator IONVERSION)
 target_link_libraries(DiffSeparator ion-analysis pthread ${ION_ARMADILLO_LIBS})
 install(TARGETS DiffSeparator DESTINATION bin)
 
+add_executable(CompressDeviation Separator/CompressDeviation.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(CompressDeviation IONVERSION)
+target_link_libraries(CompressDeviation ion-analysis pthread ${ION_ARMADILLO_LIBS})
+
+add_executable(DumpSynchDat SynchDat/DumpSynchDat.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(DumpSynchDat IONVERSION)
+target_link_libraries(DumpSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS})
 
 add_executable(TraceDriver SynchDat/TraceDriver.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TraceDriver IONVERSION)
 target_link_libraries(TraceDriver ion-analysis pthread )
+
+# add_executable(VFCTest SynchDat/VFCTest.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+# add_dependencies(VFCTest IONVERSION)
+# target_link_libraries(VFCTest ion-analysis -lunwind pthread -lprofiler )
+
 
 # add_executable(ImageT0 ImageT0.cpp ../buildTools/dbgmem.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(ImageT0 IONVERSION)
@@ -1012,27 +1063,11 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_324" DESTINATION ${ION_I
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.txt_900" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_314.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_900.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
-
-# perl modules used by plugins for json file parsing
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/common-sense-3.4.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-XS-2.32.tar.gz" DESTINATION "/tmp/pModIn")
-# perl modules used by plugins for ???
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/autodie-2.10.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Carp-Assert-0.20.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IO-All-0.44.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IPC-System-Simple-1.21.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/List-MoreUtils-0.33.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Log-Log4perl-1.35.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Perl6-Slurp-0.050000.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Regexp-Common-2011121001.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION "/tmp/pModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/pModIn")
 
 install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
 
@@ -1043,12 +1078,6 @@ endif()
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-#Dependency Notes:
-#
-# The matePairIndividualTags plugin requires these packages:
-#	emboss-data,emboss-lib,libnucleus6,libajax6
-# The emboss package itself is not installed because of a filename conflict with
-# /usr/bin/tmap.
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libatlas3gf-base,
     libblas3gf,
     libc6,
@@ -1056,12 +1085,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "libatlas3gf-base,
     libgfortran3,
     liblapack3gf,
     libstdc++6,
-    openjdk-6-jre,
     libgsl0ldbl,
-    ion-gpu")
+    ion-gpu (>=2.3.5)")
 
-set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<= 2.2)")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<= 2.2)")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 2.9)")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 2.9)")
 
 set(CPACK_PACKAGE_DESCRIPTION "ion-analysis provides the command line workflow and supporting tools to process raw DAT files into SFF and fastq files.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

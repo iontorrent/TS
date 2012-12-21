@@ -350,6 +350,7 @@ public:
     size_t end = min(mSearchRange[1], size-mWindowSize-1);
     bool first = true;
     bool found = false;
+    double maxSsqDiff = 0.0;
     for (size_t i = start; i < end; i++) {
       // Leave out the middle point as it is always a transition
       t0.SetFirstRange(i - mWindowSize, i);
@@ -357,14 +358,16 @@ public:
       t0.FitModel(Y, &mX[0]);
       if (first) {
         mBestT0 = t0;
+        maxSsqDiff = 0.0;
         first =false;
       }
-      if (t0.ConstraintsOk() && t0.GetSsqDiff() > mBestT0.GetSsqDiff()) {
+      if (t0.ConstraintsOk() && t0.GetSsqDiff() > maxSsqDiff) {
         float est = t0.GetT0Est();
         bool inRange = est >= mX.front() && est <=  mX.back();
         if (inRange) {
           found = true;
           mBestT0 = t0;
+          maxSsqDiff = mBestT0.GetSsqDiff();
         }
       }
     }

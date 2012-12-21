@@ -50,8 +50,37 @@ pluginGET = "";
 $(document).ready(function(){
 
     //setup the jQuery UI
-    $("#formwrap").tabs();
-    //$(".postbutton").button();
+    $("#formwrap").tabs({
+      select: function(event){
+          if (testAllFields()){
+            var busyDiv = '<div class="myBusyDiv"><p>Retrieving IR version. Please wait...</p></div>';
+            $('#next').append(busyDiv);
+            obj =  $('#pluginconfig').serializeObject();
+            //use the data retreived from the GET and modify it only the config key is changed
+            pluginURL = "/rundb/api/v1/ionreporter/version/?plugin=IonReporterUploader_V1_2&format=json";
+            $.ajax({
+               type: 'GET',
+               url: pluginURL,
+               contentType: "application/json; charset=utf-8",
+               dataType: "json",
+               success : function(data) {
+                  console.log(data);
+                  $.each(data, function(i,v){
+                    $("#version").append("<option value=\"" + v + "\"" + ">" + versionMap(v) + "</option>");
+                  });
+                   //setTimeout("parent.$.fn.colorbox.close()", 2000);
+                   //parent.$.fn.colorbox.close();
+               },
+               complete: function() {
+                 $('.myBusyDiv').empty();
+               $('#next').remove('.myBusyDiv');
+               }           
+            });
+          }
+          var versionSelect = document.getElementById('version');
+          versionSelect.remove(0);
+        }
+    });
 
   $.ajax({
     url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json",
@@ -81,12 +110,30 @@ $(document).ready(function(){
           document.getElementById("port").value = val;
         } else if(key == "token"){
           document.getElementById("token").value = val;
+        } else if(key == "version"){
+          var selectedVersionValue = document.getElementById("selectedVersionValue");
+          if(val != ""){
+            val = versionMap(val);
+            selectedVersionValue.innerHTML = val + " (Revision: " + pluginGET.version + ")"; 
+          }
         }
       });
 
     }
   });
 });
+
+function versionMap(v){
+  if(v == "IR12"){
+    return 'IR 1.2';
+  } else if (v == "IR14"){
+    return 'IR 1.4';
+  } else if (v == "IR20"){
+    return 'IR 2.0';
+  } else{
+    return v;
+  }
+}
 
 
 $(function() {
@@ -124,20 +171,52 @@ $(function() {
          data: pluginAPIJSON,
          dataType: "json",
          success : function(data) {
-             $("#formwrap").hide();
+             //$("#formwrap").hide();
              $('#loading-div').show();
-             setTimeout("parent.$.fn.colorbox.close()", 2000);
+             // setTimeout("parent.$.fn.colorbox.close()", 2000);
              //parent.$.fn.colorbox.close();
          }
       });
+        var selectedVersionValue = document.getElementById("selectedVersionValue");
+        var selectVersionBox = document.getElementById("version");
+        for(var i=0; i < selectVersionBox.length; i++){
+          if(selectVersionBox.options[i].selected == true){
+            selectedVersionValue.innerHTML = selectVersionBox.options[i].value;
+          }
+        }
        }
+   });
+
+   $('.settingsbutton').click(function() {
+      obj =  $('#pluginconfig').serializeObject();
+      //use the data retreived from the GET and modify it only the config key is changed
+      pluginGET.config = obj;
+      pluginAPIJSON = JSON.stringify(pluginGET);
+      console.log(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json";
+      $.ajax({
+         type: 'PUT',
+         url: pluginURL,
+         contentType: "application/json; charset=utf-8",
+         data: pluginAPIJSON,
+         dataType: "json",
+         success : function(data) {
+             //$("#formwrap").hide();
+             $('#loading-div').show();
+             // setTimeout("parent.$.fn.colorbox.close()", 2000);
+             //parent.$.fn.colorbox.close();
+         }
+      });
+   });
+
+   $('#closebutton').click(function(){
+    parent.$.fn.colorbox.close();
    });
 
    $('#version_button').click(function() {
       if (testAllFields()){
-		var busyDiv = '<div class="myBusyDiv"><p>Retrieving IR version. Please wait...</p></div>';
-		$('#next').append(busyDiv);
-  		
+	  	  var busyDiv = '<div class="myBusyDiv"><p>Retrieving IR version. Please wait...</p></div>';
+	  	  $('#next').append(busyDiv);
         obj =  $('#pluginconfig').serializeObject();
         //use the data retreived from the GET and modify it only the config key is changed
         pluginURL = "/rundb/api/v1/ionreporter/version/?plugin=IonReporterUploader_V1_2&format=json";
@@ -149,7 +228,7 @@ $(function() {
            success : function(data) {
               console.log(data);
               $.each(data, function(i,v){
-                $("#version").append("<option>" + v + "</option>");
+                $("#version").append("<option value=\"" + v + "\"" + ">" + v + "</option>");
               });
                //setTimeout("parent.$.fn.colorbox.close()", 2000);
                //parent.$.fn.colorbox.close();
@@ -160,6 +239,8 @@ $(function() {
            }           
         });
       }
+      var versionSelect = document.getElementById('version');
+      versionSelect.remove(0);
    });
 
 
@@ -179,13 +260,13 @@ $(function() {
     
     function testAllFields(){
        if (document.getElementById("server").value == ""){
-          apprise("Cannot save - Please complete all fields");
+          apprise("Please complete filling server settings");
           return false;
        } else if (document.getElementById("port").value == ""){
-          apprise("Cannot save - Please complete all fields");
+          apprise("Please complete filling server settings");
           return false;
        } else if (document.getElementById("token").value == ""){
-          apprise("Cannot save - Please complete all fields");
+          apprise("Please complete filling user settings");
           return false;
        } else {
           return true;
@@ -238,55 +319,64 @@ $(function() {
 
 <div id="formwrap">
 	<ul>
-		<li><a href="#basic">Basic</a></li>
-		<li><a href="#adv">Advanced</a></li>
+		<li><a href="#server_settings">Server Settings (Step 1)</a></li>
+		<li><a href="#user_settings">User Settings (Step 2)</a></li>
+		<li><a href="#ir_settings">Ion Reporter Settings (Final Step)</a></li>
 	</ul>
-	<div id="basic">
 
+	<div id="server_settings">
+        <table align="center">
+            <tr>
+              <td align="left">Protocol</td>
+              <td>
+                <select id="protocol" name="protocol">
+                 <option value="http">HTTP</option>
+                 <option value="https">HTTPS</option>
+                </select>
+                </td>
+            </tr>
+            <tr>
+              <td align="left">Ion Reporter Server Address</td>
+              <td>
+                <input type="text" id="server" size="55" name="server" value="" onblur="testFieldNonBlank(this);"/>
+              </td>
+            </tr>
+            <tr>
+              <td align="left">Ion Reporter WebService TCP/IP Port</td>
+              <td>
+                <input type="text" size="55" id="port" name="port" value="" onblur="testFieldNonBlank(this);"/>
+              </td>
+            </tr>
+        </table>
+        <input class="settingsbutton" type="button" value="Save">
+	</div>
 
+  <div id="user_settings">
         <table align="center">
             <tr><td valign="top">Ion Reporter Authentication Token</td><td>
               <textarea id="token" rows="4" cols="60" name="token" value="" onblur="testFieldNonBlank(this);">
               </textarea>
             </td></tr>
         </table>
+        <input class="settingsbutton" type="button" value="Save">
+  </div>
 
+  <div id="ir_settings">
+    <label id="selectedVersionLabel"><b>Selected IR Version</b></label>
+    <label id="selectedVersionValue"><span style="color: red">Missing</span></label>
+    <br/>
 
-	</div>
-
-	<div id="adv">
-
-        <table align="center">
-            <tr><td align="left">Protocol</td><td><select id="protocol" name="protocol">
-                <option value="http">HTTP</option>
-                <option value="https">HTTPS</option>
-            </select></td></tr>
-            <tr><td align="left">Ion Reporter Server Address</td><td><input type="text" id="server" size="55" name="server" value="" onblur="testFieldNonBlank(this);"/></td></tr>
-            <tr><td align="left">Ion Reporter WebService TCP/IP Port</td><td><input type="text" size="55" id="port" name="port" value="" onblur="testFieldNonBlank(this);"/></td></tr>
-        </table>
-
-	</div>
-
-
+    <!--<input id="version_button" type="button" value="Get Available IR Versions"></input>-->
+    <label id="selectedVersionLabel"><b>Available IR Versions</b></label>
+    <select id="version" name="version">
+      <option id="empty_value" value=""></option>
+    </select>
+    <br/>
+    <input class="postbutton" type="button" value="Save">
+    <input id="closebutton" type="button" value="Close">
+  </div>
 </div>
-
-<div id="next">
-
-  <select id="version" name="version"></select>
-  <input id="version_button" type="button" value="Get IR Version"></input>
-  <input class="postbutton" type="button" value="Save">
-
-</div>
-  
-
 </form>
-
-
-
-
 </body>
-
-
-
 </html>
 

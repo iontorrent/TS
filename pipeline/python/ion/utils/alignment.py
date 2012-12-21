@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 __version__ = filter(str.isdigit, "$Revision$")
@@ -33,10 +33,38 @@ from ion.reports import libGraphs
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
 from ion.reports import  base_error_plot
+from ion.utils import ionstats_plots
 
 import math
 
 import dateutil.parser
+
+
+def align(
+    libraryName,
+    lib_path,
+    output_dir,
+    output_basename):
+    #     Input -> output_basename.bam
+    #     Output -> output_dir/output_basename.bam
+
+    try:
+        cmd = "alignmentQC.pl"
+        cmd += " --logfile %s" % os.path.join(output_dir,"alignmentQC_out.txt")
+        cmd += " --output-dir %s" % output_dir
+        cmd += " --input %s" % lib_path
+        cmd += " --genome %s" % libraryName
+        cmd += " --max-plot-read-len %s" % str(int(400))
+        cmd += " --out-base-name %s" % output_basename
+        cmd += " --skip-alignStats"
+
+        printtime("DEBUG: Calling '%s':" % cmd)
+        ret = subprocess.call(cmd,shell=True)
+        if ret != 0:
+            raise RuntimeError('exit code: %d' % ret)
+    except:
+        raise
+
 
 
 
@@ -64,336 +92,6 @@ def makeAlignGraphs():
                 it.plot()
             except:
                 traceback.print_exc()
-
-def createSAMMETA(runID, sampleName, libraryName, chipType, site_name, notes, start_time):
-
-    #collect all the meta data for the SAM file
-    SAM_META = {}
-
-    # id
-    if runID:
-        SAM_META['ID'] = runID
-    else:
-        SAM_META['ID'] = 'FALSE'
-        printtime("WARNING: runID not set. ID tag set to 'FALSE'")
-
-    # sm - Sample. Use pool name where a pool is being sequenced.
-    if sampleName:
-        SAM_META['SM'] = sampleName
-    else:
-        SAM_META['SM'] = "unknown"
-        printtime("WARNING: sample name not set. SM tag set to 'unknown'")
-
-    # lb - library name
-    if libraryName:
-        SAM_META['LB'] = libraryName
-    else:
-        SAM_META['LB'] = "unknown"
-        printtime("WARNING: library name not set. LB tag set to 'unknown'")
-
-    # pu - the platform unit
-    SAM_META['PU'] = "PGM/" + chipType.replace('"',"")
-
-    SAM_META['PL'] = "IONTORRENT"
-
-    # ds - the "notes", only the alphanumeric and space characters.
-    SAM_META['DS'] = ''.join(ch for ch in notes if ch.isalnum() or ch == " ")
-
-    # dt - the run date
-    iso_exp_time = start_time
-
-    #convert to ISO time
-    iso_exp_time = dateutil.parser.parse(iso_exp_time)
-
-    SAM_META['DT'] = iso_exp_time.isoformat()
-
-    #the site name should be here, also remove spaces
-    site_name = ''.join(ch for ch in site_name if ch.isalnum() )
-    SAM_META['CN'] = site_name
-
-    return SAM_META
-
-
-def align_full_chip(
-    SAM_META,
-    libsff_path,
-    align_full,
-    graph_max_x,
-    make_align_graphs,
-    sam_parsed,
-    bidirectional,
-    libraryName,
-    flows,
-    opts_extra,
-    mark_duplicates,
-    outputdir,
-    outBaseName=''
-    ):
-
-    printtime("sam_parsed is %s" % sam_parsed)
-
-    #Now build the SAM meta data arg string
-    aligner_opts_rg= '--aligner-opts-rg "'
-    aligner_opts_extra = ''
-    additional_aligner_opts = ''
-    if sam_parsed:
-        additional_aligner_opts += ' -p 1'
-    if bidirectional:
-        additional_aligner_opts += ' --bidirectional'
-    if opts_extra:
-        print '  found extra alignment options: "%s"' % opts_extra
-        aligner_opts_extra = ' --aligner-opts-extra "'
-        aligner_opts_extra += opts_extra + '"'
-    first = True
-    for key, value in SAM_META.items():
-        if value:
-            sam_arg =  r'-R \"'
-            end =  r'\"'
-
-            sam_arg = sam_arg + key + ":" + value + end
-
-            if first:
-                aligner_opts_rg = aligner_opts_rg + sam_arg
-                first = False
-            else:
-                aligner_opts_rg = aligner_opts_rg + " " + sam_arg
-
-    #add the trailing quote
-    aligner_opts_rg = aligner_opts_rg + '"'
-
-    if 0 < graph_max_x:
-        # establish the read-length histogram range by using the simple rule: 0.6 * num-flows
-        flowsUsed = 0
-        try:
-            flowsUsed = int(flows)
-        except:
-            flowsUsed = 400
-        graph_max_x = 100 * math.trunc((0.6 * flowsUsed + 99)/100.0)
-    if graph_max_x < 400:
-        graph_max_x = 400
-
-    #-----------------------------------
-    # DEFAULT SINGLE SFF/FASTQ BEHAVIOR - (Runs for barcoded runs too)
-    #-----------------------------------
-    try:
-        com = "alignmentQC.pl"
-        if (align_full):
-            com += " --align-all-reads"
-        com += " --logfile %s" % os.path.join(outputdir,"alignmentQC_out.txt")
-        com += " --output-dir %s" % outputdir
-        com += " --input %s" % libsff_path
-        com += " --genome %s" % libraryName
-        com += " --max-plot-read-len %s" % graph_max_x
-        if len(outBaseName) > 1:
-            com += " --out-base-name %s" % outBaseName
-        else:
-            com += " %s" % (additional_aligner_opts)
-            com += " %s %s" % (aligner_opts_rg,aligner_opts_extra)
-        if mark_duplicates:
-            com += " --mark-duplicates"
-        com += " >> %s 2>&1" % os.path.join(outputdir, 'alignment.log')
-
-        printtime("Alignment QC command line:\n%s" % com)
-        retcode = subprocess.call(com, shell=True)
-        blockprocessing.add_status("alignmentQC.pl", retcode)
-        if retcode != 0:
-            printtime("alignmentQC failed, return code: %d" % retcode)
-            alignError = open("alignment.error", "w")
-            alignError.write(com)
-            alignError.write('alignmentQC returned with error code: ')
-            alignError.write(str(retcode))
-            alignError.close()
-    except OSError:
-        printtime('ERROR: Alignment Failed to start')
-        alignError = open("alignment.error", "w")
-        alignError.write(str(traceback.format_exc()))
-        alignError.close()
-        traceback.print_exc()
-    if make_align_graphs:
-        makeAlignGraphs()
-
-
-def alignment(libsff_path,
-              runID,
-              align_full,
-              DIR_BC_FILES,
-              libraryName,
-              sample,
-              chipType,
-              site_name,
-              flows,
-              notes,
-              barcodeId,
-              aligner_opts_extra,
-              mark_duplicates,
-              start_time,
-              ALIGNMENT_RESULTS,
-              bidirectional,
-              sam_parsed,
-              outBaseName=''
-              ):
-
-    printtime("Attempt to align")
-
-
-    #TODO
-    if os.path.exists('alignment.summary'):
-        try:
-            os.rename('alignment.summary', 'alignment.summary_%s' % datetime.datetime.now())
-        except:
-            printtime('error renaming')
-            traceback.print_exc()
-
-    try:
-        sammeta = createSAMMETA(
-            runID,
-            sample,
-            libraryName,
-            chipType,
-            site_name,
-            notes,
-            start_time)
-
-        align_full_chip(
-            sammeta,
-            libsff_path,
-            align_full, 1, True, sam_parsed,
-            bidirectional,
-            libraryName,
-            flows,
-            aligner_opts_extra,
-            mark_duplicates,
-            ALIGNMENT_RESULTS,
-            outBaseName)
-
-        if barcodeId != '':
-            align_barcodes(
-                sammeta,
-                libsff_path,
-                align_full,
-                sam_parsed,
-                bidirectional,
-                libraryName,
-                DIR_BC_FILES,
-                flows,
-                aligner_opts_extra,
-                mark_duplicates,
-                ALIGNMENT_RESULTS,
-                outBaseName)
-
-    except Exception:
-        printtime("ERROR: Alignment Failed")
-        alignError = open("alignment.error", "w")
-        alignError.write(str(traceback.format_exc()))
-        alignError.close()
-        traceback.print_exc()
-
-    printtime("**** Alignment completed ****")
-
-
-def align_barcodes(
-            sammeta,
-            libsff_path,
-            align_full,
-            sam_parsed,
-            bidirectional,
-            libraryName,
-            DIR_BC_FILES,
-            flows,
-            aligner_opts_extra,
-            mark_duplicates,
-            ALIGNMENT_RESULTS,
-            outBaseName=''
-            ):
-    printtime("Renaming non-barcoded alignment results to 'comprehensive'")
-    files = [ 'alignment.summary',
-              'alignmentQC_out.txt',
-              'alignTable.txt',
-            ]
-    for fname in files:
-        if os.path.exists(fname):
-            try:
-                #if os.path.exists(fname):
-                #   os.rename(fname, fname + ".comprehensive")
-                shutil.copyfile(fname, fname + ".comprehensive")
-            except:
-                printtime('ERROR copying %s' % fname)
-                traceback.print_exc()
-
-    printtime("STARTING BARCODE ALIGNMENTS")
-
-    barcodelist_path = 'barcodeList.txt'
-    if not os.path.exists(barcodelist_path):
-        barcodelist_path = '../barcodeList.txt'
-    if not os.path.exists(barcodelist_path):
-        barcodelist_path = '../../barcodeList.txt'
-    if not os.path.exists(barcodelist_path):
-        barcodelist_path = '../../../barcodeList.txt'
-    if not os.path.exists(barcodelist_path):
-        barcodelist_path = '../../../../barcodeList.txt'
-    if not os.path.exists(barcodelist_path):
-        printtime('ERROR: barcodeList.txt not found')
-    barcodeList = parse_bcfile(barcodelist_path)
-
-    align_full = True
-
-    (head,tail) = os.path.split(libsff_path)
-    for bcid in (x['id_str'] for x in barcodeList):
-        sffName = os.path.join(DIR_BC_FILES,"%s_%s" % (bcid, tail))
-        print "sffName: "+sffName
-        if os.path.exists(sffName):
-            printtime("Barcode processing for '%s': %s" % (bcid, sffName))
-        else:
-            printtime("No barcode SFF file found for '%s': %s" % (bcid, sffName))
-            continue
-
-        align_full_chip(
-                sammeta,
-                sffName,
-                align_full,
-                1,
-                True,
-                sam_parsed,
-                bidirectional,
-                libraryName,
-                flows,
-                aligner_opts_extra,
-                mark_duplicates,
-                ALIGNMENT_RESULTS,
-                outBaseName)
-
-        #rename each output file based on barcode found in fastq filename
-        #but ignore the comprehensive fastq output files
-        printtime("Barcode processing, rename")
-        if os.path.exists('alignment.summary'):
-            try:
-                fname='alignment_%s.summary' % bcid
-                os.rename('alignment.summary', fname)
-#                os.rename(fname,os.path.join(DIR_BC_FILES,fname))
-                fname='alignmentQC_out_%s.txt' % bcid
-                os.rename('alignmentQC_out.txt', fname)
-#                os.rename(fname,os.path.join(DIR_BC_FILES,fname))
-                fname='alignTable_%s.txt' % bcid
-                os.rename('alignTable.txt', fname)
-#                os.rename(fname,os.path.join(DIR_BC_FILES,fname))
-
-            except:
-                printtime('error renaming')
-                traceback.print_exc()
-
-    #rename comprehensive results back to default names
-    for fname in files:
-        if os.path.exists(fname + '.comprehensive'):
-            #    os.rename(fname + '.comprehensive', fname)
-            try:
-                shutil.copyfile(fname + '.comprehensive', fname)
-            except:
-                printtime('ERROR copying %s' % fname + '.comprehensive')
-                traceback.print_exc()
-
-    printtime("Barcode processing, aggreagate")
-    aggregate_alignment ("./",barcodelist_path)
-
 
 
 def alignment_unmapped_bam(
@@ -434,15 +132,12 @@ def alignment_unmapped_bam(
         graph_max_x = 400
 
     
-
-    input_prefix_list = []
-
     for dataset in datasets_basecaller["datasets"]:
         if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
             continue
     
         #-----------------------------------
-        # DEFAULT SINGLE SFF/FASTQ BEHAVIOR - (Runs for barcoded runs too)
+        # Analysis - (Runs for barcoded runs too)
         #-----------------------------------
         try:
             com = "alignmentQC.pl"
@@ -463,14 +158,11 @@ def alignment_unmapped_bam(
                 com += ' --aligner-opts-extra "%s"' % aligner_opts_extra
             if mark_duplicates:
                 com += ' --mark-duplicates'
-            com += " >> %s 2>&1" % os.path.join(ALIGNMENT_RESULTS, 'alignment.log')
-
-
+            
             printtime("Alignment QC command line:\n%s" % com)
             retcode = subprocess.call(com, shell=True)
-            blockprocessing.add_status("alignmentQC.pl", retcode)
             if retcode != 0:
-                printtime("alignmentQC failed, return code: %d" % retcode)
+                printtime("ERROR: alignmentQC.pl failed, return code: %d" % retcode)
                 alignError = open("alignment.error", "w")
                 alignError.write(com)
                 alignError.write('alignmentQC returned with error code: ')
@@ -547,22 +239,8 @@ def alignment_post_processing(
             except:
                 printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
 
-        printtime("Creating legacy name links")
-        if dataset.has_key('legacy_prefix'):
-            link_src = [
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam'),
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam.bai')]
-            link_dst = [
-                os.path.join(ALIGNMENT_RESULTS, os.path.basename(dataset['legacy_prefix'])+'.bam'),
-                os.path.join(ALIGNMENT_RESULTS, os.path.basename(dataset['legacy_prefix'])+'.bam.bai')]
-            for (src,dst) in zip(link_src,link_dst):
-                try:
-                    os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-                except:
-                    printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
-
     # Special legacy post-processing.
-    # Generate merged rawlib.basecaller.bam and rawlib.sff on barcoded runs
+    # Generate merged rawlib.bam on barcoded runs
 
     composite_bam_filename = os.path.join(ALIGNMENT_RESULTS,'rawlib.bam')
     if not os.path.exists(composite_bam_filename):
@@ -603,9 +281,9 @@ def alignment_post_processing(
         base_error_plot.generate_base_error_plot(
             os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
             os.path.join(ALIGNMENT_RESULTS,'base_error_plot.png'),int(graph_max_x))
-        base_error_plot.generate_alignment_rate_plot(
+        ionstats_plots.alignment_rate_plot(
             os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
-            os.path.join(BASECALLER_RESULTS,'readLen.txt'),
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
             os.path.join(ALIGNMENT_RESULTS,'alignment_rate_plot.png'),int(graph_max_x))
 
         # Create aligned histogram plot
@@ -655,6 +333,8 @@ def mergeAlignStatsResults(input_prefix_list,output_prefix):
     fixedkeys = [ 'Genome', 'Genome Version', 'Index Version', 'Genomesize' ]
 
     numberkeys = ['Total number of Reads',
+                  'Total Mapped Reads',
+                  'Total Mapped Target Bases',
                   'Filtered Mapped Bases in Q7 Alignments',
                   'Filtered Mapped Bases in Q10 Alignments',
                   'Filtered Mapped Bases in Q17 Alignments',
@@ -889,9 +569,10 @@ def merge_alignment_stats(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, flows):
         base_error_plot.generate_base_error_plot(
             os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
             os.path.join(ALIGNMENT_RESULTS,'base_error_plot.png'),int(graph_max_x))
-        base_error_plot.generate_alignment_rate_plot(
+        
+        ionstats_plots.alignment_rate_plot(
             os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
-            os.path.join(BASECALLER_RESULTS,'readLen.txt'),
+            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
             os.path.join(ALIGNMENT_RESULTS,'alignment_rate_plot.png'),int(graph_max_x))
 
         
@@ -939,19 +620,4 @@ def merge_alignment_bigdata(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, mark_du
                 blockprocessing.merge_bam_files(block_bam_list,composite_bam_filename,composite_bam_filename+'.bai',mark_duplicates)
         except:
             printtime("ERROR: merging %s unsuccessful" % (dataset['file_prefix']+'.bam'))
-
-        printtime("Creating legacy name links")
-        if dataset.has_key('legacy_prefix'):
-            link_src = [
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam'),
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam.bai')]
-            link_dst = [
-                os.path.join(ALIGNMENT_RESULTS, os.path.basename(dataset['legacy_prefix'])+'.bam'),
-                os.path.join(ALIGNMENT_RESULTS, os.path.basename(dataset['legacy_prefix'])+'.bam.bai')]
-            for (src,dst) in zip(link_src,link_dst):
-                try:
-                    os.symlink(os.path.relpath(src,os.path.dirname(dst)),dst)
-                except:
-                    printtime("ERROR: Unable to symlink '%s' to '%s'" % (src, dst))
-
 

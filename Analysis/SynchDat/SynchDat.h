@@ -47,10 +47,6 @@ class SynchDat : public AcqMovie {
     TraceChunk &chunk = mChunks.GetItem(binIx);
     float t0 = chunk.mT0 * chunk.mBaseFrameRate / 1000.0f;
     int preT0 = 0;
-    /* std::cout << "t0: " << t0 << " binIx: " << binIx << " Num frames:" << chunk.mDeltaFrame.size() << std::endl; */
-    /* for (size_t i = 0; i < chunk.mDeltaFrame.size() -1; i++) { */
-    /*   std::cout << "frame: " << i << ": " << chunk.mDeltaFrame[i] << std::endl; */
-    /* } */
     for (size_t i = 0; i < chunk.mTimePoints.size() -1; i++) {
       if (t0 > chunk.mTimePoints[i]) {
         preT0++;
@@ -159,9 +155,14 @@ class SynchDat : public AcqMovie {
     return mChunks.GetItem(mChunks.GetBin(wellIndex)).mDepth;
   }
 
-  inline short At(int chipRow, int chipCol, int chipFrame) {
+  inline short At(int chipRow, int chipCol, int chipFrame) const {
     return mChunks.GetItemByRowCol(chipRow, chipCol).At(chipRow, chipCol, chipFrame);
   }
+
+  inline short &At(int chipRow, int chipCol, int chipFrame) {
+    return mChunks.GetItemByRowCol(chipRow, chipCol).At(chipRow, chipCol, chipFrame);
+  }
+
 
   inline short At(int wellIx, int chipFrame) {
     return At(wellIx / GetCols(), wellIx % GetCols(), chipFrame);
@@ -170,6 +171,59 @@ class SynchDat : public AcqMovie {
   inline void InterpolatedAt(int chipRow, int chipCol, std::vector<float>& newTime, std::vector<float>& interpolations){
     mChunks.GetItemByRowCol(chipRow, chipCol).InterpolatedAt(chipRow, chipCol, newTime, interpolations);
   }
+
+  static inline float InterpolateValue(float *curVals, std::vector<float> &curTimes, float desiredTime) {
+    if (desiredTime < curTimes[0]) {
+      return curVals[0];
+    }
+    int end = curTimes.size() -1;
+    if (desiredTime > (curTimes[end]+curTimes[end-1])/2) {
+      // extrapolate
+      float t2 =(curTimes[end] + curTimes[end -1])/2;
+      float t1 = (curTimes[end-1] + curTimes[end -2])/2;
+      float slope = (curVals[end] - curVals[end -1])/(t2 - t1);
+      float y = slope * (desiredTime - t1);
+      return y;
+    }
+    std::vector<float>::iterator i = std::upper_bound(curTimes.begin(), curTimes.end(), desiredTime);
+    assert(i != curTimes.end());
+    assert(i != curTimes.begin());
+    int frameAbove = i - curTimes.begin();
+    int frameBelow = frameAbove - 1;
+    if ((curTimes[frameAbove] + curTimes[frameBelow])/2 < desiredTime) {
+      frameAbove++;
+      frameBelow++;
+    }
+    float lowerVal = curVals[frameBelow];
+    float upperVal = curVals[frameAbove];
+    float aboveTime = (curTimes[frameAbove] + curTimes[frameBelow])/2;
+    float belowTime = (curTimes[frameBelow] + (frameBelow == 0 ? 0 : curTimes[frameBelow-1]))/2;
+    assert(desiredTime >= belowTime);
+    assert(aboveTime > belowTime);
+    return lowerVal + (desiredTime - belowTime) * ((upperVal - lowerVal) /(aboveTime - belowTime));
+  }
+
+
+  /* static inline float InterpolateValue(float *curVals, std::vector<float> &curTimes, float desiredTime) { */
+  /*   if (desiredTime < curTimes[0]) { */
+  /*     return curVals[0]; */
+  /*   } */
+  /*   if (desiredTime >= curTimes.back()) { */
+  /*     // extrapolate */
+  /*     int end = curTimes.size() -1; */
+  /*     float slope = (curVals[end] - curVals[end -1])/(curTimes[end] - curTimes[end -1]); */
+  /*     float y = slope * (desiredTime - curTimes[end-1]); // y = mx + b  */
+  /*     return y; */
+  /*   } */
+  /*   std::vector<float>::iterator i = std::upper_bound(curTimes.begin(), curTimes.end(), desiredTime); */
+  /*   assert(i != curTimes.end()); */
+  /*   assert(i != curTimes.begin()); */
+  /*   int frameAbove = i - curTimes.begin(); */
+  /*   int frameBelow = frameAbove - 1; */
+  /*   float lowerVal = curVals[frameBelow]; */
+  /*   float upperVal = curVals[frameAbove]; */
+  /*   return lowerVal + (upperVal - lowerVal) * (desiredTime - curTimes[frameBelow])/(curTimes[frameAbove] - curTimes[frameBelow]); */
+  /* } */
 
   /* inline const short At(size_t chipRow, size_t chipCol, size_t chipFrame) const { */
   /*   return mChunks.GetItemByRowCol(chipRow, chipCol).At(chipRow, chipCol, chipFrame); */
@@ -190,6 +244,36 @@ class SynchDat : public AcqMovie {
   size_t GetRowBin() const { return mChunks.GetRowBin(); }
   size_t GetColBin() const { return mChunks.GetColBin(); }
 
+  void Clear() { 
+    mChunks.Clear();
+    ClearOrigTimes();
+    mInfo.Clear();
+  }
+
+  int GetOrigUncompFrames() { 
+    std::string val;
+    GetValue("uncompressed_frames",val);
+    return atoi(val.c_str()); 
+  }
+  int GetBaseFrameRate() { return mChunks.mBins[0].mBaseFrameRate; }
+
+  void ClearOrigTimes() { mOrigTimes.resize(0); }
+
+  const std::vector<int> & GetOriginalTimes() {
+    if (!mOrigTimes.empty()) {
+      return mOrigTimes;
+    }
+    std::vector<std::string> tokens;
+    std::string s;
+    GetValue("orig_timestamps", s);
+    split(s, ',', tokens);
+    mOrigTimes.resize(tokens.size());
+    for (size_t i = 0; i < tokens.size(); i++) {
+      mOrigTimes[i] = atoi(tokens[i].c_str());
+    }
+    return mOrigTimes;
+  }
+
   /* Metadata accessors. */
   /** Get the value associated with a particular key, return false if key not present. */
   bool GetValue(const std::string &key, std::string &value)  const { return mInfo.GetValue(key, value); }
@@ -209,11 +293,12 @@ class SynchDat : public AcqMovie {
   bool KeyExists(const std::string &key) const { return mInfo.KeyExists(key); }
 
   /** Empty out the keys, value pairs. */
-  void Clear() { mInfo.Clear(); };
+  void ValuesClear() { mInfo.Clear(); };
 
   // should be private...
   GridMesh<TraceChunk> mChunks;
   std::vector<std::string> mVersion;
+  std::vector<int> mOrigTimes;
   Info mInfo;         ///< Any key,value information associated with this hdf5 file.
 };
 

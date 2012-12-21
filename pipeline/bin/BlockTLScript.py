@@ -13,6 +13,7 @@ import traceback
 import fnmatch
 import xmlrpclib
 
+from ion.reports import beadDensityPlot
 from ion.utils import blockprocessing
 from ion.utils import explogparser
 from ion.utils import sigproc
@@ -60,20 +61,52 @@ if __name__=="__main__":
         jobserver = xmlrpclib.ServerProxy("http://%s:%d" % 
             (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT), 
             verbose=False, allow_none=True)
-        debugging_cwd = os.getcwd()
+        primary_key_file = os.path.join(os.getcwd(),'primary.key')
     except:
         traceback.print_exc()
-    
+
+
+    def add_status(process, status, message=""):
+        f = open("blockstatus.txt", 'a')
+        f.write(process+"="+str(status)+" "+str(message)+"\n")
+        f.close()
+
+
     def set_result_status(status):
         try:
-            primary_key_file = os.path.join(os.getcwd(),'primary.key')
-            jobserver.updatestatus(primary_key_file, status, True)
-            printtime("TLStatus %s\tpid %d\tpk file %s started in %s" % 
-                (status, os.getpid(), primary_key_file, debugging_cwd))
+            if os.path.exists(primary_key_file):
+                jobserver.updatestatus(primary_key_file, status, True)
+                printtime("BlockTLStatus %s\tpid %d\tpk file %s started" % 
+                    (status, os.getpid(), primary_key_file))
         except:
             traceback.print_exc()
 
-    
+
+    def upload_analysismetrics(bfmaskstatspath):
+
+        print("Starting Upload Analysis Metrics")
+        try:
+            if os.path.exists(primary_key_file):
+                full_bfmaskstatspath = os.path.join(os.getcwd(), bfmaskstatspath)
+                result = jobserver.uploadanalysismetrics(full_bfmaskstatspath, primary_key_file)
+                printtime("Completed Upload Analysis Metrics: %s" % result)
+        except Exception as err:
+            printtime("Error during analysis metrics upload %s" % err)
+            traceback.print_exc()
+
+
+    def update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title):
+
+        printtime("Make Bead Density Plots")
+        try:
+            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
+        except IOError as err:
+            printtime("Bead Density Plot file error: %s" % err)
+        except Exception as err:
+            printtime("Bead Density Plot generation failure: %s" % err)
+            traceback.print_exc()
+
+
 
     if args.do_sigproc:
 
@@ -83,25 +116,81 @@ if __name__=="__main__":
         f.write('wellfinding = yellow\n')
         f.write('signalprocessing = grey\n')
         f.write('basecalling = grey\n')
-        f.write('sffread = grey\n')
         f.write('alignment = grey')
         f.close()
 
         if env['doThumbnail']:
-            analysisArgs = env['thumbnailAnalysisArgs']
             oninstrumentanalysis = False
         else:
-            analysisArgs = env['analysisArgs']
             oninstrumentanalysis = env['oninstranalysis']
 
-        sigproc.sigproc(
-            analysisArgs,
+
+        if not oninstrumentanalysis:
+            status = sigproc.beadfind(
+                        env['beadfindArgs'],
+                        env['libraryKey'],
+                        env['tfKey'],
+                        env['pathToRaw'],
+                        env['SIGPROC_RESULTS'])
+            add_status("Beadfind", status)
+
+            if status != 0:
+                printtime("ERROR: Beadfind finished with status '%s'" % status)
+                sys.exit(1)
+
+
+        ########################################################
+        #Make Bead Density Plots                               #
+        ########################################################
+        bfmaskPath = os.path.join(env['SIGPROC_RESULTS'],"bfmask.bin")
+        bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"bfmask.stats")
+        try:
+            upload_analysismetrics(bfmaskstatspath)
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
+        except:
+            traceback.print_exc()
+
+
+        if not oninstrumentanalysis:
+
+            status = sigproc.sigproc(
+                env['analysisArgs'],
+                env['libraryKey'],
+                env['tfKey'],
+                env['pathToRaw'],
+                env['SIGPROC_RESULTS'])
+            add_status("Analysis", status)
+
+            if status != 0:
+                printtime("ERROR: Analysis finished with status '%s'" % status)
+                sys.exit(1)
+
+            # write return code into file
+            try:
+                f = open(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 'w')
+                f.write(str(status))
+                f.close()
+                os.chmod(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 0775)
+            except:
+                traceback.print_exc()
+
+        ########################################################
+        # Make Bead Density Plots                              #
+        ########################################################
+        bfmaskPath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.bin")
+        bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.stats")
+        try:
+            upload_analysismetrics(bfmaskstatspath)
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
+        except:
+            traceback.print_exc()
+
+        sigproc.generate_raw_data_traces(
             env['libraryKey'],
             env['tfKey'],
-            env['pathToRaw'],
-            env['SIGPROC_RESULTS'],
-            env['shortRunName'],
-            oninstrumentanalysis)
+            env['flowOrder'],
+            env['SIGPROC_RESULTS'])
+
 
     # In case of from-wells or from-basecaller reanalysis of a legacy report, some adjustments may be needed
     handle_legacy_report.handle_sigproc(env['SIGPROC_RESULTS'])
@@ -114,104 +203,113 @@ if __name__=="__main__":
             printtime ("ERROR: basecaller pre-conditions not met")
             sys.exit(1)
 
+        if not os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt')):
+            printtime ("ERROR: missing %s" % os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt'))
+            printtime ("ERROR: basecaller pre-conditions not met")
+            sys.exit(1)
+
+        try:
+            with open(os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt'), 'r') as f:
+                return_code = f.read()
+                if not int(return_code) == 0:
+                    printtime ("ERROR: basecaller pre-conditions not met")
+                    raise Exception("Analysis failed with %s" % return_code)
+        except:
+            traceback.print_exc()
+            sys.exit(1)
+
+
         set_result_status('Base Calling')
         # create analysis progress bar file
         f = open('progress.txt','w')
         f.write('wellfinding = green\n')
         f.write('signalprocessing = green\n')
         f.write('basecalling = yellow\n')
-        f.write('sffread = grey\n')
         f.write('alignment = grey')
         f.close()
-
-        if env['doThumbnail']:
-            basecallerArgs = env['thumbnailBasecallerArgs']
-        else:
-            basecallerArgs = env['basecallerArgs']
-
-        basecaller.basecalling(
-            env['SIGPROC_RESULTS'],
-            basecallerArgs,
-            env['libraryKey'],
-            env['tfKey'],
-            env['runID'],
-            env['flowOrder'],
-            env['reverse_primer_dict'],
-            env['BASECALLER_RESULTS'],
-            env['barcodeId'],
-            env['barcodesplit_filter'],
-            env['DIR_BC_FILES'],
-            os.path.join("barcodeList.txt"),
-            os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
-            env['libraryName'],
-            env['sample'],
-            env['site_name'],
-            env['notes'],
-            env['start_time'],
-            env['chipType'],
-            env['expName'],
-            env['resultsName'],
-            env['pgmName']
-        )
         
-        
-        ########################################################################
-        #
-        # NEW PIPELINE BRANCH: Flow Space Recalibration and re-basecalling
-        #
-        ########################################################################
-        if env['doBaseRecal']:
-            printtime("DEBUG: Flow Space Recalibration is enabled")
-#            # Replace *.basecaller.bam files with links, only if recalibration is on - Marcin
-#            try:
-#                f = open(os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json"),'r')
-#                datasets_basecaller = json.load(f);
-#                f.close()
-#                for dataset in datasets_basecaller["datasets"]:
-#                    bam_filename_primary = os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
-#                    bam_filename_backup = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+".old.basecaller.bam")
-#                    if os.path.exists(bam_filename_primary):
-#                        shutil.move(bam_filename_primary,bam_filename_backup)
-#                        os.symlink(os.path.relpath(bam_filename_backup,os.path.dirname(bam_filename_primary)),bam_filename_primary)
-#                        
-#            except:
-#                printtime("ERROR: Replacing basecaller.bam files with links failed")
-#                traceback.print_exc()
-            
-            if env['libraryName']=='none' or len(env['libraryName'])<1:
-                printtime("DEBUG: No reference specified - Flow Space Recalibration skipped")
-            else:
-                printtime("DEBUG: Flow Space Recalibration with Reference: %s" % env['libraryName'])
-                try:
-                    flow_space_recal.base_recalib(env['BASECALLER_RESULTS'],
-                                                  env['runID'],
-                                                  env['align_full'],
-                                                  env['DIR_BC_FILES'],
-                                                  env['libraryName'],
-                                                  env['sample'],
-                                                  env['chipType'],
-                                                  env['site_name'],
-                                                  env['flows'],
-                                                  env['notes'],
-                                                  env['barcodeId'],
-                                                  env['aligner_opts_extra'],
-                                                  env['mark_duplicates'],
-                                                  env['start_time'],
-                                                  env['tmap_version'],
-                                                  "datasets_basecaller.json", # file containing all available datasets
-                                                  "BaseCaller.json" #file containing dimension info (offsets, rows, cols) and flow info for stratification
-                                                  )
-                except:
-                    printtime("ERROR: Flow Space Recalibration Failed")
+        ########################################################
+        # Flow Space Recalibration and re-basecalling          #
+        ########################################################
+        additional_basecallerArgs = ""
+        if env['libraryName']!='none' and len(env['libraryName'])>=1 and env['doBaseRecal']:
+            printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['libraryName'])
+            try:
+                qvtable = flow_space_recal.base_recalib(
+                                                env['SIGPROC_RESULTS'],
+                                                env['basecallerArgs'],
+                                                env['libraryKey'],
+                                                env['tfKey'],
+                                                env['runID'],
+                                                env['flowOrder'],
+                                                env['reverse_primer_dict'],
+                                                env['BASECALLER_RESULTS'],
+                                                env['barcodeId'],
+                                                env['barcodeSamples'],
+                                                env['barcodesplit_filter'],
+                                                env['DIR_BC_FILES'],
+                                                os.path.join("barcodeList.txt"),
+                                                os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
+                                                env['libraryName'],
+                                                env['sample'],
+                                                env['site_name'],
+                                                env['notes'],
+                                                env['start_time'],
+                                                env['chipType'],
+                                                env['expName'],
+                                                env['resultsName'],
+                                                env['pgmName'],
+                                                env['tmap_version'],
+                                                "datasets_basecaller.json", # file containing all available datasets
+                                                "BaseCaller.json" #file containing dimension info (offsets, rows, cols) and flow info for stratification
+                                               )
+                printtime("QVTable: %s" % qvtable)
+                additional_basecallerArgs = " --calibration-file " + qvtable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json")
+                add_status("Recalibration", 0)
+            except:
+                add_status("Recalibration", 1)
+
         else:
-            printtime("DEBUG: Flow Space Recalibration is disabled")
+            printtime("DEBUG: Flow Space Recalibration is disabled, Reference: '%s'" % env['libraryName'])
+            updated_basecallerArgs = env['basecallerArgs']
+
+        try:
+            basecaller.basecalling(
+                env['SIGPROC_RESULTS'],
+                env['basecallerArgs'] + additional_basecallerArgs,
+                env['libraryKey'],
+                env['tfKey'],
+                env['runID'],
+                env['flowOrder'],
+                env['reverse_primer_dict'],
+                env['BASECALLER_RESULTS'],
+                env['barcodeId'],
+                env['barcodeSamples'],
+                env['barcodesplit_filter'],
+                env['DIR_BC_FILES'],
+                os.path.join("barcodeList.txt"),
+                os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
+                env['libraryName'],
+                env['sample'],
+                env['site_name'],
+                env['notes'],
+                env['start_time'],
+                env['chipType'],
+                env['expName'],
+                env['resultsName'],
+                env['pgmName']
+            )
+            add_status("Basecaller", 0)
+        except:
+            add_status("Basecaller", 1)
+
+
         
         # create analysis progress bar file
         f = open('progress.txt','w')
         f.write('wellfinding = green\n')
         f.write('signalprocessing = green\n')
         f.write('basecalling = green\n')
-        f.write('sffread = yellow\n')
         f.write('alignment = grey')
         f.close()
 
@@ -220,9 +318,7 @@ if __name__=="__main__":
 
 
         basecaller.tf_processing(
-            env['SIGPROC_RESULTS'],
             os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
-            env['libraryKey'],
             env['tfKey'],
             env['flowOrder'],
             env['BASECALLER_RESULTS'],
@@ -250,6 +346,7 @@ if __name__=="__main__":
         #make sure pre-conditions for alignment step are met
         if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):
             printtime ("ERROR: alignment pre-conditions not met")
+            sys.exit(1)
         
         if env['libraryName']=='none' or len(env['libraryName'])<1:
             # skip alignment when no library
@@ -261,7 +358,6 @@ if __name__=="__main__":
             f.write('wellfinding = green\n')
             f.write('signalprocessing = green\n')
             f.write('basecalling = green\n')
-            f.write('sffread = green\n')
             f.write('alignment = yellow')
             f.close()
             
@@ -294,17 +390,21 @@ if __name__=="__main__":
                     env['mark_duplicates'],
                     bidirectional,
                     env['sam_parsed'])
-        
-            alignment.alignment_unmapped_bam(
-                env['BASECALLER_RESULTS'],
-                env['ALIGNMENT_RESULTS'],
-                env['align_full'],
-                env['libraryName'],
-                env['flows'],
-                env['aligner_opts_extra'],
-                env['mark_duplicates'],
-                bidirectional,
-                env['sam_parsed'])
+
+            try:
+                alignment.alignment_unmapped_bam(
+                    env['BASECALLER_RESULTS'],
+                    env['ALIGNMENT_RESULTS'],
+                    env['align_full'],
+                    env['libraryName'],
+                    env['flows'],
+                    env['aligner_opts_extra'],
+                    env['mark_duplicates'],
+                    bidirectional,
+                    env['sam_parsed'])
+                add_status("Alignment", 0)
+            except:
+                add_status("Alignment", 1)
 
 
         # create analysis progress bar file
@@ -312,7 +412,6 @@ if __name__=="__main__":
         f.write('wellfinding = green\n')
         f.write('signalprocessing = green\n')
         f.write('basecalling = green\n')
-        f.write('sffread = green\n')
         f.write('alignment = green')
         f.close()
 

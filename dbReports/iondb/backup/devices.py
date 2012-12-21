@@ -1,7 +1,9 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-import os, sys
+import os
+import sys
 import subprocess
+
 
 class Devices:
     def __init__(self, path, type, blocks, used, avail, capac, mounted):
@@ -13,46 +15,48 @@ class Devices:
         self.avail = avail
         self.capac = capac
         self.mounted = mounted
-    
+
     def get_name(self):
         return self.name
 
     def get_free_space(self):
-        return float(100-int(self.capac.split('%')[0]))
-    
+        return float(100 - int(self.capac.split('%')[0]))
+
     def get_path(self):
         return self.mounted
-    
+
     def get_available(self):
         return self.avail
-    
+
     def get_type(self):
         return self.type
 
-def disk_report():  
-    report = {} # dictionary, {'deviceName': [type,1024-blocks,Used,Aval,Capac,MountedOn]}
+
+def disk_report():
+    report = {}  # dictionary, {'deviceName': [type,1024-blocks,Used,Aval,Capac,MountedOn]}
     #If df fails after 2 seconds kill the process
-    p = subprocess.Popen("ion_timeout.sh 2 df -TP", shell=True,  
-                         stdout=subprocess.PIPE)  
+    p = subprocess.Popen("ion_timeout.sh 2 df -TP", shell=True,
+                         stdout=subprocess.PIPE)
     stdout, stderr = p.communicate()
-    
+
     dat = [i.strip().split(' ') for i in stdout.splitlines(True)][1:]
     for i in dat:
         key = i[0]
-        report[key]=[]
+        report[key] = []
         for j in i:
             if j != '' and j != key:
-                report[key].append(j)      
+                report[key].append(j)
     devices = []
-    for k,v in report.iteritems():
+    for k, v in report.iteritems():
         type = v[0]
         blocks = v[1]
         used = v[2]
         avail = v[3]
         capac = v[4]
         mounted = v[5]
-        devices.append(Devices(k,type,blocks,used,avail,capac,mounted))
+        devices.append(Devices(k, type, blocks, used, avail, capac, mounted))
     return devices
+
 
 def to_media(devArr):
     ret = []
@@ -61,5 +65,5 @@ def to_media(devArr):
         type = i.get_type()
         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
         if 'media' in path and ('ext' in type or 'nfs' in type):
-            ret.append((path,path))
+            ret.append((path, path))
     return ret

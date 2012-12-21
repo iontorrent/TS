@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 43376 $")
+__version__ = filter(str.isdigit, "$Revision: 49171 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -50,10 +50,7 @@ from urlparse import urlunsplit
 # convention when B is a module in package A, or import A when
 # A is a module.
 #from ion.analysis import cafie,sigproc
-#from ion.fileformats import sff
-from ion.reports import blast_to_ionogram, \
-    parseBeadfind, parseProcessParams, \
-    libGraphs, beadHistogram
+from ion.reports import parseBeadfind, libGraphs, beadHistogram
 
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
@@ -66,42 +63,33 @@ import re
 #
 #####################################################################
 
-def getExpLogMsgs(env):
+def getExpLogMsgs(explogfinalfilepath):
     """
-    Parses explog_final.txt for warning messages and dumps them to
-    ReportLog.html.
+    Parses explog_final.txt for warning messages and dumps them to stdout.
     This only works if the raw data files have not been deleted.
     For a from-wells analysis, you may not have raw data.
     """
-    inputFile = os.path.join(env['pathToRaw'],'explog_final.txt')
-    outputFile = os.path.join('./','ReportLog.html')
+    printtime("Check file '%s' for warnings" % explogfinalfilepath)
     try:
-        f = open (inputFile, 'r')
+        with open(explogfinalfilepath, 'r') as f:
+            try:
+                text = f.readlines()
+                for line in text:
+                    if "WARNINGS:" in line and len("WARNINGS: ") < len(line):
+                        printtime("WARNINGS from explog_final.txt:")
+                        printtime(line)
+            except:
+                traceback.print_exc()
     except:
-        printtime("Cannot open file %s" % inputFile)
-        return True
+        printtime("Cannot open file %s" % explogfinalfilepath)
 
-    line = f.readline()
-    while line:
-        if "WARNINGS:" in line:
-            if len("WARNINGS: ") < len(line):
-                # print to output file
-                try:
-                    g = open (outputFile, 'a')
-                    g.write("From PGM explog_final.txt:\n")
-                    g.write (line)
-                    g.close()
-                except:
-                    printtime("Cannot open file %s" % outputFile)
-        line = f.readline()
-
-    f.close()
-        
-    return False
 
 def get_pgm_log_files(rawdatadir):
     # Create a tarball of the pgm raw data log files for inclusion into CSA.
     # tarball it now before the raw data gets deleted.
+    # inst diagnostic files are always in toplevel raw data dir:
+    if 'thumbnail' in rawdatadir:
+        rawdatadir = rawdatadir.replace('thumbnail', '')
     files=['explog_final.txt',
     'explog.txt',
     'InitLog.txt',
@@ -189,7 +177,7 @@ def spawn_cluster_job(rpath, scriptname, args, holds=None):
     jt_workingDirectory = os.path.join(cwd, rpath)
     jt_outputPath = ":" + os.path.join(cwd, out_path)
     jt_errorPath = ":" + os.path.join(cwd, err_path)
-    jt_args = [os.path.join('/usr/bin',scriptname),args]
+    jt_args = [os.path.join('/usr/bin',scriptname)] + args
     jt_joinFiles = False
 
     if holds != None and len(holds) > 0:
@@ -282,25 +270,24 @@ if __name__=="__main__":
     os.umask(0002)
 
     '''
-    fromwellsfiles = []
-    fromwellsfiles.append("iontrace_Library.png")
-    fromwellsfiles.append("1.wells")
-    fromwellsfiles.append("bfmask.stats")
-    fromwellsfiles.append("analysis.bfmask.stats")
-    fromwellsfiles.append("analysis.bfmask.bin")
-    fromwellsfiles.append("Bead_density_raw.png")
-    fromwellsfiles.append("Bead_density_contour.png")
-    fromwellsfiles.append("processParameters.txt")
-    fromwellsfiles.append("avgNukeTrace_%s.txt" % env['tfKey'])
-    fromwellsfiles.append("avgNukeTrace_%s.txt" % env['libraryKey'])
-    fromsfffiles = []
-    fromsfffiles.append("rawlib.sff")
-    fromsfffiles.append("rawlib.fastq")
-    fromsfffiles.append("quality.summary")
-    fromsfffiles.append("bfmask.bin")
-    fromsfffiles.append("readLen.txt")
-    fromsfffiles.append("raw_peak_signal")
-    fromsfffiles.append("BaseCaller.json")
+    from_sigproc_files = []
+    from_sigproc_files.append("iontrace_Library.png")
+    from_sigproc_files.append("1.wells")
+    from_sigproc_files.append("bfmask.stats")
+    from_sigproc_files.append("analysis.bfmask.stats")
+    from_sigproc_files.append("analysis.bfmask.bin")
+    from_sigproc_files.append("Bead_density_raw.png")
+    from_sigproc_files.append("Bead_density_contour.png")
+    from_sigproc_files.append("processParameters.txt")
+    from_sigproc_files.append("avgNukeTrace_%s.txt" % env['tfKey'])
+    from_sigproc_files.append("avgNukeTrace_%s.txt" % env['libraryKey'])
+    from_basecaller_files = []
+    from_basecaller_files.append("rawlib.basecaller.bam")
+    from_basecaller_files.append("rawlib.ionstats_basecaller.json")
+    from_basecaller_files.append("bfmask.bin")
+    from_basecaller_files.append("readLen.txt")
+    from_basecaller_files.append("raw_peak_signal")
+    from_basecaller_files.append("BaseCaller.json")
     '''
     print "oninstranalysis:(%s)" % env['oninstranalysis']
     if env['oninstranalysis'] and is_blockprocessing:
@@ -310,13 +297,19 @@ if __name__=="__main__":
     print "blockArgs '"+str(env['blockArgs'])+"'"
     print "previousReport: '"+str(env['previousReport'])+"'"
 
-    explogfilepath = os.path.join(env['pathToRaw'],'explog.txt')
-    explogfinalfilepath = os.path.join(env['pathToRaw'],'explog_final.txt')
+    if is_thumbnail: 
+        initlogfilepath = os.path.join( env['pathToRaw'],'..','InitLog.txt')
+        explogfilepath = os.path.join( env['pathToRaw'],'..','explog.txt')
+        explogfinalfilepath = os.path.join( env['pathToRaw'],'..','explog_final.txt')
+    else:
+        initlogfilepath = os.path.join( env['pathToRaw'],'InitLog.txt')
+        explogfilepath = os.path.join( env['pathToRaw'],'explog.txt')
+        explogfinalfilepath = os.path.join( env['pathToRaw'],'explog_final.txt')
 
     if env['blockArgs'] == "fromRaw":
-        runFromRaw = True
-        runFromWells = True
-        runFromSFF = True
+        runFromDC = True
+        runFromSigproc = True
+        runFromBasecaller = True
 
         if env['oninstranalysis'] and is_blockprocessing:
             os.symlink(os.path.join(env['pathToRaw'], 'onboard_results', env['SIGPROC_RESULTS']), env['SIGPROC_RESULTS'])
@@ -334,9 +327,10 @@ if __name__=="__main__":
                 traceback.print_exc()
 
     elif env['blockArgs'] == "fromWells":
-        runFromRaw = False
-        runFromWells = True
-        runFromSFF = True
+        runFromDC = False
+        runFromSigproc = True
+        runFromBasecaller = True
+        initlogfilepath = os.path.join(env['previousReport'],'InitLog.txt')
         explogfilepath = os.path.join(env['previousReport'],'explog.txt')
         explogfinalfilepath = os.path.join(env['previousReport'],'explog_final.txt')
 
@@ -353,31 +347,11 @@ if __name__=="__main__":
                 os.mkdir(env['BASECALLER_RESULTS'])
             except:
                 traceback.print_exc()
-    elif env['blockArgs'] == "fromSFF":
-        runFromRaw = False
-        runFromWells = False
-        runFromSFF = True
-        explogfilepath = os.path.join(env['previousReport'],'explog.txt')
-        explogfinalfilepath = os.path.join(env['previousReport'],'explog_final.txt')
-        previous_raw_peak_signal = os.path.join(env['previousReport'], 'raw_peak_signal')
-
-        sigproc_target = os.path.join(env['previousReport'], env['SIGPROC_RESULTS'])
-        basecaller_target = os.path.join(env['previousReport'], env['BASECALLER_RESULTS'])
-
-        # fix, try to prepare old reports
-        if not os.path.exists(sigproc_target):
-            os.symlink(env['previousReport'], sigproc_target)
-        if not os.path.exists(basecaller_target):
-            os.symlink(env['previousReport'], basecaller_target)
-
-        os.symlink(sigproc_target,env['SIGPROC_RESULTS'])
-        os.symlink(basecaller_target, env['BASECALLER_RESULTS'])
-        os.symlink(previous_raw_peak_signal, 'raw_peak_signal')
     else:
         printtime("WARNING: start point not defined, create new report from raw data")
-        runFromRaw = True
-        runFromWells = True
-        runFromSFF = True
+        runFromDC = True
+        runFromSigproc = True
+        runFromBasecaller = True
 
         if not os.path.isdir(env['SIGPROC_RESULTS']):
             try:
@@ -390,14 +364,15 @@ if __name__=="__main__":
             except:
                 traceback.print_exc()
 
-    #copy explog.txt into report directory
-    try:
-        if os.path.exists(explogfilepath):
-            shutil.copy(explogfilepath, ".")
-        else:
-            printtime("ERROR: %s doesn't exist" % explogfilepath)
-    except:
-        printtime(traceback.format_exc())
+    #copy InitLog.txt and explog.txt into report directory
+    for filepath in [initlogfilepath, explogfilepath]:
+        try:
+            if os.path.exists(filepath):
+                shutil.copy(filepath, ".")
+            else:
+                printtime("ERROR: %s doesn't exist" % filepath)
+        except:
+            printtime(traceback.format_exc())
 
     pluginbasefolder = 'plugin_out'
     blockprocessing.initTLReport(pluginbasefolder)
@@ -462,7 +437,7 @@ if __name__=="__main__":
 
         result_dirs = {}
         for block in blocks:
-            result_dirs[block['id_str']] = blockprocessing.initBlockReport(block, env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'], env['oninstranalysis'])
+            result_dirs[block['id_str']] = blockprocessing.initBlockReport(block, env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'], pluginbasefolder, env['oninstranalysis'])
 
         # create a list of blocks
         blocks_to_process = []
@@ -479,7 +454,7 @@ if __name__=="__main__":
                 sys.stdout.flush()
                 sys.stderr.flush()
 
-                if runFromRaw:
+                if runFromDC:
                     if is_thumbnail or is_wholechip:
                         data_file = os.path.join(env['pathToRaw'],'acq_0000.dat')
                     else:
@@ -491,23 +466,44 @@ if __name__=="__main__":
                     if os.path.exists(data_file):
 
                         if env['oninstranalysis'] and is_blockprocessing:
-                            # wait until transfer seems to be finished
+                            # check activity on directory
                             mod_time = os.stat(data_file).st_mtime
                             cur_time = time.time()
-                            if cur_time - mod_time < 120:
+                            if cur_time - mod_time < 180:
                                 printtime("mtime %s" % mod_time)
                                 printtime("ctime %s" % cur_time)
                                 timeout -= 10
                                 time.sleep (10)
                                 continue
 
-                            wells_file = os.path.join(data_file, '1.wells')
-                            if not hash_matches(wells_file):
-                                printtime("WARNING: %s might be corrupt" % wells_file)
-                                #blocks_to_process.remove(block)
-                                #continue
+                            wait_list = [
+                                         os.path.join(data_file, 'analysis_return_code.txt'),
+#                                         os.path.join(data_file, 'analysis.bfmask.bin'),
+#                                         os.path.join(data_file, 'analysis.bfmask.stats'),
+                                         os.path.join(data_file, 'processParameters.txt'),
+                                         os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['tfKey']),
+                                         os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['libraryKey']),
+                                         os.path.join(data_file, '1.wells'),
+                                        ]
+
+                            # check if transfer is delayed, for example back-to-back run
+                            block_incomplete = False
+                            for transferred_file in wait_list:
+                                if not os.path.exists(transferred_file):
+                                    printtime("WARNING: %s file transfer delayed" % transferred_file)
+                                    block_incomplete = True
+                            if block_incomplete:
+                                timeout -= 10
+                                time.sleep (10)
+                                continue
+
+                            for transferred_file in wait_list:
+                                if not hash_matches(transferred_file):
+                                    printtime("WARNING: %s might be corrupt" % transferred_file)
+                                    #blocks_to_process.remove(block)
+                                    #continue
                             
-                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', '--do-sigproc')
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', ['--do-sigproc'])
                         sigproc_job_dict[block['id_str']] = str(block['jobid'])
                         printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
                     else:
@@ -517,26 +513,23 @@ if __name__=="__main__":
                         continue
 
 
-                if runFromWells:
+                if runFromSigproc:
                     try:
                         if env['blockArgs'] == "fromWells":
                             wait_list = []
                         else:
                             wait_list = [ sigproc_job_dict[block['id_str']] ]
-                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py','--do-basecalling',wait_list)
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',['--do-basecalling'],wait_list)
                         basecaller_job_dict[block['id_str']] = str(block['jobid'])
                         printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
                     except:
                         printtime("submitting basecaller job for block (%s) failed" % block['id_str'])
 
 
-                if runFromSFF:
+                if runFromBasecaller:
                     try:
-                        if env['blockArgs'] == "fromSFF":
-                            wait_list = []
-                        else:
-                            wait_list = [ basecaller_job_dict[block['id_str']] ]
-                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py','--do-alignment',wait_list)
+                        wait_list = [ basecaller_job_dict[block['id_str']] ]
+                        block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',['--do-alignment'],wait_list)
                         alignment_job_dict[block['id_str']] = str(block['jobid'])
                         printtime("Submitted block (%s) alignment job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
                     except:
@@ -546,15 +539,15 @@ if __name__=="__main__":
 
 
         if not is_thumbnail and not is_wholechip:
-            if runFromRaw:
-                merge_job_dict['sigproc'] = spawn_cluster_job('.','MergeTLScript.py','--do-sigproc',sigproc_job_dict.values())
-            if runFromWells:
-                merge_job_dict['basecaller'] = spawn_cluster_job('.','MergeTLScript.py','--do-basecalling',basecaller_job_dict.values())
-            if runFromSFF:
-                merge_job_dict['alignment'] = spawn_cluster_job('.','MergeTLScript.py','--do-alignment',alignment_job_dict.values()+[merge_job_dict.get('basecaller','')])
-        else:
-            merge_job_dict['merge/zipping'] = spawn_cluster_job('.','MergeTLScript.py','--do-zipping',alignment_job_dict.values())
+            if runFromDC:
+                merge_job_dict['sigproc'] = spawn_cluster_job('.','MergeTLScript.py',['--do-sigproc'],sigproc_job_dict.values())
+            if runFromSigproc:
+                merge_job_dict['basecaller'] = spawn_cluster_job('.','MergeTLScript.py',['--do-basecalling'],basecaller_job_dict.values())
+            if runFromBasecaller:
+                merge_job_dict['alignment'] = spawn_cluster_job('.','MergeTLScript.py',['--do-alignment'],alignment_job_dict.values()+[merge_job_dict.get('basecaller','')])
 
+        # always create links to downloadable files
+        merge_job_dict['merge/zipping'] = spawn_cluster_job('.','MergeTLScript.py',['--do-zipping'],alignment_job_dict.values()+[merge_job_dict.get('alignment','')])
 
         # write job id's to file
         f = open('job_list.txt','w')
@@ -601,11 +594,7 @@ if __name__=="__main__":
 
                 if (len(blocklevel_plugins) > 0) and (block['status']=='done'):
                     block_pluginbasefolder = os.path.join(result_dirs[block['id_str']],pluginbasefolder)
-                    env['blockId'] = block['id_str']
-                    if not os.path.isdir(block_pluginbasefolder):
-                        oldmask = os.umask(0000)   #grant write permission to plugin user
-                        os.mkdir(block_pluginbasefolder)
-                        os.umask(oldmask)  
+                    env['blockId'] = block['id_str']                    
                     plugins = blockprocessing.runplugins(plugins, env, block_pluginbasefolder, url_root, 'block')
 
                 if block['status']=='done' or block['status']=='failed' or block['status']=="DRMAA BUG":
@@ -652,7 +641,6 @@ if __name__=="__main__":
     f.write('wellfinding = green\n')
     f.write('signalprocessing = green\n')
     f.write('basecalling = green\n')
-    f.write('sffread = green\n')
     f.write('alignment = green')
     f.close()
 
@@ -686,7 +674,7 @@ if __name__=="__main__":
         BaseCallerJsonPath = os.path.join(env['BASECALLER_RESULTS'],'BaseCaller.json')
         tfmapperstats_outputfile = os.path.join(env['BASECALLER_RESULTS'],"TFStats.json")
         merged_bead_mask_path = os.path.join(env['SIGPROC_RESULTS'], 'MaskBead.mask')
-        QualityPath = os.path.join(env['BASECALLER_RESULTS'],'quality.summary')
+        QualityPath = os.path.join(env['BASECALLER_RESULTS'], 'ionstats_basecaller.json')
         peakOut = os.path.join('.','raw_peak_signal')
         beadPath = os.path.join(env['SIGPROC_RESULTS'],'analysis.bfmask.stats')
         procPath = os.path.join(env['SIGPROC_RESULTS'],'processParameters.txt')
@@ -710,7 +698,7 @@ if __name__=="__main__":
                                 STATUS = 'No Live Beads'
                             else:
                                 STATUS = "Error in %s" % component
-                        elif component == 'alignmentQC.pl':
+                        elif component == 'Alignment':
                             # TS-2992 alignment failure will still mark the analysis report complete
                             # but in the Default Report page, the alignment section will display the failure.
                             continue
@@ -719,9 +707,21 @@ if __name__=="__main__":
                             break
             else:
                 STATUS = "Error"
+        elif is_blockprocessing:
+            try:
+                raw_return_code_file = os.path.join(env['BASECALLER_RESULTS'],"composite_return_code.txt")
+                f = open(raw_return_code_file)
+                return_code = f.readline()
+                f.close()
+                if int(return_code) == 0:
+                    STATUS = "Completed"
+                else:
+                    STATUS = "Completed with %s error(s)" % return_code
+            except:
+                STATUS = "Error"
+                printtime(traceback.format_exc())
         else:
-            #TODO Report Proton Full Chip Reports always as 'Completed'
-            STATUS = "Completed"
+            STATUS = "Error"
 
         ret_message = jobserver.uploadmetrics(
             os.path.join(mycwd,tfmapperstats_outputfile),
@@ -732,13 +732,12 @@ if __name__=="__main__":
             os.path.join(mycwd,peakOut),
             os.path.join(mycwd,QualityPath),
             os.path.join(mycwd,BaseCallerJsonPath),
-            "", #pe.json
             os.path.join(mycwd,'primary.key'),
             os.path.join(mycwd,'uploadStatus'),
             STATUS,
             reportLink)
         # this will replace the five progress squares with a re-analysis button
-        print "jobserver.uploadmetrics returned: "+str(ret_message)
+        printtime("jobserver.uploadmetrics returned: "+str(ret_message))
     except:
         traceback.print_exc()
 
@@ -749,9 +748,8 @@ if __name__=="__main__":
         primary_key = open("primary.key").readline()
         primary_key = primary_key.split(" = ")
         primary_key = primary_key[1]
-        cmd = "/opt/ion/RSM/createExperimentMetrics.py " + str(primary_key)
-        printtime(str(cmd))
-        os.system(cmd)
+        rsm_message = jobserver.createRSMExperimentMetrics(primary_key)
+        printtime("jobserver.createRSMExperimentMetrics returned: "+str(rsm_message))
     except:
         printtime("RSM createExperimentMetrics.py failed")
 
@@ -784,23 +782,21 @@ if __name__=="__main__":
     # default plugin level
     plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root)    
 
-    if env['isReverseRun'] and env['pe_forward'] != "None":
-        try:
-            crawler = xmlrpclib.ServerProxy("http://%s:%d" % (CRAWLER_HOST, CRAWLER_PORT), verbose=False, allow_none=True)
-        except (socket.error, xmlrpclib.Fault):
-            traceback.print_exc()
-
-        printtime("crawler hostname: "+crawler.hostname())
-        printtime("PE Report status: "+crawler.startPE(env['expName'],env['pe_forward'],os.getcwd()))
-
-
-    getExpLogMsgs(env)
+    getExpLogMsgs(explogfinalfilepath)
     get_pgm_log_files(env['pathToRaw'])
     
     # multilevel plugins postprocessing
     blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'post')
     # plugins last level - plugins in this level will wait for all previously launched plugins to finish
     blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'last')
+    
+    ####################################################
+    # Record disk space usage for the Result directory #
+    ####################################################
+    try:
+        jobserver.resultdiskspace(env['primary_key'])
+    except:
+        traceback.print_exc()
     
     printtime("Run Complete")
     sys.exit(0)

@@ -17,8 +17,6 @@ import json
 from decimal import Decimal
 from django.db import models
 from django.conf import settings
-from django.utils import simplejson
-from django.utils.encoding import smart_unicode
 from django.core.serializers.json import DjangoJSONEncoder
 
 class JSONEncoder(DjangoJSONEncoder):
@@ -34,16 +32,16 @@ def dumps(value):
     return json.dumps(value, cls=JSONEncoder, separators=(',', ':'))
 
 def loads(txt):
-   try:
-       value = json.loads(
-           txt,
-           parse_float=Decimal,
-           encoding=settings.DEFAULT_CHARSET
-       )
-       assert isinstance(value, dict)
-   except (TypeError, ValueError):
-      value = {}
-   return value
+    try:
+        value = json.loads(
+            txt,
+            parse_float = Decimal,
+            encoding = settings.DEFAULT_CHARSET
+        )
+        assert isinstance(value, dict)
+    except (TypeError, ValueError):
+        value = {}
+    return value
 
 class JSONDict(dict):
     """

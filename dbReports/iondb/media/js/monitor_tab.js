@@ -26,7 +26,7 @@ $(function(){
             var status = this.model.get('ftpStatus');
             context = {
                 exp: this.model.toJSON(),
-                "prettyExpName": tb.prettyPrintRunName(this.model.get('expName')),
+                "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
                 "king_report": king_report && king_report.toJSON(),
                 "date_string": kendo.toString(this.model.get('date'), "yyyy/MM/dd hh:mm tt"),
                 "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
@@ -224,10 +224,13 @@ $(function(){
         toggle_live_update: function() {
             if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").removeClass('active').text('Live Update Off');
+                this.$("#live_button").addClass('btn-success').text('Auto Update');
+                this.$("#update_status").text('Page is static until refreshed');
+                
             } else {
                 this.start_update();
-                this.$("#live_button").addClass('active').text('Live Update On');
+                this.$("#live_button").removeClass('btn-success').text('Stop Updates');
+                this.$("#update_status").text('Page is updating automatically');
             }
         },
 
@@ -348,12 +351,12 @@ $(function(){
 					field : "library",
 					title : "Ref Genome",
 					width : '6%',
-					template : '#= tb.toString(library) #'
+					template : '#= TB.toString(library) #'
 				}, {
 					field : "barcodeId",
 					title : "Barcode",
 					width : '5%',
-					template : '#= tb.toString(barcodeId) #'
+					template : '#= TB.toString(barcodeId) #'
 				}, {
 					title : "Loading",
 					sortable : false,

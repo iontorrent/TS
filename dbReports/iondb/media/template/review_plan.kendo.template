@@ -10,7 +10,7 @@
                 </tr>
                 <tr>
                     <td  width="50%" style="line-height:100%; font-weight: bold;">Run type:</td>
-                    <td width="50%"  id="review_runType" style="line-height:100%;">#= tb.runModeDescription(data.runMode) #</td>
+                    <td width="50%"  id="review_runType" style="line-height:100%;">#= TB.runModeDescription(data.runMode) #</td>
                 </tr>                                           
             </table>
             </p>
@@ -135,9 +135,9 @@
             <p style="line-height:100%; font-weight: bold;" >Reference Library:</p>
             <p style="line-height:100%; margin:10px;" id="review_refLib">#= data.library #</p>
             <p style="line-height:100%; font-weight: bold;" >Target Regions BED File:</p>
-            <p style="line-height:100%; margin:10px;" id="review_bedfile">#= data.bedfile #</p>
+            <p style="line-height:100%; margin:10px; word-wrap:break-word; word-break: break-all;" id="review_bedfile">#= data.bedfile #</p>
             <p style="line-height:100%; font-weight: bold;" >Hotspot Regions BED File:</p>
-            <p style="line-height:100%; margin:10px;" id="review_regionfile">#= data.regionfile #</p>
+            <p style="line-height:100%; margin:10px; word-wrap:break-word; word-break: break-all;" id="review_regionfile">#= data.regionfile #</p>
             </p>                                
         </div>
                             

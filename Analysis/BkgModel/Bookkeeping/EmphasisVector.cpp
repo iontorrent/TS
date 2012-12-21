@@ -43,7 +43,8 @@ void EmphasisClass::DefaultValues()
   float t_emp[]  = {6.86, 1.1575, 2.081, 1.230, 7.2625, 1.91, 0.0425, 19.995};
   for ( int i=0; i<8; i++ )
     emp[i]= t_emp[i];
-  numEv = MAX_HPLEN+1;
+  // matches the poisson look up table
+  numEv = MAX_POISSON_TABLE_COL;
   emphasis_ampl = 7.25f;
   emphasis_width = 2.89f;
 }

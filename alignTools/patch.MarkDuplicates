@@ -1,8 +1,8 @@
 Index: src/java/net/sf/picard/sam/MarkDuplicates.java
 ===================================================================
---- src/java/net/sf/picard/sam/MarkDuplicates.java	(revision 1258)
+--- src/java/net/sf/picard/sam/MarkDuplicates.java	(revision 1278)
 +++ src/java/net/sf/picard/sam/MarkDuplicates.java	(working copy)
-@@ -91,10 +91,34 @@
+@@ -91,10 +91,37 @@
              "some of the sorting collections.  If you are running out of memory, try reducing this number.")
      public double SORTING_COLLECTION_SIZE_RATIO = 0.25;
  
@@ -14,6 +14,9 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
 +    @Option(doc="Aggressively remove duplicates", shortName="AG")
 +    public boolean AGGRESSIVELY_REMOVE = false;
 +    
++    @Option(doc="If a read with a ZG tag exists, mark those without a ZG tag as duplicates")
++    public boolean ZG_PRIORITIZE = true;
++
 +    @Option(doc="Scoring of a read to break ties:\n" +
 +            "0 - sum of base qualities for bases with Q >= 15 (via BASE_QUALITY_SUM_MINIMUM),\n" +
 +            "1 - mean base quality for bases with Q >= 15 (via BASE_QUALITY_SUM_MINIMUM),\n" +
@@ -37,7 +40,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
  
      final private Map<String,Short> libraryIds = new HashMap<String,Short>();
      private short nextLibraryId = 1;
-@@ -134,7 +158,11 @@
+@@ -134,7 +161,11 @@
          final SAMFileHeader outputHeader = header.clone();
          outputHeader.setSortOrder(SAMFileHeader.SortOrder.coordinate);
          for (final String comment : COMMENT) outputHeader.addComment(comment);
@@ -50,7 +53,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
                                                                                  true,
                                                                                  OUTPUT);
  
-@@ -308,13 +336,13 @@
+@@ -308,13 +339,13 @@
  
          this.pairSort = SortingCollection.newInstance(ReadEnds.class,
                                                        new ReadEndsCodec(),
@@ -66,7 +69,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
                                                        maxInMemory,
                                                        TMP_DIR);
  
-@@ -350,12 +378,16 @@
+@@ -350,12 +381,16 @@
                      else {
                          final int sequence = fragmentEnd.read1Sequence;
                          final int coordinate = fragmentEnd.read1Coordinate;
@@ -83,7 +86,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
                              pairedEnds.read2IndexInFile = index;
                              pairedEnds.orientation = getOrientationByte(pairedEnds.orientation == ReadEnds.R,
                                                                          rec.getReadNegativeStrandFlag());
-@@ -363,9 +395,13 @@
+@@ -363,9 +398,13 @@
                          else {
                              pairedEnds.read2Sequence    = pairedEnds.read1Sequence;
                              pairedEnds.read2Coordinate  = pairedEnds.read1Coordinate;
@@ -97,7 +100,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
                              pairedEnds.read1IndexInFile = index;
                              pairedEnds.orientation = getOrientationByte(rec.getReadNegativeStrandFlag(),
                                                                          pairedEnds.orientation == ReadEnds.R);
-@@ -392,11 +428,19 @@
+@@ -392,11 +431,19 @@
          this.fragSort.doneAdding();
      }
  
@@ -117,7 +120,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
          ends.orientation = rec.getReadNegativeStrandFlag() ? ReadEnds.R : ReadEnds.F;
          ends.read1IndexInFile = index;
          ends.score = getScore(rec);
-@@ -474,12 +518,17 @@
+@@ -474,12 +521,17 @@
  
  
  
@@ -138,7 +141,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
  
          return score;
      }
-@@ -557,11 +606,15 @@
+@@ -557,11 +609,15 @@
          boolean retval =  lhs.libraryId       == rhs.libraryId &&
                            lhs.read1Sequence   == rhs.read1Sequence &&
                            lhs.read1Coordinate == rhs.read1Coordinate &&
@@ -156,13 +159,26 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
          }
  
          return retval;
-@@ -627,35 +680,89 @@
+@@ -627,35 +683,102 @@
          }
          else {
              short maxScore = 0;
 +            int n = 0, m = 0, threshold = 0;
              ReadEnds best = null;
++            boolean hasZG = false;
++
++            if(ZG_PRIORITIZE) { // NB: if a ZG exists, always use it
++                // check to see if a ZG tag exists
++                for (final ReadEnds end : list) {
++                    if(-1 != end.read1ZG) {
++                        hasZG = true;
++                        break;
++                    }
++                }
++            }
++
              for (final ReadEnds end : list) {
++                if (hasZG && -1 == end.read1ZG) continue; // ignore those without a ZG
                  if (end.score > maxScore || best == null) {
                      maxScore = end.score;
                      best = end;
@@ -199,7 +215,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
              for (final ReadEnds end : list) {
 -                if (end != best) {
 -                    addIndexAsDuplicate(end.read1IndexInFile);
-+                if (threshold <= end.score) {
++                if (threshold <= end.score && !(hasZG && -1 == end.read1ZG)) { // NB: ignore those without a ZG if others have ZGs
 +                    if (n != m) addIndexAsDuplicate(end.read1IndexInFile);
 +                    n++;
                  }
@@ -251,7 +267,7 @@ Index: src/java/net/sf/picard/sam/MarkDuplicates.java
  }
 Index: src/java/net/sf/picard/sam/ReadEnds.java
 ===================================================================
---- src/java/net/sf/picard/sam/ReadEnds.java	(revision 1258)
+--- src/java/net/sf/picard/sam/ReadEnds.java	(revision 1278)
 +++ src/java/net/sf/picard/sam/ReadEnds.java	(working copy)
 @@ -46,6 +46,11 @@
      byte tile = -1;
@@ -267,7 +283,7 @@ Index: src/java/net/sf/picard/sam/ReadEnds.java
  
 Index: src/java/net/sf/picard/sam/ReadEndsCodec.java
 ===================================================================
---- src/java/net/sf/picard/sam/ReadEndsCodec.java	(revision 1258)
+--- src/java/net/sf/picard/sam/ReadEndsCodec.java	(revision 1278)
 +++ src/java/net/sf/picard/sam/ReadEndsCodec.java	(working copy)
 @@ -55,11 +55,15 @@
              this.out.writeByte(read.orientation);

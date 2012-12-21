@@ -5,11 +5,13 @@ import argparse
 import traceback
 import subprocess
 import os
+import json
 
 from ion.utils.blockprocessing import merge_bam_files
 from ion.utils.compress import make_zip
 os.environ['MPLCONFIGDIR'] = '/tmp'
 from ion.reports import  base_error_plot
+from ion.utils import ionstats, ionstats_plots
 
 if __name__=="__main__":
 
@@ -40,7 +42,7 @@ if __name__=="__main__":
        cmd = "alignStats"
        
        if '_rawlib.bam' in inputBAM:
-          bcid = inputBAM.rstrip('_rawlib.bam')          
+          bcid = inputBAM.split('_rawlib.bam')[0]
           cmd += " -o %s" % bcid
           # make alignment_BC.summary links to BC.alignment.summary output of alignStats
           os.symlink('%s.alignment.summary' % bcid, 'alignment_%s.summary' % bcid)  
@@ -64,40 +66,43 @@ if __name__=="__main__":
     
     if args.merge_plots and len(args.files) > 1:          
         print "Generating plots for merged report"
-        dirs = [os.path.dirname(filepath) for filepath in args.files]
-
-        # merge readLen.txt        
-        readlen_file_list = [os.path.join(dir,'basecaller_results','readLen.txt') for dir in dirs]
-        l = []
+        
+        graph_max_x = 400
         try:            
-            rl_out = open("readLen.txt",'w')
-            rl_out.write("read\ttrimLen\n")
-            for readlen_file in readlen_file_list:
-                if os.path.exists(readlen_file):                    
-                    rl_in = open(readlen_file,'r')
-                    first_line = rl_in.readline()
-                    for line in rl_in:
-                        l.append(int(line.split()[1]))
-                        rl_out.write(line)
-                    rl_in.close()
+            # Merge ionstats_basecaller files from individual barcodes/dataset
+            BASECALLER_RESULTS = 'basecaller_results'
+            ionstats_file = 'ionstats_basecaller.json'
+            file_list = []
+            for filepath in args.files:
+                ionstats_path = os.path.join(os.path.dirname(filepath), BASECALLER_RESULTS, ionstats_file)
+                ionstats_path_CA = os.path.join(os.path.dirname(filepath), ionstats_file)                
+                if os.path.exists(ionstats_path):
+                    file_list.append(ionstats_path)
+                elif os.path.exists(ionstats_path_CA):
+                    file_list.append(ionstats_path_CA)
                 else:
-                    print("ERROR: skipped %s" % readlen_file)
-            rl_out.close()
-        except:
-            traceback.print_exc()
+                    raise Exception('')
+                    
+            ionstats.reduce_stats(file_list, ionstats_file)
             
-        # Make plots for merged Report
-        ALIGNMENT_RESULTS = '.'
-        graph_max_x = round(max(l),-2) if round(max(l),-2) < 400 else 400
+            # Make alignment_rate_plot.png        
+            stats = json.load(open(ionstats_file))
+            l = stats['full']['max_read_length']        
+            graph_max_x = int(round(l + 49, -2)) 
+            
+            ionstats_plots.alignment_rate_plot(
+                'alignStats_err.json',
+                'ionstats_basecaller.json',
+                'alignment_rate_plot.png', int(graph_max_x))
+            print("Ionstats plot created successfully")            
+        except:            
+            print("ERROR: Failed to generate alignment rate plot")
+      
         try:
+            # Make base_error_plot.png
             base_error_plot.generate_base_error_plot(
-                os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
-                os.path.join(ALIGNMENT_RESULTS,'base_error_plot.png'),int(graph_max_x))
-            base_error_plot.generate_alignment_rate_plot(
-                os.path.join(ALIGNMENT_RESULTS,'alignStats_err.json'),
-                os.path.join('.','readLen.txt'),
-                os.path.join(ALIGNMENT_RESULTS,'alignment_rate_plot.png'),int(graph_max_x))            
-            print("Base error plot has been created successfully")
+                'alignStats_err.json',
+                'base_error_plot.png',int(graph_max_x))            
         except:
             print("ERROR: Failed to generate base error plot")
             traceback.print_exc()        

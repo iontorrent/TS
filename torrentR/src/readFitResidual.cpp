@@ -59,7 +59,8 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
 
     H5File beadParam;
     beadParam.SetFile(beadParamFile);
-    beadParam.Open();
+    //beadParam.Open();
+    beadParam.OpenForReading();
     H5DataSet *resErrDS = beadParam.OpenDataSet("/bead/res_error");
     size_t starts[3];
     size_t ends[3];
@@ -71,9 +72,9 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
     starts[0] = minCol;
     starts[1] = minRow;
     starts[2] = minFlow;
-    ends[0] = maxCol;
-    ends[1] = maxRow;
-    ends[2] = maxFlow;
+    ends[0] = maxCol+1;
+    ends[1] = maxRow+1;
+    ends[2] = maxFlow+1;
     resErrDS->ReadRangeData(starts, ends, sizeof(tresErr),tresErr);
 
     // Compute number of regions

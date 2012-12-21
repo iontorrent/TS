@@ -101,16 +101,19 @@ then
 fi
 
 
-if [$SAMTOOLS_INC == ""]
+if [$BAMTOOLS_ROOT == ""]
 then
-    SAMTOOLS_INC=$BUILD_ROOT/../external/samtools-0.1.18
+    BAMTOOLS_ROOT=$BUILD_ROOT/../external/bamtools-2.1.1.20121113+gitbe1727d1e5
+    BAMTOOLS_INC=$BAMTOOLS_ROOT/include/bamtools
+    BAMTOOLS_LIB=$BAMTOOLS_ROOT/lib/bamtools
 fi
-    
-PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$SAMTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$BUILD_ROOT/../external/hdf5-1.8.8/include -I$ARMADILLO_INC -Wall -g"
+
+
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$BUILD_ROOT/../external/hdf5-1.8.8/include -I$ARMADILLO_INC -Wall -g"
 
 CPPFLAGS=-O2
 
-PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.8/lib/libhdf5.a -llapack -lblas -L/usr/lib -L$BUILD_ROOT/../external/samtools-0.1.18 -lbam"
+PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.8/lib/libhdf5.a $BAMTOOLS_LIB/libbamtools.a -llapack -lblas -L/usr/lib"
 
 sed -e "s|@PKG_LIBS@|${PKG_LIBS}|" \
     -e "s|@PKG_CPPFLAGS@|${PKG_CPPFLAGS}|" \

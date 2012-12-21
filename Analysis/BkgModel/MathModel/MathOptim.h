@@ -23,8 +23,6 @@
     typedef float __m128 __attribute__ ((vector_size (16)));
 #endif
 
-//#define MAX_HPLEN 11
-
 
 union Vec4
 {

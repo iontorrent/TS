@@ -1,0 +1,32 @@
+/var/log/ion/django.log {
+    size 10M
+    daily
+    missingok
+    rotate 20
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_w1.log {
+    size 5M
+    missingok
+    rotate 10
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionadmin www-data
+}
+
+/var/log/ion/celery_plugins.log {
+    size 5M
+    missingok
+    rotate 10
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}

@@ -217,8 +217,6 @@ void MultiFitStream::cleanUp()
    CUDA_ERROR_CHECK();
 }
 
-
-
 void MultiFitStream::resetPointers()
 {
   // update live beads and number of frames and padding
@@ -233,11 +231,7 @@ void MultiFitStream::resetPointers()
   _pd_delta = _pd_partialDerivsOutput + maxSteps*padN*_myJob.getNumFrames();
   _pd_beadParamEval = _pd_delta + maxParams*padN; 
 */
-
-
 }
-
-
 
 
 
@@ -371,7 +365,7 @@ void MultiFitStream::executeMultiFit(int fit_index)
 
   cudaMemcpyAsync(_pDevBeadParamsEval, _pDevBeadParamsTranspose, validValue(_myJob.getBeadParamsSize(true),__LINE__) , cudaMemcpyDeviceToDevice, _stream ); CUDA_ERROR_CHECK(); 
 
-  int sharedMem = sizeof(float)*(MAX_HPLEN + 1)*F;
+  int sharedMem = sizeof(float)*(MAX_POISSON_TABLE_COL)*F;
   for (int i=0; i<_fit_iterations[fit_index]; ++i) {
 
     cudaMemsetAsync(_pDevJTJ, 0, padN*(( _fd[fit_index]->GetNumParamsToFit()*( _fd[fit_index]->GetNumParamsToFit() + 1))/2)*sizeof(float), _stream); CUDA_ERROR_CHECK();

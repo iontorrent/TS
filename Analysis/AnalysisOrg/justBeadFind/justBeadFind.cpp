@@ -22,7 +22,6 @@
 #include "SetUpForProcessing.h"
 
 #include "IonErr.h"
-#include "RegionAnalysis.h"
 #include "ImageSpecClass.h"
 #include "MaskFunctions.h"
 

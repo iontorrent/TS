@@ -418,6 +418,24 @@ jQuery.fn.uniform = function (extended_settings) {
                 return i18n('annospace', caption);
             }
         },
+                /**
+         * Letters and numbers with out spaces, do allow dashes and underscores
+         *
+         * @param jQuery field
+         * @param string caption
+         */
+        validateAlphaNumUnderscoreNoSpace : function(field, caption) {
+
+            if ( field.val() == '') {
+                return true;
+            }
+
+            if(field.val().match(/^[a-zA-Z0-9_]+$/)) {
+                return true;
+            } else {
+                return i18n('anundernospace', caption);
+            }
+        },
         /**
          * Positive Whole numbers are allowed
          *
@@ -865,7 +883,7 @@ jQuery.fn.uniform.showFormSuccess = function (form, title) {
 		/**
 		 * 
 		 */
-jQuery.fn.uniform.isValid = function() {
+jQuery.fn.uniform.isValid = function(form, settings) {
 	form.find(settings.field_selector).each(function () {
         $(this).blur();
     });
@@ -900,6 +918,7 @@ jQuery.fn.uniform.language = {
     submit_success: 'Thank you, this form has been sent.',
     nuc           : '%s needs to be one of the following:  A, T, C, G',
     annospace     : '%s should contain only numbers, letters, and the following: . - _ ',
+    anundernospace     : '%s should contain only numbers, letters or underscore.',
     uint          : '%s needs to be a whole number greater than 0',
     uniq          : '%s is already in use, please enter another barcode id',
     url_http      : '%s is not a valid HTTP-based URL. Must begin with http:// or https://.',

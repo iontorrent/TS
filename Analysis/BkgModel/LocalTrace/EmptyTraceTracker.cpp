@@ -57,29 +57,11 @@ void EmptyTraceTracker::Allocate(Mask *bfmask, ImageSpecClass &imgSpec)
   // sdat handling
   SynchDat sdat;
   bool doSdat = inception_state.img_control.doSdat;
-  if (doSdat){
-    TraceChunkSerializer serializer;
-    char sdatFile[1024];
-
-    sprintf (sdatFile, "%s/%s%04d.%s", inception_state.sys_context.dat_source_directory,inception_state.img_control.acqPrefix, 
-             0, inception_state.img_control.sdatSuffix.c_str() );
-    bool ok = serializer.Read ( sdatFile, sdat);
-    if (!ok) {
-      ION_ABORT("Couldn't load file: " + ToStr(sdatFile));
-    }
-    
-    for (unsigned int i=0; i<regions.size(); i++){
-      Region region = regions[i];
-      imgFrames[region.index] =  sdat.NumFrames(region.row, region.col);
-    }
+  for (unsigned int i=0; i<regions.size(); i++){
+    Region region = regions[i];
+    imgFrames[region.index] = imgSpec.uncompFrames;
   }
-  else {
-    for (unsigned int i=0; i<regions.size(); i++){
-      Region region = regions[i];
-      imgFrames[region.index] = imgSpec.uncompFrames;
-    }
-  }
-
+  
   emptyTracesForBMFitter.resize(maxNumRegions);
   for (int i=0; i<maxNumRegions; i++)
     emptyTracesForBMFitter[i] = NULL;
@@ -103,8 +85,16 @@ void EmptyTraceTracker::Allocate(Mask *bfmask, ImageSpecClass &imgSpec)
       // notion of time mapping the upper left corner of the empty trace's
       // region to the corresponding sdat region.  Note that multiple sdat
       // regions may cover the empty trace's region
-      TraceChunk &chunk = sdat.GetItemByRowCol(region.row, region.col);
-      emptyTrace->SetTimeFromSdatChunk(region, chunk);
+      TraceChunkSerializer serializer;
+      char sdatFile[1024];
+      
+      sprintf (sdatFile, "%s/%s%04d.%s", inception_state.sys_context.dat_source_directory,inception_state.img_control.acqPrefix, 
+               0, inception_state.img_control.sdatSuffix.c_str() );
+      bool ok = serializer.Read ( sdatFile, sdat);
+      if (!ok) {
+        ION_ABORT("Couldn't load file: " + ToStr(sdatFile));
+      }
+      emptyTrace->SetTimeFromSdatChunk(region, sdat);
     }
 
     emptyTrace->CountReferenceTraces(region, bfmask);
@@ -136,6 +126,7 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlo
   
 
   emptyTrace = emptyTracesForBMFitter[region.index];
+  emptyTrace->SetUsed(true);
 
   // make the emptyTrace aware of time in seconds
   emptyTrace->SetTime(time_cp.frames_per_second);
@@ -151,27 +142,31 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlo
   emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow);
  }
 
-
-void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(SynchDat &sdat, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc_start)
+void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(SynchDat &sdat, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc, float sigma,float t_start, TimeCompression *time_cp)
 {
   EmptyTrace *emptyTrace = NULL;
 
   // fprintf(stdout, "ETT: Setting Empty trace %lx in %lx[%d] for flow %d\n", (unsigned long)emptyTracesForBMFitter[region.index], (unsigned long)emptyTracesForBMFitter, region.index, flow);
+  //TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region.row, region.col);
+  // TimeCompression time_cp;
+  // time_cp.choose_time = global_defaults.signal_process_control.choose_time; // have to start out using the same compression as bkg model - this will become easier if we coordinate time tracker
+  // time_cp.SetUpTime (imgFrames[region.index], chunk.mT0,global_defaults.data_control.time_start_detail, global_defaults.data_control.time_stop_detail, global_defaults.data_control.time_left_avg);
+  // float t_start = time_cp.time_start;
 
   emptyTrace = emptyTracesForBMFitter[region.index];
+  emptyTrace->SetUsed(true);
 
   // make the empty trace's notion of time conform to an sdat region's
   // notion of time mapping the upper left corner of the empty trace's
   // region to the corresponding sdat region.  Note that multiple sdat
   // regions may cover the empty trace's region
-  TraceChunk &chunk = sdat.GetItemByRowCol(region.row, region.col);
-  emptyTrace->SetTimeFromSdatChunk(region, chunk);
+  emptyTrace->SetTimeFromSdatChunk(region, sdat);
 
   // calculate average trace across all empty wells in this region for this flow
-  emptyTrace->GenerateAverageEmptyTrace(&region, pinnedInFlow, bfmask, sdat, flow);
+  emptyTrace->GenerateAverageEmptyTrace( &region, pinnedInFlow, bfmask, sdat, flow);
 
   // Fill The buffer neg_bg_buffers_slope
-  //  emptyTrace->RezeroReference(t_start, t_mid_nuc_start-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow);
+  emptyTrace->RezeroReference(t_start, t_mid_nuc-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow);
   emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow);
  }
 

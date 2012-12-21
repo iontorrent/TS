@@ -1,0 +1,30 @@
+
+
+---------------------------------------------------------------------------------------------------
+Testing
+---------------------------------------------------------------------------------------------------
+
+Mockito
+======== 
++	When using mockito.verify() to verify the invocation of a method on a testdouble (your mock), 
+	the arguments/kwargs must be strings to use mockito.contains() as the mockito.contains() internally relies on 
+	the .find() method of the argument 
+	
+	
+	Example: 
+	class Foo(object):
+		def methodtotest(pk, comment):
+			return pk, comment
+		
+	def test_verifymethodinvocation():
+		obj = mock()
+		when(obj).methodtotest(1,'abc').thenReturn((1,'abc'))
+		# TIP
+		# Wrong way,  
+		# verify(obj).methodtotest(contains(str(1)), contains('abc'))
+		# 
+		# yields:
+		# VerificationError: 
+		# Wanted but not invoked: methodtotest(<Contains: '1'>, <Contains: 'abc'>) 
+		
+		verify(obj).methodtotest(any(), contains('abc'))

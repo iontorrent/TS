@@ -162,7 +162,7 @@ float MixtureMemo::Generate ( float _A, PoissonCDFApproxMemo *my_math )
   if ( A<0.0001f )
     A = 0.0001f; // safety
   // initialize diffusion/reaction simulation for this flow
-  int maxA = MAX_HPLEN; // largest value computed in the table
+  int maxA = LAST_POISSON_TABLE_COL; // largest value computed in the table
   if ( A>maxA )
     A = maxA;
   ileft = ( int ) A;

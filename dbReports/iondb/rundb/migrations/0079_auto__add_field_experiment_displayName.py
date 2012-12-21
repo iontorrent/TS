@@ -11,6 +11,21 @@ class Migration(SchemaMigration):
         # Adding field 'Experiment.displayName'
         db.add_column('rundb_experiment', 'displayName', self.gf('django.db.models.fields.CharField')(default='', max_length=128), keep_default=False)
 
+        # Commit the schema change 
+        # so we can do a data migration in the same script
+        db.commit_transaction()
+        db.start_transaction()
+
+        #set the display name on pre-existing experiments.
+        import re
+        PRETTY_PRINT_RE = re.compile(r'R_(\d{4})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_(\d{2})_')
+        Experiment = orm['rundb.Experiment']
+        #set the display name on pre-existing experiments.
+        for experiment in Experiment.objects.filter(displayName=""):
+            nodate = PRETTY_PRINT_RE.sub("", experiment.expName)
+            joined = " ".join(nodate.split('_')).strip()
+            experiment.displayName = joined or nodate
+            experiment.save()
 
     def backwards(self, orm):
         # Deleting field 'Experiment.displayName'

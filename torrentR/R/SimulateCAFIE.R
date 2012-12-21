@@ -6,7 +6,7 @@ SimulateCAFIE <- function(
   dr,
   nflows,
   hpScale      = 1,
-  simModel     = c("CafieSolver","PhaseSim"),
+  simModel     = c("treePhaserSim","CafieSolver","PhaseSim"),
   hpSignal     = 0:11,
   sigMult      = 1,
   conc         = diag(4),
@@ -16,11 +16,18 @@ SimulateCAFIE <- function(
 ) {
 
   simModel <- match.arg(simModel)
+  if(nchar(flowOrder) < nflows){
+    flowOrder <- substring(paste(rep(flowOrder,ceiling(nflows/nchar(flowOrder))),collapse=""),1,nflows)
+  } else if (nchar(flowOrder) > nflows) {
+    flowOrder <- substring(flowOrder, 1, nflows)
+  }
 
   if((length(hpScale) != 1) & (length(hpScale) != 4))
     stop("hpScale must be of length 1 or 4\n");
 
-  if(simModel == "CafieSolver") {
+  if (simModel == "treePhaserSim") {
+    val <- .Call("treePhaserSim", seq, flowOrder, cf, ie, dr, nflows, PACKAGE="torrentR")
+  } else if(simModel == "CafieSolver") {
     val <- .Call("SimulateCAFIE", seq, flowOrder, cf, ie, dr, nflows, hpSignal, sigMult, PACKAGE="torrentR")
   } else {
     droopType <- match.arg(droopType)

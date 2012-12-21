@@ -62,7 +62,6 @@ function parseProgress($fileIn)
 	$progress_task_name = array( "wellfinding" => "Well Characterization",
 		"signalprocessing" => "Signal Processing",
 		"basecalling" => "Basecalling",
-		"sffread" => "Creating Fastq",
 		"alignment" => "Aligning Reads"
 		);
 		
@@ -416,7 +415,6 @@ if (isset($_GET["progress"])){
 	$progress_task_name = array( "wellfinding" => "Well_Characterization",
 		"signalprocessing" => "Signal_Processing",
 		"basecalling" => "Basecalling",
-		"sffread" => "Creating_Fastq",
 		"alignment" => "Aligning_Reads"
 		);
 		
@@ -452,10 +450,6 @@ if (isset($_GET["progress"])){
 		echo "<html><body><pre>";
 		$sigproc_log = file_get_contents("sigproc_results/sigproc.log");
 		echo htmlspecialchars($sigproc_log);
-		$basecaller_log = file_get_contents("basecaller_results/basecaller.log");
-		echo htmlspecialchars($basecaller_log);
-		$alignment_log = file_get_contents("alignment.log");
-		echo htmlspecialchars($alignment_log);
 		$report_log = file_get_contents("ReportLog.html");
 		echo htmlspecialchars($report_log);
 		echo "</pre></body></html>";

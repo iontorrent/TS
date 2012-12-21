@@ -96,7 +96,7 @@ class SignalProcessingMasterFitter
               int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,  EmptyTraceTracker *emptyTraceTracker,
               float sigma_guess=2.5,float t0_guess=35,
 	      SequenceItem* seqList=NULL,int numSeqListItems=2,
-              bool restart=false);
+                                  bool restart=false, int16_t *_washout_flow=NULL);
 
     // constructor used for testing outside of Analysis pipeline (doesn't require mask, region, or RawWells obects)
     SignalProcessingMasterFitter (GlobalDefaultsForBkgModel &_global_defaults, int numLBeads, int numFrames,
@@ -257,6 +257,8 @@ class SignalProcessingMasterFitter
       return global_defaults;
     }
 
+    extern_links &GetGlobalStage() { return global_state; }
+      
 // making this public for temporary simplicity
     // Data and parameters here --------------
     RegionalizedData *region_data;
@@ -294,7 +296,7 @@ class SignalProcessingMasterFitter
     // void FitModelForBlockOfFlows (int flow, bool last);
 
     // export data of various types per flow
-    void ExportStatusToMask();
+    void ExportStatusToMask(int flow);
     void ExportDataToWells();
     void ExportDataToDataCubes (bool last);
 
@@ -338,7 +340,7 @@ class SignalProcessingMasterFitter
 
     // talking to external world
     extern_links global_state;
-
+    
     debug_collection my_debug;
     
     // cache math that all bkgmodel objects need to execute
