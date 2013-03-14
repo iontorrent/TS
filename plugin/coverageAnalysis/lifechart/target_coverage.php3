@@ -13,9 +13,10 @@ $numrec = intval($_GET['numrec']);
 if( $dataFile == "" ) $dataFile = '-';
 if( $chrom == "" ) $chrom = '-';
 if( $gene == "" ) $gene = '-';
-if( $options != "" )
+$tobed = strpos( $options, '-b' ) !== false ;
+$allout = $tobed || (strpos( $options, '-a' ) !== false) ;
+if( $allout )
 {
-  $tobed = $options == "-b";
   $subtable = preg_replace( '/\.xls$/', '', $dataFile ).".range.".($tobed ? "bed" : "xls");
   $filename = preg_replace( '/^.*\//', '', $subtable );
   $redirect = '';

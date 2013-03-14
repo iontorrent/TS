@@ -377,8 +377,7 @@ sub outputStats
   }
   printf "$tagU base coverage at 1x:        %.2f%%\n",$cumd[1]*$scl;
   printf "$tagU base coverage at 10x:       %.2f%%\n",$cumd[10]*$scl if( $fullstats );
-  printf "$tagU base coverage at 20x:       %.2f%%\n",$cumd[20]*$scl if( $fullstats );
-  printf "$tagU base coverage at 30x:       %.2f%%\n",$cumd[30]*$scl;
+  printf "$tagU base coverage at 20x:       %.2f%%\n",$cumd[20]*$scl;
   printf "$tagU base coverage at 50x:       %.2f%%\n",$cumd[50]*$scl if( $fullstats );
   printf "$tagU base coverage at 100x:      %.2f%%\n",$cumd[100]*$scl;
   printf "$tagU base coverage at 500x:      %.2f%%\n",$cumd[500]*$scl;

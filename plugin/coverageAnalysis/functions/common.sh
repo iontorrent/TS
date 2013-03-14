@@ -29,12 +29,20 @@ write_page_title ()
     #    ALIGNEDREADS="Aligned Reads='${PLUGINCONFIG__MERGEDBAM_ID}'   "
     #fi
     local TARGETS=""
-    if [ -n "$PLUGIN_EFF_TARGETS" ]; then
+    if [ -n "$BC_MAPPED_BED" ]; then
+      TARGETS=`echo "$BC_MAPPED_BED" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
+      TARGETS="    Target Regions='${TARGETS}'"
+    elif [ -n "$PLUGIN_BC_TARGETS" ];then
+      TARGETS="    Target Regions=[Barcoded Targets]"
+    elif [ -n "$PLUGIN_EFF_TARGETS" ]; then
       TARGETS="    Target Regions='${PLUGINCONFIG__TARGETREGIONS_ID}'"
     fi
     local OPTIONS=""
+    if [ "$PLUGIN_SAMPLEID" = "Yes" ];then
+        OPTIONS="$OPTIONS   SampleID Tracking"
+    fi
     if [ "$INPUT_TRIM_READS" = "Yes" ]; then
-        OPTIONS="   Trim Reads"
+        OPTIONS="$OPTIONS   Trim Reads"
     fi
     if [ "$PLUGIN_PADSIZE" -gt 0 ]; then
         OPTIONS="$OPTIONS   Target Padding: $PLUGIN_PADSIZE"
@@ -59,7 +67,11 @@ write_page_header ()
         HTML="$2"
     fi
     cat "$HEADFILE" > "$HTML"
-    if [ -n "$PLUGIN_TARGETS" ]; then
+    if [ "$AMPOPT" != "-r" ]; then
+      echo '<script language="javascript" type="text/javascript" src="lifechart/DepthOfCoverageChart.js"></script>' >> "$HTML"
+      echo '<script language="javascript" type="text/javascript" src="lifechart/ReferenceCoverageChart.js"></script>' >> "$HTML"
+    fi
+    if [ -n "$PLUGIN_TARGETS" -o "$PLUGIN_BC_TARGETS" ]; then
       echo '<script language="javascript" type="text/javascript" src="lifechart/TargetCoverageChart.js"></script>' >> "$HTML"
     fi
     echo '</head>' >> "$HTML"
@@ -163,12 +175,12 @@ write_json_header ()
 
 write_json_footer ()
 {
-    if [ -n "$1" ]; then
-        if [ $1 -ne 0 ]; then
-            echo -e "\n  }" >> "$JSON_RESULTS"
-        fi
+    if [ -n "$1" -a "$1" -ne 0 ]; then
+        echo -e "\n  }" >> "$JSON_RESULTS"
+    else
+        echo "" >> "$JSON_RESULTS"
     fi
-    echo -e "\n}" >> "$JSON_RESULTS"
+    echo "}" >> "$JSON_RESULTS"
 }
 
 write_json_inner ()
@@ -182,11 +194,6 @@ write_json_inner ()
     fi
 }
 
-#*! @function
-#  @param $1 Name of JSON file to append to
-#  @param $2 Path to file composed of <name>:<value> lines
-#  @param $3 data subset (e.g. "filtered_reads" - no loner employed)
-#  @param $4 printing indent level. Default: 2
 append_to_json_results ()
 {
   local JSONFILE="$1"
@@ -201,5 +208,127 @@ append_to_json_results ()
   fi
   local JSONCMD="perl ${SCRIPTSDIR}/coverage_analysis_json.pl -a -I $INDENTLEV $DATASET \"$DATAFILE\" \"$JSONFILE\""
   eval "$JSONCMD || echo \"WARNING: Failed to write to JSON from $DATAFILE\"" >&2
+}
+
+# Create padded targets file and return filename as $CREATE_PADDED_TARGETS
+create_padded_targets ()
+{
+  local BEDFILE=$1
+  local PADDING=$2
+  local OUTDIR=$3
+  local BEDROOT
+  local GENOME
+  local PADCMD
+  CREATE_PADDED_TARGETS=$BEDFILE
+  if [ -n "$BEDFILE" -a -n "$PADDING" -a $PADDING -gt 0 ];then
+    echo "(`date`) Creating padded targets file..." >&2
+    GENOME="${REFERENCE}.fai"
+    if ! [ -f "$GENOME" ]; then
+      echo "WARNING: Could not create padded targets file; genome (.fai) file does not exist at $GENOME" >&2
+      echo "- Continuing without padded targets analysis." >&2
+    else
+      BEDROOT=`echo "$BEDFILE" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
+      CREATE_PADDED_TARGETS="${OUTDIR}/${BEDROOT}_$PLUGIN_PADSIZE.bed"
+      PADCMD="${DIRNAME}/padbed/padbed.sh $LOGOPT \"$BEDFILE\" \"$GENOME\" $PADDING \"$CREATE_PADDED_TARGETS\""
+      eval "$PADCMD" >&2
+      if [ $? -ne 0 ]; then
+        echo "WARNING: Could not create padded targets file; padbed.sh failed." >&2
+        echo "\$ $REMDUP" >&2
+        echo "- Continuing without padded targets analysis." >&2
+        CREATE_PADDED_TARGETS=$BEDFILE
+      elif [ $PLUGIN_DEV_FULL_LOG -gt 0 ]; then
+        echo "> $CREATE_PADDED_TARGETS" >&2
+      fi
+    fi
+  fi
+}
+
+# Create GC annotated BED file and return to filename $GC_ANNOTATE_BED
+gc_annotate_bed ()
+{
+  local BEDFILE=$1
+  local OUTDIR=$2
+  local GCANNOCMD
+  GC_ANNOTATE_BED="$BEDFILE"
+  if [ -n "$BEDFILE" ]; then
+    echo "(`date`) Adding GC count information to annotated targets file..." >&2
+    GC_ANNOTATE_BED="${OUTDIR}/tca_auxiliary.gc.bed"
+    GCANNOCMD="${SCRIPTSDIR}/gcAnnoBed.pl -s -w -t \"$OUTDIR\" $PLUGIN_ANNOFIELDS \"$BEDFILE\" \"$REFERENCE\" > \"$GC_ANNOTATE_BED\""
+    eval "$GCANNOCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo -e "\nERROR: gcAnnoBed.pl failed. GC Annotation will be missing from subsequent analyses." >&2
+      echo "\$ $GCANNOCMD" >&2
+      GC_ANNOTATE_BED="$BEDFILE"
+      # TO DO: add a default field for GC to prevent downstream failure...
+    elif [ $PLUGIN_DEV_FULL_LOG -gt 0 ]; then
+      echo "> $GC_ANNOTATE_BED" >&2
+    fi
+  fi
+}
+
+# Link specific file names with more non-run-speicific names (in a diferent folder).
+create_scraper_links ()
+{
+  local NAMEROOT=${1}
+  local LINKNAME=${2}
+  local OUTDIR=${3}
+  local SAFEROOT=`echo "$NAMEROOT" | sed -e 's/^.*\///' | sed -e 's/[][\.*^$(){}?+|/]/\\\&/g'`
+  for FNAME in `eval "ls -1 ${NAMEROOT}.* 2> /dev/null"`
+  do
+    LNAME=`echo "$FNAME" | sed -e 's/^.*\///' | sed -e "s/$SAFEROOT\./$LINKNAME\./"`
+    FNAME=`readlink -f $FNAME`
+    ln -sf "$FNAME" "${OUTDIR}/${LNAME}"
+  done
+}
+
+# Creates the body of the detailed report post-analysis
+write_html_results ()
+{
+  local RUNID=${1}
+  local OUTDIR=${2}
+  local OUTURL=${3}
+  local BAMFILE=${4}
+
+  # test for trimmed bam file based results
+  local BAMROOT="$RUNID"
+  if [ "$PLUGIN_TRIMREADS" = "Yes" ]; then
+    PLUGIN_OUT_TRIMPBAM=`echo $BAMFILE | sed -e 's/.bam$/\.trim\.bam/'`
+    if [ -e "${OUTDIR}/$PLUGIN_OUT_TRIMPBAM" ]; then
+      PLUGIN_OUT_TRIMPBAI="${PLUGIN_OUT_TRIMPBAM}.bai"
+      BAMROOT="${RUNID}.trim";
+    else
+      PLUGIN_OUT_TRIMPBAM=""
+    fi
+  fi
+  # Definition of coverage output file names expected in the file links table
+  PLUGIN_OUT_BAMFILE="${RUNID}.bam"
+  PLUGIN_OUT_BAIFILE="${PLUGIN_OUT_BAMFILE}.bai"
+  PLUGIN_OUT_STATSFILE="${BAMROOT}.stats.cov.txt" ; # also needed for json output
+  PLUGIN_OUT_DOCFILE="${BAMROOT}.base.cov.xls"
+  PLUGIN_OUT_AMPCOVFILE="${BAMROOT}.amplicon.cov.xls"
+  PLUGIN_OUT_TRGCOVFILE="${BAMROOT}.target.cov.xls"
+  PLUGIN_OUT_CHRCOVFILE="${BAMROOT}.chr.cov.xls"
+  PLUGIN_OUT_WGNCOVFILE="${BAMROOT}.wgn.cov.xls"
+
+  # Links to folders/files required for html report pages (inside firewall)
+  run "ln -sf \"${DIRNAME}/flot\" \"${OUTDIR}/\"";
+  run "ln -sf \"${LIFECHART}\" \"${OUTDIR}/\"";
+  run "ln -sf \"${SCRIPTSDIR}/igv.php3\" \"${OUTDIR}/\"";
+
+  # Create the html report page
+  echo "(`date`) Publishing HTML report page..." >&2
+  write_file_links "$OUTDIR" "$PLUGIN_OUT_FILELINKS";
+  local HTMLOUT="${OUTDIR}/${HTML_RESULTS}";
+  write_page_header "$LIFECHART/TCA.head.html" "$HTMLOUT";
+  cat "${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML" >> "$HTMLOUT"
+  write_page_footer "$HTMLOUT";
+
+  # Remove temporary files (in each barcode folder)
+  run "rm -f ${OUTDIR}/${PLUGIN_OUT_COVERAGE_HTML}"
+
+  # Create scraper directory containings links to all 'visible' output files
+  echo "(`date`) Creating scraper folder..." >&2
+  run "mkdir ${OUTDIR}/scraper"
+  create_scraper_links "${OUTDIR}/$BAMROOT" "link" "${OUTDIR}/scraper"
 }
 

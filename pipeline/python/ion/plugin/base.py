@@ -120,7 +120,7 @@ class IonPluginMeta(type):
         # Upgrade "special" attributes - these can be callables, so attach property decorator
         class_attr = (
             'allow_autorun', 'major_block',
-            'runtypes', 'features',
+            'runtypes', 'features', 'runlevels',
             'requires', 'provides',
             # 'getUserInput',
         )
@@ -166,6 +166,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
     version = None
     runtypes = []
     features = []
+    runlevels = []
     allow_autorun = True
     major_block = False
     requires = [ 'BAM', ]

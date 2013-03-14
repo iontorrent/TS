@@ -21,6 +21,8 @@ my $OPTIONS = "Options:
      which will be given the field ID 'norm_reads' or 'total_reads'.
   -E <int> End-to-end read proximity limit. If a read covers up to this disance from both ends of a region
      it will be counted as an end-to-end read. (Set to 0 if given as negative.) Default: 2.
+  -C <num> Percentage Coverage threshold for 'full' target coverage read to be counted. When more than 0,
+     specifiying this value causes fwd_cov and rev_cov counts to replace fwd_e2e and rev_e2e. Default: 0.
   -D <int> Downstream limit for matching read start to target end (appropriate for +/- strand mapping).
      This assignment parameter is only employed if the -a option is provided. Default: 5.
   -U <int> Upstream limit for matching read start to target end (appropriate for +/- strand mapping).
@@ -32,6 +34,7 @@ my $ampreads = 0;
 my $dsLimit = 5;
 my $usLimit = 30;
 my $e2eLimit = 2;
+my $tcovLimit = 0;
 my $nondupreads = 0;
 my $uniquereads = 0;
 my $normreads = 0;
@@ -47,6 +50,7 @@ while( scalar(@ARGV) > 0 )
   elsif($opt eq '-d') {$nondupreads = 1;}
   elsif($opt eq '-u') {$uniquereads = 1;}
   elsif($opt eq '-n') {$normreads = 1;}
+  elsif($opt eq '-C') {$tcovLimit = int(shift);}
   elsif($opt eq '-D') {$dsLimit = int(shift);}
   elsif($opt eq '-E') {$e2eLimit = int(shift);}
   elsif($opt eq '-U') {$usLimit = int(shift);}
@@ -75,8 +79,12 @@ elsif( scalar @ARGV != 2 )
 my $bamfile = shift(@ARGV);
 my $bedfile = shift(@ARGV);
 
+$tcovLimit = 0 if( $tcovLimit < 0 );
 $e2eLimit = 0 if( $e2eLimit < 0 );
 $usLimit *= -1;  # more convenient for testing
+
+my $usePcCov = ($tcovLimit > 0);
+$tcovLimit *= 0.01;  # % to fraction
 
 #--------- End command arg parsing ---------
 
@@ -133,7 +141,7 @@ while( <MAPPINGS> )
   }
   my $maxOvlp = -1;
   my $bestTn = $tn;
-  my $maxEndDist;
+  my $maxEndDist, $bestTrgLen;
   for( ; $tn >= 0; --$tn )
   {
     # test for no overlap with this region (but possibly previous regions since ends not ordered)
@@ -141,6 +149,7 @@ while( <MAPPINGS> )
     next if( $tEnds->[$tn] < $srt );
     my $rSrt = $tSrts->[$tn];
     my $rEnd = $tEnds->[$tn];
+    my $trgLen = $rEnd - $rSrt;
     # record a hit for any read overlap
     ++$tOvpRds->[$tn];
     $dSrt = $srt - $rSrt;
@@ -160,6 +169,7 @@ while( <MAPPINGS> )
       $maxOvlp = $rSrt;
       $bestTn = $tn;
       $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
+      $bestTrgLen = $trgLen;
     }
   }
   if( $maxOvlp >= 0 )
@@ -167,12 +177,26 @@ while( <MAPPINGS> )
     if( $rev )
     {
       ++$tRevRds->[$bestTn];
-      ++$tRevE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
+      if( $usePcCov )
+      {
+        ++$tRevE2E->[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+      }
+      else
+      {
+        ++$tRevE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
+      }
     }
     else
     {
       ++$tFwdRds->[$bestTn];
-      ++$tFwdE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
+      if( $usePcCov )
+      {
+        ++$tFwdE2E->[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+      }
+      else
+      {
+        ++$tFwdE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
+      }
     }
   }
 }
@@ -191,9 +215,8 @@ if( !$bedout )
     else { $headerLine .= sprintf("field%d\t", $i+1); }
   }
   # these are the added 6 base coverage fields
-  my $nrdsid = $normreads ? 'norm_reads' : 'total_reads';
-  $headerLine .= "overlaps\tfwd_e2e\trev_e2e\t$nrdsid\tfwd_reads\trev_reads";
-  print "$headerLine\n";
+  printf "%soverlaps\t%s\t%s\tfwd_reads\trev_reads\n", $headerLine,
+    ($usePcCov ? "fwd_cov\trev_cov" : "fwd_e2e\trev_e2e"), ($normreads ? "norm_reads" : "total_reads");
 }
 
 $lastChrid = "";

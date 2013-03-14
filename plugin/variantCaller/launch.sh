@@ -7,7 +7,7 @@
 #ulimit -s 8192
 #$ -l mem_free=22G,h_vmem=22G,s_vmem=22G
 #normal plugin script
-VERSION="3.4.49252"
+VERSION="3.4.51874"
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should all be set to 0 in production mode
@@ -117,7 +117,6 @@ fi
 
 # Parameters from plugin customization
 echo "Selected run options:" >&2
-echo "  Aligned Reads:     $PLUGINCONFIG__MERGEDBAM_ID" >&2
 echo "  Library Type:      $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
 echo "  Variant Detection: $PLUGINCONFIG__VARIATIONTYPE_ID" >&2
 echo "  Target Regions:    $PLUGINCONFIG__TARGETREGIONS_ID" >&2
@@ -216,7 +215,6 @@ export PLUGIN_OUT_INDELS="indel_variants.xls"
 export PLUGIN_OUT_ALLVARS="variants.xls"
 export PLUGIN_OUT_CHRVARS="variants_per_chromosome.xls"
 export PLUGIN_OUT_FILELINKS="filelinks.xls"
-export PLUGIN_OUT_PARAM_SETTINGS="variantCaller_Params.xls"
 
 export PLUGIN_OUT_LOCI_SNPS="hotspot_SNP_variants.xls"
 export PLUGIN_OUT_LOCI_INDELS="hotspot_indel_variants.xls"
@@ -238,6 +236,7 @@ export HTML_ROWSUMS="${PLUGINNAME}_rowsum"
 
 # These are hard-coded in to varinatCaller.py, as are its other output file names
 export PLUGIN_OUT_SNPS_VCF="SNP_variants.vcf"
+export PLUGIN_OUT_CONSENSUS_TXT="consensus_calls.txt"
 export PLUGIN_OUT_INDELS_VCF="indel_variants.vcf"
 export PLUGIN_OUT_MERGED_VCF="TSVC_variants.vcf"
 

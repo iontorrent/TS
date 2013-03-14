@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 49171 $")
+__version__ = filter(str.isdigit, "$Revision: 49775 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -29,7 +29,6 @@ from torrentserver.cluster_settings import *
 import hashlib
 import ConfigParser
 import shutil
-import socket
 import time
 import traceback
 import json
@@ -478,31 +477,40 @@ if __name__=="__main__":
 
                             wait_list = [
                                          os.path.join(data_file, 'analysis_return_code.txt'),
-#                                         os.path.join(data_file, 'analysis.bfmask.bin'),
-#                                         os.path.join(data_file, 'analysis.bfmask.stats'),
+                                         os.path.join(data_file, 'analysis.bfmask.bin'),
+                                         os.path.join(data_file, 'analysis.bfmask.stats'),
                                          os.path.join(data_file, 'processParameters.txt'),
                                          os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['tfKey']),
                                          os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['libraryKey']),
                                          os.path.join(data_file, '1.wells'),
                                         ]
 
-                            # check if transfer is delayed, for example back-to-back run
-                            block_incomplete = False
-                            for transferred_file in wait_list:
-                                if not os.path.exists(transferred_file):
-                                    printtime("WARNING: %s file transfer delayed" % transferred_file)
-                                    block_incomplete = True
-                            if block_incomplete:
+                            analysis_return_code_file = os.path.join(data_file, 'analysis_return_code.txt')
+                            if os.path.exists(analysis_return_code_file):
+                                try:
+                                    with open(analysis_return_code_file, 'r') as f:
+                                        analysis_return_code = int(f.read())
+                                        if analysis_return_code != 0:
+                                            printtime("WARNING: Analysis returned %s" % analysis_return_code)
+
+                                        for transferred_file in wait_list:
+                                            if not hash_matches(transferred_file):
+                                                printtime("WARNING: %s might be corrupt" % transferred_file)
+                                                #blocks_to_process.remove(block)
+                                                #continue
+                                except:
+                                    traceback.print_exc()
+                                    # continue with job submission
+                            else:
+                                # delayed (for example back-to-back run) or serious issue
+                                printtime("WARNING: %s file transfer delayed" % analysis_return_code_file)
+                                for transferred_file in wait_list:
+                                    if not os.path.exists(transferred_file):
+                                        printtime("WARNING: %s file transfer delayed" % transferred_file)
                                 timeout -= 10
                                 time.sleep (10)
                                 continue
 
-                            for transferred_file in wait_list:
-                                if not hash_matches(transferred_file):
-                                    printtime("WARNING: %s might be corrupt" % transferred_file)
-                                    #blocks_to_process.remove(block)
-                                    #continue
-                            
                         block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', ['--do-sigproc'])
                         sigproc_job_dict[block['id_str']] = str(block['jobid'])
                         printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
@@ -715,6 +723,9 @@ if __name__=="__main__":
                 f.close()
                 if int(return_code) == 0:
                     STATUS = "Completed"
+                    # remove unneeded block files
+                    printtime("Remove unneeded block files %s" % len(dirs))
+                    blockprocessing.remove_unneeded_block_files(dirs)
                 else:
                     STATUS = "Completed with %s error(s)" % return_code
             except:

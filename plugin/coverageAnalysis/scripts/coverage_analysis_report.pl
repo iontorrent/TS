@@ -17,6 +17,8 @@ my $OPTIONS = "Options:
   -h ? --help Display Help information
   -a Extract Amplicon reads coverage information from stats file as a parallel report table
   -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
+  -i Output sample Identification tracking reads in summary statistics.
+  -r AmpliSeq RNA report. No output associated with base coverage and uniformity of coverage. (Overrides -a)
   -D <dir> Directory path for working directory where input files are found and output files saved.
   -N <title> Name prefix for any output files for display and links. Default: 'tca_auxillary'.
   -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt.
@@ -33,6 +35,8 @@ my $runid = "tca_auxillary";
 my $tabhead = "All Reads";
 my $amplicons = 0;
 my $genome = 0;
+my $rnacoverage = 0;
+my $sampleid = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -46,6 +50,8 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-T') {$rowsumfile = shift;}
     elsif($opt eq '-a') {$amplicons = 1;}
     elsif($opt eq '-g') {$genome = 1;}
+    elsif($opt eq '-i') {$sampleid = 1;}
+    elsif($opt eq '-r') {$rnacoverage = 1;}
     elsif($opt eq '-s') {$tabhead = shift;}
     elsif($opt eq '-t') {$title = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
@@ -73,11 +79,16 @@ elsif( scalar @ARGV != 2 )
 my $outfile = shift;
 my $statsfile = shift;
 
+$amplicons = 0 if( $rnacoverage );
+$ampcoverage  = ($amplicons || $rnacoverage );
+$basecoverage = ($genome || !$rnacoverage );
+
 $statsfile = "" if( $statsfile eq "-" );
 $rowsumfile = "" if( $rowsumfile eq "-" );
 
 my $haverowsum = ($rowsumfile ne "");
-my $have2stats = $amplicons;
+my $have2stats = $ampcoverage && $basecoverage;
+my $passingcov = 0; #$rnacoverage
 
 $workdir = "." if( $workdir eq "" || $workdir eq "-" );
 $statsfile = "$workdir/$statsfile";
@@ -115,57 +126,91 @@ if( $title ne "" )
 
 # overview plot
 print OUTFILE "<table class=\"center\"><tr>\n";
-displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
-print OUTFILE "</td>\n";
+my $t2width = 350;
+if( $rnacoverage )
+{
+  displayResults( "repoverview.png", "amplicon.cov.xls", "Representation Overview", 1, "height:100px" );
+  print OUTFILE "</td>\n";
+  $t2width = 320;
+}
+else
+{
+  displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
+  print OUTFILE "</td>\n";
+  $t2width = 340;
+}
 my @keylist = ( "Number of mapped reads" );
 push( @keylist, "Percent reads on target" ) if( !$genome );
-push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage" ) );
-print OUTFILE "<td><div class=\"statsdata\" style=\"width:340px\">\n";
+push( @keylist, "Percent sample tracking reads" ) if( $sampleid );
+push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage" ) ) if( !$rnacoverage );
+printf OUTFILE "<td><div class=\"statsdata\" style=\"width:%dpx\">\n",$t2width;
 print OUTFILE subTable( $statsfile, \@keylist );
 print OUTFILE "</div></td></tr>\n";
 print OUTFILE "</table>\n";
 print OUTFILE "<br/>\n";
 
 # table headers
-printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? 720 : 360);
+printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? 760 : 380);
 print OUTFILE "<table>\n <tr>\n";
-if( $amplicons )
+if( $ampcoverage )
 {
   $hotLable = getHelp("Amplicon Read Coverage",1);
   print OUTFILE "  <th>$hotLable</th>\n";
 }
-my $hotLable = getHelp("$tagU Base Coverage",1);
-print OUTFILE "  <th>$hotLable</th>\n";
+if( $basecoverage )
+{
+  my $hotLable = getHelp("$tagU Base Coverage",1);
+  print OUTFILE "  <th>$hotLable</th>\n";
+}
 print OUTFILE " </tr>\n <tr>\n";
 my @keylist;
-if( $amplicons )
+if( $ampcoverage )
 {
-  @keylist = ( "Number of amplicons", "Percent assigned amplicon reads", "Average reads per amplicon", "Uniformity of amplicon coverage", 
-    "Amplicons with at least 1 read", "Amplicons with at least 30 reads", "Amplicons with at least 100 reads", "Amplicons with at least 500 reads",
-    "Amplicons with no strand bias", "Amplicons reading end-to-end" );
+  @keylist = ( "Number of amplicons" );
+  if( $amplicons )
+  {
+    push( @keylist, (
+      "Percent assigned amplicon reads", "Average reads per amplicon", "Uniformity of amplicon coverage",
+      "Amplicons with at least 1 read", "Amplicons with at least 20 reads",
+      "Amplicons with at least 100 reads", "Amplicons with at least 500 reads" ) );
+  }
+  else
+  {
+    push( @keylist, (
+      "Amplicons with at least 1 read", "Amplicons with at least 10 reads",
+      "Amplicons with at least 100 reads", "Amplicons with at least 1000 reads",
+      "Amplicons with at least 10K reads", "Amplicons with at least 100K reads" ) );
+  }
+  push( @keylist, "Amplicons with no strand bias" );
+  push( @keylist, $passingcov ? "Amplicons with passing coverage" : "Amplicons reading end-to-end" );
   $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:380px\">$txt</div></td>\n";
 }
-if( $genome )
+if( $basecoverage )
 {
-  @keylist = ( "Bases in reference $tagL" );
+  if( $genome )
+  {
+    @keylist = ( "Bases in reference $tagL" );
+  }
+  else
+  {
+    @keylist = ( "Bases in $tagL regions", "Percent base reads on $tagL" );
+  }
+  push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage", "$tagU base coverage at 1x",
+    "$tagU base coverage at 20x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
+  push( @keylist, '' ) if( $amplicons );
+  my $txt = subTable( $statsfile, \@keylist );
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:380px\">$txt</div></td>\n";
 }
-else
-{
-  @keylist = ( "Bases in $tagL regions", "Percent base reads on $tagL" );
-}
-push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage", "$tagU base coverage at 1x",
-  "$tagU base coverage at 30x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
-push( @keylist, '' ) if( $amplicons );
-my $txt = subTable( $statsfile, \@keylist );
-print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
 print OUTFILE " </tr>\n</table>\n</div>\n</div>\n";
 
 # create table row for separate summary page
 if( $haverowsum )
 {
-  # TO DO - what to do for ampliSeq?
-  @keylist = ( "Number of mapped reads", "Percent reads on target", "Average base coverage depth", "Uniformity of base coverage" );
+  # Should this also be the same for ampliSeq?
+  @keylist = ( "Number of mapped reads", "Percent reads on target" );
+  push( @keylist, "Percent sample tracking reads" ) if( $sampleid );
+  push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage" ) ) if( !$rnacoverage );
   writeRowSum( $rowsumfile, $statsfile, \@keylist );
 }
 

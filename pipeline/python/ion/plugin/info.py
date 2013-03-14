@@ -48,6 +48,7 @@ class PluginInfo(object):
         self.config = {} ## getUserInput
         self.runtypes = []
         self.features = []
+        self.runlevels = []
         self.docs = ""
         self.major_block = ""
         #self.description = ""
@@ -88,11 +89,10 @@ class PluginInfo(object):
         except:
             _logger.exception("Failed to query plugin for getUserInput")
 
-        for a in ('runtypes', 'features', 'allow_autorun', 'major_block'):
+        for a in ('runtypes', 'features', 'runlevels', 'allow_autorun', 'major_block'):
             v = getattr(plugin, a, None)
-            if v:
+            if v is not None:
                 setattr(self, a, v)
-
         self.docs = getattr(plugin, '__doc__', "")
         return self
 

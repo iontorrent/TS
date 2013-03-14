@@ -117,6 +117,7 @@ class PluginManager(object):
             logger.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
         return (pluginscript, islaunch)
 
+
     def get_plugininfo(self, pluginname, pluginscript, context=None, use_cache=True, gettimeout=60):
         """
         Query plugin script for a block of json info.
@@ -129,16 +130,20 @@ class PluginManager(object):
             return None
 
         pluginlist = [ (pluginname, pluginscript, context) ]
+        infoasync = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[pluginlist],timeout=300)
 
         if use_cache and context and 'plugin' in context:
-            # Fire off a background task without waiting for it. It'll at least update for next time.
-            infonext = iondb.plugins.tasks.scan_all_plugins.apply_async(args=[pluginlist],timeout=300) ## no get
-            # But return current content immediately.
+            # Return current content immediately without waiting
+            logger.debug("Using cached plugindata: %s %s", pluginname, context['plugin'].version)
             return context['plugin'].info()
 
         # Else, we need to requery plugin for info, and wait for it.
         try:
-            info = self.get_plugininfo_list(pluginlist, gettimeout=gettimeout)
+            try:
+                info = infoasync.get(gettimeout)
+            except celery.exceptions.TimeoutError:
+                logger.info("Plugin info query timed out: %s", pluginlist, exc_info=True)
+
             pinfo = info.get(pluginscript, None)
             return pinfo
         except:
@@ -155,12 +160,6 @@ class PluginManager(object):
                 logger.info("Plugin info query timed out: %s", updatelist, exc_info=True)
         return info
 
-
-    def get_version(self, pluginpath, pluginname, pluginscript):
-        info = self.get_plugininfo(pluginname, pluginscript)
-        if info is None:
-            return "0"
-        return info.get('version',"0")
 
     def set_pluginconfig(self, plugin, configfile='pluginconfig.json'):
         """ if there is data in pluginconfig json
@@ -183,20 +182,6 @@ class PluginManager(object):
 
         # Invalid, or Unchanged
         return False
-
-    def get_pluginsettings(self, plugin, readfile='pluginsettings.json'):
-        """ read settings from file if exists """
-        filepath = os.path.join(plugin.path, readfile)
-        if not os.path.exists(filepath):
-            return False
-        try:
-            with open(filepath) as f:
-                settings = json.load(f)
-            plugin.addSettings(settings)
-            return True
-        except:
-            logger.exception("Failed to load pluginconfig from '%s'", filepath)
-
 
     def search_for_plugins(self, basedir=None):
         """ Scan folder for uninstalled or upgraded plugins
@@ -239,9 +224,11 @@ class PluginManager(object):
             # - cannot install without name and version.
             info = infocache.get(plugin_script)
             if not info:
+                logger.error("Missing info for %s", plugin_script)
                 continue
 
             if 'version' not in info:
+                logger.error("Missing VERSION info for %s", plugin_script)
                 # Cannot install versionless plugin
                 continue
 
@@ -256,6 +243,7 @@ class PluginManager(object):
                 logger.exception("Plugin not installable due to error querying name and version '%s'", full_path)
             if updated:
                 count += 1
+
         return count
 
 
@@ -283,11 +271,15 @@ class PluginManager(object):
         if not launch_script:
             (launch_script, isLaunch) = self.find_pluginscript(full_path, pname)
 
+        logger.debug("Plugin Info: %s", info)
         if not info:
             # Worst case, should have been pre-fetched above
+            logger.error("Need to rescan plugin info..")
             info = self.get_plugininfo(pname, launch_script, use_cache=False, gettimeout=300)
+            logger.debug("Plugin Rescan Info: %s", info)
         if info is None:
             raise ValueError("No plugininfo for '%s' in '%s'" % (pname,launch_script))
+
         version = info.get('version',"0")
         majorBlock = info.get('major_block', False)
         allow_autorun = info.get('allow_autorun', True)
@@ -303,6 +295,7 @@ class PluginManager(object):
             'userinputfields': info.get('config', None),
         }
 
+        logger.debug("Plugin Install/Upgrade checking for plugin: %s %s", pname, version)
         # needs_save is aka created. Tracks if anything changed.
         (p, needs_save) = iondb.rundb.models.Plugin.objects.get_or_create(name=pname,
                                                               version=version, # NB: Exact Version matches only
@@ -315,17 +308,10 @@ class PluginManager(object):
             # Set pluginconfig.json if needed - only for new installs / version changes
             if self.set_pluginconfig(p):
                 logger.info("Loaded new pluginconfig.json values for Plugin %s v%s at '%s'", pname, version, full_path)
-            if self.get_pluginsettings(p):
-                logger.info("Loaded new pluginsettings.json values for Plugin %s v%s at '%s'", pname, version, full_path)
-            else:
-                # In the absence of pluginsettings.json, use inspected values
-                pluginsettings = {
-                    'features': info.get('features', []),
-                    'runtype': info.get('runtypes', []),
-                    'runlevel': info.get('runlevels', []),
-                }
-                p.addSettings(pluginsettings)
+        else:
+            logger.debug("Existing plugin found: %s %s [%d]", p.name, p.version, p.pk)
 
+        p.updateFromInfo(info)
 
         # Handle any upgrade behaviors - deactivating old versions, etc.
         (count, oldp) = self.upgrade_helper(p, current_path=full_path)
@@ -401,13 +387,6 @@ class PluginManager(object):
         if needs_save:
             p.save()
 
-            # Rescan info - userinput can reference plugin config
-            info = p.info()
-            userinputfields = info.get('config', None)
-            if userinputfields:
-                p.userinputfields = userinputfields
-                p.save()
-
         # Return true if anything changed. Always return plugin object
         return (p, needs_save)
 
@@ -441,6 +420,7 @@ class PluginManager(object):
                 oldp.path=''
             if oldp.active:
                 oldp.active=False
+                oldplugin = oldp
             oldp.save()
 
         if count:

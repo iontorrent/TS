@@ -9,6 +9,7 @@ import argparse
 import traceback
 import json
 import subprocess
+import xmlrpclib
 
 from ion.utils import blockprocessing
 from ion.utils import explogparser
@@ -17,6 +18,8 @@ from ion.utils import basecaller
 from ion.utils import alignment
 
 from ion.utils.blockprocessing import printtime
+
+from torrentserver import cluster_settings
 
 from ion.utils.compress import make_zip
 
@@ -48,12 +51,35 @@ if __name__=="__main__":
     sys.stdout.flush()
     sys.stderr.flush()
 
+    #-------------------------------------------------------------
+    # Connect to Job Server
+    #-------------------------------------------------------------
+    try:
+        jobserver = xmlrpclib.ServerProxy("http://%s:%d" % 
+            (cluster_settings.JOBSERVER_HOST, cluster_settings.JOBSERVER_PORT), 
+            verbose=False, allow_none=True)
+        primary_key_file = os.path.join(os.getcwd(),'primary.key')
+    except:
+        traceback.print_exc()
+
+
+    def set_result_status(status):
+        try:
+            if os.path.exists(primary_key_file):
+                jobserver.updatestatus(primary_key_file, status, True)
+                printtime("MergeTLStatus %s\tpid %d\tpk file %s started" % 
+                    (status, os.getpid(), primary_key_file))
+        except:
+            traceback.print_exc()
+
+
     blocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
     dirs = ['block_%s' % block['id_str'] for block in blocks]
 
 
     if args.do_sigproc:
 
+        set_result_status('Merge Heatmaps')
         merged_bead_mask_path = os.path.join(env['SIGPROC_RESULTS'], 'MaskBead.mask')
 
         sigproc.mergeSigProcResults(
@@ -63,24 +89,39 @@ if __name__=="__main__":
 
 
     if args.do_basecalling:
-        # Only merge metrics and generate plots
-        basecaller.merge_basecaller_stats(
-            dirs,
-            env['BASECALLER_RESULTS'],
-            env['SIGPROC_RESULTS'],
-            env['flows'],
-            env['flowOrder'])
-        ## Generate BaseCaller's composite "Big Data": unmapped.bam. Totally optional
-        if env.get('libraryName','') == 'none':        
-            actually_merge_unmapped_bams = True
-        else:
-            actually_merge_unmapped_bams = False
-        if actually_merge_unmapped_bams:
-            basecaller.merge_basecaller_bam(
+
+        set_result_status('Merge Basecaller Results')
+
+        try:
+            sigproc.mergeRawPeakSignals(dirs)
+        except:
+            traceback.print_exc()
+
+        try:
+            # Only merge metrics and generate plots
+            basecaller.merge_basecaller_stats(
                 dirs,
-                env['BASECALLER_RESULTS'])
+                env['BASECALLER_RESULTS'],
+                env['SIGPROC_RESULTS'],
+                env['flows'],
+                env['flowOrder'])
+            ## Generate BaseCaller's composite "Big Data": unmapped.bam. Totally optional
+            if env.get('libraryName','') == 'none':        
+                actually_merge_unmapped_bams = True
+            else:
+                actually_merge_unmapped_bams = False
+            if actually_merge_unmapped_bams:
+                basecaller.merge_basecaller_bam(
+                    dirs,
+                    env['BASECALLER_RESULTS'])
+        except:
+            traceback.print_exc()
+            printtime("ERROR: Merge Basecaller Results failed")
+
 
     if args.do_alignment and env['libraryName'] and env['libraryName']!='none':
+
+        set_result_status('Merge Alignment Results')
         # Only merge metrics and generate plots
         alignment.merge_alignment_stats(
             dirs,
@@ -98,6 +139,7 @@ if __name__=="__main__":
 
     if args.do_zipping:
         
+        set_result_status('Create Zip Files')
         datasets_basecaller_path = os.path.join(env['BASECALLER_RESULTS'],"datasets_basecaller.json")
         datasets_basecaller = {}
     

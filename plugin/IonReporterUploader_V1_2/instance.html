@@ -59,7 +59,7 @@ $(document).ready(function(){
               $("#postbutton").show();
         } else {
               $("#postbutton").hide();
-              $("#loading").html("Could Not Initialize: Incorrect Server Configuration");
+              $("#loading").html("Ion Reporter Uploader Not Configured Correctly - Please Go To  Settings -> Plugins and Configure the Plugin ");
         }
 
 	pluginURL = "/rundb/api/v1/ionreporter/version/?plugin=IonReporterUploader_V1_2&format=json";
@@ -142,7 +142,7 @@ $(function() {
 	         url: pluginURL,
 	         contentType: "application/json; charset=utf-8",
 	         success : function(data) {
-	             apprise("Upload Job is submitted", {'verify':false}, function(r){
+	             apprise("Upload Job is submitted. It will take a while to upload the files. It will take longer if it is a proton run. When the uploads are finished, you will receive an email on your email id registered with the Ion Reporter. Please do not re-submit till it is done.", {'verify':false}, function(r){
 						parent.$.fn.colorbox.close();
 				});
 	         },

@@ -1,8 +1,20 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+MODULES=${MODULES-"
+Analysis
+alignTools
+buildTools
+dbReports
+plugin
+torrentR
+onetouchupdate
+tsconfig
+publishers
+pipeline
+"}
 
-find Analysis alignTools buildTools dbReports plugin torrentR onetouchupdate tsconfig -type f | \
-    grep -v '\.svn' | grep -v '__init__.py' | grep -v jsonencode.py | \
+find $MODULES -type f | \
+    grep -v '\.svn' | grep -v '__init__.py' | grep -v jsonencode.py | grep -v rndbin | grep -v dbReports/local-python | grep -v dbReports/reports  |\
     xargs buildTools/fileChecker.pl
 
 if [ $? != 0 ]; then

@@ -22,7 +22,7 @@ if( !file.exists(nFileIn) ) {
 picWidth = 1.5*798
 picHeight= 1.5*264
 
-rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE)
+rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, comment.char="")
 
 # test the type of the field in case the wrong type of targets are provided
 if( grepl("a",option) ) {

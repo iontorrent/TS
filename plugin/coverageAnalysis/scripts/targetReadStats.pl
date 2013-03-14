@@ -13,8 +13,7 @@ my $OPTIONS = "Options:
   -a Indicates target regions are Amplicons rather than generic targets. Changes wording of output.
   -f Output Full statistics. This adds a few more statistics to the output, e.g. those output by previous version of TCA.
   -l Show extra log information to STDERR.
-  -n Use Normalized read coverage. Normalize depth by taking integer of number of reads divided by taget lenth.
-     Default: Calculate read depth distribution using (assigned) reads per amplicon.
+  -r RNA AmpliSeq option: Output passing (splice) coverage as statistic instead of end-to-end. Forces '-a' option.
   -D <file> Output file name for depth of coverage Distribution table (tsv) file. Default: '' (None output).
   -E <int> Threshold for end-to-end read counting based on percent end-to-end reads greaater or equal to <int>. Default: 70.
   -M <int> Number of mapped reads. If provided the percent assigned reads statistic will be output.
@@ -25,6 +24,7 @@ my $OPTIONS = "Options:
 my $docfile = '';
 my $logopt = 0;
 my $ampout = 0;
+my $rnaopt = 0;
 my $fullstats = 0;
 my $mappedReads = 0;
 my $thresE2E = 70;
@@ -40,6 +40,7 @@ while( scalar(@ARGV) > 0 )
   elsif($opt eq '-a') {$ampout = 1;}
   elsif($opt eq '-f') {$fullstats = 1;}
   elsif($opt eq '-l') {$logopt = 1;}
+  elsif($opt eq '-r') {$rnaopt = 1;$ampout = 1;}
   elsif($opt eq '-E') {$thresE2E = int(shift);}
   elsif($opt eq '-M') {$mappedReads = int(shift);}
   elsif($opt eq '-R') {$thresReads = int(shift);}
@@ -127,12 +128,20 @@ close(TRDFILE);
 my $targType = $ampout ? 'Amplicon' : 'Target';
 my $targetCumd = outputStats( $targType, \@targetDist, $targetMaxDepth, $numTargets );
 
-my $pcBias = $numTargets > 0 ? 100*$numBias/$numTargets : 0;
-printf "%ss with no strand bias:     %.2f%%\n",$targType,$pcBias;
-if( $ampout )
+if( $rnaopt )
 {
-  my $pcE2E = $numTargets > 0 ? 100*$numE2E/$numTargets : 0;
-  printf "%ss reading end-to-end:      %.2f%%\n",$targType,$pcE2E;
+  printf "%ss with no strand bias:       %d\n",$targType,$numBias;
+  printf "%ss reading end-to-end:        %d\n",$targType,$numE2E;
+}
+else
+{
+  my $pcBias = $numTargets > 0 ? 100*$numBias/$numTargets : 0;
+  printf "%ss with no strand bias:       %.2f%%\n",$targType,$pcBias;
+  if( $ampout )
+  {
+    my $pcE2E = $numTargets > 0 ? 100*$numE2E/$numTargets : 0;
+    printf "%ss reading end-to-end:        %.2f%%\n",$targType,$pcE2E;
+  }
 }
 
 # output assigned read depth distribution
@@ -179,31 +188,45 @@ sub outputStats
   my $std = $cumcov > 1 ? sqrt(($sum_dreads - $ave*$ave*$cumcov)/($cumcov-1)) : 0;
   my $scl = 100 / $numTargs;
   my $p2m = int(0.2*$abc+0.5);
-  printf "Number of %ss:               %.0f\n",$tagL,$numTargs;
-  printf "Total assigned $tagL reads:     %.0f\n",$sum_reads;
-  if( $mappedReads > 0 )
-  {
-    printf "Percent assigned $tagL reads:   %.2f%%\n",100*$sum_reads/$mappedReads;
-  }
+  printf "Number of %ss:                %.0f\n",$tagL,$numTargs;
+  printf "Total assigned $tagL reads:      %.0f\n",$sum_reads;
   my $sig = sigfig($abc);
-  printf "Average reads per $tagL:        %.${sig}f\n",$abc;
-  printf "Uniformity of $tagL coverage:   %.2f%%\n",$cumd[$p2m]*$scl;
+  if( !$rnaopt )
+  {
+    if( $mappedReads > 0 )
+    {
+      printf "Percent assigned $tagL reads:    %.2f%%\n",100*$sum_reads/$mappedReads;
+    }
+    printf "Average reads per $tagL:         %.${sig}f\n",$abc;
+    printf "Uniformity of $tagL coverage:    %.2f%%\n",$cumd[$p2m]*$scl;
+  }
   if( $fullstats )
   {
-    printf "%ss with at least 1 read:    %.0f\n",$tagU,$cumcov;
-    printf "Maximum $tagL read depth:       %.0f\n",$maxDepth;
+    printf "%ss with at least 1 read:     %.0f\n",$tagU,$cumcov;
+    printf "Maximum $tagL read depth:        %.0f\n",$maxDepth;
     $sig = sigfig($ave);
-    printf "Average $tagL read depth:           %.${sig}f\n",$ave;
+    printf "Average $tagL read depth:            %.${sig}f\n",$ave;
     $sig = sigfig($std);
-    printf "Std.Dev $tagL read depth:           %.${sig}f\n",$std;
+    printf "Std.Dev $tagL read depth:            %.${sig}f\n",$std;
   }
-  printf "%ss with at least 1 read:    %.2f%%\n",$tagU,$cumd[1]*$scl;
-  printf "%ss with at least 10 reads:  %.2f%%\n",$tagU,$cumd[10]*$scl if( $fullstats );
-  printf "%ss with at least 20 reads:  %.2f%%\n",$tagU,$cumd[20]*$scl if( $fullstats );
-  printf "%ss with at least 30 reads:  %.2f%%\n",$tagU,$cumd[30]*$scl;
-  printf "%ss with at least 50 reads:  %.2f%%\n",$tagU,$cumd[50]*$scl if( $fullstats );
-  printf "%ss with at least 100 reads: %.2f%%\n",$tagU,$cumd[100]*$scl;
-  printf "%ss with at least 500 reads: %.2f%%\n",$tagU,$cumd[500]*$scl;
+  if( $rnaopt )
+  {
+    printf "%ss with at least 1 read:     %d\n",$tagU,$cumd[1];
+    printf "%ss with at least 10 reads:   %d\n",$tagU,$cumd[10];
+    printf "%ss with at least 100 reads:  %d\n",$tagU,$cumd[100];
+    printf "%ss with at least 1000 reads: %d\n",$tagU,$cumd[1000];
+    printf "%ss with at least 10K reads:  %d\n",$tagU,$cumd[10000];
+    printf "%ss with at least 100K reads: %d\n",$tagU,$cumd[100000];
+  }
+  else
+  {
+    printf "%ss with at least 1 read:     %.2f%%\n",$tagU,$cumd[1]*$scl;
+    printf "%ss with at least 10 reads:   %.2f%%\n",$tagU,$cumd[10]*$scl if( $fullstats );
+    printf "%ss with at least 20 reads:   %.2f%%\n",$tagU,$cumd[20]*$scl;
+    printf "%ss with at least 50 reads:   %.2f%%\n",$tagU,$cumd[50]*$scl if( $fullstats );
+    printf "%ss with at least 100 reads:  %.2f%%\n",$tagU,$cumd[100]*$scl;
+    printf "%ss with at least 500 reads:  %.2f%%\n",$tagU,$cumd[500]*$scl;
+  }
   return \@cumd;
 }
 

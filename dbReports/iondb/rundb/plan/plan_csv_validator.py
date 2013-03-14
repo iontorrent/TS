@@ -127,10 +127,6 @@ def validate_csv_plan(csvPlanDict):
     errorMsg,plugins = _validate_plugins(csvPlanDict.get(plan_csv_writer.COLUMN_PLUGINS), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_PLUGINS, errorMsg))
-
-    errorMsg = _validate_variant_freq(csvPlanDict.get(plan_csv_writer.COLUMN_VARIANT_FREQ), selectedTemplate, planObj)
-    if errorMsg:
-        failed.append((plan_csv_writer.COLUMN_VARIANT_FREQ, errorMsg))                        
         
     errorMsg, projects = _validate_projects(csvPlanDict.get(plan_csv_writer.COLUMN_PROJECTS), selectedTemplate, planObj)
     if errorMsg:
@@ -421,20 +417,7 @@ def _validate_plugins(input, selectedTemplate, planObj):
         planObj.selectedPlugins = ""
         
     return errorMsg, plugins
-   
-def _validate_variant_freq(input, selectedTemplate, planObj):
-    errorMsg = None
-    if input:
-        try:
-            variantFreq = VariantFrequencies.objects.filter(name = input.strip())[0]
-            planObj.variantfrequency = variantFreq.name
-        except:
-            logger.exception(format_exc())            
-            errorMsg = input + " not found."
-    else:
-        planObj.variantfrequency = ""
         
-    return errorMsg                  
     
 def _validate_projects(input, selectedTemplate, planObj):
     errorMsg = None

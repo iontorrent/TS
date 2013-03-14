@@ -180,11 +180,11 @@ function ChromIGV(row, cell, value, columnDef, dataContext) {
   if (value == null || value === "") { return "N/A" }
   var pos = grid.getData().getItem(row)['chrom'] + ":" + value;
   var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
-  var igvURL = window.location.protocol + "//" + window.location.host + locpath + "/igv.php3";
+  var igvURL = window.location.protocol + "//" + window.location.host + "/auth" + locpath + "/igv.php3";
   // link to Broad IGV
   //var href = "http://www.broadinstitute.org/igv/projects/current/igv.php?locus="+pos+"&sessionURL="+igvURL;
   // link to internal IGV
-  var launchURL = window.location.protocol + "//" + window.location.host + ":8080/IgvServlet/igv";
+  var launchURL = window.location.protocol + "//" + window.location.host + "/IgvServlet/igv";
   var href = launchURL + "?locus="+pos+"&sessionURL="+igvURL;
   return "<a href='"+href+"'>"+value+"</a>";
 }

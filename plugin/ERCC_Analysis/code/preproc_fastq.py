@@ -1,10 +1,10 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-#pre-process fastq files by filtering for base quality and then for length
+#pre-process mapped bam files by filtering for base quality and then for length
+
 from __future__ import division
 from itertools import izip
-import subprocess
-from ion.utils import blockprocessing
 import traceback
+import pysam
 
 reverse_enumerate = lambda l: izip(xrange(len(l)-1, -1, -1), reversed(l))
 
@@ -37,56 +37,25 @@ def base_quality_trim(base_seq, quality_metric_seq, threshold, min_length):
     else:
         return ''
 
-def process_4line_block(four_lines,threshold,min_length):
-    output_lines = ['','','','']
-    base_seq = four_lines[1]
-    quality_metric_seq = four_lines[3]
-    output_lines[1] = base_quality_trim(base_seq, quality_metric_seq, threshold, min_length)+ '\n'
-    if (len(output_lines[1])>1):
-        output_lines[0] = four_lines[0]
-        output_lines[2] = four_lines[2]
-        output_lines[3] = quality_metric_seq[0:(len(output_lines[1])-1)]
- 	if (output_lines[3][-1] != "\n"): #carriage return was trimmed by above line
- 	    output_lines[3] = output_lines[3] + "\n"
-        return ''.join(output_lines)
 
-def bam2fastq(bam, fastq):
+def process_read(read,threshold,min_length):
+    # backup read.qual, pysam removes it once I set red.seq
+    read_qual = read.qual
 
-    try:
-        com = blockprocessing.bam2fastq_command(bam,fastq)
-        ret = subprocess.call(com,shell=True)
-    except:
-        traceback.print_exc()
-
-    return False
+    read.seq = base_quality_trim(read.seq, read.qual, threshold, min_length)
+    if len(read.seq)>0:
+        read.qual = read_qual[0:len(read.seq)]
 
 
-def fastq_preproc(path_to_bam_input,path_to_fastq_output,threshold, min_length):
+def bam_preproc(path_to_input_bam, path_to_output_file, threshold, min_length):
 
-    path_to_fastq_input = 'tmp.fastq'
-    bam2fastq(path_to_bam_input, path_to_fastq_input)
-
-    input_file = open(path_to_fastq_input,'r')
-    output_file = open(path_to_fastq_output,'w')
-    lines_from_input = []
-    no_more_to_read = False
-    while True:
-        if ((no_more_to_read == False) and (len(lines_from_input) < 4)):
-            new_lines_read = input_file.readlines(5000)
-            if (len(new_lines_read)==0):
-		no_more_to_read = True
-            for new_line in new_lines_read:
-                lines_from_input.append(new_line)
-        if (len(lines_from_input)>=4):
-            try:
-                output_file.write(process_4line_block(lines_from_input[0:4],threshold,min_length))
-            except (TypeError): #process_4line_block didn't return anything, perhaps bcs less than min_length
-                pass
-            for i in range(4):
-                lines_from_input.pop(0)
-        if (no_more_to_read and (len(lines_from_input)<4)):
-            break
-    #for output_block in process_4line_blocks(input_file,threshold, min_length):
-    #    output_file.write(output_block)
-    input_file.close()
-    output_file.close()
+    input_bam = pysam.Samfile(path_to_input_bam, mode="rb",check_header=False,check_sq=False)
+    #output_bam = pysam.Samfile(path_to_output_file, mode="wb",template=input_bam,check_header=False,check_sq=False)
+    output_fastq = open(path_to_output_file, 'w')
+    for x in input_bam.fetch(until_eof=True):
+        process_read(x,threshold,min_length)
+        #output_bam.write(x)
+        output_fastq.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
+    input_bam.close()
+    #output_bam.close()
+    output_fastq.close()

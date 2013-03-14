@@ -5,14 +5,13 @@ import os
 import sys
 import glob
 import json
-import fnmatch
 import subprocess
 import traceback
 from ion.plugin import *
 
 
 class SFFCreator(IonPlugin):
-    version = "3.4.48481"
+    version = "3.4.49884"
     runtypes = [ RunType.COMPOSITE, RunType.THUMB, RunType.FULLCHIP ]
 
 
@@ -30,18 +29,16 @@ class SFFCreator(IonPlugin):
             spj = json.load(fh)
             net_location = spj['runinfo']['net_location']
             basecaller_dir = spj['runinfo']['basecaller_dir']
+            alignment_dir = spj['runinfo']['alignment_dir']
             barcodeId = spj['runinfo']['barcodeId']
             runtype = spj['runplugin']['run_type']
+
         url_path = os.getenv('TSP_URLPATH_PLUGIN_DIR','./')
         print url_path
         output_stem = os.getenv('TSP_FILEPATH_OUTPUT_STEM','unknown')
         print "TSP_FILEPATH_OUTPUT_STEM: %s" % output_stem
 
-        if runtype == 'composite':
-            block_directories = [x for x in os.listdir(basecaller_dir) if fnmatch.fnmatch(x,'block_X[0-9]*_Y[0-9]*')]
-        else:
-            block_directories = ['./']
-        print "Blocks: %s" % block_directories
+        reference_path = os.getenv('TSP_FILEPATH_GENOME_FASTA','')
 
         with open(os.path.join(basecaller_dir, "datasets_basecaller.json"),'r') as f:
             datasets_basecaller = json.load(f);
@@ -51,10 +48,14 @@ class SFFCreator(IonPlugin):
 
             # input
             bam_list = []
-            for idx, block_directory in enumerate(block_directories):
-                bam = os.path.join(basecaller_dir, block_directory, dataset['file_prefix']+'.basecaller.bam')
-                if os.path.exists(bam):
-                    bam_list.append(bam)
+            if reference_path != '':
+                bam = os.path.join(alignment_dir, dataset['file_prefix']+'.bam')
+            else:
+                bam = os.path.join(basecaller_dir, dataset['file_prefix']+'.basecaller.bam')
+            print bam
+            if os.path.exists(bam):
+                bam_list.append(bam)
+
             # output
             if barcodeId:
                 dataset['sff'] = dataset['file_prefix'].rstrip('_rawlib')+'_'+output_stem+'.sff'

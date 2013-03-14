@@ -225,13 +225,20 @@ dibayes : {
   # Allowed values: integers greater than 0
   # Recommended values: between 7 and 50
   # Impact: If this is set to a large number, it turns off the strand bias filter more often, and the result may be more calls. When set to a huge number above any possible coverage value, it effectively turns off the strand bias filter; when set very low, the strand bias will always be on.
-  mini-strandcount-fpr-strand-bias : 10    
+  mini-strandcount-fpr-strand-bias : 10,
+  
+  # Generate consensus file
+  # Allowed values: Integers 0 (No) or 1 (Yes)
+  # Recommended values: 0
+  # Impact: Produces a file wih allele counts in each genomic position.
+  C : 0   
+   
 }
 
 
 torrent-variant-caller: {
   # Maximum coverage depth. Reads are randomly selected for sampling if this value is exceeded.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers between 1 and 100000
   # Recommended values: between 50 and 5000
   downsample_to_coverage : 2000,
 
@@ -242,7 +249,7 @@ torrent-variant-caller: {
   min_indel_count_for_genotyping : 5,
   
   # Minimum mapping quality required to consider a read for calling.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers greater than 0 
   # Recommended values: between 2 and 30
   # Impact: Increasing values make indel calls less sensitive but more specific. 
   min_mapping_quality_score : 4,
@@ -302,7 +309,7 @@ torrent-variant-caller: {
   fpe_max_peak_deviation : 31,
 
   # Maximum homopolymer length for calling indels.
-  # Allowed values:  Integers greater than 0 and less than or equal to 11
+  # Allowed values:  Integers greater than 0 and less than or equal to 25
   # Recommended values: between 5 and 11
   # Impact: Increasing values make indel calls more sensitive but less specific. 
   hp_max_length : 9,
@@ -318,19 +325,19 @@ torrent-variant-caller: {
 long-indel-assembler : {
 
   # Size of the smallest k-mer used in assembly.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers greater than 5
   # Recommended values: between 11 and 30
   # Impact: Increasing values make indel calls less sensitive but more specific. 
   kmer_len : 19,
 
   # Minimum support for a variant to be evaluated.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers greater than 1
   # Recommended values: between 3 and 30
   # Impact: Increasing values make indel calls less sensitive but more specific. 
   min_var_count : 5,
 
   # Minimum assembled sequence match on both sides of the variant.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers greater than 2
   # Recommended values: between 4 and the value given to the kmer_len parameter
   # Impact: Increasing values make indel calls less sensitive but more specific. 
   short_suffix_match : 5,
@@ -342,7 +349,7 @@ long-indel-assembler : {
   min_indel_size : 4,
 
   # Variants containing HP larger than this are not reported.
-  # Allowed values: Integers greater than 0
+  # Allowed values: Integers greater than 1
   # Recommended values: between 2 and 11
   # Impact: Increasing values make indel calls more sensitive but less specific. 
   max_hp_length : 8,
@@ -357,7 +364,8 @@ long-indel-assembler : {
   # Allowed values: Decimal numbers between 0.0 and 1.0
   # Recommended values: between 0.6 and 1.0
   # Impact: Increasing values make indel calls more sensitive but less specific. 
-  relative_strand_bias : 0.80
+  relative_strand_bias : 0.80,
+  
 }
 
 filter-indels : {

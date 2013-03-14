@@ -457,9 +457,9 @@ void BkgFitterTracker::DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu()
   
   if (maxBeads)
     GpuMultiFlowFitControl::SetMaxBeads(maxBeads);
-
+ 
   // it is always 0 right now since frames are actually set after the first flow is read in
-  if (maxFrames)
-    GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
+  //if (maxFrames)
+  //  GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
 }
 

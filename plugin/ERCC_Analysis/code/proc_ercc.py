@@ -36,13 +36,13 @@ def load_ercc_conc(filter = None, pool = 1):
     rows = ercc_conc_db.filter(cols=['ERCC ID', 'Pool1'])
   else:
     rows = ercc_conc_db.filter(
-      cols=['ERCC ID', 'Pool1'],
+      cols=['ERCC ID', pool],
       rows=[('ERCC ID', filter)]
       )
 
   return rows
 
-def dose_response(coverage, ercc_conc,counts):
+def dose_response(coverage, ercc_conc, counts, min_counts=0):
   """
   Generate the x and y values for the scatter plot and compute the
   dose/response curve from the coverage and concentration values.
@@ -54,9 +54,10 @@ def dose_response(coverage, ercc_conc,counts):
 
   for transcript in ercc_conc:
     ercc, conc = transcript
-    x.append(math.log(conc,2))
-    y.append(math.log(counts[ercc],2))
-    N += 1                        
+    if counts[ercc] >= min_counts:
+      x.append(math.log(conc,2))
+      y.append(math.log(counts[ercc],2))
+      N += 1                        
 
   m, b, r, p, err = scipy.stats.linregress(x, y)
 

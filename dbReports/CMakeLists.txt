@@ -130,7 +130,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    ion-pipeline (>= 3.3.10),
+    ion-pipeline (>= 3.4.17),
     texlive-latex-base,
     texlive-latex-extra,
     latex-xcolor,

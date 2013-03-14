@@ -25,6 +25,14 @@ try:
   MINIMUM_RSQUARED = float(sys.argv[5])
 except ValueError: 
   MINIMUM_RSQUARED = 0.9
+try:
+  MINIMUM_COUNTS = int(sys.argv[7])
+except ValueError: 
+  MINIMUM_COUNTS = 1
+try:
+  ERCC_POOL_NBR = int(sys.argv[8])
+except:
+  ERCC_POOL_NBR = 1
 
 coverage = SamCoverage(GENOME)
 
@@ -42,11 +50,11 @@ if (total_counts > 0):
 
 coverage.parse_sam(FILTERED_SAM_FILE)
 
-ercc_conc = load_ercc_conc(filter = counts.keys())
+ercc_conc = load_ercc_conc(filter = counts.keys(), pool = ERCC_POOL_NBR)
 ercc_conc.sort()
 
 
-dr = dose_response(coverage,ercc_conc,counts)
+dr = dose_response(coverage,ercc_conc,counts,MINIMUM_COUNTS)
 trendline_points = generate_trendline_points(dr)
 
 data_to_display = True
@@ -86,7 +94,8 @@ if data_to_display:
                                     counts_file = COUNTS_URL,
                                     msg_to_user = msg_to_user,
                                     series = series_params,
-                                    plugin_name = PLUGIN_NAME )
+                                    plugin_name = PLUGIN_NAME,
+                                    min_counts = MINIMUM_COUNTS )
 else:
   template = open(SRC + '/ercc_error_template.html')
   page_we_are_making = Template(template.read())

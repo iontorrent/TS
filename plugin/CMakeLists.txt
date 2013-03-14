@@ -30,7 +30,7 @@ SFFCreator
 coverageAnalysis
 sampleID
 variantCaller
-IonReporterUploader_V1_0
+IonReporterUploader_V1_2
 ERCC_Analysis
 )
 

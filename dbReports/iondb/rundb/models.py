@@ -2076,21 +2076,6 @@ class Plugin(models.Model):
     ## file containing plugin definition. launch.sh or PluginName.py
     script = models.CharField(max_length=256, blank=True, default="")
 
-    def addSettings(self, settings_dict):
-      # Allow only fixed values for runtype and runlevel
-      #TODO: this definition needs to be shared, ion.plugin.constants
-      runtypes = dict(COMPOSITE='composite', THUMB='thumbnail', FULLCHIP='wholechip')
-      runlevels = dict(PRE='pre', DEFAULT='default', BLOCK='block', POST='post')
-      features = dict(EXPORT='export',)
-      pluginsettings = self.pluginsettings or {}
-      if 'runtype' in settings_dict and settings_dict['runtype']:
-          pluginsettings['runtype'] = [value for value in settings_dict['runtype'] if value in runtypes.values()]
-      if 'runlevel' in settings_dict and settings_dict['runlevel']:
-          pluginsettings['runlevel'] = [value for value in settings_dict['runlevel'] if value in runlevels.values()]
-      if 'features' in settings_dict and settings_dict['features']:
-          pluginsettings['features'] = [value for value in settings_dict['features'] if value in features.values()]
-      self.pluginsettings = pluginsettings
-
     def isConfig(self):
         try:
             if os.path.exists(os.path.join(self.path, "config.html")):
@@ -2175,15 +2160,14 @@ class Plugin(models.Model):
             self.userinputfields = userinputfields
             changed = True
 
-        # Plugin settings is only refreshed if empty, never auto updated
+        # Set features, runtype, runlevel from info
         pluginsettings = {
             'features': info.get('features'),
             'runtype': info.get('runtypes'),
             'runlevel': info.get('runlevels'),
         }
-        oldsettings = self.pluginsettings
-        self.addSettings(pluginsettings)
-        if self.pluginsettings != oldsettings:
+        if self.pluginsettings != pluginsettings:
+            self.pluginsettings = pluginsettings
             changed = True
 
         majorBlock = info.get('major_block', False)

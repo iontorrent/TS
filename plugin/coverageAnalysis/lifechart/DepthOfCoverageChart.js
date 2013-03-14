@@ -35,7 +35,7 @@ document.write('\
       <input type="text" class="numSearch" id="DOC-binSize" value=10 size=4>\
    </tr></table>\
 </div>\
-<div id="DOC-tooltip">\
+<div id="DOC-tooltip" style="display:none">\
   <div><span id="DOC-tooltip-close" title="Close" class="help-box ui-icon ui-icon-close"></span></div>\
   <div id="DOC-tooltip-body"></div>\
 </div>\

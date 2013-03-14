@@ -90,6 +90,7 @@ my @binid;
 if( $haveBed )
 {
   $binsize = $targetSize / $numbins;
+  print STDERR "targetSize = $targetSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
   my $lastChrom;
   my $binnum = 0;
   for( my $cn = 0; $cn < $numChroms; ++$cn )
@@ -121,6 +122,7 @@ else
   $binsize = $genomeSize / $numbins;
   my $chrid = $chromName[0];
   my $chrsz = $numChroms > 1 ? $chromMaps{$chromName[1]} : $genomeSize;
+  print STDERR "genomeSize = $genomeSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
   my $chrn = 1;
   my $pos = 0;
   for( my $i = 0; $i < $numbins; ++$i )
@@ -130,8 +132,9 @@ else
     while( $pos > $chrsz )
     {
       $chrid = $chromName[$chrn];
-      $binid[$i] .= "-" . $chrid;
-      $chrsz = $chrn < $numChroms ? $chromMaps{$chromName[++$chrn]} : $genomeSize;
+      $binid[$i] .= "-" . $chrid if( int($pos) > $chrsz );
+      ++$chrn;
+      $chrsz = $chrn < $numChroms ? $chromMaps{$chromName[$chrn]} : $genomeSize;
     }
   }
   open( BBCVIEW, "$Bin/bbcView.pl $bbcfile |" ) || die "Cannot read base coverage from $bbcfile.\n";
@@ -184,7 +187,7 @@ while( <BBCVIEW> )
     if( $chrid ne $lastChr )
     {
       $lastChr = $chrid;
-      $targMap = $targMaps{$chrid};
+      $targMap = $chromMaps{$chrid};
       print STDERR "Binning reads over $chrid...\n" if( $logopt );
     }
     $bin = int(($pos+$targMap-1) / $binsize);

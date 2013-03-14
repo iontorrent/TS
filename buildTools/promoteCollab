@@ -11,22 +11,27 @@ DEBUG=0
 
 # note:  package names are case sensitive!!
 pkglist=(
-	ion-alignment
+    ion-alignment
     ion-analysis
     ion-dbreports
     ion-gpu
     ion-docs
+    ion-onetouchupdater
+    ion-pipeline
     ion-pgmupdates
-    ion-plugins
+    ion-plugins 
+    ion-protonupdates
+    ion-publishers
     ion-referencelibrary
-    ion-rndplugins
     ion-rsmts
-    ion-torrentR
+    ion-torrentr
+    ion-torrentscout-light
     ion-tsconfig
     samtools
     tmap
     bedtools
     gridengine-client
+    gridengine-common
     gridengine-exec
     gridengine-master
     gridengine-qmon 
@@ -48,6 +53,7 @@ pkglist=(
     python-django-doc
     python-django-kombu
     python-django-picklefield
+    python-django-south
     python-django-tastypie
     python-django
     python-drmaa
@@ -59,9 +65,40 @@ pkglist=(
     python-pysam
     python-simplejson
     python-tastypie
+    python-endless-pagination
+    zeroinstall-injector
+    r-cran-mgcv 
+    r-cran-mass
+    r-cran-rpart 
+    r-cran-kernsmooth 
+    r-cran-boot
+    r-base
+    r-doc-html 
+    r-base-html
+    r-base-dev
+    r-recommended 
+    r-base-core	 
+    r-cran-nlme 
+    r-cran-foreign
+    r-cran-survival
+    r-cran-matrix
+    r-cran-lattice
+    r-cran-cluster
+    r-cran-spatial
+    r-cran-nnet
+    r-cran-codetools
+    r-cran-class
+    r-cran-bitops
+    r-cran-catools
+    nxclient
+    nxnode
+    nxserver
+    ion-igv
+    ion-jk
+    libapache2-mod-wsgi
     )
-srcdir="lucid-beta"
-dstdir="lucid-collab"
+srcdir="lucid-proton-alpha"
+dstdir="lucid-alpha"
 remoteuser="ion"
 remoteserver="rnd1.ite"
 rootdir="public_html/updates_server_root/updates/software"

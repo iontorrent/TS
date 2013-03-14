@@ -5,12 +5,14 @@
 # The -a option specifies to output all data passing filters in range
 #  - Max rows output and binning is ignorred. No exra fields for # number filtered and contig list are output.
 # The -b option is the same as -a except the output format is plain (no header) 4-column BED.
+# The -c option indicates that no contig (field #1) list is returned (with retval < 0 or -G option)
 
 (my $CMD = $0) =~ s{^(.*/)+}{};
 
 my $genome = '';
 my $allout = 0;
 my $bedout = 0;
+my $chrret = 1;
 
 while( scalar(@ARGV) > 0 )
 {
@@ -19,6 +21,7 @@ while( scalar(@ARGV) > 0 )
   if($opt eq '-G') {$genome = shift;}
   elsif($opt eq '-a') {$allout = 1;}
   elsif($opt eq '-b') {$allout = 1; $bedout = 1;}
+  elsif($opt eq '-c') {$chrret = 0;}
   else
   {
     print STDERR "$CMD: Invalid option argument: $opt\n";
@@ -49,6 +52,7 @@ if( scalar(@ARGV) > 0 )
 
 $chrom = "" if( $chrom eq "-" );
 $gene = "" if( $gene eq "-" );
+$genome = "" if( !$chrret );
 
 unless( $genome eq '' || $genome eq '-' )
 {
@@ -75,7 +79,7 @@ if( $numrec <= 0 )
   while( <TSVFILE> )
   {
     my @fields = split;
-    if( !defined($chrid{$fields[0]}) )
+    if( $chrret && !defined($chrid{$fields[0]}) )
     {
       $chrList .= $fields[0] . ':';
       $chrid{$fields[0]} = 1;
@@ -108,7 +112,7 @@ if( $genome ne '' )
 my $line = <TSVFILE>;
 if( !$allout ) {
   print "$numHits\t";
-  print "$chrList\t" if( $numrec < 0 );
+  print "$chrList\t" if( $chrret && $numrec < 0 );
 }
 print $line if( !$bedout );
 exit(0) if( $numHits == 0 );

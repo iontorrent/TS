@@ -10,7 +10,7 @@
                 background: #eef;
                 margin: 10px;
                 padding: 10px;
-                height: 130px;
+                height: 190px;
                 text-align: center;
         }
 
@@ -46,12 +46,19 @@
        delete pluginGET.resource_uri;
     
        $.each(pluginGET.config, function(key,val){
-        //set the default value of the html object with id input_text
         if(key == "minrsquared"){
          document.getElementById("minrsquared").value = val;
          $("#default_rsquared").text("The current default minimum R-squared is "+val+".  To change this, go to the Config tab of the Torrent Suite.");
         } 
-       });
+        if(key == "mincounts"){
+         document.getElementById("mincounts").value = val;
+         $("#default_mincounts").text("The current default minimum counts per transcript is "+val+".  To change this, go to the Config tab of the Torrent Suite.");
+        } 
+        if(key == "ercc_pool"){
+         document.getElementById("erccpool").value = val;
+         $("#default_erccpool").text("The current default ERCC Pool is Pool"+val+".  To change this, go to the Config tab of the Torrent Suite.");
+        }
+		});
       }
      });
     });
@@ -104,6 +111,12 @@
                 Minimum acceptable R-squared value :
                 <input type="text" id="minrsquared" name="minrsquared" value="" />
                 <p id="default_rsquared"></p>
+                Minimum acceptable counts per ERCC transcript :
+                <input type="text" id="mincounts" name="mincounts" value="" />
+                <p id="default_mincounts"></p>
+				ERCC Pool used (1 or 2):
+				<input type="text" id="erccpool" name="erccpool" value="1" />
+				<p id="default_erccpool"></p>
             </form>
             <input id="postbutton" type="submit" value="Submit">    
         </div>

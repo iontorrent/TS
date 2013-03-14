@@ -41,6 +41,8 @@ BROKER_PASSWORD = "ionadmin"
 BROKER_VHOST = "ion"
 ## Avoid indefinite hangs by forcing results to expire after 30 minutes
 CELERY_TASK_RESULT_EXPIRES = 1800
+# Restart celery each time to ensure imported plugin data is fresh
+CELERYD_MAX_TASKS_PER_CHILD = 1
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name

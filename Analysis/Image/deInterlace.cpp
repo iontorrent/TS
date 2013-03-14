@@ -27,8 +27,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "datahdr.h"
+#ifdef BB_DC
+#include "deInterlace.h"
+#include "datacollect_global.h"
+#else
 #include "ByteSwapUtils.h"
-
+#endif
 #define KEY_0     0x44
 #define KEY_8_1   0x99
 #define KEY_16_1  0xBB
@@ -556,9 +560,8 @@ int LoadCompressedImage ( DeCompFile *fd, short *out, int rows, int cols, int to
   return 1;
 }
 
-#undef KEY_0
-#define KEY_0     0x7f
-#define KEY_16_1  0xBB
+#undef KEY_16_1
+#define KEY_16_1  0x0B
 
 #ifndef WIN32
 #define __debugbreak()
@@ -717,6 +720,7 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
   unsigned int Transitions = 0;
   unsigned int cksum=0;
   unsigned int tmpcksum=0;
+  int leftShift=0;
 
   struct _expmt_hdr_cmp_frame frameHdr;
   unsigned short *WholeFrameOrig = NULL, *LocalWholeFrameOriginal=NULL,*WholeFrame = NULL,*PrevWholeFrame=NULL,*PrevWholeFrameOriginal=NULL;
@@ -767,6 +771,7 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
     PrevWholeFrameOriginal = LocalWholeFrameOriginal;
     if ( WholeImage && imageFramePtr )
     { // optimization... in the case of getting the whole frame, just write into one location....
+      //PrevWholeFrameOriginal = out + ( ( frame-1) * ( maxcols-mincols ) * ( maxrows-minrows ) );
       WholeFrame = ( short unsigned int * ) imageFramePtr;
       imageFramePtr = NULL;
     }
@@ -1015,12 +1020,17 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
               x++;
               continue;
             }
-            if ( ( unsigned char ) CompPtr[0] == KEY_0 )
+            if (( unsigned char ) CompPtr[0] == 0x7F)
             {
-              if ( ( unsigned char ) CompPtr[1] == KEY_16_1 )
+              if ( ( unsigned char ) (CompPtr[1] & 0x0f) == KEY_16_1 )
                 state = 16;
               else
                 state = CompPtr[1] & 0xf;
+              if(frameHdr.Compressed == 2)
+				leftShift = ((CompPtr[1] >> 4) & 0xf);
+    		  else
+				leftShift = 0;
+                
               CompPtr += 2;
               Transitions++;
             }
@@ -1126,13 +1136,20 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
 
 //      groupCksum = *CompPtr++;
 
-            if ( state != 16 )
+
+			if ( state != 16 )
             {
               for ( i=0;i<8;i++ )
                 Val[i] -= 1 << ( state-1 );
             }
 
-            for ( i=0;i<8;i++ )
+			if(leftShift)
+			{
+				for(i=0;i<8;i++)
+					Val[i] <<= leftShift;
+			}
+
+			for ( i=0;i<8;i++ )
             {
               Val[i] += PrevWholeFrame[i];
             }
@@ -1500,6 +1517,111 @@ static int getVFCFrames ( int *timestamps, int frames )
 }
 #endif
 
+int unCompressVFC(int stride, short *compOut, int *compTimestamps, int compFrames,
+				  int uncFrames,  short *out, int *timestamps)
+{
+	int rc = 0;
+	int i;
+	int baseTime;
+	int prevTime;
+	int nextTime;
+//	int curTime;
+//	int endTime;
+//	int deltaTime;
+//	int safecnt;
+	short *sptrNext,*dptr;
+//	double tmpValue1,tmpValue2,tmpValue3;
+//	double weightNext,weightPrev;
+//	double baseTimeF,numFramesF;
+	uint32_t numFrames,addedFrames;
+	int curFrame=0;
+	uint32_t oldnumFrames=0,alike=1;
+	// first frame is always the base unit of time
+	baseTime  = compTimestamps[0];
+//	baseTimeF = (double)compTimestamps[0];
+	if(baseTime == 0)
+	{
+		printf("baseTime == 0\n");
+		exit(-1);
+	}
+//	printf("baseTime=%d\n",baseTime);
+	prevTime=0;
+//	curTime=0;
+	for(i=0;i<compFrames;i++)
+	{
+		nextTime = compTimestamps[i];
+        if(i)
+              prevTime = compTimestamps[i-1];
+        else
+              prevTime = 0;
+
+        double numFramesF = ((nextTime - prevTime) + 2);
+        numFramesF /= (double)compTimestamps[0]; // gets rounded down.  because of the +2 above, this should be right
+
+        numFrames = (uint32_t)numFramesF;
+//        endTime = nextTime;
+//        if (i==(compFrames-1))
+//            endTime = compTimestamps[i];
+
+        if(numFrames == oldnumFrames || alike <= 0)
+        {
+        	alike++;
+        	oldnumFrames = numFrames;
+        }
+        else
+        {
+ //       	printf("%d(%d) ",oldnumFrames,alike);
+        	oldnumFrames = numFrames;
+        	alike=1;
+        }
+//		deltaTime = nextTime - prevTime;
+//		safecnt=0;
+		for(addedFrames=0;addedFrames<numFrames;addedFrames++)
+
+//		while(addedFramescurTime < endTime && safecnt++ < 100 && (curFrame < uncFrames))
+		{
+
+//			weightPrev  = (double)((numFrames-1)-addedFrames) / (double)(numFrames-1);
+//			weightNext  = (double)(addedFrames) / (double)(numFrames-1);
+
+			// add a frame to the output array
+			timestamps[curFrame] = nextTime + addedFrames*baseTime;
+//			printf("ts=%d ",curTime);
+//			if(i == 0)
+//				sptrPrev = compOut;
+//			else
+//				sptrPrev = &compOut[stride*(i-1)];
+			sptrNext = &compOut[stride*i];
+			dptr = &out[(size_t)curFrame*(size_t)stride];
+//			if(addedFrames == 0)
+//			{
+				memcpy(dptr,sptrNext,(size_t)stride*2);
+//			}
+//			else
+//			{
+//				for(j=0;j<stride;j++)
+//				{
+//					// interpolate the value
+////					tmpValue1 = *sptrPrev++;
+////					tmpValue2 = *sptrNext++;
+////					tmpValue3 = tmpValue1*weightPrev + tmpValue2*weightNext;
+////					*dptr++ = (short)tmpValue2;
+//				}
+//
+//			}
+			curFrame++; // there's another uncompressed frame available
+			rc++; // another frame
+		}
+//		prevTime = nextTime;
+	}
+//	DTRACEP("\n\nuncompressed %d frames %d\n",rc,uncFrames);
+	return rc;
+}
+
+
+
+
+
 #ifndef WIN32
 int deInterlace_c (
 #else
@@ -1644,6 +1766,17 @@ extern "C" int __declspec ( dllexport ) deInterlace_c (
 
 
   return 1;
+}
+
+#ifndef WIN32
+int deInterlaceUncomp(
+#else
+extern "C" int __declspec(dllexport) deInterlaceUncomp(
+#endif
+        short *_out, int *_timestamps, int frames, int uncFrames, int stride, short *outUncomp, int *timestampsUncomp)
+{
+	return unCompressVFC(stride,_out,_timestamps,frames,uncFrames,outUncomp,timestampsUncomp);
+
 }
 
 #ifndef WIN32

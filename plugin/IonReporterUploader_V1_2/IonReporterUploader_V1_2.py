@@ -23,9 +23,9 @@ pluginName = ""
 plugin_dir = ""
 
 class IonReporterUploader_V1_2(IonPlugin):
-	version = "3.2.0-r%s" % filter(str.isdigit,"$Revision: 49268 $")
-	#runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
-	#runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
+	version = "3.2.0-r%s" % filter(str.isdigit,"$Revision: 50766 $")
+	runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
+	runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
 	features = [ Feature.EXPORT ]
 
 	global pluginName , plugin_dir, launchOption, commonScratchDir
@@ -89,9 +89,9 @@ class IonReporterUploader_V1_2(IonPlugin):
 		log_text = self.get_timestamp() + pluginName + " : executing the IonReporter Uploader Client -- - pre"
 		print "LAUNCH OPTION " + launchOption
 		if launchOption == "upload_and_launch":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
 		elif launchOption == "upload_only":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
 		os.system("sleep 2")
 		return True
 
@@ -105,9 +105,9 @@ class IonReporterUploader_V1_2(IonPlugin):
 		self.get_plugin_parameters(data)
 		print "LAUNCH OPTION " + launchOption
 		if launchOption == "upload_and_launch":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
 		elif launchOption == "upload_only":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
 		os.system("sleep 2")
 		self.write_log(pluginName + " : executed the IonReporter Client ... Exit Code = " + `os.getenv("LAUNCHERCLIENTEXITCODE")`, data)
 		print "Returning from Block"
@@ -133,9 +133,9 @@ class IonReporterUploader_V1_2(IonPlugin):
 								self.get_plugin_parameters(data)
 								print "LAUNCH OPTION " + launchOption
 								if launchOption == "upload_and_launch":
-									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
+									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
 								elif launchOption == "upload_only":
-									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
+									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
 								os.system("sleep 2")
 								return True
 
@@ -147,9 +147,9 @@ class IonReporterUploader_V1_2(IonPlugin):
 		self.get_plugin_parameters(data)
 		print "LAUNCH OPTION " + launchOption
 		if launchOption == "upload_and_launch":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
 		elif launchOption == "upload_only":
-			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
 		os.system("sleep 2")
 		return True 
 
@@ -364,7 +364,7 @@ class IonReporterUploader_V1_2(IonPlugin):
 		block.write(serial_number)
 		
 	def copy_status_block(self):
-		shutil.copyfile(os.getenv("RUNINFO__PLUGIN_DIR") + "/status_block.html", os.getenv("RESULTS_DIR") + "/status_block.html" )
+		shutil.copyfile(os.getenv("RUNINFO__PLUGIN_DIR") + "/status_block.html", os.getenv("RESULTS_DIR") + "/progress.html" )
 
 if __name__ == "__main__": PluginCLI()
 '''

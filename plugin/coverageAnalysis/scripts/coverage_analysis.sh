@@ -14,6 +14,7 @@ OPTIONS="OPTIONS:
   -d Ignore Duplicate reads.
   -u Include only Uniquely mapped reads (MAPQ > 1).
   -p <number> Padding value used (for report). Default: 0.
+  -r Customize output for AmpliSeq-RNA reads. (Overides -a.): Assume transcript BED; no base coverage output
   -s <text> Single line of text reflecting user options selected. Default: 'All Reads'.
   -A <file> Annotated (non-merged) targets BED file for per-target coverage analysis.
   -B <file> General BED file specifying (merged) target regions for on-target base coverage analysis.
@@ -21,7 +22,8 @@ OPTIONS="OPTIONS:
   -D <dirpath> Path to Directory where results are written.
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMROOT>.stats.cov.txt.
-  -P <file> Padded targets BED file for padded target coverage analysis."
+  -P <file> Padded targets BED file for padded target coverage analysis.
+  -S <file> SampleID tracking regions file. Default: '' (=> no tageted reads statistic created)"
 
 # should scan all args first for --X options
 if [ "$1" = "--help" ]; then
@@ -42,17 +44,19 @@ RUNOPTS="All Reads"
 NONDUPREADS=0
 UNIQUEREADS=0
 AMPLICONS=0
-PROPPLOTS=1
-TRGSIG=""
+TRGSID=""
 PLOTREPLEN=0
+RNABED=0
+TRACKINGBED=""
 
-while getopts "hladup:s:A:B:C:G:D:O:P:" opt
+while getopts "hladurp:s:A:B:C:G:D:O:P:S:" opt
 do
   case $opt in
     a) AMPLICONS=1;;
     d) NONDUPREADS=1;;
     u) UNIQUEREADS=1;;
     l) SHOWLOG=1;;
+    r) RNABED=1;;
     p) PADVAL=$OPTARG;;
     s) USROPTS=$OPTARG;;
     A) ANNOBED=$OPTARG;;
@@ -62,6 +66,7 @@ do
     G) GENOME=$OPTARG;;
     O) OUTFILE=$OPTARG;;
     P) PADBED=$OPTARG;;
+    S) TRACKINGBED=$OPTARG;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
        exit 0;;
     \?) echo $USAGE >&2
@@ -84,6 +89,18 @@ if [ -z "$GENOME" ]; then
 fi
 if [ "$OUTFILE" == "-" ]; then
   OUTFILE=""
+fi
+
+BASECOVERAGE=1
+PROPPLOTS=1
+AMPCOVOPTS=''
+AMPSTSOPTS='-a'
+if [ $RNABED -eq 1 ]; then
+  AMPLICONS=2
+  BASECOVERAGE=0
+  PROPPLOTS=0
+  AMPSTSOPTS='-r'
+  #AMPCOVOPTS='-C 70';  # to create passing coverage stats
 fi
 
 #--------- End command arg parsing ---------
@@ -134,6 +151,9 @@ elif [ -n "$BEDFILE" -a ! -f "$BEDFILE" ]; then
   exit 1
 elif [ -n "$PADBED" -a ! -f "$PADBED" ]; then
   echo "ERROR: Padded reference targets (bed) file does not exist at $PADBED" >&2
+  exit 1;
+elif [ -n "$TRACKINGBED" -a ! -f "$TRACKINGBED" ]; then
+  echo "ERROR: SampleID tracking targets (bed) file does not exist at $TRACKINGBED" >&2
   exit 1;
 fi
 
@@ -199,10 +219,15 @@ if [ -n "$BEDFILE" ]; then
   fi
 fi
 ALMNAME=`echo "$BAMNAME" | sed -e 's/\.trim$//'`
+if [ -n "$TRACKINGBED" ]; then
+  USROPTS="$USROPTS and SampleID Tracking"
+fi
 echo "Alignments: $ALMNAME" >> "$OUTFILE"
 echo -e "Using: $USROPTS\n" >> "$OUTFILE"
 
 ########### Create BBC files #########
+
+if [ $BASECOVERAGE -eq 1 ]; then
 
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Creating base coverage files..." >&2
@@ -256,6 +281,8 @@ elif [ $SHOWLOG -eq 1 ]; then
   echo "> $COVOVR_PNG" >&2
 fi
 
+fi;  # BASECOVERAGE
+
 ########### Read Coverage Analysis #########
 
 if [ $TRACK -eq 1 ]; then
@@ -264,17 +291,27 @@ fi
 MAPPED_READS=`samtools view -c $SAMVIEWOPT "$BAMFILE"`
 echo -e "Number of mapped reads:         $MAPPED_READS" >> "$OUTFILE"
 
+if [ -n "$TRACKINGBED" ]; then
+  TRACKING_READS=`samtools view -c $SAMVIEWOPT -L "$TRACKINGBED" "$BAMFILE"`
+  TRACKING_READS=`echo "$TRACKING_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+fi
+
 if [ -n "$BEDOPT" ]; then
   # switch to flagstat if total #reads wanted (has exact same performance as view -c)
   TREADS=`samtools view -c $SAMVIEWOPT -L "$BEDFILE" "$BAMFILE"`
   FREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
   #echo "Number of reads on target:      $TREADS" >> "$OUTFILE"
   echo "Percent reads on target:        $FREADS%" >> "$OUTFILE"
+  if [ -n "$TRACKINGBED" ]; then
+    echo "Percent sample tracking reads:  $TRACKING_READS%" >> "$OUTFILE"
+  fi
   if [ -n "$PADBED" ]; then
     TREADS=`samtools view -c $SAMVIEWOPT -L "$PADBED" "$BAMFILE"`
     FREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
     echo "Percent reads on padded target: $FREADS%" >> "$OUTFILE"
   fi
+elif [ -n "$TRACKINGBED" ]; then
+  echo "Percent sample tracking reads:  $TRACKING_READS%" >> "$OUTFILE"
 fi
 echo "" >> "$OUTFILE"
 
@@ -286,7 +323,7 @@ if [ -n "$ANNOBEDOPT" ]; then
     TARGETMSG='target base'
   else
     TARGETCOVFILE="$ROOTNAME.amplicon.cov.xls"
-    COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
+    COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS $AMPCOVOPTS \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
     TARGETMSG='amplicon read'
   fi
   if [ $TRACK -eq 1 ]; then
@@ -321,7 +358,11 @@ if [ -n "$ANNOBEDOPT" ]; then
     echo "(`date`) Generating start-up $TARGETMSG Coverage Chart data..." >&2
   fi
   TCCINITFILE="$AUXFILEROOT.ttc.xls"
-  COVCMD="$RUNDIR/target_coverage.pl -G \"$GENOME\" \"$TARGETCOVFILE\" - - 0 100000000 100 0 100 -1 > \"$TCCINITFILE\""
+  GENOPT="-c"
+  if [ $RNABED -eq 0 ]; then
+    GENOPT="-G \"$GENOME\""
+  fi
+  COVCMD="$RUNDIR/target_coverage.pl $GENOPT \"$TARGETCOVFILE\" - - 0 100000000 100 0 100 -1 > \"$TCCINITFILE\""
   eval "$COVCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: target_coverage.pl failed." >&2
@@ -361,6 +402,20 @@ if [ -n "$ANNOBEDOPT" ]; then
     fi
   fi
 
+  if [ $RNABED -eq 1 ]; then
+    if [ $TRACK -eq 1 ]; then
+      echo "(`date`) Generating amplicon representation overview plot..." >&2
+    fi
+    AMPREP_OVE_PNG=`echo $TARGETCOVFILE | sed 's/\.amplicon\.cov\.xls$/.repoverview.png/'`
+    PLOTCMD="R --no-save --slave --vanilla --args \"$TARGETCOVFILE\" \"$AMPREP_OVE_PNG\" < $RUNDIR/plot_rna_rep.R"
+    eval "$PLOTCMD" >&2
+    if [ $? -ne 0 ]; then
+      echo "ERROR: plot_rna_rep.R failed." >&2
+      PLOTERROR=1
+    elif [ $SHOWLOG -eq 1 ]; then
+      echo "> $AMPREP_OVE_PNG" >&2
+    fi
+  fi
 fi
 
 ########### Depth of Read Coverage Analysis #########
@@ -372,7 +427,7 @@ if [ $AMPLICONS -ne 0 ]; then
   # For now there is no point in creating the DOC distribution file since this is useless for
   # Depth of Coverage plots with few amplicons (targets). Most read depths are only covered once
   # and this information is given in the fine coverage file.
-  COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -a -M $MAPPED_READS \"$TARGETCOVFILE\" >> \"$OUTFILE\""
+  COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPSTSOPTS -M $MAPPED_READS \"$TARGETCOVFILE\" >> \"$OUTFILE\""
   eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: targetReadStats.pl failed." >&2
@@ -382,6 +437,8 @@ if [ $AMPLICONS -ne 0 ]; then
 fi
 
 ########### Depth of Base Coverage Analysis #########
+
+if [ $BASECOVERAGE -eq 1 ]; then
 
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Analyzing depth of base coverage..." >&2
@@ -430,15 +487,21 @@ elif [ $SHOWLOG -eq 1 ]; then
   echo "> $WGNCOVFILE" >&2
 fi
 
+fi;  # BASECOVERAGE
+
 ########### Write HTML fragment for table #########
 
 EXTRAHTML="$AUXFILEROOT.htm"
-# files openned directly by the JS have to be with a local path (as opposed to those passed through to perl)
-DOCFILE=`echo $DOCFILE | sed -e 's/^.*\///'`
-echo "<br/> <div id='DepthOfCoverageChart' datafile='$DOCFILE' class='center' style='width:800px;height:300px'></div>" > "$EXTRAHTML"
+
+if [ $BASECOVERAGE -eq 1 ]; then
+  # files openned directly by the JS have to be with a local path (as opposed to those passed through to perl)
+  DOCFILE=`echo $DOCFILE | sed -e 's/^.*\///'`
+  echo "<br/> <div id='DepthOfCoverageChart' datafile='$DOCFILE' class='center' style='width:800px;height:300px'></div>" > "$EXTRAHTML"
+fi
 REFGEN="genome"
 COLLAPSERCC=""; # RCC will be expanded unless no targets are defined (=> Whole Genome but not necessarily!)
 if [ -n "$BEDFILE" ]; then
+  COLLAPSEPFP="collapse"
   if [ $PROPPLOTS -eq 1 ]; then
     TARGETCOV_GC_PNG=`echo $TARGETCOV_GC_PNG | sed -e 's/^.*\///'`
     TARGETCOV_LEN_PNG=`echo $TARGETCOV_LEN_PNG | sed -e 's/^.*\///'`
@@ -448,17 +511,20 @@ if [ -n "$BEDFILE" ]; then
     if [ $REPLENPLOT -eq 1 ]; then
       REPOPT="$REPOPT fedlenfile='$TARGETCOV_RPL_PNG' lencovfile='$TARGETCOV_LEN_PNG'"
     fi
-    echo "<br/> <div id='PictureFrame' $REPOPT class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
+    echo "<br/> <div id='PictureFrame' $REPOPT $COLLAPSEPFP class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
   fi
   REFGEN=""
   COLLAPSERCC="collapse"
   TCCINITFILE=`echo $TCCINITFILE | sed -e 's/^.*\///'`
   echo "<br/> <div id='TargetCoverageChart' amplicons=$AMPLICONS datafile='$TARGETCOVFILE' initfile='$TCCINITFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
 fi
-CHRCOVFILE=`echo $CHRCOVFILE | sed -e 's/^.*\///'`
-WGNCOVFILE=`echo $WGNCOVFILE | sed -e 's/^.*\///'`
-echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' cbcfile='$CBCFILE' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
-echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:440px'></div>" >> "$EXTRAHTML"
+
+if [ $BASECOVERAGE -eq 1 ]; then
+  CHRCOVFILE=`echo $CHRCOVFILE | sed -e 's/^.*\///'`
+  WGNCOVFILE=`echo $WGNCOVFILE | sed -e 's/^.*\///'`
+  echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' cbcfile='$CBCFILE' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
+fi
+echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>" >> "$EXTRAHTML"
 echo "<br/>" >> "$EXTRAHTML"
 
 # create local igv session file

@@ -11,7 +11,7 @@ if( !file.exists(nFileIn) )
   write(sprintf("Could not locate input file %s\n",nFileIn),stderr())
   q(status=1)
 }
-bcov <- read.table(nFileIn, header=TRUE, as.is=TRUE)
+bcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, comment.char="")
 
 # check to avoid no coverage cases
 ndata <- length(bcov$reads)

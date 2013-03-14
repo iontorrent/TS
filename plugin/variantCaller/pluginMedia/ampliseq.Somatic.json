@@ -30,7 +30,8 @@ dibayes : {
   mini-strandcount-fpr-strand-bias : 10,
   hotspot-qv-threshold-adj : .7,
   quick-pval-cutoff-hotspot : .5,
-  hotspot-hp-penalty1 : .5
+  hotspot-hp-penalty1 : .5,
+  C : 0
 }
 
 torrent-variant-caller: {

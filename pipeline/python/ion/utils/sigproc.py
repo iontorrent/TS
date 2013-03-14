@@ -84,7 +84,7 @@ def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
     ########################################################
     #Generate Raw Data Traces for lib and TF keys          #
     ########################################################
-    printtime("Generate Raw Data Traces for lib and TF keys(iontrace_Test_Fragment.png, iontrace_Library.png)")
+    printtime("Generate Raw Data Traces for lib and TF keys(iontrace_Test_Fragment.png, iontrace_Library.png) and raw_peak_signal file")
 
     tfRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % tfKey)
     libRawPath = os.path.join(SIGPROC_RESULTS, 'avgNukeTrace_%s.txt' % libKey)
@@ -210,6 +210,10 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
     else:
         printtime("Warning: no heatmap generated.")
 
+    printtime("Finished mergeSigProcResults")
+
+
+def mergeRawPeakSignals(dirs):
 
     ###############################################
     # Merge raw_peak_signal files                 #
@@ -232,5 +236,4 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
     except:
         printtime("Merging raw_peak_signal files failed")
 
-
-    printtime("Finished sigproc merging")
+    printtime("Finished mergeRawPeakSignals")

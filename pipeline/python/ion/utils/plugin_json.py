@@ -96,6 +96,7 @@ def get_expmeta(env):
         "sample": exp_json.get('sample'),        
         "pgm": exp_json.get('pgmName'),        
         "chiptype": exp_json.get('chipType'),
+        "chipBarcode": exp_json.get('chipBarcode'),
         "notes": exp_json.get('notes'),
         
         "barcodeId": env.get('barcodeId'),

@@ -14,6 +14,7 @@ OPTIONS="OPTIONS:
   -a Customize output for Amplicon reads.
   -d Filter to remove Duplicate reads removed.
   -u Filter to Uniquely mapped reads (SAM MAPQ>0).
+  -r Customize output for AmpliSeq-RNA reads. (Overides -a.)
   -t Filter BAM file to trimmed reads using TRIMP.
   -p <int>  Padding value for BED file padding. For reporting only. Default: 0.
   -A <file> Annotate coverage for (annotated) targets specified in this BED file
@@ -25,6 +26,7 @@ OPTIONS="OPTIONS:
   -P <file> Padded targets BED file for padded target coverage analysis
   -Q <file> Name for BLOCK HTML results file (in output directory). Default: '' (=> none created)
   -R <file> Name for HTML Results file (in output directory). Default: 'results.html'
+  -S <file> SampleID tracking regions file. Default: '' (=> no tageted reads statistic created)
   -T <file> Name for HTML Table row summary file (in output directory). Default: '' (=> none created)
   -l Log progress to STDERR. (A few primary progress messages will always be output.)
   -x Do not create the HTML file linking to all results created."
@@ -52,8 +54,10 @@ AMPOPT=""
 TRIMP=0
 PADVAL=0
 TRGSID=""
+RNABED=0
+TRACKINGBED=""
 
-while getopts "hladtuxp:A:B:C:M:G:D:X:O:R:T:P:Q:" opt
+while getopts "hladrtuxp:A:B:C:M:G:D:X:O:R:S:T:P:Q:" opt
 do
   case $opt in
     A) ANNOBED=$OPTARG;;
@@ -65,10 +69,12 @@ do
     P) PADBED=$OPTARG;;
     Q) BLOCKFILE=$OPTARG;;
     R) RESHTML=$OPTARG;;
+    S) TRACKINGBED=$OPTARG;;
     T) ROWHTML=$OPTARG;;
+    p) PADVAL=$OPTARG;;
     a) AMPOPT="-a";;
     d) DEDUP=1;;
-    p) PADVAL=$OPTARG;;
+    r) RNABED=1;;
     t) TRIMP=1;;
     u) UNIQUE=1;;
     x) MAKEHML=0;;
@@ -95,6 +101,12 @@ if [ -z "$GENOME" ]; then
 fi
 if [ -z "$RESHTML" ]; then
   RESHTML="results.html"
+fi
+
+BASECOVERAGE=1
+if [ $RNABED -eq 1 ]; then
+  AMPOPT="-r"
+  BASECOVERAGE=0
 fi
 
 #--------- End command arg parsing ---------
@@ -217,7 +229,7 @@ fi
 if [ $SHOWLOG -eq 1 ]; then
   echo "" >&2
 fi
-COVER="$RUNDIR/coverage_analysis.sh $LOGOPT $RTITLE $FILTOPTS $AMPOPT -O \"$OUTFILE\" -A \"$ANNOBED\" -B \"$BEDFILE\" -C \"$TRGSID\" -p $PADVAL -P \"$PADBED\" -D \"$WORKDIR\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
+COVER="$RUNDIR/coverage_analysis.sh $LOGOPT $RTITLE $FILTOPTS $AMPOPT -O \"$OUTFILE\" -A \"$ANNOBED\" -B \"$BEDFILE\" -C \"$TRGSID\" -p $PADVAL -P \"$PADBED\" -S \"$TRACKINGBED\" -D \"$WORKDIR\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
 eval "$COVER" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nFailed to run coverage analysis."
@@ -238,9 +250,13 @@ if [ $MAKEHML -eq 1 ]; then
   if [ -n "$BEDFILE" ]; then
     GENOPT=""
   fi
+  SIDOPT=""
+  if [ -n "$TRACKINGBED" ]; then
+    SIDOPT="-i"
+  fi
   COVERAGE_HTML="COVERAGE_html"
   PTITLE=`echo $BAMNAME | sed -e 's/\.trim$//'`
-  HMLCMD="$RUNDIR/coverage_analysis_report.pl $RTITLE $AMPOPT $ROWHTML $GENOPT -N \"$BAMNAME\" -t \"$PTITLE\" -D \"$WORKDIR\" \"$COVERAGE_HTML\" \"$OUTFILE\""
+  HMLCMD="$RUNDIR/coverage_analysis_report.pl $RTITLE $AMPOPT $ROWHTML $GENOPT $SIDOPT -N \"$BAMNAME\" -t \"$PTITLE\" -D \"$WORKDIR\" \"$COVERAGE_HTML\" \"$OUTFILE\""
   eval "$HMLCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: coverage_analysis_report.pl failed." >&2
@@ -254,7 +270,7 @@ if [ $MAKEHML -eq 1 ]; then
 
   # Block Summary
   if [ -n "$BLOCKFILE" ]; then
-    HMLCMD="perl $RUNDIR/coverage_analysis_block.pl $RTITLE $GENOPT -O \"$BLOCKFILE\" -D \"$WORKDIR\" -S \"$OUTFILE\" \"$BAMFILE\""
+    HMLCMD="perl $RUNDIR/coverage_analysis_block.pl $RTITLE $AMPOPT $GENOPT $SIDOPT -O \"$BLOCKFILE\" -D \"$WORKDIR\" -S \"$OUTFILE\" \"$BAMFILE\""
     eval "$HMLCMD" >&2
     if [ $? -ne 0 ]; then
       echo -e "\nERROR: coverage_analysis_block.pl failed." >&2

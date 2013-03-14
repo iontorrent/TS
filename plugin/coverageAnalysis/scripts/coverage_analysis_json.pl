@@ -94,9 +94,10 @@ if( $blockname ne "" )
 my $linenum = 0;
 while( <DATAFILE> )
 {
-  next unless( /\S/ );
+  my $nvp = jsonNameValue($_);
+  next unless( $nvp =~ /\S/ );
   print JSONFILE ",\n" if( ++$linenum != 1 );
-  print JSONFILE jsonNameValue($_);
+  print JSONFILE $nvp;
 }
 close( DATAFILE );
 
@@ -114,6 +115,7 @@ sub jsonNameValue
   my ($n,$v) = split(/:/,$_[0]);
   $n =~ s/^\s+|\s+$//g;
   return "" if( $n eq "" );
+  return "" if( $n eq "Coverage Analysis Report" );
   $v =~ s/^\s+|\s+$//g;
   $v = "N/A" if( $v eq "" );
   #$n =~ s/\s/_/g;

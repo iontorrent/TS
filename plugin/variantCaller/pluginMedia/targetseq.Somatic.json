@@ -27,7 +27,8 @@ dibayes : {
   hp-jump-pos : 6,
   hp-jump-amount : 15,
   relative-variant-strand-bias : 0.95,
-  mini-strandcount-fpr-strand-bias : 10 
+  mini-strandcount-fpr-strand-bias : 10,
+  C : 0 
 }
 
 

@@ -45,7 +45,7 @@ document.write('\
       <input type="button" id="RC-OpenIGV" value="View in IGV" style="width:76px"></td>\
   </tr></table>\
 </div>\
-<div id="RC-tooltip">\
+<div id="RC-tooltip" style="display:none">\
   <div><span id="RC-tooltip-close" title="Close" class="help-box ui-icon ui-icon-close"></span></div>\
   <div id="RC-tooltip-body"></div>\
 </div>\
@@ -613,10 +613,6 @@ $(function () {
   $('#RC-tooltip-close').click( function() {
     hideTooltip();
   });
-
-  function dataBar(id) {
-    return (id === LegendLabels.covCount);
-  }
 
   function dataBar(id) {
     return (id === LegendLabels.fwdReads || id === LegendLabels.revReads || id === LegendLabels.allReads);

@@ -9,13 +9,14 @@ if __name__ == '__main__':
   try:
     JSON_INPUT = json.load( open(sys.argv[1], "r") )
     PLAN_INFO = JSON_INPUT['plan']
+    PARAMS = JSON_INPUT['runinfo']['plugin']['userInput']
   except:
     print ";;;"
     sys.exit(0) 
 
   if PLAN_INFO:
-     runtype = PLAN_INFO['runType']
-     varfreq = PLAN_INFO['variantfrequency']
+     runtype = PARAMS['librarytype']
+     varfreq = PARAMS['variationtype']
      regionf = PLAN_INFO['bedfile']
      hotspot = PLAN_INFO['regionfile']
      if ( runtype == 'AMPS' ):
@@ -31,7 +32,7 @@ if __name__ == '__main__':
      elif ( varfreq == 'Somatic' ):
         varfreq = "Somatic"
      else:
-        varfreq = ""                   
+        varfreq = ""                        
      print "%s;%s;%s;%s" % (runtype, varfreq, regionf, hotspot)
   else:
      print ";;;"

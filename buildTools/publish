@@ -50,10 +50,10 @@ while [ $# != 0 ]; do
     shift
 done
 
-USER=ion
-SERVER=rnd1.ite
+USER=root
+SERVER=friartuck.ite
 PUBDIR=${PUBDIR-"lucid-alpha"}
-PUBPATH=public_html/updates_server_root/updates/software/$PUBDIR
+PUBPATH=/home/aptadmin/public_html/updates_server_root/updates/software/$PUBDIR
 
 if [ ! -f "$PKGFILE" ]; then
    echo "ERROR: $PKGFILE not found."

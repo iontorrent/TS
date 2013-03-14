@@ -32,6 +32,11 @@ A read is considered on target if at least one aligned base overlaps at least on
 If no target regions (file) was specified this value will be the percentage of reads passing uniquely mapped
 and/or non-duplicate filters, or 100% if no filters where specified.
 
+@Percent sample tracking reads
+The percentage of filtered reads mapped to any targeted region used for sample identification.
+Note: It is assumed that these regions are distinct from the actual target regions under investigation, i.e.
+there is no overlap or other ambiguiy of any reads be misassigned to a sample identification target.
+
 @Percent reads on padded target
 The percentage of filtered reads mapped to any padded targeted region relative to all reads mapped to the reference.
 A read is considered on target if at least one aligned base overlaps at least one padded target region.
@@ -169,6 +174,15 @@ The percentage of all amplicons that had at least one hundred reads.
 @Amplicons with at least 500 reads
 The percentage of all amplicons that had at least five hundred reads.
 
+@Amplicons with at least 1000 reads
+The percentage of all amplicons that had at least one thousand reads.
+
+@Amplicons with at least 10K reads
+The percentage of all amplicons that had at least ten thousand reads.
+
+@Amplicons with at least 100K reads
+The percentage of all amplicons that had at least one hundred thousand reads.
+
 @Amplicons with no strand bias
 The percentage of all amplicons that did not show a bias towards forward or reverse strand
 read alignments. An individual amplicon is considered to have read bias if it has at least 10
@@ -179,6 +193,12 @@ The percentage of all amplicons that were considered to have a sufficient propor
 assigned reads (70%) that covered the whole amplicon target from 'end-to-end'. To allow for error
 the effective ends of the amplicon region for read alignment are within 2 bases of the actual
 ends of the region.
+
+@Amplicons with passing coverage
+The percentage of all amplicons that were considered to have a sufficient proportion of
+assigned reads (70%) that covered had reads aligned to at least 70% of their target sequence.
+For transcript targets that are specific exon-exon splices, these are the reads that should
+sufficiently cover sequence on both sides of the splice site.
 
 @Genome Base Coverage
 Summary statistics for base reads of the reference genome.

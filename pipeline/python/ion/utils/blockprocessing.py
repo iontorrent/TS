@@ -339,6 +339,19 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,ma
         traceback.print_exc()
         return 1
 
+def remove_unneeded_block_files(blockdirs):
+    return
+    for blockdir in blockdirs:
+        try:
+            bamfile = os.path.join(blockdir,'rawlib.bam')
+            if os.path.exists(bamfile):
+                os.remove(bamfile)
+
+            recalibration_dir = os.path.join(blockdir,'basecaller_results','recalibration')
+            shutil.rmtree(recalibration_dir, ignore_errors=True)
+        except:
+            printtime("remove unneeded block files failed")
+            traceback.print_exc()
 
 def bam2fastq_command(BAMName,FASTQName):
     com = "java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar"

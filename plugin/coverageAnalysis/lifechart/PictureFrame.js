@@ -38,6 +38,10 @@ $(function () {
   var fedlenFile = $("#PictureFrame").attr("fedlenfile");
   if( fedlenFile === undefined ) fedlenFile = '';
 
+  var startCollapsed = $("#PictureFrame").attr("collapse");
+  startCollapsed = (startCollapsed != undefined);
+
+
   if( gccovFile === '' && lencovFile === '' && fedoraFile === '' && fedlenFile === '' ) {
     alert("ERROR on page: PictureFrame widget requires a file attribute set.");
     return;
@@ -125,5 +129,13 @@ $(function () {
   }
   customizeChart();
 
+  if( startCollapsed ) {
+    $("#PF-collapseDisplay").attr("class","ui-icon ui-icon-triangle-1-s");
+    $("#PF-collapseDisplay").attr("title","Expand view");
+    $('#PF-frame').resizable('destroy');
+    $('.PF-shy').hide();
+    $('#PF-displayArea').hide();
+    $('#PF-titlebar').css("border","1px solid grey");
+  }
 
 });

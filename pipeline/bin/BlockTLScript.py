@@ -185,17 +185,18 @@ if __name__=="__main__":
         except:
             traceback.print_exc()
 
+
+    if args.do_basecalling:
+
+        # In case of from-wells or from-basecaller reanalysis of a legacy report
+        # some adjustments may be needed
+        handle_legacy_report.handle_sigproc(env['SIGPROC_RESULTS'])
+
         sigproc.generate_raw_data_traces(
             env['libraryKey'],
             env['tfKey'],
             env['flowOrder'],
             env['SIGPROC_RESULTS'])
-
-
-    # In case of from-wells or from-basecaller reanalysis of a legacy report, some adjustments may be needed
-    handle_legacy_report.handle_sigproc(env['SIGPROC_RESULTS'])
-
-    if args.do_basecalling:
 
         #make sure pre-conditions for basecaller step are met
         if not os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'1.wells')):

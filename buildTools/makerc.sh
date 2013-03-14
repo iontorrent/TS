@@ -3,10 +3,10 @@
 # Automates the building of a Release Candidate deb file for a given directory
 TEST=0  # Set to 1 to go into debug and not make changes to svn or apt
 
-USER=ion
-SERVER=rnd1.ite
+USER=root
+SERVER=friartuck.ite
 PUBDIR=${PUBDIR-"lucid-alpha"}
-PUBPATH=public_html/updates_server_root/updates/software/$PUBDIR
+PUBPATH=/home/aptadmin/public_html/updates_server_root/updates/software/$PUBDIR
 
 for arg in "$@"; do
 

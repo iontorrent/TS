@@ -45,7 +45,11 @@ def ReadParamsFromUI( paramfile):
 	tokens = line.split('__')
 	if(tokens[0].strip().replace('"', '') == "param"):
 		group = tokens[1].strip().replace('"', '')
-            	paradict[group] += "--%s=%s " % (tokens[2].strip().replace('"', ''),value)
+		name = tokens[2].strip().replace('"', '')
+		if name == "C":
+			paradict[group] += "-C %s " % (value)
+		else:
+			paradict[group] += "--%s=%s " % (name,value)
 
 def ReadParamsFromPlan( paramfile):
     paradict['dibayes'] = ""
@@ -63,7 +67,11 @@ def ReadParamsFromPlan( paramfile):
 	tokens = line.split('__')
 	if(tokens[0].strip().replace('"', '') == "param"):
 		group = tokens[1].strip().replace('"', '')
-            	paradict[group] += "--%s=%s " % (tokens[2].strip().replace('"', ''),value)
+		name = tokens[2].strip().replace('"', '')
+		if name == "C":
+			paradict[group] += "-C %s " % (value)
+		else:
+			paradict[group] += "--%s=%s " % (name,value)
             	
 
 def ReadParamsFile( paramfile ):
@@ -106,7 +114,10 @@ def ReadParamsFile( paramfile ):
             sys.stderr.write("ERROR: paramfile format; no progrma node before first key '%s'\n"%fields[1])
             sys.exit(1)
         if newdict == 0:
-            paradict[dictkey] += "--%s=%s " % (name,val)
+            if name == "C":
+                paradict[dictkey] += "-C %s " % (val)
+            else:
+                paradict[dictkey] += "--%s=%s " % (name,val)   
     inf.close()
 
 def RunCommand( command ):
@@ -127,7 +138,7 @@ def RunCommand( command ):
         sys.exit(errorExit)
 
 def SNPsCallerCommandLine( binDir, paramstr, bamfile, reference, bedfile, hotspotsfile, outDir ):
-    fixedprms = "--AllSeq=1 -b 1 --platform=2 -d 1 -C 0 -W 0 -S 1 -n diBayes_run -g %s/log/ -w %s/temp/ -o %s" % (outDir,outDir,outDir)
+    fixedprms = "--AllSeq=1 -b 1 --platform=2 -d 1 -W 0 -S 1 -n diBayes_run -g %s/log/ -w %s/temp/ -o %s" % (outDir,outDir,outDir)
     if paramstr == "":
         paramstr  = "--call-stringency medium --het-skip-high-coverage 0 --reads-min-mapping-qv 2 --het-min-lca-start-pos 0 --het-min-lca-base-qv 14 " + \
             "--het-lca-both-strands 0 --het-min-allele-ratio 0.15 --het-max-coverage-bayesian 60 --het-min-nonref-base-qv 14 --snps-min-base-qv 14 " + \
@@ -190,28 +201,40 @@ def MergeSNPandIndelVCF( binDir, outDir ):
 def OutputSnpVCF( binDir, inDir, faifile, outDir ):
     global keepdir
     snpsout = "%s/SNP_variants.vcf" % outDir
+    consensout = "%s/consensus_calls.txt" % outDir
     os.system('rm -f "%s"' % snpsout)
+    os.system('rm -f "%s"' % consensout)
     contigs = open(faifile,'r')
     countout = 0
+    conscountout = 0
     for lines in contigs:
         if len(lines) == 0:
             continue
         chrom = lines.split()
         fname = "%s/diBayes_run_%s_SNP.vcf" % (inDir,chrom[0])
+        consfname = "%s/diBayes_run_%s_Consensus_Calls.txt" % (inDir,chrom[0])
         if os.path.exists(fname):
             countout += 1
             if countout > 1:
                 os.system('sed -i -e "/^#/d" "%s"' % fname)
             os.system('cat "%s" >> "%s"' % (fname,snpsout))
+        if os.path.exists(consfname):
+            conscountout += 1
+            if conscountout > 1:
+                os.system('sed -i -e "/^#/d" "%s"' % consfname)
+            os.system('cat "%s" >> "%s"' % (consfname,consensout))
     contigs.close()
     if countout == 0:
         CreateEmptyVcf(snpsout)
-    keepdir = 1
+    keepdir = 0
     if keepdir == 0:
         RunCommand('rm -rf "%s"' % inDir)
         WriteLog(" (%s removed)\n" % inDir)
     WriteLog(" > %s\n" % snpsout)
     ZindexVcf(binDir,snpsout)
+    if os.path.exists(consensout):
+	ZindexVcf(binDir,consensout)
+	os.system('rm -f "%s"' % consensout)
 
 def OutputIndelVCF( binDir, outDir ):
     indelsout = "%s/indel_variants.vcf" % outDir

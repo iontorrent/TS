@@ -36,7 +36,7 @@ settings.EMAIL_USE_TLS = False
 gl_experiments = {}
 last_exp_size = 0
 
-__version__ = filter(str.isdigit, "$Revision: 49091 $")
+__version__ = filter(str.isdigit, "$Revision: 50737 $")
 
 # TODO: these are defined in crawler.py as well.  Needs to be consolidated.
 RUN_STATUS_COMPLETE = "Complete"
@@ -359,6 +359,7 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
                 os.chmod(linkPath, 0775)
             except:
                 log.error(traceback.format_exc())
+            finally:
                 add_to_db(exp, linkPath, True)
 
         elif removecomplete and not JUST_TESTING:

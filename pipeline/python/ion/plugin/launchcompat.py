@@ -5,12 +5,13 @@ import os
 import subprocess
 import re, tokenize, keyword
 from hashlib import md5
+import json
 import logging
 
 from distutils.version import LooseVersion
 
 from ion.plugin.base import IonPlugin
-from ion.plugin.constants import RunType, Feature
+from ion.plugin.constants import *
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,15 @@ class IonLaunchPlugin(IonPlugin):
 
     ## Internal state - these are class attributes, as script is read
     ## to populate VERSION and AUTORUNDISABLE in the class
-    _content=[]
+    _content={}
+    _pluginsettings={}
     _launchsh=None
 
     ## Defaults for Launch Plugins
-    runtypes = [ RunType.FULLCHIP, RunType.THUMB ]
-    features = []
+    # Can be overridden with pluginsettings.json file
+    _runtypes = [ RunType.FULLCHIP, RunType.THUMB ]
+    _features = []
+    _runlevels = []
 
     @classmethod
     def getContent(cls):
@@ -37,6 +41,22 @@ class IonLaunchPlugin(IonPlugin):
             except:
                 logger.error("Unable to read launch.sh script: '%s'", cls._launchsh)
         return cls._content
+
+    @classmethod
+    def pluginsettings(cls):
+        if cls._pluginsettings:
+            return cls._pluginsettings
+
+        pluginsettingsjson = os.path.join(os.path.dirname(cls._launchsh), 'pluginsettings.json')
+        if not os.path.exists(pluginsettingsjson):
+            return cls._pluginsettings
+        try:
+            with open(pluginsettingsjson, 'r') as f:
+                cls._pluginsettings = json.load(f)
+        except:
+            logger.error("Unable to read pluginsettings.json: '%s'", pluginsettingsjson)
+
+        return cls._pluginsettings
 
     @classmethod
     def version(cls):
@@ -81,16 +101,59 @@ class IonLaunchPlugin(IonPlugin):
                 return True
         return False
 
+
+    @classmethod
+    def runtypes(cls):
+        pluginsettings = cls.pluginsettings()
+        if not pluginsettings:
+            return cls._runtypes
+
+        ret = []
+        for k in pluginsettings.get('runtype', pluginsettings.get('runtypes', [])):
+            c = k # lookupEnum(RunType, k)
+            if c:
+                ret.append(c)
+        return ret
+
+
+    @classmethod
+    def features(cls):
+        pluginsettings = cls.pluginsettings()
+        if not pluginsettings:
+            return cls._features
+
+        ret = []
+        for k in pluginsettings.get('feature', pluginsettings.get('features', [])):
+            c = k # lookupEnum(Feature, k)
+            if c:
+                ret.append(c)
+        return ret
+
+
+    @classmethod
+    def runlevels(cls):
+        pluginsettings = cls.pluginsettings()
+        if not pluginsettings:
+            return cls._runlevels
+
+        ret = []
+        for k in pluginsettings.get('runlevel', pluginsettings.get('runlevels', [])):
+            c = k # lookupEnum(RunLevel, k)
+            if c:
+                ret.append(c)
+        return ret
+
+
     def launch(self):
         lenv = {}
         lenv.update(os.environ)
         # TODO setup lenv with plugin_functions variables
         # For now local ionPluginShell --local will call plugin_functions
-        if not os.path.exists(launchsh):
-            self.log.error("Unable to find launch.sh at '%s'", self.launchsh)
+        if not os.path.exists(self._launchsh):
+            self.log.error("Unable to find launch.sh at '%s'", self._launchsh)
             return False
         outputpath = self.data['analysis_dir']
-        ret = subprocess.call(["ionPluginShell", self.launchsh, "-j", "startplugin.json"], env=lenv, cwd=outputpath)
+        ret = subprocess.call(["ionPluginShell", self._launchsh, "-j", "startplugin.json"], env=lenv, cwd=outputpath)
         self.exit_status = ret
         return (ret == 0)
 

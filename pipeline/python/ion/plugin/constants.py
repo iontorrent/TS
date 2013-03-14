@@ -4,10 +4,17 @@
 Definitions for enum like constants
 """
 
-__all__ = ('Feature', 'RunType', 'RunLevel')
+__all__ = ('Feature', 'RunType', 'RunLevel', 'lookupEnum')
 
 def enum(**enums):
         return type('Enum', (), enums)
+
+# Helper lookup method - move to constants?
+def lookupEnum(enum, item):
+    for (k,v) in enum.__dict__.iteritems():
+        if item == v:
+            return k
+    return None
 
 Feature = enum(
     EXPORT='export',

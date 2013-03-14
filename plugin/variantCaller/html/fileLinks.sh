@@ -17,7 +17,7 @@ echo -e "Text\tLink" > "$OUTFILE"
 # Link to Broad IGV
 #echo -e "Open IGV to import genome.\thttp://www.broadinstitute.org/igv/projects/current/igv.php" >> "$OUTFILE"
 # Link to internal IGV
-echo -e "Open internal IGV to import genome.\t${RUNINFO__NET_LOCATION}/IgvServlet/igv" >> "$OUTFILE"
+echo -e "Open internal IGV to import genome.\t/IgvServlet/igv" >> "$OUTFILE"
 if [ -f "${OUTDIR}/$PLUGIN_OUT_ALLVARS" ]; then
   echo -e "Download all variant calls as a table file. (textfile.xls)\t${PLUGIN_OUT_ALLVARS}" >> "$OUTFILE"
 fi
@@ -67,7 +67,7 @@ fi
 if [ -f "${OUTDIR}/$PLUGIN_OUT_TRIMPBAI" ]; then
   echo -e "Download the primer-trimmed $PROCESS reads index file. (binaryfile.bai)\t${PLUGIN_OUT_TRIMPBAI}" >> "$OUTFILE"
 fi
-if [ -f "${OUTDIR}/$PLUGIN_OUT_PARAM_SETTINGS" ]; then
-  echo -e "Download the parameter settings used as a table file. (textfile.xls)\t${PLUGIN_OUT_PARAM_SETTINGS}" >> "$OUTFILE"
+if [ -f "${OUTDIR}/${PLUGIN_OUT_CONSENSUS_TXT}.gz" ]; then
+  echo -e "Download Consensus calls. (binaryfile.gz)\t${PLUGIN_OUT_CONSENSUS_TXT}.gz" >> "$OUTFILE"
 fi
 }

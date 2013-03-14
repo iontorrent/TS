@@ -17,6 +17,8 @@ if __name__ == '__main__':
      regionf = PLAN_INFO['bedfile']
      if ( runtype == 'AMPS' ):
         runtype = "ampliseq"       
+     elif ( runtype == 'AMPS_RNA' ):
+        runtype = "ampliseq-rna"
      elif ( runtype == 'TARS' ):
         runtype = "targetseq"
      elif ( runtype == 'WGNM' ):

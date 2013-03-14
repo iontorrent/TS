@@ -31,7 +31,6 @@ COLUMN_REF = "Reference library"
 COLUMN_TARGET_BED = "Target regions BED file"
 COLUMN_HOTSPOT_BED = "Hotspot regions BED file"
 COLUMN_PLUGINS = "Plugins"
-COLUMN_VARIANT_FREQ = "Variant frequency"
 COLUMN_PROJECTS = "Project names"
 COLUMN_EXPORT = "Export"
 
@@ -141,7 +140,7 @@ def _get_target_regions_bed_file(template):
     
     if template and template.bedfile:
         try:
-            bed = template.objects.get(file = template.bedfile)
+            bed = Content.objects.get(file = template.bedfile)
             filePath = bed.path
         except:
             logger.exception(format_exc())
@@ -152,7 +151,7 @@ def _get_hotspot_regions_bed_file(template):
     
     if template and template.bedfile:
         try:
-            bed = template.objects.get(file = template.regionfile)
+            bed = Content.objects.get(file = template.regionfile)
             filePath = bed.path
         except:
             logger.exception(format_exc())
@@ -189,10 +188,7 @@ def _get_export(template, delimiter):
             
     #logger.info("EXIT plan_csv_writer._get_exports() uploaders=%s" %(uploaders))        
     return uploaders
-  
-              
-def _get_variant_frequencey(template):
-    return template.variantfrequency
+
     
 def _get_projects(template, delimiter):
     projectNames = ""
@@ -307,7 +303,6 @@ def get_template_data_for_batch_planning(templateId):
                , COLUMN_TARGET_BED
                , COLUMN_HOTSPOT_BED
                , COLUMN_PLUGINS
-               , COLUMN_VARIANT_FREQ
                , COLUMN_PROJECTS
                , COLUMN_EXPORT
                , COLUMN_NOTES
@@ -331,7 +326,6 @@ def get_template_data_for_batch_planning(templateId):
                , _get_target_regions_bed_file(template)
                , _get_hotspot_regions_bed_file(template)
                , _get_plugins(template, ";")
-               , _get_variant_frequencey(template)
                , _get_projects(template, ";")
                , _get_export(template, ";")
                , _get_notes(template)

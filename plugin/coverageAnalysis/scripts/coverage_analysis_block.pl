@@ -13,7 +13,10 @@ my $DESCR = "Collect output from coverageAnalysis run for block/summary HTML pag
 my $USAGE = "Usage:\n\t$CMD [options] <bam file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
+  -a Customize to Amplicon reads coverage information (if a distinction is made)
   -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
+  -i Output sample Identification tracking reads in summary statistics.
+  -r AmpliSeq RNA report. No output associated with base coverage and uniformity of coverage. (Overrides -a)
   -O <file> Output file name (relative to output directory). Should have .html extension. Default: ./block.html
   -D <dirpath> Path to Directory where html page is written. Default: '' (=> use path given by Output file name)
   -S <file> Input Statistics file name. Default: '-' (no summary file)
@@ -29,6 +32,9 @@ my $title = "";
 my $helpfile ="";
 my $tabhead = "All Reads";
 my $genome = 0;
+my $amplicons = 0;
+my $rnacoverage = 0;
+my $sampleid = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -39,7 +45,10 @@ while( scalar(@ARGV) > 0 )
     elsif($opt eq '-D') {$workdir = shift;}
     elsif($opt eq '-S') {$statsfile = shift;}
     elsif($opt eq '-A') {$helpfile = shift;}
+    elsif($opt eq '-a') {$amplicons = 1;}
     elsif($opt eq '-g') {$genome = 1;}
+    elsif($opt eq '-i') {$sampleid = 1;}
+    elsif($opt eq '-r') {$rnacoverage = 1;}
     elsif($opt eq '-s') {$tabhead = shift;}
     elsif($opt eq '-t') {$title = shift;}
     elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
@@ -68,6 +77,11 @@ my $bamfile = shift;
 
 $statsfile = "" if( $statsfile eq "-" );
 
+# tied/derive options - in case futher customization is required
+$amplicons = 0 if( $rnacoverage );
+$ampcoverage  = ($amplicons || $rnacoverage );
+$basecoverage = ($genome || !$rnacoverage );
+
 # extract root name for output files from bam file names
 my($runid,$folder,$ext) = fileparse($bamfile, qr/\.[^.]*$/);
 
@@ -82,45 +96,44 @@ loadHelpText( "$helpfile" );
 $outfile = "$workdir/$outfile" if( $workdir ne "" );
 open( OUTFILE, ">$outfile" ) || die "Cannot open output file $outfile.\n";
 
-print OUTFILE "<html><body>\n";
-print OUTFILE "<div style=\"width:760px;margin-left:auto;margin-right:auto;\">\n";
-#print OUTFILE "<h1><center>Coverage Analysis Report</center></h1>\n";
+# Common header + link to stylesheet
+print OUTFILE "<?xml version=\"1.0\" encoding=\"iso-8859-1\"?>\n";
+print OUTFILE "<!DOCTYPE HTML>\n";
+print OUTFILE "<html>\n<head>\n<base target=\"_parent\"/>\n";
+print OUTFILE "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n";
+print OUTFILE "<link rel=\"stylesheet\" type=\"text/css\" href=\"lifechart/lifegrid.css\"/>\n";
+print OUTFILE "</head>\n";
+print OUTFILE "<body>\n";
+print OUTFILE "<div style=\"margin-left:auto;margin-right:auto;\">\n";
 if( $title ne "" )
 {
     # add simple formatting if no html tag indicated
     $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
     print OUTFILE "$title\n";
 }
-# html has compromises so as to appear almost identical on Firefox vs. IE8
-print OUTFILE "<style type=\"text/css\">\n";
-print OUTFILE "  table {width:100% !important;border-collapse:collapse;margin:0;table-layout:fixed}\n";
-print OUTFILE "  th,td {font-family:\"Lucida Sans Unicode\",\"Lucida Grande\",Sans-Serif;font-size:14px;line-height:1.2em;font-weight:normal}\n";
-print OUTFILE "  th,td {border:0px;padding:0px;text-align:center}\n";
-print OUTFILE "  td {padding-top:5px;padding-bottom:5px}\n";
-print OUTFILE "  td.inleft  {width:75% !important;border-width:0;text-align:left;padding:2px;padding-left:50px}\n";
-print OUTFILE "  td.inright {width:25% !important;border-width:0;text-align:right;padding:2px;padding-right:10px}\n";
-print OUTFILE "  img.frm {display:block;margin-left:auto;margin-right:auto;margin-top:10px;margin-bottom:10px;width:400;height:200;border-width:0;cursor:help}\n";
-print OUTFILE "  .thelp {cursor:help}\n";
-print OUTFILE "</style>\n";
-
-print OUTFILE "<center><table><tr>\n";
-displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
-my @keylist = ( "Number of mapped reads" );
-if( !$genome )
+print OUTFILE "<table class=\"center\"><tr>\n";
+my $t2width = 350;
+if( $rnacoverage )
 {
-  push @keylist, "Percent reads on target";
+  displayResults( "repoverview.png", "amplicon.cov.xls", "Representation Overview", 1, "height:100px" );
+  print OUTFILE "</td>\n";
+  $t2width = 320;
 }
-push @keylist, ("Average base coverage depth", "Uniformity of base coverage" );
-print OUTFILE "<td><div class=\"statsdata\" style=\"width:350px\">\n";
+else
+{
+  displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
+  print OUTFILE "</td>\n";
+  $t2width = 340;
+}
+
+my @keylist = ( "Number of mapped reads" );
+push( @keylist, "Percent reads on target" ) if( !$genome );
+push( @keylist, "Percent sample tracking reads" ) if( $sampleid );
+push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage" ) ) if( !$rnacoverage );
+printf OUTFILE "<td><div class=\"statsdata\" style=\"width:%dpx\">\n", $t2width;
 print OUTFILE subTable( "$workdir/$statsfile", \@keylist );
-print OUTFILE "</div></td></tr><tr>\n";
-#displayResults( "coverage.png", "coverage.xls", "Target Coverage" );
-#@keylist = ( "Average base coverage depth", "Target base coverage at 1x", "Target base coverage at 30x",
-#  "Target base coverage at 100x", "Target base coverage at 500x" );
-#print OUTFILE "<td><div class=\"statsdata\" style=\"width:350px\">\n";
-#print OUTFILE subTable( "$workdir/$statsfile", \@keylist );
-#print OUTFILE "</div>";
-print OUTFILE "</td></tr></table></center>\n";
+print OUTFILE "</div></td></tr>\n";
+print OUTFILE "</table>\n";
 print OUTFILE "</div></body></html>\n";
 close( OUTFILE );
 
@@ -234,10 +247,10 @@ sub getHelp
 sub writeLinksToFiles
 {
     my ($pic,$tsv,$alt,$desc,$style) = ($_[0],$_[1],$_[2],$_[3],$_[4]);
-    $style = " style=\"$style\"" if( $style ne "" );
+    $style = "style=\"$style\"" if( $style ne "" );
     if( -f "$workdir/$pic" )
     {
-        print OUTFILE "<td><a style=\"cursor:help\" href=\"$pic\" title=\"$desc\"><img class=\"frm\"$style src=\"$pic\" alt=\"$alt\"/></a> ";
+        print OUTFILE "<td class=\"imageplot\" style=\"border:0\"><a href=\"$pic\" title=\"$desc\"><img $style src=\"$pic\" alt=\"$alt\"/></a> ";
     }
     else
     {
