@@ -1,9 +1,0 @@
-@read1 - forward
-GCTA
-@read2 - reverse
-CGTA
-@read3 - reverse
-GCGT
-@read4 - forward with 1 insert error
-ATGGC
-
