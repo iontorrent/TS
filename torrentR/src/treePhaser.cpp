@@ -9,8 +9,8 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
   char *exceptionMesg = NULL;
 
   try {
-    RcppMatrix<double>   signal(Rsignal);
-    RcppVector<int>      keyFlow(RkeyFlow);
+    Rcpp::NumericMatrix  signal(Rsignal);
+    Rcpp::IntegerVector  keyFlow(RkeyFlow);
     string flowCycle   = Rcpp::as<string>(RflowCycle);
     double cf          = Rcpp::as<double>(Rcf);
     double ie          = Rcpp::as<double>(Rie);
@@ -23,15 +23,15 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
 
     if(basecaller != "treephaser-swan" && basecaller != "dp-treephaser" && basecaller != "treephaser-adaptive") {
       std::string exception = "base value for basecaller supplied: " + basecaller;
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if (flowCycle.length() < nFlow) {
       std::string exception = "Flow cycle is shorter than number of flows to solve";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
 
       // Prepare objects for holding and passing back results
-      RcppMatrix<double>        predicted_out(nRead,nFlow);
-      RcppMatrix<double>        residual_out(nRead,nFlow);
+      Rcpp::NumericMatrix        predicted_out(nRead,nFlow);
+      Rcpp::NumericMatrix        residual_out(nRead,nFlow);
       std::vector< std::string> seq_out(nRead);
 
       // Set up key flow vector
@@ -71,18 +71,14 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
       }
 
       // Store results
-      RcppResultSet rs;
-      rs.add("seq",        seq_out);
-      rs.add("predicted",  predicted_out);
-      rs.add("residual",   residual_out);
-
-      ret = rs.getReturnList();
-
+      ret = Rcpp::List::create(Rcpp::Named("seq")       = seq_out,
+                               Rcpp::Named("predicted") = predicted_out,
+                               Rcpp::Named("residual")  = residual_out);
     }
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -91,27 +87,31 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
   return ret;
 }
 
-
-RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr, SEXP Rmaxflows)
+// ======================================================================
+RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr,
+		SEXP Rmaxflows, SEXP RgetStates)
 {
   SEXP ret = R_NilValue;
   char *exceptionMesg = NULL;
 
   try {
 
-    RcppStringVector     sequences(Rsequence);
+    Rcpp::StringVector   sequences(Rsequence);
     string flowCycle   = Rcpp::as<string>(RflowCycle);
     double cf          = Rcpp::as<double>(Rcf);
     double ie          = Rcpp::as<double>(Rie);
     double dr          = Rcpp::as<double>(Rdr);
     unsigned int max_flows      = Rcpp::as<int>(Rmaxflows);
+    unsigned int get_states     = Rcpp::as<int>(RgetStates);
 
     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
     unsigned int nFlow = flow_order.num_flows();
     unsigned int nRead = sequences.size();
 
     // Prepare objects for holding and passing back results
-    RcppMatrix<double>        predicted_out(nRead,nFlow);
+    Rcpp::NumericMatrix       predicted_out(nRead,nFlow);
+    vector<vector<float> >    query_states;
+    vector<int>               hp_lengths;
 
     // Iterate over all sequences
     BasecallerRead read;
@@ -120,14 +120,16 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     unsigned int max_length = (2*flow_order.num_flows());
 
     for(unsigned int iRead=0; iRead<nRead; iRead++) {
-      string mySequence = sequences(iRead);
+      string mySequence = Rcpp::as<std::string>(sequences(iRead));
       read.sequence.clear();
       read.sequence.reserve(2*flow_order.num_flows());
       for(unsigned int iBase=0; iBase<mySequence.length() and iBase<max_length; ++iBase){
         read.sequence.push_back(mySequence[iBase]);
       }
-
-      dpTreephaser.Simulate(read, max_flows);
+      if (nRead == 1 and get_states > 0)
+        dpTreephaser.QueryAllStates(read, query_states, hp_lengths, max_flows);
+      else
+        dpTreephaser.Simulate(read, max_flows);
 
       for(unsigned int iFlow=0; iFlow<nFlow and iFlow<max_flows; ++iFlow){
 		predicted_out(iRead,iFlow) = (double) read.prediction[iFlow];
@@ -135,14 +137,25 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     }
 
     // Store results
-          RcppResultSet rs;
-          rs.add("sig",  predicted_out);
+    if (nRead == 1 and get_states > 0) {
+      Rcpp::NumericMatrix        states(hp_lengths.size(), nFlow);
+      Rcpp::NumericVector        HPlengths(hp_lengths.size());
+      for (unsigned int iHP=0; iHP<hp_lengths.size(); iHP++){
+        HPlengths(iHP) = (double)hp_lengths[iHP];
+        for (unsigned int iFlow=0; iFlow<nFlow; iFlow++)
+          states(iHP, iFlow) = (double)query_states[iHP][iFlow];
+      }
+      ret = Rcpp::List::create(Rcpp::Named("sig")  = predicted_out,
+                               Rcpp::Named("states")  = states,
+                               Rcpp::Named("HPlengths")  = HPlengths);
+    } else {
+      ret = Rcpp::List::create(Rcpp::Named("sig")  = predicted_out);
+    }
 
-          ret = rs.getReturnList();
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
 
   if(exceptionMesg != NULL)

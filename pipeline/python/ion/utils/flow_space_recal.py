@@ -11,6 +11,39 @@ import json
 from ion.utils import alignment
 from ion.utils import basecaller
 
+def HPtable(dir_recalibration,
+            sampleBAMFile,
+            xMin,
+            xMax,
+            xCuts,
+            yMin,
+            yMax,
+            yCuts,
+            numFlows,
+            flowCuts):
+    '''Generates HP table from the mapped sample reads'''
+    try:
+        cmd = "calibrate --skipDroop"
+        cmd += " -i %s" % sampleBAMFile
+        cmd += " -o %s" % dir_recalibration
+        cmd += " --xMin %d" % xMin #X_MAX=3391 =0 Y_MAX=3791 Y_MIN=0 X_CUTS=1 Y_CUTS=1 FLOW_SPAN=520
+        cmd += " --xMax %d" % xMax
+        cmd += " --xCuts %d" % xCuts
+        cmd += " --yMin %d" % yMin
+        cmd += " --yMax %d" % yMax
+        cmd += " --yCuts %d" % yCuts
+        cmd += " --numFlows %d" % numFlows
+        cmd += " --flowCuts %d" % flowCuts
+        printtime("DEBUG: Calling '%s':" % cmd)
+        ret = subprocess.call(cmd,shell=True)
+        if ret == 0:
+            printtime("Finished HP table")
+        else:
+            raise RuntimeError('HP table exit code: %d' % ret)
+    except:
+        printtime('ERROR: HP table failed')
+        raise
+
 def QVtable(dir_recalibration,
             genome_path,
             sampleBAMFile,
@@ -35,7 +68,7 @@ def QVtable(dir_recalibration,
         cmd += " Y_MAX=%d" % yMax
         cmd += " Y_CUTS=%d" % yCuts
         cmd += " FLOW_SPAN=%d" % flowSpan
-        cmd += " VALIDATION_STRINGENCY=SILENT NUM_THREADS=16 > %s 2>&1" % os.path.join(dir_recalibration, 'flowQVtable.log')
+        cmd += " VALIDATION_STRINGENCY=SILENT NUM_THREADS=16 MAX_QUEUE_SIZE=8192 > %s 2>&1" % os.path.join(dir_recalibration, 'flowQVtable.log')
         printtime("DEBUG: Calling '%s':" % cmd)
         ret = subprocess.call(cmd,shell=True)
         if ret == 0:
@@ -46,6 +79,21 @@ def QVtable(dir_recalibration,
         printtime('ERROR: flow QV table failed')
         raise
 
+def HPaggregation(dir_recalibration
+                 ):
+    try:
+        cmd = "calibrate --performMerge"
+        cmd += " -o %s" % dir_recalibration
+        cmd += " --mergeParentDir %s" % dir_recalibration
+        printtime("DEBUG: Calling '%s':" % cmd)
+        ret = subprocess.call(cmd,shell=True)
+        if ret == 0:
+            printtime("Finished HP training")
+        else:
+            raise RuntimeError('HP training exit code: %d' % ret)
+    except:
+        printtime('ERROR: HP training failed')
+        raise
 
 def QVaggregation(dir_recalibration,
                   flowSpan,
@@ -66,7 +114,6 @@ def QVaggregation(dir_recalibration,
     except:
         printtime('ERROR: flow QV aggregation failed')
         raise
-
 
 def base_recalib(
       SIGPROC_RESULTS,
@@ -109,9 +156,14 @@ def base_recalib(
 
     try:
         # Produce smaller basecaller results
+                #                      basecallerArgs + " --calibration-training=2000000 --flow-signals-type scaled-residual",
+        if not "--calibration-training=" in basecallerArgs:
+            basecallerArgs = basecallerArgs + " --calibration-training=2000000"
+        if not "--flow-signals-type" in basecallerArgs:
+            basecallerArgs = basecallerArgs + " --flow-signals-type scaled-residual"
         basecaller.basecalling(
                       SIGPROC_RESULTS,
-                      basecallerArgs + " --calibration-training=2000000 --flow-signals-type scaled-residual",
+                      basecallerArgs,
                       libKey,
                       tfKey,
                       runID,
@@ -162,6 +214,7 @@ def base_recalib(
         xCuts = 2
         numFlows = chipflow["BaseCaller"]['num_flows']
         flowSpan = numFlows/2
+        flowCuts = 2
 #        print("xMin: %d; xMax: %d; xCuts: %d; yMin: %d; yMax: %d; yCuts: %d; numFlows: %d" % (xMin, xMax, xCuts, yMin, yMax, yCuts, numFlows));
 
         try:
@@ -185,8 +238,16 @@ def base_recalib(
                     alignment.align(
                         libraryName,
                         readsFile,
-                        RECALIBRATION_RESULTS,
-                        "samplelib")
+                        align_full=False,
+                        sam_parsed=False,
+                        bidirectional=False,
+                        mark_duplicates=False,
+                        realign=False,
+                        skip_sorting=True,
+                        aligner_opts_extra="",
+                        logfile=os.path.join(RECALIBRATION_RESULTS,"alignmentQC_out.txt"),
+                        output_dir=RECALIBRATION_RESULTS,
+                        output_basename="samplelib")
                 except:
                     traceback.print_exc()
                     raise
@@ -195,8 +256,9 @@ def base_recalib(
                     # Flow QV table generation
                     #     Input -> recalibration/samplelib.bam, genome_path
                     #     Output -> QVtable file
-                    genome_path = "/results/referenceLibrary/%s/%s/%s.fasta" % (tmap_version,libraryName,libraryName)
-                    QVtable(RECALIBRATION_RESULTS,genome_path,sample_map_path,xMin,xMax,xCuts,yMin,yMax,yCuts,flowSpan)
+                    #genome_path = "/results/referenceLibrary/%s/%s/%s.fasta" % (tmap_version,libraryName,libraryName)
+                    #QVtable(RECALIBRATION_RESULTS,genome_path,sample_map_path,xMin,xMax,xCuts,yMin,yMax,yCuts,flowSpan)
+                    HPtable(RECALIBRATION_RESULTS,sample_map_path,xMin,xMax,xCuts,yMin,yMax,yCuts,numFlows,flowCuts)
                 except:
                     traceback.print_exc()
                     raise
@@ -204,11 +266,13 @@ def base_recalib(
             #create flowQVtable.txt
             try:
                 qvtable = os.path.join(BASECALLER_RESULTS, "recalibration", "flowQVtable.txt")
-                QVaggregation(
-                    os.path.join(BASECALLER_RESULTS,"recalibration"),
-                    flowSpan,
-                    qvtable
-                )
+                #QVaggregation(
+                #    os.path.join(BASECALLER_RESULTS,"recalibration"),
+                #    flowSpan,
+                #    qvtable
+                #)
+                HPaggregation(os.path.join(BASECALLER_RESULTS,"recalibration"))
+                
             except:
                 printtime('ERROR: Flow QV aggregation failed')
                 raise

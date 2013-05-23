@@ -75,12 +75,10 @@ void
 sff_check(sff_t *sff, int32_t *n_err1, int32_t *n_err2, int32_t print)
 {
   int32_t i, j, l, fl;
-  sff_read_t *r;
   ion_string_t *fo, *bases;
   char prev_base = 0;
   uint16_t *fg;
 
-  r = sff->read;
   fo = sff->gheader->flow;
   fl = sff->gheader->flow_length; 
   bases = sff->read->bases;

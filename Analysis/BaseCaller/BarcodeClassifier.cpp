@@ -18,8 +18,8 @@ void BarcodeClassifier::PrintHelp()
 {
   printf ("Barcode classification options:\n");
   printf ("  -b,--barcodes              FILE/off   detect barcodes listed in provided file [off]\n");
-  printf ("     --barcode-mode          INT        selects barcode classification algorithm [3]\n" );
-  printf ("     --barcode-cutoff        FLOAT      minimum score to call a barcode [1.5\n" );
+  printf ("     --barcode-mode          INT        selects barcode classification algorithm [1]\n" );
+  printf ("     --barcode-cutoff        FLOAT      minimum score to call a barcode [2\n" );
   printf ("     --barcode-separation    FLOAT      minimum difference between best and second best scores [0.5]\n" );
   printf ("     --barcode-filter        FLOAT      barcode freq. threshold, if >0 writes output-dir/barcodeFilter.txt [0.0 = off]\n" );
   printf ("\n");
@@ -39,6 +39,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
 
   barcode_directory_              = opts.GetFirstString ('-', "barcode-directory", output_directory+"/bc_files");
   barcode_filter_                 = opts.GetFirstDouble ('-', "barcode-filter", 0.0);
+  windowSize_                     = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
 
   if (barcode_filter_ > 0.0)
     barcode_filter_filename_ = output_directory+"/barcodeFilter.txt";
@@ -52,8 +53,8 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
   //score_mode_     = datasets.barcode_config().get("score_mode",1).asInt();
   //score_cutoff_   = datasets.barcode_config().get("score_cutoff",2.0).asDouble();
 
-  score_mode_                     = opts.GetFirstInt    ('-', "barcode-mode", 3);
-  score_cutoff_                   = opts.GetFirstDouble ('-', "barcode-cutoff", 1.5);
+  score_mode_                     = opts.GetFirstInt    ('-', "barcode-mode", 1);
+  score_cutoff_                   = opts.GetFirstDouble ('-', "barcode-cutoff", 2);
   score_separation_               = opts.GetFirstDouble ('-', "barcode-separation", 0.5);
 
   barcode_.reserve(datasets.num_read_groups());
@@ -152,7 +153,7 @@ void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
   if (num_barcodes_ == 0)
     return;
 
-  DPTreephaser treephaser(flow_order_);
+  DPTreephaser treephaser(flow_order_, windowSize_);
   BasecallerRead basecaller_read;
   treephaser.SetModelParameters(cf, ie, dr);
 

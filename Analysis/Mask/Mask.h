@@ -88,8 +88,28 @@ class Mask
       return &mask[0];
     }
     uint16_t GetBarcodeId ( int x, int y ) const;
-    bool Match ( int x, int y, MaskType type, int method = MATCH_ANY ) const;
-    bool Match ( int n, MaskType type, int method = MATCH_ANY ) const;
+    bool Match ( int x, int y, MaskType type, int method ) const;
+    bool Match ( int n, MaskType type, int method ) const;
+
+    inline bool Match(int x, int y, MaskType type) const
+    {
+    	int n = y*w+x;
+
+		if ( n < 0 || n >= ( w*h ) )
+			return false;
+
+		return ( ( mask[n] & type ? true : false ) );
+    }
+
+    inline bool Match(int n, MaskType type) const
+    {
+		if ( n < 0 || n >= ( w*h ) )
+			return false;
+
+		return ( ( mask[n] & type ? true : false ) );
+    }
+
+
     void    Set ( int x, int y, MaskType type );
     void    SetBarcodeId ( int x, int y, uint16_t barcodeId );
     void AddThese ( Mask *fromMask, MaskType these );

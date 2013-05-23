@@ -16,24 +16,40 @@
 #include "JobWrapper.h"
 #include "GpuMultiFlowFitControl.h"
 
-#define CUDA_MULTIFLOW_NUM_FIT 2 
 
-class MultiFitStream : public cudaStreamExecutionUnit
+struct MultiFitData
 {
-  int _myId; 
-  GpuMultiFlowFitMatrixConfig* _fd[CUDA_MULTIFLOW_NUM_FIT];
+  CpuStep_t* Steps; // we need a specific struct describing this config for this well fit for GPU
+  unsigned int * JTJMatrixMapForDotProductComputation;
+  unsigned int * BeadParamIdxMap;
+  float* LambdaForBeadFit;
+};
+
+
+class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
+{
+  //Execution config    
+  static int _bpb;   // beads per block
+  static int _l1type; // 0:sm=l1, 1:sm>l1, 2:sm<l1
+  static int _bpbPartialD;   // beads per block
+  static int _l1typePartialD; // 0:sm=l1, 1:sm>l1, 2:sm<l1
+
+
+
   float _lambda_start[CUDA_MULTIFLOW_NUM_FIT];
   int _fit_iterations[CUDA_MULTIFLOW_NUM_FIT];
   int _clonal_restriction[CUDA_MULTIFLOW_NUM_FIT];
   float _restrict_clonal[CUDA_MULTIFLOW_NUM_FIT];
 
-   //Execution specific values    
-  static int _bpb;   // beads per block
 
   int _fitIter; 
   
   int _maxEmphasis;
   unsigned int _partialDerivMask; // mask to find out which params to compute partial derivative for
+
+
+  size_t _invariantCopyInSize;
+  size_t _fitSpecificCopyInSize;
 
 
   ConstParams* _HostConstP;
@@ -43,14 +59,10 @@ class MultiFitStream : public cudaStreamExecutionUnit
 
   //host memory
   // fit specific inputs
-  float* _pHostLambdaForBeadFit[CUDA_MULTIFLOW_NUM_FIT];
-  unsigned int * _pHostJTJMatrixMapForDotProductComputation[CUDA_MULTIFLOW_NUM_FIT];
-  unsigned int * _pHostBeadParamIdxMap[CUDA_MULTIFLOW_NUM_FIT];
-  CpuStep_t* _pHostSteps[CUDA_MULTIFLOW_NUM_FIT]; // we need a specific struct describing this config for this well fit for GPU
 
-  bead_params * _pHostBeadParams;
+  bead_params* _pHostBeadParams;
   FG_BUFFER_TYPE * _pHostFgBuffer;
-
+  MultiFitData _HostFitData[CUDA_MULTIFLOW_NUM_FIT];
   float* _pHostNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* _pHostSbg; // FLxF
   float* _pHostEmphasis; // MAX_HPLEN+1 xF // needs precomputation
@@ -58,25 +70,22 @@ class MultiFitStream : public cudaStreamExecutionUnit
   float* _pHostDarkMatterComp; // NUMNUC * F  
 
   // allocated memory
-  float* _pDevObservedTrace; //fg
+  MultiFitData _DevFitData;
+  FG_BUFFER_TYPE* _pDevObservedTrace; //fg
   float* _pDevObservedTraceTranspose; //fg
   float* _pDevNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
   float* _pDevSbg; // FLxF
   float* _pDevEmphasis; // MAX_HPLEN+1 xF // needs precomputation
   float* _pDevNon_integer_penalty; // MAX_HPLEN+1
   float* _pDevDarkMatterComp; // NUMNUC * F  
-  float* _pDevBeadParams;
+  bead_params* _pDevBeadParams;
   float* _pDevBeadParamsEval;
   float* _pDevBeadParamsTranspose;
-  CpuStep_t* _pDevSteps; // we need a specific struct describing this config for this well fit for GPU
   // outputs
   float* _pDevIval; // FLxNxF
   float* _pDevScratch_ival; // FLxNxF
   float* _pDevResidual; // N
 
-  unsigned int * _pDevJTJMatrixMapForDotProductComputation;
-  unsigned int * _pDevBeadParamIdxMap; 
-  float* _pDevLambdaForBeadFit;
   float* _pDevJTJ;
   float* _pDevRHS;
   float* _pDevLTR;
@@ -86,25 +95,38 @@ class MultiFitStream : public cudaStreamExecutionUnit
   float* _pd_delta;
 //  float* _pd_beadParamEval; 
   
-  WorkSet _myJob;
 
 protected:
 
   void cleanUp();
+  int l1DefaultSettingMultiFit();
+  int l1DefaultSettingPartialD();
 
 public:
 
-  MultiFitStream(GpuMultiFlowFitControl& fitcontrol, WorkerInfoQueue* q);
-  ~MultiFitStream();
+  SimpleMultiFitStream(streamResources * res, WorkerInfoQueueItem item);
+  ~SimpleMultiFitStream();
 
 
   // implementatin of stream execution methods
-  bool ValidJob();
   int handleResults();
-  void ExecuteJob(int * control = NULL);
+  void ExecuteJob();
 
 
-  static void setBeadsPerBLock(int bpb);
+  static void setBeadsPerBLockMultiF(int bpb);
+  static void setL1SettingMultiF(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
+  static void setBeadsPerBLockPartialD(int bpb);
+  static void setL1SettingPartialD(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
+
+  static void printSettings();
+
+  static size_t getMaxHostMem();
+  static size_t getMaxDeviceMem(int numFrames = 0, int numBeads = 0);
+
+  int getBeadsPerBlockMultiFit();
+  int getL1SettingMultiFit();
+  int getBeadsPerBlockPartialD();
+  int getL1SettingPartialD();
 
 private:
 
@@ -132,6 +154,9 @@ private:
   void CalculateClonalityRestriction(int fit_index);
   void CalculateNonIntegerPenalty();
 
+
 };
+
+
 
 #endif // MULTIFITSTREAM_H

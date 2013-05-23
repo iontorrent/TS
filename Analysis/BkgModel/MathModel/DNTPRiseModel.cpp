@@ -228,7 +228,7 @@ int SplineRiseAndFallFunction(float *output, int npts, float *frame_times, int s
     }
 
     if (i_start_uninitialized)
-      printf("ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f\n", t_mid_nuc, sigma);
+      printf("SplineRiseAndFallFunction... ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f npts:%d sub_steps:%d\n", t_mid_nuc, sigma, npts, sub_steps);
     return(i_start);
 }
 
@@ -290,7 +290,7 @@ int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_step
         output[ndx] = C;
 
     if (i_start_uninitialized)
-      printf("ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f\n", t_mid_nuc, sigma);
+      printf("SplineRiseFunction... ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f npts:%d sub_steps:%d\n", t_mid_nuc, sigma, npts, sub_steps);
     return(i_start);
 }
 
@@ -335,7 +335,7 @@ int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps
         output[ndx] = C;
     
     if (i_start_uninitialized)
-      printf("ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f\n", t_mid_nuc, sigma);
+      printf("SigmaXRiseFunction... ERROR_FINDING_I_START: t_mid_nuc: %f sigma: %f npts:%d sub_steps:%d\n", t_mid_nuc, sigma, npts, sub_steps);
     
     return(i_start);
 }

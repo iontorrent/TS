@@ -11,7 +11,7 @@ if( !file.exists(nFileIn) ) {
   q(status=1)
 }
 
-rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, comment.char="")
+rcov <- read.table(nFileIn, header=TRUE, sep="\t", as.is=TRUE, comment.char="")
 
 # test for property
 a <- rcov$total_reads

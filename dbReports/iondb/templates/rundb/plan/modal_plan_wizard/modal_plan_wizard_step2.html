@@ -3,9 +3,9 @@
     <div class="workflow-step-content">
         <table class="plan-grid">
             <tr>
-                <td>
+                <td width="65%">
                 <p class="form-label">Sample Preparation Kit (optional):</p>
-                <select id="samplePrepKitName" name="samplePrepKitName" value="" class="select-group">
+                <select id="samplePrepKitName" name="samplePrepKitName" value="" class="select-group" style="width:350px;">
                 <option value=""></option>
                 {% for samplePrepKit in planTemplateData.samplePrepKits %}
                     {% if selectedApplProductData %}
@@ -26,15 +26,23 @@
                 </select>
                 </td>
 
-                <td>
+                <td  width="35%">
                 <p class="form-label">Barcode Set (optional):</p>
                 <input value="False" name="isBarcodedPlan" id="isBarcodedPlan" type="hidden"/>
 
-                <select id="barcodeName" name="barcodeId" value="" class="select-group">
+                <select id="barcodeName" name="barcodeId" value="" class="select-group"  style="width:250px;">
                 <option value=""></option>
                 {% for barcodeKit in planTemplateData.barcodes %}
                     {% if selectedApplProductData %}
-                        <option value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+                    	{% if selectedApplProductData.isDefaultBarcoded %}
+                        	{% ifequal barcodeKit.name selectedApplProductData.defaultBarcodeKitName %}
+                        		<option SELECTED value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+                        	{% else %}
+                        		<option value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+                        	{% endifequal %}
+                        {% else %}
+                			<option value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
+                    	{% endif %}                        
                     {% else %}
                         {% ifequal barcodeKit.name selectedPlanTemplate.barcodeId %}
                             <option SELECTED value="{{barcodeKit.name}}">{{barcodeKit.name}}</option>
@@ -48,11 +56,11 @@
             </tr>
 
             <tr>
-                <td>
+                <td width="65%">
                     <p class="form-label">Library Kit Type:
                     <a href="#" class="btn extra_kit_inline">Details &nbsp;+</a>
                     </p>
-                    <select id="librarykitname" name="librarykitname" value="" class="select-group">
+                    <select id="librarykitname" name="librarykitname" value="" class="select-group"  style="width:350px;">
                     <option value=""></option>
                     {% for libKit in planTemplateData.libKits %}
                         {% if selectedApplProductData %}
@@ -87,9 +95,9 @@
         <div class="extra_kit_forward_info row-fluid" style="display: none;">
             <table class="plan-grid">
                 <tr>
-                    <td>
+                    <td width="65%">
                         <p class="form-label">Forward Library Key:</p>
-                        <select id="libraryKey" name="libraryKey" value="" class="select-group">
+                        <select id="libraryKey" name="libraryKey" value="" class="select-group"  style="width:350px;">
                         <option value=""></option>
 
                         {% for libKey in planTemplateData.forwardLibKeys %}
@@ -115,9 +123,9 @@
                         </select>
                     </td>
 
-                    <td>
+                    <td width="35%">
                         <p class="form-label">Forward 3' Adapter:</p>
-                        <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
+                        <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group"  style="width:250px;">
                         <option value=""></option>
 
                         {% for adapter in planTemplateData.forward3Adapters %}
@@ -151,9 +159,9 @@
         <div class="extra_kit_pe_forward_info row-fluid" style="display: none;">
             <table class="plan-grid">
                 <tr>
-                    <td>
+                    <td width="65%">
                         <p class="form-label">Forward Library Key:</p>
-                        <select id="peForwardLibraryKey" name="peForwardLibraryKey" value="" class="select-group">
+                        <select id="peForwardLibraryKey" name="peForwardLibraryKey" value="" class="select-group" style="width:350px;">
                         <option value=""></option>
 
                         {% for libKey in planTemplateData.peForwardLibKeys %}
@@ -179,9 +187,9 @@
                         </select>
                     </td>
 
-                    <td>
+                    <td width="35%">
                         <p class="form-label">Forward 3' Adapter:</p>
-                        <select id="peForward3primeAdapter" name="peForward3primeAdapter" value="" class="select-group">
+                        <select id="peForward3primeAdapter" name="peForward3primeAdapter" value="" class="select-group"  style="width:250px;">
                         <option value=""></option>
 
                         {% for adapter in planTemplateData.peForward3Adapters %}
@@ -213,9 +221,9 @@
         <div class="extra_kit_pe_reverse_info row-fluid" style="display: none;">
             <table class="plan-grid">
                 <tr>
-                    <td>
+                    <td width="65%">
                         <p class="form-label">Reverse Library Key:</p>
-                        <select id="reverselibrarykey" name="reverselibrarykey" value="" class="select-group">
+                        <select id="reverselibrarykey" name="reverselibrarykey" value="" class="select-group" style="width:350px;">
                         <option value=""></option>
 
                         {% for libKey in planTemplateData.reverseLibKeys %}
@@ -241,9 +249,9 @@
                         </select>
                     </td>
 
-                    <td>
+                    <td width="35%">
                         <p class="form-label">Reverse 3' Adapter:</p>
-                        <select id="reverse3primeAdapter" name="reverse3primeAdapter" value="" class="select-group">
+                        <select id="reverse3primeAdapter" name="reverse3primeAdapter" value="" class="select-group"  style="width:250px;">
                         <option value=""></option>
 
                         {% for adapter in planTemplateData.reverse3Adapters %}
@@ -270,9 +278,9 @@
                     </td>
                 </tr>
                 <tr>
-                    <td>
+                    <td width="65%">
                     <p class="form-label">Paired-End Library Adapter:</p>
-                    <select id="pairedEndLibraryAdapterName" name="pairedEndLibraryAdapterName" value="" class="select-group">
+                    <select id="pairedEndLibraryAdapterName" name="pairedEndLibraryAdapterName" value="" class="select-group"  style="width:350px;">
                     <option value=""></option>
 
                     {% for adapter in planTemplateData.pairedEndLibAdapters %}
@@ -300,13 +308,32 @@
 
         <table class="plan-grid">
             <tr>
-                <td>
-                    <p class="form-label">Templating Kit:</p>
-                    <select id="templatekitname" name="templatekitname" value="" class="select-group">
+                <td width="65%">
+                    <p class="form-label">Templating Kit:   
+                    <span class="option-group">
+                    <small style="font-weight: normal; font-size: 75%;">
+                    	{% if selectedApplProductData %}
+                    		<input checked="checked" type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="oneTouch" >OneTouch
+                    		<input type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="ionChef">IonChef
+                    	{% else %}
+                    		{% if selectedPlanTemplate.isIonChef %}
+                    			<input type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="oneTouch" >OneTouch
+                    			<input checked="checked" type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="ionChef">IonChef
+                    		{% else %}
+                        		<input checked="checked" type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="oneTouch" >OneTouch
+                        		<input type="radio" id="samplePrepInstrumentType" name="samplePrepInstrumentType" value="ionChef">IonChef
+                        	{% endif %}
+                    	{% endif %}
+                    </small>
+                    </span>
+                    </p>
+
+                    <div class="template_kit_oneTouch row-fluid" style="display: none;">
+                    <select id="templatekitname" name="templatekitname" value="" class="select-group" style="width:350px;">
                     <option value="" style="width:50px;"></option>
                     {% for templateKit in planTemplateData.templateKits %}
                         {% if selectedApplProductData %}
-                            {% ifequal templateKit.name selectedApplProductData.templateKit.name %}
+                            {% ifequal templateKit.name selectedApplProductData.defaultOneTouchTemplateKit.name %}
                                 <option SELECTED value="{{templateKit.name}}">{{templateKit.name}}</option>
                             {% else %}
                                 <option value="{{templateKit.name}}">{{templateKit.name}}</option>
@@ -320,11 +347,36 @@
                         {% endif %}
                     {% endfor %}
                     </select>
+                    </div>
+                    
+                    <div class="template_kit_ionChef row-fluid" style="display: none;">                    
+                    <select id="templatekitionchefname" name="templatekitionchefname" value="" class="select-group"  style="width:350px;">
+                    <option value="" style="width:50px;"></option>
+                    {% for templateKit in planTemplateData.ionChefKits %}
+                        {% if selectedApplProductData %}
+                        	{% ifequal templateKit.name selectedApplProductData.defaultIonChefKit.name %}
+                        		<option SELECTED value="{{templateKit.name}}">{{templateKit.name}}</option>
+                        	{% else %}
+                        		<option value="{{templateKit.name}}">{{templateKit.name}}</option>
+                        	{% endifequal %}
+                        {% else %}
+                            {% ifequal templateKit.name selectedPlanTemplate.templatingKitName %}
+                                <option SELECTED value="{{templateKit.name}}">{{templateKit.name}}</option>
+                            {% else %}
+                                <option value="{{templateKit.name}}">{{templateKit.name}}</option>
+                            {% endifequal %}
+                        {% endif %}
+                    {% endfor %}
+                    </select>
+                    </div>                    
                 </td>
 
-                <td>
-                    <p class="form-label">Control Sequence (optional):</p>
-                    <select id="controlsequence" name="controlsequence" value="" class="select-group">
+                <td width="35%">
+                    <p class="form-label">Control Sequence (optional):
+                    <span class="option-group"  style="height:3px;">
+                    </span>
+                    </p>
+                    <select id="controlsequence" name="controlsequence" value="" class="select-group"  style="width:250px;">
                     <option value="" style="width:50px;"></option>
                     {% for controlSeqKit in planTemplateData.controlSeqKits %}
                     {% if selectedApplProductData %}
@@ -341,12 +393,12 @@
                 </td>
             </tr>
             <tr>
-                <td>
+                <td width="65%">
                     <p class="form-label">Sequence Kit:</p>
                     {% for seqKit in planTemplateData.seqKits %}
                         <input value="{{seqKit.flowCount}}"  id="{{seqKit.name}}" name="{{seqKit.name}}" type="hidden"/>
                     {% endfor %}
-                    <select id="sequencekitname" name="sequencekitname" value="" class="select-group">
+                    <select id="sequencekitname" name="sequencekitname" value="" class="select-group" style="width:350px;">
                     <option value=""></option>
                     {% for seqKit in planTemplateData.seqKits %}
                         {% if selectedApplProductData %}
@@ -374,9 +426,9 @@
                     </select>
                 </td>
 
-                <td>
+                <td width="35%">
                     <p class="form-label">Chip Type (optional):</p>
-                    <select id="chipType" name="chipType" class="select-group">
+                    <select id="chipType" name="chipType" class="select-group"  style="width:250px;">
                     <option value=""></option>
                     {% for chipType in planTemplateData.chipTypes %}
                         {% if selectedApplProductData %}
@@ -397,7 +449,7 @@
                 </td>
             </tr>
             <tr>
-                <td>
+                <td width="65%">
                     <p class="form-label">Flows:</p>
                     {% if selectedApplProductData %}
                         {% if selectedApplProductData.isDefaultPairedEnd %}

@@ -35,21 +35,21 @@ RcppExport SEXP writeDat( SEXP RdatFile, SEXP Rcol, SEXP Rrow, SEXP RWidth, SEXP
     int rowInt              = Rcpp::as< int >( Rrow );
     int   width             = Rcpp::as<int>( RWidth );
     int   height            = Rcpp::as<int>( RHeight );
-    RcppMatrix<double> signal = Rcpp::as< RcppMatrix<double> >( RSignal );
+    Rcpp::NumericMatrix signal = Rcpp::as< Rcpp::NumericMatrix >( RSignal );
 
 
     //Rprintf("File Name: %s col: %d, row: %d, width: %d, signal: %g, %g, %g\n",datFile, signal.cols(), signal.rows(), width, signal(0,0), signal(1,0), signal(0,1) );
 
-    double* tempTrace = new double[ signal.getDim2()] ;
+    double* tempTrace = new double[ signal.ncol()] ;
     int linearIndex = 0;
     RawDat saver;
 
-    saver.SetSize( width, height, signal.getDim2(), signal.getDim2() );
+    saver.SetSize( width, height, signal.ncol(), signal.ncol() );
     saver.SetTraceTimestamps( 69 );
 
     for ( int i = 0; i < height; i++ ) {
       for ( int k = 0; k < width; k++ ) {
-        for ( int l = 0; l < signal.getDim2(); l++ ) //copy into raw vector
+        for ( int l = 0; l < signal.ncol(); l++ ) //copy into raw vector
           tempTrace[l] = signal( linearIndex, l );
 
         saver.SetWellTrace( tempTrace, k, i );
@@ -61,15 +61,13 @@ RcppExport SEXP writeDat( SEXP RdatFile, SEXP Rcol, SEXP Rrow, SEXP RWidth, SEXP
     saver.Write( datFile, colInt, rowInt, width, height );
 
     delete[] tempTrace;
-    RcppResultSet rs;
-    ret = rs.getReturnList();
 
   }
   catch ( exception& ex ) {
-    exceptionMesg = copyMessageToR( ex.what() );
+    forward_exception_to_r(ex);
   }
   catch ( ... ) {
-    exceptionMesg = copyMessageToR( "unknown reason" );
+    ::Rf_error("c++ exception (unknown reason)");
   }
 
   if ( exceptionMesg != NULL )

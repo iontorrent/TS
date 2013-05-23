@@ -4,6 +4,7 @@ logger = logging.getLogger(__name__)
 from django.db.models import Q
 from tastypie.bundle import Bundle
 from iondb.rundb import models
+from django.conf import settings
 
 
 def base_context_processor(request):
@@ -19,6 +20,7 @@ def base_context_processor(request):
     resource = MessageResource()
     msg_list = [resource.full_dehydrate(Bundle(message)) for message in messages]
     serialized_messages = resource.serialize(None, msg_list, "application/json")
+    base_js_extra = settings.JS_EXTRA
     if msg_list:
         logger.debug("Found %d global messages" % len(msg_list))
         
@@ -29,7 +31,8 @@ def base_context_processor(request):
         user_msglist = [resource.full_dehydrate(Bundle(message)) for message in user_messages]
         user_serialized_messages = resource.serialize(None, user_msglist, "application/json")
         logger.debug("User messages are %s" % user_serialized_messages)
-    return {"base_site_name": site_name, "global_messages": serialized_messages, "user_messages":user_serialized_messages}
+    return {"base_site_name": site_name, "global_messages": serialized_messages,
+            "user_messages":user_serialized_messages, "base_js_extra" : base_js_extra}
 
 
 def message_binding_processor(request):

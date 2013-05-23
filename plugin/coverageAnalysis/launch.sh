@@ -3,10 +3,16 @@
 
 #MAJOR_BLOCK
 
-VERSION="3.4.51836"
+VERSION="3.6.58977"
 
 # Disable excess debug output for test machine
 #set +o xtrace
+
+# Enable coverageAnalysisLite mode: no per-target coverage analysis
+export NOTARGETANALYSIS=0
+
+# Enable TargetSeq target coverage based on mean base read depth per target
+export TARGETCOVBYBASES=1
 
 # DEVELOPMENT/DEBUG options:
 # NOTE: the following should be set to 0 in production mode
@@ -112,6 +118,10 @@ else
   # used merged detail target for base coverage to assigned targets
   # otherwise base coverage may be over-counted where targets overlap
   PLUGIN_DETAIL_TARGETS=`echo "$PLUGIN_DETAIL_TARGETS" | sed -e 's/\/unmerged\//\/merged\//'`
+  if [ "$PLUGIN_RUNTYPE" = "targetseq" ]; then
+    # indicate to warn for missing targets for TargetSeq run
+    AMPOPT="-w"
+  fi
 fi
 PLUGIN_SAMPLEID=$PLUGINCONFIG__SAMPLEID
 PLUGIN_TRIMREADS=$PLUGINCONFIG__TRIMREADS
@@ -378,7 +388,7 @@ else
   # Write json output
   write_json_header;
   write_json_inner "${TSP_FILEPATH_PLUGIN_DIR}" "$PLUGIN_OUT_STATSFILE" "" 2;
-  write_json_footer;
+  write_json_footer 0;
 fi
 # Remove after successful completion
 rm -f "${TSP_FILEPATH_PLUGIN_DIR}/header" "${TSP_FILEPATH_PLUGIN_DIR}/footer" "$PADDED_TARGETS" "$BARCODES_LIST"

@@ -2,42 +2,39 @@
 #ifndef DOTPRODUCT_H
 #define DOTPRODUCT_H
 
-#include <xmmintrin.h>
-#include <pmmintrin.h>
+#include <x86intrin.h>
 
-#ifndef __SSE__
-//"SSE not available. Using slow dot product. If your processor supports SSE, use -march=native compiler flag."
+#if defined(__SSE4_1__)
 inline float DotProduct( int N, float* X, float* Y )
 {
-    float dot0=0.f, dot1=0.f, dot2=0.f, dot3=0.f;
-    float *stX, *stX0=X+N;
+    float dot=0.f;
+    float *stX0=X+N;
 
-    stX = X + ((N>>2)<<2);
-    if (X != stX)
+    int nIter = N>>2;
+
+    __m128 X_sse, Y_sse, XY_sse;
+    __m128 dot_sse = _mm_setzero_ps();
+
+
+    while (nIter--)
     {
-        do
-        {
-            //ATL_pfl1R(X+16);
-            dot0 += *X * *Y;
-            dot1 += X[1] * Y[1];
-            dot2 += X[2] * Y[2];
-            dot3 += X[3] * Y[3];
-            X += 4;
-            Y += 4;
-        }
-        while (X != stX);
-        dot0 += dot1;
-        dot2 += dot3;
-        dot0 += dot2;
+        X_sse = _mm_loadu_ps( X );
+        Y_sse = _mm_loadu_ps( Y );
+
+        XY_sse = _mm_dp_ps( X_sse, Y_sse,  0xF1 );
+        dot_sse = _mm_add_ss( dot_sse, XY_sse );
+
+        X += 4;
+        Y += 4;
     }
-    while (X != stX0) dot0 += *X++ * *Y++;
-    return(dot0);
+    _mm_store_ss( &dot, dot_sse );
+
+    while (X != stX0) dot += *X++ * *Y++;
+
+    return(dot);
 }
-#else
-
-#ifndef __SSE4_1__
+#elif defined(__SSE3__)
 //"SSE4 not available. Using slower dot product. If your processor supports SSE4.1, use -march=native compiler flag."
-
 inline float DotProduct( int N, float* X, float* Y )
 {
     float dot = 0.f;
@@ -73,36 +70,33 @@ inline float DotProduct( int N, float* X, float* Y )
     return(dot);
 }
 #else
-#include <smmintrin.h>
+//"SSE not available. Using slow dot product. If your processor supports SSE, use -march=native compiler flag."
 inline float DotProduct( int N, float* X, float* Y )
 {
-    float dot=0.f;
-    float *stX0=X+N;
+    float dot0=0.f, dot1=0.f, dot2=0.f, dot3=0.f;
+    float *stX, *stX0=X+N;
 
-    int nIter = N>>2;
-
-    __m128 X_sse, Y_sse, XY_sse;
-    __m128 dot_sse = _mm_setzero_ps();
-
-
-    while (nIter--)
+    stX = X + ((N>>2)<<2);
+    if (X != stX)
     {
-        X_sse = _mm_loadu_ps( X );
-        Y_sse = _mm_loadu_ps( Y );
-
-        XY_sse = _mm_dp_ps( X_sse, Y_sse,  0xF1 );
-        dot_sse = _mm_add_ss( dot_sse, XY_sse );
-
-        X += 4;
-        Y += 4;
+        do
+        {
+            //ATL_pfl1R(X+16);
+            dot0 += *X * *Y;
+            dot1 += X[1] * Y[1];
+            dot2 += X[2] * Y[2];
+            dot3 += X[3] * Y[3];
+            X += 4;
+            Y += 4;
+        }
+        while (X != stX);
+        dot0 += dot1;
+        dot2 += dot3;
+        dot0 += dot2;
     }
-    _mm_store_ss( &dot, dot_sse );
-
-    while (X != stX0) dot += *X++ * *Y++;
-
-    return(dot);
+    while (X != stX0) dot0 += *X++ * *Y++;
+    return(dot0);
 }
-#endif //#ifndef __SSE4_1__
-#endif //#ifndef __SSE__
+#endif
 
 #endif // DOTPRODUCT_H

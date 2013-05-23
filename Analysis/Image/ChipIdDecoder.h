@@ -7,8 +7,9 @@ typedef enum
   ChipIdUnknown = 0,
   ChipId314 = 1,
   ChipId316 = 2,
-  ChipId318 = 3,
-  ChipId900 = 4,
+  ChipId316v2 = 3,        
+  ChipId318 = 4,
+  ChipId900 = 5,
 } ChipIdEnum;
 
 typedef struct

@@ -55,6 +55,9 @@
         Allow from all
     </Directory>
 
+    ErrorDocument 404 /404.html
+    ErrorDocument 500 /500.html
+
     ErrorLog /var/log/apache2/error.log
 
     # Possible values include: debug, info, notice, warn, error, crit, alert, emerg.

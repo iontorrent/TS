@@ -10,7 +10,7 @@
 #include "dumper.h"
 
 
-DumpBuffer::DumpBuffer(unsigned int bytes, const char * name)
+DumpBuffer::DumpBuffer(size_t bytes, const char * name)
 {
   _buffer = new char[bytes];
   _sizeBytes=bytes;
@@ -47,7 +47,7 @@ void DumpBuffer::cleanup()
 }
 
 
-unsigned int DumpBuffer::addData(void *data, unsigned int bytes)
+size_t DumpBuffer::addData(void *data, size_t bytes)
 {
   
   char * writePtr = _buffer + _writeOffset;
@@ -62,7 +62,7 @@ unsigned int DumpBuffer::addData(void *data, unsigned int bytes)
   return (_writeOffset - bytes);
 }
 
-unsigned int DumpBuffer::addCudaData(void *devData, unsigned int bytes)
+size_t DumpBuffer::addCudaData(void *devData, size_t bytes)
 {
   char * writePtr = _buffer + _writeOffset;
   _writeOffset += bytes;
@@ -88,7 +88,7 @@ bool DumpBuffer::CompareCuda(float * devData, float threshold, OutputFormat outp
 void DumpBuffer::writeToFile(ofstream& myFile)
 {
 
-  myFile.write((const char*)&_writeOffset , sizeof(unsigned int));
+  myFile.write((const char*)&_writeOffset , sizeof(size_t));
   myFile.write((const char*)_name , sizeof(char)*DUMPNAMELEN);
   myFile.write((const char*)_buffer , _writeOffset);
 }
@@ -99,7 +99,7 @@ void DumpBuffer::readFromFile(ifstream& myFile)
  
   cleanup();
 
-  myFile.read((char*)&_sizeBytes,sizeof(unsigned int));
+  myFile.read((char*)&_sizeBytes,sizeof(size_t));
   myFile.read((char*)_name,sizeof(char)*DUMPNAMELEN);
 
  _buffer = new char[_sizeBytes];
@@ -115,7 +115,7 @@ void * DumpBuffer::getData()
 }
 
 
-unsigned int DumpBuffer::getSize()
+size_t DumpBuffer::getSize()
 {
   return (_writeOffset > 0)?(_writeOffset):(_sizeBytes); 
 }
@@ -138,24 +138,25 @@ bool DumpBuffer::CompareSize(DumpBuffer& buffer)
   return false;
 }
 
-bool DumpBuffer::CompareData(DumpBuffer& buffer, float threshold, OutputFormat output, int length , int stride ,int start)
+bool DumpBuffer::CompareData(DumpBuffer& buffer, float threshold, OutputFormat output, size_t length , size_t stride ,size_t start)
 {
-  unsigned int size = min(getSize(),buffer.getSize()); 
+  size_t size = min(getSize(),buffer.getSize()); 
   size /= sizeof(float);
 
   return CompareData((float*)buffer.getData(), threshold, output, length ,stride ,start);
 }
 
-bool DumpBuffer::CompareData(float * data, float threshold, OutputFormat output, int length , int stride ,int start)
+bool DumpBuffer::CompareData(float * data, float threshold, OutputFormat output, size_t length , size_t stride ,size_t start)
 {
-  unsigned int size = getSize()/sizeof(float); 
+  size_t size = getSize()/sizeof(float); 
   float * ptrA = (float*)getData();
   float * ptrB = data;
-  int n = 0;
+  size_t n = 0;
   double stddev = 0;
-  unsigned int cnt = 0;   
-  int i = start;
-  int l = 0;
+  size_t cnt = 0;   
+  size_t i = start;
+  size_t l = 0;
+  size_t block = 0;
 
   if(stride < 0 ) stride = 0;
  
@@ -167,24 +168,31 @@ bool DumpBuffer::CompareData(float * data, float threshold, OutputFormat output,
     float diff = abs(ptrA[i] - ptrB[i]);
     float error = abs(diff/((ptrA[i] != 0)?(ptrA[i]):(1)));
     if(error>threshold || error != error ){//&& diff > 0.01 ){ 
-     if(output > MIN) cout << i <<" " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << " F" << endl;  
+     if(output > MIN) cout << i <<" " <<block << " " << l <<" " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << " F" << endl;  
      n++;
      if(error == error) stddev += diff*diff; 
     }else{
-     if(output==ALL) cout << i << " " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << endl;  
+     if(output==ALL) cout << i << " " <<block << " " << l <<" " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << endl;  
      stddev += diff*diff; 
     }
 
     cnt++; 
     l++;
-   
-    if(stride > length && length == l){
+
+    if(length == l){
       l = 0;
-      i += stride - length + 1; 
-      if(output == ALL) cout << endl;   
-    }else{
-      i++;
+      block ++;
+      if(stride > length){
+        i += stride - length; 
+//        cout << endl;   
+      }
+      if(stride == length){
+//        cout << endl;
+      } 
     }
+
+    i++;
+  
   }
   
   stddev =   sqrt(stddev/cnt); 
@@ -196,8 +204,65 @@ bool DumpBuffer::CompareData(float * data, float threshold, OutputFormat output,
 }
 
 
+bool DumpBuffer::CompareData(short int * data, float threshold, OutputFormat output, size_t length , size_t stride ,size_t start)
+{
+  size_t size = getSize()/sizeof(short int); 
+  short int * ptrA = (short int*)getData();
+  short int * ptrB = data;
+  size_t n = 0;
+  double stddev = 0;
+  size_t cnt = 0;   
+  size_t i = start;
+  size_t l = 0;
+  size_t block = 0;
 
-bool DumpBuffer::Compare(DumpBuffer& buffer, float threshold, OutputFormat output, int length , int stride ,int start)
+  if(stride < 0 ) stride = 0;
+ 
+  if(length > stride) size = ( length+start <= size)?(length+start):(size);
+  cout << "absolut_element stride_block offset_in_block value" <<endl; 
+ 
+  while(i < size){
+
+
+    float diff = abs(ptrA[i] - ptrB[i]);
+    float error = abs(diff/((ptrA[i] != 0)?(ptrA[i]):(1)));
+    if(error>threshold || error != error ){//&& diff > 0.01 ){ 
+     if(output > MIN) cout << i << " " <<block << " " << l << " " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << " F" << endl;  
+     n++;
+     if(error == error) stddev += diff*diff; 
+    }else{
+     if(output==ALL) cout << i << " " <<block << " " << l << " " <<  ptrA[i] << " " << ptrB[i] << " " <<  (100.0*error) << "%" << endl;  
+     stddev += diff*diff; 
+    }
+
+    cnt++; 
+    l++;
+ 
+    if(length == l){
+      l = 0;
+      block ++;
+      if(stride > length){
+        i += stride - length; 
+//        cout << endl;   
+      }
+      if(stride == length){
+//        cout << endl;
+      } 
+    }
+
+    i++;
+
+  }
+  
+  stddev =   sqrt(stddev/cnt); 
+  
+   cout << "compare " << getName()<<" threshold of " << threshold  << " failed for "<< n << " out of " << cnt << " ( " << (100.0 *n)/((double)(cnt))  << "% ), standard deviation: "<< stddev << endl;
+  if(n==0) return true; 
+
+  return false;
+}
+
+bool DumpBuffer::Compare(DumpBuffer& buffer, float threshold, OutputFormat output, size_t length , size_t stride ,size_t start)
 {
 
 
@@ -214,7 +279,7 @@ bool DumpBuffer::Compare(DumpBuffer& buffer, float threshold, OutputFormat outpu
 
 
 
-bool DumpBuffer::CompareCuda(float * devData, float * hostData, unsigned int size, float threshold, OutputFormat output)
+bool DumpBuffer::CompareCuda(float * devData, float * hostData, size_t size, float threshold, OutputFormat output)
 {
 
   DumpBuffer tmpCuda(size,"CudaBuffer");
@@ -225,10 +290,10 @@ bool DumpBuffer::CompareCuda(float * devData, float * hostData, unsigned int siz
 
 
 
-unsigned int DumpBuffer::PrintHeader()
+size_t DumpBuffer::PrintHeader()
 {
 
-  unsigned int size = getSize()/sizeof(float);
+  size_t size = getSize()/sizeof(float);
 
   cout << _name << "\t " << size << " floats " << endl;
 
@@ -236,18 +301,63 @@ unsigned int DumpBuffer::PrintHeader()
 }
 
 
-unsigned int DumpBuffer::Print()
+size_t DumpBuffer::Print()
 {
   float * ptr = (float*)getData();
   cout << endl;
-  unsigned int size =  PrintHeader();
+  size_t size =  PrintHeader();
   cout << "-------------------------------------------" << endl; 
-  for(int i=0; i<size; i++){
+  for(size_t i=0; i<size; i++){
     cout << ptr[i] << endl;
   }
 
   return size;
 }
+
+size_t DumpBuffer::Print(size_t length , size_t stride ,size_t start, size_t max)
+{
+  size_t size = getSize()/sizeof(float); 
+  float * ptrA = (float*)getData();
+  size_t n = 0;
+  size_t cnt = 0;   
+  size_t i = start;
+  size_t l = 0;
+  size_t block = 0;
+
+  PrintHeader();
+  cout << "-------------------------------------------" << endl; 
+
+  if (max == 0) max = size;
+  if(stride < 0 ) stride = 0;
+ 
+  if(length > stride) size = ( length+start <= size)?(length+start):(size);
+  cout << "absolut_element stride_block offset_in_block value" <<endl; 
+  while(i < size && i < max){
+    cout << i << " " <<block << " " << l <<" " <<  ptrA[i] << endl;  
+
+    cnt++; 
+    l++;
+   
+    if(length == l){
+      l = 0;
+      block ++;
+      if(stride > length){
+        i += stride - length; 
+//        cout << endl;   
+      }
+      if(stride == length){
+//        cout << endl;
+      } 
+    }
+
+    i++;
+    
+  }
+  return size;
+}
+
+
+
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -257,21 +367,21 @@ unsigned int DumpBuffer::Print()
 DumpFile::~DumpFile()
 {
 
-  for ( int i=_buffers.size()-1  ; i >= 0; i--){
-    delete _buffers[i];
+  for ( size_t i=_buffers.size(); i > 0; i--){
+    if(_buffers[i-1] != NULL) delete _buffers[i];
     _buffers.pop_back();
   }
 
 }
 
-int DumpFile::addBuffer(DumpBuffer * databuffer)
+size_t DumpFile::addBuffer(DumpBuffer * databuffer)
 {
   _buffers.push_back(databuffer);
 
   return _buffers.size()-1;
 }
 
-int DumpFile::writeToFile(const char * filename)
+size_t DumpFile::writeToFile(const char * filename)
 {
    ofstream myFile (filename, ios::binary);
 
@@ -280,7 +390,7 @@ int DumpFile::writeToFile(const char * filename)
     exit (-1);
   }
 
-  for(int i = 0; i < _buffers.size(); i++){
+  for(size_t i = 0; i < _buffers.size(); i++){
     _buffers[i]->writeToFile(myFile);;
   }
 
@@ -290,7 +400,7 @@ int DumpFile::writeToFile(const char * filename)
  
 }
 
-int DumpFile::readFromFile(const char * filename)
+size_t DumpFile::readFromFile(const char * filename)
 {
   ifstream myFile (filename, ios::binary);
 
@@ -310,7 +420,7 @@ int DumpFile::readFromFile(const char * filename)
 
 }
 
-int DumpFile::getNumBuffers()
+size_t DumpFile::getNumBuffers()
 {
   return _buffers.size();
 }
@@ -325,7 +435,7 @@ DumpBuffer* DumpFile::getBuffer(int id)
 
 DumpBuffer* DumpFile::getBuffer(const char * buffername)
 {
-  for(int b=0; b<_buffers.size();b++){
+  for(size_t b=0; b<_buffers.size();b++){
     if (0 == strcmp(buffername, _buffers[b]->getName())) return _buffers[b];
   }
   return NULL;
@@ -335,7 +445,7 @@ DumpBuffer* DumpFile::getBuffer(const char * buffername)
 //Comparea all the buffers of two DumpFile Objects
 void DumpFile::Compare(DumpFile& DF, float threshold, OutputFormat output)
 {
-  for(int b=0; b<DF._buffers.size();b++){
+  for(size_t b=0; b<DF._buffers.size();b++){
     Compare(*DF._buffers[b],threshold, output);
   }
 }
@@ -343,7 +453,7 @@ void DumpFile::Compare(DumpFile& DF, float threshold, OutputFormat output)
 //compares all the buffers of the DumpFile Object with the passed buffer
 void DumpFile::Compare(DumpBuffer& buffer, float threshold, OutputFormat output)
 {
-  for(int a=0; a<_buffers.size();a++){
+  for(size_t a=0; a<_buffers.size();a++){
     if(_buffers[a]->CompareName(buffer))
       _buffers[a]->Compare(buffer,threshold, output);
   }
@@ -352,9 +462,9 @@ void DumpFile::Compare(DumpBuffer& buffer, float threshold, OutputFormat output)
 
 void DumpFile::printContent()
 {
-  unsigned int size = 0;
-  int cnt = 0;
-   for(int a=0; a<_buffers.size();a++){
+  size_t size = 0;
+  size_t cnt = 0;
+   for(size_t a=0; a<_buffers.size();a++){
     if(_buffers[a] != NULL){
       size += _buffers[a]->PrintHeader();
       cnt ++;
@@ -364,16 +474,16 @@ void DumpFile::printContent()
   cout << cnt << " buffers containing: " << size << " floats" << endl << endl;
 } 
 
-void DumpFile::printContent(int id)
+void DumpFile::printContent(int id, size_t length , size_t stride ,size_t start)
 {
   DumpBuffer * tmp = getBuffer(id);
-  if(tmp != NULL) tmp->Print();
+  if(tmp != NULL) tmp->Print(length,stride,start);
 }
 
-void DumpFile::printContent(const char * buffername)
+void DumpFile::printContent(const char * buffername, size_t length , size_t stride ,size_t start)
 {
   DumpBuffer * tmp = getBuffer(buffername);
-  if(tmp != NULL) tmp->Print();
+  if(tmp != NULL) tmp->Print(length,stride,start);
 } 
 
 

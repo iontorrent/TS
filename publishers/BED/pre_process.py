@@ -8,7 +8,9 @@ import os.path
 import sys
 import traceback
 import zipfile
-
+import call_api as api
+from pprint import pprint
+from iondb.rundb.plan import ampliseq
 
 def get_common_prefix(files):
     """For a list of files, a common path prefix and a list file names with
@@ -102,17 +104,28 @@ def pre_process():
         meta['is_ampliseq'] = False
         meta['primary_bed'] = files[0]
     elif "plan.json" in files:
+        print("Found ampliseq")
         meta['is_ampliseq'] = True
-        plan = json.load(open(os.path.join(args.path, "plan.json")))
-        meta['plan'] = plan
-        meta['primary_bed'] = plan['designed_bed']
-        meta['secondary_bed'] = plan['hotspot_bed']
+        plan_data = json.load(open(os.path.join(args.path, "plan.json")))
+        version, design = ampliseq.handle_versioned_plans(plan_data)
+        meta['design'] = design
+        plan = design['plan']
+        try:
+            meta['primary_bed'] = plan['designed_bed']
+            meta['secondary_bed'] = plan['hotspot_bed']
+            if 'reference' not in meta:
+                meta['reference'] = plan['genome'].lower()
+        except KeyError as err:
+            api.patch("contentupload", args.upload_id, status="Error: malformed AmpliSeq archive")
+            raise
+        print(meta)
     else:
         raise ValueError("Upload must be either valid Ampliseq export or contain a single BED file.")
 
     args.meta_file.truncate(0)
     args.meta_file.seek(0)
     json.dump(meta, args.meta_file)
+    api.patch("contentupload", args.upload_id, meta=meta)
 
 
 if __name__ == '__main__':

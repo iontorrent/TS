@@ -6,12 +6,13 @@ Look for old experiments and analysis them again
 
 Usage:
 
-    /opt/ion/iondb/bin/startanalysis_batch.py <experiment_name> <prefix> <project_name>
+    /opt/ion/iondb/bin/startanalysis_batch.py <experiment_name> [ebr (true/false) ] [note] [prefix] [project_name]
 
-The first input arguement is the expName in the database. The second
-and optional input argument will be the prefix to the report name.
-By default, it is set to "Batch". The third input is also optional.
-By default, it is set to what is defined in explog.txt
+The first input arguement is the expName in the database. 
+The second and optional input argument is the basecalling recalibration switch, default value is 'True'. 
+The third and optional input is a user short note, such as 'fromWell'.
+The fourth and optional input is prefix to the report name. It is "PGM" by default. 
+The fifth and optional input is the project name, By default, it is set to what is defined in explog.txt
 """
 
 # mirror import from crawler.py
@@ -46,6 +47,8 @@ from iondb.utils.crawler_utils import getFlowOrder
 from iondb.utils.crawler_utils import folder_mtime
 from iondb.utils.crawler_utils import tdelt2secs
 
+from time import strftime
+
 # use default crawler functions
 import crawler
 
@@ -73,27 +76,41 @@ def get_build_number(exp):
     for line in p:
         if ("Version = " in line):
             head, sep, tail = line.partition('(')
-            head, sep, tail1 =tail.partition(') (')
-            buildnum=tail1.rstrip(')\n')
+            head1, sep, tail1=tail.partition(')')
+            buildnum=head1.rstrip(')\n')
             return buildnum
     
     # return empty in case "Build" is not specified.
     return ""
+def get_report_timestamp():
+    
+    timestamp = strftime("%Y%m%d%H%M%S",time.localtime())
+    return timestamp
 
-def generate_report_name(exp):
+def generate_report_name(exp, use_recal, note):
     """generate report with a input prefix and build number as suffix"""
-    if len(sys.argv) > 2:
-        prefix = sys.argv[2]
-    else:
-        prefix = "Batch"
     buildnum = get_build_number(exp)
-    report_name = '%s_%s_Build_%s' %(prefix, exp.pretty_print_no_space(), buildnum)
+    timestamp = get_report_timestamp()
+    if len(sys.argv) > 4:
+        prefix = sys.argv[4]
+    else:
+        prefix = "PGM"
+    if use_recal.lower() == 'false':
+        ebr = "noebr"
+    else:
+        ebr = "ebr"
+
+    if note != '':
+        report_name = '%s_%s_%s_%s_%s_%s' %(prefix, exp.pretty_print_no_space(), buildnum,timestamp, ebr, note)
+    else:
+        report_name = '%s_%s_%s_%s_%s' %(prefix, exp.pretty_print_no_space(), buildnum,timestamp, ebr)
+
     return report_name
 
 def generate_project_name(exp):
     """generate project name from parsing explog or input"""
-    if len(sys.argv) > 3:
-        project_name = sys.argv[3]
+    if len(sys.argv) > 5:
+        project_name = sys.argv[5]
     else:
         fpath = load_log(exp.expDir, 'explog.txt')
         explog = parse_log(fpath)
@@ -106,20 +123,24 @@ def get_exp_from_name(name):
     exp = models.Experiment.objects.filter(expName__exact=name)
     return exp[0]
 
-def generate_post(run_name):
+def generate_post(run_name, ebr, note):
     """mirror this functions from crawler.py"""
 
     exp = get_exp_from_name(run_name)
     
-    report_name = generate_report_name(exp)
+    #report_name = generate_report_name(exp)
     project_names = generate_project_name(exp)
-    
+   
+    # comment out the use_recal arg check, use the one parsed from command line
+    """
     try:
         gc = models.GlobalConfig.objects.all().order_by('pk')[0]
         use_recal = gc.base_recalibrate
     except models.GlobalConfig.DoesNotExist:
         use_recal = False
-    
+    """
+    use_recal = ebr
+    report_name = generate_report_name(exp,use_recal,note)
     params = urllib.urlencode({'report_name':report_name,
                                'tf_config':'',
                                'path':exp.expDir,
@@ -149,11 +170,21 @@ def print_usage():
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
+    ebr = "True"
+    note = ''
+    if len(sys.argv) > 3:
+        run_name = sys.argv[1]
+        ebr = sys.argv[2]
+        note = sys.argv[3]
+    elif len(sys.argv) > 2:
+        run_name = sys.argv[1]
+        ebr = sys.argv[2]
+    elif len(sys.argv) > 1:
         run_name = sys.argv[1]
     else:
         print_usage()
         sys.exit(2)
     
-	
-    generate_post(run_name)
+    generate_post(run_name,ebr,note)
+
+

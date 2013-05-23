@@ -3,9 +3,7 @@
 #define CAFIESOLVER_H
 
 #include "RawWells.h"
-#include "SFFWrapper.h"
 #include <vector>
-#include "bivariate_gaussian.h"
 #include "ChipIdDecoder.h"
 
 struct DNATemplate {
@@ -42,7 +40,6 @@ struct CafieThreadInfo {
 	double *ie;
 	double *droop;
 	double *flowMult;
-	SFFWrapper *sff;
 	int KEYPASSFILTER;
 	int *numReads;
 	int *numClonal;
@@ -68,7 +65,6 @@ struct CafieThreadInfo {
 	int numFlowsPerCycle;
 	int minReadLength;
 	bool percentPositiveFlowFilterOn;
-//	CommandLineOpts *clo;
 	std::vector<float> perFlowScaleVal;
 	bool perFlowScale;
 	int phredScoreVersion;
@@ -78,7 +74,6 @@ struct CafieThreadInfo {
 	double percentPositiveFlowsMinValue;
 	int cafieResFilterCalling;
 	double cafieResMaxValue;
-	bivariate_gaussian clonalDist;
 	bool clonalFilterSolve;
 };
 

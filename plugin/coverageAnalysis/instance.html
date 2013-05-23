@@ -26,6 +26,7 @@
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
     $('#sampleid').attr('checked',false);
     $('#barcodebeds').attr('checked',false);
+    $('#uniquemaps').attr('checked',false);
     $('.bcbed-shy').hide();
     // turn off async JavaScript so we can easily get/set var names
     $.ajaxSetup({async: false});
@@ -109,33 +110,39 @@
         }
        }
       });
+       var lst = $('#targetregions option');
+       lst.sort(function(a,b) {
+         if( a.text > b.text ) return 1;
+         if( a.text < b.text ) return -1;
+         return 0
+       });
+       $("#targetregions").empty().append("<option value=''>None</option>");
+       $("#targetregions").append(lst);
+       $('#targetregions option')[0].selected = true;
+       if( populateBarcodeTargets > 0 ) {
+         // have to repeat operation with new list to prevent issues with sharing objects(?)
+         lst = $('#barcodetargets option');
+         lst.sort(function(a,b) {
+           if( a.text > b.text ) return 1;
+           if( a.text < b.text ) return -1;
+           return 0
+         });
+         $("#barcodetargets").empty().append(lst);
+         $('#barcodetargets option')[0].selected = true;
+       }
     });
     // make the Plan auto-selections
+    var pluginLibType = "ampliseq";
     if( planLibType != "" ) {
-      var pluginLibType = planBedFile == "" ? "wholegenome" : "ampliseq";
+      pluginLibType = planBedFile == "" ? "wholegenome" : "ampliseq";
       if( planLibType == "WGNM" ) {
         pluginLibType = "wholegenome";
       } else if( planLibType == "AMPS" ) {
         pluginLibType = "ampliseq";
-        if( referenceID == "hg19" ) {
-          $("#sampid").show();
-        } else {
-          $("#sampid").hide();
-        }
       } else if( planLibType == "TARS" ) {
         pluginLibType = "targetseq";
       } else if( planLibType == "AMPS_RNA" ) {
         pluginLibType = "ampliseq-rna";
-      }
-      $("#librarytype").val(pluginLibType);
-    } else {
-      pluginLibType = "ampliseq";
-    }
-    if( pluginLibType == "ampliseq" ) {
-      if( referenceID == "hg19" ) {
-        $("#sampid").show();
-      } else {
-        $("#sampid").hide();
       }
     }
     if( planBedFile != "" ) {
@@ -145,11 +152,10 @@
       }
     }
 
-    // Primer Trimming option disabled until future resolution of undesired side effects
-    $("#trimreads").attr("checked",false);
-    $("#librarytype").change(function() {
-      var opt = $("#librarytype option:selected").val();
-      if( opt == "ampliseq" ) {
+    function setOptionDefaults(libType,refID) {
+      $("#librarytype").val(libType);
+      if( libType == "ampliseq" ) {
+        // Note: this is a captured variable
         if( referenceID == "hg19" ) {
           $("#sampid").show();
         } else {
@@ -159,13 +165,13 @@
         $("#tpadding").hide();
         $("#uniquereads").show();
         $("#nondups").hide();
-      } else if( opt == "targetseq" ) {
+      } else if( libType == "targetseq" ) {
         $("#sampid").hide();
         //$("#ptrim").hide();
         $("#tpadding").show();
         $("#uniquereads").show();
         $("#nondups").show();
-      } else if( opt == "ampliseq-rna" ) {
+      } else if( libType == "ampliseq-rna" ) {
         $("#sampid").show();
         //$("#ptrim").hide();
         $("#tpadding").hide();
@@ -178,6 +184,17 @@
         $("#uniquereads").show();
         $("#nondups").show();
       }
+    }
+
+    // Set default options according to Library type selected (and reference for scope limiting)
+    setOptionDefaults(pluginLibType,referenceID);
+
+    // Primer Trimming option disabled until future resolution of undesired side effects
+    $("#trimreads").attr("checked",false);
+
+    $("#librarytype").change(function() {
+      var libType = $("#librarytype option:selected").val();
+      setOptionDefaults(libType);
     });
 
     $('#barcodebeds').change(function() {
@@ -275,7 +292,7 @@
       if( useBcTargets ) {
         bcTargetList = checkBarcodeTargets( $("#bctextarea").val() );
         if( bcTargetList == "" ) {
-          var msg = "Barcoded Targets was specified but no mappings were defined."
+          var msg = "Barcode-specific Targets was specified but no mappings were defined."
           msg += "\n\nDo you wish to continue?";
           if( !confirm(msg) ) return false;
         } else if( bcTargetList.substr(0,5) == "Error" ) {
@@ -387,11 +404,11 @@
      <td><span class="help"
        title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Usage Notes below.">
        Targeted Regions:</span></td>
-     <td><select id="targetregions" name="targetregions"><option value="">None</option></select></td> </tr>
+     <td><select id="targetregions" name="targetregions"></select></td> </tr>
     <tr id="multibed">
      <td><span class="help"
        title="Assign target regions based on assigned barcodes.">
-       Barcoded Targets:</span></td>
+       Barcode-specific Targets:</span></td>
      <td><input type="checkbox" id="barcodebeds" name="barcodebeds" checked="checked" value="Yes" style="float:left"/>
        <div class="bcbed-shy" style="margin-left:25px">
          Use the text box below to specify barcode to target regions mappings.<br/>
@@ -457,7 +474,7 @@ reported over the specified target regions. Typically a Targeted Regions selecti
 for enriched library types and set to 'None' for Whole Genome runs.
 (The default selections will match those defined by the Run Plan for this report.)</p>
     <p>
-If the option for Barcoded Targets is presented you may check this option to use and further specify Targeted Regions
+If the option for Barcode-specific Targets is presented you may check this option to use and further specify Targeted Regions
 for analysis of reads associated with specific barcode IDs.</p>
     <p>
 The SampleID Tracking option is recommended if your AmpliSeq targets (amplicons) were 'spiked' with SampleID sample tracking

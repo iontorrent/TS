@@ -75,6 +75,19 @@ class WellChunk {
   size_t flowDepth;
 };
 
+/**
+ * Helper class to serialize wells data to disk. 
+ */
+class RawWellsWriter {
+ public:
+  /**
+   * Write the data specified by the slice of the wells file in chunk to the hdf5 location sepcified in RWH5DataSet
+   * returns 0 if no error and nonzero if error.
+   */
+  int WriteWellsData(RWH5DataSet &dataSet, WellChunk &chunk, float *data);
+};
+
+
 /** 
  * Represents the cube of results 
  * Usages:

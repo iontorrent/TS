@@ -33,6 +33,10 @@
 	float: right;
 }
 
+.pluginRemove {
+    float: right;
+}
+
 .pluginBlock{
 	background: white;
 }

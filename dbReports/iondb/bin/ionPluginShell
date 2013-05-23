@@ -10,7 +10,7 @@ import re
 
 import djangoinit
 from iondb.plugins.runner import PluginRunner
-from ion.utils.plugin_json import *
+from iondb.plugins.plugin_json import *
 
 """
     Ion Plugin Shell -- Run barebones plugin launch.sh scripts from command line

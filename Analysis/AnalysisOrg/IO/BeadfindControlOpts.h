@@ -38,6 +38,7 @@ class BeadfindControlOpts{
     int numThreads;
     float minTfPeakMax;
     float minLibPeakMax;
+    int blobFilter;
     void DefaultBeadfindControl();
     ~BeadfindControlOpts();
 };

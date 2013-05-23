@@ -34,6 +34,7 @@ public:
   PhaseEstimator();
 
   static void PrintHelp();
+  const static int max_phasing_levels_default_ = 4;   //!< Default value for max_phasing_levels
 
   //! @brief  Initialize the object.
   //! @param  opts                Command line options
@@ -120,14 +121,14 @@ protected:
   //! @param    useful_reads        Solved reads to be used for fitting.
   //! @param    treephaser          Phasing solver/simulator
   //! @param    parameters          Initial and final CF,IE,DR estimates
-  static void NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters);
+  static void NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters, const bool usePIDNorm);
 
   //! @brief    Evaluates the data fit for a specific set of CF,IE,DR candidate values
   //! @param    useful_reads        Solved reads to be used for fitting.
   //! @param    treephaser          Phasing solver/simulator
   //! @param    parameters          Candidate CF,IE,DR values
   //! @return   Squared error between measurements and predicted fit. The lower the better the fit.
-  static float EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters);
+  static float EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters, const bool usePIDNorm);
 
 
 
@@ -165,6 +166,9 @@ protected:
   float                 average_ie_;              //!< Chip average of IE estimates
   float                 average_dr_;              //!< Chip average of DR estimates
 
+  // Normalization algorithm selection
+  bool           use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
+
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
   vector<KeySequence>   keys_;                    //!< Key sequences, 0 = library, 1 = TFs.
@@ -195,6 +199,9 @@ protected:
   int                   train_subset_;
 
   int                   get_subset(int x, int y) const { return (x+y) % train_subset_count_; }
+
+  int                   windowSize_;              //!< Normalization window size
+  int                   max_phasing_levels_;      //!< Limits the number of levels of phasing estimation in SpatialRefiner
 
 };
 

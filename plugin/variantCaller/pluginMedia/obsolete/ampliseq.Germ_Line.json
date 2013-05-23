@@ -1,0 +1,401 @@
+dibayes : {
+  
+  # This parameter specifies a set of (hidden) variables for the statistical model that TVC uses for variant calling.
+  # Allowed values are: "low_frequency", "lowest", "low", "medium", "high", "highest"
+  # Recomended values: "low_frequency" for somatic variant detection and "medium" for germline variant detection
+  # Default value: "medium"
+  call-stringency : "medium",
+  
+  # This filter skips false-positive heterozygous SNP positions with high coverage for heterozygous alleles. The SNP position is skipped if the coverage of a position is too high compared to the median of the coverage distribution of all positions. Requires that the mapping quality value of the read be higher than the minimum mapping/pairing QV. The filter is disabled by default. 
+  # Allowed values: 0 (filter off), 1 (filter on). 
+  # Recommended values: between  Both
+  # Impact:  Switched on, this parameter improves specificity and reduces sensitivity.
+  het-skip-high-coverage : 0,
+  
+  # Reads with mapping QVs (Quality Values) lower than this minimum value are filtered out. 
+  # Allowed values: Integers between 0 and 100
+  # Recommended values: between  2 to 30
+  # Impact: Raising the mapping QV reduces the number of false 
+  # positive SNP calls. However, because more reads are filtered out, the
+  # total number of SNP calls decreases.  
+  reads-min-mapping-qv : 4,
+  
+  # The minimum unique start position of the heterozygous less common allele. 
+  # Allowed values: Integers>=0
+  # Recommended values: between  0 to 5 for Ampliseq; 0 to 2 for others.
+  # Impact: Increasing the threshold improves specificity and reduces sensitivity
+  het-min-lca-start-pos : 0,
+  
+  # The minimum Quality Value for a base in reads supporting a heterozygous less common allele
+  # Allowed values: Integers 0 to 41
+  # Recommended values: between  10 to 30
+  het-min-lca-base-qv : 18,
+  
+  # The non-reference heterozygous allele is required to be present on both strands. 
+  # Allowed values: Integers 0 (False) or 1 (True)
+  # Recommended values: 0 or 1 depending on the case.
+  # Impact: Switching on the parameter improves specificity and reduces sensitivity
+  het-lca-both-strands : 0,
+  
+  # The heterozygous less common allele must be at least this proportion of the reads of the first two most common valid alleles. 
+  # Allowed values: Decimal numbers between 0.0 and 0.5.  
+  # Recommended values: between  0.04 to 0.3
+  # Impact: Increasing the threshold will reduce the number of heterozygous SNPs called.
+  het-min-allele-ratio : 0.2,
+  
+  # The heterozygous less common allele must be at least this proportion of the reads of the first two most common valid alleles at the "hotspot" positions. 
+  # Allowed values: Decimal numbers between 0.0 and 0.5
+  # Recommended values: between 0.02 and 0.3  
+  # Impact: Increasing the threshold will reduce the number of hetrozygous SNPs called.
+  het-min-allele-ratio-hotspot : 0.2,
+  
+  # Below this cutoff value of coverage, a Bayesian algorithm is used to call heterozygous SNPs. Above it, a frequinistic algorithm is used
+  # Allowed values: Integers greater than or equal to 0.
+  # Recommended values: between 30 and 600
+  # Impact: The Bayesian algorithm is much slower but more accurate at low coverage. For high coverage, both algorithms perform the same, but the frequentist is much faster.
+  het-max-coverage-bayesian : 60,
+  
+  # Requires the non-reference allele to have at least this average base quality value to call a heterozygous SNP. 
+  # Allowed values: Integers between 0 and 41 
+  # Recommended values: between 10 and 30 
+  # Impact: Increasing the threshold improves specificity of Het SNPs and reduces the total number of Het SNPs called.
+  het-min-nonref-base-qv : 18,
+  
+  # Requires that the candidate allele have at least this base quality value. A base call that fails this filter is excluded from the analysis, but the base pile-up is still considered for SNP calling.
+  # The snps-min-base-qv and snps-min-nonref-base-qv parameters work like read filters at the position level. 
+  #
+  # These parameters are very effective in removing bad base calls for SNP analysis. Increasing the value of these parameters causes only high-quality base calls to be considered, and results in higher SNP calling accuracy with a slight sacrifice of the total number of SNPs. When data coverage is high, we recommend using a higher value for higher accuracy.  
+  # Allowed values: Integers between 0 and 41
+  # Recommended values: between 10 and 30
+  # Impact:  Lowering the value of the "Minimum base quality value a read for a position" and "Minimum base 
+  # quality value of  the non-reference allele for a position" parameters results in more SNP calls, and 
+  # possibly more false positives.
+  snps-min-base-qv : 18,
+  
+  # Requires that the non-reference allele have at least this base quality value. A base call that fails this filter is excluded from the analysis, but the base pile-up is still considered for SNP calling. 
+  # The snps-min-nonref-base-qv and snps-min-base-qv parameters work like read filters at the position level. 
+  #
+  # These parameters are very effective in removing bad base calls for SNP analysis. Increasing the value of these parameters causes only high-quality base calls to be considered, and results in higher SNP calling accuracy with a slight sacrifice of the total number of SNPs. When data coverage is high, we recommend using a higher value for higher accuracy.
+  # Allowed values: Integers 0-41. 
+  # Recommended values: between 10 and 30
+  # Impact: Increasing the threshold will reduce the number of SNPs called, improves specificity
+  snps-min-nonref-base-qv : 18,
+  
+  # Exclude reads with indels from SNP calling
+  # Allowed values: Integers 0 (No) or 1 (Yes)
+  # Recommended values: between  Either 0 or 1 depending on the case
+  # Impact: For long reads with an indel error model like Ion, this should be set to 0. Setting it to 1 is appropriate for technologies like Solid with short reads and no indels for elimination of erroneous reads and increasing SNP calling accuracy.
+  reads-with-indel-exclude : 0,
+  
+  # Require at least this coverage to call a heterozygous SNP 
+  # Allowed values: Integers greater than or equal to 0
+  # Recommended values: between 0 and 5
+  # Impact: Increasing the threshold will reduce the number of heterozygous SNPs called and improves specificity
+  het-min-coverage : 2,
+  
+  # The minimum number of unique start positions required to call a heterozygous SNP 
+  # Allowed values: Integers greater than or equal to 0 
+  # Recommended values: between 0 and 5
+  # Impact: Increasing the threshold improves specificity and reduces sensitivity
+  het-min-start-pos : 2,
+  
+  # Requires at least this coverage to call a homozygous SNP. 
+  # Allowed values: Integers greater than or equal to 0
+  # Recommended values: between 1 and 5
+  # Impact: Increasing the threshold improves specificity and reduces sensitivity.
+  hom-min-coverage : 1,
+  
+  # Requires at least this non-reference allele count to be called a homozygous SNP. 
+  # Allowed values: Integers greater than or equal to 0
+  # Recommended values: between 3 and 10
+  # Impact: Increasing the threshold improves specificity and reduces the total number of homozygous SNPs called.
+  hom-min-nonref-allele-count : 3,
+
+  # The minimum ratio of the filtered reads (excluded after filtering) and raw reads. A position whose ratio of filtered reads to raw reads is below this value is not considered for SNP calling. 
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.05 and 0.3
+  # Impact:Increasing the threshold, improves specificity
+  snps-min-filteredreads-rawreads-ratio : 0.15,
+  
+  # The proportion of the total reads containing either of the two candidate alleles. Filters positions with high raw-error rates. 
+  # Allowed values: Decimal numbers between 0.0 and 1.0 
+  # Recommended values: between 0.06 and 1.0
+  # Impact: Increasing the threshold improves specificity of heterozygous SNPs called.
+  het-min-validreads-totalreads-ratio : 0.65,
+  
+  # The threshold value for the ratio alignment-length/read-length. The reads for which the ratio is less than this specified threshold are filtered out. 
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.2 and 1.0
+  # Impact: Increasing the threshold improves specificity and reduces sensitivity
+  reads-min-alignlength-readlength-ratio : 0.2,
+  
+  # Requires the non-reference allele to have at least this average base quality value to call a homozygous SNP 
+  # Allowed values: Integers between 0 and 41 
+  # Recommended values: between 10 and 30
+  # Impact: Increasing the threshold improves specificity of homozygous SNPs and reduces the total number of SNPs called.
+  hom-min-nonref-base-qv : 18,
+
+  # Requires the non-reference allele to have at least this minimum number of unique start positions, to call a homozygous SNP. 
+  # Allowed values: Integers greater than or equal to 0.
+  # Recommended values: between 0 and 2 for AmpliSeq; between 0 and 5 for all others
+  # Impact: Increasing the threshold, improves specificity and reduces the total number of homozygous SNPs called.
+  hom-min-nonref-start-pos : 0,
+  
+  # Whether or not to require that the novel allele is present on both strands and its statistical representation is similar on the two strands for both, heterozygous and homozygous SNPs. 
+  # Allowed values: Integers 0 (off) or 1 (on)
+  # Recommended values: between  0 or 1, depending on the case
+  # Impact: Switched on, this parameter improves specificity.
+  snps-both-strands : 1,
+  
+  # Primary penalty for homopolymers.
+  # SNPs called near homopolymer (HP) positions tend more likely to be false positives because of a higher chance of mismapping in addition to the higher error rate at these positions. Also longer HPs are more likely to cause false positives. We model this observation by adding an HP penalty. 
+  #
+  # Formally, for any HP of length L we define a penalty function: 
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L, when L < hp-jump-pos, and
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L + hp-jump-amount, when L>= hp-jump-pos,
+  # 
+  # hp-penalty1, hp-pen-slope, hp-jump-pos, hp-jump-amount are user-specified parameters. These four parameters define a penalty function based on homopolymer length P(L). hp-penalty1 is the penalty for HP of length 1. The increase of hp-penalty1, hp-pen- slope, and hp-jump-amount will make calling a SNP harder at a homopolymer position.
+  # Allowed values: Integers greater or equal than 0
+  # Recommended values: between 2 and 8
+  # Impact: higher values result in fewer SNPs called due to a larger set of hompolymers around which SNPs are filtered out
+  hp-penalty1 : 4.0,
+  
+  # The slope of the homopolymer penalty function
+  # SNPs called near homopolymer (HP) positions tend more likely to be false positives because of a higher chance of mismapping in addition to the higher error rate at these positions. Also longer HPs are more likely to cause false positives. We model this observation by adding an HP penalty. 
+  #
+  # Formally, for any HP of length L we define a penalty function: 
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L, when L < hp-jump-pos, and
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L + hp-jump-amount, when L>= hp-jump-pos,
+  # 
+  # hp-penalty1, hp-pen-slope, hp-jump-pos, hp-jump-amount are user-specified parameters. These four parameters define a penalty function based on homopolymer length P(L). hp-penalty1 is the penalty for HP of length 1. The increase of hp-penalty1, hp-pen- slope, and hp-jump-amount will make calling a SNP harder at a homopolymer position.
+  # Allowed values: any decimal number
+  # Recommended values: between 0.1 and 1.0
+  # Impact: higher values result in fewer SNPs called due to a larger set of hompolymers around which SNPs are filtered out
+  hp-pen-slope : 0.5,
+  
+  # The homopolymer size above which the error rate increases significantly.
+  # SNPs called near homopolymer (HP) positions tend more likely to be false positives because of a higher chance of mismapping in addition to the higher error rate at these positions. Also longer HPs are more likely to cause false positives. We model this observation by adding an HP penalty. 
+  #
+  # Formally, for any HP of length L we define a penalty function: 
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L, when L < hp-jump-pos, and
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L + hp-jump-amount, when L>= hp-jump-pos,
+  # 
+  # hp-penalty1, hp-pen-slope, hp-jump-pos, hp-jump-amount are user-specified parameters. These four parameters define a penalty function based on homopolymer length P(L). hp-penalty1 is the penalty for HP of length 1. The increase of hp-penalty1, hp-pen- slope, and hp-jump-amount will make calling a SNP harder at a homopolymer position.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 5 and 9
+  # Impact: lower values result in fewer SNPs called due to a larger set of hompolymers around which SNPs are filtered out
+  hp-jump-pos : 6,
+  
+  # Extra penalty for homopolymer longer than hp-jump-pos
+  # SNPs called near homopolymer (HP) positions tend more likely to be false positives because of a higher chance of mismapping in addition to the higher error rate at these positions. Also longer HPs are more likely to cause false positives. We model this observation by adding an HP penalty. 
+  #
+  # Formally, for any HP of length L we define a penalty function: 
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L, when L < hp-jump-pos, and
+  #
+  # P(L)= hp-penalty1 + hp-pen-slope * L + hp-jump-amount, when L>= hp-jump-pos,
+  # 
+  # hp-penalty1, hp-pen-slope, hp-jump-pos, hp-jump-amount are user-specified parameters. These four parameters define a penalty function based on homopolymer length P(L). hp-penalty1 is the penalty for HP of length 1. The increase of hp-penalty1, hp-pen- slope, and hp-jump-amount will make calling a SNP harder at a homopolymer position.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 5 and 25
+  # Impact: higher values result in fewer SNPs called due to a larger set of hompolymers around which SNPs are filtered out
+  hp-jump-amount : 15,
+  
+  # Variants are more likely to be true positives if they appear in both forward and reverse reads, as opposed to only on one strand.  
+  #
+  # relative-variant-strand-bias = Max(Vp*Cm, Vm*Cp) / (Vp*Cm + Vm*Cp)
+  #
+  # Vp is number of reads on the positive strand that match the variant
+  # Vm is number of reads on the negative strand that match the variant
+  # Cp is the total number of reads in the positive strand that cover the postiton
+  # Cm is the total number of reads in the negative strand that cover the postiton
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between  0.6 to 1.0
+  # Impact: Filters out the vast majority of false positives. Increase to 0.99 or 1.0 to reduce false negatives
+
+  relative-variant-strand-bias : 0.95,
+  
+  # The minimum coverage for both strands to turn on the relative strand bias filter. It is not a filter itself, just a switch to turn on the filter.
+  # Allowed values: integers greater than 0
+  # Recommended values: between 7 and 50
+  # Impact: If this is set to a large number, it turns off the strand bias filter more often, and the result may be more calls. When set to a huge number above any possible coverage value, it effectively turns off the strand bias filter; when set very low, the strand bias will always be on.
+  mini-strandcount-fpr-strand-bias : 10,
+  
+  # Generate consensus file
+  # Allowed values: Integers 0 (No) or 1 (Yes)
+  # Recommended values: 0
+  # Impact: Produces a file wih allele counts in each genomic position.
+  C : 0   
+   
+}
+
+
+torrent-variant-caller: {
+  # Maximum coverage depth. Reads are randomly selected for sampling if this value is exceeded.
+  # Allowed values: Integers between 1 and 100000
+  # Recommended values: between 50 and 5000
+  downsample_to_coverage : 2000,
+
+  # Minimum number of consensus indels required to trigger genotyping run 
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 3 and 10
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_indel_count_for_genotyping : 5,
+  
+  # Minimum mapping quality required to consider a read for calling.
+  # Allowed values: Integers greater than 0 
+  # Recommended values: between 2 and 30
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_mapping_quality_score : 4,
+  
+  # Minimum base-space allele frequency for calling a variant.
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.1 and 0.4
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_allele_frequency : 0.2,
+      
+  # For homopolymer cases, if  hp_low_stringency = 1 expectation maximization is used for peak finding; if hp_low_stringency = 0 least mean squares is used first and then expectation maximization
+  # Allowed values: Integers 0 or 1
+  # Recommended values: 0 or 1 depending on the case 
+  # Impact: value 1 makes indel calls more sensitive and less specific. 
+  hp_low_stringency : 0,
+  
+  # Minimum coverage required on each strand in order to consider position as callable.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 3 and 30
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  hp_min_cov_each_strand : 3,
+  
+  # Minimum coverage from which strand bias, standard deviation filters and homopolymer evaluator modules will be applied.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 25 and 100
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  hp_stb_fpe_min_coverage : 30,
+  
+  # Maximum allowed distance between average intensity on positive vs negative strand for single peak.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 30 and 70
+  # Impact: Increasing values make indel calls more specific. Indel calls are more sensitive for homozygous but less sensitive for heterozygous. 
+  hp_stb_max_avg_peak_srand_distance : 40,
+
+  # Maximum allowed relative strand bias between two peaks.
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.6 and 1.0
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  hp_stb_max_two_peaks_relative_bias : 0.8,
+  
+  # Maximum allowed intensity standard deviation for homopolymers of size 2 and 3.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 7 and 20
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  hp_max_single_peak_std_23 : 18,
+
+  # Increment to maximum allowed intensity STD for HP of size larger than 3.
+  # Allowed values:  Integers greater than 0
+  # Recommended values: between 1 and 10
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  hp_max_single_peak_std_increment : 5,
+
+  # Maximum allowed deviation (in percentage) of the actual homopolymer frequency peak from the expected position of the nearest hypothetical homopolymer peak. 
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 25 and 45
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  fpe_max_peak_deviation : 31,
+
+  # Maximum homopolymer length for calling indels.
+  # Allowed values:  Integers greater than 0 and less than or equal to 25
+  # Recommended values: between 5 and 11
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  hp_max_length : 9,
+ 
+  # Outputs additional information into VCF records.
+  # Allowed values: Integers 0 or 1
+  # Recommended values: 0 or 1 depending on the case
+  # Impact: Output extra logging information  
+  info_vcf: 0
+  
+ }
+
+long-indel-assembler : {
+
+  # Size of the smallest k-mer used in assembly.
+  # Allowed values: Integers greater than 5
+  # Recommended values: between 11 and 30
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  kmer_len : 19,
+
+  # Minimum support for a variant to be evaluated.
+  # Allowed values: Integers greater than 1
+  # Recommended values: between 3 and 30
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_var_count : 5,
+
+  # Minimum assembled sequence match on both sides of the variant.
+  # Allowed values: Integers greater than 2
+  # Recommended values: between 4 and the value given to the kmer_len parameter
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  short_suffix_match : 5,
+
+  # Minimum size indel reported by assembly.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 2 and 30
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_indel_size : 4,
+
+  # Variants containing HP larger than this are not reported.
+  # Allowed values: Integers greater than 1
+  # Recommended values: between 2 and 11
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  max_hp_length : 8,
+
+  # Minimum frequency of the variant to be reported.
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.1 and 0.4
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min_var_freq : 0.15,
+
+  # Variants with strand bias above this are not reported.
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.6 and 1.0
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  relative_strand_bias : 0.80,
+  
+}
+
+filter-indels : {
+  # Indels with Bayesian_Score bellow this are filtered out.
+  # Allowed values: Decimal numbers greater than 0.0
+  # Recommended values: between 0.5 and 50
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min-bayesian-score : 2.5,
+  
+  # Indels with frequency bellow this are filtered out.
+  # Allowed values: Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.1 and 0.4
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  min-var-freq : 0.199,
+  
+  # All indels longer than this are called regardless their Bayesian score.
+  # Allowed values: Integers greater than 0
+  # Recommended values: between 7 and 25
+  # Impact: Increasing values make indel calls less sensitive but more specific. 
+  bay-score-minlen : 11,
+  
+  # variant-strand-bias = Max(Vp*Cm, Vm*Cp) / (Vp*Cm + Vm*Cp)
+  #
+  # Vp is number of reads on the positive strand that match the variant
+  # Vm is number of reads on the negative strand that match the variant
+  # Cp is the total number of reads in the positive strand that cover the postiton
+  # Cm is the total number of reads in the negative strand that cover the postiton
+  # Filters the vast majority of false positives. Increase to 0.99 or 1 to reduce false negatives
+  # Allowed values:  Decimal numbers between 0.0 and 1.0
+  # Recommended values: between 0.6 and 1.0
+  # Impact: Increasing values make indel calls more sensitive but less specific. 
+  variant-strand-bias : 0.90
+}

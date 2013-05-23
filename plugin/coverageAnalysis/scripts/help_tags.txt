@@ -142,7 +142,7 @@ that has the greatest overlap of aligned sequence.
 The average number of reads assigned to amplicons.
 
 @Uniformity of amplicon coverage
-The percentage of bases in all targeted regions (or whole genome) covered by at least 0.2x the average base read depth.
+The percentage of amplicons that had at least 0.2x of the average number of reads per amplicon.
 
 @Maximum amplicon read depth
 The maximum number of reads assigned to any amplicon.
@@ -242,10 +242,8 @@ to the target region that has the greatest overlap of aligned sequence.
 The number of targets specified in the target regions file.
 
 @Percent assigned target reads
-The total number of reads that were assigned to individual targets.
+The total number of reads that were assigned to individual targets or merged overlapping targets.
 A read is assigned to a particular target region has at least one aligned base overlapping that region.
-If a read might be associated with multiple targets this way it is assigned to the target region
-that has the greatest overlap of aligned sequence.
 
 @Average reads per target
 The average number of reads assigned to targets.
@@ -283,7 +281,7 @@ The percentage of all targets that had at least one hundred reads.
 @Targets with at least 500 reads
 The percentage of all targets that had at least five hundred reads.
 
-@Targets with no strand bias
+@Targets with no strand read bias
 The percentage of all targets that did not show a bias towards forward or reverse strand
 read alignments. An individual target is considered to have read bias if it has at least 10
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
@@ -301,10 +299,49 @@ The effective reference is created from a concatenation of the chromosomes or in
 Each point plotted is the base 10 logorithm value of the total aligned base read count within an equal length (1/600) of the effective reference.
 
 @Target Coverage
-Target base coverage is plotted against read depth, where read depth is the number of times
-a particular base is read and coverage is the number of counts of bases read at that read depth.
-The right hand y-axis shows the cumulative coverage as a percentage of the total number of target base
-reads, corresponding to the light blue line plot. This may be used to gauge to percentage of target
-bases read to a particular depth. To better show the coverage curve, the 0x coverage data point may be
-omitted and the read depth (x-axis) limited to show the lower 99.5% coverage percentile.
+Summary statistics relative to coverage of individual targets as measured by the average base read depth for
+those targets. The average base read depth across a group of overlapping targets is assumed to be distributed
+evenly.
+
+@Number of unmerged targets
+The number of targets specified in the target regions file.
+Note that this may be more than those shown in the Target Coverage Chart and listed in the target coverage summary file
+if any individual targets overlap, as base coverage here is resolved to merged target regions.
+
+@Uniformity of base coverage per target
+The percentage of all individual targets that had an average base coverage depth that was at least 0.2x the average base coverage depth per target.
+
+@Targets with base coverage at 1x
+The percentage of targets that had an average base coverage depth of at least one base.
+Note that the average base coverage across the length of an individual target can be less than 1 if only partially covered by reads.
+
+@Targets with base coverage at 10x
+The percentage of targets that had an average base coverage depth of at least ten bases.
+Note that this does not mean all bases across the whole length of any particular target were necessily read to this depth.
+
+@Targets with base coverage at 20x
+The percentage of targets that had an average base coverage depth of at least twenty bases.
+Note that this does not mean all bases across the whole length of any particular target were necessily read to this depth.
+
+@Targets with base coverage at 50x
+The percentage of targets that had an average base coverage depth of at least fifty bases.
+Note that this does not mean all bases across the whole length of any particular target were necessily read to this depth.
+
+@Targets with base coverage at 100x
+The percentage of targets that had an average base coverage depth of at least one hundred bases.
+Note that this does not mean all bases across the whole length of any particular target were necessily read to this depth.
+
+@Targets with base coverage at 500x
+The percentage of targets that had an average base coverage depth of at least five hundred bases.
+Note that this does not mean all bases across the whole length of any particular target were necessily read to this depth.
+
+@Targets with no strand bias
+The percentage of targets that did not show a bias towards forward or reverse strand base read alignments.
+An individual target is considered to show strand bias if it has an average base read coverage depth of at least 10 and
+the fraction of forward or reverse base reads to total base reads is greater than 70%.
+
+@Targets with full coverage
+The percentage of targets that had at least 98% of their length covered by at least one base read. This definition allows some
+flexiblity for a small number of (homozygous) deletions and missing reads at the ends of targets. Targets that were not
+'fully' covered would typically have larger gaps or lack of coverage at one or both ends.
 

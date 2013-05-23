@@ -19,14 +19,22 @@ void ReadOptimizedDefaultsForBkgModel (GlobalDefaultsForBkgModel &global_default
     global_defaults.SetGoptDefaults(tmp_config_file);
     if (tmp_config_file)
       free(tmp_config_file);
-  }  
+    if (strcmp (bkg_control.gopt, "opt") == 0)
+      global_defaults.ReadEmphasisVectorFromFile (results_folder);   //GeneticOptimizer run - load its vector
+  }
   else
+  {
     global_defaults.SetGoptDefaults (bkg_control.gopt); //parameter file provided cmd-line
-    
-  if (strcmp (bkg_control.gopt, "opt") == 0)
-    global_defaults.ReadEmphasisVectorFromFile (results_folder);   //GeneticOptimizer run - load its vector
-  
+    // still do opt if the emphasis_vector.txt file exists
+    char fname[512];
+    sprintf ( fname,"%s/emphasis_vector.txt", results_folder );
+    struct stat fstatus;
+    int status = stat ( fname,&fstatus );
+    if ( status == 0 )    // file exists
+        global_defaults.ReadEmphasisVectorFromFile (results_folder);   //GeneticOptimizer run - load its vector
+  }   
 }
+
 
 void OverrideDefaultsForBkgModel (GlobalDefaultsForBkgModel &global_defaults,BkgModelControlOpts &bkg_control, char *chipType,char *results_folder)
 {
@@ -81,7 +89,10 @@ void PresetDefaultsForBkgModel(GlobalDefaultsForBkgModel &global_defaults,BkgMod
   global_defaults.signal_process_control.proton_dot_wells_post_correction=bkg_control.proton_dot_wells_post_correction;
   global_defaults.signal_process_control.single_flow_fit_max_retry=bkg_control.single_flow_fit_max_retry;
   global_defaults.signal_process_control.per_flow_t_mid_nuc_tracking = bkg_control.per_flow_t_mid_nuc_tracking;
+  global_defaults.signal_process_control.exp_tail_fit = bkg_control.exp_tail_fit;
+  global_defaults.signal_process_control.pca_dark_matter = bkg_control.pca_dark_matter;
   global_defaults.signal_process_control.regional_sampling = bkg_control.regional_sampling;
+  global_defaults.signal_process_control.regional_sampling_type = bkg_control.regional_sampling_type;
   global_defaults.signal_process_control.enable_dark_matter = bkg_control.enable_dark_matter;
   global_defaults.signal_process_control.prefilter_beads = bkg_control.prefilter_beads;
 

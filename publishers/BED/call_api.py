@@ -38,6 +38,15 @@ def put(where, item_id, **update):
     return response["status"] == "204", response, content
 
 
+def patch(where, item_id, **update):
+    """Returns True if successful; otherwise, False"""
+    body = json.dumps(update)
+    item_uri = uri % (where, str(item_id))
+    h = httplib2.Http()
+    response, content = h.request(item_uri, method="PATCH", body=body, headers=headers)
+    return response["status"] == "202", response, content
+
+
 def delete(where, item_id):
     """Returns True if successful; otherwise, False"""
     item_uri = uri % (where, str(item_id))

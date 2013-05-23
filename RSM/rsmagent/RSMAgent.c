@@ -220,7 +220,7 @@ static void SendExperimentMetrics(AeDRMDataItem *dataItem, const char* experimen
 			if (!expfp)
 				continue;
 
-			char value[4096];
+			char value[4096] = {0};
 			if (fread(value, sizeof(char), sizeof(value), expfp))
 			{
 				AeGetCurrentTime(&dataItem->value.timeStamp);

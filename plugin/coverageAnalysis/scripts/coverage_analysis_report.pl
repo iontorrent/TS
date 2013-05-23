@@ -14,11 +14,13 @@ The two required arguments are the path to the result files and original mapped 
 The results directory is relative to the top level directory (specified by -D option) for HMTL.";
 my $USAGE = "Usage:\n\t$CMD [options] <output html file> <stats file>";
 my $OPTIONS = "Options:
-  -h ? --help Display Help information
-  -a Extract Amplicon reads coverage information from stats file as a parallel report table
+  -h ? --help Display Help information.
+  -a Extract Amplicon reads coverage information from stats file as a parallel report table. (Overrides -b)
+  -b Extract targets coverage by Base coverage information from stats file as a parallel report table. 
   -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
   -i Output sample Identification tracking reads in summary statistics.
   -r AmpliSeq RNA report. No output associated with base coverage and uniformity of coverage. (Overrides -a)
+  -w Indicates to put a warning banner for missing targets file.
   -D <dir> Directory path for working directory where input files are found and output files saved.
   -N <title> Name prefix for any output files for display and links. Default: 'tca_auxillary'.
   -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt.
@@ -36,58 +38,69 @@ my $tabhead = "All Reads";
 my $amplicons = 0;
 my $genome = 0;
 my $rnacoverage = 0;
+my $trgcoverage = 0;
 my $sampleid = 0;
+my $warnBanner = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
 {
-    last if($ARGV[0] !~ /^-/);
-    my $opt = shift;
-    if($opt eq '-R') {$readsfile = shift;}
-    elsif($opt eq '-D') {$workdir = shift;}
-    elsif($opt eq '-N') {$runid = shift;}
-    elsif($opt eq '-A') {$helpfile = shift;}
-    elsif($opt eq '-T') {$rowsumfile = shift;}
-    elsif($opt eq '-a') {$amplicons = 1;}
-    elsif($opt eq '-g') {$genome = 1;}
-    elsif($opt eq '-i') {$sampleid = 1;}
-    elsif($opt eq '-r') {$rnacoverage = 1;}
-    elsif($opt eq '-s') {$tabhead = shift;}
-    elsif($opt eq '-t') {$title = shift;}
-    elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
-    else
-    {
-        print STDERR "$CMD: Invalid option argument: $opt\n";
-        print STDERR "$OPTIONS\n";
-        exit 1;
-    }
+  last if($ARGV[0] !~ /^-/);
+  my $opt = shift;
+  if($opt eq '-R') {$readsfile = shift;}
+  elsif($opt eq '-D') {$workdir = shift;}
+  elsif($opt eq '-N') {$runid = shift;}
+  elsif($opt eq '-A') {$helpfile = shift;}
+  elsif($opt eq '-T') {$rowsumfile = shift;}
+  elsif($opt eq '-a') {$amplicons = 1;}
+  elsif($opt eq '-b') {$trgcoverage = 1;}
+  elsif($opt eq '-g') {$genome = 1;}
+  elsif($opt eq '-i') {$sampleid = 1;}
+  elsif($opt eq '-r') {$rnacoverage = 1;}
+  elsif($opt eq '-s') {$tabhead = shift;}
+  elsif($opt eq '-t') {$title = shift;}
+  elsif($opt eq '-w') {$warnBanner = 1;}
+  elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
+  else
+  {
+    print STDERR "$CMD: Invalid option argument: $opt\n";
+    print STDERR "$OPTIONS\n";
+    exit 1;
+  }
 }
 if( $help )
 {
-    print STDERR "$DESCR\n";
-    print STDERR "$USAGE\n";
-    print STDERR "$OPTIONS\n";
-    exit 1;
+  print STDERR "$DESCR\n";
+  print STDERR "$USAGE\n";
+  print STDERR "$OPTIONS\n";
+  exit 1;
 }
 elsif( scalar @ARGV != 2 )
 {
-    print STDERR "$CMD: Invalid number of arguments.";
-    print STDERR "$USAGE\n";
-    exit 1;
+  print STDERR "$CMD: Invalid number of arguments.";
+  print STDERR "$USAGE\n";
+  exit 1;
 }
 
 my $outfile = shift;
 my $statsfile = shift;
 
+# option dependencies and overrides
+
+if( $warnBanner ) {
+  $amplicons = 0;
+  $rnacoverage = 0;
+}
 $amplicons = 0 if( $rnacoverage );
 $ampcoverage  = ($amplicons || $rnacoverage );
 $basecoverage = ($genome || !$rnacoverage );
+$trgcoverage = 0 if( $ampcoverage );
 
 $statsfile = "" if( $statsfile eq "-" );
 $rowsumfile = "" if( $rowsumfile eq "-" );
 
 my $haverowsum = ($rowsumfile ne "");
-my $have2stats = $ampcoverage && $basecoverage;
+my $have2stats = ($ampcoverage || $trgcoverage) && $basecoverage;
 my $passingcov = 0; #$rnacoverage
 
 $workdir = "." if( $workdir eq "" || $workdir eq "-" );
@@ -107,34 +120,32 @@ die "No statistics summary file found at $statsfile" unless( -f $statsfile );
 my %helptext;
 loadHelpText( "$helpfile" );
 
-if( $haverowsum )
-{
-    # remove any old file since calls will append to this
-    unlink( $rowsumfile );
+if( $haverowsum ) {
+  # remove any old file since calls will append to this
+  unlink( $rowsumfile );
 }
 
 open( OUTFILE, ">$workdir/$outfile" ) || die "Cannot open output file $workdir/$outfile.\n";
 
 print OUTFILE "<div style=\"width:860px;margin-left:auto;margin-right:auto;\">\n";
 
-if( $title ne "" )
-{
-    # add simple formatting if no html tag indicated
-    $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
-     print OUTFILE "$title\n";
+if( $title ne "" ) {
+  # add simple formatting if no html tag indicated
+  $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
+  print OUTFILE "$title\n";
+}
+if( $warnBanner ) {
+  print OUTFILE "<h4 style='color:red'><center>Warning: No targets region specified as expected for Library Type.</center></h4>\n";
 }
 
 # overview plot
 print OUTFILE "<table class=\"center\"><tr>\n";
 my $t2width = 350;
-if( $rnacoverage )
-{
+if( $rnacoverage ) {
   displayResults( "repoverview.png", "amplicon.cov.xls", "Representation Overview", 1, "height:100px" );
   print OUTFILE "</td>\n";
   $t2width = 320;
-}
-else
-{
+} else {
   displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
   print OUTFILE "</td>\n";
   $t2width = 340;
@@ -150,15 +161,16 @@ print OUTFILE "</table>\n";
 print OUTFILE "<br/>\n";
 
 # table headers
-printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? 760 : 380);
+printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? ($trgcoverage ? 780 : 730) : 370);
 print OUTFILE "<table>\n <tr>\n";
-if( $ampcoverage )
-{
+if( $ampcoverage ) {
   $hotLable = getHelp("Amplicon Read Coverage",1);
   print OUTFILE "  <th>$hotLable</th>\n";
+} elsif ( $trgcoverage ) {
+  $hotLable = getHelp("Target Coverage",1);
+  print OUTFILE "  <th>$hotLable</th>\n";
 }
-if( $basecoverage )
-{
+if( $basecoverage ) {
   my $hotLable = getHelp("$tagU Base Coverage",1);
   print OUTFILE "  <th>$hotLable</th>\n";
 }
@@ -184,7 +196,13 @@ if( $ampcoverage )
   push( @keylist, "Amplicons with no strand bias" );
   push( @keylist, $passingcov ? "Amplicons with passing coverage" : "Amplicons reading end-to-end" );
   $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:380px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+} elsif( $trgcoverage ) {
+  @keylist = ( "Number of unmerged targets", "Percent assigned target reads", "Average base coverage depth per target",
+    "Uniformity of base coverage per target", "Targets with base coverage at 1x", "Targets with base coverage at 20x",
+    "Targets with base coverage at 100x", "Targets with base coverage at 500x", "Targets with no strand bias", "Targets with full coverage" );
+  $txt = subTable( $statsfile, \@keylist );
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:410px\">$txt</div></td>\n";
 }
 if( $basecoverage )
 {
@@ -198,9 +216,9 @@ if( $basecoverage )
   }
   push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage", "$tagU base coverage at 1x",
     "$tagU base coverage at 20x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
-  push( @keylist, '' ) if( $amplicons );
+  push( @keylist, '' ) if( $amplicons || $trgcoverage );
   my $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:380px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
 }
 print OUTFILE " </tr>\n</table>\n</div>\n</div>\n";
 

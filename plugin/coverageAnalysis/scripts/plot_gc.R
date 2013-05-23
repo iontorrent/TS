@@ -22,7 +22,7 @@ if( !file.exists(nFileIn) ) {
 picWidth = 1.5*798
 picHeight= 1.5*264
 
-rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, comment.char="")
+rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, sep="\t", comment.char="")
 
 # test the type of the field in case the wrong type of targets are provided
 if( grepl("a",option) ) {
@@ -134,7 +134,7 @@ if( grepl("f",option,ignore.case=TRUE) ) {
     yaxisTitle <- "Number of Targets"
     legendTitle <- c("Fail (Base reads < 0.2x mean)","Pass")
   }
-  bgc <- as.integer(pcgc);
+  bgc <- as.integer(pcgc+0.5)
   xmin <- min(bgc)
   xmax <- max(bgc)
   xdata <- xmin:xmax
@@ -154,7 +154,7 @@ if( grepl("f",option,ignore.case=TRUE) ) {
 #      xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
     legendTitle <- c("Drop Out (0 Assigned Reads)", "Fail (Assigned Reads < 0.2x mean)", "Pass", "Pass/Over (Assigned Reads >= 5x mean)" )
     lcols=c("red","orange","darkgreen","cyan")
-    barplot( t(cbind(ybad,ylow-ybad,yhigh-ybad,yall-yhigh)),
+    barplot( t(cbind(ybad,ylow-ybad,yhigh-ylow,yall-yhigh)),
       names.arg=xdata, beside=FALSE, ylim=c(0,ymax), space=0, xaxs='i', yaxs='i', col=lcols,
       xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
   } else {
@@ -201,7 +201,7 @@ if( grepl("k",option,ignore.case=TRUE) ) {
 #      xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
     legendTitle <- c("Drop Out (0 Assigned Reads)", "Fail (Assigned Reads < 0.2x mean)", "Pass", "Pass/Over (Assigned Reads >= 5x mean)" )
     lcols=c("red","orange","darkgreen","cyan")
-    barplot( t(cbind(ybad,ylow-ybad,yhigh-ybad,yall-yhigh)),
+    barplot( t(cbind(ybad,ylow-ybad,yhigh-ylow,yall-yhigh)),
       names.arg=xdata, beside=FALSE, ylim=c(0,ymax), space=0, xaxs='i', yaxs='i', col=lcols,
       xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
   } else {

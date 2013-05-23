@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#if defined( __SSE3__) && !defined( __CUDACC__ )
-    #include <xmmintrin.h>
+#if !defined( __CUDACC__ )
+    #include <x86intrin.h>
 #else
     typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
 #endif

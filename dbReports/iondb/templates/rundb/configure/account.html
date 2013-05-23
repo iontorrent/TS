@@ -1,5 +1,4 @@
 {% extends "rundb/configure/base.html" %}
-{% block pagination_holder %}{% endblock %}
 {% block current_tab %}about{% endblock %}
 {% block sub-nav %}
   <li><a href="{% url configure_about %}">About</a></li>
@@ -18,9 +17,10 @@ $(document).ready(function() {
         var userId = btn.data('id');
         $('#modal_confirm_approve').modal('show');
         $('#modal_confirm_approve .modal-body p b').text(btn.data('username'));
-        $('#modal_confirm_approve .modal-body #modal-error-messages').empty();
+        $('#modal_confirm_approve .modal-body #modal-error-messages').hide().empty();
         $('#modal_confirm_approve .btn-success').click(function(e){
             e.preventDefault();
+            $('#modal_confirm_approve .modal-body #modal-error-messages').hide().empty();
             console.log('clicked Yes, Approve!');
             $.ajax({
                 type: "POST",
@@ -33,7 +33,7 @@ $(document).ready(function() {
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_approve').modal('hide');
             }).fail(function (data) {
-               $('#modal_confirm_approve .modal-body #modal-error-messages').append('<p>Error</p><p>' + data.responseText + '</p>');
+               $('#modal_confirm_approve .modal-body #modal-error-messages').empty().append('<p>Error:</p><p>' + data.responseText + '</p>').show();
             });
         });
         e.preventDefault();
@@ -44,9 +44,10 @@ $(document).ready(function() {
         var userId = btn.data('id');
         $('#modal_confirm_reject').modal('show');
         $('#modal_confirm_reject .modal-body p b').text(btn.data('username'));
-        $('#modal_confirm_reject .modal-body #modal-error-messages').empty();
+        $('#modal_confirm_reject .modal-body #modal-error-messages').hide().empty();
         $('#modal_confirm_reject .btn-danger').click(function(e){
             e.preventDefault();
+            $('#modal_confirm_reject .modal-body #modal-error-messages').hide().empty();
             console.log('clicked Yes, Reject!');
             $.ajax({
                 type: "POST",
@@ -59,7 +60,7 @@ $(document).ready(function() {
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_reject').modal('hide');
             }).fail(function (data) {
-               $('#modal_confirm_approve .modal-body #modal-error-messages').append('<p>Error</p><p>' + data.responseText + '</p>');
+               $('#modal_confirm_reject .modal-body #modal-error-messages').empty().append('<p>Error:</p><p>' + data.responseText + '</p>').show();
             });
         });
     });
@@ -190,7 +191,7 @@ $(document).ready(function() {
     </div>
     <div class="modal-body">
         <p>Are you sure you want to reject the registration for <b></b>?</p>
-        <div id="modal-error-messages"></div>
+        <div id="modal-error-messages" class="alert alert-error hide"></div>
     </div>
     <div class="modal-footer">
         <a href="#" class="btn" data-dismiss="modal">Cancel</a>
@@ -204,7 +205,7 @@ $(document).ready(function() {
     </div>
     <div class="modal-body">
         <p>Are you sure you want to approve the registration for <b></b>?</p>
-        <div id="modal-error-messages"></div>
+        <div id="modal-error-messages" class="alert alert-error hide"></div>
     </div>
     <div class="modal-footer">
         <a href="#" class="btn" data-dismiss="modal">Cancel</a>

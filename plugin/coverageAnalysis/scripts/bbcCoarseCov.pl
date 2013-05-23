@@ -91,7 +91,7 @@ $header .= "\tfwd_ontrg\trev_ontrg" if( $targetcov );
 # open BBCFILE and read contig header string
 open( BBCFILE, "<:raw", $bbcfile ) || die "Failed to open BBC file $bbcfile\n";
 chomp( my $contigList = <BBCFILE> );
-my @chromName = split('\t',$contigList );
+my @chromName = split('\t',$contigList);
 my $numChroms = scalar(@chromName);
 my @chromSize;
 my $genomeSize = 0;
@@ -103,6 +103,18 @@ for( my $i = 0; $i < $numChroms; ++$i )
   $genomeSize += $chromSize[$i];
 }
 print STDERR "Read $numChroms contig names and lengths. Total contig size: $genomeSize\n" if( $logopt );
+
+# reset $cbcsize if genome is small (<100Kb)
+if( $genomeSize < 100000 && $cbcsize > 100 ) {
+  if( $genomeSize < 1000 ) {
+    $cbcsize = 1;
+  } elsif( $genomeSize < 10000 ) {
+    $cbcsize = 10;
+  } else {
+    $cbcsize = 100;
+  }
+  print STDERR "Reset CBC binning size to $cbcsize for small reference ($genomeSize bases)\n" if( $logopt );
+}
 
 # for whole genome coverage try to divide bins evenly of genome but at least one per contig
 my @chromBins = ((1) x ($numChroms+1));
@@ -116,8 +128,6 @@ if( $haveWgnCov )
   # this method asigns 1 bin for every contig then iteratively adds one to the largest remaining contig,
   # dividing the contig by the number of bins to leave virtual contigs for comparison
   my $xbins = $wgnumBins - $numChroms;
-  my $xsize = $genomeSize;
-  my $xbinsize = $xsize / $xbins;
   my @echrsize = @chromSize;
   while( $xbins > 0 )
   {
@@ -308,7 +318,8 @@ sub processContigReads
     }
     $chromBinOffset += $chromBins[$chromIndex];
     # correct last bin size to actual size used
-    $wgnBinEnd[$bn] += ($chromSize[$chromIndex] % $cbcsize) - $cbcsize;
+    my $lastBinSize = $chromSize[$chromIndex] % $cbcsize;
+    $wgnBinEnd[$bn] += $lastBinSize - $cbcsize if( $lastBinSize );
   }
 }
 

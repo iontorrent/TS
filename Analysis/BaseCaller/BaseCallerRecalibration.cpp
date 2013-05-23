@@ -9,7 +9,7 @@
 #include <string>
 #include <fstream>
 #include <stdio.h>
-
+#include <SystemMagicDefines.h>
 
 uint toInt(char nuc) {
   switch(nuc) {
@@ -25,6 +25,7 @@ BaseCallerRecalibration::BaseCallerRecalibration():stratification_(NULL)
 {
   is_enabled_ = false;
   max_hp_calibrated_ = 0;
+  recal_model_hp_thres_ = MAX_HPXLEN + 1;
 }
 
 
@@ -52,6 +53,9 @@ void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& fl
     calibration_file.close();
     return;
   }
+
+  recal_model_hp_thres_ = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+  printf("Recalibration HP threshold: %d\n", recal_model_hp_thres_);
 
   string comment_line;
   getline(calibration_file, comment_line);
@@ -146,7 +150,8 @@ void BaseCallerRecalibration::CalibrateRead(int x, int y, vector<char>& sequence
     flowBaseInt += offsetRegion + offsetFlow;
 
     int new_hp_length = old_hp_length;
-    if(old_hp_length <= max_hp_calibrated_) new_hp_length = std::abs(calibrated_table_hp_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]);
+    //inclusive
+    if(old_hp_length <= max_hp_calibrated_ && old_hp_length <= recal_model_hp_thres_) new_hp_length = std::abs(calibrated_table_hp_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]);
 
     if (old_hp_length == 0 or new_hp_length == 0) {
       for (int idx = 0; idx < old_hp_length; ++idx)
@@ -157,7 +162,8 @@ void BaseCallerRecalibration::CalibrateRead(int x, int y, vector<char>& sequence
     for (int idx = 0; idx < new_hp_length; ++idx)
       new_sequence.push_back(flow_order_[flow]);
 
-    if(old_hp_length <= max_hp_calibrated_) normalized_measurements[flow] += calibrated_table_delta_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]*state_inphase[flow]/100;
+    if(old_hp_length <= max_hp_calibrated_ && old_hp_length <= recal_model_hp_thres_) normalized_measurements[flow] += calibrated_table_delta_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]*state_inphase[flow]/100;
+
   }
 
   sequence.swap(new_sequence);

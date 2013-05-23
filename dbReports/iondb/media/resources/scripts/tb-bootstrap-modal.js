@@ -2,7 +2,7 @@
     if ($.fn.modalmanager) {
         $.fn.modal.defaults = {
             keyboard: false, 
-            backdrop: true,
+            backdrop: 'static',
             loading: false,
             show: true,
             width: null,
@@ -11,7 +11,7 @@
             modalOverflow: false,  // set on a modal by using data-modal-Overflow="true"
             consumeTab: true,
             focusOn: null,
-            attentionAnimation: 'shake',
+            attentionAnimation: '', //'shake' or ''
             manager: 'body',
             spinner: '<div class="loading-spinner" style="width: 200px; margin-left: -100px;"><div class="progress progress-striped active"><div class="bar" style="width: 100%;"></div></div></div>'
         };

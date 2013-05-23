@@ -11,15 +11,12 @@ case "$1" in
 	if [ -e	"/etc/init.d/ionJobServer" ]; then
 		invoke-rc.d ionJobServer stop
 	fi
-	if [ -e	"/etc/init.d/ionArchive" ]; then
-		invoke-rc.d ionArchive stop
-	fi
 	if [ -e	"/etc/init.d/ionPlugin" ]; then
 		invoke-rc.d ionPlugin stop
 	fi
-	if [ -e	"/etc/init.d/celeryd" ]; then
-		invoke-rc.d celeryd stop
-	fi
+    
+    # ionArchive is removed as of this version - make sure sysv links are gone
+    update-rc.d -f ionArchive remove
 	;;
 esac
 

@@ -19,6 +19,7 @@ my $opt = {
   "max-plot-read-len"      => 400,
   "qscores"                => "7,10,17,20,30,47",
   "threads"                => &numCores(),
+  "server-key"             => undef,
   "aligner"                => "tmap",
   "aligner-opts-rg"        => undef,                 # primary options (for -R to TMAP)
   "aligner-opts-extra"     => "stage1 map4", # this could include stage and algorithm options
@@ -48,6 +49,7 @@ GetOptions(
   "m|max-plot-read-len=s"    => \$opt->{"max-plot-read-len"},
   "q|qscores=s"              => \$opt->{"qscores"},
   "b|threads=i"              => \$opt->{"threads"},
+  "k|server-key=i"           => \$opt->{"server-key"},
   "d|aligner=s"              => \$opt->{"aligner"},
   "aligner-opts-rg=s"        => \$opt->{"aligner-opts-rg"},
   "aligner-opts-extra=s"     => \$opt->{"aligner-opts-extra"},
@@ -164,7 +166,11 @@ my $alignStartTime = time();
 if($opt->{"aligner"} eq "tmap") {
   my $command = "tmap mapall";
   $command .= " -n ".$opt->{"threads"};
-  $command .= " -f $refFasta";
+  if(defined($opt->{"server-key"})) {
+      $command .= " -k " . $opt->{"server-key"}
+  } else {
+      $command .= " -f $refFasta";
+  }
   $command .= " -r ".join(" -r ",@{$opt->{"readFile"}});
   $command .= " -v";
   # For the moment it seems -Y cannot be used with tmap pairing options - need to fix
@@ -175,15 +181,17 @@ if($opt->{"aligner"} eq "tmap") {
   }
   $command .= " --bidirectional" if($opt->{"bidirectional"});
   $command .= " ".$opt->{"aligner-opts-rg"} if(defined($opt->{"aligner-opts-rg"}));
-  $command .= " -u -o 0"; # NB: random seed based on read and outputs SAM
+  $command .= " -u -o 2"; # NB: random seed based on read and outputs -o 0: SAM, -o 2: uncomp BAM
   die if(!defined($opt->{"aligner-opts-extra"}));
   $command .= " ".$opt->{"aligner-opts-extra"};
   $command .= " 2>> ".$opt->{"logfile"};
   if(0 == $opt->{"mark-duplicates"}) {
-      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
+      $command .= " | samtools sort -m 1G -l1 -p".$opt->{"threads"}." - $bamBase";
+      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   else {
-      $command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile.tmp VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
+      $command .= " | samtools sort -m 1G -l1 -p".$opt->{"threads"}." - $bamBase.tmp";
+      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamBase.tmp.bam VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));
@@ -191,11 +199,10 @@ if($opt->{"aligner"} eq "tmap") {
   die "$0: invalid aligner option: ".$opt->{"aligner"}."\n";
 }
 if(1 == $opt->{"mark-duplicates"}) {
-    # TODO: how do we get the '/usr/local/bin/' path?
-    my $command = "java -Xmx8G -jar /usr/local/bin/MarkDuplicates.jar I=$bamFile.tmp O=$bamFile M=$bamFile.markduplictes.metrics.txt AS=true VALIDATION_STRINGENCY=SILENT"; # FIXME
+    my $command = "java -Xmx8G -jar /usr/local/bin/MarkDuplicates.jar I=$bamBase.tmp.bam O=$bamFile M=$bamFile.markduplictes.metrics.txt AS=true VALIDATION_STRINGENCY=SILENT";
 	print "  $command\n";
     die "$0: Failure during mark duplicates\n" if(&executeSystemCall($command));
-    $command = "rm -v $bamFile.tmp";
+    $command = "rm -v $bamBase.tmp.bam";
 	print "  $command\n";
     die "$0: Failure mark duplicates cleanup\n" if(&executeSystemCall($command));
 }
@@ -493,7 +500,7 @@ sub getReadNumber {
     chomp $nReads;
     $nReads =~ s/\s+//g;
   } elsif($fileType eq "sff") {
-    my $command = "SFFSummary -q 0 -m 0 -s $readFile | grep \"^reads\" | cut -f2- -d\\ ";
+    my $command = "iontools sffview $readFile |head -1 | cut -f6 -d, |cut -c9-";
     die "$0: Failed to determine number of reads from $readFile\n" if(&executeSystemCall($command,\$nReads));
     chomp $nReads;
     $nReads =~ s/\s+//g;

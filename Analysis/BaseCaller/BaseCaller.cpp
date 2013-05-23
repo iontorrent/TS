@@ -34,8 +34,7 @@
 #include "BaseCallerFilters.h"
 #include "BaseCallerMetricSaver.h"
 #include "BaseCallerRecalibration.h"
-
-#include "dbgmem.h"
+#include "RecalibrationModel.h"
 
 using namespace std;
 
@@ -47,6 +46,7 @@ struct BaseCallerContext {
 
   // General run parameters
   string                    run_id;                 //!< Run ID string, prepended to each read name
+  string                    keynormalizer;          //!< Name of selected key normalization algorithm
   string                    dephaser;               //!< Name of selected dephasing algorithm
   string                    filename_wells;         //!< Filename of the input wells file
   int                       chip_size_y;            //!< Chip height in wells
@@ -61,6 +61,7 @@ struct BaseCallerContext {
   int                       block_col_offset;       //!< Offset added to read names
   int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
   bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
+  int                       windowSize;             //!< Normalization window size
 
   // Important outside entities accessed by BaseCaller
   Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
@@ -71,6 +72,7 @@ struct BaseCallerContext {
   BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
   BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
   BaseCallerRecalibration   recalibration;          //!< Base call and signal adjustment algorithm
+  RecalibrationModel        recalModel;             //!< Model estimation of simulated predictions and observed measurements
 
   // Threaded processing
   pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
@@ -160,7 +162,9 @@ void PrintHelp()
   printf ("  -c,--cols                  INT-INT    basecall only a range of columns [all columns]\n");
   printf ("     --region-size           INTxINT    wells processing chunk size [50x50]\n");
   printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
+  printf ("     --keynormalizer         STRING     key normalization algorithm [keynorm-old]\n");
   printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
+  printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", kMinWindowSize_, kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
   printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
   printf ("                                          \"none\" - FZ not generated\n");
   printf ("                                          \"wells\" - Raw values (unnormalized and not dephased)\n");
@@ -173,6 +177,7 @@ void PrintHelp()
   printf ("     --extra-trim-left       INT        Number of additional bases after key and barcode to remove from each read [0]\n");
   printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. 0=off [0]\n");
   printf ("     --calibration-file      FILE       Enable recalibration using tables from provided file [off]\n");
+  printf ("     --model-file            FILE       Enable recalibration using model from provided file [off]\n");
   printf ("     --phase-estimation-file FILE       Enable reusing phase estimation from provided file [off]\n");
   printf ("\n");
 
@@ -255,16 +260,6 @@ void SaveBaseCallerProgress(int percent_complete, const string& output_directory
 }
 
 
-#ifdef _DEBUG
-void memstatus (void)
-{
-  memdump();
-  dbgmemClose();
-}
-#endif /* _DEBUG */
-
-
-
 
 
 //! @brief    Main function for BaseCaller executable
@@ -273,11 +268,6 @@ void memstatus (void)
 int main (int argc, const char *argv[])
 {
   BaseCallerSalute();
-
-#ifdef _DEBUG
-  atexit (memstatus);
-  dbgmemInit();
-#endif /* _DEBUG */
 
   time_t analysis_start_time;
   time(&analysis_start_time);
@@ -363,6 +353,7 @@ int main (int argc, const char *argv[])
 
   bc.run_id                     = opts.GetFirstString ('-', "run-id", default_run_id);
   bc.dephaser                   = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
+  bc.keynormalizer              = opts.GetFirstString ('-', "keynormalizer", "keynorm-old");
   int num_threads               = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
   int num_unfiltered            = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
   bc.flow_signals_type          = opts.GetFirstString ('-', "flow-signals-type", "none");
@@ -371,6 +362,7 @@ int main (int argc, const char *argv[])
   bc.extra_trim_left            = opts.GetFirstInt    ('-', "extra-trim-left", 0);
   int calibration_training      = opts.GetFirstInt    ('-', "calibration-training", 0);
   string phase_file_name        = opts.GetFirstString ('s', "phase-estimation-file", "");
+  bc.windowSize                 = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
 
   bc.process_tfs = true;
   int subsample_library = -1;
@@ -516,6 +508,7 @@ int main (int argc, const char *argv[])
   bc.filters = &filters;
   bc.estimator.InitializeFromOptArgs(opts);
   bc.recalibration.Initialize(opts, bc.flow_order);
+  bc.recalModel.Initialize(opts);
 
   int num_regions_x = (bc.chip_size_x +  bc.region_size_x - 1) / bc.region_size_x;
   int num_regions_y = (bc.chip_size_y +  bc.region_size_y - 1) / bc.region_size_y;
@@ -548,6 +541,7 @@ int main (int argc, const char *argv[])
   basecaller_json["BaseCaller"]["filename_mask"] = filename_mask;
   basecaller_json["BaseCaller"]["num_threads"] = num_threads;
   basecaller_json["BaseCaller"]["dephaser"] = bc.dephaser;
+  basecaller_json["BaseCaller"]["keynormalizer"] = bc.keynormalizer;
   basecaller_json["BaseCaller"]["block_row_offset"] = bc.block_row_offset;
   basecaller_json["BaseCaller"]["block_col_offset"] = bc.block_col_offset;
   basecaller_json["BaseCaller"]["block_row_size"] = bc.chip_size_y;
@@ -789,8 +783,8 @@ void * BasecallerWorker(void *input)
   vector<uint8_t>   quality(3*bc.flow_order.num_flows());
   vector<int>       base_to_flow (3*bc.flow_order.num_flows());             //!< Flow of in-phase incorporation of each base.
 
-  DPTreephaser treephaser(bc.flow_order);
-  TreephaserSSE treephaser_sse(bc.flow_order);
+  DPTreephaser treephaser(bc.flow_order, bc.windowSize);
+  TreephaserSSE treephaser_sse(bc.flow_order, bc.windowSize);
 
 
   while (true) {
@@ -926,49 +920,73 @@ void * BasecallerWorker(void *input)
       //
 
       BasecallerRead read;
-      read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
+      if (bc.keynormalizer == "keynorm-new") {
+        read.SetDataAndKeyNormalizeNew(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1, true);
+
+      } else { // if (bc.keynormalizer == "keynorm-old") {
+        read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
+
+      }
 
       bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, processed_read.filter, read.raw_measurements);
       if (!is_random_unfiltered and !bc.filters->IsValid(read_index))// No reason to waste more time
         continue;
 
-
       // Execute the iterative solving-normalization routine
-
       if (bc.dephaser == "treephaser-sse") {
         treephaser_sse.SetModelParameters(cf, ie);
+        vector<vector<vector<float> > > * aPtr = 0;
+        vector<vector<vector<float> > > * bPtr = 0;
+        if(bc.recalModel.is_enabled()){
+          aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
+          bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
+          if(aPtr != 0 && bPtr != 0)
+            treephaser_sse.SetAsBs(aPtr, bPtr, true);
+        }
         treephaser_sse.NormalizeAndSolve(read);
-        treephaser.SetModelParameters(cf, ie, 0);
-        treephaser.ComputeQVmetrics(read);
-
+        treephaser.SetModelParameters(cf, ie, 0);//to remove
       } else if (bc.dephaser == "dp-treephaser") {
         treephaser.SetModelParameters(cf, ie, dr);
         treephaser.NormalizeAndSolve4(read, bc.flow_order.num_flows());
         treephaser.ComputeQVmetrics(read);
-
       } else if (bc.dephaser == "treephaser-adaptive") {
         treephaser.SetModelParameters(cf, ie, 0);
         treephaser.NormalizeAndSolve3(read, bc.flow_order.num_flows()); // Adaptive normalization
         treephaser.ComputeQVmetrics(read);
-
       } else { //if (bc.dephaser == "treephaser-swan") {
         treephaser.SetModelParameters(cf, ie, dr);
+        vector<vector<vector<float> > > * aPtr = 0;
+        vector<vector<vector<float> > > * bPtr = 0;
+        if(bc.recalModel.is_enabled()){
+          aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
+          bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
+//          printf("a: %6.4f; b: %6.4f\n", (*aPtr)[0][0][1], (*bPtr)[0][0][1]);
+          treephaser.SetAsBs(*aPtr, *bPtr, true);
+        }
         treephaser.NormalizeAndSolve5(read, bc.flow_order.num_flows()); // sliding window adaptive normalization
         treephaser.ComputeQVmetrics(read);
       }
 
       // If recalibration is enabled, generate adjusted sequence and normalized_measurements, and recompute QV metrics
 
+//      BasecallerRead readDP = read;
       if (bc.recalibration.is_enabled()) {
-        bc.recalibration.CalibrateRead(x,y,read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
-        treephaser.ComputeQVmetrics(read); // also generates updated read.prediction
+        bc.recalibration.CalibrateRead(x+bc.block_col_offset,y+bc.block_row_offset,read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
+        if(bc.dephaser == "treephaser-sse")
+          treephaser_sse.ComputeQVmetrics(read);
+        else
+          treephaser.ComputeQVmetrics(read); // also generates updated read.prediction
       }
 
       // Misc data management: Generate residual, scaled_residual
-
       for (int flow = 0; flow < bc.flow_order.num_flows(); ++flow) {
         residual[flow] = read.normalized_measurements[flow] - read.prediction[flow];
         scaled_residual[flow] = residual[flow] / read.state_inphase[flow];
+      }
+
+      //delay call of ComputeQVmetrics so that state_inphase would be from treephaserSSE consistently
+      if (!bc.recalibration.is_enabled() && bc.dephaser == "treephaser-sse") {
+        treephaser_sse.ComputeQVmetrics(read);
       }
 
       // Misc data management: Put base calls in proper string form
@@ -1058,6 +1076,7 @@ void * BasecallerWorker(void *input)
       bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
       bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
       bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality);
+      bc.filters->TrimAvalanche       (read_index, read_class, processed_read.filter, quality);
 
       //! New mechanism for dumping potentially useful metrics.
       if (bc.metric_saver->save_anything() and (is_random_unfiltered or !bc.metric_saver->save_subset_only())) {

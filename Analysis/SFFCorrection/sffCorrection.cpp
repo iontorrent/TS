@@ -46,11 +46,7 @@ using namespace BamTools;
 #define MAX_NUM_THREADS 10
 #define MAX_PAIRS_PER_THREAD 10000
 
-#ifdef _DEBUG
-	const int DEBUG = 1;
-#else
-	const int DEBUG = 0;
-#endif
+const int DEBUG = 0;
 
 /* P R O T O T Y P E S *******************************************************/
 void help_message(void);
@@ -2306,8 +2302,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 		std::string correctedBasesString = "";
 
 			int homPolyFwd = 0;
-			float fwdDev = 0;
-			float avgDev = 0;
+			//float fwdDev = 0;
+			//float avgDev = 0;
 			int homPolyRev = 0;
 			
 			//start with setting all the flow priors to 1.0
@@ -2491,8 +2487,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 					int findex = -10;
 					int findexRev = -10;
 					float avgFlowSignal = 0;
-					char correctedbase = ' ';
-					int homPoly = 0;
+					//char correctedbase = ' ';
+					//int homPoly = 0;
 							
                     fwd_flow_has_bias = find_read_in_bias_map(name1, &strand_bias_flow_index_map_fwd, &fwd_flow_bias_index_set);
                     rev_flow_has_bias = find_read_in_bias_map(name2, &strand_bias_flow_index_map_rev, &rev_flow_bias_index_set);
@@ -2518,9 +2514,9 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
                         if (findex != -10) {
 
                             avgFlowSignal += flow_sig[findex-1];
-                            correctedbase = flow_fwd[findex-1];
+                            //correctedbase = flow_fwd[findex-1];
                             homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
-                            fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
+                            //fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
                             if (DEBUG)
                                 correctedAlign += intToString(flow_sig[findex-1], 3);
                         }
@@ -2558,8 +2554,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
                         }
 
 
-						homPoly = roundsff(avgFlowSignal );	
-						avgDev = fabs(avgFlowSignal - homPoly)*100;
+						//homPoly = roundsff(avgFlowSignal );	
+						//avgDev = fabs(avgFlowSignal - homPoly)*100;
 						if (findex != -10 && findexRev != -10) {
 							if (homPolyFwd != homPolyRev) {
 								flowPriors[findex-1] = MISMATCH_PRIOR;
@@ -2602,8 +2598,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 				//flowsignal alignment is identical 
 				//numCorrected++;
 		    	regionAlignCase = 3;	
-				int homPoly = 0;
-				char correctedbase = ' ';
+				//int homPoly = 0;
+				//char correctedbase = ' ';
 				int count = 0;
 				int findex = 0, findexrev = 0;
 				float avgFlowSignal = 0;
@@ -2624,10 +2620,10 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
 
 
                    if (findex > 0) {
-                       correctedbase = flow_fwd[findex-1];
+                       //correctedbase = flow_fwd[findex-1];
                        avgFlowSignal += flow_sig[findex-1];
                        homPolyFwd = roundsff((float)flow_sig[findex-1]/100);
-                       fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
+                       //fwdDev = abs(flow_fwd[findex-1] - homPolyFwd*100);
                    }
 
                    if(!fwd_flow_index_has_bias && !rev_flow_index_has_bias){
@@ -2644,8 +2640,8 @@ int  errorCorrect(Alignment* alignment,  int *flow_index, int *flow_index_rev, u
                        avgFlowSignal /= 100;
                    }
 
-                   homPoly = roundsff(avgFlowSignal);
-                   avgDev = fabs(avgFlowSignal - homPoly)*100;
+                   //homPoly = roundsff(avgFlowSignal);
+                   //avgDev = fabs(avgFlowSignal - homPoly)*100;
                    if (findex > 0) {
 					 
 					 if (homPolyFwd != homPolyRev) {

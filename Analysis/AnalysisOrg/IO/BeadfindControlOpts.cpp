@@ -7,7 +7,7 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   //minNumKeyFlows = 99;
   bfMinLiveRatio = .0001;
   bfMinLiveLibSnr = 4;
-  bfMinLiveTfSnr = 4;
+  bfMinLiveTfSnr = -1;
   bfTfFilterQuantile = 1;
   bfLibFilterQuantile = 1;
   skipBeadfindSdRecover = 1;
@@ -22,14 +22,15 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   noduds = 0;
   beadfindUseSepRef = 0;
   numThreads = -1;
-  minTfPeakMax = 15.0f;
+  minTfPeakMax = 40.0f;
   minLibPeakMax = 15.0f;
   bfOutputDebug = false;
   bfMult = 1.0;
   sdAsBf = true;
   gainCorrection = true;
+  blobFilter = true;
   if (isInternalServer()) {
-    bfOutputDebug = true;
+    bfOutputDebug = 2;
   }
   beadfindType = "differential";
 }

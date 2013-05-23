@@ -98,9 +98,9 @@ template <typename shortvec> void GenerateBfT0Prior(TraceConfig &config,
                        T0Calc &t0,
                        GridMesh<T0Prior> &t0Prior) {
   t0.SetWindowSize(4);
-  t0.SetMinFirstHingeSlope(-1/(float) baseFrameRate);
-  t0.SetMaxFirstHingeSlope(100/(float) baseFrameRate);
-  t0.SetMinSecondHingeSlope(-20000/(float) baseFrameRate);
+  t0.SetMinFirstHingeSlope(-5.0/(float) baseFrameRate);
+  t0.SetMaxFirstHingeSlope(300.0/(float) baseFrameRate);
+  t0.SetMinSecondHingeSlope(-20000.0/(float) baseFrameRate);
   t0.SetMaxSecondHingeSlope(-10/(float) baseFrameRate);
   t0.Init(numRow, numCol, numFrame, rowStep, colStep, 1);
   t0.SetTimeStamps(timeStamps, numFrame);

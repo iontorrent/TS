@@ -30,10 +30,6 @@
     <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
     <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
     <script type="text/javascript" src="/site_media/resources/scripts/tb.min.js"></script>
-    <!--[if lte IE 8]>
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/browser-warning.css"/>
-    <script type="text/javascript" src="/site_media/resources/scripts/browser-warning.js"></script>
-    <![endif]-->
     <style>
         .nav-pills > li > span {
             margin-bottom: 4px;
@@ -68,6 +64,22 @@
 <body>
     <div class="login">
         <div class="container">
+            {% if prompt_chromeframe %}
+                <div class="row" style="margin-top:20px;">
+                    <div class="span 12">
+                        <div class="alert">
+                            <strong>Hello,</strong>
+                            <p>You now need to install this simple compatibility plugin: <a class="btn btn-primary" href="http://www.google.com/chromeframe" title="Get the Google Chrome Frame compatibility plugin">Google Chrome Frame</a></p>
+                            <p>
+                                This is because you're using Internet Explorer, which is only supported with this plugin.  
+                                Alternatively, you can also switch to Firefox or Chrome instead.  
+                                Downloading the Google Chrome Frame plugin for Internet Explorer or switching to Firefox or Chrome will 
+                                provide a higher quality, fully supported experience.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
             <div class="row login-form">
                 <div class="span4 logo"><img src="/site_media/resources/img/tb-logo3.png" border="0"></div>
                 <div class="span8" id="login_html">
@@ -75,7 +87,7 @@
                 </div>
             </div><!-- row -->
             
-            <div class="splash-workflow">
+            <div class="splash-workflow visible-desktop">
                 <div class="login-sample" data-select="#plan" data-href="{% url 'plans' %}"></div>
                 <div class="login-sequence" data-select="#monitor" data-href="{% url 'monitor' %}"></div>
                 <div class="login-report" data-select="#data" data-href="{% url 'data' %}"></div>
@@ -94,7 +106,7 @@
             </div>
             <div class="span8 pull-left">
                 <p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
-                <p><span class="copyright">&copy; 2012 Life Technologies Corporation. All Rights Reserved.</span> <a href="#">Technical Support</a> | <a href="#">Terms &amp; Conditions</a></p>
+                <p><span class="copyright">&copy; 2013 Life Technologies Corporation. All Rights Reserved.</span> <a href="#">Technical Support</a> | <a href="#">Terms &amp; Conditions</a></p>
             </div>
         </div>
     </div>

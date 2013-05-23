@@ -9,38 +9,6 @@ import traceback
 from django.db import connection
 from django.core import management
 
-def writeInitialDataFile():
-    '''Writes initial_data.json file with superuser info.
-    Subsequent call to ./manage.py syncdb --noinput will load this file and
-    result in the django.contrib.auth module being initialized.
-    '''
-    import json
-    fp = open('initial_data.json', 'wb')
-    json.dump([
-  {
-    "pk": 1, 
-    "model": "auth.user", 
-    "fields": {
-      "username": "ionadmin", 
-      "first_name": "", 
-      "last_name": "", 
-      "is_active": True, 
-      "is_superuser": True, 
-      "is_staff": True, 
-      "last_login": "2011-05-05 15:45:15", 
-      "groups": [], 
-      "user_permissions": [], 
-      "password": "sha1$d0981$fd85e583cfa0d586e3f93093f8bf6040b3ddc7dc", 
-      "email": "ionadmin@iontorrent.com", 
-      "date_joined": "2011-05-03 14:37:38"
-    }
-  }
-],fp,indent=True)
-    fp.close()
-    return None
-    
-    
-    
 def superUserExists():
     '''Tests database for existence of a superuser'''
     try:
@@ -62,23 +30,14 @@ def createSuperUser():
     NOTE: If superuser of the same name exists, it will be overwritten.'''
     connection.close()
     os.chdir('/opt/ion/iondb') ## FIXME - should be set outside script
-    writeInitialDataFile()
     management.call_command("syncdb", interactive=False)
+
+    management.call_command("migrate", app="tastypie") # Adding superuser requires tastypie_apikey
+    management.call_command("migrate", app="rundb", target="0001") # Adding superuser requires rundb_userprofile
+    management.call_command("loaddata", "ionadmin_superuser.json", raw=True)
+
+    # Many rundb migrations require superuser...
     management.call_command("migrate")
-    os.unlink('initial_data.json')
-    # The following will only work once the auth system is initialized
-    #try:
-    #    print "here"
-    #    user = User(username='ionadmin',email='ionadmin@iontorrent.com')
-    #    print "there"
-    #    user.set_password('ionadmin')
-    #    user.is_staff = True
-    #    user.is_superuser = True
-    #    user.save()
-    #    return user
-    #except psycopg2.DatabaseError:
-    #    print traceback.format_exc()
-    #    return None
 
 if __name__=="__main__":
     if superUserExists():
@@ -92,5 +51,5 @@ if __name__=="__main__":
             sys.exit(0)
         else:
             print "Failed to create superuser!"
-            sys.exit(1)
+            sys.exit(0)
 

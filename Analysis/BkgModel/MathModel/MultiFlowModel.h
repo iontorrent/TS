@@ -21,7 +21,7 @@
 void FillBufferParamsBlockFlows(buffer_params_block_flows *my_buff, bead_params *p, reg_params *reg_p, int *flow_ndx_map, int *buff_flow);
 void FillIncorporationParamsBlockFlows(incorporation_params_block_flows *my_inc, bead_params *p, reg_params *reg_p,int *flow_ndx_map, int *buff_flow);
 void ApplyDarkMatter(float *fval,reg_params *reg_p, std::vector<float>& dark_matter_compensator, int *flow_ndx_map, int *buff_flow, int npts);
-
+void ApplyPCADarkMatter ( float *fval,bead_params *p, std::vector<float>& dark_matter_compensator, int npts, float *etbr );
 void MultiFlowComputeTraceGivenIncorporationAndBackground(float *fval,struct bead_params *p,struct reg_params *reg_p, float *ival, float *sbg, 
                                                            RegionTracker &my_regions, buffer_params_block_flows &cur_buffer_block, 
                                                            TimeCompression &time_c, flow_buffer_info &my_flow,

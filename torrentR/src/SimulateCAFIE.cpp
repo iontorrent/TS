@@ -22,7 +22,7 @@ RcppExport SEXP SimulateCAFIE(SEXP Rseq, SEXP RflowOrder, SEXP Rcf, SEXP Rie, SE
     double      dr      = Rcpp::as<double>(Rdr);
     int         nflows  = Rcpp::as<int>(Rnflows);
     double      sigMult = Rcpp::as<double>(RsigMult);
-    RcppVector<double> tempHpSignal(RhpSignal);
+    Rcpp::NumericVector tempHpSignal(RhpSignal);
     int nHpSignal = tempHpSignal.size();
   
     if(nHpSignal != MAX_MER) {
@@ -30,7 +30,7 @@ RcppExport SEXP SimulateCAFIE(SEXP Rseq, SEXP RflowOrder, SEXP Rcf, SEXP Rie, SE
       temp << MAX_MER;
       std::string exception = "hpSignal must be of length " + temp.str();
       cerr << exception << endl;
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
       double *hpSignal = new double[nHpSignal];
       for(int i=0; i<nHpSignal; i++)
@@ -41,21 +41,19 @@ RcppExport SEXP SimulateCAFIE(SEXP Rseq, SEXP RflowOrder, SEXP Rcf, SEXP Rie, SE
       CafieSolver solver;
       solver.SimulateCAFIE(predicted, seq, order, cf, ie, dr, nflows, hpSignal, nHpSignal, sigMult);
 
-      RcppVector<double> out_signal(nflows);
+      Rcpp::NumericVector out_signal(nflows);
       for(int i=0; i<nflows; i++)
         out_signal(i) = predicted[i];
-      
-      RcppResultSet rs;
-      rs.add("sig", out_signal);
-      
+
+      ret = Rcpp::List::create(Rcpp::Named("sig") = out_signal);
+
       delete [] hpSignal;
 
-      ret = rs.getReturnList();
     }
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
   
   return ret;

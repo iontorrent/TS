@@ -2,13 +2,15 @@
 
 #include "GpuMultiFlowFitControl.h"
 
+
+GpuMultiFlowFitControl * GpuMultiFlowFitControl::_pInstance = NULL;
 unsigned int GpuMultiFlowFitControl::_maxBeads = 216*224;
-unsigned int GpuMultiFlowFitControl::_maxFrames = MAX_COMPRESSED_FRAMES;
+unsigned int GpuMultiFlowFitControl::_maxFrames = MAX_COMPRESSED_FRAMES_GPU;
 
 void GpuMultiFlowFitControl::clear()
 {
   // delete gpu matrix configs here
-  map<const char*, GpuMultiFlowFitMatrixConfig*>::iterator it;
+  map<std::string, GpuMultiFlowFitMatrixConfig*>::iterator it;
   for (it=_matrixConfig.begin(); it!=_matrixConfig.end(); ++it)
   {
     delete (*it).second;
@@ -25,6 +27,13 @@ GpuMultiFlowFitControl::GpuMultiFlowFitControl()
    CreateFitInitialGpuMatrixConfig();
 }
 
+GpuMultiFlowFitControl * GpuMultiFlowFitControl::Instance()
+{
+  if(_pInstance == NULL) _pInstance = new GpuMultiFlowFitControl();
+  return _pInstance;
+}
+
+
 GpuMultiFlowFitControl::~GpuMultiFlowFitControl()
 {
   clear();
@@ -36,7 +45,7 @@ void GpuMultiFlowFitControl::CreatePostKeyFitGpuMatrixConfig()
                                                   _fitParams.Steps, _fitParams.NumSteps);
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
-  _matrixConfig.insert(pair<const char*, GpuMultiFlowFitMatrixConfig*>("FitWellPostKey", config));
+  _matrixConfig.insert(pair<std::string, GpuMultiFlowFitMatrixConfig*>("FitWellPostKey", config));
 }
 
 void GpuMultiFlowFitControl::CreateFitInitialGpuMatrixConfig()
@@ -46,7 +55,7 @@ void GpuMultiFlowFitControl::CreateFitInitialGpuMatrixConfig()
                                                   _fitParams.Steps, _fitParams.NumSteps);
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
-  _matrixConfig.insert(pair<const char*, GpuMultiFlowFitMatrixConfig*>("FitWellAmplBuffering", config));
+  _matrixConfig.insert(pair<std::string, GpuMultiFlowFitMatrixConfig*>("FitWellAmplBuffering", config));
 }
 
 void GpuMultiFlowFitControl::DetermineMaxSteps(int steps)

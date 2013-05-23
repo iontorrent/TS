@@ -13,8 +13,9 @@ that have the  ``@task`` decorator.
 
 from __future__ import division
 
-from celery.task import task
+from celery import task
 from celery.task import periodic_task
+from celery.utils.log import get_task_logger
 from celery.schedules import crontab
 import urllib2
 import os
@@ -33,9 +34,15 @@ import json
 import logging
 from datetime import timedelta
 import pytz
+import time
+import tempfile
+import urllib
 
 import urlparse
 from ion.utils.timeout import timeout
+from iondb.utils.files import percent_full
+
+logger = get_task_logger(__name__)
 
 def call(*cmd, **kwargs):
     if "stdout" not in kwargs:
@@ -101,11 +108,12 @@ else:
             self.zobj.close()
 
 # Unified unzip function
-def extract_zip(archive, dest, prefix=None, auto_prefix=False):
+def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
     """ unzip files in archive to destination folder
     extracting only files in prefix and omitting prefix from output path.
     """
-    logger = logging.getLogger(__name__)
+    if not logger:
+        logger = logging.getLogger(__name__)
     # Normalize, clear out or create dest path
     dest = os.path.normpath(dest)
     if os.path.exists(dest):
@@ -207,8 +215,9 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False):
 
     return (prefix, extracted_files)
 
-def unzipPlugin(zipfile):
-    logger = logging.getLogger(__name__)
+def unzipPlugin(zipfile, logger=None):
+    if not logger:
+        logger = logging.getLogger(__name__)
     ## Extract plugin to scratch folder. When complete, move to final location.
     plugin_path, ext = os.path.splitext(zipfile)
     plugin_name = os.path.basename(plugin_path)
@@ -218,7 +227,7 @@ def unzipPlugin(zipfile):
     # FIXME - handle version string in ZIP archive name
 
     scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch","install-temp",plugin_name)
-    (prefix, files) = extract_zip(zipfile, scratch_path, auto_prefix=True)
+    (prefix, files) = extract_zip(zipfile, scratch_path, auto_prefix=True, logger=logger)
     if prefix:
         plugin_name = os.path.basename(prefix)
 
@@ -305,8 +314,13 @@ def make_relative_directories(root, files):
             os.makedirs(path)
 
 @task
+def echo(message, wait=0):
+    time.sleep(wait)
+    logger.info("Logged: " + message)
+    print(message)
+
+@task
 def delete_that_folder(directory, message):
-    logger = delete_that_folder.get_logger()
     def delete_error(func, path, info):
         logger.error("Failed to delete %s: %s", path, message)
     logger.info("Deleting %s", directory)
@@ -315,7 +329,6 @@ def delete_that_folder(directory, message):
 #N.B. Run as celery task because celery runs with root permissions
 @task
 def removeDirContents(folder_path):
-    logger = removeDirContents.get_logger()
     for file_object in os.listdir(folder_path):
         file_object_path = os.path.join(folder_path, file_object)
         if os.path.isfile(file_object_path):
@@ -374,7 +387,7 @@ def downloadGenome(url, genomeID):
 import zeroinstallHelper
 
 # Helper for downloadPlugin task
-def downloadPluginZeroInstall(url, plugin):
+def downloadPluginZeroInstall(url, plugin, logger=None):
     """ To be called for zeroinstall xml feed urls.
         Returns plugin prototype, not full plugin model object.
     """
@@ -382,6 +395,7 @@ def downloadPluginZeroInstall(url, plugin):
         downloaded  = zeroinstallHelper.downloadZeroFeed(url)
         feedName = zeroinstallHelper.getFeedName(url)
     except:
+        logger.exception("Failed to fetch zeroinstall feed")
         plugin.status["installStatus"] = "failed"
         plugin.status["result"] = str(sys.exc_info()[1][0])
         return False
@@ -391,6 +405,7 @@ def downloadPluginZeroInstall(url, plugin):
     plugin.name = feedName.replace(" ","")
 
     if not downloaded:
+        logger.error("Failed to download url: '%s'", url)
         plugin.status["installStatus"] = "failed"
         plugin.status["result"] = "processed"
         return False
@@ -420,11 +435,12 @@ def downloadPluginZeroInstall(url, plugin):
     plugin.status["result"] = "0install"
     # Other fields we can get from zeroinstall feed?
 
+    logger.debug(plugin)
     # Version is parsed during install - from launch.sh, ignoring feed value
     return plugin
 
 # Helper for downloadPlugin task
-def downloadPluginArchive(url, plugin):
+def downloadPluginArchive(url, plugin, logger=None):
     ret = downloadChunks(url)
     if not ret:
         plugin.status["installStatus"] = "failed"
@@ -432,7 +448,7 @@ def downloadPluginArchive(url, plugin):
         return False
     downloaded, url = ret
 
-    pdata = unzipPlugin(downloaded)
+    pdata = unzipPlugin(downloaded, logger=logger)
 
     plugin.name = pdata['plugin'] or os.path.splitext(os.path.basename(url))[0]
     plugin.path = pdata['path'] or os.path.join(settings.PLUGIN_PATH, plugin.name )
@@ -446,7 +462,6 @@ def downloadPluginArchive(url, plugin):
     else:
         plugin.status["result"] = "failed to unzip"
 
-    plugin.status["installStatus"] = "installed"
 
     return True
 
@@ -458,17 +473,15 @@ def downloadPlugin(url, plugin=None, zipFile=None):
         plugin = models.Plugin.objects.create(name='Unknown', version='Unknown', status={})
     plugin.status["installStatus"] = "downloading"
 
-    logger = downloadPlugin.get_logger()
-
     #normalise the URL
     url = urlparse.urlsplit(url).geturl()
 
     if not zipFile:
         if url.endswith(".xml"):
-            status = downloadPluginZeroInstall(url, plugin)
+            status = downloadPluginZeroInstall(url, plugin, logger=logger)
             logger.error("xml") # logfile
         else:
-            status = downloadPluginArchive(url, plugin)
+            status = downloadPluginArchive(url, plugin, logger=logger)
             logger.error("zip") # logfile
 
         if not status:
@@ -489,6 +502,8 @@ def downloadPlugin(url, plugin=None, zipFile=None):
 
         try:
             ret = unzipPlugin(zip_file)
+        except:
+            logger.exception("Failed to unzip Plugin: '%s'", zip_file)
         finally:
             #remove the zip file
             os.unlink(zip_file)
@@ -523,7 +538,6 @@ def contact_info_flyaway():
         Black magic
         Axeda has the contact information
     """
-    logger = contact_info_flyaway.get_logger()
     logger.info("The user updated their contact information.")
     cmd = ["/opt/ion/RSM/updateContactInfo.py"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -543,7 +557,6 @@ def static_ip(address, subnet, gateway):
          --bc      Define broadcast IP address
          --gw      Define gateway/router IP address
     """
-    logger = static_ip.get_logger()
     cmd = ["/usr/sbin/TSstaticip",
            "--ip", address,
            "--nm", subnet,
@@ -563,7 +576,6 @@ def dhcp():
     """Usage: TSstaticip [options]
         --remove  Sets up dhcp, removing any static IP settings
     """
-    logger = dhcp.get_logger()
     cmd = ["/usr/sbin/TSstaticip", "--remove"]
     logger.info("Network: Setting host DHCP, '%s'" % " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -583,7 +595,6 @@ def proxyconf(address, port, username, password):
          --password    Password for authentication
          --remove      Removes proxy setting
     """
-    logger = proxyconf.get_logger()
     cmd = ["/usr/sbin/TSsetproxy",
            "--address", address,
            "--port", port,
@@ -603,7 +614,6 @@ def ax_proxy():
     """Usage: TSsetproxy [options]
          --remove      Removes proxy setting
     """
-    logger = ax_proxy.get_logger()
     cmd = ["/usr/sbin/TSsetproxy", "--remove"]
     logger.info("Network: Removing proxy settings, '%s'" % " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -615,10 +625,9 @@ def ax_proxy():
 
 @task
 def dnsconf(dns):
-    """Usage: TSsetproxy [options]
-         --remove      Removes proxy setting
+    """Usage: TSdns [options]
+         --dns      Define one or more comma delimited dns servers
     """
-    logger = ax_proxy.get_logger()
     cmd = ["/usr/sbin/TSdns", "--dns", dns]
     logger.info("Network: Changing DNS settings, '%s'" % " ".join(cmd))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -668,7 +677,6 @@ def build_tmap_index(reference, read_sample_size=None):
         until then this genome will be listed in a unfinished state.
     """
 
-    logger = build_tmap_index.get_logger()
     fasta = os.path.join(reference.reference_path , reference.short_name + ".fasta")
     logger.debug("TMAP %s rebuild, for reference %s(%d) using fasta %s"%
          (settings.TMAP_VERSION, reference.short_name, reference.pk, fasta))
@@ -746,6 +754,7 @@ def IonReporterWorkflows(autorun=True):
         logging.exception(error)
         return False, error
 
+
 def IonReporterVersion(plugin):
     """
     This is a temp thing for 3.0. We need a way for IRU to get the versions
@@ -793,91 +802,33 @@ def IonReporterVersion(plugin):
         logging.exception(error)
         return False, error
 
-@periodic_task(run_every=timedelta(days=1))
+
+@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
 def scheduled_update_check():
-    logger = scheduled_update_check.get_logger()
+    from iondb.rundb import models
     try:
-        check_updates.delay()
+        packages = check_updates()
+        upgrade_message = models.Message.objects.filter(tags__contains="new-upgrade")
+        if packages:
+            if not upgrade_message.all():
+                models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade')
+            download_now = models.GlobalConfig.objects.all()[0].enable_auto_pkg_dl
+            if download_now:
+                async = download_updates.delay()
+                logger.debug("Auto starting download of %d packages in task %s" % (len(packages), async.task_id))
+        else:
+            upgrade_message.delete()
     except Exception as err:
         logger.error("TSconfig raised '%s' during a scheduled update check." % err)
         from iondb.rundb import models
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
-    
-@periodic_task(run_every=crontab(hour="5", minute="4", day_of_week="*"))
-def autoAction_report():
-    # This implementation fixes the lack of logging to reportsLog.log by sending messages to
-    # ionArchive daemon to do the actions (which implements the logger)
-    from iondb.rundb import models
-    import traceback
-    import xmlrpclib
-    logger = autoAction_report.get_logger()
-    logger.info("Checking for Auto-action Report Data Management")
 
-    try:
-        bk = models.dm_reports.get()
-    except:
-        logger.error("dm_reports configuration object does not exist in database")
-        raise 
-        
-    if bk.autoPrune:
-        logger.info("Auto-action enabled")
-        proxy = xmlrpclib.ServerProxy('http://127.0.0.1:%d' % settings.IARCHIVE_PORT, allow_none=True)
-        #TODO: would be good to be able to filter this list somehow
-        retList = models.Results.objects.all()
-        for ret in retList:
-            date1 = ret.timeStamp
-            if timezone.is_naive(date1):
-                date1 = date1.replace(tzinfo = pytz.utc)
-            date2 = datetime.datetime.now(pytz.UTC)
-            try:
-                #Fix for TS-4983
-                if ret.reportStatus == "Archived":
-                    # Report has been archived so ignore any actions
-                    logger.info("%s has been previously archived.  Skipping." % ret.resultsName)
-                    continue
-                
-                timesUp = True if (date2 - date1) > timedelta(days=bk.autoAge) else False
-                # N.B. the word "auto-action" in the comment is required in order to disable useless comments in the Report Log
-                if not ret.autoExempt and timesUp:
-                    if bk.autoType == 'P':
-                        comment = '%s Pruned via auto-action' % ret.resultsName
-                        proxy.prune_report(ret.pk, comment)
-                        logger.debug(comment)
-                    elif bk.autoType == 'A':
-                        comment = '%s Archived via auto-action' % ret.resultsName
-                        proxy.archive_report(ret.pk, comment)
-                        logger.debug(comment)
-                    elif bk.autoType == 'E':
-                        comment = '%s Exported via auto-action' % ret.resultsName
-                        proxy.export_report(ret.pk, comment)
-                        logger.debug(comment)
-                    #elif bk.autoType == 'D':
-                    #    comment = '%s Deleted via auto-action' % ret.resultsName
-                    #    proxy.delete_report(ret.pk, comment)
-                    #    logger.info(comment)
-                else:
-                    if ret.autoExempt:
-                        logger.info("%s is marked Exempt" % ret.resultsName)
-                    else:
-                        logger.info("%s is not marked Exempt" % ret.resultsName)
-                        
-                    if timesUp:
-                        logger.info("%s exceeds time threshold" % ret.resultsName)
-                    else:
-                        logger.info("%s has not reached time threshold" % ret.resultsName)
-            except:
-                logger.exception(traceback.format_exc())
-        logger.info("Auto-action complete")
-    else:
-        logger.info("Auto-action disabled")
-        
 @task
 def check_updates():
     """Currently this is passed a TSConfig object; however, there might be a
     smoother design for this control flow.
     """
-    logger = check_updates.get_logger()
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
@@ -887,17 +838,11 @@ def check_updates():
         from iondb.rundb import models
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
-    async = None
-    if packages and tsconfig.get_autodownloadflag():
-        async = download_updates.delay()
-        logger.debug("Auto starting download of %d packages in task %s" %
-                     (len(packages), async.task_id))
-    return packages, async
 
+    return packages
 
 @task
 def download_updates(auto_install=False):
-    logger = download_updates.get_logger()
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
@@ -920,6 +865,7 @@ def download_updates(auto_install=False):
 def _do_the_install():
     """This function is expected to be run from a daemonized process"""
     from iondb.rundb import models
+    from django.db.models import Q
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
@@ -930,6 +876,8 @@ def _do_the_install():
         else:
             tsconfig.set_state('IF')
             models.Message.error("Upgrade failed during installation.")
+        models.Message.objects.filter(expires="system-update-finished").delete()
+        models.Message.objects.filter(tags__contains="new-upgrade").delete()
     except Exception as err:
         models.GlobalConfig.objects.update(ts_update_status="Install failure")
         raise
@@ -942,7 +890,6 @@ def _do_the_install():
 @task
 def install_updates():
     logging.shutdown()
-    logger = install_updates.get_logger()
     try:
         run_as_daemon(_do_the_install)
     except Exception as err:
@@ -951,50 +898,168 @@ def install_updates():
         models.GlobalConfig.objects.update(ts_update_status="Install failure")
         raise
 
-# Times out after 60 seconds
-@timeout(60,None)
-def free_percent(path):
-    '''Returns percent of disk space that is free'''
-    resDir = os.statvfs(path)
-    totalSpace = resDir.f_blocks
-    freeSpace = resDir.f_bavail
-    if not (totalSpace > 0):
-        logging.error("Path: %s : Zero TotalSpace? %d / %d", path, freeSpace, totalSpace)
-        return 0
-    return 100-(float(freeSpace)/float(totalSpace)*100)
+
+@task
+def update_diskusage(fs):
+    if os.path.exists(fs.filesPrefix):
+        try:
+            fs.percentfull = percent_full(fs.filesPrefix)
+        except:
+            logger.exception("Failed to compute percent full")
+            fs.percentfull = None
+
+        if fs.percentfull is not None:
+            fs.save()
+            #logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
+        else:
+            logger.warning ("could not determine size of %s" % fs.filesPrefix)
+    else:
+        logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
+
 
 # Expires after 5 minutes; is scheduled every 10 minutes
-@periodic_task(run_every=timedelta(minutes=10),expires=300)
+# To trigger celery task from command line:
+# python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.check_disk_space.apply_async()'
+@periodic_task(run_every=600, expires=300, queue="periodic")
 def check_disk_space():
     '''For every FileServer object, get percentage of used disk space'''
-    logger = check_disk_space.get_logger()
     from iondb.rundb import models
+    import socket
+    import traceback
+    from django.core import mail
+
+    def notify_diskfull(msg):
+        '''sends an email with message'''
+        #TODO make a utility function to send email
+        try:
+            recipient = models.User.objects.get(username='dm_contact').email
+            logger.warning("dm_contact is %s." % recipient)
+        except:
+            logger.warning("Could not retrieve dm_contact.  No email sent.")
+            return False
+
+        # Check for blank email
+        # TODO: check for valid email address
+        if recipient is None or recipient == "":
+            logger.warning("No dm_contact email configured.  No email sent.")
+            return False
+
+        #Needed to send email
+        settings.EMAIL_HOST = 'localhost'
+        settings.EMAIL_PORT = 25
+        settings.EMAIL_USE_TLS = False
+
+        try:
+            site_name = models.GlobalConfig.get().site_name
+        except:
+            site_name = "Torrent Server"
+
+        hname = socket.getfqdn()
+
+        subject_line = 'Torrent Server Data Management Disk Alert'
+        reply_to = 'donotreply@iontorrent.com'
+        message = 'From: %s (%s)\n' % (site_name, hname)
+        message += '\n'
+        message += msg
+        message += "\n"
+
+        # Send the email
+        try:
+            recipient = recipient.replace(',',' ').replace(';',' ').split()
+            logger.debug(recipient)
+            mail.send_mail(subject_line, message, reply_to, recipient)
+        except:
+            logger.warning(traceback.format_exc())
+            return False
+        else:
+            logger.info("Notification email sent for user acknowledgement")
+            return True
+
     try:
         fileservers = models.FileServer.objects.all()
-        #logger.info("Num fileservers: %d" % len(fileservers))
     except:
         logger.error(traceback.print_exc())
         return
 
     for fs in fileservers:
-        #logger.info("Checking '%s'" % fs.filesPrefix)
-        #prod automounter
-        if os.path.exists(fs.filesPrefix):
-            try:
-                fs.percentfull = free_percent(fs.filesPrefix)
-            except:
-                logger.exception("Failed to compute free_percent")
-                fs.percentfull = None
-                
-            if fs.percentfull is not None:
-                fs.save()
-                logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
-            else:
-                logger.warning ("could not determine size of %s" % fs.filesPrefix)
+        update_diskusage(fs)
+        # TS-6669: Generate a Message Banner when disk usage gets critical
+        crit_tag = "%s_disk_usage_critical" % (fs.name)
+        warn_tag = "%s_disk_usage_warning" % (fs.name)
+        golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+        if fs.percentfull > 99:
+            msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix,fs.percentfull)
+            logger.debug(msg+"   %s" % golink)
+            message  = models.Message.objects.filter(tags__contains=crit_tag)
+            if not message:
+                models.Message.error(msg+"   %s" % golink,tags=crit_tag)
+                notify_diskfull(msg)
+        elif fs.percentfull > 95:
+            msg = "%s: Partition is getting full - %0.2f%%" % (fs.filesPrefix,fs.percentfull)
+            logger.debug(msg+"   %s" % golink)
+            message  = models.Message.objects.filter(tags__contains=warn_tag)
+            if not message:
+                models.Message.error(msg+"   %s" % golink,tags=warn_tag)
+                notify_diskfull(msg)
         else:
-            logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
+            # Remove any message objects
+            models.Message.objects.filter(tags__contains=crit_tag).delete()
+            models.Message.objects.filter(tags__contains=warn_tag).delete()
 
-@task
+
+#TS-5495: Refactored from a ionadmin cron job
+#Note on time: we need to specify the time to run in UTC. 6am localtime
+if time.daylight:
+    cronjobtime = 6 + int(time.altzone/60/60)
+else:
+    cronjobtime = 6 + int(time.timezone/60/60)
+
+# ensure that cronjobtime returns non-negative hours (0..23)
+if (cronjobtime <0): cronjobtime = cronjobtime+24
+
+@periodic_task(run_every=crontab(hour=str(cronjobtime), minute="0", day_of_week="*"), queue="periodic")
+def runnightly():
+    import traceback
+    from iondb.bin import nightly
+
+    try:
+        nightly.send_nightly()
+    except:
+        logger.exception(traceback.format_exc())
+
+    return
+
+
+def getdiskusage(directory):
+    # Try an all-python solution here - in case the suprocess spawning is causing grief.  We could be opening
+    # hundreds of instances of shells above.
+    logger = get_task_logger('iondb.rundb.tasks.getdiskusage')
+    def dir_size (start):
+        if not start or not os.path.exists(start):
+            return 0
+
+        file_walker = (
+            os.path.join(root, f)
+            for root, _, files in os.walk( start )
+            for f in files
+        )
+        total = 0L
+        for f in file_walker:
+            if os.path.isdir(f):
+                total += dir_size(f)
+                continue
+            if not os.path.isfile(f):
+                continue
+            try:
+                total += os.lstat(f).st_size
+            except OSError:
+                logger.exception("Cannot stat %s during calc_size", f)
+        return total
+    # Returns size in MB
+    return dir_size(directory)/(1024*1024)
+
+
+@task(queue="periodic")
 def setRunDiskspace(experimentpk):
     '''Sets diskusage field in Experiment record with data returned from du command'''
     try:
@@ -1009,15 +1074,9 @@ def setRunDiskspace(experimentpk):
     else:
         # Get filesystem location of given Experiment record
         directory = exp.expDir
-        
-        if not os.path.isdir(directory):
-            used = 0
-        else:
-            # Get disk space used by the contents of the given directory in megabytes
-            du = subprocess.Popen(['du', '-sm', directory], stdout=subprocess.PIPE)
-            output = du.communicate()[0]
-            used = output.split()[0]
-        
+
+        used = getdiskusage(directory)
+
         # Update database entry for the given Experiment record
         try:
             used = used if used != None else "0"
@@ -1026,31 +1085,28 @@ def setRunDiskspace(experimentpk):
         except:
             # field does not exist, cannot update
             pass
-    
-    
-@task
+
+
+@task(queue="periodic")
 def setResultDiskspace(resultpk):
     '''Sets diskusage field in Results record with data returned from du command'''
-    log = setResultDiskspace.get_logger()
+
     try:
         from iondb.rundb import models
         from django.core.exceptions import ObjectDoesNotExist
         # Get Results record
         result = models.Results.objects.get(pk=resultpk)
-        
+    except ObjectDoesNotExist:
+        logger.error("Object does not exist error")
+        pass
+    except:
+        raise
+    else:
         # Get filesystem location of given Results record
-        directory = result.get_report_path()
-        
-        # Get disk space used by the contents of the given directory in megabytes
-        du = subprocess.Popen(['du', '-sm', directory], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = du.communicate()
-        if du.returncode == 0:
-            output = stdout[0]
-            log.info("%s -- %s" %(directory,output))
-            used = output.split()[0]
-        else:
-            log.warning(stderr)
-        
+        directory = result.get_report_dir()
+
+        used = getdiskusage(directory)
+
         # Update database entry for the given Experiment record
         try:
             used = used if used != None else "0"
@@ -1059,23 +1115,32 @@ def setResultDiskspace(resultpk):
         except:
             # field does not exist, cannot update
             pass
-    except ObjectDoesNotExist:
-        pass
-    except:
-        raise
+
 
 @task
+def update_diskspace_fields(resultpk):
+    '''uses dmfileset objects to calculate disk space for each fileset'''
+    try:
+        dmfilestats = models.DMFileStat.objects.filter(result=resultpk)
+    except:
+        pass
+    else:
+        for dmfilestat in dmfilestats:
+            dmfilestat.update_diskusage()
+
+@task(queue="periodic")
 def backfill_exp_diskusage():
     '''
     For every Experiment object in database, scan filesystem and determine disk usage.
     Intended to be run at package installation to populate existing databases.
     '''
+    import traceback
     from django.db.models import Q
     from iondb.rundb import models
-    
+
     # Setup log file logging
     filename = '/var/log/ion/%s.log' % 'backfill_exp_diskusage'
-    log = logging.getLogger('backfill_diskusage')
+    log = logging.getLogger('backfill_exp_diskusage')
     log.propagate = False
     log.setLevel(logging.DEBUG)
     handler = logging.handlers.RotatingFileHandler(
@@ -1083,13 +1148,233 @@ def backfill_exp_diskusage():
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     log.addHandler(handler)
-    
+
     log.info("")
     log.info("===== New Run =====")
-            
-    log.info("EXPERIMENTS:") 
+
+    log.info("EXPERIMENTS:")
     query = Q(diskusage=None) | Q(diskusage=0)
-    experiment_list = models.Experiment.objects.filter(query)
-    for experiment in experiment_list:
-        log.info("%s" % experiment.expName)
-        setRunDiskspace.delay(experiment.pk)
+    obj_list = models.Experiment.objects.filter(query).exclude(status="planned").values('pk','expName')
+    #obj_list = models.Experiment.objects.values('pk','expName')
+    for obj in obj_list:
+        log.info(obj['expName'])
+        try:
+            setRunDiskspace(obj['pk'])
+        except:
+            log.exception(traceback.format_exc())
+
+
+@task(queue="periodic")
+def backfill_result_diskusage():
+    '''Due to error in initial code that filled in the diskusage field, this function
+    updates every Result object's diskusage value.
+    '''
+    import traceback
+    from django.db.models import Q
+    from iondb.rundb import models
+
+    # Setup log file logging
+    filename = '/var/log/ion/%s.log' % 'backfill_result_diskusage'
+    log = logging.getLogger('backfill_result_diskusage')
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+
+    log.info("")
+    log.info("===== New Run =====")
+
+    log.info("RESULTS:")
+    query = Q(diskusage=None) | Q(diskusage=0)
+    obj_list = models.Results.objects.filter(query).values('pk','resultsName')
+    #obj_list = models.Results.objects.values('pk','resultsName')
+    for obj in obj_list:
+        log.debug(obj['resultsName'])
+        try:
+            setResultDiskspace(obj['pk'])
+        except:
+            log.exception(traceback.format_exc())
+
+@task(queue="periodic")
+def backfill_pluginresult_diskusage():
+    '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
+    updates every Result object's diskusage value.
+    '''
+    import traceback
+    from django.db.models import Q
+    from iondb.rundb import models
+
+    # Setup log file logging
+    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
+    log = logging.getLogger('backfill_pluginresult_diskusage')
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+
+    log.info("")
+    log.info("===== New Run =====")
+
+    log.info("PluginResults:")
+    #query = Q(size=-1) | Q(inodes=-1)
+    #obj_list = models.PluginResult.objects.filter(query).values('pk','path', 'size', 'inodes')
+    obj_list = models.PluginResult.objects.all()
+    for obj in obj_list:
+        log.debug(str(obj))
+        try:
+            obj.size, obj.inodes = obj._calc_size()
+        except OSError:
+            log.exception("Failed to compute plugin size: '%s'", self.path())
+            obj.size, obj.inodes = -1
+        except:
+            log.exception(traceback.format_exc())
+        obj.save()
+    else:
+        log.warn("No PluginResult objects found")
+
+@task
+def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth=None):
+    from iondb.rundb import models
+    logger.debug("Downloading " + url)
+    monitor, created = models.DownloadMonitor.objects.get_or_create(id=download_monitor_pk)
+    monitor.url = url
+    monitor.status = "Starting"
+    monitor.celery_task_id = download_something.request.id
+    monitor.name = name
+    monitor.save()
+
+    # create temp folder in dir to hold the thing
+    local_dir = tempfile.mkdtemp(dir=dir)
+    monitor.local_dir = local_dir
+    monitor.save()
+    os.chmod(local_dir, 0777)
+
+    # open connection
+    try:
+        if auth:
+            username, password = auth
+            password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+            password_mgr.add_password(None, url, username, password)
+            handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+            opener = urllib2.build_opener(handler)
+            resource = opener.open(url, timeout=30)
+        else:
+            resource = urllib2.urlopen(url, timeout=30)
+    except urllib2.HTTPError as err:
+        logger.error("download_something had an http error: %s" % err)
+        monitor.status = "HTTP Error: {0}".format(err.msg)
+        monitor.save()
+        return None, monitor.id
+    except urllib2.URLError as err:
+        logger.error("download_something had a connection error: %s" % err)
+        monitor.status = "Connection Error"
+        monitor.save()
+        return None, monitor.id
+    except ValueError as err:
+        logger.error("download_something got invalid url: " + str(url))
+        monitor.status = "Invalid URL Error"
+        monitor.save()
+        return None, monitor.id
+
+    #set the download's local file name if it wasn't specified above
+    logger.info(resource.headers)
+    if not name:
+        # Check the server's suggested name
+        pattern = re.compile(r"filename\s*=(.+)")
+        match = pattern.search(resource.headers.get("Content-Disposition", ""))
+        if match:
+            name = match.group(1).strip()
+    # name it something, for the love of humanity name it something!
+    name = name or os.path.basename(urllib.unquote(urlparse.urlsplit(url)[2])) or 'the_download_with_no_name'
+    monitor.name = name
+    size = resource.headers.get("Content-Length", None)
+    monitor.size = size and int(size)
+    monitor.save()
+
+    full_path = os.path.join(local_dir, name)
+    # if not None, log the progress to the DownloadMonitor objects
+    if monitor:
+        monitor.status = "Downloading"
+        monitor.save()
+
+    # download and write CHUNK size bits of the file to disk at a time
+    CHUNK = 16 * 1024
+    tick = time.time()
+    progress = 0
+    try:
+        with open(full_path, 'wb') as out_file:
+            chunk = resource.read(CHUNK)
+            while chunk:
+                out_file.write(chunk)
+                # accumulate the download progress as it happens
+                progress += len(chunk)
+                # every 2 seconds, save the current progress to the DB
+                tock = time.time()
+                if tock - tick >= 2:
+                    monitor.progress += progress
+                    monitor.save()
+                    progress = 0
+                    tick = tock
+                chunk = resource.read(CHUNK)
+        os.chmod(full_path, 0666)
+    except IOError as err:
+        monitor.status = "Connection Lost"
+        monitor.save()
+        return None, monitor.id
+
+    monitor.progress += progress
+    monitor.status = "Complete"
+    monitor.save()
+
+    return full_path, monitor.id
+    # setup celery callback for success to take path and go
+    # write generic err-back to log failure in DownloadProgress
+    # write wrapper function to set up the common case.
+
+@task
+def ampliseq_zip_upload(args, meta):
+    from iondb.rundb import publishers
+    from iondb.rundb import models
+    pub = models.Publisher.objects.get(name="BED")
+    full_path, monitor_id = args
+    monitor = models.DownloadMonitor.objects.get(id=monitor_id)
+    upload = publishers.move_upload(pub, full_path, monitor.name, meta)
+    publishers.run_pub_scripts(pub, upload)
+
+
+@task
+def install_reference(args, reference_id):
+    from iondb.rundb import models
+    from iondb.anaserve import client
+    full_path, monitor_id = args
+    monitor = models.DownloadMonitor.objects.get(id=monitor_id)
+    reference = models.ReferenceGenome.objects.get(id=reference_id)
+    extracted_path = os.path.join(monitor.local_dir, "reference_contents")
+    extract_zip(full_path, extracted_path)
+    reference.reference_path = extracted_path
+    reference.enabled = True
+    reference.enable_genome()
+    reference.save()
+    if reference.index_version != settings.TMAP_VERSION:
+        reference.status = "Rebuilding index"
+        reference.save()
+        build_tmap_index.delay(reference)
+
+
+@task
+def get_raid_stats():
+    raidCMD = ["/usr/bin/ion_raidinfo"]
+    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
+    stdout, stderr = q.communicate()
+    if q.returncode == 0:
+        raid_stats = stdout.splitlines(True)
+    else:
+        raid_stats = ['There was an error executing %s' % raidCMD[0]]
+        raid_stats += stdout.splitlines(True)
+    return raid_stats

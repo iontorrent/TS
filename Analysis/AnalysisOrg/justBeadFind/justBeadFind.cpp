@@ -25,8 +25,6 @@
 #include "ImageSpecClass.h"
 #include "MaskFunctions.h"
 
-#include "dbgmem.h"
-
 
 void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progress)
 {
@@ -44,15 +42,6 @@ void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progr
   fprintf (stdout, "\n");
   fflush (NULL);
 }
-
-#ifdef _DEBUG
-void memstatus (void)
-{
-  memdump();
-  dbgmemClose();
-}
-
-#endif /* _DEBUG */
 
 
 void TheSilenceOfTheArmadillos(ofstream &null_ostream)
@@ -74,10 +63,6 @@ int main (int argc, char *argv[])
 {
 
   init_salute();
-#ifdef _DEBUG
-  atexit (memstatus);
-  dbgmemInit();
-#endif /* _DEBUG */
   ofstream null_ostream("/dev/null"); // must stay live for entire scope, or crash when writing
   TheSilenceOfTheArmadillos(null_ostream);
   

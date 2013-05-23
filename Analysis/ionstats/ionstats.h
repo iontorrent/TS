@@ -16,6 +16,7 @@ int IonstatsBasecaller(int argc, const char *argv[]);
 int IonstatsBasecallerReduce(const string& output_json_filename, const vector<string>& input_jsons);
 
 int IonstatsAlignment(int argc, const char *argv[]);
+int IonstatsAlignmentReduce(const string& output_json_filename, const vector<string>& input_jsons);
 
 int IonstatsTestFragments(int argc, const char *argv[]);
 int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector<string>& input_jsons);
@@ -145,6 +146,8 @@ public:
     count_ = json_value["full"]["num_reads"].asInt();
     double system_snr = json_value["system_snr"].asDouble();
     double variance = (1.0/system_snr) * (1.0/system_snr);
+    if (system_snr == 0)
+      variance = 0;
 
     for (int idx = 0; idx < 8; ++idx) {
       zeromer_first_moment_ [idx] = 0;

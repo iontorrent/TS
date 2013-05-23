@@ -58,5 +58,14 @@ class IonErr {
   
 };
 
+class ExitCode{
+    static int exitCode;
+public:
+    static void UpdateExitCode( int newCode ){
+        //Failure code overrides success, but not vice versa
+        exitCode = (newCode==EXIT_FAILURE)?EXIT_FAILURE:exitCode;
+    }
+    static int GetExitCode(void) { return exitCode; }
+};
 
 #endif // IONERR_H

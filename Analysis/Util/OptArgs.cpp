@@ -45,8 +45,25 @@ void OptArgs::ParseCmdLine(int argc, const char *argv[]) {
 }
 
 /** 
- * Get a string option value for the given short/long key
+ * Check if a given option was provided
  */ 
+bool OptArgs::HasOption(char shortOption, const std::string &longOption) {
+
+  std::string shortString = std::string(1, shortOption);
+  if (shortOption != '-' && mSeenOpts.find(shortString) != mSeenOpts.end())
+    return true;
+  if (mSeenOpts.find(longOption) != mSeenOpts.end())
+    return true;
+
+  return false;
+}
+
+
+
+
+/**
+ * Get a string option value for the given short/long key
+ */
 void OptArgs::GetOption(std::string &value, const std::string &defaultValue,
 			char shortOption, const std::string &longOption) {
   OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);

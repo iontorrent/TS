@@ -52,11 +52,13 @@ void WriteBeadFindForBkgModel (std::string& h5file, std::vector<float>& smooth_t
 {
   unsigned int totalRegions = region_timing.size();
   std::vector<float> t_mid_nuc (totalRegions);
+  std::vector<float> t0_frame (totalRegions);
   std::vector<float> t_sigma (totalRegions);
   for (unsigned int i=0; i<totalRegions; i++)
   {
     t_mid_nuc[i] = region_timing[i].t_mid_nuc;
     t_sigma[i] = region_timing[i].t_sigma;
+    t0_frame[i] = region_timing[i].t0_frame;
   }
 
   string h5_t0_est = h5file + ":/beadfind/t0_est";
@@ -67,6 +69,9 @@ void WriteBeadFindForBkgModel (std::string& h5file, std::vector<float>& smooth_t
 
   string h5_t_mid_nuc = h5file + ":/beadfind/t_mid_nuc";
   H5File::WriteVector (h5_t_mid_nuc, t_mid_nuc, false);
+
+  string h5_t0_frame = h5file + ":/beadfind/t0_frame";
+  H5File::WriteVector (h5_t0_frame, t0_frame, false);
 
   string h5_t_sigma = h5file + ":/beadfind/t_sigma";
   H5File::WriteVector (h5_t_sigma, t_sigma, false);
@@ -87,6 +92,10 @@ void LoadBeadFindForBkgModel (std::string &h5file, std::vector<float>& smooth_t0
   std::vector<float> t_sigma;
   H5File::ReadVector (h5_t_sigma, t_sigma);
 
+  std::vector<float> t0_frame;
+  string h5_t0_frame = h5file + ":/beadfind/t0_frame";
+  H5File::ReadVector (h5_t0_frame, t0_frame);
+
   unsigned int totalRegions = region_timing.size();
   assert (t_mid_nuc.size() == totalRegions);
 
@@ -94,6 +103,7 @@ void LoadBeadFindForBkgModel (std::string &h5file, std::vector<float>& smooth_t0
   {
     region_timing[i].t_mid_nuc = t_mid_nuc[i];
     region_timing[i].t_sigma = t_sigma[i];
+    region_timing[i].t0_frame = t0_frame[i];
   }
 
   string h5_t0_est = h5file + ":/beadfind/t0_est";

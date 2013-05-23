@@ -47,9 +47,7 @@ TB.configure.plugins.modal_refresh.ready = function() {
             $('#modal_confirm_plugin_refresh #modal-plugin-information pre code').text(JSON.stringify(data));
         }).fail(function(data) {
             TB.configure.plugins.modal_refresh.reset();
-            $('#modal_confirm_plugin_refresh #modal-error-messages').empty();
-            $('#modal_confirm_plugin_refresh #modal-error-messages').removeClass('hide');
-            $('#modal_confirm_plugin_refresh #modal-error-messages').append('<p>Error</p><p>' + data.responseText + '</p>');
+            $('#modal_confirm_plugin_refresh #modal-error-messages').empty().append('<p>Error</p><p>' + data.responseText + '</p>').removeClass('hide');
             console.log("error:", data);
         }).always(function(data) {
             TB.configure.plugins.modal_refresh.loading(); //toggle loading to off

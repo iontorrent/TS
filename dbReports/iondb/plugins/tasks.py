@@ -6,8 +6,10 @@ import logging
 
 from django.conf import settings
 from celery.task import task
+from celery.utils.log import get_task_logger
 
 log = logging.getLogger(__name__)
+logger = get_task_logger(__name__)
 
 ## Helper common to all methods.
 def get_info_from_script(name, script, context=None):
@@ -83,7 +85,6 @@ def scan_all_plugins(pluginlist):
     Note: They do not need to be installed yet. Just name, script pairs, or name, script, context tuples.
     """
     ret = {}
-    logger = scan_all_plugins.get_logger()
 
     count = 0
     for data in pluginlist:
@@ -115,6 +116,9 @@ def scan_all_plugins(pluginlist):
                 p = Plugin.objects.get(pk=ppk)
                 p.updateFromInfo(info)
                 p.save()
+            except ValueError:
+                # plugin version mismatch
+                pass
             except:
                 logger.exception("Failed to save info to plugin db cache")
 

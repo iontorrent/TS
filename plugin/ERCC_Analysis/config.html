@@ -46,6 +46,9 @@
           if(key == "erccpool"){
            document.getElementById("erccpool").value = val;
           }  
+          if(key == "barcode"){
+           document.getElementById("barcode").value = val;
+          }
 		  });
         }
        });
@@ -104,6 +107,7 @@
 	  <tr><td>Default minimum r-squared (e.g. 0.9): </td><td><input type="text" id="minrsquared" name="minrsquared" value=""/></td></tr>
       <tr><td>Default minimum counts per ERCC transcript (e.g. 1): </td><td><input type="text" id="mincounts" name="mincounts" value=""/></td></tr>
 	  <tr><td>Default ERCC Pool (1 or 2): </td><td><input type="text" id="erccpool" name="erccpool" value=""/></td></tr>
+	  <tr><td>Default Barcode (e.g. IX001): </td><td><input type="text" id="barcode" name="barcode" value=""/></td></tr>
 	</table>
       </form>
       <input id="postbutton" type="submit" value="Submit">

@@ -6,6 +6,7 @@
     <div class="modal-body">
         <p id="single_msg">Click Refresh to begin.</p>
         <div id="modal-error-messages" class="alert alert-error hide"></div>
+        <div id="modal-info-messages" class="alert alert-info hide"></div>
         <div id="modal-success-messages" class="alert alert-success hide"></div>
         <div id="modal-plugin-information" class="hide">
             <h3>Response</h3>
@@ -13,57 +14,10 @@
         </div>
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
         <a href="#" class="btn btn-primary">Refresh</a>
     </div>
     <script>
-        reset_modal = function() {
-            $('#modal_confirm_plugin_refresh #modal-success-messages').addClass('hide').empty();
-            $('#modal_confirm_plugin_refresh #modal-error-messages').addClass('hide').empty();
-            $('#modal_confirm_plugin_refresh #modal-plugin-information').addClass('hide');
-            $('#modal_confirm_plugin_refresh #modal-plugin-information pre code').empty();
-        };
-        $('#modal_confirm_plugin_refresh .btn-primary').click(function(e) {
-            reset_modal();
-            var that = this;
-            e.preventDefault();
-            var url = $('#modal_confirm_plugin_refresh').attr('action')
-                , type = $('#modal_confirm_plugin_refresh').attr('method');
-
-            console.log('transmitting :', type, url);
-            var jqxhr = $.ajax(url, {
-                             type: type
-                            , contentType: 'application/json'
-                            , dataType: 'json'
-                            , processData: false
-                }).done(function(data) {
-                    console.log("success:",  url);
-                    console.log("data:",  data);
-                    if ($('#modal_confirm_plugin_refresh').data('customevents')) {
-                        jQuery.each($('#modal_confirm_plugin_refresh').data('customevents'), function(i, elem) {
-                            $('#modal_confirm_plugin_refresh').trigger(elem, {})
-                        });
-                    }
-                    var event = jQuery.Event("modal_confirm_plugin_refresh_done");
-                    event.plugininfo = data;
-                    $('#modal_confirm_plugin_refresh').trigger(event);
-                    $('#modal_confirm_plugin_refresh #modal-success-messages').removeClass('hide').empty().append('<p>Successfully refreshed plugin information</p>');
-                    $('#modal_confirm_plugin_refresh #modal-plugin-information').removeClass('hide');
-                    $('#modal_confirm_plugin_refresh #modal-plugin-information pre code').text(JSON.stringify(data));
-                })
-                .fail(function(data) {
-                    reset_modal();
-                    $('#modal_confirm_plugin_refresh #modal-error-messages').empty();
-                    $('#modal_confirm_plugin_refresh #modal-error-messages').removeClass('hide');
-                    $('#modal_confirm_plugin_refresh #modal-error-messages').append('<p>Error</p><p>'+ data.responseText + '</p>');
-                    console.log("error:", data);
-
-                })
-                .always(function(data) { /*console.log("complete:", data);*/ });
-        });
-        $('#modal_confirm_plugin_refresh').on('hidden', function () {
-            $('body #modal_confirm_plugin_refresh').remove();
-        });
+    TB.configure.plugins.modal_refresh.ready();
     </script>
-
 </div>

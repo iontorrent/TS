@@ -20,15 +20,18 @@ from os import path
 import datetime
 import re
 import os.path
-
+import fnmatch
+import traceback
+import pytz
 from django.core.exceptions import ValidationError
 
 import iondb.settings
 
 
 from django.db import models
-from iondb.backup import devices
+from iondb.utils import devices
 import json
+import simplejson
 
 from iondb.rundb import json_field
 
@@ -39,7 +42,8 @@ import random
 import string
 import logging
 from iondb.rundb import tasks
-
+from iondb.rundb.data import dmactions_types
+from iondb.rundb.separatedValuesField import SeparatedValuesField
 try:
     from hashlib import sha1
 except ImportError:
@@ -52,6 +56,7 @@ from django.contrib.auth.models import User, Group
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 from django.utils.encoding import force_unicode
+from django.utils import timezone
 from django.core import urlresolvers
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
@@ -85,7 +90,7 @@ class Project(models.Model):
 #        if self.pk:
 #            current = Project.objects.get(self.pk)
 #            logger.error( current.creator.username, self.creator.username)
-#            if current and current.creator.pk != self.creator.pk: 
+#            if current and current.creator.pk != self.creator.pk:
 #                raise ValidationError('creator is readonly')
 #        models.Model.save(self, force_insert=force_insert, force_update=force_update, using=using)
 
@@ -110,18 +115,19 @@ class Project(models.Model):
 class KitInfoManager(models.Manager):
     def get_by_natural_key(self, uid):
         return self.get(uid = uid)
-    
+
 class KitInfo(models.Model):
-    
+
     ALLOWED_KIT_TYPES = (
         ('SequencingKit', 'SequencingKit'),
         ('LibraryKit', 'LibraryKit'),
         ('TemplatingKit', 'TemplatingKit'),
         ('AdapterKit', "AdapterKit"),
         ('ControlSequenceKit', "ControlSequenceKit"),
-        ('SamplePrepKit', "SamplePrepKit")
+        ('SamplePrepKit', "SamplePrepKit"),
+        ('IonChefPrepKit', 'IonChefPrepKit')
     )
-    
+
     kitType = models.CharField(max_length=20, choices=ALLOWED_KIT_TYPES)
     name = models.CharField(max_length=512, blank=False, unique=True)
     description = models.CharField(max_length=3024, blank=True)
@@ -136,7 +142,7 @@ class KitInfo(models.Model):
     nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='', blank=True)
 
     ALLOWED_RUN_MODES = (
-        ('', 'Undefined'),                         
+        ('', 'Undefined'),
         ('single', 'SingleRead'),
         ('pe', 'PairedEnd')
     )
@@ -147,7 +153,7 @@ class KitInfo(models.Model):
     isActive = models.BooleanField(default = True)
 
     ALLOWED_INSTRUMENT_TYPES = (
-        ('', 'Any'),                         
+        ('', 'Any'),
         ('pgm', 'PGM'),
         ('proton', 'Proton')
     )
@@ -155,15 +161,15 @@ class KitInfo(models.Model):
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
 
     uid = models.CharField(max_length=10, unique=True, blank=False)
-    
+
     objects = KitInfoManager()
-             
+
     def __unicode__(self):
-        return u'%s' % self.name     
+        return u'%s' % self.name
 
     def natural_key(self):
         return (self.uid,)  # must return a tuple
-    
+
     class Meta:
         unique_together = (('kitType', 'name'),)
         #unique_together = (('uid'),)
@@ -185,15 +191,15 @@ class KitPart(models.Model):
 
     def natural_key(self):
         return (self.barcode, )  # must return a tuple
-         
+
     class Meta:
         unique_together = (('barcode'),)
-    
+
 
 class RunTypeManager(models.Manager):
     def get_by_natural_key(self, runType):
         return self.get(runType = runType)
-    
+
 class RunType(models.Model):
     runType = models.CharField(max_length=512)
     barcode = models.CharField(max_length=512, blank=True)
@@ -209,13 +215,13 @@ class RunType(models.Model):
     nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='dna', blank=True)
 
     objects = RunTypeManager()
-    
+
     def __unicode__(self):
         return self.runType
 
     def natural_key(self):
         return (self.runType, )  # must return a tuple
-    
+
 
 class ApplProductManager(models.Manager):
     def get_by_natural_key(self, productCode):
@@ -236,37 +242,37 @@ class ApplProduct(models.Model):
     defaultPairedEndSequencingKit = models.ForeignKey(KitInfo, related_name='peSeqKit_applProduct_set', null=True)
     defaultPairedEndLibraryKit = models.ForeignKey(KitInfo, related_name='peLibKit_applProduct_set', null=True)
     defaultGenomeRefName = models.CharField(max_length = 1024, blank=True, null=True)
-    #this is analogous to bedFile in PlannedExperiment 
-    defaultTargetRegionBedFileName = models.CharField(max_length = 1024, blank=True, null=True) 
+    #this is analogous to bedFile in PlannedExperiment
+    defaultTargetRegionBedFileName = models.CharField(max_length = 1024, blank=True, null=True)
     #this is analogous to regionFile in PlannedExperiment
     defaultHotSpotRegionBedFileName = models.CharField(max_length = 1024, blank=True, null=True)
-
-    ##20120608-to-be-replaced-by-json-clob-according-to-josh compatiblePlugins = models.ManyToManyField(Plugin, related_name='applProduct_set')
-    ##20120608-to-be-replaced-by-json-clob-according-to-josh defaultPlugins = models.ManyToManyField(Plugin, related_name='defaultApplProduct_set')
 
     defaultChipType = models.CharField(max_length=128, blank=True, null=True)
     isDefault = models.BooleanField(default = False)
     isPairedEndSupported = models.BooleanField(default = True)
     isDefaultPairedEnd = models.BooleanField(default = False)
     defaultVariantFrequency = models.CharField(max_length = 512, blank=True, null=True)
-    
+
     defaultFlowCount = models.PositiveIntegerField(default = 0)
     defaultPairedEndAdapterKit = models.ForeignKey(KitInfo, related_name='peAdapterKit_applProduct_set', null=True)
     defaultTemplateKit = models.ForeignKey(KitInfo, related_name='templateKit_applProduct_set', null=True)
     defaultControlSeqKit = models.ForeignKey(KitInfo, related_name='controlSeqKit_applProduct_set', null=True)
-    
+
     #sample preparation kit
     defaultSamplePrepKit = models.ForeignKey(KitInfo, related_name='samplePrepKit_applProduct_set', null=True)
-    
+
     isHotspotRegionBEDFileSuppported = models.BooleanField(default = True)
 
-    
+    isDefaultBarcoded = models.BooleanField(default = False)
+    defaultBarcodeKitName = models.CharField(max_length=128, blank=True, null=True)
+    defaultIonChefPrepKit = models.ForeignKey(KitInfo, related_name='ionChefPrepKit_applProduct_set', null=True)
+
     def __unicode__(self):
-        return u'%s' % self.productName  
+        return u'%s' % self.productName
 
     def natural_key(self):
         return (self.productCode, )    # must return a tuple
-    
+
 
 class QCType(models.Model):
     qcName = models.CharField(max_length=512, blank=False, unique=True)
@@ -274,12 +280,64 @@ class QCType(models.Model):
     minThreshold = models.PositiveIntegerField(default=0)
     maxThreshold = models.PositiveIntegerField(default=100)
     defaultThreshold = models.PositiveIntegerField(default=0)
-    
-    def __unicode__(self):
-        return u'%s' % self.qcName     
-    
 
-        
+    def __unicode__(self):
+        return u'%s' % self.qcName
+
+
+class PlannedExperimentManager(models.Manager):
+    def _extract_extra_kwargs(self, **kwargs):
+        #PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
+
+        extra_kwargs = {}
+        extra_kwargs['x_autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
+        extra_kwargs['x_barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
+        extra_kwargs['x_barcodeId'] = kwargs.pop('x_barcodeId', "")
+        extra_kwargs['x_bedfile'] = kwargs.pop('x_bedfile', "")
+        extra_kwargs['x_chipType'] = kwargs.pop('x_chipType', "")
+        extra_kwargs['x_flows'] = kwargs.pop('x_flows', None)
+        extra_kwargs['x_forward3primeadapter'] = kwargs.pop('x_forward3primeadapter', "")
+        ###'_isReverseRun':  = self.isReverseRun
+        extra_kwargs['x_library'] = kwargs.pop('x_library', "")
+        extra_kwargs['x_libraryKey'] = kwargs.pop('x_libraryKey', "")
+        extra_kwargs['x_librarykitname'] = kwargs.pop('x_librarykitname', "")
+        extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
+        extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
+        extra_kwargs['x_sample'] = kwargs.pop('x_sample', "")
+        extra_kwargs['x_sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
+        extra_kwargs['x_selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
+        extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
+        extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
+
+        logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
+
+        return kwargs, extra_kwargs
+
+
+    def save_plan(self, planOid, **kwargs):
+        popped_kwargs, extra_kwargs = self._extract_extra_kwargs(**kwargs)
+
+        logger.info("PlannedExpeirmentManager.save_plan() planOid=%s; after extract_extra_kwargs... popped_kwargs==%s" %(str(planOid), popped_kwargs))
+        logger.info("PlannedExpeirmentManager.save_plan() after extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
+
+        if planOid < 0:
+            plan = self.create(**popped_kwargs)
+        else:
+            plan = self.get(pk = planOid)
+
+            for key, value in popped_kwargs.items():
+                setattr(plan, key, value)
+
+        plan.save()
+
+        if plan:
+            isPlanCreated = (planOid < 0)
+            plan.save_plannedExperiment_association(isPlanCreated, **extra_kwargs)
+
+
+        return plan, extra_kwargs
+
+
 class PlannedExperiment(models.Model):
     """
     Create a planned run to ease the pain on manually entry on the PGM
@@ -297,14 +355,23 @@ class PlannedExperiment(models.Model):
     #was the plan already executed?
     planExecuted = models.BooleanField(default=False)
 
+    #"planned" status : means the entire plan object has been saved but not yet used
+    #"reserved" status: means part of a group plan (e.g., forward of a paired-end plan) has been claimed for a run
+    #"run" status     : means the plan has been claimed for a run and the corresponding sequencing run has started
+    #"voided" status  : means to ignore the status of a plan (e.g., forward of a paired-end plan) so the claiming
+    #of the reverse of a paired-end plan will mark this plan as executed
+    #"blank" status   : for backward compatibility, blank status + planExecuted = True is same as "executed" while
+    #"blank" status + planExecuted = False is same as "planned" status. [TODO: replace blank status]
     ALLOWED_PLAN_STATUS = (
-        ('', 'None'),
+        ('', 'Undefined'),
         ('voided', 'Voided'),
-        ('reserved', 'Reserved')
+        ('reserved', 'Reserved'),
+        ('planned', 'Planned'),
+        ('run', 'Run')
     )
 
-    #planStatus - Did the plan work?
-    planStatus = models.CharField(max_length=512, blank=True)
+    #planStatus
+    planStatus = models.CharField(max_length=512, blank=True, choices=ALLOWED_PLAN_STATUS, default='')
 
     #who ran this
     username = models.CharField(max_length=128, blank=True, null=True)
@@ -321,9 +388,8 @@ class PlannedExperiment(models.Model):
     #add metadata grab bag
     metaData = json_field.JSONField(blank=True)
 
-    chipType = models.CharField(max_length=32,blank=True,null=True)
     chipBarcode = models.CharField(max_length=64, blank=True,null=True)
-    
+
     #we now persist the sequencing kit name instead of its part number. to be phased out
     seqKitBarcode = models.CharField(max_length=64, blank=True,null=True)
 
@@ -339,23 +405,13 @@ class PlannedExperiment(models.Model):
     #cycles
     cycles = models.IntegerField(blank=True,null=True)
 
-    #flow vs cycles ? do we need this?
-    flows = models.IntegerField(blank=True,null=True)
-
-    #AutoAnalysis - autoName string
-    autoAnalyze = models.BooleanField()
+    #autoName string
     autoName = models.CharField(max_length=512, blank=True, null=True)
 
     preAnalysis = models.BooleanField()
 
     #RunType -- this is from a list of possible types (aka application)
-    runType = models.CharField(max_length=512, blank=True, null=True)
-
-    #Library - should this be a text field?
-    library = models.CharField(max_length=512, blank=True, null=True)
-
-    #barcode
-    barcodeId = models.CharField(max_length=256, blank=True, null=True)
+    runType = models.CharField(max_length=512, blank=False, null=False, default="GENS")
 
     #adapter (20120313: this was probably for forward 3' adapter but was never used.  Consider this column obsolete)
     adapter = models.CharField(max_length=256, blank=True, null=True)
@@ -366,32 +422,15 @@ class PlannedExperiment(models.Model):
     #runname - name of the raw data directory
     runname = models.CharField(max_length=255, blank=True, null=True)
 
-
-    #Sample
-    sample = models.CharField(max_length=127, blank=True, null=True)
-
-    #usernotes
-    notes = models.CharField(max_length=1024, blank=True, null=True)
-
     flowsInOrder = models.CharField(max_length=512, blank=True, null=True)
-    #library key for forward run
-    libraryKey = models.CharField(max_length=64, blank=True,null=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
     reverse_primer = models.CharField(max_length=128, blank=True, null=True)
-
-    #bed file
-    #Target Regions BED File: bedfile
-    #Hotspot Regions BED File: regionfile
-    bedfile = models.CharField(max_length=1024,blank=True)
-    regionfile = models.CharField(max_length=1024,blank=True)
 
     #add field for ion reporter upload plugin workflow
     irworkflow = models.CharField(max_length=1024,blank=True)
 
     #we now persist the sequencing kit name instead of its part number. to be phased out
     libkit = models.CharField(max_length=512, blank=True, null=True)
-
-    variantfrequency = models.CharField(max_length=512, blank=True, null=True)
 
     STORAGE_CHOICES = (
         ('KI', 'Keep'),
@@ -403,34 +442,22 @@ class PlannedExperiment(models.Model):
     storage_options = models.CharField(max_length=200, choices=STORAGE_CHOICES,
                                        default='A')
 
-    #for paired-end reverse run, separate library key and 3' adapter needed
-    reverselibrarykey = models.CharField("library key for reverse run", max_length=64, blank=True, null=True)
-    reverse3primeadapter = models.CharField("3' adapter for reverse run", max_length=512, blank=True, null=True)
-
-
-    #for forward run, 3' adapter specific to this plan
-    forward3primeadapter = models.CharField("3' adapter for forward run", max_length=512, blank=True, null=True)
-    
     isReverseRun = models.BooleanField(default=False)
-    
-    #we now persist the kit names instead of their part number
-    librarykitname = models.CharField(max_length=512, blank=True, null=True)
-    sequencekitname = models.CharField(max_length=512, blank=True, null=True)
-    
-    #plan displayed name allows embedded blanks. 
+
+    #plan displayed name allows embedded blanks.
     #planName is the display name with embedded blanks converted to underscores
-    
+
     planDisplayedName = models.CharField(max_length=512,blank=True,null=True)
-    
+
     ALLOWED_RUN_MODES = (
-        ('', 'Undefined'),                         
+        ('', 'Undefined'),
         ('single', 'SingleRead'),
         ('pe', 'PairedEnd')
     )
 
     #run mode
     runMode = models.CharField(max_length=64, choices=ALLOWED_RUN_MODES, default='', blank=True)
-    
+
     #whether this is a plan template
     isReusable = models.BooleanField(default=False)
     isFavorite = models.BooleanField(default=False)
@@ -438,37 +465,33 @@ class PlannedExperiment(models.Model):
     #whether this is a pre-defined plan template
     isSystem = models.BooleanField(default=False)
 
-    #if instrument user does not select a plan for the run, 
-    #crawler will use the properties from the system default plan or template 
+    #if instrument user does not select a plan for the run,
+    #crawler will use the properties from the system default plan or template
     #for the run
     isSystemDefault = models.BooleanField(default=False)
-    
+
     #used for paired-end plan & plan template
     #for PE plan template, there will only be 1 template in db
-    #for PE plan, there will be 1 parent plan and 2 children (1 forward and 1 reverse) 
+    #for PE plan, there will be 1 parent plan and 2 children (1 forward and 1 reverse)
 
     isPlanGroup = models.BooleanField(default=False)
     parentPlan = models.ForeignKey('self', related_name='childPlan_set', null=True, blank=True)
 
     qcValues = models.ManyToManyField(QCType, through="PlannedExperimentQC", null=True)
-     
-    #allow spaces in sampleDisplayedName
-    sampleDisplayedName = models.CharField(max_length=127, blank=True, null=True)
-    
-    barcodedSamples = json_field.JSONField(blank=True, null=True)
-        
+
     #we now persist the kit names instead of their part number
     templatingKitName = models.CharField(max_length=512, blank=True, null=True)
     controlSequencekitname = models.CharField(max_length=512, blank=True, null=True)
 
     #pairedEnd library adapter name
     pairedEndLibraryAdapterName = models.CharField(max_length=512, blank=True, null=True)
-    
+
     #sample preparation kit name
     samplePrepKitName = models.CharField(max_length=512, blank=True, null=True)
 
-    selectedPlugins = json_field.JSONField(blank=True, null=True)
-    
+    objects = PlannedExperimentManager()
+
+
     def __unicode__(self):
         if self.planName:
             return self.planName
@@ -485,75 +508,267 @@ class PlannedExperiment(models.Model):
         return planShortID
 
 
-    def getSeqKitBarcodeForSave(self):
-        #we now save the sequencing kit name in addition to the kit's part number in a plan but
-        #csv upload, for backward compatibility, will continue to ask user to include seqKitBarcode only.
-        #when saving (or updating a pre-existing plan, we want to populate the new field 
-        #with the info if not provided
-        if (self.seqKitBarcode and not self.sequencekitname):
-            try:
-                selectedSeqKitPart = KitPart.objects.get(barcode=self.seqKitBarcode)
-                if (selectedSeqKitPart):
-                    selectedSeqKit = selectedSeqKitPart.kit
-                    if (selectedSeqKit):
-                        return selectedSeqKit.name
+    @classmethod
+    def get_latest_plan_or_template_by_chipType(cls, chipType = None, isReusable = True, isSystem = True, isSystemDefault = True):
+        """
+        return the latest plan or template with matching chipType. Input chipType can be None
+        """
+        plans = PlannedExperiment.objects.filter(isReusable = isReusable, isSystem = isSystem, isSystemDefault = isSystemDefault).order_by("-date")
 
-            except KitPart.DoesNotExist:
-                #if we can't determine the seq kit name, leave it as is
-                #do not fail the save()               
-                logger.info("NO kit part found at plan for sequencingKitBarcode=%s" % self.seqKitBarcode)
-                return None
-        else:
-            return self.sequencekitname
-        
+        if plans:
+            for plan in plans:
+                planChipType = plan.get_chipType()
 
-    def getLibraryKitForSave(self):
-        #we now save the library kit name instead of the kit's part number to PlannedExperiment
-        #when updating a pre-existing plan, we want to populate the new field with the info
-        if (self.libkit and not self.librarykitname):
-            try:
-                selectedLibKitPart = KitPart.objects.get(barcode=self.libkit)
-                if (selectedLibKitPart):
-                    selectedLibKit = selectedLibKitPart.kit
-                    if (selectedLibKit):
-                        return selectedLibKit.name
-            except KitPart.DoesNotExist:
-                #if we can't determine the library kit name, leave it as is
-                #do not fail the save()               
-                logger.info("NO kit part found at PlannedExperiment for libraryKitBarcode=%s" % self.libkit)                    
-                return None
-        else:
-            return self.librarykitname
-        
-        
+                if chipType:
+                    if (planChipType == chipType) or (planChipType == chipType[:3]):
+                        logger.info("PlanExperiment.get_latest_plan_or_template_by_chipType() match - chipType=%s; planChipType=%s; found plan.pk=%s" %(chipType, planChipType, str(plan.pk)))
+                        return plan
+                elif (not planChipType and not chipType):
+                    logger.info("PlanExperiment.get_latest_plan_or_template_by_chipType() found plan.pk=%s" %(str(plan.pk)))
+                    return plan
 
-    def getForward3primeAdapterForSave(self):
-        #For paired-end forward run, if 3' adapter is missing, programmatically set it here 
-        #since the preferred 3' adapter is not the default.                                                 
-        if not self.forward3primeadapter:
-            try:
-                forwardPEAdapter = ThreePrimeadapter.objects.filter(direction="Forward", runMode="pe", name__contains="Ion")[0]
-                return forwardPEAdapter.sequence
-            except ThreePrimeadapter.DoesNotExist:
-                logger.info("No preferred paired-end forward 3 prime adapter found at PlannedExperiment")  
-            except:
-                logger.info("Error: Preferred paired-end forward 3 prime adapters at PlannedExperiment")
-                return None
+        if (isReusable and isSystem and isSystemDefault):
+            chips = dict((chip.name, chip.instrumentType) for chip in Chip.objects.all())
+
+            chipInstrumentType = "pgm"
+            if chipType:
+                chipInstrumentType = chips.get(chipType, "")
+                if (not chipInstrumentType):
+                    chipInstrumentType = chips.get(chipType[:3], "pgm")
+
+                    logger.debug("PlanExperiment.get_latest_plan_or_template_by_chipType() chipType=%s; instrumentType=%s; " %(chipType, chipInstrumentType))
+            else:
+                logger.debug("PlanExperiment.get_latest_plan_or_template_by_chipType() NO chipType - use chipInstrumentType=%s; " %(chipInstrumentType))
+
+            for template in plans:
+                plan_chipInstrumentType = "pgm"
+
+                planChipType = template.get_chipType()
+                if planChipType:
+                    plan_chipInstrumentType = chips.get(planChipType, "")
+                    if not plan_chipInstrumentType:
+                        plan_chipInstrumentType = chips.get(chipType[:3], "pgm")
+
+                if plan_chipInstrumentType == chipInstrumentType:
+                    logger.debug("EXIT PlanExperiment.get_latest_plan_or_template_by_chipType() return template.id=%d; for chipInstrumentType=%s; " %(template.id, chipInstrumentType))
+                    return template
+
+        return None
+
+
+    def get_autoAnalyze(self):
+        experiment = self.experiment
+        if experiment:
+            return experiment.autoAnalyze
         else:
-            return self.forward3primeadapter
-        
-        
-    def save(self):            
+            return False
+
+    def get_barcodedSamples(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.barcodedSamples
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_barcodeId(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.barcodeKitName
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_bedfile(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.targetRegionBedFile
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_chipType(self):
+        experiment = self.experiment
+        if experiment:
+            return experiment.chipType
+        else:
+            return ""
+
+    def get_flows(self):
+        experiment = self.experiment
+        if experiment:
+            return experiment.flows
+        else:
+            return 0
+
+    def get_forward3primeadapter(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.threePrimeAdapter
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_library(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.reference
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_libraryKey(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.libraryKey
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_librarykitname(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.libraryKitName
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_notes(self):
+        experiment = self.experiment
+        if experiment:
+            return experiment.notes
+        else:
+            return ""
+
+    def get_regionfile(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.hotSpotRegionBedFile
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_sample(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas and latest_eas.barcodeKitName:
+                return ""
+            else:
+                if experiment.samples.count() > 0:
+                    sample = experiment.samples.values()[0]
+                    name = sample['name']
+                    return name
+                else:
+                    return ""
+        else:
+            return ""
+
+    def get_sampleDisplayedName(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas and latest_eas.barcodeKitName:
+                return ""
+            else:
+                if experiment.samples.count() > 0:
+                    sample = experiment.samples.values()[0]
+                    displayedName = sample['displayedName']
+                    return displayedName
+                else:
+                    return ""
+        else:
+            return ""
+
+    def get_selectedPlugins(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.selectedPlugins
+            else:
+                return ""
+        else:
+            return ""
+
+    def get_sequencekitname(self):
+        experiment = self.experiment
+        if experiment:
+            return experiment.sequencekitname
+        else:
+            return ""
+
+    def get_variantfrequency(self):
+        return ""
+
+    def is_ionChef(self):
+        kitName = self.templatingKitName
+        if kitName:
+            for icKit in KitInfo.objects.filter(kitType = "IonChefPrepKit"):
+                if (kitName == icKit.name):
+                    return True
+
+        return False
+
+
+    def save(self, *args, **kwargs):
+
+        logger.debug("PDD ENTER models.PlannedExperiment.save(self, args, kwargs)")
+        logger.debug("PDD kwargs=%s " %(kwargs))
+
+
+        #PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
+
+        extra_kwargs = {}
+        extra_kwargs['x_autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
+        extra_kwargs['x_barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
+        extra_kwargs['x_barcodeId'] = kwargs.pop('x_barcodeId', "")
+        extra_kwargs['x_bedfile'] = kwargs.pop('x_bedfile', "")
+        extra_kwargs['x_chipType'] = kwargs.pop('x_chipType', "")
+        extra_kwargs['x_flows'] = kwargs.pop('x_flows', "0")
+        extra_kwargs['x_forward3primeadapter'] = kwargs.pop('x_forward3primeadapter', "")
+        ###'_isReverseRun':  = self.isReverseRun
+        extra_kwargs['x_library'] = kwargs.pop('x_library', "")
+        extra_kwargs['x_libraryKey'] = kwargs.pop('x_libraryKey', "")
+        extra_kwargs['x_librarykitname'] = kwargs.pop('x_librarykitname', "")
+        extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
+        extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
+        extra_kwargs['x_sample'] = kwargs.pop('x_sample', "")
+        extra_kwargs['x_sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
+        extra_kwargs['x_selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
+        extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
+        extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
+
+        if not self.planStatus:
+            self.planStatus = "planned"
+
         #if user uses the old ui to save a plan directly, planDisplayedName will have no user input
         if not self.planDisplayedName:
             self.planDisplayedName = self.planName;
-
-        #likewise for sampleDisplayedName
-        if not self.sampleDisplayedName:
-            self.sampleDisplayedName = self.sample;
-            
-        if not self.notes:
-            self.notes = ""
 
         self.date = datetime.datetime.now()
         if not self.planShortID:
@@ -561,53 +776,236 @@ class PlannedExperiment(models.Model):
         if not self.planGUID:
             self.planGUID = str(uuid.uuid4())
 
-        self.sequencekitname = self.getSeqKitBarcodeForSave()      
-              
+        if not self.runType:
+            self.runType = "GENS"
+
         isToSkipPlanUpdate = False
-        
+
+        isPlanCreated = True
+
         #for backward and non-gui compatibility if user is not using the v3.0 plan/template wizard to create a plan
         if (self.isReverseRun == True):
             self.runMode = "pe"
-            
+
         if (self.id):
+            isPlanCreated = False
+
             dbPlan = PlannedExperiment.objects.get(pk=self.id)
- 
+
             #last modified date
             self.date = datetime.datetime.now()
 
-            self.librarykitname = self.getLibraryKitForSave() 
-                                                
             #scenario: change from PE to PE or non-PE to PE
             if (self.runMode == "pe" or self.isReverseRun):
-                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)     
+                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)
             else:
                 #scenario: change from PE to non-PE
                 if (dbPlan.runMode == "pe" or dbPlan.isReverseRun):
-                    raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be updated." % self.planDisplayedName)     
-                  
-                else:  
+                    raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be updated." % self.planDisplayedName)
+
+                else:
                     if (self.isReverseRun == False):
-                        self.reverselibrarykey = None
-                        self.reverse3primeadapter = None
-                    
                         super(PlannedExperiment, self).save()
-                    else:              
-                        raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)     
-        else:                
+                    else:
+                        raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)
+        else:
             #if user creates a new forward plan
             if (self.runMode == "pe" or self.isReverseRun):
-                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName) 
+                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)
             else:
-                #do not blank out the reverse info for a PE plan template               
-                self.reverselibrarykey = None
-                self.reverse3primeadapter = None
-                             
                 if PlannedExperiment.objects.filter(planShortID=self.planShortID, planExecuted=False):
                     self.planShortID = self.findShortID()
-                            
-                #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName) 
-                super(PlannedExperiment, self).save()                
-         
+
+                #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName)
+                super(PlannedExperiment, self).save()
+
+
+    def save_plannedExperiment_association(self, isPlanCreated, **kwargs):
+        """
+        create/update the associated records for the plan
+        """
+        logger.debug("PDD ENTER models.save_plannedExperiment_association() isPlanCreated=%s; self_id=%d; planExecuted=%s; kwargs=%s" %(str(isPlanCreated), self.id, str(self.planExecuted), kwargs))
+
+        #-1-for plan creation: create all records (exp/sample/eas)
+        #-2-for template creation: create only exp and eas records
+        #-3-for plan updates: if plan is still at planning stage, all exp/sample/eas attributes are editable
+        #-4-if user has already selected this plan for a run on the instrument, entry point for edits needs to start from experiment
+        #-5-for template updates, all exp/sample/eas attributes are editable
+
+        if (not isPlanCreated) and self.planExecuted:
+            pass
+        else:
+            #this could be a new creation or an update
+            logger.debug("models.save_plannedExperiment_association() isPlanCreated=%s; self_id=%d" %(str(isPlanCreated), self.id))
+
+            currentDate = datetime.datetime.now()
+
+            exp_kwargs = {
+                          'autoAnalyze' : kwargs.get('x_autoAnalyze', True),
+                          'chipType' : kwargs.get('x_chipType', ""),
+                          'date' : currentDate,
+                          'flows' : kwargs.get('x_flows', "0"),
+                          'isReverseRun' : kwargs.get('x_isReverseRun', False),
+                          'notes' : kwargs.get('x_notes', ""),
+                          'plan' : self,
+                          'runMode' : self.runMode,
+                          'sequencekitname' : kwargs.get('x_sequencekitname', ""),
+                          'status' : self.planStatus,
+
+                          'expDir' : '',
+                          #temp expName value below will be replaced in crawler
+                          'expName' : self.planGUID,
+                          'displayName' : self.planShortID,
+                          'pgmName' : '',
+                          'log' : '',
+                          #db constraint requires a unique value for experiment. temp unique value below will be replaced in crawler
+                          'unique' : self.planGUID,
+                          'chipBarcode' : '',
+                          'seqKitBarcode' : '',
+                          'sequencekitbarcode' : '',
+                          'reagentBarcode' : '',
+                          'cycles' : 0,
+                          'expCompInfo' : '',
+                          'baselineRun' : '',
+                          'flowsInOrder' : '',
+                          'ftpStatus' : 'Complete',
+                          'displayName' : '',
+
+            }
+
+            logger.debug("PDD models.save_plannedExperiment_association() self_id=%d exp_kwargs=..." %(self.id))
+            logger.debug(exp_kwargs)
+
+            #there should only be 1 experiment maximum for each plan
+
+            experiment = None
+            try:
+                experiment = self.experiment
+                for key,value in exp_kwargs.items():
+                    setattr(experiment, key, value)
+
+                #need this!
+                experiment.plan = self
+                logger.debug("PDD models.save_plannedExperiment_association() going to UPDATE experiment id=%d" % experiment.id)
+            except Experiment.DoesNotExist:
+                experiment = Experiment(**exp_kwargs)
+
+                experiment.plan = self
+                logger.debug("PDD models.save_plannedExperiment_association() #2 going to CREATE experiment")
+
+            experiment.save()
+
+            logger.debug("PDD models.save_plannedExperiment_association() AFTER saving experiment_id=%d" %(experiment.id))
+
+            #if this is a plan
+            if not self.isReusable:
+                #TODO: sample-driven planning is not yet supported. all is plan-driven planning
+
+                if not isPlanCreated:
+                    #TODO: should we try to figure out if there has been any sample updates and applied the updates to existing samples instead of creating new samples?
+                    #remove all the m2m relationship between samples and experiment
+                    #if sample is created as a by-product of plan creation and has become an orphan, we'll delete the sample
+                    for sample in experiment.samples.all():
+                        experiment.samples.remove(sample)
+                        experiment.save()
+
+                        #delete sample if it is not associated with any experiments
+                        if sample.experiments.all().count() == 0 and not (sample.status == "loaded"):
+                            logger.debug("PDD models.save_plannedExperiment_association() going to DELETE sample=%s" %(sample.name))
+                            sample.delete()
+
+                    ##experiment.samples.clear()
+                    logger.debug("PDD models.save_plannedExperiment_association() has CLEARED all previously associated samples")
+
+                # add single sample or multiple barcoded samples
+                barcodedSamples = kwargs.get('x_barcodedSamples', {})
+
+                barcodedSampleDict = {}
+                if barcodedSamples:
+                    barcodedSampleDict = simplejson.loads(barcodedSamples)
+
+                ##logger.debug("PDD models.save_plannedExperiment_association() barcodedSampleDict=%s" %(barcodedSampleDict))
+
+                if barcodedSampleDict:
+                    sample_displayedNames = barcodedSampleDict.keys()
+                    sample_names = [name.replace(' ', '_') for name in sample_displayedNames]
+
+                    externalId = None
+                    for name, displayedName in zip(sample_names,  sample_displayedNames):
+                        sample_kwargs = {
+                                     'name' : name,
+                                     'displayedName' : displayedName,
+                                     'date' : self.date,
+                                     'status' : self.planStatus,
+                                     'externalId': externalId
+                                     }
+
+                        sample = Sample.objects.get_or_create(name=name, externalId=externalId, defaults=sample_kwargs)[0]
+                        sample.experiments.add(experiment)
+                        sample.save()
+
+                        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving barcoded sample_id=%d" %(sample.id))
+                else:
+                    sample_name = kwargs.get('x_sample', "")
+                    sample_displayedName = kwargs.get('x_sampleDisplayedName', "")
+
+                    if sample_name:
+                        externalId = None
+                        name = sample_name.replace(' ', '_')
+
+                        sample_kwargs = {
+                                     'name' : name,
+                                     'displayedName' : sample_displayedName,
+                                     'date' : self.date,
+                                     'status' : self.planStatus,
+                                     'externalId': externalId
+                                     }
+
+                        sample = Sample.objects.get_or_create(name=name, externalId=externalId, defaults=sample_kwargs)[0]
+                        sample.experiments.add(experiment)
+                        sample.save()
+
+                        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving sample_id=%d" %(sample.id))
+
+            eas_kwargs = {
+                          'barcodedSamples' : kwargs.get('x_barcodedSamples', {}),
+                          'barcodeKitName' : kwargs.get('x_barcodeId', ""),
+                          'date' : self.date,
+                          'experiment' : experiment,
+                          'hotSpotRegionBedFile' : kwargs.get('x_regionfile', ""),
+                          'isEditable' : True,
+                          'isOneTimeOverride' : False,
+                          'libraryKey' : kwargs.get('x_libraryKey', ""),
+                          'libraryKitName' : kwargs.get('x_librarykitname', ""),
+                          'reference' : kwargs.get('x_library', ""),
+                          'selectedPlugins' : kwargs.get('x_selectedPlugins', {}),
+                          'status' : self.planStatus,
+                          'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
+                          'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' "")
+                          }
+
+            if isPlanCreated:
+                ##eas = ExperimentAnalysisSettings.objects.create(**eas_kwargs)
+                eas = ExperimentAnalysisSettings(**eas_kwargs)
+                logger.debug("PDD models.save_plannedExperiment_association() going to CREATE eas")
+            else:
+                #update the most recent eas
+                eas_set = ExperimentAnalysisSettings.objects.filter(experiment = experiment).exclude(isEditable = False).order_by('-date')
+                if eas_set:
+                    eas = eas_set[0]
+
+                    for key,value in eas_kwargs.items():
+                        setattr(eas, key, value)
+
+                    logger.debug("PDD models.save_plannedExperiment_association() going to UPDATE eas")
+                else:
+                    eas = ExperimentAnalysisSettings(**eas_kwargs)
+                    logger.debug("PDD models.save_plannedExperiment_association() going to CREATE eas")
+
+            eas.save()
+
+            logger.debug("PDD models.save_plannedExperiment_association() AFTER saving EAS_id=%d" %(eas.id))
+
 
     class Meta:
         ordering = [ '-id' ]
@@ -624,7 +1022,7 @@ class PlannedExperimentQC(models.Model):
 class Experiment(models.Model):
     _CSV_METRICS = (('Sample', 'sample'),
                     #('Project', 'project'),
-                    ('Library', 'library'),
+                    #('Library', 'library'),
                     ('Notes', 'notes'),
                     ('Run Name', 'expName'),
                     ('PGM Name', 'pgmName'),
@@ -638,11 +1036,14 @@ class Experiment(models.Model):
     )
     # Archive action states
     ACK_CHOICES = (
-        ('U', 'Unset'),          # (1) No action is pending
+        ('U', 'Unset'),         # (1) No action is pending
         ('S', 'Selected'),      # (2) Selected for action
         ('N', 'Notified'),      # (3) user has been notified of action pending
         ('A', 'Acknowledged'),  # (4) user acknowledges to proceed with action
-        ('D', 'Disposed'),      # (5) Action has been completed
+        ('P', 'Partial'),       # (5) Some deletion has occurred
+        ('I', 'In-process'),    # (6) Being processed by system
+        ('D', 'Disposed'),      # (7) Action has been completed
+        ('E', 'Error'),         # (8) Action resulted in error
     )
     PRETTY_PRINT_RE = re.compile(r'R_(\d{4})_(\d{2})_(\d{2})_(\d{2})'
                                  '_(\d{2})_(\d{2})_')
@@ -655,11 +1056,12 @@ class Experiment(models.Model):
     unique = models.CharField(max_length=512, unique=True)
     date = models.DateTimeField(db_index=True)
     resultDate = models.DateTimeField(auto_now_add=True, db_index=True, blank=True, null=True)
+
+    #deprecated as of TS 3.6: see DMFileStat and DMFileSet class
     storage_options = models.CharField(max_length=200, choices=STORAGE_CHOICES,
                                        default='A')
+
     user_ack = models.CharField(max_length=24, choices=ACK_CHOICES,default='U')
-    sample = models.CharField(max_length=64, blank=True, null=True)
-    library = models.CharField(max_length=64, blank=True, null=True)
     notes = models.CharField(max_length=1024, blank=True, null=True)
     chipBarcode = models.CharField(max_length=64, blank=True)
     seqKitBarcode = models.CharField(max_length=64, blank=True)
@@ -674,49 +1076,49 @@ class Experiment(models.Model):
     flowsInOrder = models.CharField(max_length=512)
     star = models.BooleanField()
     ftpStatus = models.CharField(max_length=512, blank=True)
-    #library key for forward run
-    libraryKey = models.CharField(max_length=64, blank=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
-    barcodeId = models.CharField(max_length=128, blank=True, null=True)
     reverse_primer = models.CharField(max_length=128, blank=True, null=True)
     rawdatastyle = models.CharField(max_length=24, blank=True, null=True, default='single')
 
     sequencekitname = models.CharField(max_length=512, blank=True, null=True)
     sequencekitbarcode = models.CharField(max_length=512, blank=True, null=True)
-    librarykitname = models.CharField(max_length=512, blank=True, null=True)
-    librarykitbarcode = models.CharField(max_length=512, blank=True, null=True)
-    
-    #for paired-end reverse run, separate library key and 3' adapter needed
-    reverselibrarykey = models.CharField("library key for reverse run", max_length=64, blank=True, null=True)
-    reverse3primeadapter = models.CharField("3' adapter for reverse run", max_length=512, blank=True, null=True)
-    #for forward run, 3' adapter specific to this plan
-    forward3primeadapter = models.CharField("3' adapter for forward run", max_length=512, blank=True, null=True)
+
     isReverseRun = models.BooleanField(default=False)
     diskusage = models.IntegerField(blank=True, null=True)
-    
+
     #progress_flows = models.IntegerField(default=0)
-    #progress_status = 
+    #progress_status =
 
     #add metadata
     metaData = json_field.JSONField(blank=True)
-   
+
     ALLOWED_RUN_MODES = (
-        ('', 'Undefined'),                         
+        ('', 'Undefined'),
         ('single', 'SingleRead'),
         ('pe', 'PairedEnd')
     )
 
     #run mode
     runMode = models.CharField(max_length=64, choices=ALLOWED_RUN_MODES, default='', blank=True)
-    
+
     # plan may be null because Experiments do not Have to have a plan
     # and it may be blank for the same reason.
     plan = models.OneToOneField(PlannedExperiment, blank=True, null=True, related_name='experiment')
-    
+    #planned status: means the entire plan object has been saved but not yet used
+    #run status: means the plan has been claimed for a run and the corresponding sequencing run has started
+    ALLOWED_STATUS = (
+        ('', 'Undefined'),
+        ('planned', 'Planned'),
+        ('run', 'Run')
+    )
+
+    status = models.CharField(max_length=512, blank=True, choices=ALLOWED_STATUS, default='')
+
     def __unicode__(self): return self.expName
 
     def runtype(self):
-        return self.log.get("runtype","")
+        runType = self.log.get("runtype","")
+        return runType if runType else "GENS"
 
     def pretty_print(self):
         nodate = self.PRETTY_PRINT_RE.sub("", self.expName)
@@ -771,6 +1173,7 @@ class Experiment(models.Model):
         else:
             return rset.order_by('-libmetrics__extrapolated_100q17_reads')
 
+    #TODO: deprecated in TS3.6
     def available(self):
         try:
             backup = Backup.objects.get(backupName=self.expName)
@@ -778,8 +1181,141 @@ class Experiment(models.Model):
             return False
         if backup.backupPath == 'DELETED':
             return 'Deleted'
+        if backup.backupPath == 'PARTIAL-DELETE':
+            return 'Partial-delete'
+        if backup.backupPath == 'PURGED':
+            return 'Purged'
         if backup.isBackedUp:
             return 'Archived'
+
+
+    def isBarcoded(self):
+        try:
+            eas = self.eas_set.all().order_by("-date")[0]
+            if eas.barcodeKitName:
+                return True
+            else:
+                return False
+        except:
+            return False
+
+    def get_or_create_EAS(self, editable=False, reusable=True):
+        """
+        Retrieve latest experimentAnalysisSettings that is editable and/or reusable for this experiment
+        Special case: If caller requests for EAS that is both editable and reusable, attempt to retrieve
+        the latest EAS that meets the criteria. If not found, copy the latest reusable EAS.
+        If no appropriate EAS is found, create one based on latest reusable EAS.
+        """
+
+        eas_set = self.eas_set.all().order_by("-date", "-id")
+
+        if editable:
+            queryset = eas_set.filter(isEditable=True)
+            if eas_set.filter(isOneTimeOverride = False):
+                eas_set = eas_set.filter(isOneTimeOverride = False)
+        elif reusable:
+            queryset = eas_set.filter(isOneTimeOverride=False)
+        else:
+            queryset = eas_set
+
+        created = False
+        try:
+            eas = queryset[0]
+        except:
+            created = True
+            try:
+                eas = eas_set[0]
+
+                eas.pk = None # this will create a new instance
+                eas.date = datetime.datetime.now()
+                eas.isEditable = True
+                eas.isOneTimeOverride = False
+                eas.save()
+            except:
+                logger.debug('No ExperimentAnalysisSettings found for experiment id=%d' % self.pk)
+
+                # generate blank EAS
+                default_eas_kwargs = {
+                              'date' : datetime.datetime.now(),
+                              'experiment' : self,
+                              'libraryKey' : GlobalConfig.objects.all()[0].default_library_key,
+                              'isEditable' : True,
+                              'isOneTimeOverride' : False,
+                              'status' : 'run',
+                              }
+                eas = models.ExperimentAnalysisSettings(**default_eas_kwargs)
+                eas.save()
+
+        return (eas, created)
+
+
+    def get_EAS(self, editable=True, reusable=True):
+        """
+        Retrieve latest experimentAnalysisSettings that is editable and/or reusable for this experiment.
+        Special case: If caller requests for EAS that is both editable and reusable, attempt to retrieve
+        the latest EAS that meets the criteria. If not found, attempt to retrieve the latest reusable EAS.
+        Return None if no EAS matching the criteria is found.
+        """
+        eas_set = self.eas_set.all().order_by("-date", "-id")
+
+        queryset = None
+        if editable and reusable:
+            queryset = eas_set.filter(isEditable = True, isOneTimeOverride = False)
+            if not queryset:
+                queryset = eas_set.filter(isEditable = False, isOneTimeOverride = False)
+
+        if not editable and not reusable:
+            queryset = eas_set.filter(isEditable = False, isOneTimeOverride = True)
+
+        if not queryset:
+            if editable:
+                queryset = eas_set.filter(isEditable=True)
+
+            elif reusable:
+                queryset = eas_set.filter(isOneTimeOverride=False)
+            else:
+                queryset = eas_set
+
+        if queryset.exists():
+            return queryset[0]
+        else:
+            return None
+
+    def get_barcodeId(self):
+        latest_eas = self.get_EAS()
+        if latest_eas:
+            return latest_eas.barcodeKitName
+        else:
+            return ""
+
+    def get_library(self):
+        latest_eas = self.get_EAS()
+        if latest_eas:
+            return latest_eas.reference
+        else:
+            return ""
+
+    def _get_firstSampleValue(self, attribute):
+        if not attribute:
+            return ""
+
+        samples = self.samples.values_list(attribute, flat=True)
+
+        try:
+            firstSample = str(samples[0])
+        except IndexError:
+            firstSample = ""
+
+        return firstSample
+
+    def get_sample(self):
+        """Return the first sample name"""
+        return self._get_firstSampleValue('name')
+
+    def get_sampleDisplayedName(self):
+        """Return the first sample displayed name"""
+        return self._get_firstSampleValue('displayedName')
+
 
     def save(self):
         """on save we need to sync up the log JSON and the other values that might have been set
@@ -788,20 +1324,6 @@ class Experiment(models.Model):
         #Make sure that that pretty print name is saved as the display name for the experiment
         self.displayName = self.pretty_print()
 
-        #we now save the library kit name instead of the kit's part number to Experiment
-        #when updating a pre-existing run from TS, we want to populate the new field with the info
-        if (self.librarykitbarcode and not self.librarykitname):
-            try:
-                selectedLibKitPart = KitPart.objects.get(barcode=self.librarykitbarcode)
-                if (selectedLibKitPart):
-                    selectedLibKit = selectedLibKitPart.kit
-                    if (selectedLibKit):
-                        self.librarykitname = selectedLibKit.name
-            except KitPart.DoesNotExist:
-                #If we can't determine the library kit name, leave it as is
-                #do not fail the save()
-                logger.info("NO kit part found at Experiment for libraryKitBarcode=%s" % self.librarykitbarcode)
-                
         #we now save the sequencing kit name instead of the kit's part number to Experiment
         #when updating a pre-existing run from TS, we want to populate the new field with the info
         if ((self.sequencekitbarcode or self.seqKitBarcode) and not self.sequencekitname):
@@ -817,17 +1339,35 @@ class Experiment(models.Model):
                         self.sequencekitname = selectedSeqKit.name
             except KitPart.DoesNotExist:
                 #if we can't determine the seq kit name, leave it as is
-                #do not fail the save()               
+                #do not fail the save()
                 logger.info("NO kit part found at Experiment for sequencingKitBarcode=%s" % kitBarcode)
 
-        if self.isReverseRun:
-            self.libraryKey = ""
-            self.forward3primeadapter = ""
-        else:
-            self.reverselibrarykey = ""
-            self.reverse3primeadapter = ""
-        
+
         super(Experiment, self).save()
+
+    def getdeviceid(self):
+        '''Returns deviceid of the storage of the raw data directory'''
+        return os.stat(self.expDir)[2]
+
+
+
+@receiver(pre_delete, sender=Experiment, dispatch_uid="pre_delete_experiment")
+def on_experiment_preDelete(sender, instance, **kwargs):
+    """Going to delete the experiment.
+    """
+    plan = instance.plan
+    if plan:
+        instance.plan = None
+        instance.save()
+        plan.delete()
+
+    for sample in instance.samples.all():
+        instance.samples.remove(sample)
+        #if sample is created via loading instead of plan/run creation, keep the sample around!!
+        if (sample.experiments.count() == 0) and not (sample.status == "loaded"):
+            sample.delete()
+
+    logger.info("Deleting companion records before deleting experiment=%s; pk=%d" % (instance.expName, instance.id))
 
 
 @receiver(post_delete, sender=Experiment, dispatch_uid="delete_experiment")
@@ -835,6 +1375,89 @@ def on_experiment_delete(sender, instance, **kwargs):
     """Log the deletion of the Experiment.
     """
     logger.info("Deleting Experiment %d" % (instance.id))
+
+
+class ExperimentAnalysisSettings(models.Model):
+    """
+    Supports versioning.  Once used for analysis, no editing is allowed and a new instance will be created for the edits
+    """
+
+    #planned status: means the entire plan object has been saved but not yet used
+    #run status    : means the plan has been claimed for a run and the corresponding sequencing run has started
+    ALLOWED_STATUS = (
+        ('', 'Undefined'),
+        ('planned', 'Planned'),
+        ('run', 'Run')
+    )
+
+    status = models.CharField(max_length=512, blank=True, choices=ALLOWED_STATUS, default='')
+
+    barcodeKitName = models.CharField(max_length=128, blank=True, null=True)
+
+    libraryKey = models.CharField(max_length=64, blank=True)
+
+    libraryKitName = models.CharField(max_length=512, blank=True, null=True)
+    libraryKitBarcode = models.CharField(max_length=512, blank=True, null=True)
+
+    threePrimeAdapter = models.CharField("3' adapter", max_length=512, blank=True, null=True)
+
+    #bed file
+    #Target Regions BED File: old name is bedfile
+    #Hotspot Regions BED File: old name is regionfile
+    targetRegionBedFile = models.CharField(max_length=1024,blank=True,null=True)
+    hotSpotRegionBedFile = models.CharField(max_length=1024,blank=True,null=True)
+
+    reference = models.CharField(max_length=512, blank=True, null=True)
+
+    barcodedSamples = json_field.JSONField(blank=True, null=True)
+    selectedPlugins = json_field.JSONField(blank=True, null=True)
+
+    date = models.DateTimeField(blank=True, null=True)
+    isEditable = models.BooleanField(default=False)
+
+    #for reanalysis, user can enter parameters that are intended for just this re-analysis attempt
+    isOneTimeOverride = models.BooleanField(default=False)
+
+    # foreign key to the experiment
+    experiment = models.ForeignKey(Experiment, related_name='eas_set', blank=True, null=True)
+
+
+    def __unicode__(self):
+        return "%s/%d" % (self.experiment, self.pk)
+
+    class Meta:
+        verbose_name_plural = "Experiment Analysis Settings"
+
+
+
+class Sample(models.Model):
+    #loaded status       : means the sample is created for sample-driven planning. it may or may not have plans associated with it.
+    #samplePlanned status: means the loaded sample has been assigned to a plan
+    #planned status      : means the sample is created as a by-product of a plan entire plan object has been saved but not yet used
+    #run status          : means the plan has been claimed for a run and the corresponding sequencing run has started
+    ALLOWED_STATUS = (
+        ('', 'Undefined'),
+        ('loaded', 'Loaded'),
+        ('samplePlanned', 'SamplePlanned'),
+        ('planned', 'Planned'),
+        ('run', 'Run')
+    )
+
+    status = models.CharField(max_length=512, blank=True, choices=ALLOWED_STATUS, default='')
+
+    name = models.CharField(max_length=127, blank=True, null=True)
+    displayedName = models.CharField(max_length=127, blank=True, null=True)
+    externalId = models.CharField(max_length=127, blank=True, null=True)
+    description = models.CharField(max_length=1024, blank=True, null=True)
+    date = models.DateTimeField(auto_now_add=True, blank=True,null=True)
+
+    experiments = models.ManyToManyField(Experiment, related_name='samples', null=True)
+
+    def __unicode__(self):
+        return self.name
+
+    class Meta:
+        unique_together=( ('name', 'externalId'), )
 
 
 class Lookup(object):
@@ -874,6 +1497,7 @@ class Results(models.Model, Lookup):
     _CSV_METRICS = (("Report", "resultsName"),
                     ("Status", 'status'),
                     ("Flows", 'processedflows'),
+                    ("Library", 'reference')
                     #("Plugin Data", 'pluginStore')
                     )
     _ALIASES = {
@@ -911,9 +1535,12 @@ class Results(models.Model, Lookup):
     timeToComplete = models.CharField(max_length=64)
     reportstorage = models.ForeignKey("ReportStorage", related_name="storage", blank=True, null=True)
     runid = models.CharField(max_length=10,blank=True)
+
+    #deprecated as of TS 3.6: see DMFileStatand DMFileSet class
     reportStatus = models.CharField(max_length=64, null=True, default="Nothing")
+
     autoExempt = models.BooleanField(default=False)
-    
+
     projects = models.ManyToManyField(Project, related_name='results')
     # reference genome for alignment
     reference = models.CharField(max_length=64, blank=True, null=True)
@@ -922,37 +1549,86 @@ class Results(models.Model, Lookup):
     #ids of parent reports separated by colon (e.g :1:32:3:)
     parentIDs = models.CharField(max_length=512, blank=True)
     diskusage = models.IntegerField(blank=True, null=True)
-    
+
     #metaData
     metaData = json_field.JSONField(blank=True)
 
+    # foreign key to the experimentAnalysisSettings
+    eas = models.ForeignKey(ExperimentAnalysisSettings, related_name='results_set', blank=True, null=True)
+
+    analysismetrics = models.OneToOneField('AnalysisMetrics', null=True, blank=True)
+    libmetrics = models.OneToOneField('LibMetrics', null=True, blank=True)
+    qualitymetrics = models.OneToOneField('QualityMetrics', null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+
+        super(Results, self).save(*args, **kwargs)
+
+        # Test for related DMFileStat objects
+        if DMFileStat.objects.filter(result=self).count() == 0:
+            # Create data management file tracking objects
+            try:
+                dmfilesets = DMFileSet.objects.filter(version=iondb.settings.RELVERSION)
+                #dmfilesets = DMFileSet.objects.all()
+            except:
+                logger.exception(traceback.format_exc())
+            else:
+                previous_result = None
+                if self.experiment.results_set.exclude(pk=self.pk).count() > 0:
+                    previous_result = self.experiment.results_set.exclude(pk=self.pk)[0]
+
+                for dmfileset in dmfilesets:
+                    try:
+                        if dmfileset.type == dmactions_types.SIG and previous_result is not None:
+                            # copy previous Sigproc dmfilestat
+                            dmfilestat = previous_result.get_filestat(dmactions_types.SIG)
+                            dmfilestat.result = self
+                            dmfilestat.pk = None
+                        else:
+                            kwargs = {
+                                'result':self,
+                                'dmfileset':dmfileset,
+                            }
+                            dmfilestat = DMFileStat(**kwargs)
+                        dmfilestat.save()
+                    except:
+                        logger.exception(traceback.format_exc())
+                    else:
+                        #EventLog.objects.add_entry(self,"Created DMFileStat (%s)" % dmfileset.type)
+                        pass
+
+    def get_filestat(self, typeStr):
+        return self.dmfilestat_set.filter(dmfileset__type=typeStr)[0]
 
     def isProton(self):
-        #protons
-        proton = ["900"]
-        if self.experiment.chipType in proton:
-            return True
-        else:
-            return False
+        if self.experiment.chipType:
+            chips = Chip.objects.filter(name = self.experiment.chipType)
+            if chips:
+                chip = chips[0]
+                return (chip.instrumentType == "proton")
+            else:
+                chipPrefix = self.experiment.chipType[:3]
+                chips = Chip.objects.filter(name = chipPrefix)
+                if chips:
+                    chip = chips[0]
+                    return (chip.instrumentType == "proton")
+        return False
+
 
     #a place for plugins to store information
-    # NB: These two functions facilitate compatibility with earlier model, 
+    # NB: These two functions facilitate compatibility with earlier model,
     # which had pluginStore and pluginState as members
     #pluginStore = json_field.JSONField(blank=True)
     def getPluginStore(self):
         pluginDict = {}
-        for p in self.pluginresult_set.all():
+        for p in self.pluginresult_set.all().order_by('id').select_related('plugin__name'):
             pluginDict[p.plugin.name] = p.store
-        #if not pluginDict:
-        #    return None
         return pluginDict
     #pluginState = json_field.JSONField(blank=True)
     def getPluginState(self):
         pluginDict = {}
-        for p in self.pluginresult_set.all():
+        for p in self.pluginresult_set.all().order_by('id').select_related('plugin__name'):
             pluginDict[p.plugin.name] = p.state
-        #if not pluginDict:
-        #    return None
         return pluginDict
 
     def planShortID(self):
@@ -963,18 +1639,17 @@ class Results(models.Model, Lookup):
             plan = expLog.get("pending_run_short_id","")
         return plan
 
-    def experimentReference(self):
-        return self.experiment.library
-
     def projectNames(self):
-      names = [p.name for p in self.projects.all().order_by('-modified')]      
-      return ','.join(names)   
+      names = [p.name for p in self.projects.all().order_by('-modified')]
+      return ','.join(names)
 
     def sffLinkPatch(self):
-        return self.fastqLink.replace("fastq","sff")
-        
+        link = self.fastqLink.replace("fastq","sff")
+        return link if os.path.exists(link) else None
+
     def sffTFLinkPatch(self):
-        return self.fastqLink.replace("fastq","tf.sff")
+        link = self.fastqLink.replace("fastq","tf.sff")
+        return link if os.path.exists(link) else None
 
     def bamLink(self):
         """a method to used by the API to provide a link to the bam file"""
@@ -1026,10 +1701,12 @@ class Results(models.Model, Lookup):
         return "%s_%03d" % (self.resultsName, self.pk)
 
     def server_and_location(self):
+        if getattr(self, '_location', None):
+            return self._location
         try:
             loc = Rig.objects.get(name=self.experiment.pgmName).location
         except Rig.DoesNotExist:
-            logger.error("Rerport %s references Rig %s which does not exist." % (self, self.experiment.pgmName))
+            #logger.error("Rerport %s references Rig %s which does not exist." % (self, self.experiment.pgmName))
             loc = Location.objects.filter(defaultlocation=True)
             if not loc:
                 #if there is not a default, just take the first one
@@ -1038,7 +1715,8 @@ class Results(models.Model, Lookup):
                 loc = loc[0]
             else:
                 logger.critical("Report %s is requesting the location of PGM %s and no locations exist!" % (self, self.experiment.pgmName))
-                return False    
+                return False
+        setattr(self, '_location', loc)
         return loc
 
     def _findReportStorage(self):
@@ -1101,7 +1779,7 @@ class Results(models.Model, Lookup):
         index = len(tmpPath) - 4
         linkstub = self.reportLink.split('/' + tmpPath[index])
         if self.reportstorage is not None:
-            return self.reportstorage.dirPath + linkstub[1] 
+            return self.reportstorage.dirPath + linkstub[1]
         else:
             logger.error("Cannot find the path to %s" % self)
             return None
@@ -1114,12 +1792,9 @@ class Results(models.Model, Lookup):
         return fs_path
 
     def is_archived(self):
-        archived_contents = set(['report.pdf', "%s.support.zip" % os.path.basename(self.get_report_dir())])
-        contents = set([])
-        if self.get_report_dir():
-            if os.path.isdir(self.get_report_dir()):
-                contents = set(os.listdir(self.get_report_dir()))
-        return archived_contents.issubset(contents) and archived_contents.issuperset(contents)
+        '''Returns True in either case: Report Files deleted or archived'''
+        # Pre-3.6 did not allow Report delete, only archive so we return either case here.
+        return self.get_filestat(dmactions_types.OUT).isdisposed()
 
     def web_path(self, location):
         basename = self._basename()
@@ -1140,23 +1815,23 @@ class Results(models.Model, Lookup):
         retLog = logger
         self.reportStatus = status
         self.save()
-        
+
         if retLog:
             retLog.info(self.resultsName+": Status: "+status+" | Info: "+info + " | Comments: %s"%comment)
             # This string is parsed when calculating disk space saved:
             if size > 0: retLog.info(self.resultsName+": Size saved:* %7.2f KB"%(float(size/1024)))
-        
+
         self.metaData["Status"] = status
         self.metaData["Date"] = "%s"%datetime.datetime.now()
         self.metaData["Info"] = info
         self.metaData["Comment"] = comment
-        
+
         # Try to read the Log entry, if it does not exist, create it
         if len(self.metaData.get("Log",[])) == 0:
             self.metaData["Log"] = []
         self.metaData["Log"].append({"Status":self.metaData.get("Status"), "Date":self.metaData.get("Date"), "Info":self.metaData.get("Info"), "Comment":comment})
         self.save()
-         
+
     # TODO: Cycles -> flows hack, very temporary.
     @property
     def processedFlowsorCycles(self):
@@ -1193,7 +1868,6 @@ class Results(models.Model, Lookup):
             frags = self.tfmetrics_set.all().exclude(CF=0, IE=0, DR=0).order_by('name')
             return frags
         except:
-            import traceback
             traceback.print_exc()
     def best_metrics_tabulate(self):
         return [self.lookup(f) for f in self.best_metrics_headings()]
@@ -1219,7 +1893,10 @@ class Results(models.Model, Lookup):
         q = obj.experiment
         ret = []
         for metric in metrics:
-            ret.append(getattr(q, metric))
+            if metric == 'sample':
+                ret.append(q.get_sample())
+            else:
+                ret.append(getattr(q, metric))
         return ret
 
     @classmethod
@@ -1311,6 +1988,10 @@ class Results(models.Model, Lookup):
     class Meta:
         verbose_name_plural = "Results"
 
+    def getdeviceid(self):
+        '''Returns deviceid of the storage of the results directory'''
+        return os.stat(self.get_report_dir())[2]
+
 
 @receiver(post_save, sender=Results, dispatch_uid="create_result")
 def on_result_created(sender, instance, created, **kwargs):
@@ -1354,9 +2035,9 @@ class TFMetrics(models.Model, Lookup):
         "keypassreads": "keypass",
         "tfkeypeakcounts":'aveKeyCount'
         }
-    TABLE_FIELDS = ("TF Name", "Q17 Mean", 
+    TABLE_FIELDS = ("TF Name", "Q17 Mean",
                     "System SNR", "50Q17 Reads", "Keypass Reads",
-                    "TF Key Peak Counts")    
+                    "TF Key Peak Counts")
     report = models.ForeignKey(Results, db_index=True, related_name='tfmetrics_set')
     name = models.CharField(max_length=128, db_index=True)
     Q10Histo = models.TextField(blank=True)
@@ -1428,6 +2109,7 @@ class Rig(models.Model):
 class FileServer(models.Model):
     name = models.CharField(max_length=200)
     comments = models.TextField(blank=True)
+    #TODO require this field's contents to be terminated with trailing delimiter
     filesPrefix = models.CharField(max_length=200)
     location = models.ForeignKey(Location)
     percentfull = models.FloatField(default=0.0,blank=True,null=True)
@@ -1561,8 +2243,10 @@ class LibMetrics(models.Model):
                     ('Library_IE', 'ie'),
                     ('Library_DR', 'dr'),
                     ('Library_SNR', 'sysSNR'),
+                    ('Raw Accuracy', 'raw_accuracy'),
                     )
     report = models.ForeignKey(Results, db_index=True, related_name='libmetrics_set')
+    raw_accuracy = models.FloatField()
     sysSNR = models.FloatField()
     aveKeyCounts = models.FloatField()
     totalNumReads = models.IntegerField()
@@ -1813,6 +2497,7 @@ class LibMetrics(models.Model):
     extrapolated_200q47_reads = models.IntegerField()
     extrapolated_300q47_reads = models.IntegerField()
     extrapolated_400q47_reads = models.IntegerField()
+    duplicate_reads = models.IntegerField(null=True,blank=True)
 
     def __unicode__(self):
         return "%s/%d" % (self.report, self.pk)
@@ -1862,8 +2547,12 @@ class Template(models.Model):
 class Backup(models.Model):
     experiment = models.ForeignKey(Experiment)
     backupName = models.CharField(max_length=256, unique=True)
+    # boolean indicator whether raw data has been archived
     isBackedUp = models.BooleanField()
     backupDate = models.DateTimeField()
+    # backupPath will be a filesystem path if the data directory was archived.
+    # else it will be 'DELETED' string.
+    # else it will be 'PARTIAL-DELETE' string if some, not all deletes have occurred
     backupPath = models.CharField(max_length=512)
     def __unicode__(self):
         return u'%s' % self.experiment
@@ -1896,7 +2585,7 @@ class BackupConfig(models.Model):
             return True
         else:
             return False
-    
+
     @classmethod
     def get(cls):
         """This represents pretty much the only query on this entire
@@ -1917,10 +2606,10 @@ class dm_reports(models.Model):
     autoAge = models.IntegerField(default=90)
     class Meta:
         verbose_name_plural = "DM - Configuration"
-        
+
     def __unicode__(self):
         return self.location
-    
+
     @classmethod
     def get(cls):
         """This represents pretty much the only query on this entire
@@ -1930,18 +2619,18 @@ class dm_reports(models.Model):
         this call to get will properly raises a DoesNotExist error.
         """
         return cls.objects.order_by('pk')[:1].get()
-        
-        
+
+
 class dm_prune_group(models.Model):
     name = models.CharField(max_length=128, default="")
     editable = models.BooleanField(default=True)    # This actually signifies "deletable by customer"
     ruleNums = models.CommaSeparatedIntegerField(max_length=128, default='', blank = True)
     class Meta:
         verbose_name_plural = "DM - Prune Groups"
-        
+
     def __unicode__(self):
         return self.name
-    
+
 class dm_prune_field(models.Model):
     rule = models.CharField(max_length=64, default = "")
     class Meta:
@@ -1951,22 +2640,35 @@ class Chip(models.Model):
     name = models.CharField(max_length=128)
     slots = models.IntegerField()
     description = models.CharField(max_length=128, default="")
-    
+
     # Default cmdline args
-    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Analysis args")
-    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
     beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
-    thumbnailanalysisargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
-    thumbnailbasecallerargs= models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
     thumbnailbeadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Beadfind args")
-    
+    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Analysis args")
+    thumbnailanalysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
+    prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Pre Basecaller args, used for recalibration")
+    prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Pre Basecaller args, used for recalibration")
+    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
+    thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
+
+    isActive = models.BooleanField(default=True)
+
+    ALLOWED_INSTRUMENT_TYPES = (
+        ('', "Undefined"),
+        ('pgm', 'PGM'),
+        ('proton', 'Proton')
+    )
+    #compatible instrument type
+    instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
+
+
     def getChipDisplayedName(self):
         if self.description:
             return self.description;
         else:
             return self.name;
-        
-    
+
+
 class GlobalConfig(models.Model):
     name = models.CharField(max_length=512)
     selected = models.BooleanField()
@@ -1985,21 +2687,24 @@ class GlobalConfig(models.Model):
     default_storage_options = models.CharField(max_length=500,
                                        choices=Experiment.STORAGE_CHOICES,
                                        default='D', blank=True)
-    auto_archive_ack = models.BooleanField("Auto-Acknowledge Archive?", default=False)
-    
+    auto_archive_ack = models.BooleanField("Auto-Acknowledge Delete?", default=False)
+    auto_archive_enable = models.BooleanField("Enable Auto Actions?", default=False)
+
     barcode_args = json_field.JSONField(blank=True)
     enable_auto_pkg_dl = models.BooleanField("Enable Package Auto Download", default=True)
     ts_update_status = models.CharField(max_length=256,blank=True)
     # Controls analysis pipeline alternate processing path
     base_recalibrate = models.BooleanField(default=True)
+    mark_duplicates = models.BooleanField(default=False)
+    realign = models.BooleanField(default=False)
 
     def set_TS_update_status(self,inputstr):
         self.ts_update_status = inputstr
-        
+
     def set_enableAutoPkgDL(self,flag):
         if type(flag) is bool:
             self.enableAutoPkgDL = flag
-        
+
     def get_enableAutoPkgDL(self):
         return self.enableAutoPkgDL
 
@@ -2022,7 +2727,7 @@ def on_save_config_sitename(sender, instance, created, **kwargs):
     """
     try:
         with open("/opt/ion/iondb/templates/rundb/php_base.html", 'r+') as name:
-            text = name.read()
+            text = name.read().decode('utf8')
             name.seek(0)
             # .*? is a non-greedy qualifier.
             # It will match the minimally satisfying text
@@ -2031,7 +2736,7 @@ def on_save_config_sitename(sender, instance, created, **kwargs):
             text = re.sub(target, replacement, text)
             target = '<title>.*?</title>'
             replacement = '<title>%s - Torrent Browser</title>' % instance.site_name
-            name.write(re.sub(target, replacement, text))
+            name.write(re.sub(target, replacement, text).encode('utf8'))
     except IOError as err:
         logger.warning("Problem with /opt/ion/iondb/templates/rundb/php_base.html: %s" % err)
 
@@ -2048,7 +2753,7 @@ class Plugin(models.Model):
     version = models.CharField(max_length=256)
     description = models.TextField(blank=True, default="")
 
-    date = models.DateTimeField(default=datetime.datetime.now)
+    date = models.DateTimeField(auto_now_add=True)
     selected = models.BooleanField(default=False)
     path = models.CharField(max_length=512)
     autorun = models.BooleanField(default=False)
@@ -2103,6 +2808,14 @@ class Plugin(models.Model):
             pass
         return False
 
+    def isInstance(self):
+        try:
+            if os.path.exists(os.path.join(self.path, "instance.html")):
+                return urlresolvers.reverse('configure_plugins_plugin_configure', kwargs = {'pk':self.pk, 'action':'report'})
+        except OSError:
+            pass
+        return False
+
     def __unicode__(self):
         return self.name
 
@@ -2150,8 +2863,8 @@ class Plugin(models.Model):
     def updateFromInfo(self, info):
         version = info.get('version', None)
         if version and version != self.version:
-            logger.warning("Queried plugin but got version mismatch. Plugin: %s has been updated from %s to %s", self.name, self.version, version)
-            return False
+            logger.warn("Queried plugin but got version mismatch. Plugin: %s has been updated from %s to %s", self.name, self.version, version)
+            raise ValueError
 
         changed = False
         # User Input Fields from info config
@@ -2165,6 +2878,7 @@ class Plugin(models.Model):
             'features': info.get('features'),
             'runtype': info.get('runtypes'),
             'runlevel': info.get('runlevels'),
+            'depends': info.get('depends'),
         }
         if self.pluginsettings != pluginsettings:
             self.pluginsettings = pluginsettings
@@ -2199,11 +2913,13 @@ class Plugin(models.Model):
             'runtypes': self.pluginsettings.get('runtype', []),
             'runlevels': self.pluginsettings.get('runlevel', []),
             'features': self.pluginsettings.get('features', []),
+            'depends': self.pluginsettings.get('depends', []),
             'config': self.userinputfields,
             'allow_autorun': self.autorunMutable,
             'docs': self.description,
             'major_block' : self.majorBlock,
             'pluginorm': self.pk,
+            'active': self.active,
         }
         from ion.plugin.info import PluginInfo
         return PluginInfo(info).todict()
@@ -2213,8 +2929,8 @@ class Plugin(models.Model):
 
 @receiver(pre_delete, sender=Plugin, dispatch_uid="delete_plugin")
 def on_plugin_delete(sender, instance, **kwargs):
-    """ Uninstall plugin on db record removal. 
-    Note: DB Delete is a purge and destroys all plugin content. 
+    """ Uninstall plugin on db record removal.
+    Note: DB Delete is a purge and destroys all plugin content.
     Best to uninstall and leave records / results """
     if instance.path or instance.active:
         from iondb.plugins.manager import pluginmanager
@@ -2252,24 +2968,42 @@ class PluginResult(models.Model):
     endtime = models.DateTimeField(null=True, blank=True)
 
     size = models.BigIntegerField(default=-1)
+    inodes = models.BigIntegerField(default=-1)
 
     def path(self):
         return os.path.join(self.result.get_report_dir(),
                             'plugin_out',
                             self.plugin.name + '_out'
                            )
-
+    # compat - return just size, not (size,inodes) tuple
     def calc_size(self):
+        return self._calc_size()[0]
+
+    def _calc_size(self):
         d = self.path()
-        if not os.path.exists(d):
-            return 0
+        if not d or not os.path.exists(d):
+            return (0,0)
+
+        total_size = 0
+        inodes = 0
 
         file_walker = (
             os.path.join(root, f)
             for root, _, files in os.walk( d )
             for f in files
         )
-        return sum(os.path.getsize(f) for f in file_walker if os.path.isfile(f))
+        for f in file_walker:
+            if not os.path.isfile(f):
+                continue
+            inodes += 1
+            try:
+                total_size += os.lstat(f).st_size
+            except OSError:
+                logger.exception("Failed accessing %s during calc_size", f)
+
+        logger.info("PluginResult %d for %s has %d byte(s) in %d file(s)",
+                    self.id, self.plugin.name, total_size, inodes)
+        return (total_size, inodes)
 
     # Taken from tastypie apikey generation
     def _generate_key(self):
@@ -2294,7 +3028,7 @@ class PluginResult(models.Model):
 
     def start(self, jobid=None):
         self.state = 'Started'
-        self.starttime = datetime.datetime.now()
+        self.starttime = timezone.now()
         if self.jobid:
             if self.jobid != jobid:
                 logger.warn("(Re-)started as different queue jobid: '%d' was '%d'", jobid, self.jobid)
@@ -2302,18 +3036,20 @@ class PluginResult(models.Model):
 
     def complete(self, state='Completed'):
         """ Call with state = Completed, Error, or other valid state """
-        self.endtime = datetime.datetime.now()
+        self.endtime = timezone.now()
         self.state = state
         self.apikey = None
         try:
-            self.size = self.calc_size()
+            self.size, self.inodes = self._calc_size()
         except OSError:
             logger.exception("Failed to compute plugin size: '%s'", self.path())
-            self.size = -1
+            self.size = self.inodes = -1
 
     def duration(self):
-        if not (self.starttime and self.endtime):
+        if not self.starttime:
             return 0
+        if not self.endtime:
+            return (timezone.now() - self.starttime)
         return (self.endtime - self.starttime)
 
     def __unicode__(self):
@@ -2377,6 +3113,7 @@ class ReferenceGenome(models.Model):
     status = models.CharField(max_length=512, blank=True)
     index_version = models.CharField(max_length=512, blank=True)
     verbose_error = models.CharField(max_length=3000, blank=True)
+    identity_hash = models.CharField(max_length=40, null=True, default=None)
 
     class Meta:
         ordering = ['short_name']
@@ -2401,6 +3138,8 @@ class ReferenceGenome(models.Model):
 
         try:
             shutil.move(self.reference_path, enabled_path)
+            self.reference_path = enabled_path
+            self.save()
         except:
             return False
 
@@ -2445,11 +3184,11 @@ class ThreePrimeadapter(models.Model):
         ('Forward', 'Forward'),
         ('Reverse', 'Reverse')
     )
-    
+
     direction = models.CharField(max_length=20, choices=ALLOWED_DIRECTIONS, default='Forward')
-    
+
     ALLOWED_RUN_MODES = (
-        ('', 'Undefined'),                         
+        ('', 'Undefined'),
         ('single', 'SingleRead'),
         ('pe', 'PairedEnd')
     )
@@ -2471,13 +3210,13 @@ class ThreePrimeadapter(models.Model):
 
 
     def save(self):
-        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1):
             currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
             for currentDefault in currentDefaults:
-                if (self.id == currentDefault.id):          
+                if (self.id == currentDefault.id):
                     raise ValidationError("Error: Please set another adapter for %s direction to be the default before changing this adapter not to be the default." % self.direction)
-                    
+
         if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
             currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
@@ -2488,16 +3227,16 @@ class ThreePrimeadapter(models.Model):
 
         super(ThreePrimeadapter, self).save()
 
-        
-   
+
+
     def delete(self):
-        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1):
             currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
             for currentDefault in currentDefaults:
-                if (self.id == currentDefault.id):          
+                if (self.id == currentDefault.id):
                     raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction to be the default before deleting this adapter." % self.direction)
-                    
+
         if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
             currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
@@ -2678,11 +3417,11 @@ class LibraryKey(models.Model):
         ('Forward', 'Forward'),
         ('Reverse', 'Reverse')
     )
-    
+
     direction = models.CharField(max_length=20, choices=ALLOWED_DIRECTIONS, default='Forward')
-    
+
     ALLOWED_RUN_MODES = (
-        ('', 'Undefined'),                         
+        ('', 'Undefined'),
         ('single', 'SingleRead'),
         ('pe', 'PairedEnd')
     )
@@ -2703,34 +3442,34 @@ class LibraryKey(models.Model):
 
 
     def save(self):
-        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1):
             currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
             for currentDefault in currentDefaults:
-                if (self.id == currentDefault.id):          
+                if (self.id == currentDefault.id):
                     raise ValidationError("Error: Please set another library key for %s direction to be the default before changing this key not to be the default." % self.direction)
-                    
+
         if (self.isDefault == True and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() > 0):
             currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
             for currentDefault in currentDefaults:
-                if (self.id <> currentDefault.id):                    
+                if (self.id <> currentDefault.id):
                     currentDefault.isDefault = False
                     super(LibraryKey, currentDefault).save()
 
         ###print 'Going to call super.save() for LibraryKey'
         super(LibraryKey, self).save()
 
-        
-      
+
+
     def delete(self):
-        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1): 
+        if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1):
             currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
             for currentDefault in currentDefaults:
-                if (self.id == currentDefault.id):          
+                if (self.id == currentDefault.id):
                     raise ValidationError("Error: Deleting the default library key is not allowed. Please set another library key for %s direction to be the default before deleting this key." % self.direction)
-                    
+
         if (self.isDefault == True and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() > 0):
             currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
@@ -2814,7 +3553,7 @@ class Message(models.Model):
     def critical(cls, body, route="", **kwargs):
         return cls.log_new_message(cls.CRITICAL, body, route, **kwargs)
 
-# JUST DON'T THINK THIS IS BAKED (THOUGHT OUT) ENOUGH 
+# JUST DON'T THINK THIS IS BAKED (THOUGHT OUT) ENOUGH
 #class ProjectUserVisibility(models.Model):
 #    """By default, a given project for a given user has no ProjectUserVisibility
 #    and the project is 'show' visibility for that user.
@@ -2844,8 +3583,9 @@ class EventLogManager(models.Manager):
         ct = ContentType.objects.get_for_model(instance)
         ev = EventLog(object_pk=instance.pk, content_type=ct, username=username, text=message)
         ev.save()
-        
-    
+        return ev
+
+
 class EventLog (models.Model):
     # Content-object field
     content_type   = models.ForeignKey(ContentType,
@@ -2872,3 +3612,130 @@ class EventLog (models.Model):
         return self.text
 
 
+class DMFileSet (models.Model):
+    # Global settings record.  For each instance, user can enable/disable
+    # auto action (archive/delete), set the age threshold and diskusage threshold.
+    AUTO_ACTION = (
+        ('OFF', 'Disabled'),
+        ('ARC', 'Archive'),
+        ('DEL', 'Delete'),
+    )
+    type = models.CharField(max_length=48, null=False)
+    description = models.CharField(max_length=256, null=True, blank=True)
+    backup_directory = models.CharField(max_length=256, blank=True, null=True)
+    bandwidth_limit = models.IntegerField(blank=True, null=True)
+    enabled = models.BooleanField(default=False)
+    include = SeparatedValuesField(null=True, blank=True)
+    exclude = SeparatedValuesField(null=True, blank=True)
+    keepwith = json_field.JSONField(blank=True, null=True)
+    version = models.CharField(max_length=8)
+    auto_trigger_age = models.IntegerField(null=True, blank=True)
+    auto_trigger_usage = models.IntegerField(null=True, blank=True)
+    auto_action = models.CharField(max_length=8, choices=AUTO_ACTION, default='OFF')
+    del_empty_dir = models.BooleanField(default=True)
+
+    def __unicode__(self):
+        return u'%s (%s)' % (self.type, self.version)
+
+
+class DMFileStat (models.Model):
+    # These are status fields for a Report instance to track state and action status of
+    # the selected files.
+    ACT_STATES = (
+        ('L', 'Local'),             # Files are local
+        ('S', 'Selected'),          # Selected for autoaction
+        ('N', 'Notified'),          # user has been notified of action pending
+        ('A', 'Acknowledged'),      # user acknowledges to proceed with action
+        ('SA', 'Archive Pending'),  # Selected for archive manual action
+        ('SE', 'Export Pending'),   # Selected for export manual action
+        ('AG', 'Archiving'),
+        ('DG', 'Deleting'),
+        ('EG', 'Exporting'),
+        ('AD', 'Archived'),
+        ('DD', 'Deleted'),
+        ('E', 'Error'),             # Action resulted in error
+        )
+
+    # state of file action
+    action_state = models.CharField(max_length=8, choices=ACT_STATES, default='L')
+
+    # path to archived filed
+    archivepath = models.CharField(max_length=512, blank=True, null=True)
+
+    # kilobytes used by files
+    diskspace = models.FloatField(blank=True, null=True)
+
+    # status of files currently being used by analysis pipeline
+    files_in_use = models.CharField(max_length=512, blank=True, default='')
+
+    # link to result object (the Report)
+    result = models.ForeignKey(Results, null=True, blank=True)
+
+    # link to DMFileSet object (the file selection filter)
+    dmfileset = models.ForeignKey(DMFileSet, null=True, blank=True)
+
+    # Preserve fileset files (except for sigproc files which is stored in experiment.storage_options)
+    preserve_data = models.BooleanField(default=False)
+
+    # datetime stamp when object created; do not auto fill
+    created = models.DateTimeField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.created = datetime.datetime.now(pytz.UTC)
+        super(DMFileStat, self).save(*args, **kwargs)
+
+    def getpreserved(self):
+        if self.dmfileset.type == dmactions_types.SIG:
+            return self.result.experiment.storage_options == 'KI'
+        else:
+            return self.preserve_data
+
+    def setpreserved(self, keep_flag):
+        if self.dmfileset.type == dmactions_types.SIG:
+            self.result.experiment.storage_options = 'KI' if keep_flag else 'D'
+            self.result.experiment.save()
+        else:
+            self.preserve_data = keep_flag
+            self.save()
+
+    def setactionstate(self, state):
+        if state in [c for (c,d) in DMFileStat.ACT_STATES]:
+            self.action_state = state
+            self.save()
+            # update related dmfilestats
+            if self.dmfileset.type == dmactions_types.SIG:
+                exp_id = self.result.experiment_id
+                DMFileStat.objects.filter(dmfileset__type=dmactions_types.SIG, result__experiment__id=exp_id).update(action_state = state)
+        else:
+            raise Exception("Failed to set action_state. Invalid state: '%s'" % state)
+
+    def isdisposed(self):
+        return bool(self.action_state in ['AG','DG','AD','DD'])
+
+    def isarchived(self):
+        return bool(self.action_state in ['AG','AD'])
+
+    def isdeleted(self):
+        return bool(self.action_state in ['DG','DD'])
+
+    def in_process(self):
+        return bool(self.action_state in ['AG','DG','EG','SA','SE'])
+
+
+class DownloadMonitor(models.Model):
+    """Record the details of a file download from a remote server to the TS
+    by a backround or automated process.
+    """
+
+    url = models.CharField(max_length=2000)
+    local_dir = models.CharField(max_length=512, default="")
+    name = models.CharField(max_length=255, default="")
+    size = models.BigIntegerField(default=None, null=True)
+    progress = models.BigIntegerField(default=0)
+    status = models.CharField(max_length=60, default="")
+    celery_task_id = models.CharField(max_length=60)
+    tags = models.CharField(max_length=1024, default="")
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)

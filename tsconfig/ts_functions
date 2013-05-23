@@ -116,12 +116,15 @@ function config_compute_node ()
 function config_ionSoftware()
 {
     # Install/Update system-level software packages
+    updated_mirror_check
     preinst_system_packages
     install_system_packages
     config_system_packages
     # Install/Update Torrent Suite software packages
+    preinst_ion_packages
     install_ion_packages
     config_ion_packages
+    update_conf_file
 }
 
 #-------------------------------------------------
@@ -141,6 +144,7 @@ function reconfig_head_node ()
 
     # ensure tag is correct for master node
     touch /opt/ion/.masternode
+    update_conf_file
 
     #config_ionSoftware
     # Here we intend to do all configuration steps without updating any ion software packages
@@ -173,6 +177,7 @@ function reconfig_compute_node ()
 
     # ensure tag is correct for compute node
     touch /opt/ion/.computenode
+    update_conf_file
 
     # Get name of head node server
     get_user_input_compute
@@ -389,8 +394,10 @@ function ion_daemon_ctrl()
         update-rc.d -f ionCrawler remove
         update-rc.d ionCrawler stop 97 2 3 4 5 .
         # Prevent archiver daemon from starting at boot
-        update-rc.d -f ionArchive remove
-        update-rc.d ionArchive stop 97 2 3 4 5 .
+        if [ -e /etc/init.d/ionArchive  ]; then
+            update-rc.d -f ionArchive remove
+            update-rc.d ionArchive stop 97 2 3 4 5 .
+        fi
         # Prevent plugin daemon from starting at boot
         update-rc.d -f ionPlugin remove
         update-rc.d ionPlugin stop 97 2 3 4 5 .
@@ -783,7 +790,7 @@ function cleanup_previousInstallations()
     # Remove deprecated ion software
     #-----------------------------------
     if dpkg -l|grep -q ion-eaplugins; then
-        apt-get --assume-yes --force-yes remove ion-eaplugins 1>&2 || true
+        dpkg -P ion-eaplugins 1>&2 || true
     fi
 
     #---    Clean up /usr/local/lib/python2.6/dist-packages ---#
@@ -864,7 +871,8 @@ function cleanup_previousInstallations()
     fi
 
     # Remove from the ssh login screen the listing of packages with updates available
-    apt-get --assume-yes --force-yes remove landscape-common 1>&2 || true
+    #apt-get --assume-yes --force-yes remove landscape-common 1>&2 || true
+    dpkg -P landscape-common 1>&2 || true
 
     # Modify dhcp lease time, only if it still the default that our scripts used to set
     if [ -r /etc/dhcp3/dhcpd.conf ]; then
@@ -938,7 +946,7 @@ function pkg_installation ()
         #---                                                                ---#
         #---    Search for Packages.gz file                                 ---#
         #---                                                                ---#
-        updatesPath=$(find $PWD -name Packages.gz 2>/dev/null)
+        updatesPath=$(find $PWD -name Packages.gz | grep updates/Packages.gz 2>/dev/null)
         updatesPath=$(echo $updatesPath|awk '{print $1}')   #filter single entry
         if [ "${updatesPath}" == "" ]; then
             updatesPath=$(find /media -name Packages.gz 2>/dev/null)
@@ -1032,6 +1040,8 @@ function pkg_installation ()
         fi
     done
     echo ""
+
+    cleanup_tmp_src_list $TMP_SRC_LST
 }
 
 
@@ -1060,6 +1070,21 @@ gridengine-exec         shared/gridenginemaster string $(hostname -f)
 gridengine-common       shared/gridenginecell   string iontorrent
 gridengine-common       shared/gridengineconfig boolean true
 EOF
+        # rabbitmq-server install needs preseed
+        debconf-set-selections << EOF
+rabbitmq-server rabbitmq-server/upgrade_previous note
+EOF
+        # rabbitmq-server upgrade to from before 3.0 needs it's conf file removed
+        RMQ_VERSION=`dpkg -l rabbitmq-server|awk '$2 ~ "rabbitmq-server" {print $3}'`
+        #if [[ $RMQ_VERSION < '3.0' ]] && [[ -f /usr/sbin/rabbitmqctl ]]; then
+        if [[ $RMQ_VERSION < '3.0' ]]; then
+            echo Resetting rabbitmq-server, $RMQ_VERSION 1>&2
+            # http://www.rabbitmq.com/clustering.html#upgrading
+            service rabbitmq-server stop 1>&2
+            rm -rf /var/lib/rabbitmq/mnesia/ 1>&2
+        else
+            echo Not resetting rabbitmq-server, $RMQ_VERSION 1>&2
+        fi
     else
         # Preseed the execute gridengine settings
         # sge_master_host is user input on initial config; else its defined in this file
@@ -1088,11 +1113,6 @@ postfix shared/main_mailer_type string  Internet Site
 #postfix shared/recipient_delim string +
 EOF
 
-    # rabbitmq-server install needs preseed
-    debconf-set-selections << EOF
-rabbitmq-server rabbitmq-server/upgrade_previous note
-EOF
-
     # tmpreaper package posts a security notice requiring user acknowledgement
     debconf-set-selections << EOF
 tmpreaper	tmpreaper/readsecurity	note
@@ -1101,8 +1121,22 @@ tmpreaper	tmpreaper/confignowexists	note
 tmpreaper	tmpreaper/readsecurity_upgrading	note
 EOF
 
+    # TS-6230
+    if dpkg -l libapache2-mod-jk|tail -1|grep -q ^ii; then
+        echo "Forcing reinstall of jk.load file" 1>&2
+        apt-get -o Dpkg::Options::="--force-confnew" --reinstall install --assume-yes --force-yes libapache2-mod-jk 1>&2
+    fi
+    if dpkg -l ion-jk|tail -1|grep -q ^ii; then
+        echo "Forcing reinstall of ion-jk" 1>&2
+        apt-get -o Dpkg::Options::="--force-confnew" --reinstall install --assume-yes --force-yes ion-jk 1>&2
+    fi
+
 }
 
+function preinst_ion_packages ()
+{
+    return 0
+}
 
 #Dependency Notes:
 #
@@ -1132,6 +1166,7 @@ function install_system_packages ()
     fi
     return 0
 }
+
 function install_ion_packages()
 {
     user_msg "=================================================================="
@@ -1180,7 +1215,7 @@ function install_ion_packages()
         echo "Critical Error."
         echo "Aborting the configuration now"
         echo
-        dpkg -l "ion-*" tmap samtools
+        dpkg -l "ion-*" samtools
         echo
         exit 1
     fi
@@ -1198,8 +1233,10 @@ function config_ion_packages ()
         if ! service ionJobServer status > /dev/null; then
             /etc/init.d/ionJobServer start || error ${LINENO} "In function install_ion_packages"
         fi
-        if ! service ionArchive status > /dev/null; then
-            /etc/init.d/ionArchive start || error ${LINENO} "In function install_ion_packages"
+        if [ -e /etc/init.d/ionArchive  ]; then
+            if ! service ionArchive status > /dev/null; then
+                /etc/init.d/ionArchive start || error ${LINENO} "In function install_ion_packages"
+            fi
         fi
         if ! service ionPlugin status > /dev/null; then
             /etc/init.d/ionPlugin start || error ${LINENO} "In function install_ion_packages"
@@ -1211,8 +1248,18 @@ function config_ion_packages ()
             service rabbitmq-server start || error ${LINENO} "In function install_ion_packages"
         fi
     fi
+
+    # With 3.6, separate tmap package is no longer distributed; tmap is part of ion-analysis package
+    # In order to not cause confusion, we remove the tmap package
+    if dpkg -l tmap|tail -1|grep -q ^ii; then
+        echo "Removing deprecated package: tmap.  Package ion-analysis now provides tmap." 1>&2
+        #apt-get --assume-yes --force-yes remove tmap 1>&2 || true
+        dpkg -P --ignore-depends=ion-dbreports,ion-alignment tmap 1>&2 || true
+    fi
+
     return 0
 }
+
 function reconfig_ion_packages ()
 {
     echo "=================================================================="
@@ -1756,9 +1803,9 @@ EOFdb
         user_msg "=================================================================="
         user_msg "       Creating backup of postgresql database"
         user_msg "=================================================================="
-        TIMESTAMP=$(date +%Y%m%d_%k%M%S)
-        BACKUP_DBASE_FILE=${BACKUP_DBASE_DIR}/iondb.${TIMESTAMP}.backup
-        /usr/bin/pg_dump -U ion -c iondb | gzip > ${BACKUP_DBASE_FILE}.gz || true
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        BACKUP_DBASE_FILE="${BACKUP_DBASE_DIR}/iondb.${TIMESTAMP}.backup"
+        /usr/bin/pg_dump -U ion -c iondb | gzip > "${BACKUP_DBASE_FILE}.gz" || true
 
         # Keep 5 most recent dbase backup files
         KEEP=5
@@ -1962,14 +2009,14 @@ function config_master_sge()
         # Assume that only TS serving Proton instruments will have ion-protonupdates installed.
         if is_proton_ts; then
             slots=4
-            qconf -mattr queue slots $slots all.q
+            qconf -mattr queue slots $slots all.q 1>&2
         fi
     fi
 
     # Set the all.q load_thresholds       np_load_avg=95.0
-    qconf -mattr queue load_thresholds np_load_avg=95.0 all.q
-    qconf -mattr queue load_thresholds np_load_avg=95.0 thumbnail.q
-    qconf -mattr queue load_thresholds np_load_avg=95.0 tl.q
+    qconf -mattr queue load_thresholds np_load_avg=95.0 all.q 1>&2
+    qconf -mattr queue load_thresholds np_load_avg=95.0 thumbnail.q 1>&2
+    qconf -mattr queue load_thresholds np_load_avg=95.0 tl.q 1>&2
 
     # add execution host
     #Wait!  host is already an execution host!  This never executes!
@@ -2078,7 +2125,25 @@ function config_master_sge()
     COMPLEX=/tmp/complexresources.$$
     qconf -sc > ${COMPLEX}
     sed -i 's:^mem_free .*:mem_free            mf         MEMORY      <=   YES         YES        0        0:' ${COMPLEX}
+    # Add export_plugins consumable resource
+    if ! grep -q export_plugins ${COMPLEX}; then
+        echo "export_plugins            ep         INT      <=   YES         YES        0        0" >> ${COMPLEX}
+    else
+        sed -i 's:^export_plugins .*:export_plugins            ep         INT      <=   YES         YES        0        0:' ${COMPLEX}
+    fi
     qconf -Mc ${COMPLEX}
+    rm -f "${COMPLEX}"
+    # For network-using plugins, set a consumable resource to control bandwidth utilization
+    NET_CR=10   # Needs experimenting to determine maximum network resource units
+    # ERROR: Was added per-host. Remove and set as global consumable
+    if !qconf -dattr exechost complex_values export_plugins $currentNodeName 1>&2; then
+        user_msg "WARN: unable to clear export_plugins on $currentNodeName. Not set?"
+    fi
+    if ! qconf -aattr exechost complex_values export_plugins=10 global 1>&2; then
+        user_msg "ERROR: unable to set export_plugins consumable resource"
+    fi
+
+    # Restart sge exec daemon
 
     setupQueue=1
     S_RT_LIMIT='24:00:00'       # 24 hours
@@ -2092,6 +2157,11 @@ function config_master_sge()
     #---    Test for existing plugin.q and skip creation if so  ---#
     if qconf -sq plugin.q > /dev/null; then
         setupQueue=0
+        # Ensure current hostname is in plugin queue configuration
+        if ! qconf -aattr queue hostlist $currentNodeName $qname 1>&2; then
+            user_msg "ERROR: SGE config failed setting hostlist"
+            return 1
+        fi
     fi
     if [ $setupQueue -eq 1 ]; then
 
@@ -2169,7 +2239,7 @@ function config_master_sge()
             qconf -aattr queue epilog "/usr/share/ion-tsconfig/gridengine-scripts/plugin-epilog.sh" plugin.q 1>&2
         fi
 
-        qconf -mattr queue load_thresholds np_load_avg=75.0 plugin.q
+        qconf -mattr queue load_thresholds np_load_avg=75.0 plugin.q 1>&2
     fi
 
     # SGE: Set per-host maximum mem_free to be node physical mem
@@ -2182,7 +2252,6 @@ function config_master_sge()
     #    qconf -mattr exechost complex_values mem_free=48G $node # fixed at 48G
     #done
 
-    # Restart sge exec daemon
     #/etc/init.d/gridengine-exec stop
     #/etc/init.d/gridengine-master restart
     /etc/init.d/gridengine-exec start
@@ -2244,6 +2313,11 @@ function config_compute_sge()
     if ! qconf -mattr exechost complex_values mem_free=48G $currentNodeName 1>&2; then
         user_msg "ERROR: error setting mem_free"
         return 1
+    fi
+
+    # ERROR: export set on hosts, should be global. Remove it.
+    if ! qconf -dattr exechost complex_values export_plugins $currentNodeName 1>&2; then
+        user_msg "WARN: unable to clear export_plugins on $currentNodeName. Not set?"
     fi
 
     #add host to queues
@@ -2780,10 +2854,38 @@ function rotate()
     done
 }
 
+function rotate_log_oldversion()
+{
+    MAXINDEX=5
+    # list files in reverse order
+    list=( $TSCONFIG_INSTALL_LOG $TSCONFIG_DEBUG_LOG )
+    for filename in ${list[@]}; do
+        for file in $(ls -r $TSCONFIG_LOG_DIR/$filename* 2>/dev/null); do
+            name=$(basename $file)
+            if [ "$name" == "$filename" ]; then
+                # echo "add an extension";
+                # echo "$file -> $file.1"
+                mv $file $file.1
+                continue
+            fi
 
+            extension=${name##*.}
+
+            if [[ $extension -ge $MAXINDEX ]]; then
+                # echo "remove $file";
+                rm -f $file
+            else
+                # echo "increment index extension by 1"
+                # echo "$file -> ${file%.*}.$(($extension+1))"
+                mv $file ${file%.*}.$(($extension+1))
+            fi
+        done
+    done
+}
+#broken...
 function rotate_log()
 {
-    list=( $TSCONFIG_DIR/$TSCONFIG_INSTALL_LOG $TSCONFIG_DIR/$TSCONFIG_DEBUG_LOG )
+    list=( $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG $TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG )
     for filename in ${list[@]}; do
         rotate $filename
     done
@@ -2871,6 +2973,51 @@ function write_conf_file()
 
     return 0
 }
+
+#---
+#--- This function updates some, not all fields in tsconf.conf
+#---
+function update_conf_file()
+{
+	conflog="$TSCONFIG_DIR/$TSCONFIG_CONF"
+
+    if [ -e $conflog ]; then
+
+    	#--- update the date        ---#
+        sed -i "s/^date:.*/date:`date`/" ${conflog}
+
+        #--- update the hostname    ---#
+        sed -i "s/^hostname:.*/hostname:`hostname -f`/" ${conflog}
+
+        #--- update the ip address  ---#
+        if address=$(dig +short +search `hostname`); then
+            single=`echo $address|awk '{print $1}'`
+            sed -i "s/^ipaddress:.*/ipaddress:$single/" ${conflog}
+        fi
+
+        #--- update the serial number   ---#
+        sn=$(dmidecode -s system-serial-number 2>/dev/null)
+        sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
+        sed -i "s/^serialnumber:.*/serialnumber:$sn/" ${conflog}
+
+        #--- update the hardware name   ---#
+        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        if ! grep -q ^hardwarename ${conflog}; then
+            echo "hardwarename:\"${hardwarename}\"" >> $conflog
+        else
+            sed -i "s/^hardwarename:.*/hardwarename:\"${hardwarename}\"/"  ${conflog}
+        fi
+
+        #--- update the version ---#
+        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@"
+        sed -i "s/^version:.*/version:$version/" ${conflog}
+
+    else
+    	echo "Error - could not update $TSCONFIG_CONF"
+        echo "Does not exist: $conflog"
+    fi
+}
+
 
 function copy_conf_file()
 {
@@ -3150,4 +3297,41 @@ function is_proton_ts ()
         echo "This is a Proton TS" 1>&2
         return 0
     fi
+}
+
+# With TS3.6, we have a new web address for Ion package hosting.
+# This function checks/updates /etc/apt/sources.list to include the new address
+# which may offer speed advantage to sites outside US.
+function updated_mirror_check()
+{
+    SRCLIST="/etc/apt/sources.list"
+    APT_ENTRY="deb http://ionupdates.com/updates/software lucid/"
+
+    if [ ! -e $SRCLIST ]; then
+        # major problem if this file doesn't exist
+        echo "Does not exist:${SRCLIST}" 1>&2
+        return 1
+    fi
+
+    if ! grep -q "ionupdates.com" $SRCLIST; then
+
+        echo "The desired apt repository entry does not exist" 1>&2
+
+        if ! grep -q "updates.iontorrent.com" $SRCLIST; then
+
+            echo "The expected apt repository entry does not exist either" 1>&2
+
+            echo $APT_ENTRY >> $SRCLIST
+        else
+
+            echo "Found the expected entry:"
+            # deb http://updates.iontorrent.com/updates/software lucid/
+            # N.B. use of comma as the sed command delimiter.  Insert desired entry
+            # before expected entry
+            sed -i "/updates.iontorrent.com/ s,$,\n${APT_ENTRY}," $SRCLIST
+        fi
+    else
+        echo "An apt repository entry exists with desired web address" 1>&2
+    fi
+
 }

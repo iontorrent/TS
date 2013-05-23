@@ -1,5 +1,9 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+// patch for CUDA5.0/GCC4.7
+#undef _GLIBCXX_ATOMIC_BUILTINS
+#undef _GLIBCXX_USE_INT128
+
 #include "StreamingKernels.h"
 #include "CudaConstDeclare.h" // for cuda < 5.0 this has to be included ONLY here!
 
@@ -11,7 +15,7 @@
 //#define CREATE_POISSON_LUT_ON_DEVICE
 
 // transpose emphasise vectors in shared memory to remove bank conflicts
-#define TRANSPOSED_EMPH
+
 
 
 //forward declerations of device functions
@@ -113,6 +117,7 @@ ComputeSignalForMultiFlowFit_dev(
   int num_beads,
   float* non_integer_penalty,
   float* dark_matter,
+  float* pPCA_vals,
   float* sbg,
   float* ival,
   float* output,
@@ -121,8 +126,9 @@ ComputeSignalForMultiFlowFit_dev(
   float* emphasis = NULL,
   float* fval = NULL);
 
-//__device__
-//void ComputeTauB_dev(float& tauB, float etbR, int sId); 
+__device__
+void ComputeMidNucTime_dev(float& tmid, const ConstParams*pCP, int nucId, int fnum);
+
 __device__
 void ComputeTauB_dev(float& tauB, const ConstParams* pCP, float etbR, int sId); 
 
@@ -131,6 +137,15 @@ void ComputeEtbR_dev(float& etbR, float R, int sId, int nucid, int absFnum);
 
 __device__
 void ComputeSP_dev(float& SP, float Copies, int fnum, int sId); 
+
+__device__
+void GenerateSmoothingKernelForExponentialTailFit_dev(
+  int size,
+  float taub,
+  int exp_start,
+  float* kern, 
+  const ConstParams* pCP
+);
 
 __device__ void 
 ResidualCalculationPerFlow(
@@ -153,8 +168,67 @@ CalculateMeanResidualErrorPerFlow(
   int num_beads,
   int num_frames); 
 
+__device__    
+void ModelFunctionEvaluationForExponentialTailFit_dev(
+  int tail_start, 
+  int num_frames, 
+  int num_beads, 
+  float A, 
+  float taub, 
+  float dc_offset, 
+  float* fval,
+  const ConstParams* pCP,
+  float* tmp_fval = NULL);
 
+__device__    
+void CalculateResidualForExponentialTailFit_dev(
+  float* obs, 
+  float* pred, 
+  float* start,
+  float* end,
+  float* err,
+  float& residual);
+      
 ///// Implemented functions
+/*
+
+__device__ float  CalcNucAvgDarkMatterPerFrame(
+  int frame, 
+  float*darkMatter)
+{
+ return  darkMatter[frame]+ CP[sId].darkness[0]; //CP_MULTIFLOWFIT
+}
+
+__device__ float  CalcPCADarkMatterPerFrame(
+  int frame,
+  float *pca_vals, 
+  float *darkMatter)
+{
+
+ return  darkMatter[frame]+ CP[sId].darkness[0]; //CP_MULTIFLOWFIT
+}
+*/
+
+__device__
+float ApplyDarkMatterToFrame(
+    float * darkMatter,
+    float * pca_val,
+    int frame,
+    int num_frames,
+    int num_beads,  
+    int sId 
+  )
+{
+  if( !CP[sId].useDarkMatterPCA)
+    return darkMatter[frame]*CP[sId].darkness[0]; //CP_MULTIFLOWFIT
+
+  float val = 0;
+  for(int i=0; i<NUM_DM_PCA; i++)
+    val += darkMatter[i*num_frames+frame]*pca_val[i*num_beads];
+
+  return val;
+}
+
 
 
 __device__
@@ -206,52 +280,65 @@ float poiss_cdf_approx_float4 (float x, const float4* ptr, float occ_l, float oc
   x *= 20.0f;
   int left = (int) x;
 
-  float idelta = x-left;
-  float ifrac = 1.0f-idelta;
-  
   int max_dim_minus_one = MAX_POISSON_TABLE_ROW - 1;
 
-  left = (left < max_dim_minus_one )?(left):(max_dim_minus_one);
+  float idelta = x-left;
 
+  if (left > max_dim_minus_one ){
+    left = max_dim_minus_one;
+//    idelta = 1.0f;
+  }
+  float ifrac = 1.0f-idelta;
+ 
+#if __CUDA_ARCH__ >= 350
+  float4 mixLUT = __ldg(ptr + left);
+#else
   float4 mixLUT = ptr[left];
+#endif
+/*
+      x = ptrR[right];
+      y = ptrL[right]; 
+
+      z = ptrR[left]; 
+      w = ptrL[left]; 
+*/
 
 #ifndef CREATE_POISSON_LUT_ON_DEVICE
   //using _mm128 type casted as float4 --> reverse order of x,y,z,w ---> w,z,y,x
-  ret = ( ifrac * ( occ_l * mixLUT.w + occ_r * mixLUT.z ) + idelta * (occ_l * mixLUT.y + occ_r * mixLUT.x )); 
-#else
-  ret = ( ifrac * ( occ_l * mixLUT.x + occ_r * mixLUT.y ) + idelta * (occ_l * mixLUT.z + occ_r * mixLUT.w )); 
+   ret = ( ifrac * ( occ_l * mixLUT.w + occ_r * mixLUT.z ) + idelta * (occ_l * mixLUT.y + occ_r * mixLUT.x )); 
+
 /*
-    int right = left+1;
-    idelta = (float) (x - left);
-
-    // both left and right points are inside the table...interpolate between them
-    if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
+    if ( (left >= 0) && (left < MAX_POISSON_TABLE_ROW-1))
     {
-      ret = ((float)( (1 - idelta) * mixLUT.y + idelta * mixLUT.w )) * occ_r ;
+      ifrac = (float) (x - left);
+      ret = (float) ( (1.0f - ifrac) * mixLUT.z + ifrac * mixLUT.x) * occ_r ;
+      ret += (float) ( (1.0f - ifrac) * mixLUT.w + ifrac * mixLUT.y) * occ_l;
     }
     else
     {
-      if (left < 0)
-        ret = ((float) mixLUT.y) * occ_r;
-      else
-        ret = ((float) mixLUT.w) * occ_r;
+      if (left < 0){
+        ret = (float) mixLUT.z * occ_r;
+        ret += (float) mixLUT.w * occ_l;
+      }else{
+        ret = (float) mixLUT.x * occ_r ;
+        ret += (float) mixLUT.y * occ_l ;
+      }
     }
 
-    if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
-    {
-      ret += ((float)( (1 - idelta) * mixLUT.x + idelta * mixLUT.z )) * occ_l ;
-    }
-    else
-    {
-      if (left < 0)
-        ret += ((float) mixLUT.x) * occ_l;
-      else
-        ret += ((float) mixLUT.z) * occ_l;
-    }*/
+
+*/
+
+
+  #else
+   ret = ( ifrac * ( occ_l * mixLUT.x + occ_r * mixLUT.y ) + idelta * (occ_l * mixLUT.z + occ_r * mixLUT.w )); 
 #endif
 
   return ret;
 }
+
+
+
+
 
 
 __device__
@@ -271,7 +358,7 @@ float poiss_cdf_approx_streaming (float x, const float* ptr)
     if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
     {
       frac = (float) (x - left);
-      ret = (float) ( (1 - frac) * ptr[left] + frac * ptr[right]);
+      ret = (float) ( (1.0f - frac) * ptr[left] + frac * ptr[right]);
     }
     else
     {
@@ -284,58 +371,56 @@ float poiss_cdf_approx_streaming (float x, const float* ptr)
   return ret;
 }
 
-
-#ifndef USE_GLOBAL_POISSTABLE 
-__device__
-const float*  precompute_pois_params_streaming (int n)
+__device__ 
+void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const float4 * ptrLUT, float x)
 {
 
-  const float* ptr = NULL;
-  switch (n)
-  {
-        case 0:
-            ptr = POISS_0_APPROX_TABLE_CUDA;
-            break;
-        case 1:
-            ptr = POISS_1_APPROX_TABLE_CUDA;
-            break;
-        case 2:
-            ptr = POISS_2_APPROX_TABLE_CUDA;
-            break;
-        case 3:
-            ptr = POISS_3_APPROX_TABLE_CUDA;
-            break;
-        case 4:
-            ptr = POISS_4_APPROX_TABLE_CUDA;
-            break;
-        case 5:
-            ptr = POISS_5_APPROX_TABLE_CUDA;
-            break;
-        case 6:
-            ptr = POISS_6_APPROX_TABLE_CUDA;
-            break;
-        case 7:
-            ptr = POISS_7_APPROX_TABLE_CUDA;
-            break;
-        case 8:
-            ptr = POISS_8_APPROX_TABLE_CUDA;
-            break;
-        case 9:
-            ptr = POISS_9_APPROX_TABLE_CUDA;
-            break;
-        case 10:
-            ptr = POISS_10_APPROX_TABLE_CUDA;
-            break;
-        case 11:
-            ptr = POISS_11_APPROX_TABLE_CUDA;
-            break;
-        default:
-            ;
+  int left, right;
+  x *= 20.0f;
+  left = (int) x; // left-most point in the lookup table
+  right = left + 1; // right-most point in the lookup table
+  float4 cdf;
+    if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
+    {
+      cdf.x = ptrR[right];
+      cdf.y = ptrL[right]; 
+      cdf.z = ptrR[left]; 
+      cdf.w = ptrL[left]; 
     }
-    return ptr;
+    else
+    {
+      if (left < 0){
+        cdf.x = ptrR[0];
+        cdf.y = ptrL[0];
+        cdf.z = ptrR[0]; 
+        cdf.w = ptrL[0]; 
+      }else{
+        cdf.x = ptrR[MAX_POISSON_TABLE_ROW - 1];
+        cdf.y = ptrL[MAX_POISSON_TABLE_ROW - 1];
+        cdf.z = ptrR[MAX_POISSON_TABLE_ROW - 1];
+        cdf.w = ptrL[MAX_POISSON_TABLE_ROW - 1];
+   }
+  }
+  
+  int max_dim_minus_one = MAX_POISSON_TABLE_ROW - 1;
+  left = (left < max_dim_minus_one )?(left):(max_dim_minus_one);
+#if __CUDA_ARCH__ >= 350
+  float4 mixLUT = __ldg(ptrLUT + left);
+#else
+  float4 mixLUT = ptrLUT[left];
+#endif
+                    
+if( cdf.x != mixLUT.x || cdf.y != mixLUT.y || cdf.z != mixLUT.z || cdf.w != mixLUT.w  )
+   printf("ERROR %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w); 
+
+//if( cdf.x == mixLUT.x && cdf.y == mixLUT.y && cdf.z == mixLUT.z && cdf.w == mixLUT.w  )
+//   printf("PASS %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w); 
+
 
 }
-#else
+
+
+
 __device__
 const float*  precompute_pois_params_streaming (int n)
 {
@@ -357,7 +442,10 @@ const float4*  precompute_pois_LUT_params_streaming (int il, int ir)
 
   return ptr;  
 }
-#endif
+
+
+
+
 
 __device__
 void clamp_streaming ( int &x, int a, int b)
@@ -400,7 +488,6 @@ ModelFuncEvaluationForSingleFlowFit(
   float d,
   float sens,
   int c_dntp_top_ndx,
-//  int ibd,
   int num_frames,
   int num_beads,
   float* fval,
@@ -495,9 +582,9 @@ ModelFuncEvaluationForSingleFlowFit(
   float c_dntp_old_rate = 0;
   float c_dntp_new_rate = 0;
 
-  float c_dntp_bot_plus_kmax = 1.0f/CP_SINGLEFLOWFIT[sId].kmax[nucid];
+  float c_dntp_bot_plus_kmax = 1.0f/CP[sId].kmax[nucid]; //CP_SINGLEFLOWFIT
 
-  float scaled_kr = Krate*CP_SINGLEFLOWFIT[sId].molecules_to_micromolar_conversion/d;
+  float scaled_kr = Krate*CP[sId].molecules_to_micromolar_conversion/d; //CP_SINGLEFLOWFIT
   float half_kr = Krate*0.5f;
 
   // variables used for solving background signal shape
@@ -514,17 +601,17 @@ ModelFuncEvaluationForSingleFlowFit(
 
   c_dntp_top_ndx += fnum*num_frames*ISIG_SUB_STEPS_SINGLE_FLOW;
 
-  for (i=CP_SINGLEFLOWFIT[sId].start[fnum];i < num_frames;i++)
+  for (i=CP[sId].start[fnum];i < num_frames;i++) //CP_SINGLEFLOWFIT
   {
     if (totgen > 0.0f)
     {
-      ldt = (CP_SINGLEFLOWFIT[sId].deltaFrames[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr;
+      ldt = (CP[sId].deltaFrames[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr; //CP_SINGLEFLOWFIT
       for (st=1; (st <= ISIG_SUB_STEPS_SINGLE_FLOW) && (totgen > 0.0f);st++)
       {
         // assume instantaneous equilibrium
         c_dntp_old_rate = c_dntp_new_rate;
         c_dntp_bot = nucRise[c_dntp_top_ndx++]/ (1.0f + scaled_kr*pact*c_dntp_bot_plus_kmax);
-        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP_SINGLEFLOWFIT[sId].kmax[nucid]);
+        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP[sId].kmax[nucid]); //CP_SINGLEFLOWFIT
 
         c_dntp_new_rate = c_dntp_bot*c_dntp_bot_plus_kmax;
         c_dntp_int = ldt* (c_dntp_new_rate+c_dntp_old_rate);
@@ -533,7 +620,7 @@ ModelFuncEvaluationForSingleFlowFit(
         // calculate new number of active polymerase
 #ifndef POISS_FLOAT4
         pact_new = poiss_cdf_approx_streaming (c_dntp_sum,rptr) * occ_r;
- //       if (occ_l > 0.0f)
+//       if (occ_l > 0.0f)
         pact_new += poiss_cdf_approx_streaming (c_dntp_sum,lptr) * occ_l;
 #else       
         pact_new = poiss_cdf_approx_float4(c_dntp_sum, LUTptr, occ_l, occ_r);
@@ -554,10 +641,10 @@ ModelFuncEvaluationForSingleFlowFit(
     red_hydro *= sens;  
  
     one_over_two_tauB = 1.0f/ (2.0f*tau);
-    aval = CP_SINGLEFLOWFIT[sId].deltaFrames[i]*one_over_two_tauB;
+    aval = CP[sId].deltaFrames[i]*one_over_two_tauB; //CP_SINGLEFLOWFIT
     one_over_one_plus_aval = 1.0f/ (1.0f+aval);
     
-    if(i==CP_SINGLEFLOWFIT[sId].start[fnum])
+    if(i==CP[sId].start[fnum]) //CP_SINGLEFLOWFIT
       fval_local  = red_hydro; // *one_over_one_plus_aval;
     else
       fval_local = red_hydro - red_hydro_prev + (1.0f-aval)*fval_local; // *one_over_one_plus_aval;
@@ -567,27 +654,40 @@ ModelFuncEvaluationForSingleFlowFit(
     fval_local *=  one_over_one_plus_aval;
 
     if( flag == 0){
+#ifdef FVAL_L1
+      fval[i] = fval_local * gain;  
+#else
       fval[num_beads*i] = fval_local * gain;  
+#endif
  
     }else{
-
-#ifndef TRANSPOSED_EMPH
-      float weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
-#else
       float weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
-#endif
+
       int bxi = num_beads * i;
+#ifdef FVAL_L1
+      float jac_tmp =  weight * (fval_local*gain - fval_in[i]) * 1000.0f;
+#else
       float jac_tmp =  weight * (fval_local*gain - fval_in[bxi]) * 1000.0f;
+#endif
       if(flag==1){
+#ifdef JAC_L1
+        jac_out[i] = jac_tmp;
+#else
         jac_out[bxi] = jac_tmp;
+#endif
         *aa += jac_tmp * jac_tmp;       
         if (!twoParamFit) 
          *rhs0 += (jac_tmp * err[bxi]);
       }
       
       if(flag == 2){
+#ifdef JAC_L1
+        *akr +=  jac_out[i] * jac_tmp;
+        *rhs0 += jac_out[i] * err[bxi];  //err
+#else
         *akr +=  jac_out[bxi] * jac_tmp;
-        *rhs0 += jac_out[bxi] * err[bxi];  //err
+        *rhs0 += jac_out[bxi] * err[bxi];
+#endif
         *rhs1 += jac_tmp * err[bxi];
         *krkr += jac_tmp*jac_tmp;
       }
@@ -685,9 +785,9 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
   float c_dntp_old_rate = 0;
   float c_dntp_new_rate = 0;
 
-  float c_dntp_bot_plus_kmax = 1.0f/CP_SINGLEFLOWFIT[sId].kmax[nucid];
+  float c_dntp_bot_plus_kmax = 1.0f/CP[sId].kmax[nucid]; //CP_SINGLEFLOWFIT
 
-  float scaled_kr = Krate*CP_SINGLEFLOWFIT[sId].molecules_to_micromolar_conversion/d;
+  float scaled_kr = Krate*CP[sId].molecules_to_micromolar_conversion/d; //CP_SINGLEFLOWFIT
   float half_kr = Krate*0.5f;
 
   // variables used for solving background signal shape
@@ -706,17 +806,17 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
 
   float num = 0;
   float den = 0.0001f;
-  for (i=CP_SINGLEFLOWFIT[sId].start[fnum];i < num_frames;i++)
+  for (i=CP[sId].start[fnum];i < num_frames;i++) //CP_SINGLEFLOWFIT
   {
     if (totgen > 0.0f)
     {
-      ldt = (CP_SINGLEFLOWFIT[sId].deltaFrames[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr;
+      ldt = (CP[sId].deltaFrames[i]/( ISIG_SUB_STEPS_SINGLE_FLOW * FRAMESPERSEC)) * half_kr; //CP_SINGLEFLOWFIT
       for (st=1; (st <= ISIG_SUB_STEPS_SINGLE_FLOW) && (totgen > 0.0f);st++)
       {
         // assume instantaneous equilibrium
         c_dntp_old_rate = c_dntp_new_rate;
         c_dntp_bot = nucRise[c_dntp_top_ndx++]/ (1.0f + scaled_kr*pact*c_dntp_bot_plus_kmax);
-        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP_SINGLEFLOWFIT[sId].kmax[nucid]);
+        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP[sId].kmax[nucid]); //CP_SINGLEFLOWFIT
 
         c_dntp_new_rate = c_dntp_bot*c_dntp_bot_plus_kmax;
         c_dntp_int = ldt* (c_dntp_new_rate+c_dntp_old_rate);
@@ -748,10 +848,10 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
  
    
     one_over_two_tauB = 1.0f/ (2.0f*tau);
-    aval = CP_SINGLEFLOWFIT[sId].deltaFrames[i]*one_over_two_tauB;
+    aval = CP[sId].deltaFrames[i]*one_over_two_tauB; //CP_SINGLEFLOWFIT
     one_over_one_plus_aval = 1.0f/ (1.0f+aval);
     
-    if(i==CP_SINGLEFLOWFIT[sId].start[fnum])
+    if(i==CP[sId].start[fnum]) //CP_SINGLEFLOWFIT
       fval_local  = red_hydro; // *one_over_one_plus_aval;
     else
       fval_local = red_hydro - red_hydro_prev + (1.0f-aval)*fval_local; // *one_over_one_plus_aval;
@@ -759,11 +859,8 @@ ModelFuncEvaluationAndProjectiontForSingleFlowFit(
     red_hydro_prev = red_hydro;
  
     fval_local *=  one_over_one_plus_aval;
-#ifndef TRANSPOSED_EMPH
-      float weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
-#else
-      float weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
- #endif
+
+      float weight = (emRight != NULL )?( frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)]) :( emLeft[i*(MAX_POISSON_TABLE_COL)]);
 
      delta = (fval_local*gain) - fval[i*num_beads];
      num += epsilon*delta*err[i*num_beads]*weight*weight; 
@@ -790,7 +887,7 @@ ComputeHydrogenForMultiFlowFit_dev(
   int num_beads,
   float* ival)
 {
-  float sens = CP_MULTIFLOWFIT[sId].sens*SENSMULTIPLIER;
+  float sens = CP[sId].sens*SENSMULTIPLIER; //CP_MULTIFLOWFIT
   if (A < 0.0f) {
     A = -A;
     sens = -sens;
@@ -859,29 +956,29 @@ ComputeHydrogenForMultiFlowFit_dev(
   float c_dntp_old_rate = 0;
   float c_dntp_new_rate = 0;
 
-  float c_dntp_bot_plus_kmax = 1.0f/CP_MULTIFLOWFIT[sId].kmax[nucid];
+  float c_dntp_bot_plus_kmax = 1.0f/CP[sId].kmax[nucid]; //CP_MULTIFLOWFIT
 
-  float scaled_kr = Krate*CP_MULTIFLOWFIT[sId].molecules_to_micromolar_conversion/d;
+  float scaled_kr = Krate*CP[sId].molecules_to_micromolar_conversion/d; //CP_MULTIFLOWFIT
   float half_kr = Krate*0.5f;
 
   c_dntp_top_ndx += fnum*num_frames*ISIG_SUB_STEPS_MULTI_FLOW;
 
-  for(i=0;i<CP_MULTIFLOWFIT[sId].start[fnum]; i++) {
+  for(i=0;i<CP[sId].start[fnum]; i++) { //CP_MULTIFLOWFIT
     *ival = 0;
     ival += num_beads;
   }
 
-  for (i=CP_MULTIFLOWFIT[sId].start[fnum];i < num_frames;i++)
+  for (i=CP[sId].start[fnum];i < num_frames;i++) //CP_MULTIFLOWFIT
   {
     if (totgen > 0.0f)
     {
-      ldt = (CP_MULTIFLOWFIT[sId].deltaFrames[i]/( ISIG_SUB_STEPS_MULTI_FLOW * FRAMESPERSEC)) * half_kr;
+      ldt = (CP[sId].deltaFrames[i]/( ISIG_SUB_STEPS_MULTI_FLOW * FRAMESPERSEC)) * half_kr; //CP_MULTIFLOWFIT
       for (st=1; (st <= ISIG_SUB_STEPS_MULTI_FLOW) && (totgen > 0.0f);st++)
       {
         // assume instantaneous equilibrium
         c_dntp_old_rate = c_dntp_new_rate;
         c_dntp_bot = nucRise[c_dntp_top_ndx++]/ (1.0f + scaled_kr*pact*c_dntp_bot_plus_kmax);
-        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP_MULTIFLOWFIT[sId].kmax[nucid]);
+        c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + CP[sId].kmax[nucid]); //CP_MULTIFLOWFIT
 
         c_dntp_new_rate = c_dntp_bot*c_dntp_bot_plus_kmax;
         c_dntp_int = ldt* (c_dntp_new_rate+c_dntp_old_rate);
@@ -922,6 +1019,7 @@ ComputeSignalForMultiFlowFit_dev(
   int num_beads,
   float* non_integer_penalty,
   float* dark_matter,
+  float* pPCA_vals,
   float* sbg,
   float* ival,
   float* output,
@@ -942,24 +1040,27 @@ ComputeSignalForMultiFlowFit_dev(
   }
 
   float one_over_two_taub = 1.0f / (2.0f*tauB);
-  xt = CP_MULTIFLOWFIT[sId].deltaFrames[i]*one_over_two_taub;
+  xt = CP[sId].deltaFrames[i]*one_over_two_taub; //CP_MULTIFLOWFIT
 
   float one_over_one_plus_aval = 1.0f/ (1.0f+xt);
 
   sbg += fnum*num_frames;
   purple_hydr = ( *ival + (etbR+xt)*sbg[i])*one_over_one_plus_aval;
-  fval_local = purple_hydr*gain + dark_matter[i]*CP_MULTIFLOWFIT[sId].darkness[0] + 
-                              clonal_error_term * ((float) (i&1) - 0.5f);
+  
+  //fval_local =   dark_matter[i]*CP[sId].darkness[0] +  //CP_MULTIFLOWFIT
+  fval_local =   ApplyDarkMatterToFrame(dark_matter, pPCA_vals, i, num_frames, num_beads, sId);  
+  fval_local += purple_hydr*gain + clonal_error_term * ((float) (i&1) - 0.5f);
   *output = useEmphasis ? (fval_local - *fval)*emphasis[i] / diff : fval_local;
   output += num_beads;
   i++;
   for (; i<num_frames; ++i)
   {
-    xt = CP_MULTIFLOWFIT[sId].deltaFrames[i]*one_over_two_taub;
+    xt = CP[sId].deltaFrames[i]*one_over_two_taub; //CP_MULTIFLOWFIT
     one_over_one_plus_aval = 1.0f/(1.0f+xt);
     purple_hydr = ((ival[i*num_beads] - ival[(i-1)*num_beads]) 
          + (etbR+xt)*sbg[i] - (etbR-xt) * sbg[i-1]+ (1.0f-xt) * purple_hydr) * one_over_one_plus_aval;
-    fval_local = purple_hydr*gain + dark_matter[i]*CP_MULTIFLOWFIT[sId].darkness[0];
+    fval_local = purple_hydr*gain + ApplyDarkMatterToFrame(dark_matter, pPCA_vals , i, num_frames, num_beads, sId);  
+    // dark_matter[i]*CP[sId].darkness[0]; //CP_MULTIFLOWFIT
 
     if (i < MAXCLONALMODIFYPOINTSERROR)
       fval_local += clonal_error_term * ((float) (i&1) - 0.5f);
@@ -970,17 +1071,34 @@ ComputeSignalForMultiFlowFit_dev(
   }
 
 }
-/*
+
+// smoothing kernel to provide weights for smoothing exponential tail 
 __device__
-void ComputeTauB_dev(float& tauB, float etbR, int sId) {
-  if (CP_MULTIFLOWFIT[sId].fit_taue) {
-    tauB = etbR  ? (CP_MULTIFLOWFIT[sId].tauE / etbR) : MINTAUB;
+void GenerateSmoothingKernelForExponentialTailFit_dev(
+  int size,
+  float taubInv,
+  int exp_start,
+  float* kern, 
+  const ConstParams* pCP
+)
+{
+  float dt;
+  for (int i=0; i<size; ++i) {
+    dt = (pCP->frameNumber[i+exp_start] - pCP->frameNumber[exp_start + 3])*taubInv;
+    kern[i] = __expf(dt);   
   }
-  else {
-    tauB = CP_MULTIFLOWFIT[sId].tau_R_m*etbR + CP_MULTIFLOWFIT[sId].tau_R_o;
-  }
-  clamp_streaming(tauB, MINTAUB, MAXTAUB);
-}*/
+}
+
+// compute tmid muc. This routine mimics CPU routine in BookKeeping/RegionaParams.cpp
+__device__
+void ComputeMidNucTime_dev(float& tmid, const ConstParams* pCP, int nucId, int fnum) {
+  tmid = pCP->nuc_shape.t_mid_nuc[0];
+  tmid +=  pCP->nuc_shape.t_mid_nuc_delay[nucId]*
+          (pCP->nuc_shape.t_mid_nuc[0] -  pCP->nuc_shape.valve_open) /
+          ( pCP->nuc_shape.magic_divisor_for_timing + SAFETYZERO);
+  tmid +=  pCP->nuc_shape.t_mid_nuc_shift_per_flow[fnum];
+
+}
 
 __device__
 void ComputeTauB_dev(float& tauB, const ConstParams* pCP , float etbR, int sId) {
@@ -996,7 +1114,7 @@ void ComputeTauB_dev(float& tauB, const ConstParams* pCP , float etbR, int sId) 
 
 __device__ 
 void ComputeEtbR_dev(float& etbR,const ConstParams* pCP , float R, int sId, int nucid, int absFnum ) {
-  if (CP_MULTIFLOWFIT[sId].fit_taue) {
+  if (CP[sId].fit_taue) { //CP_MULTIFLOWFIT
     etbR = R;
     if (etbR)
       etbR = pCP->NucModifyRatio[nucid] /(pCP->NucModifyRatio[nucid] + 
@@ -1034,18 +1152,23 @@ ResidualCalculationPerFlow(
   float weight;
   float wtScale = 0;
   for (i=0; i<num_frames; ++i) {
-#ifndef TRANSPOSED_EMPH
-    weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
-#else
-    weight = emRight != NULL ? frac* (*emLeft) + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : (*emLeft); //[i*(MAX_POISSON_TABLE_COL)];
+    weight = (emRight != NULL) ?( frac* (*emLeft) + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)]) :( (*emLeft)); //[i*(MAX_POISSON_TABLE_COL)];
     emLeft += (MAX_POISSON_TABLE_COL);
-#endif
+
+#if __CUDA_ARCH__ >= 350
+    *err = e = weight * (__ldg(fg_buffers) - *fval);
+#else
     *err = e = weight * (*fg_buffers - *fval);
+#endif
     residual += e*e;
     wtScale += weight*weight;
     err += num_beads;
     fg_buffers += num_beads;
+#ifdef FVAL_L1
+    fval ++;
+#else
     fval += num_beads;
+#endif
     
   }
   residual /= wtScale;
@@ -1070,11 +1193,7 @@ ResidualForAlternatingFit(
   float weight;
   float wtScale = 0;
   for (i=0; i<num_frames; ++i) {
-#ifndef TRANSPOSED_EMPH
-    weight = emRight != NULL ? frac*emLeft[i] + (1.0f - frac)*emRight[i] : emLeft[i];
-#else
     weight = emRight != NULL ? frac*emLeft[i*(MAX_POISSON_TABLE_COL)] + (1.0f - frac)*emRight[i*(MAX_POISSON_TABLE_COL)] : emLeft[i*(MAX_POISSON_TABLE_COL)];
-#endif
     e = fg_buffers[num_beads*i] - fval[num_beads*i];
     err[num_beads*i] = e;
     residual += e*e*weight*weight;
@@ -1106,7 +1225,11 @@ CalculateMeanResidualErrorPerFlow(
 
     weight += (LAST_POISSON_TABLE_COL + 1);
     fg_buffers+=num_beads;
+#ifdef FVAL_L1
+    fval++;
+#else
     fval += num_beads;
+#endif
   }
   residual = sqrtf(residual/wtScale);
 }
@@ -1553,19 +1676,19 @@ __device__ void CalculateNewBeadParams_dev(
     paramIdx = paramIdxMap[i];
     if (paramIdx == RIdx) {
       paramVal = orig_params[paramIdx*num_beads + ibd] + delta[i*num_beads + ibd];
-      clamp_streaming(paramVal, CP_MULTIFLOWFIT[sId].beadParamsMinConstraints.R, CP_MULTIFLOWFIT[sId].beadParamsMaxConstraints.R);
+      clamp_streaming(paramVal, CP[sId].beadParamsMinConstraints.R, CP[sId].beadParamsMaxConstraints.R); //CP_MULTIFLOWFIT //CP_MULTIFLOWFIT
     }
     if (paramIdx == CopiesIdx) {
       paramVal = orig_params[paramIdx*num_beads + ibd] + delta[i*num_beads + ibd];
-      clamp_streaming(paramVal, CP_MULTIFLOWFIT[sId].beadParamsMinConstraints.Copies, CP_MULTIFLOWFIT[sId].beadParamsMaxConstraints.Copies);
+      clamp_streaming(paramVal, CP[sId].beadParamsMinConstraints.Copies, CP[sId].beadParamsMaxConstraints.Copies); //CP_MULTIFLOWFIT //CP_MULTIFLOWFIT
     }
     if (paramIdx == DmultIdx) {
       paramVal = orig_params[paramIdx*num_beads + ibd] + delta[i*num_beads + ibd];
-      clamp_streaming(paramVal, CP_MULTIFLOWFIT[sId].beadParamsMinConstraints.dmult, CP_MULTIFLOWFIT[sId].beadParamsMaxConstraints.dmult);
+      clamp_streaming(paramVal, CP[sId].beadParamsMinConstraints.dmult, CP[sId].beadParamsMaxConstraints.dmult); //CP_MULTIFLOWFIT //CP_MULTIFLOWFIT
     }
     if (paramIdx >= AmplIdx && paramIdx <= (AmplIdx + NUMFB - 1)) {
       paramVal = orig_params[paramIdx*num_beads + ibd] + delta[i*num_beads + ibd];
-      clamp_streaming(paramVal, CP_MULTIFLOWFIT[sId].beadParamsMinConstraints.Ampl, CP_MULTIFLOWFIT[sId].beadParamsMaxConstraints.Ampl);
+      clamp_streaming(paramVal, CP[sId].beadParamsMinConstraints.Ampl, CP[sId].beadParamsMaxConstraints.Ampl); //CP_MULTIFLOWFIT //CP_MULTIFLOWFIT
     }
     //printf("old: %f new: %f pIdx: %d\n", params[paramIdx*num_beads + ibd], paramVal, paramIdx);
     new_params[paramIdx*num_beads + ibd] = paramVal;
@@ -1628,17 +1751,10 @@ __device__ void DecideOnEmphasisVectorsForInterpolation(
       left = 0;
       frac = 1.0f;
     }
-#ifndef TRANSPOSED_EMPH
-    *emLeft = &emphasis[left*num_frames];
-    *emRight = &emphasis[(left + 1)*num_frames];
-  }else{
-    *emLeft = &emphasis[LAST_POISSON_TABLE_COL*num_frames];
-#else
     *emLeft = &emphasis[left];
     *emRight = &emphasis[left + 1];
   }else{
     *emLeft = &emphasis[LAST_POISSON_TABLE_COL]; 
-#endif
     *emRight = NULL;
     frac = 1.0f;
   }
@@ -1671,6 +1787,65 @@ __device__ void DynamicConstraintKrate(
   }
 }
 
+__device__    
+void ModelFunctionEvaluationForExponentialTailFit_dev(
+  int start, 
+  int num_frames, 
+  int num_beads, 
+  float A, 
+  float taubInv, 
+  float dc_offset, 
+  float* fval,
+  const ConstParams* pCP,
+  float* tmp_fval)
+{
+  fval += start*num_beads;
+  if (tmp_fval)
+    tmp_fval += start*num_beads;
+
+  float val;
+  for (int i=start; i<num_frames; ++i) {
+    
+     val = A * __expf(-(pCP->frameNumber[i] - pCP->frameNumber[start])*taubInv)
+                   + dc_offset;
+     if (tmp_fval) {
+       *tmp_fval = (val - *fval) / 0.001f;
+       tmp_fval += num_beads;
+     }
+     else {
+       *fval = val;
+     }
+     fval += num_beads;
+  }
+}
+
+__device__    
+void CalculateResidualForExponentialTailFit_dev(
+  float* obs, 
+  float* pred, 
+  int start,
+  int end,
+  float* err,
+  int num_beads,
+  float& residual)
+{
+  residual = 0; 
+  float e;
+
+  obs += start*num_beads;
+  pred += start*num_beads;
+  err += start*num_beads;
+  for (int i=start; i<end; ++i) {
+    e = *obs - *pred;
+    *err = e;
+    residual += e*e;
+    obs += num_beads;
+    pred += num_beads;
+    err += num_beads;
+  }
+}
+ 
+
 /*****************************************************************************
 
               SINGLE FLOW FIT KERNELS 
@@ -1681,7 +1856,7 @@ __device__ void DynamicConstraintKrate(
 // Let number of beads be N and frames be F. The size for each input argument in
 // comments is in bytes.
 __global__ void 
-PerFlowLevMarFit_k(
+PerFlowGaussNewtonFit_k(
   // inputs
   float* fg_buffers, // NxF
   float* emphasisVec, 
@@ -1691,8 +1866,10 @@ PerFlowLevMarFit_k(
 
   // scratch space in global memory
   float* err, // NxF
+#ifndef FVAL_L1
   float* fval, // NxF
   float* tmp_fval, // NxF
+#endif
   float* jac, // NxF 
   float* meanErr,
   // other inputs 
@@ -1703,26 +1880,22 @@ PerFlowLevMarFit_k(
   int num_beads, // 4
   int num_frames, // 4
   bool useDynamicEmphasis,
+//  int * pMonitor,
   int sId
 ) 
 {
+
+#ifdef FVAL_L1
+  float fval[MAX_COMPRESSED_FRAMES_GPU];
+  float tmp_fval[MAX_COMPRESSED_FRAMES_GPU];
+#endif
+
+#ifdef JAC_L1
+  float jac_l1[MAX_COMPRESSED_FRAMES_GPU];
+#endif
+
+
   extern __shared__ float emphasis[];
-
-#ifndef TRANSPOSED_EMPH
-  for (int i=0; i<MAX_POISSON_TABLE_COL*num_frames; i+=num_frames)
-  {
-    if (threadIdx.x < num_frames)
-      emphasis[i + threadIdx.x] = emphasisVec[i + threadIdx.x];
-  }
-#else
-
-  
-/*  for(int i=0; i<num_frames; i ++)
-  {
-     if (threadIdx.x < MAX_POISSON_TABLE_COL)
-      emphasis[(MAX_POISSON_TABLE_COL)*i + threadIdx.x] = emphasisVec[num_frames*threadIdx.x + i ];
-  }
-*/
   int numWarps = blockDim.x/32;
   int threadWarpIdx = threadIdx.x%32;
   int warpIdx = threadIdx.x/32; 
@@ -1731,9 +1904,6 @@ PerFlowLevMarFit_k(
      if (threadWarpIdx < MAX_POISSON_TABLE_COL)
       emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[num_frames*threadWarpIdx + i ];
   }
-  
-#endif
-
   __syncthreads();
 
   int ibd = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1749,12 +1919,24 @@ PerFlowLevMarFit_k(
   float *pAmpl = &pBeadParamsBase[BEAD_AMPL(Ampl[0])*num_beads];
 
    
-  err += ibd;
+
+#ifdef FVAL_L1
+//  fval = fval_l1;
+//  tmp_fval = tmp_fval_l1;
+#else
   fval += ibd;
   tmp_fval += ibd;
+#endif
+
+#ifdef JAC_L1
+  jac = jac_l1;
+#else
   jac += ibd;
+#endif
+
+  err += ibd;
   meanErr += ibd;
-  
+ 
   fg_buffers += ibd;
 
 
@@ -1763,8 +1945,8 @@ PerFlowLevMarFit_k(
   float avg_err;
   for(int fnum=0; fnum<NUMFB; fnum++){
 
-    int nucid = CP_SINGLEFLOWFIT[sId].flowIdxMap[fnum];
-    float sens = CP_SINGLEFLOWFIT[sId].sens*SENSMULTIPLIER; 
+    int nucid = CP[sId].flowIdxMap[fnum]; //CP_SINGLEFLOWFIT
+    float sens = CP[sId].sens*SENSMULTIPLIER;  //CP_SINGLEFLOWFIT
 
     float copies = *pCopies;
     float R = *(pCopies + num_beads);
@@ -1774,7 +1956,7 @@ PerFlowLevMarFit_k(
     float *pKmult = pAmpl + num_beads*NUMFB;
 
 
-    d *= CP_SINGLEFLOWFIT[sId].d[nucid];
+    d *= CP[sId].d[nucid]; //CP_SINGLEFLOWFIT
 
 
     //offset for next value gets added to address at end of fnum loop
@@ -1783,13 +1965,13 @@ PerFlowLevMarFit_k(
 
     float Ampl = *pAmpl;
     float etbR;
-    float tauB; // = tmp.x; // *ptauB;
-    float SP; //= tmp.y; //*pSP;  
+    float tauB; 
+    float SP;  
  
  
-    ComputeEtbR_dev(etbR, &CP_SINGLEFLOWFIT[sId], R, sId, nucid, realFnum+fnum);
-    ComputeTauB_dev(tauB, &CP_SINGLEFLOWFIT[sId], etbR, sId);
-    ComputeSP_dev(SP, &CP_SINGLEFLOWFIT[sId], copies, realFnum+fnum, sId);
+    ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, realFnum+fnum); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_SINGLEFLOWFIT
+    ComputeSP_dev(SP, &CP[sId], copies, realFnum+fnum, sId); //CP_SINGLEFLOWFIT
   
     bool twoParamFit = ( copies * Ampl > 2.0f  );
  
@@ -1798,16 +1980,23 @@ PerFlowLevMarFit_k(
     // These values before start are always zero since there is no nucrise yet. Don't need to
     // zero it out. Have to change the residual calculation accordingly for the frames before the
     // start.
-    for (i =0; i < CP_SINGLEFLOWFIT[sId].start[fnum]; i++) {
+    for (i =0; i < CP[sId].start[fnum]; i++) { //CP_SINGLEFLOWFIT
+
+#ifdef FVAL_L1
+      fval[i] = 0;
+      tmp_fval[i] = 0;
+#else
       fval[num_beads*i] = 0;
       tmp_fval[num_beads*i] = 0;
+#endif
+
     }
 
     // first step
     // Evaluate model function using input Ampl and Krate and get starting residual
     ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-        Ampl, krate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum],
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval);
 
     float *emLeft, *emRight;
@@ -1836,16 +2025,16 @@ PerFlowLevMarFit_k(
       float aa = 0, akr= 0, krkr = 0, rhs0 = 0, rhs1 = 0;
 
       ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise,
-          newAmpl, krate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-          sens, CP_SINGLEFLOWFIT[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, 
+          newAmpl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
           num_frames, num_beads, tmp_fval, 1, jac, emLeft, emRight, frac, fval, 
           err, &aa, &rhs0, &krkr, &rhs1, &akr);
 
 
       if (twoParamFit) 
         ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-            Ampl, newKrate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-            sens, CP_SINGLEFLOWFIT[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, 
+            Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+            sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval,2, jac, emLeft, emRight, frac, fval, 
             err, &aa, &rhs0, &krkr, &rhs1, &akr);
 
@@ -1867,8 +2056,8 @@ PerFlowLevMarFit_k(
 
         // Evaluate using new params
         ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-            newAmpl, newKrate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, 
-            d, sens, CP_SINGLEFLOWFIT[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, 
+            newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
             num_frames, num_beads, tmp_fval);
         // residual calculation using new parameters
         if (useDynamicEmphasis)
@@ -1880,9 +2069,13 @@ PerFlowLevMarFit_k(
           Ampl = newAmpl;
           if(twoParamFit)krate = newKrate;
           // copy new function val to fval
-          for (i=CP_SINGLEFLOWFIT[sId].start[fnum]; i<num_frames; ++i)
+          for (i=CP[sId].start[fnum]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+#ifdef FVAL_L1
+            fval[i] = tmp_fval[i];
+#else
             fval[num_beads*i] = tmp_fval[num_beads*i];
-
+#endif
+          }
           residual = newresidual;
         }
         else {
@@ -1893,10 +2086,652 @@ PerFlowLevMarFit_k(
         }
       }
 
-      if ((delta0*delta0) < 0.0000025f)
+      if ((delta0*delta0) < 0.0000025f){
+        iter++;
         break;
+      }
+    } // end ITER loop
+    //atomicAdd(&pMonitor[iter-1], 1);
+
+    if(fnum==0) avg_err = pState->avg_err * realFnum;  
+
+    if(twoParamFit) *pKmult = krate;
+    *pAmpl= Ampl;
+
+ 
+    CalculateMeanResidualErrorPerFlow(fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL, residual, 
+      num_beads, num_frames); 
+  
+    avg_err += residual;
+    meanErr[num_beads * fnum] = residual;
+
+    pAmpl += num_beads;
+    fg_buffers += num_frames*num_beads;
+  } // end fnum loop
+
+  avg_err /= (realFnum + NUMFB);
+  pState->avg_err = avg_err;
+  int high_err_cnt = 0;
+  avg_err *= WASHOUT_THRESHOLD;
+  for (int fnum = NUMFB - 1; fnum >= 0 
+                           && (meanErr[num_beads* fnum] > avg_err); fnum--)
+    high_err_cnt++;
+
+  if (high_err_cnt > WASHOUT_FLOW_DETECTION)
+    pState->corrupt = true;
+
+
+}
+
+
+__global__ void 
+PerFlowHybridFit_k(
+  // inputs
+  float* fg_buffers, // NxF
+  float* emphasisVec, 
+  float* nucRise, 
+  float * pBeadParamsBase, //N
+  bead_state* pState,
+  // scratch space in global memory
+  float* err, // NxF
+#ifndef FVAL_L1
+  float* fval, // NxF
+  float* tmp_fval, // NxF
+#endif
+  float* jac, // NxF 
+  float* meanErr,
+  // other inputs 
+  float minAmpl,
+  float maxKmult,
+  float minKmult,
+  int realFnum,
+  int num_beads, // 4
+  int num_frames, // 4
+  bool useDynamicEmphasis,
+//  int * pMonitor,
+  int sId,
+  int switchToLevMar
+) 
+{
+
+#ifdef FVAL_L1
+  float fval[MAX_COMPRESSED_FRAMES_GPU];
+  float tmp_fval[MAX_COMPRESSED_FRAMES_GPU];
+#endif
+
+#ifdef JAC_L1
+  float jac_l1[MAX_COMPRESSED_FRAMES_GPU];
+#endif
+
+
+  extern __shared__ float emphasis[];
+  int numWarps = blockDim.x/32;
+  int threadWarpIdx = threadIdx.x%32;
+  int warpIdx = threadIdx.x/32; 
+  for(int i=warpIdx; i<num_frames; i += numWarps)
+  {
+     if (threadWarpIdx < MAX_POISSON_TABLE_COL)
+      emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[num_frames*threadWarpIdx + i ];
+  }
+  __syncthreads();
+
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  num_beads = ((num_beads+31)/32) * 32;
+  pBeadParamsBase += ibd;
+  pState += ibd; 
+  
+
+  float * pCopies = &pBeadParamsBase[BEAD_COPIES(Copies)*num_beads];
+  float *pAmpl = &pBeadParamsBase[BEAD_AMPL(Ampl[0])*num_beads];
+
+   
+
+#ifdef FVAL_L1
+//  fval = fval_l1;
+//  tmp_fval = tmp_fval_l1;
+#else
+  fval += ibd;
+  tmp_fval += ibd;
+#endif
+
+#ifdef JAC_L1
+  jac = jac_l1;
+#else
+  jac += ibd;
+#endif
+
+  err += ibd;
+  meanErr += ibd;
+ 
+  fg_buffers += ibd;
+
+
+  if (pState->corrupt || !pState->clonal_read) return;
+
+  float avg_err;
+  for(int fnum=0; fnum<NUMFB; fnum++){
+
+    
+    int nucid = CP[sId].flowIdxMap[fnum]; //CP_SINGLEFLOWFIT
+    float sens = CP[sId].sens*SENSMULTIPLIER;  //CP_SINGLEFLOWFIT
+
+    float copies = *pCopies;
+    float R = *(pCopies + num_beads);
+    float d = *(pCopies + 2*num_beads);
+    float gain = *(pCopies + 3 * num_beads) ;
+    
+    float *pKmult = pAmpl + num_beads*NUMFB;
+
+
+    d *= CP[sId].d[nucid]; //CP_SINGLEFLOWFIT
+
+
+    //offset for next value gets added to address at end of fnum loop
+    
+    float krate = *pKmult;
+
+    float Ampl = *pAmpl;
+    float etbR;
+    float tauB; // = tmp.x; // *ptauB;
+    float SP; //= tmp.y; // *pSP;  
+ 
+ 
+    ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, realFnum+fnum); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_SINGLEFLOWFIT
+    ComputeSP_dev(SP, &CP[sId], copies, realFnum+fnum, sId); //CP_SINGLEFLOWFIT
+  
+    bool twoParamFit = ( copies * Ampl > 2.0f  );
+ 
+    float residual, newresidual; // lambdaThreshold;
+    int i;
+    // These values before start are always zero since there is no nucrise yet. Don't need to
+    // zero it out. Have to change the residual calculation accordingly for the frames before the
+    // start.
+    for (i =0; i < CP[sId].start[fnum]; i++) { //CP_SINGLEFLOWFIT
+
+#ifdef FVAL_L1
+      fval[i] = 0;
+      tmp_fval[i] = 0;
+#else
+      fval[num_beads*i] = 0;
+      tmp_fval[num_beads*i] = 0;
+#endif
+
+    }
+
+    // first step
+    // Evaluate model function using input Ampl and Krate and get starting residual
+    ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval);
+
+    float *emLeft, *emRight;
+    float frac;
+
+    // calculating weighted sum of square residuals for the convergence test
+    DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,Ampl,emphasis, num_frames);
+    ResidualCalculationPerFlow(fg_buffers, fval, emLeft, emRight, frac, err, residual,  
+      num_beads, num_frames);
+  
+    // new Ampl and Krate generated from the Lev mar Fit
+    float newAmpl, newKrate;
+
+    // convergence test variables 
+    float delta0 = 0, delta1 = 0;
+
+    float det;
+
+    // Indicates whether a flow has converged
+    //int flowDone = 0;
+
+    float lambda = 1E-20;
+
+    // Lev Mar Fit Outer Loop
+    int iter;
+    for (iter = 0; iter < ITER; ++iter) {
+
+      // new Ampl and krate by adding delta to existing values
+      newAmpl = Ampl + 0.001f;
+      newKrate = (twoParamFit)?(krate + 0.001f):(krate);
+ 
+      // Evaluate model function for new Ampl keeping Krate constant
+      float aa = 0, akr= 0, krkr = 0, rhs0 = 0, rhs1 = 0;
+
+      ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise,
+          newAmpl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+          num_frames, num_beads, tmp_fval, 1, jac, emLeft, emRight, frac, fval, 
+          err, &aa, &rhs0, &krkr, &rhs1, &akr);
+
+      if (twoParamFit) 
+        ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+            Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+            sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            num_frames, num_beads, tmp_fval,2, jac, emLeft, emRight, frac, fval, 
+            err, &aa, &rhs0, &krkr, &rhs1, &akr);
+
+     // Now start the solving.
+     if(iter< switchToLevMar){
+
+
+      if(twoParamFit){ 
+        float det = 1.0f / (aa*krkr - akr*akr);
+        delta1 = (-akr*rhs0 + aa*rhs1)*det;
+        delta0 = (krkr*rhs0 - akr*rhs1)*det;
+      }else
+        delta0 = rhs0 / aa;
+
+      if( !isnan(delta0) && !isnan(delta1)){
+        // add delta to params to obtain new params
+        newAmpl = Ampl + delta0;
+        if(twoParamFit)newKrate = krate + delta1;
+
+        clamp_streaming(newAmpl, minAmpl, (float)LAST_POISSON_TABLE_COL);
+        if(twoParamFit)clamp_streaming(newKrate, minKmult, maxKmult);
+
+        // Evaluate using new params
+        ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+            newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            num_frames, num_beads, tmp_fval);
+        // residual calculation using new parameters
+        if (useDynamicEmphasis)
+          DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,newAmpl,emphasis, num_frames);
+        ResidualCalculationPerFlow(fg_buffers, tmp_fval, emLeft, emRight, frac, err, newresidual, 
+           num_beads, num_frames);
+        
+        if (newresidual < residual) {
+          Ampl = newAmpl;
+          if(twoParamFit)krate = newKrate;
+          // copy new function val to fval
+          for (i=CP[sId].start[fnum]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+#ifdef FVAL_L1
+            fval[i] = tmp_fval[i];
+#else
+            fval[num_beads*i] = tmp_fval[num_beads*i];
+#endif
+          }
+          residual = newresidual;
+        }
+        else {
+          if (useDynamicEmphasis) {
+            DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,Ampl,emphasis, 
+              num_frames);
+          }
+        }
+      }
+
+
+    }else{ //LevMar Instead
+
+     bool cont_proc = false;        
+     while (!cont_proc) {
+      if(twoParamFit){ 
+        det = 1.0f / (aa*krkr*(1.0f + lambda)*(1.0f + lambda) - akr*akr);
+        delta0 = (krkr*(1.0f + lambda)*rhs0 - akr*rhs1)*det;
+        delta1 = (-akr*rhs0 + aa*(1.0f + lambda)*rhs1)*det;
+
+      }else
+        delta0 = rhs0 / (aa*(1.0f + lambda));
+
+       // NAN check
+      bool nan_detected = false;
+      if( !isnan(delta0) && !isnan(delta1)){
+        // add delta to params to obtain new params
+        newAmpl = Ampl + delta0;
+        if(twoParamFit)newKrate = krate + delta1;
+
+        clamp_streaming(newAmpl, minAmpl, (float)LAST_POISSON_TABLE_COL);
+        if(twoParamFit)clamp_streaming(newKrate, minKmult, maxKmult);
+
+        // Evaluate using new params
+        ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+            newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+            num_frames, num_beads, tmp_fval);
+        // residual calculation using new parameters
+        if (useDynamicEmphasis)
+          DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,newAmpl,emphasis, num_frames);
+        ResidualCalculationPerFlow(fg_buffers, tmp_fval, emLeft, emRight, frac, err, newresidual, 
+           num_beads, num_frames);
+      }
+      else 
+        nan_detected = true;
+   
+      // this might be killing...Need to rethink for some alternative here
+      // If new residual is less than the earlier recorded residual, accept the solution and
+      // obtain new parameters and copy them to original parameters and copy the new model function 
+      // to the earlier recorded model function till this point
+      if (newresidual < residual && !nan_detected) {
+        lambda /= 10.0f;
+        if (lambda < FLT_MIN)
+          lambda = FLT_MIN;
+        Ampl = newAmpl;
+        if(twoParamFit)krate = newKrate;
+        // copy new function val to fval
+        for (i=CP[sId].start[fnum]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+#ifdef FVAL_L1
+            fval[i] = tmp_fval[i];
+#else
+            fval[num_beads*i] = tmp_fval[num_beads*i];
+#endif
+          }
+        residual = newresidual;
+        cont_proc = true;
+      }
+      else {
+        lambda *= 10.0f;
+      }
+
+      if (lambda > 1.0f) {
+        cont_proc = true;
+        if (useDynamicEmphasis) {
+          DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,Ampl,emphasis, 
+              num_frames);
+        }
+      }
+     }
+
+
+    }
+
+    if ((delta0*delta0) < 0.0000025f){
+      iter++;
+      break;
+    }
+
 
     } // end ITER loop
+//    atomicAdd(&pMonitor[iter-1], 1);
+
+    if(fnum==0) avg_err = pState->avg_err * realFnum;  
+
+    if(twoParamFit) *pKmult = krate;
+    *pAmpl= Ampl;
+
+ 
+    CalculateMeanResidualErrorPerFlow(fg_buffers, fval, emphasis+LAST_POISSON_TABLE_COL, residual, 
+      num_beads, num_frames); 
+  
+    avg_err += residual;
+    meanErr[num_beads * fnum] = residual;
+
+    pAmpl += num_beads;
+    fg_buffers += num_frames*num_beads;
+  } // end fnum loop
+
+  avg_err /= (realFnum + NUMFB);
+  pState->avg_err = avg_err;
+  int high_err_cnt = 0;
+  avg_err *= WASHOUT_THRESHOLD;
+  for (int fnum = NUMFB - 1; fnum >= 0 
+                           && (meanErr[num_beads* fnum] > avg_err); fnum--)
+    high_err_cnt++;
+
+  if (high_err_cnt > WASHOUT_FLOW_DETECTION)
+    pState->corrupt = true;
+
+
+}
+
+
+
+__global__ void 
+PerFlowLevMarFit_k(
+  // inputs
+  float* fg_buffers, // NxF
+  float* emphasisVec, 
+  float* nucRise, 
+  float * pBeadParamsBase, //N
+  bead_state* pState,
+  // scratch space in global memory
+  float* err, // NxF
+#ifndef FVAL_L1
+  float* fval, // NxF
+  float* tmp_fval, // NxF
+#endif
+  float* jac, // NxF 
+  float* meanErr,
+  // other inputs 
+  float minAmpl,
+  float maxKmult,
+  float minKmult,
+  int realFnum,
+  int num_beads, // 4
+  int num_frames, // 4
+  bool useDynamicEmphasis,
+//  int * pMonitor,
+  int sId
+) 
+{
+#ifdef FVAL_L1
+  float fval[MAX_COMPRESSED_FRAMES_GPU];
+  float tmp_fval[MAX_COMPRESSED_FRAMES_GPU];
+#endif
+
+
+  extern __shared__ float emphasis[];
+  int numWarps = blockDim.x/32;
+  int threadWarpIdx = threadIdx.x%32;
+  int warpIdx = threadIdx.x/32; 
+  for(int i=warpIdx; i<num_frames; i += numWarps)
+  {
+     if (threadWarpIdx < MAX_POISSON_TABLE_COL)
+      emphasis[(MAX_POISSON_TABLE_COL)*i + threadWarpIdx ] = emphasisVec[num_frames*threadWarpIdx + i ];
+  }
+  __syncthreads();
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  num_beads = ((num_beads+31)/32) * 32;
+  pBeadParamsBase += ibd;
+  pState += ibd; 
+  
+
+  float * pCopies = &pBeadParamsBase[BEAD_COPIES(Copies)*num_beads];
+  float *pAmpl = &pBeadParamsBase[BEAD_AMPL(Ampl[0])*num_beads];
+
+ #ifdef FVAL_L1
+//  fval = fval_l1;
+//  tmp_fval = tmp_fval_l1;
+#else
+  fval += ibd;
+  tmp_fval += ibd;
+#endif
+  
+  err += ibd;
+  jac += ibd;
+  meanErr += ibd;
+  
+  fg_buffers += ibd;
+
+
+  if (pState->corrupt || !pState->clonal_read) return;
+
+  float avg_err;
+  for(int fnum=0; fnum<NUMFB; fnum++){
+    int nucid = CP[sId].flowIdxMap[fnum]; //CP_SINGLEFLOWFIT
+    float sens = CP[sId].sens*SENSMULTIPLIER;  //CP_SINGLEFLOWFIT
+
+    float copies = *pCopies;
+    float R = *(pCopies + num_beads);
+    float d = *(pCopies + 2*num_beads);
+    float gain = *(pCopies + 3 * num_beads) ;
+    
+    float *pKmult = pAmpl + num_beads*NUMFB;
+    d *= CP[sId].d[nucid]; //CP_SINGLEFLOWFIT
+
+
+    //offset for next value gets added to address at end of fnum loop
+    
+    float krate = *pKmult;
+    float Ampl = *pAmpl;
+    float etbR;
+    float tauB; // = tmp.x; // *ptauB;
+    float SP; //= tmp.y; // *pSP;  
+ 
+ 
+    ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, realFnum+fnum); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_SINGLEFLOWFIT
+    ComputeSP_dev(SP, &CP[sId], copies, realFnum+fnum, sId); //CP_SINGLEFLOWFIT
+ 
+    bool twoParamFit = ( copies * Ampl > 2.0f  );
+ 
+    float residual, newresidual; // lambdaThreshold;
+    int i, iter;
+
+    // These values before start are always zero since there is no nucrise yet. Don't need to
+    // zero it out. Have to change the residual calculation accordingly for the frames before the
+    // start.
+    for (i=0; i < CP[sId].start[fnum]; i++) { //CP_SINGLEFLOWFIT
+#ifdef FVAL_L1
+      fval[i] = 0;
+      tmp_fval[i] = 0;
+#else
+      fval[num_beads*i] = 0;
+      tmp_fval[num_beads*i] = 0;
+#endif
+    }
+
+    // first step
+    // Evaluate model function using input Ampl and Krate and get starting residual
+    ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
+        num_frames, num_beads, fval);
+
+    float *emLeft, *emRight;
+    float frac;
+
+    // calculating weighted sum of square residuals for the convergence test
+    DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,Ampl,emphasis, num_frames);
+    ResidualCalculationPerFlow(fg_buffers, fval, emLeft, emRight, frac, err, residual,  
+      num_beads, num_frames);
+ 
+    // new Ampl and Krate generated from the Lev mar Fit
+    float newAmpl, newKrate;
+
+    // convergence test variables 
+    float delta0 = 0, delta1 = 0;
+
+    // determinant for the JTJ matrix in Lev Mar Solve
+    float det;
+
+    // Indicates whether a flow has converged
+    int flowDone = 0;
+
+    float lambda = 1E-20;
+
+    // Lev Mar Fit Outer Loop
+    for (iter = 0; iter < 40; ++iter) {
+
+      // convergence test...need to think of an alternate approach
+      if ((delta0*delta0) < 0.0000025f)
+        flowDone++;
+      else
+        flowDone = 0;
+
+      // stop the loop for this bead here
+      if (flowDone  >= 2)
+      {
+        break;
+      }
+      // new Ampl and krate by adding delta to existing values
+      newAmpl = Ampl + 0.001f;
+      newKrate = (twoParamFit)?(krate + 0.001f):(krate);
+ 
+      // Evaluate model function for new Ampl keeping Krate constant
+      float aa = 0, akr= 0, krkr = 0, rhs0 = 0, rhs1 = 0;
+
+      ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+          newAmpl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+          num_frames, num_beads, tmp_fval, 1, jac, emLeft, emRight, frac, fval, 
+          err, &aa, &rhs0, &krkr, &rhs1, &akr);
+
+      if (twoParamFit) 
+        ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+            Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+            sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW,  //CP_SINGLEFLOWFIT
+            num_frames, num_beads, tmp_fval,2, jac, emLeft, emRight, frac, fval, 
+            err, &aa, &rhs0, &krkr, &rhs1, &akr);
+
+     // Now start the solving.
+     bool cont_proc = false;        
+     while (!cont_proc) {
+      if(twoParamFit){ 
+        det = 1.0f / (aa*krkr*(1.0f + lambda)*(1.0f + lambda) - akr*akr);
+        delta0 = (krkr*(1.0f + lambda)*rhs0 - akr*rhs1)*det;
+        delta1 = (-akr*rhs0 + aa*(1.0f + lambda)*rhs1)*det;
+
+      }else
+        delta0 = rhs0 / (aa*(1.0f + lambda));
+
+       // NAN check
+      bool nan_detected = false;
+      if( !isnan(delta0) && !isnan(delta1)){
+        // add delta to params to obtain new params
+        newAmpl = Ampl + delta0;
+        if(twoParamFit)newKrate = krate + delta1;
+
+        clamp_streaming(newAmpl, minAmpl, (float)LAST_POISSON_TABLE_COL);
+        if(twoParamFit)clamp_streaming(newKrate, minKmult, maxKmult);
+
+        // Evaluate using new params
+        ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
+            newAmpl, newKrate*CP[sId].krate[nucid], tauB, gain, SP,  //CP_SINGLEFLOWFIT
+            d, sens, CP[sId].start[fnum]*ISIG_SUB_STEPS_SINGLE_FLOW, //CP_SINGLEFLOWFIT
+            num_frames, num_beads, tmp_fval);
+        // residual calculation using new parameters
+        if (useDynamicEmphasis)
+          DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,newAmpl,emphasis, num_frames);
+        ResidualCalculationPerFlow(fg_buffers, tmp_fval, emLeft, emRight, frac, err, newresidual, 
+           num_beads, num_frames);
+      }
+      else 
+        nan_detected = true;
+   
+      // this might be killing...Need to rethink for some alternative here
+      // If new residual is less than the earlier recorded residual, accept the solution and
+      // obtain new parameters and copy them to original parameters and copy the new model function 
+      // to the earlier recorded model function till this point
+      if (newresidual < residual && !nan_detected) {
+        lambda /= 10.0f;
+        if (lambda < FLT_MIN)
+          lambda = FLT_MIN;
+        Ampl = newAmpl;
+        if(twoParamFit)krate = newKrate;
+        // copy new function val to fval
+        for (i=CP[sId].start[fnum]; i<num_frames; ++i){ //CP_SINGLEFLOWFIT
+#ifdef FVAL_L1
+            fval[i] = tmp_fval[i];
+#else
+            fval[num_beads*i] = tmp_fval[num_beads*i];
+#endif
+          }
+        residual = newresidual;
+        cont_proc = true;
+      }
+      else {
+        lambda *= 10.0f;
+      }
+
+      if (lambda > 1.0f) {
+        cont_proc = true;
+        if (useDynamicEmphasis) {
+          DecideOnEmphasisVectorsForInterpolation(&emLeft,&emRight,frac,Ampl,emphasis, 
+              num_frames);
+        }
+      }
+     }
+
+    } // end ITER loop
+//    atomicAdd(&pMonitor[iter-1], 1);
 
     if(fnum==0) avg_err = pState->avg_err * realFnum;  
 
@@ -1927,28 +2762,23 @@ PerFlowLevMarFit_k(
 }
 
 
+
 ///////// Pre-processing kernel (bkg correct and well params calculation)
 __global__ void PreSingleFitProcessing_k(// Here FL stands for flows
   // inputs from data reorganization
   float* pCopies, // N
   float* pR, // N
-  float* pdmult, // N
   float* pgain, // N
   float* pAmpl, // FLxN
-  float* pkmult, // FLxN
   float* sbg, // FLxF 
   float* dark_matter, // FLxF
+  float* pPCA_vals, // FxNUM_DM_PCA
   float* fgbuffers, // FLxFxN
 
   // other inputs 
   int flowNum, // starting flow number to calculate absolute flow num
   int num_beads, // 4
   int num_frames, // 4
-  int numEv, // 4
-
-  // outputs
-//  float* pSP, // FLxN
-//  float* ptauB, 
   bool alternatingFit,
   int sId
 )
@@ -1961,35 +2791,20 @@ __global__ void PreSingleFitProcessing_k(// Here FL stands for flows
 
   int NucId, i;
   float Rval, tau, SP;
-  float darkness = CP_SINGLEFLOWFIT[sId].darkness[0];
+//  float darkness = CP[sId].darkness[0]; //CP_SINGLEFLOWFIT
   float gain = pgain[ibd];
+  float *pca_vals = pPCA_vals + ibd;
   float *fval, *sbgPtr;
+  float *et = dark_matter;  // set to dark matter base pointer for PCA
+
   for (int fnum=0; fnum < NUMFB; ++fnum) {
   
     sbgPtr = sbg + fnum*num_frames; // may shift to constant memory
-    NucId = CP_SINGLEFLOWFIT[sId].flowIdxMap[fnum]; 
-    SP = (float) (COPYMULTIPLIER * pCopies[ibd]) * 
-      pow(CP_SINGLEFLOWFIT[sId].CopyDrift, flowNum + fnum);
+    NucId = CP[sId].flowIdxMap[fnum];  //CP_SINGLEFLOWFIT
 
-//    pSP[fnum*num_beads + ibd] = SP; 
-
-    if (CP_SINGLEFLOWFIT[sId].fit_taue) {
-      Rval = pR[ibd];
-      if (Rval)
- 	 Rval = CP_SINGLEFLOWFIT[sId].NucModifyRatio[NucId] /(CP_SINGLEFLOWFIT[sId].NucModifyRatio[NucId] +
- 	 	 (1.0f - (CP_SINGLEFLOWFIT[sId].RatioDrift * (flowNum + fnum)/SCALEOFBUFFERINGCHANGE))*
- 	 	  (1.0f / Rval - 1.0f));
-      // tau b calculation..Will go into a device function
-      tau = Rval ? (CP_SINGLEFLOWFIT[sId].tauE / Rval) : MINTAUB;
-    }
-    else {
-      Rval = pR[ibd] * CP_SINGLEFLOWFIT[sId].NucModifyRatio[NucId] + CP_SINGLEFLOWFIT[sId].RatioDrift * (flowNum + fnum) *
- 	 	(1.0f - pR[ibd] * CP_SINGLEFLOWFIT[sId].NucModifyRatio[NucId]) / SCALEOFBUFFERINGCHANGE;
-      tau = CP_SINGLEFLOWFIT[sId].tau_R_m * Rval + CP_SINGLEFLOWFIT[sId].tau_R_o;
-    }
-    clamp_streaming(tau, (float)MINTAUB, (float)MAXTAUB); 
-
-//    ptauB[fnum*num_beads + ibd] = tau;
+    ComputeEtbR_dev(Rval, &CP[sId], pR[ibd], sId, NucId, flowNum + fnum); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(tau, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT
+    ComputeSP_dev(SP, &CP[sId], pCopies[ibd], flowNum + fnum, sId); //CP_SINGLEFLOWFIT
 
     Rval -= 1.0f;
     float dv = 0.0f;
@@ -1999,46 +2814,609 @@ __global__ void PreSingleFitProcessing_k(// Here FL stands for flows
     float aval;
 
     // need to go in constant memory since same word access for each thread in the warp
-    float* et = &dark_matter[NucId*num_frames]; 
+    // if PCA vectors keep base pointer otherwise bend to nuv average
+    if(! CP[sId].useDarkMatterPCA ) 
+      et = &dark_matter[NucId*num_frames]; 
 
     fval = &fgbuffers[fnum*num_beads*num_frames];
+ 
+
     for (i=0; i<num_frames; i++)
     {
-      aval = CP_SINGLEFLOWFIT[sId].deltaFrames[i]/(2.0f * tau);
+      aval = CP[sId].deltaFrames[i]/(2.0f * tau); //CP_SINGLEFLOWFIT
 
       // calculate new dv
       curSbgVal = sbgPtr[i];
       dvn = (Rval*curSbgVal - dv_rs/tau - dv*aval) / (1.0f + aval);
-      dv_rs += (dv+dvn) * CP_SINGLEFLOWFIT[sId].deltaFrames[i] * 0.5f;
+      dv_rs += (dv+dvn) * CP[sId].deltaFrames[i] * 0.5f; //CP_SINGLEFLOWFIT
       dv = dvn;
+      float ftmp = fval[i*num_beads + ibd]
+                    -  ((dv+curSbgVal)*gain + ApplyDarkMatterToFrame(et, pca_vals, i, num_frames, num_beads, sId));  
+  // darkness*et[i]);
+      fval[i*num_beads + ibd] = ftmp;
 
-      fval[i*num_beads + ibd] = fval[i*num_beads + ibd]
-                    -  ((dv+curSbgVal)*gain + darkness*et[i]);
     }
 
     // Guess amplitude for alternating fit
     if (alternatingFit)
     {
-      int start_frame = CP_SINGLEFLOWFIT[sId].start[fnum]; 
-      aval = CP_SINGLEFLOWFIT[sId].deltaFrames[start_frame]/(2.0f * tau);
+      int start_frame = CP[sId].start[fnum];  //CP_SINGLEFLOWFIT
+      aval = CP[sId].deltaFrames[start_frame]/(2.0f * tau); //CP_SINGLEFLOWFIT
       float sig_val_at_start =  fval[start_frame*num_beads + ibd] 
                                     * (1.0f + aval);  
       int cutoff_frame = start_frame + 
-                     CP_SINGLEFLOWFIT[sId].nuc_shape.nuc_flow_span*0.75f;
+                     CP[sId].nuc_shape.nuc_flow_span*0.75f; //CP_SINGLEFLOWFIT
       if (cutoff_frame > (num_frames -1))
         cutoff_frame = num_frames - 1;
       float ampl_guess = sig_val_at_start;
       for (i=(start_frame + 1); i<=cutoff_frame; ++i)
       {
-        aval = CP_SINGLEFLOWFIT[sId].deltaFrames[i]/(2.0f * tau);
+        aval = CP[sId].deltaFrames[i]/(2.0f * tau); //CP_SINGLEFLOWFIT
         ampl_guess = (1.0f + aval)*fval[i*num_beads + ibd] - 
                      (1.0f - aval)*fval[(i-1)*num_beads + ibd] + ampl_guess;
       }
-      pAmpl[fnum*num_beads + ibd] = (ampl_guess - sig_val_at_start) / (SP*CP_MULTIFLOWFIT[fnum].sens*SENSMULTIPLIER);
+      pAmpl[fnum*num_beads + ibd] = (ampl_guess - sig_val_at_start) / (SP*CP[fnum].sens*SENSMULTIPLIER); //CP_MULTIFLOWFIT
     }
 
   }
 }
+
+// xtalk calculation from excess hydrogen by neighbours
+__global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
+  // inputs from data reorganization
+  float* pR, // N
+  float* sbg, // FLxF 
+  float* fgbuffers, // FLxFxN
+
+  // other inputs 
+  int startingFlowNum, // starting flow number to calculate absolute flow num
+  int currentFlowIteration,
+  int num_beads, // 4
+  int num_frames, // 4
+
+  // temporaries
+  float* scratch_buf, // 3xFxN
+  float* nei_xtalk, // neixNxF
+
+  int sId
+)
+{
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+  int NucId;
+  float Rval, tau;
+  float* incorp_rise = scratch_buf;
+  float* lost_hydrogen = incorp_rise + num_beads*num_frames;
+  float* bulk_signal = lost_hydrogen + num_beads*num_frames;
+  incorp_rise += ibd;
+  lost_hydrogen += ibd;
+  bulk_signal += ibd;
+  fgbuffers += ibd;
+  nei_xtalk += ibd;
+  NucId = CP[sId].flowIdxMap[currentFlowIteration];  //CP_SINGLEFLOWFIT
+
+  if (CP[sId].fit_taue) { //CP_SINGLEFLOWFIT
+    Rval = pR[ibd];
+    if (Rval)
+      Rval = CP[sId].NucModifyRatio[NucId] /(CP[sId].NucModifyRatio[NucId] + //CP_SINGLEFLOWFIT //CP_SINGLEFLOWFIT
+		(1.0f - (CP[sId].RatioDrift *  //CP_SINGLEFLOWFIT
+                (startingFlowNum + currentFlowIteration)/SCALEOFBUFFERINGCHANGE))*
+                (1.0f / Rval - 1.0f));
+      // taub calculation..Will go into a device function
+      tau = Rval ? (CP[sId].tauE / Rval) : MINTAUB; //CP_SINGLEFLOWFIT
+    }
+  else {
+    Rval = pR[ibd] * CP[sId].NucModifyRatio[NucId] + CP[sId].RatioDrift *  //CP_SINGLEFLOWFIT //CP_SINGLEFLOWFIT
+                (startingFlowNum + currentFlowIteration) *
+		(1.0f - pR[ibd] * CP[sId].NucModifyRatio[NucId]) / SCALEOFBUFFERINGCHANGE; //CP_SINGLEFLOWFIT
+    tau = CP[sId].tau_R_m * Rval + CP[sId].tau_R_o; //CP_SINGLEFLOWFIT //CP_SINGLEFLOWFIT
+  }
+  clamp_streaming(tau, (float)MINTAUB, (float)MAXTAUB); 
+
+  // Calculate approximate incorporation signal
+  int f = 0;
+  float one_over_two_taub = 1.0f / (2.0f*tau);
+  float xt = CP[sId].deltaFrames[0]*one_over_two_taub; //CP_SINGLEFLOWFIT
+  incorp_rise[0] = (1.0f+xt)*fgbuffers[0] - (Rval+xt)*sbg[0];
+  f++;
+  for (;f<num_frames; ++f) {
+    xt = CP[sId].deltaFrames[f]*one_over_two_taub; //CP_SINGLEFLOWFIT
+    incorp_rise[f*num_beads] = (1.0+xt)*fgbuffers[f*num_beads] - (1.0f-xt)*fgbuffers[(f-1)*num_beads]
+          - ((Rval+xt)*sbg[f]-(Rval-xt)*sbg[f-1]) + incorp_rise[(f-1)*num_beads];        
+  }
+
+  // calculate contribution to xtalk from this bead as a neighbour in the grid
+  float old_tautop = 0, old_taufluid = 0;
+  for (int i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+    bool changed = false;
+    // Calculate lost hydrogen using tau_top
+    if (old_tautop != CP_XTALKPARAMS[sId].tau_top[i]) {
+      f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+      one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_top[i]);
+      xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+      lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
+      f++;
+      for (;f<num_frames; ++f) {
+        xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+	lost_hydrogen[f*num_beads] = (incorp_rise[f*num_beads] - incorp_rise[(f-1)*num_beads] + 
+	      (1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+      }
+
+      for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
+        lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
+      }
+      changed = true;
+    }
+
+    // Calculate ions from bulk
+    if (changed || ( !changed && (old_taufluid != CP_XTALKPARAMS[sId].tau_fluid[i]))) {
+      f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+      one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_fluid[i]);
+      xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+      bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
+      f++;
+      for (;f<num_frames; ++f) {
+        xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+	bulk_signal[f*num_beads] = (lost_hydrogen[f*num_beads] - lost_hydrogen[(f-1)*num_beads] + 
+	   (1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*bulk_signal[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+      }
+    }
+    // Scale down the ion by neighbour multiplier
+    for (f=0; f<CP[sId].start[currentFlowIteration]; ++f) { //CP_SINGLEFLOWFIT
+      *nei_xtalk = 0; 
+      nei_xtalk += num_beads;
+    } 
+    for (; f<num_frames; ++f) {
+      *nei_xtalk = bulk_signal[f*num_beads] * CP_XTALKPARAMS[sId].multiplier[i]; 
+      nei_xtalk += num_beads;
+    }
+    old_tautop = CP_XTALKPARAMS[sId].tau_top[i];
+    old_taufluid = CP_XTALKPARAMS[sId].tau_fluid[i];
+  }
+}
+
+__global__ void XtalkAccumulationAndSignalCorrection_k(// Here FL stands for flows
+  int currentFlowIteration,
+  float* fgbuffers, // FLxFxN
+  int num_beads, // 4
+  int num_frames, // 4
+  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
+  float* nei_xtalk, // neixNxF
+  float* xtalk, // FLxN
+  float* pCopies, // N
+  float* pR, // N
+  float* pgain, // N
+  float* sbg, // FLxF 
+  float* dark_matter, // FLxF
+  float* pPCA_vals, // FxNUM_DM_PCA
+  int flowNum, // starting flow number to calculate absolute flow num
+  int sId
+)
+{
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  int orig_beads = num_beads;
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+  int beadFrameProduct = num_beads*num_frames;
+  xtalk += ibd;
+  fgbuffers += ibd;
+  neiIdxMap += ibd;
+  pPCA_vals += ibd;
+
+  // Accumulate crosstalk from neighbours
+  int i,f;
+  for (f=0; f<num_frames; ++f) {
+    xtalk[f*num_beads] = 0;
+  }
+  for (i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+    int neiIdx = neiIdxMap[i*orig_beads];
+    if (neiIdx != -1) {
+      for (int f=0; f<num_frames; ++f) {
+        xtalk[f*num_beads] += nei_xtalk[i*beadFrameProduct + f*num_beads + neiIdx];          
+      }
+    }
+  }
+        
+  float Rval, tau, SP;
+//  float darkness = CP[sId].darkness[0]; //CP_SINGLEFLOWFIT
+  float gain = pgain[ibd];
+  int NucId = CP[sId].flowIdxMap[currentFlowIteration];  //CP_SINGLEFLOWFIT
+
+  ComputeEtbR_dev(Rval, &CP[sId], pR[ibd], sId, NucId, flowNum + currentFlowIteration); //CP_SINGLEFLOWFIT
+  ComputeTauB_dev(tau, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT
+  ComputeSP_dev(SP, &CP[sId], pCopies[ibd], flowNum + currentFlowIteration, sId); //CP_SINGLEFLOWFIT
+
+  Rval -= 1.0f;
+  float dv = 0.0f;
+  float dv_rs = 0.0f;
+  float dvn = 0.0f;
+  float curSbgVal;
+  float aval;
+
+  // need to go in constant memory since same word access for each thread in the warp
+  float* et;
+  if(CP[sId].useDarkMatterPCA)
+    et = dark_matter;
+  else
+    et = &dark_matter[NucId*num_frames]; 
+
+  for (i=0; i<num_frames; i++)
+  {
+    aval = CP[sId].deltaFrames[i]/(2.0f * tau); //CP_SINGLEFLOWFIT
+
+    // calculate new dv
+    curSbgVal = sbg[i] + *xtalk;
+    dvn = (Rval*curSbgVal - dv_rs/tau - dv*aval) / (1.0f + aval);
+    dv_rs += (dv+dvn) * CP[sId].deltaFrames[i] * 0.5f; //CP_SINGLEFLOWFIT
+    dv = dvn;
+    *fgbuffers = *fgbuffers - ((dv+curSbgVal)*gain + ApplyDarkMatterToFrame(et, pPCA_vals, i, num_frames, num_beads, sId));//darkness*et[i]);
+    fgbuffers += num_beads;
+    xtalk += num_beads;
+  }
+}
+
+__global__
+void ExponentialTailFitting_k(
+  float* tauAdjust, // obtained from TaubAdjustForExponentialTailFitting()
+  float* Ampl,
+  float* pR,
+  float* fg_buffers,
+  float* bkg_trace, // sbg
+  float* tmp_fval,
+  int num_beads,
+  int num_frames,
+  int flowNum,
+  int sId
+)
+{
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+  tauAdjust += ibd;
+  Ampl += ibd;
+  fg_buffers += ibd;
+  tmp_fval += ibd;
+
+  float kern[7];
+  for (int fnum=0; fnum < NUMFB; ++fnum) {
+    
+
+    float Rval, taub, tmid;
+    int NucId = CP[sId].flowIdxMap[fnum];  //CP_SINGLEFLOWFIT
+    ComputeMidNucTime_dev(tmid, &CP[sId], NucId, fnum);  //CP_SINGLEFLOWFIT
+    ComputeEtbR_dev(Rval, &CP[sId], pR[ibd], sId, NucId, flowNum + fnum); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(taub, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT
+    taub *= *tauAdjust; // adjust taub with multipler estimated using levmar
+    if (taub > 0.0f) { 
+
+      // set up start and end point for exponential tail
+      float tail_start = tmid + 6.0f + 1.75f * (*Ampl);
+      int tail_start_idx = -1, tail_end_idx = -1;
+      for (int i=0; i<num_frames; ++i) {
+        if ((tail_start_idx == -1) && CP[sId].frameNumber[i] >= tail_start) //CP_SINGLEFLOWFIT
+          tail_start_idx = i;
+	if ((tail_end_idx == -1) && CP[sId].frameNumber[i] >= (tail_start + 60.0f)) //CP_SINGLEFLOWFIT
+	  tail_end_idx = i;
+      }
+
+      if (tail_end_idx == -1)
+        tail_end_idx = num_frames;
+
+      // too few points
+      if (tail_end_idx - tail_start_idx >= 5) {
+
+        // Generate smoothing kernel vector. Distance from the point is +/- 3 so need
+	// 7 weights
+	int exp_kern_start = (tail_end_idx - tail_start_idx) < 7 ? (tail_end_idx - 7) : tail_start_idx;
+	float taubInv = 1.0f / taub;
+	GenerateSmoothingKernelForExponentialTailFit_dev(7, taubInv, exp_kern_start, 
+	    kern, &CP[sId]); //CP_SINGLEFLOWFIT
+
+        /*if (ibd == 0) {
+          for (int k=0; k<7; ++k)
+            printf("kern:%.2f ", kern[k]);
+          printf("\n");
+        }*/
+          
+	// perform kernel smoothing on exponential tail
+	float avg_bkg_amp_tail = 0;
+	for (int i=tail_start_idx; i<tail_end_idx; ++i) {
+          float sum=0,scale=0;
+          for (int j=i-3, k=0; j <= (i+3); ++j, ++k) {
+	    if (j >= 0 && j < num_frames) {
+	      sum += (kern[k] * fg_buffers[j*num_beads]);
+	      scale += kern[k];
+	    }
+          }
+          tmp_fval[i*num_beads] = sum / scale;
+          avg_bkg_amp_tail += bkg_trace[i];
+	}
+	avg_bkg_amp_tail /= (tail_end_idx - tail_start_idx);
+
+	// linear regression to calculate A and C in Aexp(-(t-t0)/taub) + C
+	// First calculate lhs and rhs matrix entries which are obtained by taking
+	// derivative of the squared residual (y - (Aexp(-(t-t0)/taub) + C))^2 w.r.t
+	// A and C to 0 which gives two linear equations in A and C
+	float lhs_00 = tail_end_idx - tail_start_idx;
+	float lhs_01=0,lhs_11=0, rhs_0=0, rhs_1=0;
+	float A, C, expval;
+	for (int i=tail_start_idx; i<tail_end_idx; ++i) {
+	  expval = __expf(-(CP[sId].frameNumber[i] -  //CP_SINGLEFLOWFIT
+			CP[sId].frameNumber[tail_start_idx])*taubInv); //CP_SINGLEFLOWFIT
+	  lhs_01 += expval;
+	  lhs_11 += expval*expval;
+	  rhs_0 += tmp_fval[i*num_beads];
+	  rhs_1 += tmp_fval[i*num_beads]*expval;  
+	}
+	float detInv = 1.0f / (lhs_00*lhs_11 - lhs_01*lhs_01);
+	C = (lhs_11*rhs_0 - lhs_01*rhs_1) * detInv;
+	A = (-lhs_01*rhs_0 + lhs_00*rhs_1) * detInv;
+
+        /*if (ibd == 0 && fnum==0) {
+          printf("lhs00: %.2f lhs01: %.2f lhs_11: %.2f rhs0: %.2f rhs1: %.2f\n", lhs_00, lhs_01, lhs_11,rhs_0,rhs_1);
+          printf("start:%d end:%d dc:%.3f Ampl:%.3f\n", tail_start_idx, tail_end_idx, C, A);
+        }*/
+	// if negative  then no incorporation
+	if (A < -20.0f) {
+          C = rhs_0 / lhs_00;
+	}
+
+	if (avg_bkg_amp_tail) 
+          C /= avg_bkg_amp_tail;
+
+        /*if (ibd == 0 && fnum == 0) {
+          printf("R:%.2f tau:%.2f tmid:%.2f Ampl:%.2f\n", Rval, taub, tmid, *Ampl);
+        }*/
+	// correct fg_buffers in place
+	for (int i=0; i<num_frames; ++i) {
+          fg_buffers[i*num_beads] -= C*bkg_trace[i];
+	}
+      }
+    }
+    Ampl += num_beads;
+    fg_buffers += num_beads*num_frames;
+    bkg_trace += num_frames;
+  }
+}
+
+// only performed in first 20 flows. It wll be called after presingleflowfit
+__global__ 
+void TaubAdjustForExponentialTailFitting_k(
+  float* fg_buffers,
+  float* Ampl,
+  float* pR,
+  float* avg_trc,
+  float* fval,
+  float* tmp_fval,
+  float* err,
+  float* jac,
+  int num_beads,
+  int num_frames,
+  float* tauAdjust, // output it is a per bead parameter
+  int sId
+)
+{
+  int ibd = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(ibd >= num_beads) return;
+
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+  tauAdjust += ibd;
+  Ampl += ibd;
+  fg_buffers += ibd;
+  avg_trc += ibd;
+
+  int count = 0;
+  for (int i=0; i<num_frames; ++i)
+    avg_trc[i*num_beads] = 0.0f;
+
+  // collect incorporation traces from 1mer to 3mers in this flow block and average them
+  // to get a typical incorporation trace
+  for (int fnum=0; fnum<NUMFB; ++fnum) {
+    float A = *Ampl;
+    if((A > 0.5f) && (A < 3.0f)) {
+      for (int i=0; i<num_frames; ++i) {
+        avg_trc[i*num_beads] += *fg_buffers;
+        fg_buffers += num_beads;
+      } 
+      count++;
+    }  
+    else {
+      fg_buffers += num_frames*num_beads;
+    }  
+    Ampl += num_beads;
+  }
+
+  if (count > 6) {
+    float Rval, taub, tmid;
+    int NucId = CP[sId].flowIdxMap[0];  //CP_SINGLEFLOWFIT
+    ComputeMidNucTime_dev(tmid, &CP[sId], NucId, 0);  //CP_SINGLEFLOWFIT
+    ComputeEtbR_dev(Rval, &CP[sId], pR[ibd], sId, NucId, 0); //CP_SINGLEFLOWFIT
+    ComputeTauB_dev(taub, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT
+    float orig_taub = taub;
+
+    float exp_tail_start = tmid + 6.0f + 2.0*1.5f;
+    int tail_start = -1;
+    
+    // perform average as well as determine tail
+    for (int j=0; j<num_frames; ++j) {
+      avg_trc[j*num_beads] /= count;
+
+      if ((tail_start == -1) && (CP[sId].frameNumber[j] >= exp_tail_start)) //CP_SINGLEFLOWFIT
+        tail_start = j;     
+    }
+
+    // now perform lev mar fitting for Ampl, taub and dc_offset
+    
+    // set starting values for estimated parameters
+    float dc_offset = 0.0f;
+    float A = 20.0f;
+
+    float newA, newtaub, newdc;
+    int done = 0;
+    float lambda = 1E-20;
+    float min_taub = orig_taub*0.9f;
+    float max_taub = orig_taub*1.1f;
+    float delta0=0, delta1=0, delta2=0, residual, newresidual;
+    
+    fval += ibd;
+    tmp_fval += ibd;
+    err += ibd;
+    jac += ibd;
+   
+    // calculate model function value with starting params before starting lev mar 
+    ModelFunctionEvaluationForExponentialTailFit_dev(tail_start, num_frames, 
+        num_beads, A, 1.0f/taub, dc_offset, fval, &CP[sId]); //CP_SINGLEFLOWFIT
+
+    // calculate squared residual between average incorporation trace and model 
+    // function 
+    CalculateResidualForExponentialTailFit_dev(avg_trc, fval, tail_start, 
+        num_frames, err, num_beads, residual);      
+
+    for (int iter=0; iter<200; ++iter) {
+
+      if (delta0*delta0 < 0.0000025f)
+        done++;
+      else 
+        done = 0;
+
+      if (done >=5)
+        break;
+
+      // calculate partial derivatives using pertubed parameters
+      newA = A + 0.001f;
+      newtaub = taub + 0.001f;
+      newdc = dc_offset + 0.001f;
+
+      // partial derivative w.r.t A
+      ModelFunctionEvaluationForExponentialTailFit_dev(tail_start, num_frames, 
+        num_beads, newA, 1.0f/taub, dc_offset, fval, &CP[sId], jac); //CP_SINGLEFLOWFIT
+
+      // partial derivative w.r.t taub
+      ModelFunctionEvaluationForExponentialTailFit_dev(tail_start, num_frames, 
+        num_beads, A, 1.0f/newtaub, dc_offset, fval, &CP[sId],  //CP_SINGLEFLOWFIT
+        jac+num_frames*num_beads);
+
+      // partial derivative w.r.t dc_offset
+      ModelFunctionEvaluationForExponentialTailFit_dev(tail_start, num_frames, 
+        num_beads, A, 1.0f/taub, newdc, fval, &CP[sId],  //CP_SINGLEFLOWFIT
+        jac+2*num_frames*num_beads);
+
+      // jacobian matrix members
+      float lhs_00=0, lhs_01=0, lhs_02=0, lhs_11=0, lhs_12=0, lhs_22=0;
+      float rhs_0=0, rhs_1=0, rhs_2=0, det;
+   
+      // calculate jtj matrix entries
+      for (int i=tail_start; i<num_frames; ++i) {
+        lhs_00 += jac[i*num_beads]*jac[i*num_beads];
+        lhs_01 += jac[i*num_beads]*jac[(num_frames + i)*num_beads];
+        lhs_02 += jac[i*num_beads]*jac[(2*num_frames + i)*num_beads];
+        lhs_22 += jac[(2*num_frames + i)*num_beads]*jac[(2*num_frames + i)*num_beads];
+        lhs_12 += jac[(2*num_frames + i)*num_beads]*jac[(num_frames + i)*num_beads];
+        lhs_11 += jac[(num_frames + i)*num_beads]*jac[(num_frames + i)*num_beads];
+        rhs_0 += jac[i*num_beads]*err[i*num_beads];
+        rhs_1 += jac[(num_frames + i)*num_beads]*err[i*num_beads];
+        rhs_2 += jac[(2*num_frames + i)*num_beads]*err[i*num_beads];
+      }
+
+      // Solve
+      bool cont_proc = false;
+      while (!cont_proc) {
+        float new_lhs00 = lhs_00 * (1.0f + lambda);
+        float new_lhs11 = lhs_11 * (1.0f + lambda);
+        float new_lhs22 = lhs_22 * (1.0f + lambda);
+
+        // calculate determinant
+        det = new_lhs00*(new_lhs11*new_lhs22 - lhs_12*lhs_12) - 
+              lhs_01*(lhs_01*new_lhs22 - lhs_12*lhs_02) +
+              lhs_02*(lhs_01*lhs_12 - new_lhs11*lhs_02);
+        det = 1.0f/det;
+
+        //if (ibd == 0)
+        //  printf("lhs00:%.2f lhs01: %.2f lhs02:%.2f lhs11:%.2f lhs12:%.2f lhs22:%.2f rhs0:%.2f rhs1:%.2f rhs2:%.2f, det:%.2f\n", lhs_00,lhs_01,lhs_02,lhs_11,lhs_12,lhs_22,rhs_0,rhs_1,rhs_2,det);
+
+        delta0 = det*(rhs_0*(new_lhs11*new_lhs22 - lhs_12*lhs_12) +
+                 rhs_1*(lhs_02*lhs_12 - lhs_01*new_lhs22) +
+                 rhs_2*(lhs_01*lhs_12 - lhs_02*new_lhs11));
+        delta1 = det*(rhs_0*(lhs_12*lhs_02 - lhs_01*new_lhs22) +
+                 rhs_1*(new_lhs00*new_lhs22 - lhs_02*lhs_02) +
+                 rhs_2*(lhs_01*lhs_02 - new_lhs00*lhs_12));
+        delta2 = det*(rhs_0*(lhs_01*lhs_12 - lhs_02*new_lhs11) +
+                 rhs_1*(lhs_01*lhs_02 - new_lhs00*lhs_12) +
+                 rhs_2*(new_lhs00*new_lhs11 - lhs_01*lhs_01));
+
+        // NAN check
+        bool nan_detected = true;
+
+        //if (ibd == 0)
+        //  printf("delta0: %.2f delta1: %.2f delta2: %.2f\n", delta0, delta1, delta2);
+
+        if (!isnan(delta0) && !isnan(delta1) && !isnan(delta2)) {
+          newA = A + delta0;
+          newtaub = taub + delta1;
+          newdc = dc_offset + delta2;
+
+            
+          clamp_streaming(newA, 0.0f, 500.0f);
+          clamp_streaming(newtaub, min_taub, max_taub);
+          clamp_streaming(newdc, -50.0f, 50.0f);
+      
+          //if (ibd == 0)
+          //  printf("A:%.2f tau:%.2f dc:%.2f\n", newA, newtaub, newdc);
+
+          ModelFunctionEvaluationForExponentialTailFit_dev(tail_start, 
+              num_frames, num_beads, newA, 1.0f/newtaub, newdc, tmp_fval,
+              &CP[sId]); //CP_SINGLEFLOWFIT
+          CalculateResidualForExponentialTailFit_dev(avg_trc, tmp_fval, 
+              tail_start, num_frames, err, num_beads, newresidual);      
+
+          nan_detected = false;
+        }
+
+        if (!nan_detected && newresidual < residual) {
+          lambda /= 10.0f;
+          if (lambda < FLT_MIN)
+            lambda = FLT_MIN;
+          
+          A = newA;
+          taub = newtaub;
+          dc_offset = newdc;
+
+          //if (ibd == 0)
+          //  printf("===> iter: %d Tau: %.2f residual: %.2f newresidual: %.2f\n", iter, taub, residual, newresidual);
+
+          float* temp = fval;
+          fval = tmp_fval;
+          tmp_fval = temp;
+
+          residual = newresidual;
+          cont_proc = true;
+        }
+        else {
+          lambda *= 10.0f;
+        }
+
+        if (lambda > 100.0f)
+          cont_proc = true;
+        
+      }
+    }      
+
+    *tauAdjust = taub / orig_taub;
+  }
+}
+
 /*
 __global__ void 
 PerFlowAlternatingFit_k(
@@ -2093,7 +3471,7 @@ PerFlowAlternatingFit_k(
   if (pState->corrupt || !pState->clonal_read) return;
 
   float gain = pgain[ibd];
-  float sens = CP_SINGLEFLOWFIT[sId].sens*SENSMULTIPLIER; 
+  float sens = CP[sId].sens*SENSMULTIPLIER;  //CP_SINGLEFLOWFIT
   float d = pdmult[ibd];
   float copies = pCopies[ibd];
   fval += ibd;
@@ -2107,8 +3485,8 @@ PerFlowAlternatingFit_k(
   
   for(int fnum=0; fnum<NUMFB; fnum++){
 
-    int nucid = CP_SINGLEFLOWFIT[sId].flowIdxMap[fnum];
-    d *= CP_SINGLEFLOWFIT[sId].d[nucid];
+    int nucid = CP[sId].flowIdxMap[fnum]; //CP_SINGLEFLOWFIT
+    d *= CP[sId].d[nucid]; //CP_SINGLEFLOWFIT
 
     float krate = pKmult[fnum*num_beads];
     float Ampl = pAmpl[fnum*num_beads];
@@ -2124,14 +3502,14 @@ PerFlowAlternatingFit_k(
     // These values before start are always zero since there is no nucrise yet. Don't need to
     // zero it out. Have to change the residual calculation accordingly for the frames before the
     // start.
-    for (i=0; i < CP_SINGLEFLOWFIT[sId].start[fnum]; i++) {
+    for (i=0; i < CP[sId].start[fnum]; i++) { //CP_SINGLEFLOWFIT
       fval[num_beads*i] = 0;
       tmp_fval[num_beads*i] = 0;
     }
 
     ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-        Ampl, krate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum],
+        Ampl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+        sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
         num_frames, num_beads, fval);
 
     float *emLeft, *emRight;
@@ -2156,9 +3534,9 @@ PerFlowAlternatingFit_k(
     
         float delta;
         ModelFuncEvaluationAndProjectiontForSingleFlowFit(sId, fnum, nucid, 
-          nucRise, newAmpl, krate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, 
+          nucRise, newAmpl, krate*CP[sId].krate[nucid], tauB,  //CP_SINGLEFLOWFIT
           gain, SP, d, sens, 
-          ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum],
+          ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
           num_frames, num_beads, epsilon, fval, emLeft, emRight, 
           frac, err, delta);
       
@@ -2168,8 +3546,8 @@ PerFlowAlternatingFit_k(
         DynamicConstraintKrate(copies, newAmpl, krate, twoParamFit);
     
         ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-          newAmpl, krate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum],
+          newAmpl, krate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
           num_frames, num_beads, tmp_fval);
         ResidualForAlternatingFit(fg_buffers, tmp_fval, emLeft, emRight, frac, err, newresidual, 
           num_beads, num_frames);
@@ -2177,7 +3555,7 @@ PerFlowAlternatingFit_k(
         {
           Ampl = newAmpl;
           residual = newresidual;
-          for (i=CP_SINGLEFLOWFIT[sId].start[fnum]; i<num_frames; ++i)
+          for (i=CP[sId].start[fnum]; i<num_frames; ++i) //CP_SINGLEFLOWFIT
             fval[num_beads*i] = tmp_fval[num_beads*i];
         }
         else 
@@ -2200,8 +3578,8 @@ PerFlowAlternatingFit_k(
    
         float delta; 
         ModelFuncEvaluationAndProjectiontForSingleFlowFit(sId, fnum, nucid, nucRise, 
-          Ampl, newKrate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum],
+          Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum], //CP_SINGLEFLOWFIT
           num_frames, num_beads, epsilon, fval, emLeft, emRight, frac, err, 
           delta);
       
@@ -2209,8 +3587,8 @@ PerFlowAlternatingFit_k(
         clamp_streaming(newKrate, minKmult, maxKmult);
     
         ModelFuncEvaluationForSingleFlowFit(twoParamFit,sId, fnum, nucid, nucRise, 
-          Ampl, newKrate*CP_SINGLEFLOWFIT[sId].krate[nucid], tauB, gain, SP, d, 
-          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP_SINGLEFLOWFIT[sId].start[fnum], 
+          Ampl, newKrate*CP[sId].krate[nucid], tauB, gain, SP, d,  //CP_SINGLEFLOWFIT
+          sens, ISIG_SUB_STEPS_SINGLE_FLOW* CP[sId].start[fnum],  //CP_SINGLEFLOWFIT
           num_frames, num_beads, tmp_fval);
         ResidualForAlternatingFit(fg_buffers, tmp_fval, emLeft, emRight, frac, err, 
           newresidual, num_beads, num_frames);
@@ -2218,7 +3596,7 @@ PerFlowAlternatingFit_k(
         {
           krate = newKrate;
           residual = newresidual;
-          for (i=CP_SINGLEFLOWFIT[sId].start[fnum]; i<num_frames; ++i)
+          for (i=CP[sId].start[fnum]; i<num_frames; ++i) //CP_SINGLEFLOWFIT
             fval[num_beads*i] = tmp_fval[num_beads*i];
           //float* temp = tmp_fval;
           //tmp_fval = fval;
@@ -2304,6 +3682,8 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
   int sId
 ) 
 {
+
+// TODO: optimize empgh vecs
   extern __shared__ float emphasisVec[];
 
   for (int i=0; i<MAX_POISSON_TABLE_COL*num_frames; i+=num_frames)
@@ -2319,7 +3699,6 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
   if(ibd >= num_beads) return;
 
   num_beads = ((num_beads+32-1)/32) * 32;
-  //num_beads += 32 - (num_beads%32);
 
   int i, j, fnum;
   int stepOffset = num_beads*num_frames;
@@ -2330,8 +3709,8 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
   float dmult = pbeadParamsTranspose[(BEAD_DMULT(dmult))*num_beads + ibd];
   float R = pbeadParamsTranspose[(BEAD_R(R))*num_beads + ibd];
   float Copies = pbeadParamsTranspose[(BEAD_COPIES(Copies))*num_beads + ibd];
+  float *pPCA_vals =&pbeadParamsTranspose[(BEAD_PCA(pca_vals))*num_beads + ibd];
 
-  //pfval = poutput;
   pfval = poutput + ibd;
 
   float tot_err = 0.0f;
@@ -2344,7 +3723,15 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
     kmult = pbeadParamsTranspose[(BEAD_KMULT(kmult[0]) + fnum)*num_beads + ibd];
 
     int emphasisIdx = (int)(Ampl) > maxEmphasis ? maxEmphasis : (int)Ampl;
-    int nucid = CP_MULTIFLOWFIT[sId].flowIdxMap[fnum];
+    int nucid = CP[sId].flowIdxMap[fnum]; //CP_MULTIFLOWFIT
+    float * et;    
+    // if PCA use basebointer to dark Matter otherwise bend pointer to current nuc average
+    if(CP[sId].useDarkMatterPCA)
+      et = pdarkMatterComp;
+    else
+      et = &pdarkMatterComp[nucid*num_frames];
+ 
+
     for (i=0; i<num_steps; ++i) {
       ptemp = poutput + i*stepOffset + ibd;
       switch (psteps[i].PartialDerivMask) {
@@ -2355,8 +3742,6 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
 	    eval = (pobservedTrace[j*num_beads] - 
                         pfval[j*num_beads]) * 
 		            emphasisVec[emphasisIdx*num_frames + j];
-            //ptemp[j*num_beads + ibd] = eval;
-            //ptemp[j*num_beads] = eval;
             *ptemp = eval;
             tot_err += eval*eval;
             ptemp += num_beads;
@@ -2365,17 +3750,17 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
 	break;
 	case FVAL:
 	{
-          ComputeEtbR_dev(etbR, &CP_MULTIFLOWFIT[sId], R, sId, nucid, 0+fnum);
-          ComputeTauB_dev(tauB, &CP_MULTIFLOWFIT[sId] ,etbR, sId);
-          ComputeSP_dev(SP,  &CP_MULTIFLOWFIT[sId], Copies, fnum, sId);
+          ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, 0+fnum); //CP_MULTIFLOWFIT
+          ComputeTauB_dev(tauB, &CP[sId] ,etbR, sId); //CP_MULTIFLOWFIT
+          ComputeSP_dev(SP,  &CP[sId], Copies, fnum, sId); //CP_MULTIFLOWFIT
 	  ComputeHydrogenForMultiFlowFit_dev(sId, fnum, nucid, pnucRise, Ampl, 
-                          kmult*CP_MULTIFLOWFIT[sId].krate[nucid], gain, SP, 
-                          dmult*CP_MULTIFLOWFIT[sId].d[nucid], 
-			  ISIG_SUB_STEPS_MULTI_FLOW*CP_MULTIFLOWFIT[sId].start[fnum], 
+                          kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
+                          dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
+			  ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[fnum],  //CP_MULTIFLOWFIT
                           num_frames, num_beads, pival);
 	  ComputeSignalForMultiFlowFit_dev(restrict_clonal, sId, fnum, Ampl, tauB,
 	  		  etbR, gain, num_frames, num_beads, pnon_integer_penalty,
-	  		  pdarkMatterComp + num_frames*nucid, psbg, pival, pfval);
+	  		  et,pPCA_vals, psbg, pival, pfval);
 	}
 	break;
 	default:
@@ -2400,18 +3785,18 @@ __global__ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k (
           float* pivtemp = pival;
           if (psteps[i].doBoth) {
             pivtemp = pscratch_ival;
-            ComputeSP_dev(SP, &CP_MULTIFLOWFIT[sId], Copies, fnum, sId);
+            ComputeSP_dev(SP, &CP[sId], Copies, fnum, sId); //CP_MULTIFLOWFIT
 	    ComputeHydrogenForMultiFlowFit_dev(sId, fnum, nucid, pnucRise, Ampl, 
-                kmult*CP_MULTIFLOWFIT[sId].krate[nucid], gain, SP, 
-                dmult*CP_MULTIFLOWFIT[sId].d[nucid], 
-                ISIG_SUB_STEPS_MULTI_FLOW*CP_MULTIFLOWFIT[sId].start[fnum], 
+                kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
+                dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
+                ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[fnum],  //CP_MULTIFLOWFIT
                 num_frames, num_beads, pivtemp);
           }
-          ComputeEtbR_dev(etbR, &CP_MULTIFLOWFIT[sId], R, sId, nucid, 0+fnum);
-          ComputeTauB_dev(tauB, &CP_MULTIFLOWFIT[sId], etbR, sId);
+          ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, 0+fnum); //CP_MULTIFLOWFIT
+          ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_MULTIFLOWFIT
 	  ComputeSignalForMultiFlowFit_dev(restrict_clonal, sId, fnum, Ampl, tauB,
 		etbR, gain, num_frames, num_beads, pnon_integer_penalty,
-		pdarkMatterComp + num_frames*nucid, psbg, pivtemp, ptemp, true, 
+		et,pPCA_vals, psbg, pivtemp, ptemp, true, 
                 psteps[i].diff, emphasisVec + emphasisIdx*num_frames, pfval);
 
           // restore the params back
@@ -2535,6 +3920,9 @@ __global__ void MultiFlowLevMarFit_k(
     float dmult = pevalBeadParams[(BEAD_DMULT(dmult))*num_beads + ibd];
     float R = pevalBeadParams[(BEAD_R(R))*num_beads + ibd];
     float Copies = pevalBeadParams[(BEAD_COPIES(Copies))*num_beads + ibd];
+    float *et = pdarkMatterComp;
+    float *pPCA_vals = &pevalBeadParams[(BEAD_PCA(pca_vals))*num_beads + ibd];
+
     for (int fnum=0; fnum<NUMFB; ++fnum)
     {
       // calculate emphasis vector index
@@ -2542,19 +3930,22 @@ __global__ void MultiFlowLevMarFit_k(
       kmult = pevalBeadParams[(BEAD_KMULT(kmult[0]) + fnum)*num_beads + ibd];
 
       int emphasisIdx = (int)(Ampl) > maxEmphasis ? maxEmphasis : (int)Ampl;
-      int nucid = CP_MULTIFLOWFIT[sId].flowIdxMap[fnum];
-  
-      ComputeEtbR_dev(etbR, &CP_MULTIFLOWFIT[sId], R, sId, nucid, 0+fnum);
-      ComputeTauB_dev(tauB, &CP_MULTIFLOWFIT[sId], etbR, sId);
-      ComputeSP_dev(SP, &CP_MULTIFLOWFIT[sId], Copies, fnum, sId);
+      int nucid = CP[sId].flowIdxMap[fnum]; //CP_MULTIFLOWFIT
+ 
+      if(!CP[sId].useDarkMatterPCA)
+        et = pdarkMatterComp+num_frames*nucid;
+
+      ComputeEtbR_dev(etbR, &CP[sId], R, sId, nucid, 0+fnum); //CP_MULTIFLOWFIT
+      ComputeTauB_dev(tauB, &CP[sId], etbR, sId); //CP_MULTIFLOWFIT
+      ComputeSP_dev(SP, &CP[sId], Copies, fnum, sId); //CP_MULTIFLOWFIT
       ComputeHydrogenForMultiFlowFit_dev(sId, fnum, nucid, pnucRise, Ampl, 
-        kmult*CP_MULTIFLOWFIT[sId].krate[nucid], gain, SP, 
-        dmult*CP_MULTIFLOWFIT[sId].d[nucid], 
-        ISIG_SUB_STEPS_MULTI_FLOW*CP_MULTIFLOWFIT[sId].start[fnum], 
+        kmult*CP[sId].krate[nucid], gain, SP,  //CP_MULTIFLOWFIT
+        dmult*CP[sId].d[nucid],  //CP_MULTIFLOWFIT
+        ISIG_SUB_STEPS_MULTI_FLOW*CP[sId].start[fnum],  //CP_MULTIFLOWFIT
         num_frames, num_beads, pival);
       ComputeSignalForMultiFlowFit_dev(restrict_clonal, sId, fnum, Ampl, tauB,
 	etbR, gain, num_frames, num_beads, pnon_integer_penalty,
-	pdarkMatterComp + num_frames*nucid, psbg, pival, pfval);    
+	et,pPCA_vals, psbg, pival, pfval);    
       CalculateMultiFlowFitResidual_dev(newResidual, pobservedTrace, pfval, 
         emphasisVec + num_frames*emphasisIdx, fnum, num_beads, num_frames);
      } 
@@ -2816,7 +4207,7 @@ __global__ void transposeDataToFloat_k(float *dest, FG_BUFFER_TYPE *source, int 
 //////////////////////////////////////////////////////////////////
 ///////// EXTERN DECL. WRAPPER FUNCTIONS//////////////////////////
 
-
+/*
 extern "C" void copySingleFlowFitConstParamAsync(ConstParams* ptr, int offset, cudaStream_t stream)
 {
   cudaMemcpyToSymbolAsync ( CP_SINGLEFLOWFIT, ptr, sizeof(ConstParams), offset*sizeof(ConstParams),cudaMemcpyHostToDevice, stream);
@@ -2826,28 +4217,27 @@ extern "C" void copyMultiFlowFitConstParamAsync(ConstParams* ptr, int offset, cu
 {
   cudaMemcpyToSymbolAsync ( CP_MULTIFLOWFIT, ptr, sizeof(ConstParams), offset*sizeof(ConstParams),cudaMemcpyHostToDevice, stream);
 }
+*/
+
+extern "C" void copyFittingConstParamAsync(ConstParams* ptr, int offset, cudaStream_t stream)
+{
+  cudaMemcpyToSymbolAsync ( CP, ptr, sizeof(ConstParams), offset*sizeof(ConstParams),cudaMemcpyHostToDevice, stream);
+}
 
 
-
-
-
+extern "C" void copyXtalkConstParamAsync(ConstXtalkParams* ptr, int offset, cudaStream_t stream)
+{
+  cudaMemcpyToSymbolAsync ( CP_XTALKPARAMS, ptr, sizeof(ConstXtalkParams), offset*sizeof(ConstXtalkParams),cudaMemcpyHostToDevice, stream);
+}
 
 extern "C"
-void  PerFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
   float* emphasis, // F
   float* nucRise, 
-  // bead params
-//  float* pAmpl, // N
-//  float* pKmult, // N
-//  float* pdmult, // N
-//  float* pR, // N
-//  float* pgain, // N
-//  float* pSP, // N
   float * pBeadParamsBase, //N
   bead_state* pState,
-
   // scratch space in global memory
   float* err, // NxF
   float* fval, // NxF
@@ -2866,22 +4256,30 @@ void  PerFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t str
   int sId
 ) 
 {
-  cudaFuncSetCacheConfig(PerFlowLevMarFit_k, cudaFuncCachePreferL1);
-  PerFlowLevMarFit_k<<< grid, block, smem, stream >>> (
+
+
+  switch(l1type){
+    case 1:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferShared);
+    break;
+    case 2:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferL1);
+      break;
+    default:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferEqual);
+  }
+
+  PerFlowGaussNewtonFit_k<<< grid, block, smem, stream >>> (
     fg_buffers_base, // NxF
     emphasis,
     nucRise, 
-//    pAmpl, // N
-//    pKmult, // N
-//    pdmult, // N
-//    pR, // N
-//    pgain, // N
-    //pSP, // N
     pBeadParamsBase, //N
     pState,
     err, // NxF
+#ifndef FVAL_L1
     fval, // NxF
     tmp_fval, // NxF
+#endif
     jac, // NxF 
     meanErr,
     minAmpl,
@@ -2895,47 +4293,169 @@ void  PerFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t str
     sId);
 }
 
+
+extern "C"
+void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+  // inputs
+  float* fg_buffers_base, // NxF
+  float* emphasis, // F
+  float* nucRise, 
+  // bead params
+  float * pBeadParamsBase, //N
+  bead_state* pState,
+
+  // scratch space in global memory
+  float* err, // NxF
+  float* fval, // NxF
+  float* tmp_fval, // NxF
+  float* jac, // NxF 
+  float* meanErr,
+  // other inputs 
+  float minAmpl,
+  float maxKmult,
+  float minKmult,  
+  int realFnum,
+  int num_beads, // 4
+  int num_frames, // 4
+  bool useDynamicEmphasis,
+//  int * pMonitor,
+  int sId,
+  int switchToLevMar
+) 
+{
+
+
+  switch(l1type){
+    case 1:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferShared);
+    break;
+    case 2:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferL1);
+      break;
+    default:
+      cudaFuncSetCacheConfig(PerFlowGaussNewtonFit_k, cudaFuncCachePreferEqual);
+  }
+
+  PerFlowHybridFit_k<<< grid, block, smem, stream >>> (
+    fg_buffers_base, // NxF
+    emphasis,
+    nucRise, 
+    pBeadParamsBase, //N
+    pState,
+    err, // NxF
+#ifndef FVAL_L1
+    fval, // NxF
+    tmp_fval, // NxF
+#endif
+    jac, // NxF 
+    meanErr,
+    minAmpl,
+    maxKmult,
+    minKmult,
+    realFnum,
+    num_beads, // 4
+    num_frames, // 4
+    useDynamicEmphasis,
+//    pMonitor,
+    sId,
+    switchToLevMar
+  );
+}
+
+extern "C"
+void  PerFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+  // inputs
+  float* fg_buffers_base, // NxF
+  float* emphasis, // F
+  float* nucRise, 
+  // bead params
+  float * pBeadParamsBase, //N
+  bead_state* pState,
+  // scratch space in global memory
+  float* err, // NxF
+  float* fval, // NxF
+  float* tmp_fval, // NxF
+  float* jac, // NxF 
+  float* meanErr,
+  // other inputs 
+  float minAmpl,
+  float maxKmult,
+  float minKmult,  
+  int realFnum,
+  int num_beads, // 4
+  int num_frames, // 4
+  bool useDynamicEmphasis,
+//  int * pMonitor,
+  int sId
+) 
+{
+  switch(l1type){
+    case 1:
+      cudaFuncSetCacheConfig(PerFlowLevMarFit_k, cudaFuncCachePreferShared);
+    break;
+    case 2:
+      cudaFuncSetCacheConfig(PerFlowLevMarFit_k, cudaFuncCachePreferL1);
+      break;
+    default:
+      cudaFuncSetCacheConfig(PerFlowLevMarFit_k, cudaFuncCachePreferEqual);
+  }
+
+  PerFlowLevMarFit_k<<< grid, block, smem, stream >>> (
+    fg_buffers_base, // NxF
+    emphasis,
+    nucRise, 
+    pBeadParamsBase, //N
+    pState,
+    err, // NxF
+#ifndef FVAL_L1
+    fval, // NxF
+    tmp_fval, // NxF
+#endif
+    jac, // NxF 
+    meanErr,
+    minAmpl,
+    maxKmult,
+    minKmult,
+    realFnum,
+    num_beads, // 4
+    num_frames, // 4
+    useDynamicEmphasis,
+//    pMonitor,
+    sId);
+}
+
+
 ///////// Pre-processing kernel (bkg correct and well params calculation);
 extern "C"
 void PreSingleFitProcessing_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,// Here FL stands for flows
   // inputs from data reorganization
   float* pCopies, // N
   float* pR, // N
-  float* pdmult, // N
   float* pgain, // N
   float* pAmpl, // FLxN
-  float* pkmult, // FLxN
   float* sbg, // FLxF 
   float* dark_matter, // FLxF
+  float* pPCA_vals,
   float* fgbuffers, // FLxFxN
   // other inputs 
   int flowNum, // starting flow number to calculate absolute flow num
   int num_beads, // 4
   int num_frames, // 4
-  int numEv, // 4
-  // outputs
-//  float* pSP, // FLxN
-//  float* ptauB, 
   bool alternatingFit,
-  int sId 
-)
+  int sId)
 {
   PreSingleFitProcessing_k<<< grid, block, smem, stream >>>(
     pCopies, // N
     pR, // N
-    pdmult, // N
     pgain, // N
     pAmpl, // FLxN
-    pkmult, // FLxN
     sbg, // FLxF 
     dark_matter, // FLxF
+    pPCA_vals,
     fgbuffers, // FLxFxN
     flowNum, // starting flow number to calculate absolute flow num
     num_beads, // 4
     num_frames, // 4
-    numEv, // 4
-    //pSP, // FLxN
-    //ptauB, 
     alternatingFit,
     sId 
     );
@@ -3006,6 +4526,7 @@ void  PerFlowAlternatingFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_
 //////// Computing Partial Derivatives
 extern "C"
 void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
+  int l1type,
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -3036,7 +4557,18 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
   int sId
 )
 {
-  cudaFuncSetCacheConfig(ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k, cudaFuncCachePreferL1);
+  switch(l1type){
+    case 1:
+      cudaFuncSetCacheConfig(ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k, cudaFuncCachePreferShared);
+    break;
+    case 2:
+      cudaFuncSetCacheConfig(ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k, cudaFuncCachePreferL1);
+      break;
+    default:
+      cudaFuncSetCacheConfig(ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k, cudaFuncCachePreferEqual);
+  }
+
+
   ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_k<<<grid,block,smem,stream>>>(
   // inputs
   maxEmphasis,
@@ -3135,7 +4667,7 @@ void BuildMatrix_Wrapper( dim3 grid, dim3 block, int smem, cudaStream_t stream,
 }
 
 extern "C"
-void MultiFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void MultiFlowLevMarFit_Wrapper(int l1type,  dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   int maxEmphasis,
   float restrict_clonal,
@@ -3163,7 +4695,21 @@ void MultiFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t st
   int sId
   )
 {
-  cudaFuncSetCacheConfig(MultiFlowLevMarFit_k, cudaFuncCachePreferL1);
+
+ switch(l1type){
+    case 1:
+      cudaFuncSetCacheConfig(MultiFlowLevMarFit_k, cudaFuncCachePreferShared);
+      break;
+    case 2:
+      cudaFuncSetCacheConfig(MultiFlowLevMarFit_k, cudaFuncCachePreferL1);
+      break;
+    case 0:
+    default:
+      cudaFuncSetCacheConfig(MultiFlowLevMarFit_k, cudaFuncCachePreferEqual);
+  }
+
+
+
   MultiFlowLevMarFit_k<<< grid ,block ,  smem, stream >>>(
     maxEmphasis,
     restrict_clonal,
@@ -3188,6 +4734,165 @@ void MultiFlowLevMarFit_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t st
     num_frames,
     presidual, // N 
     sId);
+}
+
+///////// Xtalk computation kernel wrapper
+extern "C"
+void NeighbourContributionToXtalk_Wrapper(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,// Here FL stands for flows
+  // inputs from data reorganization
+  float* pR, // N
+  float* sbg, // FLxF 
+  float* fgbuffers, // FLxFxN
+  // other inputs 
+  int startingFlowNum, // starting flow number to calculate absolute flow num
+  int currentFlowIteration,
+  int num_beads, // 4
+  int num_frames, // 4
+  float* scratch_buf,
+  float* nei_xtalk,
+  int sId 
+)
+{
+  NeighbourContributionToXtalk_k<<< 
+    grid, 
+    block, 
+    smem, 
+    stream >>>(
+    pR, // N
+    sbg, // FLxF 
+    fgbuffers, // FLxFxN
+    startingFlowNum, // starting flow number to calculate absolute flow num
+    currentFlowIteration,
+    num_beads, // 4
+    num_frames, // 4
+    scratch_buf,
+    nei_xtalk,
+    sId 
+    );
+}
+
+extern "C"
+void XtalkAccumulationAndSignalCorrection_Wrapper(// Here FL stands for flows
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,// Here FL stands for flows
+  int currentFlowIteration,
+  float* fgbuffers, // FLxFxN
+  int num_beads, // 4
+  int num_frames, // 4
+  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
+  float* nei_xtalk, // neixNxF
+  float* xtalk, // FLxN
+  float* pCopies, // N
+  float* pR, // N
+  float* pgain, // N
+  float* sbg, // FLxF 
+  float* dark_matter, // FLxF
+  float* pPCA_vals, 
+  int flowNum, // starting flow number to calculate absolute flow num
+  int sId
+)
+{
+  XtalkAccumulationAndSignalCorrection_k<<< 
+    grid, 
+    block, 
+    smem, 
+    stream >>>(
+    currentFlowIteration,
+    fgbuffers, // FLxFxN
+    num_beads, // 4
+    num_frames, // 4
+    neiIdxMap,
+    nei_xtalk,
+    xtalk,
+    pCopies, // N
+    pR, // N
+    pgain, // N
+    sbg, // FLxF 
+    dark_matter, // FLxF
+    pPCA_vals,
+    flowNum, // starting flow number to calculate absolute flow num
+    sId 
+    );
+}
+
+extern "C"
+void TaubAdjustForExponentialTailFitting_Wrapper(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  float* fg_buffers,
+  float* Ampl,
+  float* pR,
+  float* avg_trc,
+  float* fval,
+  float* tmp_fval,
+  float* err,
+  float* jac,
+  int num_beads,
+  int num_frames,
+  float* tauAdjust,
+  int sId
+)
+{
+  TaubAdjustForExponentialTailFitting_k <<<
+        grid, 
+        block, 
+        smem, 
+        stream >>>(
+        fg_buffers, // FLxFxN,
+        Ampl, // FLxN
+	pR, // N
+        avg_trc,
+	fval,
+	tmp_fval,
+	err,
+	jac,
+	num_beads,
+	num_frames,
+	tauAdjust, // output it is a per bead parameter
+	sId);
+}
+
+extern "C"
+void ExponentialTailFitting_Wrapper(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  float* tauAdjust,
+  float* Ampl,
+  float* pR,
+  float* fg_buffers,
+  float* bkg_trace,
+  float* tmp_fval,
+  int num_beads,
+  int num_frames,
+  int flowNum,
+  int sId
+)
+{
+  ExponentialTailFitting_k <<<
+      grid, 
+      block, 
+      smem, 
+      stream >>> (
+      tauAdjust,
+      Ampl,
+      pR,
+      fg_buffers,
+      bkg_trace,
+      tmp_fval,
+      num_beads,
+      num_frames,
+      flowNum,
+      sId);
 }
 
 
@@ -3239,7 +4944,6 @@ void initPoissonTablesLUT(int device, void ** poissLUT)
   cudaSetDevice(device);
 ////////// float4/avx version
 //  float4 ** pPoissLUT = (float4**) poissLUT;
-#ifdef POISS_FLOAT4
 
   int poissTableSize =  MAX_LUT_TABLE_COL * MAX_POISSON_TABLE_ROW * sizeof(float4);
   float4 * devPtrLUT = NULL;  
@@ -3261,7 +4965,6 @@ void initPoissonTablesLUT(int device, void ** poissLUT)
     cudaMemcpy(devPtrLUT, &pPoissLUT[i][0], sizeof(float4)*MAX_POISSON_TABLE_ROW, cudaMemcpyHostToDevice ); CUDA_ERROR_CHECK();
     devPtrLUT += MAX_POISSON_TABLE_ROW;
   }
-#endif
 #endif
 
 }

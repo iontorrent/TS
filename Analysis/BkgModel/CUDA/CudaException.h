@@ -5,17 +5,18 @@
 
 #include <iostream>
 #include <exception>
-
+#include "CudaDefines.h"
 
 
 using namespace std;
 
+
 class cudaException: public exception
 {
 
+protected:
+
   cudaError_t err;
-  const char * file;
-  int line;
 
 public:
 
@@ -23,11 +24,46 @@ public:
 
   virtual const char* what() const throw()
   {
-    return "CUDA: an Exception occured";
+    Print();
+    return "CUDA EXCEPTION: an Exception occured" ;
   }
 
     
-  cudaException(cudaError_t err,  const char * file, int line):err(err),file(file),line(line)
+  cudaException(cudaError_t err):err(err)
+  {};
+
+  virtual void Print() const throw() 
+  {
+    
+   cout << " +----------------------------------------" << endl
+        << " | ** CUDA ERROR! ** " << endl                               
+        << " | Error: " << err << endl                             
+        << " | Msg: " << cudaGetErrorString(err) << endl           
+        << " +----------------------------------------" << endl << flush;  
+  }
+
+}; 
+
+
+
+
+class cudaExceptionDebug: public cudaException
+{
+
+  const char * file;
+  int line;
+
+public:
+
+
+  virtual const char* what() const throw()
+  {
+    Print();
+    return "CUDA EXCEPTION: an Exception occured";
+  }
+
+    
+  cudaExceptionDebug(cudaError_t err,  const char * file, int line):cudaException(err),file(file),line(line)
   {};
 
   virtual void Print() const throw() 
@@ -45,44 +81,62 @@ public:
 }; 
 
 
-
-class cudaStreamCreationError: public cudaException
+class cudaStreamCreationError: public cudaExceptionDebug
 {
+
+  public:
+
   virtual const char* what() const throw()
   {
     //Print();
-    return "CUDA: could not acquire stream from streamPool";
+    return "CUDA EXCEPTION: could not acquire stream resources";
   }
 
-  public:
-  cudaStreamCreationError( const char * file, int line):cudaException(cudaErrorUnknown,file,line) {};
+  cudaStreamCreationError( const char * file, int line):cudaExceptionDebug(cudaErrorUnknown,file,line) {};
 
 };
 
 
-class cudaAllocationError: public cudaException
+class cudaAllocationError: public cudaExceptionDebug
 {
+
+  public:
+
   virtual const char* what() const throw()
   {
     //Print();
-    return "CUDA: could not allocate memory";
+    return "CUDA EXCEPTION: could not allocate memory";
   }
 
-  public:
-  cudaAllocationError(cudaError_t err, const char * file, int line):cudaException(err,file,line) {};
+  cudaAllocationError(cudaError_t err, const char * file, int line):cudaExceptionDebug(err,file,line) {};
 
 };
 
-class cudaNotEnoughMemForStream: public cudaException
+class cudaNotEnoughMemForStream: public cudaExceptionDebug
 {
+public:
   virtual const char* what() const throw()
   {
     //Print();
-    return "CUDA: Not enough memory for context and at least one stream!";
+    return "CUDA EXCEPTION: Not enough memory for context and at least one stream!";
+  }
+
+  cudaNotEnoughMemForStream( const char * file, int line):cudaExceptionDebug(cudaErrorMemoryValueTooLarge,file,line) {};
+
+};
+
+
+class cudaExecutionException: public cudaExceptionDebug
+{
+
+  virtual const char* what() const throw()
+  {
+    //Print();
+    return "CUDA EXCEPTION: Error occured during job Execution!";
   }
 
  public:
-  cudaNotEnoughMemForStream( const char * file, int line):cudaException(cudaErrorStartupFailure,file,line) {};
+  cudaExecutionException( cudaError_t err,  const char * file, int line):cudaExceptionDebug(err,file,line) {};
 
 };
 

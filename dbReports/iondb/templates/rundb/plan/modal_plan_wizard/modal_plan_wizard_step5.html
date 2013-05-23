@@ -4,16 +4,15 @@
         <table class="plan-grid">
             <tr>
                 <td>
-                    <p class="form-label">Select the plugin(s) to execute:</p>
-                    <div style="border:1px solid #0981d2;overflow: auto;width:350px;height:125px;padding:5px">
+                    <div style="border:1px solid #0981d2;overflow: auto;width:350px;height:285px;padding:5px; float: left; margin-right: 10px">
                         <span class="option-group">
                         {% if selectedApplProductData %}
                             {% for plugin in planTemplateData.plugins %}
                                 <p>
                                 {% if plugin.autorun %}
-                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{plugin.name}}
+                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" data-autorun="auto" data-planconfig={{plugin.isPlanConfig}} style="opacity: 0.3;" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{plugin.name}}
                                 {% else %}
-                                    <input type="checkbox" id="plugins" name="plugins" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
+                                    <input type="checkbox" id="plugins" name="plugins"  data-planconfig={{plugin.isPlanConfig}} value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
                                 {% endif %}
 
                                 {% if plugin.isPlanConfig %}
@@ -36,11 +35,11 @@
                             {% for plugin in planTemplateData.plugins %}
                                 <p>
                                 {% if plugin.selected %}
-                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
+                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" data-planconfig={{plugin.isPlanConfig}} value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
                                 {% elif plugin.autorun %}
-                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{plugin.name}}
+                                    <input type="checkbox" id="plugins" name="plugins" checked="checked" data-autorun="auto" data-planconfig={{plugin.isPlanConfig}} style="opacity: 0.3;" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}" rel="tooltip" title="Plugin is set to auto-run"> {{plugin.name}}
                                 {% else %}
-                                    <input type="checkbox" id="plugins" name="plugins" value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
+                                    <input type="checkbox" id="plugins" name="plugins" data-planconfig={{plugin.isPlanConfig}} value="{{plugin.id}}|{{plugin.name}}|{{plugin.version}}"> {{plugin.name}}
                                 {% endif %}
                                 
                                 {% if plugin.isPlanConfig %}
@@ -67,6 +66,8 @@
                         {% endif %}
                         </span>                        
                     </div>
+                    <strong>Select the plugin(s) to execute</strong>
+                    <p>Plugins selected for Auto-Run will be checked by default.</p>
                 </td>
             </tr>
         </table>

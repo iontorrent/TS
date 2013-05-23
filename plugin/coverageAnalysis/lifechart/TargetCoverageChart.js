@@ -147,7 +147,7 @@ $(function () {
   $('#TC-chart').css("height","auto");
 
   // some default values for plot display
-  var def_minPoints = 10;
+  var def_minPoints = 11;
   var def_numPoints = 100;
   var def_hugeCov = 100000000;
   var disableTitleBar = false;
@@ -527,8 +527,8 @@ $(function () {
     } else {
       var clip = xRight - xLeft;
       if( clip >= plotStats.minNumPoints ) {
-        plotStats.minX = options.xaxis.min = xLeft;
-        plotStats.maxX = options.xaxis.max = xRight;
+        plotStats.minX = options.xaxis.min = Math.floor(xLeft);
+        plotStats.maxX = options.xaxis.max = Math.ceil(xRight);
       } else {
         var diff = 0.5 * (plotStats.minNumPoints - clip);
         plotStats.minX = Math.floor(0.5+xRight-diff);
@@ -685,10 +685,15 @@ $(function () {
   function tooltipHint(id,bin) {
     $('#TC-tooltip-close').hide();
     if( dataBar(id) ) {
+      var br = "<br/>";
       if( binBar(bin) ) {
         return dataTable[bin][DataField.bin_size] + ' ' + LegendLabels.targType + 's';
       }
-      return dataTable[bin][DataField.target_id];
+      var i, targID = dataTable[bin][DataField.target_id];
+      while( (i = targID.indexOf(',')) > 0 ) {
+        targID = targID.substr(0,i)+br+targID.substr(i+1);
+      }
+      return targID;
     }
     var targLen = binBar(bin) ? dataTable[bin][DataField.bin_length] :
       dataTable[bin][DataField.pos_end]-dataTable[bin][DataField.pos_start]+1;
@@ -765,7 +770,11 @@ $(function () {
       }
     } else {
       msg += "Gene Sym: "+dataTable[bin][DataField.gene_id]+br;
-      msg += leadStr+" ID: "+dataTable[bin][DataField.target_id]+br;
+      var i, targID = dataTable[bin][DataField.target_id];
+      while( (i = targID.indexOf(',')) > 0 ) {
+        targID = targID.substr(0,i)+br+'+  '+targID.substr(i+1);
+      }
+      msg += leadStr+" ID: "+targID+br;
       msg += contigType+dataTable[bin][DataField.contig_id]+br;
       msg += "Location: "+dataTable[bin][DataField.pos_start]+"-"+dataTable[bin][DataField.pos_end]+br;
       if( barData ) {
@@ -1048,8 +1057,15 @@ $(function () {
   $('.TC-selectParam').change(function() {
     plotParams[this.id] = parseInt(this.value);
     plotParams.resetYScale = this.id == 'barAxis';
+    autoHideLegend();
     updatePlot();
   });
+
+  function autoHideLegend() {
+    if( !plotParams.showLegend ) {
+      $('#TC-showLegend').attr('checked', plotParams.showLegend = true );
+    }
+  }
 
   $('#TC-logAxis').change(function() {
     plotParams.logAxis = ($(this).attr("checked") == "checked");
@@ -1486,17 +1502,27 @@ $(function () {
     }
   });
 
-  function exportTSV(options) {
-    options += ' ' + tsvFilter.options;
+  function exportTSV(expOpt) {
+    var clipLeft = tsvFilter.clipleft;
+    var clipRight = tsvFilter.clipright;
+    if( plotStats.targetsRepresented < plotStats.numPoints ) {
+      // temporaily modify file extraction region for over-zoom 
+      var lam = plotStats.minX / plotStats.numPoints;
+      clipLeft = (1 - lam) * tsvFilter.clipleft + lam * tsvFilter.clipright;
+      lam = plotStats.maxX / plotStats.numPoints;
+      clipRight = (1 - lam) * tsvFilter.clipleft + lam * tsvFilter.clipright;
+    }
+    expOpt += ' ' + tsvFilter.options;
     window.open( "lifechart/target_coverage.php3"+
-      "?options="+options.trim()+"&dataFile="+tsvFilter.dataFile+
+      "?options="+expOpt.trim()+"&dataFile="+tsvFilter.dataFile+
       "&chrom="+tsvFilter.chrom+"&gene="+tsvFilter.gene+
       "&covmin="+tsvFilter.covmin+"&covmax="+tsvFilter.covmax+
-      "&clipleft="+tsvFilter.clipleft+"&clipright="+tsvFilter.clipright+
+      "&clipleft="+clipLeft+"&clipright="+clipRight+
       "&maxrows="+tsvFilter.maxrows+"&numrec="+tsvFilter.numrec );
   }
 
   // autoload - after everything is defined
   unzoomToFile(coverageFile);
+  autoHideLegend();
 
 });

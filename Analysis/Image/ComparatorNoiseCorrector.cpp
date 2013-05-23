@@ -5,39 +5,86 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <float.h>
+
 #include "Utils.h"
 #include "ComparatorNoiseCorrector.h"
 
-
-void ComparatorNoiseCorrector::CorrectComparatorNoise(RawImage *raw, Mask *mask, bool verbose) {
-  CorrectComparatorNoise(raw->image, raw->rows, raw->cols, raw->frames,  mask, verbose);
+void ComparatorNoiseCorrector::CorrectComparatorNoise(RawImage *raw, Mask *mask, bool verbose,bool aggressive_correction, bool beadfind_image)
+{
+   CorrectComparatorNoise(raw->image,raw->rows,raw->cols,raw->frames,mask,verbose,aggressive_correction,beadfind_image);
 }
 
-void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, int cols, int frames, Mask *mask, bool verbose)
+void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, int cols, int frames, Mask *mask, bool verbose, bool aggressive_correction, bool beadfind_image)
 {
-  //if isThumbnail, assume 100x100 for
-  time_t cnc_start;
-  time ( &cnc_start );
-  MemUsage ( "Starting Comparator Noise Correction" );
 
-  //  float *comparator_sigs;
-  //  float *mComparator_noise;
+   if (aggressive_correction)
+      NNSpan = 4;
+   else
+      NNSpan = 1;
+
+   if (!beadfind_image)
+   {
+      CorrectComparatorNoise_internal(image, rows, cols, frames,  mask, verbose, aggressive_correction);
+
+      if (aggressive_correction)
+      {
+         int blk_size = 96;
+         int sub_blocks = rows / blk_size;
+
+         if (blk_size * sub_blocks < rows) sub_blocks++;
+
+         for (int blk = 0; blk < sub_blocks; blk++)
+         {
+            int row_start = blk * blk_size;
+            int row_end = (blk + 1) * blk_size;
+
+            if (blk == sub_blocks - 1) row_end = rows;
+
+            CorrectComparatorNoise_internal(image, rows, cols, frames,  mask, verbose, aggressive_correction, row_start, row_end);
+         }
+      }
+   }
+   else
+   {
+      // trick correction into only doing hf noise correction as this is all that works for beadfind images
+      CorrectComparatorNoise_internal(image, rows, cols, frames,  mask, verbose, aggressive_correction, 0, rows);
+   }
+
+}
+
+void ComparatorNoiseCorrector::CorrectComparatorNoise_internal(short *image, int rows, int cols, int frames, Mask *mask, bool verbose, bool aggressive_correction, int row_start,int row_end)
+{
   float comparator_rms[cols*2];
   int comparator_mask[cols*2];
+  float comparator_hf_rms[cols*2];
+  int comparator_hf_mask[cols*2];
+  float pcomp[frames];
   int c_avg_num[cols*4];
   int x,y,frame,i;
   int phase;
   int frameStride = rows * cols;
+  bool hfonly = false;
   Allocate(cols*4*frames);
   memset(mComparator_sigs,0,sizeof(float) * cols*4*frames);
   memset(mComparator_noise,0,sizeof(float) * cols*2*frames);
   memset(c_avg_num,0,sizeof(c_avg_num));
   memset(comparator_mask,0,sizeof(comparator_mask));
+  memset(comparator_hf_mask,0,sizeof(comparator_hf_mask));
+
+  if (row_start == -1)
+  {
+	row_start = 0;
+	row_end = rows;
+	hfonly = false;
+  }
+  else
+	hfonly = true;
 
   // first, create the average comparator signals
   // making sure to avoid pinned pixels
-  i=0;
-  for ( y=0;y<rows;y++ ) {
+  i=row_start*cols;
+  for ( y=row_start;y<row_end;y++ ) {
     for ( x=0;x<cols;x++ ) {
       int cndx;
       int frame;
@@ -123,7 +170,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
       }
 
       // now neighbor-subtract the comparator signals
-      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,1,cols*2,frames);
+      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,cols*2,frames);
 
       // measure noise in the neighbor-subtracted signals
       CalcComparatorSigRMS(comparator_rms,mComparator_noise,cols*2,frames);
@@ -132,7 +179,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
       MaskIQR(comparator_mask,comparator_rms,cols*2);
 
       // neighbor-subtract again...avoiding noisiest 10%
-      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,1,cols*2,frames);
+      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,cols*2,frames);
 
       // measure noise in the neighbor-subtracted signals
       CalcComparatorSigRMS(comparator_rms,mComparator_noise,cols*2,frames);
@@ -149,8 +196,60 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
       MaskIQR(comparator_mask,comparator_rms,cols*2, verbose);
 
       // neighbor-subtract again...avoiding noisiest 10%
-      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,1,cols*2,frames);
+      NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,cols*2,frames);
 
+      if (aggressive_correction)
+      {
+         // Newly added stuff.
+             // subtracts some of what we detect as comparator noise from neighbors before forming the nn average
+             // this cleans things up a little
+
+         // make another set of noise signals that have been run through a high-pass filter
+         // filter low frequency noise out of noise signals
+         memcpy(mComparator_hf_noise,mComparator_noise,sizeof(float)*cols*2*frames);
+         HighPassFilter(mComparator_hf_noise,cols*2,frames,10);
+
+         // neighbor-subtract again...now with some rejection of what we think the noise is
+         NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,cols*2,frames,mComparator_hf_noise);
+
+         // measure noise in the neighbor-subtracted signals
+         CalcComparatorSigRMS(comparator_rms,mComparator_noise,cols*2,frames);
+
+         // reset comparator_mask
+         memset(comparator_mask,0,sizeof(int)*cols*2);
+         for ( int cndx=0;cndx < cols*2;cndx++ )
+         {
+           if ( c_avg_num[cndx] == 0 )
+           {
+             comparator_mask[cndx] = 1;
+           }
+         }
+   //      MaskIQR(comparator_mask,comparator_rms,cols*2, verbose);
+         MaskUsingDynamicStdCutoff(comparator_mask,comparator_rms,cols*2,1.0f);
+
+         // even if some comparators didn't make the cut with the raw noise signal
+         // we can correct more agressively if we put the noise signal through the high pass filter
+
+         // redo the high-pass fitler
+         memcpy(mComparator_hf_noise,mComparator_noise,sizeof(float)*cols*2*frames);
+         // get first principal component
+         GetPrincComp(pcomp,mComparator_hf_noise,comparator_mask,cols*2,frames);
+         FilterUsingPrincComp(mComparator_hf_noise,pcomp,cols*2,frames);
+
+         // measure high frequency noise
+         CalcComparatorSigRMS(comparator_hf_rms,mComparator_hf_noise,cols*2,frames);
+
+         for ( int cndx=0;cndx < cols*2;cndx++ )
+         {
+           if ( c_avg_num[cndx] == 0 )
+           {
+             comparator_hf_mask[cndx] = 1;
+           }
+         }
+         MaskUsingDynamicStdCutoff(comparator_hf_mask,comparator_hf_rms,cols*2,2.0f);
+      }
+
+      // blanks comparator signal averages that didn't have any pixels to average (probably redundant)
       for ( int cndx=0;cndx < cols*2;cndx++ )
       {
         float *cptr;
@@ -164,8 +263,8 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
 
       // now subtract each neighbor-subtracted comparator signal from the
       // pixels that are connected to that comparator
-      i=0;
-      for ( y=0;y<rows;y++ ) {
+      i=row_start*cols;
+      for ( y=row_start;y<row_end;y++ ) {
         for ( x=0;x<cols;x++ ) {
           int cndx;
           int frame;
@@ -180,9 +279,16 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
                 cndx++;
 
             //only perform correction on noisy comparators;
-            if(comparator_mask[cndx]){
+            if(comparator_mask[cndx] && !hfonly){
               // get a pointer to where we will build the comparator signal average
               cptr = mComparator_noise + cndx*frames;
+              // subtract nn comparator signal from this pixel's data
+              for ( frame=0;frame<frames;frame++ )
+                image[frame*frameStride+i] -= cptr[frame];
+            } else if (comparator_hf_mask[cndx])
+            {
+              // get a pointer to where we will build the comparator signal average
+              cptr = mComparator_hf_noise + cndx*frames;
               // subtract nn comparator signal from this pixel's data
               for ( frame=0;frame<frames;frame++ )
                 image[frame*frameStride+i] -= cptr[frame];
@@ -193,11 +299,6 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
         }
       }
   }
-
-  MemUsage ( "After Comparator Noise Correction" );
-  time_t cnc_end;
-  time ( &cnc_end );
-  fprintf (stdout, "Comparator Noise Correction: %0.3lf sec.\n", difftime(cnc_end, cnc_start));
 }
 
 void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(RawImage *raw,Mask *mask, int regionXSize, int regionYSize, bool verbose) {
@@ -319,7 +420,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(short *image, int
         }
 
         // now neighbor-subtract the comparator signals
-        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask, 1, regionXSize*2,frames);
+        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan, regionXSize*2,frames);
 
         // measure noise in the neighbor-subtracted signals
         CalcComparatorSigRMS(comparator_rms,mComparator_noise,regionXSize*2,frames);
@@ -328,7 +429,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(short *image, int
         MaskIQR(comparator_mask,comparator_rms,regionXSize*2);
 
         // neighbor-subtract again...avoiding noisiest 10%
-        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,1,regionXSize*2,frames);
+        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,regionXSize*2,frames);
 
         // measure noise in the neighbor-subtracted signals
         CalcComparatorSigRMS(comparator_rms,mComparator_noise,regionXSize*2,frames);
@@ -345,7 +446,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoiseThumbnail(short *image, int
         MaskIQR(comparator_mask,comparator_rms,regionXSize*2, verbose);
 
         // neighbor-subtract again...avoiding noisiest 10%
-        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,1,regionXSize*2,frames);
+        NNSubtractComparatorSigs(mComparator_noise,mComparator_sigs,comparator_mask,NNSpan,regionXSize*2,frames);
 
         for ( int cndx=0;cndx < regionXSize*2;cndx++ )
         {
@@ -536,18 +637,25 @@ int ComparatorNoiseCorrector::DiscoverComparatorPhase(float *psigs,int *c_avg_nu
 }
 
 // now neighbor-subtract the comparator signals
-void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,int *mask,int span,int n_comparators,int nframes)
+void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,int *mask,int span,int n_comparators,int nframes,float *hfnoise)
 {
   float nn_avg[nframes];
+  float zero_sig[nframes];
+  
+  memset(zero_sig,0,sizeof(zero_sig));
 
   for ( int i=0;i < n_comparators;i++ )
   {
     int nn_cnt=0;
     float *cptr;
+    float *chfptr;
     float *nncptr;
     float centroid = 0.0f;
     int i_c0 = i & ~0x1;
     memset(nn_avg,0,sizeof(nn_avg));
+
+	// in case we weren't provided with high frequency noise correction for NNs, use all zeros instead
+	chfptr = zero_sig;
     
     // rounding down the starting point and adding one to the rhs properly centers
     // the neighbor average about the central column...except in cases where columns are
@@ -560,9 +668,12 @@ void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,
         // get a pointer to the comparator signal
         cptr = psigs + theOtherCompInd *nframes;
 
+        if (hfnoise != NULL)
+            chfptr = hfnoise + theOtherCompInd *nframes;
+
         // add it to the average
         for ( int frame=0;frame < nframes;frame++ )
-          nn_avg[frame] += cptr[frame];
+          nn_avg[frame] += cptr[frame] - chfptr[frame];
 
         nn_cnt++;
         centroid += theOtherCompInd;
@@ -575,16 +686,22 @@ void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,
           // get a pointer to the comparator signal
           cndx = i_c0 - 2*s + 1;
           cptr = psigs + cndx*nframes;
+
+          if (hfnoise != NULL)
+              chfptr = hfnoise + cndx*nframes;
           // add it to the average
           for ( int frame=0;frame < nframes;frame++ )
-            nn_avg[frame] += cptr[frame];
+            nn_avg[frame] += cptr[frame] - chfptr[frame];
           nn_cnt++;
           centroid += cndx;
           cndx = i_c0 + 2*s + 1;
           cptr = psigs + cndx*nframes;
+
+          if (hfnoise != NULL)
+              chfptr = hfnoise + cndx*nframes;
           // add it to the average
           for ( int frame=0;frame < nframes;frame++ )
-            nn_avg[frame] += cptr[frame];
+            nn_avg[frame] += cptr[frame] - chfptr[frame];
           nn_cnt++;
           centroid += cndx;
       }
@@ -593,16 +710,22 @@ void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,
       if(!(i_c0 - 2*s < 0  || i_c0 + 2*s >= n_comparators || mask[i_c0 - 2*s] || mask[i_c0 + 2*s])) {
           cndx = i_c0 - 2*s;
           cptr = psigs + cndx*nframes;
+
+          if (hfnoise != NULL)
+              chfptr = hfnoise + cndx*nframes;
           // add it to the average
           for ( int frame=0;frame < nframes;frame++ )
-            nn_avg[frame] += cptr[frame];
+            nn_avg[frame] += cptr[frame] - chfptr[frame];
           nn_cnt++;
           centroid += cndx;
           cndx = i_c0 + 2*s;
           cptr = psigs + cndx*nframes;
+
+          if (hfnoise != NULL)
+              chfptr = hfnoise + cndx*nframes;
           // add it to the average
           for ( int frame=0;frame < nframes;frame++ )
-            nn_avg[frame] += cptr[frame];
+            nn_avg[frame] += cptr[frame] - chfptr[frame];
           nn_cnt++;
           centroid += cndx;
       }
@@ -628,6 +751,45 @@ void ComparatorNoiseCorrector::NNSubtractComparatorSigs(float *pnn,float *psigs,
       for ( int frame=0;frame < nframes;frame++ )
         nncptr[frame] = 0.0f;
     }
+  }
+}
+
+void ComparatorNoiseCorrector::HighPassFilter(float *pnn,int n_comparators,int nframes,int span)
+{
+  float trc_scratch[nframes];
+
+  for ( int i=0;i < n_comparators;i++ )
+  {
+    float *cptr;
+
+    // get a pointer to the comparator noise signal
+    cptr = pnn + i*nframes;
+    
+    // make smooth version of noise signal
+    for (int j=0;j < nframes;j++)
+    {
+        float sum = 0.0f;
+        int cnt = 0;
+        
+        for (int k=(j-span);k <=(j+span);k++)
+        {
+            if ((k >= 0) && (k < nframes) && (k!=j))
+            {
+                cnt++;
+                sum += cptr[k];
+            }
+        }
+        
+        trc_scratch[j] = sum/cnt;
+    }
+    
+    // now subtract off the smoothed signal to eliminate low frequency
+    // components, most of which are residual background effects that the
+    // neighbor subtraction algorithm doesn't completely fitler out
+    // this unfortunately does also somtimes eliminate some real comparator
+    // noise...
+    for (int j=0;j < nframes;j++)
+        cptr[j] -= trc_scratch[j];
   }
 }
 
@@ -712,5 +874,142 @@ void ComparatorNoiseCorrector::MaskIQR(int *mask,float *prms,int n_comparators, 
     fprintf (stdout, "\n");
 //  fprintf (stdout, "\n%d noisy comparators; threshold: %f\n", noisyCount, rms_thresh);
 }
+
+void ComparatorNoiseCorrector::MaskUsingDynamicStdCutoff(int *mask,float *prms,int n_comparators, float std_mult, bool verbose)
+{
+    float mean_rms;
+    float std_rms;
+    int cnt;
+    float rms_threshold = 1E+20f;
+    int i;
+    
+    for (int iter=0;iter < 2;iter++)
+    {
+        mean_rms = 0.0f;
+        std_rms = 0.0f;
+        cnt = 0;
+        
+        for (i=0;i < n_comparators;i++ )
+        {
+            if ((mask[i] == 0) && (prms[i] < rms_threshold))
+            {
+                mean_rms += prms[i];
+                cnt++;
+            }
+        }
+
+        // if not enough to analyze...just bail
+        if (cnt < 10)
+            return;
+
+        mean_rms /= cnt;
+
+        for (i=0;i < n_comparators;i++ )
+        {
+            if ((mask[i] == 0) && (prms[i] < rms_threshold))
+                std_rms += (prms[i]-mean_rms)*(prms[i]-mean_rms);
+        }
+        
+        std_rms = sqrt(std_rms/cnt);
+        
+        rms_threshold = mean_rms + std_mult*std_rms;
+    }
+
+//  printf("hf rms threshold = %f\n",rms_threshold);
+    
+  int noisyCount = 0;
+  if(verbose)
+    fprintf (stdout, "Noisy comparators:");
+    
+    // now set the mask according to the threshold
+    for (i=0;i < n_comparators;i++ )
+    {
+        if ((mask[i] == 0) && (prms[i] >= rms_threshold))
+        {
+            mask[i] = 1;
+            noisyCount ++;
+            if(verbose)
+              fprintf (stdout, " %d", i);
+        }
+    }
+  if(verbose)
+    fprintf (stdout, "\n");
+}
+
+// simple iterative formula that is good for getting the first principal component
+void ComparatorNoiseCorrector::GetPrincComp(float *pcomp,float *pnn,int *mask,int n_comparators,int nframes)
+{
+	float ptmp[nframes];
+	float ttmp[nframes];
+	float residual;
+	
+	for (int i=0;i < nframes;i++)
+	{
+		ptmp[i] = rand();
+		ttmp[i] = 0.0f;
+	}
+	
+	memset(pcomp,0,sizeof(float)*nframes);
+	
+	residual = FLT_MAX;
+	
+	while(residual > 0.001)
+	{
+		memset(ttmp,0,sizeof(float)*nframes);
+
+		for (int i=0;i < n_comparators;i++)
+		{
+			float sum=0.0f;
+			float *cptr = pnn + i*nframes;
+			
+			if (mask[i] == 0)
+			{
+				for (int j=0;j < nframes;j++)
+					sum += ptmp[j]*cptr[j];
+				
+				for (int j=0;j < nframes;j++)
+					ttmp[j] += cptr[j]*sum;
+			}
+		}
+				
+		float tmag = 0.0f;
+		for (int i=0;i < nframes;i++)
+			tmag += ttmp[i]*ttmp[i];
+		
+		tmag = sqrt(tmag/nframes);
+
+		for (int i=0;i < nframes;i++)
+			pcomp[i] = ttmp[i]/tmag;
+			
+		residual = 0.0f;
+		for (int i=0;i < nframes;i++)
+			residual += (pcomp[i]-ptmp[i])*(pcomp[i]-ptmp[i]);
+		residual = sqrt(residual/nframes);
+		memcpy(ptmp,pcomp,sizeof(float)*nframes);
+	}
+}
+
+void ComparatorNoiseCorrector::FilterUsingPrincComp(float *pnn,float *pcomp,int n_comparators,int nframes)
+{
+    float pdotp = 0.0f;
+    for (int i=0;i < nframes;i++)
+        pdotp += pcomp[i]*pcomp[i];
+    
+    for (int i=0;i < n_comparators;i++)
+    {
+        float sum=0.0f;
+    	float *cptr = pnn + i*nframes;
+        
+        for (int j=0;j < nframes;j++)
+            sum += cptr[j]*pcomp[j];
+        
+        float scale = sum/pdotp;
+        
+        for (int j=0;j < nframes;j++)
+            cptr[j] -= pcomp[j]*scale;
+    }
+}
+
+
 
 

@@ -6,7 +6,7 @@ from django import db, shortcuts
 from django.db import transaction
 import sys
 import os
-import subprocess
+import traceback
 
 from iondb.rundb import models
 from socket import gethostname
@@ -143,25 +143,26 @@ def add_backupconfig():
 
 def add_chips():
     from iondb.utils.default_chip_args import default_chip_args
-    '''Sets the per chip default analysis args into the 
-    `chips` table in the database.  '''
-    try:
-        # Determine slots by number of cpu sockets installed
-        p1 = subprocess.Popen("/usr/bin/lscpu",stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["grep","^CPU socket"],stdin=p1.stdout,stdout=subprocess.PIPE)
-        sockets = p2.stdout.read().strip().split(":")[1]
-        sockets = int(sockets)
-    except:
-        sockets = 2
-        print traceback.format_exc()
+    '''Sets the per chip default analysis args into the `chips` table in the database.  '''
         
-    chips = (('318',1,'318'),
-             ('316',1,'316'),
-             ('314',1,'314'),
-             ('900',1,'PI'),                     
+    chips = (('314','314'),
+             ('316','316'),
+             ('318','318'),
+             ('318v2','318v2'),
+             ('316v2','316v2'),
+             ('314v2','314v2'),
+             ('P1.0.19','P0'),
+             ('900','P1'),
+             ('900v2','P1v2'),
+             ('P1.1.16','P1'),
+             ('P1.1.17','P1'),
+             ('P1.2.18','P1'),
+             ('P2.0.16','P2'),
+             ('P2.1.16','P2'),
+             ('P2.2.16','P2'),
             )
 
-    for (name,slots,description) in chips:
+    for (name,description) in chips:
         
         # get default args for this chip
         args = default_chip_args(name)
@@ -169,18 +170,20 @@ def add_chips():
         try:
             # (this case when updating TS typically)
             c = models.Chip.objects.get(name=name)
-            c.slots = slots
-            c.analysisargs    = args['analysisArgs']
-            c.basecallerargs  = args['basecallerArgs']
-            c.beadfindargs    = args['beadfindArgs']
-            c.thumbnailanalysisargs    = args['thumbnailAnalysisArgs']
-            c.thumbnailbasecallerargs  = args['thumbnailBasecallerArgs']
-            c.thumbnailbeadfindargs    = args['thumbnailBeadfindArgs']
+            c.slots = args['slots']
+            c.beadfindargs       = args['beadfindArgs']
+            c.analysisargs       = args['analysisArgs']
+            c.prebasecallerargs  = args['prebasecallerArgs']
+            c.basecallerargs     = args['basecallerArgs']
+            c.thumbnailbeadfindargs       = args['thumbnailBeadfindArgs']
+            c.thumbnailanalysisargs       = args['thumbnailAnalysisArgs']
+            c.prethumbnailbasecallerargs  = args['prethumbnailBasecallerArgs']
+            c.thumbnailbasecallerargs     = args['thumbnailBasecallerArgs']
             c.save()
         except ObjectDoesNotExist:
             # (this case is only on TS initialization or when new chips added)
             c = models.Chip(name=name,
-                            slots=slots,
+                            slots=args['slots'],
                             description = description,
                             analysisargs    = args['analysisArgs'],
                             basecallerargs  = args['basecallerArgs'],
@@ -841,8 +844,7 @@ def add_prune_group(_item):
         
     
 if __name__=="__main__":
-    import sys
-    import traceback
+
     def check_bool(value):
         if value.lower() == 'true':
             return True

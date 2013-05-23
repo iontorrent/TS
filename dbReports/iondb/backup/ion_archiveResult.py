@@ -9,7 +9,7 @@ import traceback
 import iondb.bin.djangoinit
 from iondb.rundb import models
 from django import shortcuts
-from iondb.backup import makePDF
+from iondb.utils import makePDF
 from ion.utils import makeCSA
 from iondb.rundb.tasks import removeDirContents
 

@@ -48,6 +48,7 @@ TB.data.modal_combine_results.ready = function(method) {
         json.mark_duplicates = $("#mark_duplicates").is(":checked");
         json.selected_pks = selected;
 
+        $('#modal_combine_results #modal-error-messages').hide().empty();
         json = JSON.stringify(json);
         console.log('transmitting :', type, url, json);
         // data2 = JSON.stringfy(data);
@@ -70,12 +71,10 @@ TB.data.modal_combine_results.ready = function(method) {
                 });
                 analysis_live_ready_cb();
             }
-            $('#modal-error-messages').empty();
             $('#modal_combine_results').trigger('modal_combine_results_done', {});
             $('#modal_combine_results').modal("hide");
         }).fail(function(data) {
-            $('#modal-error-messages').empty();
-            $('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#modal_combine_results #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
             console.log("error:", data);
         });
     });

@@ -28,6 +28,42 @@
 <script type='text/javascript'>
 
 $(document).ready(function(){
+
+
+
+   //check to see if the TS report has errors
+   reportCompletionURL = "/rundb/api/v1/results/" + TB_result + "/?format=json";
+   // alert(reportCompletionURL);
+   $.ajax({
+     type: 'GET',
+     url: reportCompletionURL,
+     contentType: "application/json; charset=utf-8",
+       success : function(data) {
+                $.each(data, function(key, val) {
+                    if (key === "status"){
+		    	if(val !== "Completed"){
+			  var errorMessage = "Error(s) were found in the Torrent Suite Analysis Report, which may have affected the data to be uploaded to the Ion Reporter. One or more of the Samples associated with this report may not be uploaded / defined in the Ion Reporter if known errors were detected on the required files.";
+			  apprise(errorMessage, {'verify': true,'textYes':'Accept and Proceed with Upload', 'textNo':'Cancel Upload'}, function (r) {
+			    if (!r) {
+			      $('#formwrap').hide();
+			      $('#canceldiv').show();
+			    }
+			    else{
+			      $('#formwrap').show();
+			      $('#canceldiv').hide();
+			    }
+			  });
+			}
+                    }
+                });
+            },
+       async: false,
+       dataType: "json"
+   });
+
+
+
+
   $.ajax({
     url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "/?format=json",
     dataType:"json",
@@ -59,10 +95,10 @@ $(document).ready(function(){
               $("#postbutton").show();
         } else {
               $("#postbutton").hide();
-              $("#loading").html("Could Not Initialize: Incorrect Server Configuration");
+              $("#loading").html("Ion Reporter Uploader Not Configured Correctly - Please Go To  Settings -> Plugins and Configure the Plugin ");
         }
 
-	pluginURL = "/rundb/api/v1/ionreporter/version/?format=json";
+	pluginURL = "/rundb/api/v1/ionreporter/version/?plugin=IonReporterUploader&format=json";
         $.ajax({
            type: 'GET',
            url: pluginURL,
@@ -142,7 +178,7 @@ $(function() {
 	         url: pluginURL,
 	         contentType: "application/json; charset=utf-8",
 	         success : function(data) {
-	             apprise("Upload Job is submitted", {'verify':false}, function(r){
+	             apprise("Upload Job is submitted. It will take a while to upload the files. It will take longer if it is a proton run. When the uploads are finished, you will receive an email on your email id registered with the Ion Reporter. Please do not re-submit till it is done.", {'verify':false}, function(r){
 						parent.$.fn.colorbox.close();
 				});
 	         },
@@ -254,10 +290,27 @@ function move(from, to){
          </td>
       </tr>
 
+      <tr>
+        <td id = "launchopt" name ="launchopt"> Launch Options </br>  </td>
+        <td valign="top">
+              	<select id="launchoption" name="launchoption" align="center" >
+                	<option value="upload_only" selected="selected">Upload and Define Samples</option>
+	                <!--<option value="upload_and_launch">Upload and Launch Workflow</option>
+               </select>
+		<span id="loading">
+                  <!--<img id="ldimg" src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"> -->
+              </span>
+         </td>
+      </tr>
+
    </table>
 
    </form>
    <input id="postbutton" type="submit" value="Submit" align="right"></input>
+</div>
+
+<div id="canceldiv" style="display:none">
+  <h2>Upload has been cancelled</h2>
 </div>
 
 </body>

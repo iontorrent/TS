@@ -124,7 +124,7 @@ def aggregate_alignment(dir,bcFname):
 
     for bc in bc_dict:
         # Look for alignment summary file for this barcode
-        ASfilename = os.path.join(dir,"alignment_%s.summary" % bc['id_str'])
+        ASfilename = os.path.join(dir,"%s_rawlib.alignment.summary" % bc['id_str'])
         if os.path.isfile(ASfilename):
             columns, data = parse_alignment_file (ASfilename)
             if not columns or not data:

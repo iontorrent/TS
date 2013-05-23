@@ -1,11 +1,11 @@
 {% load pagetools %}
 <div id="modal_configure_plugins_plugin_install" title="" class="modal modal-750 hide">
 	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
 		<h3>Install or Upgrade Plugin</h3>
 	</div>
 	<div class="modal-body" id="modal_configure_plugins_plugin_install_body">
-		<div id="modal-error-messages"></div>
+		<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
 	    <ul class="nav nav-tabs inContentTabs" id="myTab">
 		    <li><a href="#tab-1" data-toggle="tab">Install via URL</a></li>
 		    <li><a href="#tab-2" data-toggle="tab">Install via Zip Upload</a></li>
@@ -217,7 +217,7 @@ $('#uploadfile').click(function (e) {
 uploader.bind('Init', function(up, params) {
 	console.log('uploader Init');
 	uploaderInit = true;
-	$('#upload-help').append("<p><b>Using <i>" + params.runtime + "</i> to upload. </b></p>");
+	$('#upload-help').append("");
 });
 
 uploader.bind('FilesAdded', function (up, files) {

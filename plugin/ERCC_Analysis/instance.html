@@ -10,7 +10,7 @@
                 background: #eef;
                 margin: 10px;
                 padding: 10px;
-                height: 190px;
+                height: 340px;
                 text-align: center;
         }
 
@@ -18,7 +18,7 @@
                 margin: 10px;
                 background: #eef;
                 padding: 10px;
-                height: 80px;
+                height: 120px;
                 overflow: auto;
         }
 
@@ -47,17 +47,23 @@
     
        $.each(pluginGET.config, function(key,val){
         if(key == "minrsquared"){
-         document.getElementById("minrsquared").value = val;
-         $("#default_rsquared").text("The current default minimum R-squared is "+val+".  To change this, go to the Config tab of the Torrent Suite.");
+          document.getElementById("minrsquared").value = val;
+          $("#default_rsquared").text("The current default minimum R-squared is "+val+".");
         } 
         if(key == "mincounts"){
-         document.getElementById("mincounts").value = val;
-         $("#default_mincounts").text("The current default minimum counts per transcript is "+val+".  To change this, go to the Config tab of the Torrent Suite.");
+          document.getElementById("mincounts").value = val;
+          $("#default_mincounts").text("The current default minimum counts per transcript is "+val+".");
         } 
         if(key == "ercc_pool"){
-         document.getElementById("erccpool").value = val;
-         $("#default_erccpool").text("The current default ERCC Pool is Pool"+val+".  To change this, go to the Config tab of the Torrent Suite.");
+          document.getElementById("erccpool").value = val;
+          $("#default_erccpool").text("The current default ERCC Pool is Pool"+val+".");
         }
+        if(key == "barcode"){
+          document.getElementById("barcode").value = val;
+		  if (val){
+            $("#default_barcode").text("The current default Barcode is "+val+".");
+		  }
+		}
 		});
       }
      });
@@ -117,6 +123,11 @@
 				ERCC Pool used (1 or 2):
 				<input type="text" id="erccpool" name="erccpool" value="1" />
 				<p id="default_erccpool"></p>
+				Barcode of interest:
+				<input type="text" id="barcode" name="barcode" value="" />
+				<p id="default_barcode"></p>
+				<p>Enter the barcode EXACTLY as it appears at the top of this report, under "Barcode name" (you may want to copy and paste).  Enter one barcode only, to see multiple barcodes you will need to run plugin more than once. Leave blank if not using barcodes.</p>
+				<p>To change the default values, go to the Config tab of the Torrent Suite.</p>
             </form>
             <input id="postbutton" type="submit" value="Submit">    
         </div>

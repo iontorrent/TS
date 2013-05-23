@@ -48,7 +48,7 @@ function bindActions(source) {
     $(source + ' .review-plan').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
-
+        $('#error-messages').hide().empty();
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
@@ -67,7 +67,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 
@@ -82,6 +82,7 @@ function bindActions(source) {
     $(source + ' .plan-run').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
@@ -103,7 +104,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 
@@ -118,6 +119,7 @@ function bindActions(source) {
     $(source + " .edit-plan").click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
@@ -140,7 +142,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -153,6 +155,7 @@ function bindActions(source) {
     $(source + " .copy-plan").click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
@@ -172,7 +175,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -186,6 +189,8 @@ function bindActions(source) {
 
     $(source + " .delete-plan").click(function(e) {
         e.preventDefault();
+        $('#error-messages').hide().empty();
+        
         url = $(this).attr('href');
         $('body #modal_confirm_delete').remove();
         $.get(url, function(data) {
@@ -196,21 +201,26 @@ function bindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-        }).always(function(data) {/*console.log("complete:", data);*/
         });
     });
 
     $(source + ' .batch-plan').click(function(e) {
         e.preventDefault();
+        $('#error-messages').hide().empty();
+
         url = $(this).attr('href');
         $('body #modal_batch_planning').remove();
         $.get(url, function(data) {
             $('body').append(data);
             $('#modal_batch_planning').modal("show");
             return false;
+        }).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            console.log("error:", data);
         });
     });
 }
@@ -261,6 +271,7 @@ $(document).ready(function() {
     $('.add-new-plan').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
@@ -283,7 +294,7 @@ $(document).ready(function() {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 
@@ -299,6 +310,7 @@ $(document).ready(function() {
         $('body').css("cursor", "wait");
 
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
@@ -320,7 +332,7 @@ $(document).ready(function() {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -333,12 +345,17 @@ $(document).ready(function() {
 
     $('.upload-plan').click(function(e) {
         e.preventDefault();
+        $('#error-messages').hide().empty();
         url = $(this).attr('href');
         $('body #modal_batch_planning_upload').remove();
         $.get(url, function(data) {
             $('body').append(data);
             $('#modal_batch_planning_upload').modal("show");
             return false;
+        }).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            console.log("error:", data);
         });
     });
 });

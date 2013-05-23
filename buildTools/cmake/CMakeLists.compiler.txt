@@ -6,37 +6,103 @@ IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
 ENDIF()
 
 # Compiler flags
-# -D_DEBUG enables memory debugging, but it isn't working
-#set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC -Wno-write-strings -Wno-unused-parameter -Wpointer-arith -Wstrict-aliasing=2 -msse3 -march=native")
-set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Wno-write-strings -Wno-unused-parameter -msse3 -fPIC")
-if (CMAKE_COMPILER_IS_GNUCC)
-    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
-                    OUTPUT_VARIABLE GCC_VERSION)
-    if (GCC_VERSION VERSION_GREATER 4.3 OR GCC_VERSION VERSION_EQUAL 4.3)
-        #message(STATUS "Version >= 4.3")
-        # This breaks a few files in current build tree under CMAKE_BUILD_TYPE_RELEASE. Need to test more.
-        #set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wstrict-overflow")
-    endif()
-
+# -Wpointer-arith -Wstrict-aliasing=2 -march=native
+# http://gcc.gnu.org/onlinedocs/gcc-4.7.0/gcc/i386-and-x86_002d64-Options.html#i386-and-x86_002d64-Options
+# GCC depresses SSEx instructions when -mavx is used. Instead, it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed. 
+if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric" OR ${LSB_RELEASE_CODENAME} STREQUAL "precise")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -mavx -fPIC")
+else()
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -msse3 -fPIC")
 endif()
 
-set(ION_COMMON_FLAGS_DEBUG "${ION_COMMON_FLAGS} -O0 -g -DION_DEBUG")
-set(ION_COMMON_FLAGS_RELEASE "${ION_COMMON_FLAGS} -O6 -g -fopenmp")
-set(ION_COMMON_FLAGS_PROFILE "${ION_COMMON_FLAGS} -O6 -g -lunwind -lprofiler")
-set(CMAKE_SHARED_LINKER_FLAGS "-Wall ")
+message(STATUS "C compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
+message(STATUS "CXX compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 
-# NB: -Werror is added below to avoid breaking build until C warnings are fixed.
-# It should be moved up to ION_COMMON_FLAGS once these have been resolved.
 
 # Add any C specific flags here
-set(CMAKE_C_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG}")
-set(CMAKE_C_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE}")
-set(CMAKE_C_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE}")
+set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-unused-result")
+
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    set(ION_C_FLAGS "${ION_C_FLAGS}") # -ansi -pedantic
+    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_C_VERSION)
+    #if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 4.6 and ..)# needs new cmake ~2.8.10
+    if (GCC_C_VERSION VERSION_GREATER 4.6 OR GCC_C_VERSION VERSION_EQUAL 4.6)
+        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
+    else()
+        set(ION_C_FLAGS "${ION_C_FLAGS}")
+    endif()
+endif()
+
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+    # undefined reference to inline function`tmap_reverse_compliment', http://clang.llvm.org/compatibility.html#inline
+    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu89")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-gnu")
+endif()
+
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -wd10006") # 10006: ignoring unknown option '-Wno-unused-result'
+endif()
+
 
 # Add any C++ specific flags here
-set(CMAKE_CXX_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG} -Werror")
-set(CMAKE_CXX_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE} -Werror")
-set(CMAKE_CXX_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE} -Werror")
+set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-parameter -Wno-write-strings")
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    # GNU specific flags
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS}") # -ansi -pedantic
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_CXX_VERSION)
+    #if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 4.6 and ..)# needs new cmake ~2.8.10
+    if (GCC_CXX_VERSION VERSION_GREATER 4.6 OR GCC_CXX_VERSION VERSION_EQUAL 4.6)
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
+#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=attributes")
+#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
+#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
+#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=delete-non-virtual-dtor")
+    else()
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS}")
+    endif()
+endif()
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-gnu")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-private-field")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-value")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-mismatched-tags")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-overloaded-virtual")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-char-subscripts")
+
+    #TODO, remove asap
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-format")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-sizeof-pointer-memaccess")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-delete-non-virtual-dtor")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-return-type")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-non-literal-null-conversion")
+endif()
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -axavx") # causes gcc error: unrecognized option ‘-axavx’. CMake Error at CMakeFiles/cuda_compile_generated_StreamManager.cu.o.cmake
+#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++0x") # causes boost? error: more than one instance of overloaded function "isnan" matches the argument list:
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd10006") # 10006: ignoring unknown option '-Wno-unused-result'
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd171")  # 171: invalid type conversion: "__m128" to "v8hi"
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd192")  # 192: unrecognized character escape sequence
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd2089") #2089: definition of base class type not completed yet
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd1011") #1011: missing return statement at end of non-void function
+endif()
+
+
+set(ION_COMMON_FLAGS_DEBUG "${ION_COMMON_FLAGS} -O0 -g -DION_DEBUG")
+set(ION_COMMON_FLAGS_RELEASE "${ION_COMMON_FLAGS} -O3 -g")
+set(ION_COMMON_FLAGS_PROFILE "${ION_COMMON_FLAGS} -O3 -g -lunwind -lprofiler")
+set(CMAKE_SHARED_LINKER_FLAGS "-Wall ")
+
+set(CMAKE_C_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG} ${ION_C_FLAGS}")
+set(CMAKE_C_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE} ${ION_C_FLAGS}")
+set(CMAKE_C_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE} ${ION_C_FLAGS}")
+
+set(CMAKE_CXX_FLAGS_DEBUG "${ION_COMMON_FLAGS_DEBUG} ${ION_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "${ION_COMMON_FLAGS_RELEASE} ${ION_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_PROFILE "${ION_COMMON_FLAGS_PROFILE} ${ION_CXX_FLAGS}")
 
 #message("DEBUG CXXFLAGS ${CMAKE_CXX_FLAGS_DEBUG}")
 #message("RELEASE CXXFLAGS ${CMAKE_CXX_FLAGS_RELEASE}")

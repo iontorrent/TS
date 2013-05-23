@@ -19,6 +19,7 @@
                 "build-essential",
                 "imagemagick",
                 "emacs23",
+                "vcftools",
                 "vim",
                 "nano",
                 "curl",
@@ -49,6 +50,7 @@
                 "python-calabash",
                 "python-jsonpipe",
                 "python-rpy2",
+                "python-django",
                 "perl",
                 "perl-doc",
                 "emboss-data",
@@ -59,7 +61,8 @@
                 "gnuplot-x11",
                 "putty-tools",
                 "gawk",
-                "tmpreaper"
+                "tmpreaper",
+                "timelimit"
             ],
             "master": [
                 "gridengine-master",
@@ -87,7 +90,6 @@
                 "ion-analysis",
                 "ion-alignment",
                 "ion-pipeline",
-                "tmap",
                 "samtools",
                 "ion-rsmts",
                 "ion-samita",

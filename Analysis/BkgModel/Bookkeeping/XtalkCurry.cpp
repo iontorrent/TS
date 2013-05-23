@@ -16,7 +16,7 @@ XtalkCurry::XtalkCurry()
   my_generic_xtalk = NULL;
   use_vectorization = true;
   fast_compute = true; // seems to be slightly better
-
+  neiIdxMap = NULL;
 }
 
 XtalkCurry::~XtalkCurry()
@@ -24,6 +24,9 @@ XtalkCurry::~XtalkCurry()
   if (my_generic_xtalk!=NULL)
     delete[] my_generic_xtalk;
   my_generic_xtalk = NULL;
+  if (neiIdxMap != NULL)
+    delete[] neiIdxMap;
+  neiIdxMap = NULL;
 }
 
 // pointers to the items needed to compute:
@@ -51,6 +54,13 @@ void XtalkCurry::CloseOverPointers ( Region *_region, CrossTalkSpecification *_x
   my_generic_xtalk = new float [my_scratch_p->bead_flow_t];
   // zero me out if not needed
   memset(my_generic_xtalk, 0, sizeof(float[my_scratch_p->bead_flow_t]));
+
+  // neighbour index map for all the beads in the region
+  if (xtalk_spec_p) {
+    neiIdxMap = new int[xtalk_spec_p->nei_affected*my_beads_p->numLBeads];
+    GenerateNeighborIndexMapForAllBeads();
+  }
+  
 }
 
 // refactor to simplify
@@ -173,10 +183,47 @@ void XtalkCurry::ExecuteXtalkFlux ( int ibd,float *my_xtflux )
   int cx, cy;
   cx = my_beads_p->params_nn[ibd].x;
   cy = my_beads_p->params_nn[ibd].y;
-  if ( fast_compute )
+  if ( fast_compute ) {
     ExcessXtalkFlux ( cx,cy,my_xtflux, NULL );
-  else
+  }
+  else {
     NewXtalkFlux ( cx,cy,my_xtflux );
+  }
       // reduce by generic value of cross talk already present in empty well trace
   DiminishVector(my_xtflux, my_generic_xtalk, my_scratch_p->bead_flow_t);
+}
+
+// Mainly needed to get better access to what are neighbours 
+// for each bead on GPU.Can be used for CPU too. Just one time exercise when
+// constructing instance of this class
+void XtalkCurry::GenerateNeighborIndexMapForAllBeads()
+{
+  int* idxMap = neiIdxMap; // temporary to walk through the array
+  int nei_x, nei_y, nn_ndx;
+  for (int nei=0; nei<xtalk_spec_p->nei_affected; ++nei) {
+    for (int ibd=0; ibd<my_beads_p->numLBeads; ++ibd) {
+      xtalk_spec_p->NeighborByChipType(nei_x, 
+                                       nei_y,
+                                       my_beads_p->params_nn[ibd].x,
+                                       my_beads_p->params_nn[ibd].y,
+                                       nei,
+                                       region->col,
+                                       region->row);
+
+      if ((nei_x > -1) && (nei_x < region->w) && (nei_y > -1) && (nei_y < region->h)) // neighbor within region
+      {
+        if ( (nn_ndx=my_beads_p->ndx_map[nei_y*region->w + nei_x]) !=-1) // bead present
+        {
+          idxMap[ibd] = nn_ndx;
+        }
+        else {
+          idxMap[ibd] = -1;
+        } 
+      }
+      else {
+          idxMap[ibd] = -1;
+      }  
+    }
+    idxMap += my_beads_p->numLBeads;
+  } 
 }

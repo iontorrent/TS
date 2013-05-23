@@ -15,10 +15,12 @@
 #include "Utils.h"
 #include "IonErr.h"
 
+#include "hdf5.h"
+
 using namespace std;
 
 
-PerBaseQual::PerBaseQual()
+PerBaseQual::PerBaseQual() : phred_table_(0)
 {
   phred_thresholds_.resize(kNumPredictors);
   phred_thresholds_max_.resize(kNumPredictors);
@@ -28,6 +30,12 @@ PerBaseQual::PerBaseQual()
 
 PerBaseQual::~PerBaseQual()
 {
+  if(phred_table_)
+  {
+	  delete [] phred_table_;
+	  phred_table_ = 0;
+  }
+
   if (save_predictors_)
     predictor_dump_.close();
   pthread_mutex_destroy(&predictor_mutex_);
@@ -45,77 +53,298 @@ void PerBaseQual::PrintHelp()
 
 void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &output_directory, bool recalib)
 {
+	if(phred_table_)
+	{
+	  delete [] phred_table_;
+	  phred_table_ = 0;
+	}
+
   string phred_table_file       = opts.GetFirstString ('-', "phred-table-file", "");
   save_predictors_              = opts.GetFirstBoolean('-', "save-predictors", false);
 
   // Determine the correct phred table filename to use
 
-  if (phred_table_file.empty()) {
+  bool binTable = true;
 
+  if (phred_table_file.empty()) {
     ChipIdDecoder::SetGlobalChipId(chip_type.c_str());
     ChipIdEnum chip_id = ChipIdDecoder::GetGlobalChipId();
     switch(chip_id){
     case ChipId314:
-      phred_table_file = "phredTable.txt_314";
+      phred_table_file = "phredTable.txt_314.binary";
       break;
     case ChipId316:
-      phred_table_file = "phredTable.txt_316";
+      phred_table_file = "phredTable.txt_316.binary";
       break;
+    case ChipId316v2:
+      phred_table_file = "phredTable.txt_318.binary";
+      break; 
     case ChipId318:
-      phred_table_file = "phredTable.txt_318";
+      phred_table_file = "phredTable.txt_318.binary";
       break;
     case ChipId900: // Proton chip
-      phred_table_file = "phredTable.txt_900";
+      phred_table_file = "phredTable.txt_900.binary";
       break;
     default:
-      phred_table_file = "phredTable.txt_314";
+      phred_table_file = "phredTable.txt_314.binary";
       fprintf(stderr, "PerBaseQual: No default phred table for chip_type=%s, trying %s instead\n",
           chip_type.c_str(), phred_table_file.c_str());
       break;
     }
 
     if (recalib)
-        phred_table_file + ".Recal";
-    cout << endl << "PerBaseQual::Init... phred_table_file=" << phred_table_file << endl;
+	{
+		phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 7);
+        phred_table_file += ".Recal.binary";
+	}
 
     char* full_filename = GetIonConfigFile(phred_table_file.c_str());
     if(!full_filename)
-      ION_ABORT("ERROR: Can't find phred table file " + phred_table_file);
-    phred_table_file = full_filename;
-    free(full_filename);
+	{
+		printf("WARNING: cannot find binary phred table file %s, try to use non-binary phred table\n", phred_table_file.c_str());
+		phred_table_file = phred_table_file.substr(0, phred_table_file.length() - 7); // get rid of .binary
+		binTable = false;
+		char* full_filename2 = GetIonConfigFile(phred_table_file.c_str());
+		if(!full_filename2)
+			ION_ABORT("ERROR: Can't find phred table file " + phred_table_file);
+
+		phred_table_file = full_filename2;
+		free(full_filename2);
+	}
+	else
+	{
+		phred_table_file = full_filename;
+		free(full_filename);
+	}
   }
+
+  cout << endl << "PerBaseQual::Init... phred_table_file=" << phred_table_file << endl;
+  binTable = hasBinaryExtension(phred_table_file);
 
   // Load the phred table
+  if(binTable)
+  {
+      cout << endl << "PerBaseQual::Init... load binary phred_table_file=" << phred_table_file << endl;
+	  vector<size_t> vNumCuts(kNumPredictors, 0);
 
-  ifstream source;
-  source.open(phred_table_file.c_str());
-  if (!source.is_open())
-    ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
+	  if(H5Fis_hdf5(phred_table_file.c_str()) > 0) 
+	  {
+			hid_t root = H5Fopen(phred_table_file.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+			if(root < 0)
+			{
+				ION_ABORT("ERROR: cannot open HDF5 file " + phred_table_file);
+			}
 
-  while (!source.eof()) {
-    string line;
-    getline(source, line);
+		    hid_t grpQvTable = H5Gopen(root, "/QvTable", H5P_DEFAULT);
+			if (grpQvTable < 0) 
+			{
+				H5Fclose(root);
+				ION_ABORT("ERROR: fail to open HDF5 group QvTable");
+			}
 
-    if (line.empty())
-      break;
+			if(H5Aexists(grpQvTable, "NumPredictors") <= 0)
+			{
+				H5Gclose(grpQvTable);
+				H5Fclose(root);
+				ION_ABORT("ERROR: HDF5 attribute NumPredictors does not exist");
+			}
 
-    if (line[0] == '#')
-      continue;
+			hid_t attrNumPreds = H5Aopen(grpQvTable, "NumPredictors", H5P_DEFAULT);
+			if (attrNumPreds < 0) 
+			{
+				H5Gclose(grpQvTable);
+				H5Fclose(root);
+				ION_ABORT("ERROR: fail to open HDF5 attribute NumPredictors");
+			}
 
-    stringstream strs(line);
-    float temp;
-    for (int k = 0; k < kNumPredictors; ++k) {
-      strs >> temp;
-      phred_thresholds_[k].push_back(temp);
-    }
-    strs >> temp; //skip n-th entry
-    strs >> temp;
-    phred_quality_.push_back(temp);
+			unsigned int numPredictors = 0;
+			herr_t ret = H5Aread(attrNumPreds, H5T_NATIVE_UINT, &numPredictors);
+			H5Aclose(attrNumPreds);
+			if(ret < 0 || numPredictors != (unsigned int)kNumPredictors)
+			{
+				H5Gclose(grpQvTable);
+				H5Fclose(root);
+				ION_ABORT("ERROR: HDF5 attribute NumPredictors is wrong");
+			}
+
+			char buf[100];
+			for(size_t i = 0; i < (size_t)kNumPredictors; ++i)
+			{
+				offsets_.push_back(1);
+
+				sprintf(buf, "ThresholdsOfPredictor%d", (int)i);
+
+				if(H5Aexists(grpQvTable, buf) <= 0)
+				{
+					H5Gclose(grpQvTable);
+					H5Fclose(root);
+					ION_ABORT("ERROR: HDF5 attribute ThresholdsOfPredictor does not exist");
+				}
+
+				hid_t attrCuts = H5Aopen(grpQvTable, buf, H5P_DEFAULT);
+				if (attrCuts < 0) 
+				{
+					H5Gclose(grpQvTable);
+					H5Fclose(root);
+					ION_ABORT("ERROR: fail to open HDF5 attribute ThresholdsOfPredictor");
+				}
+
+				hsize_t size = H5Aget_storage_size(attrCuts);
+				size /= sizeof(float);
+
+				float* fcuts = new float[size];
+
+				ret = H5Aread(attrCuts, H5T_NATIVE_FLOAT, fcuts);
+				H5Aclose(attrCuts);
+				if(ret < 0)
+				{
+					H5Gclose(grpQvTable);
+					H5Fclose(root);
+					ION_ABORT("ERROR: fail to read HDF5 attribute ThresholdsOfPredictor");
+				}
+
+				vector<float> vCuts(size);
+				copy(fcuts, fcuts + size, vCuts.begin());
+
+				phred_cuts_.push_back(vCuts);
+
+				delete [] fcuts;
+				fcuts = 0;
+			}
+
+			hid_t dsQvs = H5Dopen(grpQvTable, "Qvs", H5P_DEFAULT);
+			if (dsQvs < 0) 
+			{
+				H5Gclose(grpQvTable);
+				H5Fclose(root);
+				ION_ABORT("ERROR: fail to open HDF5 dataset Qvs");
+			}
+
+			hsize_t tbSize = H5Dget_storage_size(dsQvs);
+
+			phred_table_ = new unsigned char[tbSize];
+
+			ret = H5Dread(dsQvs, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, phred_table_);
+			H5Dclose(dsQvs);
+			H5Gclose(grpQvTable);
+			H5Fclose(root);		
+			if (ret < 0)
+			{
+				delete [] phred_table_;
+				phred_table_ = 0;
+
+				ION_ABORT("ERROR: fail to read HDF5 dataset Qvs");
+			}
+	  }
+	  else
+	  {
+		printf("WARNING: binary phred table file %s is not a HDF5 file, try binary file mode.\n", phred_table_file.c_str());
+		ifstream source;
+		source.open(phred_table_file.c_str(), ios::in|ios::binary|ios::ate);
+		if (!source.is_open())
+			ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
+
+		long totalSize = source.tellg();
+		char* tbBlock = new char [totalSize];
+
+		source.seekg (0, ios::beg);
+		source.read (tbBlock, totalSize);
+		source.close();
+
+		long headerSize = 0;
+		char* ptr = tbBlock;
+		int numPredictors = ptr[0]; //kNumPredictors
+		if(numPredictors != kNumPredictors)
+		{
+			delete [] tbBlock;
+			tbBlock = 0;
+			ION_ABORT("ERROR: Wrong number of predictors load from " + phred_table_file);
+		}
+
+		ptr += 4;
+		headerSize += 4;
+		
+		for(int i = 0; i < kNumPredictors; ++i)
+		{
+			vNumCuts[i] = ptr[0];
+			ptr += 4;
+			headerSize += 4;
+
+			offsets_.push_back(1);
+		}
+
+		long tbSize = 1;
+		for(int i = 0; i < kNumPredictors; ++i)
+		{
+			vector<float> vCuts;
+			tbSize *= vNumCuts[i];
+			for(size_t j = 0; j < vNumCuts[i]; ++j)
+			{
+				float tmp;
+				memcpy(&tmp, ptr, 4);
+				vCuts.push_back(tmp); 
+				ptr += 4;
+				headerSize += 4;
+			}
+			
+			phred_cuts_.push_back(vCuts);
+		}
+
+		if(tbSize != (totalSize - headerSize))
+		{
+			delete [] tbBlock;
+			tbBlock = 0;
+			ION_ABORT("ERROR: Wrong QV table size");
+		}	
+
+		phred_table_ = new unsigned char[tbSize];
+		memcpy(phred_table_, ptr, tbSize * sizeof(unsigned char));
+
+		delete [] tbBlock;
+		tbBlock = 0;
+	  }
+
+	  for(size_t i = kNumPredictors - 2; i > 0; --i)
+	  {
+		offsets_[i] *= phred_cuts_[i + 1].size();
+		offsets_[i - 1] = offsets_[i];
+	  }
+	  offsets_[0] *= phred_cuts_[1].size();
   }
+  else
+  {
+	  ifstream source;
+	  source.open(phred_table_file.c_str());
+	  if (!source.is_open())
+		ION_ABORT("ERROR: Cannot open file: " + phred_table_file);
 
-  for (int k = 0; k < kNumPredictors; ++k)
-    phred_thresholds_max_[k] = *max_element(phred_thresholds_[k].begin(), phred_thresholds_[k].end());
+	  while (!source.eof()) {
+		string line;
+		getline(source, line);
 
+		if (line.empty())
+		  break;
+
+		if (line[0] == '#')
+		  continue;
+
+		stringstream strs(line);
+		float temp;
+		for (int k = 0; k < kNumPredictors; ++k) {
+		  strs >> temp;
+		  phred_thresholds_[k].push_back(temp);
+		}
+		strs >> temp; //skip n-th entry
+		strs >> temp;
+		phred_quality_.push_back(temp);
+	  }
+
+	  source.close();
+
+	  for (int k = 0; k < kNumPredictors; ++k)
+		phred_thresholds_max_[k] = *max_element(phred_thresholds_[k].begin(), phred_thresholds_[k].end()); 
+  }
+ 
   // Prepare for predictor dump here
 
   if (save_predictors_) {
@@ -127,33 +356,90 @@ void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &out
   }
 }
 
+inline size_t GetIndex(const float predVal, const vector<float>& thresholds)
+{
+	if(predVal >= thresholds.back())
+	{
+		return (thresholds.size() - 1);
+	}
+
+	size_t l = 0;
+	size_t r = thresholds.size() - 1;
+	size_t m = l;
+	while(r > l)
+	{
+		m = (r + l) >> 1;
+		if(m == l)
+		{
+			if(predVal <= thresholds[l])
+			{
+				return l;
+			}
+			else
+			{
+				return r;
+			}
+		}
+
+		if(predVal == thresholds[m])
+		{
+			return m;
+		}
+		else if(predVal > thresholds[m])
+		{
+			l = m;
+		}
+		else
+		{
+			r = m;
+		}
+	}
+
+	return r;
+}
 
 uint8_t PerBaseQual::CalculatePerBaseScore(float* pred) const
 {
-  int num_phred_cuts = phred_quality_.size(); // number of rows/lines in the table
+	if(phred_table_)
+	{
+		size_t index = 0;
+		vector<size_t> vind;
+		for(int i = 0; i < kNumPredictors; ++i)
+		{
+			size_t indi = GetIndex(pred[i], phred_cuts_[i]);
+			vind.push_back(indi);
+			index += (indi * offsets_[i]);
+		}
 
-  for (int k = 0; k < kNumPredictors; k++)
-    pred[k] = min(pred[k], phred_thresholds_max_[k]);
+		return phred_table_[index];
+	}
+	else
+	{
+		int num_phred_cuts = phred_quality_.size(); // number of rows/lines in the table
 
-  for ( int j = 0; j < num_phred_cuts; ++j ) {
-    bool valid_cut = true;
+		for (int k = 0; k < kNumPredictors; k++)
+			pred[k] = min(pred[k], phred_thresholds_max_[k]);
 
-    for ( int k = 0; k < kNumPredictors; ++k ) {
-      if (pred[k] > phred_thresholds_[k][j]) {
-        valid_cut = false;
-        break;
-      }
-    }
+		for ( int j = 0; j < num_phred_cuts; ++j )
+		{
+			bool valid_cut = true;
 
-    if (valid_cut)
-      return phred_quality_[j];
-  }
+			for ( int k = 0; k < kNumPredictors; ++k )
+			{
+			  if (pred[k] > phred_thresholds_[k][j]) 
+			  {
+				valid_cut = false;
+				break;
+			  }
+			}
 
-  return kMinQuality; //minimal quality score
+			if (valid_cut)
+				return phred_quality_[j];
+		}
+
+		return kMinQuality; //minimal quality score
+	}
 }
-
-
-
 
 // Predictor 2 - Local noise/flowalign - Maximum residual within +-1 BASE
 
@@ -531,3 +817,14 @@ float PerBaseQual::transform_P9(float p)
 }
 
 
+bool PerBaseQual::hasBinaryExtension(string &filename)
+{
+    string extension = ".binary";
+    size_t len1 = filename.length();
+    size_t len2 = extension.length();
+    bool has = false;
+    if (len1>=len2) {
+        has = (filename.substr(len1-len2).compare(extension) == 0) ? true : false;
+    }
+    return has;
+}

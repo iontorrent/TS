@@ -21,6 +21,9 @@ BeadTracker::BeadTracker()
   max_emphasis = 0;
   regionindex = -1;
   isSampled = false;
+  ntarget = 0;
+  ignoreQuality = false;
+  doAllBeads = false;
 }
 
 void BeadTracker::InitHighBeadParams()
@@ -77,12 +80,25 @@ void BeadTracker::InitBeadParams(float AmplLowerLimit)
   InitModelBeadParams();
 }
 
-void BeadTracker::InitBeadList (Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit)
+void BeadTracker::IgnoreQuality ()
+{ 
+  ignoreQuality = true;
+  if (ignoreQuality)
+    for (size_t i=0; i<high_quality.size(); i++)
+      high_quality[i] = true;
+}
+
+
+void BeadTracker::InitBeadList (Mask *bfMask, Region *region, bool nokey, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit)
 {
-  MaskType ProcessMask=MaskLive;
+  MaskType processMask = MaskLive;
+  if (nokey) {         // actually, we don't yet ignore the keys...
+    doAllBeads = true;
+    processMask = MaskAll; // see also ForceAll()
+  }
 
   // Number of beads to process
-  numLBeads =  bfMask->GetCount (ProcessMask,*region);
+  numLBeads =  bfMask->GetCount (processMask,*region);
   regionindex = region->index;
 
   InitBeadParams(AmplLowerLimit);
@@ -91,7 +107,7 @@ void BeadTracker::InitBeadList (Mask *bfMask, Region *region, SequenceItem *_seq
   sampled.resize(numLBeads, true);
 
   // makes spatially organized data if needed
-  BuildBeadMap (region,bfMask,ProcessMask);
+  BuildBeadMap (region,bfMask,processMask);
   // must be done after generating spatial data
   InitRandomSample (*bfMask, *region, sample);
 
@@ -230,6 +246,7 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
 // in particular, we need to handle 0,1,2 mers for possible signal types
 // when using arbitrary keys
 // we use this to set a good scale/copy number for the beads
+
 float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only)
 {
 
@@ -269,12 +286,19 @@ float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key)
       }
   }
   // cout << "Number of good beads:" << goodBeadCount  <<"\n";
-  meanCopyCount /= goodBeadCount;
+  if (goodBeadCount > 0)
+    meanCopyCount /= goodBeadCount;
+  else
+    meanCopyCount = 2.0f; // does this matter?
+
   return (meanCopyCount);
 }
 
 void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold)
 {
+  if (ignoreQuality)
+    return;
+
   int filter_total = 0;
   // only use the top snr beads for region-wide parameter fitting
   for (int ibd=0;ibd < numLBeads;ibd++)
@@ -290,9 +314,11 @@ void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold)
 //  printf("Region %d fit exclude %d beads of %d for poor ssq ratio less than %f\n", regionindex, filter_total, numLBeads, snr_threshold);
 }
 
-//@TODO: these are actually part of beadtracker, move them
 void BeadTracker::LowCopyBeadsAreLowQuality (float mean_copy_count)
 {
+  if (ignoreQuality)
+    return;
+
   int cp_filter = 0;
   // only use the top amplitude signal beads for region-wide parameter fitting
   for (int ibd=0;ibd < numLBeads;ibd++)
@@ -308,6 +334,9 @@ void BeadTracker::LowCopyBeadsAreLowQuality (float mean_copy_count)
 
 void BeadTracker::CorruptedBeadsAreLowQuality ()
 {
+  if (ignoreQuality)
+    return;
+
   for (int ibd=0; ibd<numLBeads; ibd++)
   {
     if (params_nn[ibd].my_state->corrupt or params_nn[ibd].my_state->pinned)
@@ -536,16 +565,15 @@ void BeadTracker::RescaleDmult (float scale)
 
 float BeadTracker::CenterDmult (bool skip_beads)
 {
-  // return ( CenterDmultFromSample (skip_beads) );
   float mean_dmult = FindMeanDmult (skip_beads);
   RescaleDmult (mean_dmult);
   return (mean_dmult);
 }
 
 
-float BeadTracker::CenterDmultFromSample (bool skip_beads)
+float BeadTracker::CenterDmultFromSample ()
 {
-  float mean_dmult = FindMeanDmultFromSample (skip_beads);
+  float mean_dmult = FindMeanDmultFromSample ();
   RescaleDmult (mean_dmult);
   return (mean_dmult);
 }
@@ -558,26 +586,27 @@ void BeadTracker::RescaleRatio (float scale)
   }
 }
 
-float BeadTracker::FindMeanDmultFromSample (bool skip_beads)
+float BeadTracker::FindMeanDmultFromSample ()
 {
   float mean_dmult = 0.0f;
-  float num_checked = 0.0001f;
+  int num_checked = 0;
   for (int ibd=0; ibd < numLBeads; ibd++)
   {
     // if this iteration is a region-wide parameter fit, then only process beads
-    // in the selection sub-group
-    if( !Sampled (ibd) )
-      continue;
-
-    if ( BeadIncluded(ibd, skip_beads) ) {
-	mean_dmult += params_nn[ibd].dmult;
-	num_checked += 1.0f;
-      }
+    // in the sampled sub-group
+    assert ( isSampled );
+    if ( Sampled (ibd) ) {
+      mean_dmult += params_nn[ibd].dmult;
+      num_checked += 1;
+    }
   }
-  mean_dmult /= num_checked;
+  if (num_checked > 0)
+    mean_dmult /= num_checked;
+  else
+    mean_dmult = 2.0f; // does this matter?
+
   return (mean_dmult);
 }
-
 
 void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask, int16_t *washout_state, int flow)
 {
@@ -684,38 +713,95 @@ void BeadTracker::InitRandomSample (Mask& bf, Region& region, const std::set<int
   }
 }
 
-void BeadTracker::SystematicSampling()
+int BeadTracker::SystematicSampling(int sampling_rate, std::vector<size_t>::iterator first, std::vector<size_t>::iterator last)
 {
-  // Systematic Sampling scheme
-  int num_region_groups = (numLBeads / NUMBEADSPERGROUP) + 1;
+  // Systematic Sampling scheme using bead order in BeadTracker
+  if (first >= last)
+    return 0;
 
-  for (int ibd=0; ibd < numLBeads; ibd++)
+  assert(sampling_rate >= 1);
+  int nsample = 0;
+  for (std::vector<size_t>::iterator ibd=first; ibd < last; ibd++)
   {
+    if ((*ibd % sampling_rate) == 0) {
+      sampled.at(*ibd) = true;
+      nsample++;
+    }
+  }
+  return nsample;
+}
+
+int BeadTracker::SetSampled()
+{
+  int sampling_rate = (numLBeads / NUMBEADSPERGROUP) + 1;
+
+  std::vector<size_t> ix(numLBeads, 0);
+  for (size_t ibd=0; ibd < (size_t)numLBeads; ibd++) {
+    sampled[ibd] = false;
+    ix[ibd] = ibd;
+  }
+  int nsample = SystematicSampling(sampling_rate, ix.begin(), ix.end());
+  isSampled = true;
+  return nsample;
+}
+
+/* choose a sample set of beads using penalty
+ * order the live beads by penalty up to infinite penalty
+ * choose every n-th bead starting from the 1st where n = sampling_rate
+ * attempt to systematically choose beads to reach ntarget if not enough
+ * beads to total ntarget reached using the sort
+ * return the number of beads in the sample
+ */
+int BeadTracker::SetSampled(std::vector<float>& penalty, int sampling_rate)
+{
+  std::vector<size_t> ix;
+  ionStats::sort_order(penalty.begin(), penalty.end(), ix);
+  //ix.resize(numLBeads);
+  //for (size_t i=0; i<(size_t)numLBeads; i++)
+  //  ix[i] = i;
+
+  int nsample = 0;  // total sample found
+ 
+  for (int ibd=0; ibd < numLBeads; ibd++)
     sampled[ibd] = false;
 
-    if ((ibd % num_region_groups) == 0) {
-      sampled[ibd] = true;
+  std::vector<size_t>::iterator itx = ix.begin();
+  for (; itx != ix.end(); itx++)
+  {
+    if ( isinf (penalty[ *itx ]) )
+      break;
+
+    if ((*itx % sampling_rate) == 0) {
+
+      if (nsample == ntarget)
+	break;
+
+      sampled[ *itx ] = true;
+      nsample++;
     }
   }
-}
-
-void BeadTracker::SetSampled(){
-  SystematicSampling();
-  isSampled = true;
-}
-
-void BeadTracker::UpdateSampled( bool *well_completed){
-  for (int ibd=0; ibd < numLBeads; ibd++) {
-    if ( (high_quality[ibd] == false) || well_completed[ibd] ) {
-      sampled[ibd] = false;
-    }
+  int nsample1 = nsample;
+  int residual_sampling_rate = 0;
+  if (nsample<ntarget && itx<ix.end() ){
+    residual_sampling_rate = std::max(1.0, ((double)(ix.end() - itx))/(ntarget-nsample));
+    nsample += SystematicSampling( residual_sampling_rate, itx, ix.end() );
   }
+  if (false)
+    fprintf(stdout, "Sampling scheme: clonal penalty: sampled %d beads with target %d at sampling rate %d selected from %d live beads with systematic sampling of %d at rate %d in region %d\n", nsample1, ntarget, sampling_rate, numLBeads, nsample-nsample1, residual_sampling_rate, regionindex);
+
+  isSampled = true;  
+  return nsample;
 }
 
-void BeadTracker::ExcludeFromSampled( int ibd ){
-  // @TODO reconcile use of Sampled with MultiLevMar::ExcludeBead
-  // Can we get rid of well_completed?
-  //sampled[ibd] = false;
+int BeadTracker::NumberSampled()
+{
+  int n=0;
+
+  for (int ibd=0; ibd<numLBeads; ibd++)
+    if (Sampled(ibd))
+      n++;
+  
+  return(n);
 }
 
 void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int offset_row)

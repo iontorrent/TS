@@ -47,6 +47,11 @@ public:
   void ParseCmdLine(int argc, const char *argv[]);
 
   /** 
+   * Check if a given option was provided
+   */
+  bool HasOption(char shortOption, const std::string &longOption);
+
+  /**
    * Get a string option value for the given short/long key
    */ 
   void GetOption(std::string &value, const std::string &defaultValue,

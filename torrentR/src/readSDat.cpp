@@ -41,8 +41,11 @@ RcppExport SEXP R_readSDat(
     it = max_element(depth.begin(),depth.end());
     size_t nFrame = (size_t) *it;
     size_t nWell = dataMesh.mCol * dataMesh.mRow;
-    RcppMatrix<double> signal(nWell,nFrame);
+    Rcpp::NumericMatrix signal(nWell,nFrame);
     size_t count = 0;
+
+    sdat.SubDcOffset();
+
     for(size_t bIx =0; bIx < dataMesh.mBins.size(); bIx++) {
       TraceChunk &chunk = dataMesh.mBins[bIx];
       size_t rowEnd = chunk.mRowStart + chunk.mHeight;
@@ -54,7 +57,7 @@ RcppExport SEXP R_readSDat(
 	  for (size_t frame = chunk.mFrameStart; frame < frameEnd; frame++) {
 	    signal(count,fr++) = (double)chunk.At(irow, icol, frame);
 	  }
-	  count++;
+      count++;
 	  colOut.push_back(icol);
 	  rowOut.push_back(irow);
 	}
@@ -71,21 +74,20 @@ RcppExport SEXP R_readSDat(
     rowOutInt.resize(rowOut.size());
     for(unsigned int i=0; i<rowOutInt.size(); i++)
       rowOutInt[i] = (int) rowOut[i];
-  
-    RcppResultSet rs;
-    rs.add("sdatFile",       sdatFile);
-    rs.add("nCol",          (int) nCol);
-    rs.add("nRow",          (int) nRow);
-    rs.add("nFrame",        (int) nFrame);
-    rs.add("col",           colOutInt);
-    rs.add("row",           rowOutInt);
-    rs.add("signal",        signal);
-    ret = rs.getReturnList();
+
+    //Rcpp::Named("sdatFile") = sdatFile, // doesn't compile with Rcpp 0.8.9
+    ret = Rcpp::List::create(Rcpp::Named("nCol")   = (int) nCol,
+                             Rcpp::Named("nRow")   = (int) nRow,
+                             Rcpp::Named("nFrame") = (int) nFrame,
+                             Rcpp::Named("col")    = colOutInt,
+                             Rcpp::Named("row")    = rowOutInt,
+                             Rcpp::Named("signal") = signal);
+
   }
  catch(exception& ex) {
-  exceptionMesg = copyMessageToR(ex.what());
+  forward_exception_to_r(ex);
  } catch(...) {
-  exceptionMesg = copyMessageToR("unknown reason");
+  ::Rf_error("c++ exception (unknown reason)");
  }
     
 if(exceptionMesg != NULL)

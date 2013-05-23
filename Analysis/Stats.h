@@ -84,5 +84,48 @@ template <class T>
       return(numeric_limits<double>::quiet_NaN());
   }
 
+ template <class T>
+   bool comparex (std::pair<int, T> const& a, std::pair<int, T> const& b)
+   {
+     return ( *a.second < *b.second );
+   }
+
+/** return sort order of a vector x
+ * Example:
+ * vector<double> x(5);
+ * vector<size_t> order;
+ * for (size_t i=0; i<5; i++)
+ *   x[i] = 10-i;
+ * sort_order(x.begin(), x.end(), order)
+ * cout << "sort order =>"
+ * for (size_t i=0; i<order.size(); i++)
+ *   cout << " " << order[i];
+ * cout << endl;
+ * cout << "sort data  =>"
+ * for (size_t i=0; i<order.size(); i++)
+ *   cout << " " << x[order[i]];
+ *
+ * sort order => 4 3 2 1 0 
+ * sort data  => 6 7 8 9 10
+ */
+ template <class T>
+   void sort_order(T iterBegin, T iterEnd, std::vector<size_t>& indexes)
+   {
+     std::vector< std::pair<int, T> > pv ;
+     pv.reserve(iterEnd - iterBegin) ;
+
+     T iter ;
+     size_t k ;
+     for (iter = iterBegin, k = 0 ; iter != iterEnd ; iter++, k++) {
+       pv.push_back( std::pair<int,T>(k,iter) ) ;
+     }
+
+     std::sort( pv.begin(), pv.end(), comparex<T> );
+
+     indexes.resize(pv.size()) ;
+     for (size_t i=0; i<pv.size(); i++)
+       indexes[i] = (size_t) pv[i].first;
+   }
+
 }
 #endif // STATS_H

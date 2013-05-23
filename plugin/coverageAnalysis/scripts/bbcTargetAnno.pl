@@ -113,10 +113,10 @@ open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
 while( <BEDFILE> )
 {
   chomp;
-  @fields = split;
+  @fields = split('\t',$_);
   my $chrid = $fields[0];
   next if( $chrid !~ /\S/ );
-  if( $chrid eq "track" )
+  if( $chrid =~ /^track / )
   {
     ++$numTracks;
     if( $numTracks > 1 )
@@ -155,6 +155,7 @@ while( <BEDFILE> )
     $targSrt = 0;
     $targEnd = 0;
   }
+  $targSrt = $srt;
   if( $srt < $targSrt )
   {
     print STDERR "ERROR: Region $chrid:$srt-$end is out-of-order vs. previous region $chrid:$targSrt-$targEnd.\n";
@@ -167,13 +168,13 @@ while( <BEDFILE> )
     {
       print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$targSrt-$targEnd.\n" if( $bedwarn );
       print STDERR " - This region will be excluded from the output file.\n" if( $bedwarn );
+      $targEnd = $end;
       next;
     }
     print STDERR "Warning: Region $chrid:$srt-$end overlaps previous region $chrid:$targSrt-$targEnd.\n" if( $bedwarn );
     $srt = $targEnd + 1;
     print STDERR " - Report will contain partial coverage for the overlap region $chrid:$srt-$end.\n" if( $bedwarn );
   }
-  $targSrt = $srt;
   $targEnd = $end;
   # reset cursor to start of last section looked at (for adjacent/overlapping targets)
   seek(BBCFILE,$lastHead,0);

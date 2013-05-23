@@ -2,8 +2,12 @@
 <script>
   // Torrent Browser provides TB_plugin which is a JSON object with plugin information.
   TB_plugin = {{ plugin|safe }};
+  TB_pluginMedia = "/pluginMedia/" + TB_plugin["fields"]["name"] + "/";
+
   {% if report %}
     TB_result = {{ report }};
-    {%  endif %}
-    TB_TMAP = "{{ tmap }}";
+    TB_result_json = {{ results|safe }};
+  {%  endif %}
+
+  TB_TMAP = "{{ tmap }}";
 </script>

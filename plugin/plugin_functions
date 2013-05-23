@@ -261,44 +261,42 @@ define_local_vars ()
         export BASECALLER_DIR=${ANALYSIS_DIR}
     fi
 
-    if [ -f ${REPORT_ROOT_DIR}/expMeta.dat ]; then
-        EXPMETA_PATH=${REPORT_ROOT_DIR}/expMeta.dat
-    else
-        EXPMETA_PATH=${REPORT_ROOT_DIR}/../expMeta.dat
-    fi
+    export TSP_RUN_NAME=${EXPMETA__RUN_NAME}
+    export TSP_RUN_DATE=${EXPMETA__RUN_DATE}
+    export TSP_ANALYSIS_NAME=${EXPMETA__RESULTS_NAME}
+    export TSP_ANALYSIS_DATE=${EXPMETA__ANALYSIS_DATE}
+    export TSP_PROJECT=${EXPMETA__PROJECT}
+    export TSP_LIBRARY=${RUNINFO__LIBRARY}
+    export TSP_SAMPLE=${EXPMETA__SAMPLE}
+    export TSP_PGM_NAME=${EXPMETA__INSTRUMENT}
+    export TSP_NOTES=${EXPMETA__NOTES}
+    export TSP_CHIPTYPE=${EXPMETA__CHIPTYPE}
 
-    export TSP_RUN_NAME=$(grep '^Run Name =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_RUN_DATE=$(grep '^Run Date =' ${EXPMETA_PATH} | cut -f2 -d'=')
-    export TSP_ANALYSIS_NAME=$(grep '^Analysis Name =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_ANALYSIS_DATE=$(grep '^Analysis Date =' ${EXPMETA_PATH} | cut -f2 -d'=')
-    export TSP_PROJECT=$(grep '^Project =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_LIBRARY=$(grep '^Library =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_SAMPLE=$(grep 'Sample =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_PGM_NAME=$(grep '^PGM =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/ //g')
-    export TSP_NOTES="$(grep '^Notes =' ${EXPMETA_PATH} | cut -f2 -d'=')"
-    export TSP_CHIPTYPE=$(grep '^Chip Type =' ${EXPMETA_PATH} | cut -f2 -d'='|sed 's/[ \"]//g')
-
-    export TSP_RUNID=$(grep '^runID =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
-    export TSP_FLOWORDER=$(grep '^Flow Order =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
-    export TSP_LIBRARY_KEY=$(grep '^Library Key =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
-    export TSP_TF_KEY=$(grep '^TF Key =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
-    export TSP_NUM_FLOWS=$(grep '^Run Flows =' ${EXPMETA_PATH} | cut -f2 -d '='|sed 's/ //g')
+    export TSP_RUNID=${EXPMETA__RUNID}
+    export TSP_FLOWORDER=${EXPMETA__FLOWORDER}
+    export TSP_LIBRARY_KEY=${RUNINFO__LIBRARY_KEY}
+    export TSP_TF_KEY=${RUNINFO__TESTFRAG_KEY}
+    export TSP_NUM_FLOWS=${EXPMETA__RUN_FLOWS}
 
     # Fallback for reports <=2.2
-    if [ "${TSP_RUNID}" == "" ]; then
-        export TSP_RUNID=$(grep '^runId' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    fi
-    if [ "${TSP_FLOWORDER}" == "" ]; then
-        export TSP_FLOWORDER=$(grep '^flowOrder' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    fi
-    if [ "${TSP_LIBRARY_KEY}" == "" ]; then
-        export TSP_LIBRARY_KEY=$(grep '^libraryKey' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    fi
-    if [ "${TSP_TF_KEY}" == "" ]; then
-        export TSP_TF_KEY=$(grep '^tfKey' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
-    fi
-    if [ "${TSP_NUM_FLOWS}" == "" ]; then
-        export TSP_NUM_FLOWS=$(grep '^numFlows' ${SIGPROC_DIR}/processParameters.txt | cut -f2 -d '='|sed 's/ //g')
+    PARAMS_PATH=${SIGPROC_DIR}/processParameters.txt
+    if [ -f ${PARAMS_PATH} ]; then
+    
+      if [ "${TSP_RUNID}" == "" ]; then
+          export TSP_RUNID=$(grep '^runId' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_FLOWORDER}" == "" ]; then
+          export TSP_FLOWORDER=$(grep '^flowOrder' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_LIBRARY_KEY}" == "" ]; then
+          export TSP_LIBRARY_KEY=$(grep '^libraryKey' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_TF_KEY}" == "" ]; then
+          export TSP_TF_KEY=$(grep '^tfKey' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
+      if [ "${TSP_NUM_FLOWS}" == "" ]; then
+          export TSP_NUM_FLOWS=$(grep '^numFlows' ${PARAMS_PATH} | cut -f2 -d '='|sed 's/ //g')
+      fi
     fi
 
     export TSP_FILEPATH_OUTPUT_STEM=${TSP_RUN_NAME}_${TSP_ANALYSIS_NAME}

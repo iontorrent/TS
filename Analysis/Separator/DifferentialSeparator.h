@@ -12,6 +12,7 @@
 #include "RegionAvgKeyReporter.h"
 #include "Traces.h"
 #include "TraceStore.h"
+#include "TraceStoreMatrix.h"
 #include "H5File.h"
 
 #define FRAMEZERO 0
@@ -34,12 +35,13 @@ class DifSepOpt
       minSnr = 8;
       minBfGoodWells = 30;
       bfMeshStep = 50;
-      clusterMeshStep = 100;
+      clusterMeshStep = 50;
       t0MeshStep = 50;
       useMeshNeighbors = 1;
-      tauEEstimateStep = 100;
+      tauEEstimateStep = 50;
       nCores = -1;
-      minTauESnr = 10;
+
+      minTauESnr = 13;
       sigSdMult = 6;
       doMeanFilter = true;
       doSigVarFilter = true;
@@ -66,15 +68,22 @@ class DifSepOpt
       minTfPeakMax = 10.0f;
       minLibPeakMax = 10.0f;
       useProjectedCurve = true;
-      outputDebug = false;
+      outputDebug = 0;
       percentReference = .01;
       useSignalReference = true;
       doSdat = false;
       sdatSuffix = "sdat";
       useSeparatorRef = false;
-      //      sdAsBf = false;
+      isThumbnail = false;
+      doComparatorCorrect = false;
+      doGainCorrect = true;
       sdAsBf = true;
       bfMult = 1.0;
+      aggressive_cnc = false;
+      referenceStep = 50;
+      referencePickStep = 25;
+      blobFilter = true;
+      blobFilterStep = 100;
     }
 
     Mask *mask;
@@ -98,6 +107,8 @@ class DifSepOpt
     int tauEEstimateStep;
     int nCores;
     int minTauESnr;
+    int referenceStep;
+    int referencePickStep;
     double sigSdMult;
     bool doMeanFilter;
     bool doSigVarFilter;
@@ -124,15 +135,21 @@ class DifSepOpt
     float tfFilterQuantile;
     float libFilterQuantile;
     bool useProjectedCurve;
-    bool outputDebug;
+    int outputDebug;
     float percentReference;
     bool useSignalReference;
     bool doSdat;
     float minTfPeakMax,minLibPeakMax;
+    int blobFilterStep;
     std::string sdatSuffix;
     bool useSeparatorRef;
+    bool isThumbnail;
+    bool doGainCorrect;
+    bool doComparatorCorrect;
     float bfMult;
     bool sdAsBf;
+    bool aggressive_cnc;
+    bool blobFilter; 
 };
 
 /**
@@ -144,7 +161,34 @@ class DifferentialSeparator : public AvgKeyIncorporation
 {
 
   public:
+  enum FilterType {
+    Initialized,
+    GoodWell,          // 1
+    PinnedExcluded,    // 2 
+    NotCompressable,   // 3
+    LowTraceSd,        // 4
+    BeadfindFiltered,  // 5
+    RegionTraceSd,     // 6
+  };
 
+  static std::string NameForFilter(enum FilterType filter) {
+    switch (filter) {
+    case GoodWell:
+      return "GoodWell";
+    case PinnedExcluded :
+      return "PinExclude";
+    case NotCompressable :
+      return "NotCompress";
+    case LowTraceSd :
+      return "LowTraceSd";
+    case BeadfindFiltered :
+      return "BeadfindFilt";
+    case RegionTraceSd :
+      return "RegionTraceSd";
+    default:
+      return "Unknown";
+    }
+  }        
     enum OutlierType
     {
       SdNoKeyHigh,
@@ -230,7 +274,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void DoJustBeadfind (DifSepOpt &opts, BFReference &reference);
 
     void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
-    
+    void CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
     void CalcRegionEmptyStat(H5File &h5File, GridMesh<MixModel> &mesh, TraceStore<double> &store, 
                              const string &fileName, 
                              vector<int> &flows, Mask &mask);
@@ -239,8 +283,14 @@ class DifferentialSeparator : public AvgKeyIncorporation
   /** Do a beadfind/bead classification based on options passed in. */
   int Run(DifSepOpt opts);
   void CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame); 
-  void LoadKeySDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
-  void LoadKeyDats(TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
+  void FilterRegionBlobs(Mask &mask, int rowStart, int rowEnd, int colStart, int colEnd, int chipWidth,
+                         Col<float> &metric, vector<char> &filteredWells, int smoothWindow,
+                         int filtWindow, float filtThreshold);
+  void FilterBlobs(Mask &mask, int step,
+                   Col<float> &metric, vector<char> &filteredWells, int smoothWindow,
+                   int filtWindow, float filtThreshold);
+  void LoadKeySDats(PJobQueue &jQueue, TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
+  void LoadKeyDats(PJobQueue &jQueue, TraceStoreMatrix<double> &traceStore, BFReference &reference, DifSepOpt &opts, std::vector<float> &traceSd, Col<int> &zeroFlows);
 
     void SetReportSet (int rows, int cols,
                        const std::string &wellsReportFile,
@@ -276,7 +326,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
     }
 
     /** Get the nucleotide incorporating start (in frames) */
-    int GetStart (int region, int rStart, int rEnd, int cStart, int cEnd)
+    float GetStart (int region, int rStart, int rEnd, int cStart, int cEnd)
     {
       return mRegionIncorpReporter.GetStart (region, rStart, rEnd, cStart, cEnd);
     }
@@ -358,6 +408,11 @@ class DifferentialSeparator : public AvgKeyIncorporation
                       const std::string &outFile, int ignoreChecksumErrors, DifSepOpt &opts,
                       TraceStore<double> &store,
                       ZeromerModelBulk<double> &zModelBulk);
+
+    void PredictFlow(const std::string &datFile, const std::string &debugFile,
+                     DifSepOpt &opts, Mask &mask,
+                     std::vector<KeyFit> &fits, std::vector<float> &metric, 
+                     Col<double> &time);
 
     bool InSpan (size_t rowIx, size_t colIx,
                  const std::vector<int> &rowStarts,

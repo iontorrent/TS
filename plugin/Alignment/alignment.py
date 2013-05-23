@@ -25,7 +25,6 @@ class Alignment(object):
         self.program_params = None
         self.fastq = None
         self.fastq_link = None
-        self.sff = None
         self.unmapped_bam = None
         self.analysis_dir = None
         self.basecaller_dir = None
@@ -127,7 +126,6 @@ class Alignment(object):
         
         #sam_meta_args = self.get_sam_meta()
         sam_meta_args = ""
-        #self.sff = "%s/%s_%s.sff" % (self.basecaller_dir, self.analysis_params['expName'], self.analysis_params['resultsName'])
         if self.sampling:
             self.program_params = "--out-base-name %s --genome %s --input %s %s >> %s 2>&1" % (self.file_prefix, self.genome, self.unmapped_bam, sam_meta_args, self.log_file)
         else:
@@ -309,8 +307,13 @@ if __name__ == '__main__':
     #set alignment output dir
     alignment.unmapped_bam = sys.argv[3]
     if not os.path.exists(alignment.unmapped_bam):
-      print "[alignment.py] unmapped bam doesn't exist.  exiting.."
-      sys.exit(1)
+      print "[alignment.py] unmapped bam doesn't exist. Looking for mapped bam.."
+      #sys.exit(1)
+      alignment.unmapped_bam = sys.argv[4]
+      if not os.path.exists(alignment.unmapped_bam):
+      	print "[alignment.py] mapped bam doesn't exist. Exiting.."
+	sys.exit(1)
+ 
 
     alignment.log_file = alignment.output_dir + "/alignment_log.txt"
     

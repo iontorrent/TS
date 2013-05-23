@@ -120,18 +120,18 @@ def network(request):
 @staff_member_required
 def manage(request):
     """provide a simple interface to allow a few management actions of the Torrent Server"""
-    
+
     if request.method=="POST":
-    
-        output, errors = script('sudo shutdown -P now',True)	  
+
+        output, errors = script('sudo shutdown -P now',True)
         return render_to_response(
             "admin/manage.html",
             {"output": output, "errors" : errors, "post": True},
             RequestContext(request, {}),
         )
-    
+
     if request.method=="GET":
-    
+
         return render_to_response(
             "admin/manage.html",
             {},
@@ -196,8 +196,8 @@ def get_zip_logs(request):
         compression = zipfile.ZIP_DEFLATED
     except:
         compression = zipfile.ZIP_STORED
-    
-    zipPath = '/tmp/logs.zip'    
+
+    zipPath = '/tmp/logs.zip'
     zipfile = zipfile.ZipFile(zipPath, mode='w', allowZip64=True)
     files = ['tsconfig_gui.log','django.log','celery_w1.log']
     for afile in files:
@@ -205,14 +205,14 @@ def get_zip_logs(request):
         if os.path.exists(fullpath):
             zipfile.write(fullpath, arcname=afile, compress_type=compression)
     zipfile.close()
-    
+
     #TODO: Include the server serial number in the archive filename.
     #One possible source is /etc/torrentserver/tsconf.conf, serialnumber:XXXXXX
     archive_filename = 'ts_update_logs.zip'
     response = http.HttpResponse(FileWrapper (open(zipPath)), mimetype='application/zip')
     response['Content-Disposition'] = 'attachment; filename=%s' % archive_filename
     return response
-        
+
 
 def run_update_check(request):
     tasks.check_updates.delay()
@@ -226,7 +226,7 @@ def run_update():
     """
     if not update_locked():
         update_message = """Please do not start any data analysis or chip runs. The system is updating.  This may take a while, and you will see a message when it is complete."""
-        Message.warn(update_message, expires="startup")
+        Message.warn(update_message, expires="system-update-finished")
         try:
             tasks.download_updates.delay(auto_install=True)
         except Exception as err:
@@ -281,8 +281,8 @@ def ot_log(request):
 
     response = http.HttpResponse(log, content_type=mime)
     return response
-    
-    
+
+
 @staff_member_required
 def updateOneTouch(request):
     """provide a simple interface to allow one touch updates"""
@@ -321,7 +321,8 @@ def updateOneTouch(request):
 
 
 class ExperimentAdmin(admin.ModelAdmin):
-    list_display = ('expName', 'date')
+    list_display = ('expName', 'date', 'status', 'plan')
+    list_filter = ('status',)
     search_fields = ['expName' ]
     ordering = ('-date', 'expName', )
 
@@ -357,7 +358,7 @@ class PluginResultsInline(admin.StackedInline):
     ordering = ( "endtime", "-id", )
 
 class ResultsAdmin(admin.ModelAdmin):
-    list_display = ('resultsName','experiment','timeStamp')
+    list_display = ('resultsName','experiment','timeStamp','diskusage','status')
     date_hierarchy = 'timeStamp'
     search_fields = ['resultsName']
     filter_horizontal = ('projects',)
@@ -377,8 +378,9 @@ class LocationAdmin(admin.ModelAdmin):
 
 
 class BackupAdmin(admin.ModelAdmin):
-    list_display = ('experiment',)
-
+    list_display = ('experiment','backupDate','backupPath')
+    search_fields = ['backupName' ]
+    ordering = ( "-id", )
 
 class BackupConfigAdmin(admin.ModelAdmin):
     list_display = ('backupDirectory',)
@@ -401,7 +403,6 @@ class GlobalConfigAdmin(admin.ModelAdmin):
                     'default_library_key',
                     'default_flow_order',
                     'plugin_output_folder',
-                    'default_plugin_script',
                     'default_storage_options',
                     )
     formfield_overrides = {
@@ -445,13 +446,13 @@ class PlannedExperimentQCInline(admin.TabularInline):
     verbose_name = "Planned Experiment QC Thresholds"
     can_delete = False
     can_add = False
-    
+
     def has_add_permission(self, request):
         return False
 
-    
+
 class PlannedExperimentAdmin(admin.ModelAdmin):
-    list_display = ('planName','planShortID','date','isReverseRun','planExecuted')
+    list_display = ('planName','planShortID','date', 'planExecuted', 'isReusable','isSystem', 'username', 'planStatus', 'isReverseRun')
     list_filter = ('planExecuted',)
     search_fields = ['planShortID',]
     filter_horizontal = ('projects',)
@@ -465,30 +466,47 @@ class PlannedExperimentQCAdmin(admin.ModelAdmin):
         return False
 
 class QCTypeAdmin(admin.ModelAdmin):
-        
+
     def has_add_permission(self, request):
         return False
 
-class DM_Reports(admin.ModelAdmin):
-	list_display = ("location","pruneLevel")
-    
-class DM_PruneGroup(admin.ModelAdmin):
-	list_display = ("name","pk","ruleNums","editable")
-    
-class DM_PruneRule(admin.ModelAdmin):
-	list_display = ("id","rule")
-
 class ReportStorageAdmin(admin.ModelAdmin):
-    list_display = ("name", "default")
+    list_display = ("name", "default", "webServerPath", "dirPath")
 
-#logger.exception("Registering admin site pages")
+class FileServerAdmin(admin.ModelAdmin):
+    list_display = ("name", "filesPrefix", "percentfull")
+
+class SampleAdmin(admin.ModelAdmin):
+    list_display = ("name", "displayedName", "externalId", "status")
+
+class ExperimentAnalysisSettingsAdmin(admin.ModelAdmin):
+    list_display = ("experiment", "isEditable", "isOneTimeOverride", "date", "status")
+    list_filter = ('status',)
+    search_fields = ['experiment__expName' ]
+    ordering = ( "-id", )
+
+class DMFileSetAdmin(admin.ModelAdmin):
+    list_display = ('type','include','exclude','version')
+
+class DMFileStatAdmin(admin.ModelAdmin):
+    list_display = ('result','dmfileset', 'diskspace', 'action_state', 'created')
+    list_filter = ('action_state',)
+    date_hierarchy = 'created'
+    search_fields = ['result__resultsName']
+
+class EventLogAdmin(admin.ModelAdmin):
+    list_display = ('content_type','text','created')
+    list_filter = ('username',)
+    date_hierarchy = 'created'
+    search_fields = ['text']
+
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
 admin.site.register(Message)
 admin.site.register(Location,LocationAdmin)
 admin.site.register(Rig)
-admin.site.register(FileServer)
+admin.site.register(FileServer,FileServerAdmin)
 admin.site.register(TFMetrics, TFMetricsAdmin)
 admin.site.register(ReportStorage,ReportStorageAdmin)
 admin.site.register(RunScript)
@@ -497,7 +515,7 @@ admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
 admin.site.register(Template)
-admin.site.register(Backup)
+admin.site.register(Backup, BackupAdmin)
 admin.site.register(BackupConfig)
 admin.site.register(GlobalConfig, GlobalConfigAdmin)
 admin.site.register(Plugin, PluginAdmin)
@@ -514,9 +532,6 @@ admin.site.register(Content)
 admin.site.register(UserEventLog)
 admin.site.register(UserProfile)
 admin.site.register(VariantFrequencies)
-admin.site.register(dm_reports,DM_Reports)
-admin.site.register(dm_prune_group,DM_PruneGroup)
-admin.site.register(dm_prune_field,DM_PruneRule)
 #ref genome
 admin.site.register(ReferenceGenome,ReferenceGenomeAdmin)
 
@@ -531,6 +546,11 @@ admin.site.register(ApplProduct)
 
 admin.site.register(PlannedExperimentQC, PlannedExperimentQCAdmin)
 
+admin.site.register(Sample, SampleAdmin)
+admin.site.register(ExperimentAnalysisSettings, ExperimentAnalysisSettingsAdmin)
+admin.site.register(DMFileSet, DMFileSetAdmin)
+admin.site.register(DMFileStat, DMFileStatAdmin)
+admin.site.register(EventLog, EventLogAdmin)
 
 # Add sessions to admin
 class SessionAdmin(admin.ModelAdmin):

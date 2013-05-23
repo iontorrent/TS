@@ -18,7 +18,7 @@
 #include <map>
 #include <set>
 #include <queue>
-#include <emmintrin.h>
+#include <x86intrin.h>
 #include "PsyhoCompression.h"
 
 using namespace std;

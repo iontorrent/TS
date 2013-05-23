@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block subnav %}
+<li><a href="/report/{{startplugin_json.runinfo.pk}}/">&larr; Go back to
+    {{startplugin_json.expmeta.results_name}} </a></li>
+{% endblock %}
+
+{% block extra_head %}
+
+<link rel="stylesheet" href="slickgrid/slick.grid.css" type="text/css"/>
+<link rel="stylesheet" href="lifegrid/columnpicker.css" type="text/css"/>
+<link rel="stylesheet" href="slickgrid/lib/jquery-ui-1.10.2.custom/css/smoothness/jquery-ui-1.10.2.custom.min.css"
+      type="text/css"/>
+<link rel="stylesheet" href="lifegrid/lifegrid.css" type="text/css"/>
+
+<script src="slickgrid/lib/firebugx.js"></script>
+<script src="slickgrid/lib/jquery-ui-1.10.2.custom/js/jquery-ui-1.10.2.custom.min.js"></script>
+<script src="slickgrid/lib/jquery.event.drag-2.0.min.js"></script>
+<script src="slickgrid/slick.core.js"></script>
+<script src="slickgrid/slick.grid.js"></script>
+<script src="slickgrid/plugins/slick.rowselectionmodel.js"></script>
+<script src="slickgrid/slick.dataview.js"></script>
+<script src="lifegrid/lifegrid.js"></script>
+<script src="lifegrid/pager.js"></script>
+<script src="lifegrid/checkboxselectcolumn.js"></script>
+<script src="lifegrid/columnpicker.js"></script>
+
+<script src="lifegrid/allelesTable.js"></script>
+
+{% endblock %}
+
+{% block content %}
+<div class="content clearfix">
+<div style="padding-bottom:20px">
+	<h2>Variant Caller Plugin - Beta Features </h2>
+	<a href="variantCaller.html">Return to Variant Caller Report</a>
+</div>
+
+<div id="allelesTable" fileurl="alleles.xls" class="center"></div>
+
+<div id="AL-tablecontent" style="display:none">
+  <div id="AL-titlebar" class="grid-header">
+    <span class="table-title">Variant Calls by Allele <a class="btn" href="alleles.xls">XLS</a></span>
+    <span id="AL-message" class="message"></span>
+    <div class="filter-panel">
+      <table style="width:100%">
+      <tr>
+        <td>
+          <span class="nwrap">Chrom <select id="AL-selectChrom" class="txtSelect" style="width:120px"><option value=""/></select></span>
+          <span class="nwrap">Position <input type="text" id="AL-txtSearchPosStart" class="numSearch" size=9>
+                                    to <input type="text" id="AL-txtSearchPosEnd" class="numSearch" size=9"></span>
+          <span class="nwrap">HotSpot ID <input type="text" class="txtSearch" id="AL-txtSearchHotSpotID" size=11></span>
+          <span class="nwrap">Allele Source <select id="AL-selectAlleleSource" class="txtSelect" style="width:120px">
+              <option value=""></option>
+              <option value="Novel">Novel</option>
+              <option value="Hotspot">Hotspot</option>
+          </select></span>
+          <span class="nwrap">Type <select id="AL-selectVarType" class="txtSelect" style="width:120px">
+              <option value=""></option>
+              <option value="SNP">SNP</option>
+              <option value="INS">INS</option>
+              <option value="DEL">DEL</option>
+              <option value="MNP">MNP</option>
+              <option value="COMPLEX">COMPLEX</option>
+          </select></span>
+          <span class="nwrap">Allele Call <select id="AL-selectAlleleCall" class="txtSelect" style="width:120px">
+              <option value=""></option>
+              <option value="Present">Present</option>
+              <option value="Absent">Absent</option>
+              <option value="No Call">No Call</option>
+          </select></span>
+          <span class="nwrap">Var Freq <input type="text" id="AL-txtSearchFreqMin" class="numSearch" size=4 value="0">
+                                    to <input type="text" id="AL-txtSearchFreqMax" class="numSearch" size=4 value="100"></span>
+          <span class="nwrap">Total Cov &ge; <input type="text" id="AL-txtSearchCovMin" class="numSearch" size=7 value=""></span>
+        </td>
+      </tr>
+      </table>
+    </div>
+  </div>
+  <div id="AL-grid" class="grid-body"></div>
+  <div id="AL-pager" class="grid-footer"></div>
+  <p class="grid-text"/>
+</div>
+
+<div class="row-fluid bumper">
+  <img src="scatter.png">
+</div>
+
+</div>
+{% endblock %}

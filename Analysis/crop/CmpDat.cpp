@@ -94,6 +94,18 @@ int main ( int argc, char *argv[] )
         	printf(" %d", src_raw->timestamps[idx]);
         }
         printf("\n");
+        printf("%d frames - InterpolatedFrames:\n",src_raw->frames);
+        for(int idx=0;idx<src_raw->frames;idx++)
+        {
+        	printf(" %d", src_raw->interpolatedFrames[idx]);
+        }
+        printf("\n");
+        printf("%d frames - InterpolatedMult:\n",src_raw->frames);
+        for(int idx=0;idx<src_raw->frames;idx++)
+        {
+        	printf(" %f", src_raw->interpolatedMult[idx]);
+        }
+        printf("\n");
         return 0;
     }
 

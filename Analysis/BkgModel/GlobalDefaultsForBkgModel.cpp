@@ -1,4 +1,5 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+
 #include <sys/stat.h>
 #include "GlobalDefaultsForBkgModel.h"
 #include "Utils.h"
@@ -52,7 +53,10 @@ LocalSigProcControl::LocalSigProcControl()
   proton_dot_wells_post_correction = false;
   single_flow_fit_max_retry = 0;
   per_flow_t_mid_nuc_tracking = false;
+  exp_tail_fit = false;
+  pca_dark_matter = false;
   regional_sampling = false;
+  regional_sampling_type = -1;
   no_RatioDrift_fit_first_20_flows = false;
   fitting_taue = false;
   prefilter_beads = false;
@@ -244,23 +248,18 @@ void GlobalDefaultsForBkgModel::DumpExcitingParameters(char *fun_string)
 // This function is used during GeneticOptimizer runs in which case the above SetGoptDefaults is disabled
 void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentName )
 {
-  struct stat fstatus;
-  int         status;
   char fname[512];
   FILE *evect_file;
-  char *line;
-  int nChar = MAX_LINE_LEN;
+  char *line = new char[MAX_LINE_LEN];
   float read_data[MAX_DATA_PTS];
+  int nChar = MAX_LINE_LEN;
   int pset=0;
 
+  struct stat fstatus;
   sprintf ( fname,"%s/emphasis_vector.txt", experimentName );
-  status = stat ( fname,&fstatus );
-
-  line = new char[MAX_LINE_LEN];
-
-  if ( status == 0 )
+  int status = stat ( fname,&fstatus );
+  if ( status == 0 )    // file exists
   {
-    // file exists
     printf ( "loading emphasis vector parameters from %s\n",fname );
 
     evect_file=fopen ( fname,"rt" );
@@ -271,38 +270,49 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
     if ( bytes_read > 0 )
     {
       int evect_size;
-
       sscanf ( line,"%d",&evect_size );
-      int i=0;
-      for ( ; ( i < evect_size ) && ( i < MAX_DATA_PTS );i++ )
+      printf ("nps=%d",evect_size);
+
+
+      for (int i=0; ( i < evect_size ) && ( i < MAX_DATA_PTS );i++ )
       {
         bytes_read = getline ( &line, ( size_t * ) &nChar,evect_file );
         sscanf ( line,"%f",&read_data[i] );
+        printf ("\t%f",read_data[i]);
       }
+      printf ("\n");
+
       // pick 3 gopt parameter sets:
-      // 0 = all params, 1 - no nuc-dep factors, 2 - no nuc-dep factors plus no emphasis
+      // 0 = all params, 1 - no nuc-dep factors, 2 - no nuc-dep factors plus no emphasis, 3 - only emphasis params
       if ( evect_size == 13 ) pset = 2;
       else if ( evect_size == 23 ) pset = 1;
       else if ( evect_size == 43 ) pset = 0;
+      else if ( evect_size == 10 ) pset = 3;
+      else if ( evect_size == 4 ) pset = 4;
+      else if ( evect_size == 6 ) pset = 5;
+      else if ( evect_size == 7 ) pset = 6;
+      else if ( evect_size == 8 ) pset = 7;
+      else if ( evect_size == 11 ) pset = 8;
+      else if ( evect_size == 12 ) pset = 9;
+      else if ( evect_size == 38 ) pset = 10;
       else
       {
         fprintf ( stderr, "Unrecognized number of points (%d) in %s\n", evect_size, fname );
         exit ( 1 );
       }
     }
-
     fclose ( evect_file );
 
-    int dv = 0;
-
     // copy the configuration values into the right places
-
+    int dv = 0;
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
     // first value scales add km terms
     region_param_start.kmax_default[TNUCINDEX] *= read_data[dv];
     region_param_start.kmax_default[ANUCINDEX] *= read_data[dv];
     region_param_start.kmax_default[CNUCINDEX] *= read_data[dv];
     region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
-
+    }
     // 2-5 values scale individual terms
     if ( pset == 0 )
     {
@@ -312,10 +322,13 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    region_param_start.krate_default[TNUCINDEX] *= read_data[dv];
-    region_param_start.krate_default[ANUCINDEX] *= read_data[dv];
-    region_param_start.krate_default[CNUCINDEX] *= read_data[dv];
-    region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
+      region_param_start.krate_default[TNUCINDEX] *= read_data[dv];
+      region_param_start.krate_default[ANUCINDEX] *= read_data[dv];
+      region_param_start.krate_default[CNUCINDEX] *= read_data[dv];
+      region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
+    }
 
     if ( pset == 0 )
     {
@@ -325,10 +338,13 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    region_param_start.d_default[TNUCINDEX] *= read_data[dv];
-    region_param_start.d_default[ANUCINDEX] *= read_data[dv];
-    region_param_start.d_default[CNUCINDEX] *= read_data[dv];
-    region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
+      region_param_start.d_default[TNUCINDEX] *= read_data[dv];
+      region_param_start.d_default[ANUCINDEX] *= read_data[dv];
+      region_param_start.d_default[CNUCINDEX] *= read_data[dv];
+      region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
+    }
 
     if ( pset == 0 )
     {
@@ -338,10 +354,13 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
-    region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
-    region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv];
-    region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
+      region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
+      region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
+      region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv];
+      region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
+    }
 
     if ( pset == 0 )
     {
@@ -351,10 +370,13 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
-    region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
-    region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
-    region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
+      region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
+      region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
+      region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
+      region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+    }
 
     if ( pset == 0 )
     {
@@ -364,27 +386,141 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    region_param_start.sens_default *= read_data[dv++];
-
-    region_param_start.tau_R_m_default = read_data[dv++];
-    region_param_start.tau_R_o_default = read_data[dv++];
-
-    if ( pset == 0 || pset==1 )
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
     {
-      for ( int vn=0;vn < 8;vn++ )
-        data_control.emp[vn] = read_data[dv++];
-
-      data_control.emphasis_ampl_default = read_data[dv++];
-      data_control.emphasis_width_default = read_data[dv++];
+      region_param_start.sens_default *= read_data[dv++];
+      region_param_start.tau_R_m_default *= read_data[dv++];
+      region_param_start.tau_R_o_default *= read_data[dv++];
     }
 
-    fitter_defaults.clonal_call_scale[0] = read_data[dv++];
-    fitter_defaults.clonal_call_scale[1] = read_data[dv++];
-    fitter_defaults.clonal_call_scale[2] = read_data[dv++];
-    fitter_defaults.clonal_call_scale[3] = read_data[dv++];
-    fitter_defaults.clonal_call_scale[4] = read_data[dv++];
+    if ( pset == 0 || pset==1 || pset==3)
+    {
+      for ( int vn=0;vn < 8;vn++ )
+        data_control.emp[vn] *= read_data[dv++];
 
-  }
+      data_control.emphasis_ampl_default *= read_data[dv++];
+      data_control.emphasis_width_default *= read_data[dv++];
+    }
+
+    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    {
+      fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
+      fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
+      fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
+      fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
+      fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+    }
+
+    if (pset >= 4 && pset <= 9)
+    {
+        // kmax
+        region_param_start.kmax_default[TNUCINDEX] *= read_data[dv];
+        region_param_start.kmax_default[ANUCINDEX] *= read_data[dv];
+        region_param_start.kmax_default[CNUCINDEX] *= read_data[dv];
+        region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
+        // sigma_mult
+        region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
+        region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
+        region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv];
+        region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
+        // t_mid_nuc_delay
+        region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
+        region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
+        region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv];
+        region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+        // sens
+        region_param_start.sens_default *= read_data[dv++];
+    }
+    else if (pset == 10)
+    {
+        // kmax[4]
+        region_param_start.kmax_default[TNUCINDEX] *= read_data[dv++];
+        region_param_start.kmax_default[ANUCINDEX] *= read_data[dv++];
+        region_param_start.kmax_default[CNUCINDEX] *= read_data[dv++];
+        region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
+        // krate[4]
+        region_param_start.krate_default[TNUCINDEX] *= read_data[dv++];
+        region_param_start.krate_default[ANUCINDEX] *= read_data[dv++];
+        region_param_start.krate_default[CNUCINDEX] *= read_data[dv++];
+        region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
+        // d_coeff[4]
+        region_param_start.d_default[TNUCINDEX] *= read_data[dv++];
+        region_param_start.d_default[ANUCINDEX] *= read_data[dv++];
+        region_param_start.d_default[CNUCINDEX] *= read_data[dv++];
+        region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
+        // sigma_mult[4]
+        region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv++];
+        region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv++];
+        region_param_start.sigma_mult_default[CNUCINDEX] *= read_data[dv++];
+        region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
+        // t_mid_nuc_delay[4]
+        region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv++];
+        region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv++];
+        region_param_start.t_mid_nuc_delay_default[CNUCINDEX] *= read_data[dv++];
+        region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
+        // sens
+        region_param_start.sens_default *= read_data[dv++];
+
+    }
+
+    if (pset >= 5)
+    {
+        data_control.emphasis_ampl_default *= read_data[dv++];
+        data_control.emphasis_width_default *= read_data[dv++];
+        switch (pset)
+        {
+        case 6:
+            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+            break;
+        case 7:
+            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+            for ( int vn=0;vn < 7;vn++ )
+                data_control.emp[vn] *= read_data[dv];
+            data_control.emp[7] *= read_data[dv++];
+            break;
+        case 8:
+            fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+            break;
+        case 9:
+            for ( int vn=0;vn < 7;vn++ )
+                data_control.emp[vn] *= read_data[dv];
+            data_control.emp[7] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[0] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[1] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[2] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[3] *= read_data[dv];
+            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+            region_param_start.tau_R_m_default *= read_data[dv++];
+            region_param_start.tau_R_o_default *= read_data[dv++];
+            break;
+        case 10:
+            for ( int vn=0;vn < 8;vn++ )
+                data_control.emp[vn] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
+            fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+            region_param_start.tau_R_m_default *= read_data[dv++];
+            region_param_start.tau_R_o_default *= read_data[dv++];
+            break;
+        default:
+            break;
+        }
+    }
+ }
   else
   {
     fprintf ( stderr, "emphasis file: %s \tstatus: %d\n",fname,status );

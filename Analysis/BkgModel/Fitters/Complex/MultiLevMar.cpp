@@ -1,6 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "MultiLevMar.h"
 #include "MiscVec.h"
+#include <assert.h>
 
 MultiFlowLevMar::MultiFlowLevMar ( SignalProcessingMasterFitter &_bkg ) :
     bkg ( _bkg )
@@ -207,7 +208,7 @@ void MultiFlowLevMar::DoSampledRegionIteration (
   {
     LevMarFitRegion ( reg_fit );
   }
-  IdentifyParametersFromSample ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask,lm_state.skip_beads,lm_state );
+  IdentifyParametersFromSample ( bkg.region_data->my_beads,bkg.region_data->my_regions, lm_state.well_mask, lm_state.reg_mask, lm_state );
 }
 
 void MultiFlowLevMar::DoRegionIteration (
@@ -1038,14 +1039,15 @@ void MultiFlowLevMar::FillTshiftCache ( float my_tshift )
 
 bool MultiFlowLevMar::ExcludeBead ( int ibd )
 {
-  // test to see whether this bead is excluded in the regional sampling
-  // or in the different region groups
+  // test to see whether this bead is excluded in further computation
+  // in this fit, restricted to beads of interest
+  // regional sampling is handled differently than rolling regional fits
 
   bool exclude = lm_state.well_completed[ibd];
                  
   if (bkg.region_data->my_beads.isSampled) {
     // regional sampling enabled
-    exclude = exclude || !bkg.region_data->my_beads.StillSampled(ibd);
+    exclude = exclude || !bkg.region_data->my_beads.Sampled(ibd);
   }
   else
   {
@@ -1057,9 +1059,9 @@ bool MultiFlowLevMar::ExcludeBead ( int ibd )
 
 void MultiFlowLevMar::FinishBead ( int ibd )
 {
-  // enforces synchronization between lm_state & my_beads
+  // mark this well as finished so it can be excluded
+  // from further computation in this fit
   lm_state.FinishCurrentBead ( ibd );
-  bkg.region_data->my_beads.ExcludeFromSampled ( ibd );
 }
 
 
@@ -1110,17 +1112,17 @@ void UpdateOneBeadFromRegion ( bead_params *p, bound_params *hi, bound_params *l
   params_ApplyAmplitudeZeros ( p,dbl_tap_map ); // double-taps
 }
 
-void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, bool skip_beads, const LevMarBeadAssistant& lm_state )
+void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, const LevMarBeadAssistant& lm_state )
 {
   if ( ( well_mask & DFDPDM ) >0 )  // only if actually fitting dmult do we need to do this step
-    IdentifyDmultFromSample ( my_beads,my_regions,skip_beads, lm_state );
+    IdentifyDmultFromSample ( my_beads,my_regions, lm_state );
   if ( ( reg_mask & DFDMR ) >0 ) // only if actually fitting NucMultiplyRatio do I need to identify NMR so we don't slide around randomly
     IdentifyNucMultiplyRatioFromSample ( my_beads, my_regions );
 }
 
-void IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads, const LevMarBeadAssistant& lm_state )
+void IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant& lm_state )
 {
-  float mean_dmult = my_beads.CenterDmultFromSample ( skip_beads );
+  float mean_dmult = my_beads.CenterDmultFromSample ();
 
   for ( int nnuc=0;nnuc < NUMNUC;nnuc++ )
   {

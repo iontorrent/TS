@@ -21,7 +21,7 @@
 #include "SpatialCorrelator.h"
 #include "RefineTime.h"
 #include "TraceCorrector.h"
-
+#include "BkgMagicDefines.h"
 #include "SampleQuantiles.h"
 
 
@@ -42,8 +42,9 @@
 //
 bool SignalProcessingMasterFitter::ProcessImage ( Image *img, int flow )
 {
-  if ( NeverProcessRegion() )
+  if ( NeverProcessRegion() ) {
     return false; // no error happened,nothing to do
+  }
 
   AllocateRegionDataIfNeeded ( img );
 
@@ -51,7 +52,8 @@ bool SignalProcessingMasterFitter::ProcessImage ( Image *img, int flow )
     img->LocalRescaleRegionByEmptyWells ( region_data->region );
 
   // Calculate average background for each well
-  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( *img, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t_mid_nuc_start);
+  //  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( *img, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t_mid_nuc_start);
+  region_data->emptyTraceTracker->SetEmptyTracesFromImageForRegion ( *img, *global_state.pinnedInFlow, flow, global_state.bfmask, *region_data->region, region_data->t0_frame);
 
 
   if ( region_data->LoadOneFlow ( img,global_defaults,flow ) )
@@ -65,7 +67,8 @@ void SignalProcessingMasterFitter::AllocateRegionDataIfNeeded ( Image *img )
 {
   if ( region_data->my_trace.NeedsAllocation() )
   {
-    SetupTimeAndBuffers ( region_data->sigma_start, region_data->t_mid_nuc_start, region_data->t_mid_nuc_start );
+    //SetupTimeAndBuffers ( region_data->sigma_start, region_data->t_mid_nuc_start, region_data->t_mid_nuc_start );
+    SetupTimeAndBuffers ( region_data->sigma_start, region_data->t_mid_nuc_start, region_data->t0_frame);
   }
 }
 
@@ -195,7 +198,9 @@ void SignalProcessingMasterFitter::ExportAllAndReset ( int flow, bool last )
     ExportStatusToMask(flow); // export status to bf mask
 
     ExportDataToWells(); // export condensed data to wells - note we munged the amplitude values in Proton data
-    ExportDataToDataCubes ( last ); // export hdf5 data if writing out - may want to put >this< before Proton wells correction
+
+    if (write_debug_files)
+      ExportDataToDataCubes ( last ); // export hdf5 data if writing out - may want to put >this< before Proton wells correction
 
     //@TODO: we reset here rather than explicitly locking: no guarantee that data remains invariant if accessed after this point
     ResetForNextBlockOfData(); // finally done, reset for next block of flows
@@ -251,6 +256,7 @@ void SignalProcessingMasterFitter::MultiFlowRegionalFitting ( int flow, bool las
   if ( region_data->fitters_applied == TIME_TO_DO_MULTIFLOW_REGIONAL_FIT)
   {
     SetFittersIfNeeded();
+
     if ( IsFirstBlock ( flow ) )
     {
       RegionalFittingForInitialFlowBlock();
@@ -317,8 +323,8 @@ SignalProcessingMasterFitter::SignalProcessingMasterFitter ( RegionalizedData *l
                                                              vector<float>& sep_t0_est, bool debug_trace_enable,
                                                              int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,
                                                              EmptyTraceTracker *_emptyTraceTracker,
-                                                             float sigma_guess,float t_mid_nuc_guess,
-                                                             SequenceItem* _seqList,int _numSeqListItems, bool restart, int16_t *_washout_flow )
+                                                             float sigma_guess,float t_mid_nuc_guess, float t0_frame_guess,
+                                                             bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart, int16_t *_washout_flow )
   : global_defaults ( _global_defaults )
 {
   NothingInit();
@@ -334,7 +340,7 @@ SignalProcessingMasterFitter::SignalProcessingMasterFitter ( RegionalizedData *l
     region_data->my_trace.SetImageParams ( _rows,_cols,_frames,_uncompFrames,_timestamps );
     region_data->emptyTraceTracker = _emptyTraceTracker;
   }
-  BkgModelInit ( debug_trace_enable,sigma_guess,t_mid_nuc_guess,sep_t0_est,sample,_seqList,_numSeqListItems, restart );
+  BkgModelInit ( debug_trace_enable,sigma_guess,t_mid_nuc_guess,t0_frame_guess,sep_t0_est,sample,nokey,_seqList,_numSeqListItems, restart );
 }
 
 
@@ -352,7 +358,8 @@ SignalProcessingMasterFitter::SignalProcessingMasterFitter ( GlobalDefaultsForBk
 
   set<int> emptySample;
   vector<float> empty_t0;
-  BkgModelInit ( false,sigma_guess,t_mid_nuc_guess,empty_t0,emptySample,NULL, 0, false );
+  // @todo - Need to pass in a t0_frame guess here
+  BkgModelInit ( false,sigma_guess,t_mid_nuc_guess, t_mid_nuc_guess, empty_t0,emptySample,false,NULL, 0, false );
 }
 
 
@@ -362,10 +369,9 @@ void SignalProcessingMasterFitter::UpdateBeadBufferingFromExternalEstimates ( ve
 }
 
 
-//@TODO: bad duplicated code between the two inits: fix!!!
 void SignalProcessingMasterFitter::BkgModelInit ( bool debug_trace_enable,float sigma_guess,
-    float t_mid_nuc_guess,vector<float>& sep_t0_est,
-    set<int>& sample, SequenceItem* _seqList,int _numSeqListItems, bool restart )
+                                                  float t_mid_nuc_guess, float t0_frame_guess, vector<float>& sep_t0_est,
+						  set<int>& sample, bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart )
 {
 
   if ( !restart )
@@ -373,12 +379,13 @@ void SignalProcessingMasterFitter::BkgModelInit ( bool debug_trace_enable,float 
     // use separator estimate
     region_data->t_mid_nuc_start = t_mid_nuc_guess;
     region_data->sigma_start = sigma_guess;
+    region_data->t0_frame = (int)(t0_frame_guess + VFC_T0_OFFSET + .5);
     region_data->my_trace.T0EstimateToMap ( sep_t0_est,region_data->region,global_state.bfmask );
 
     //Image parameters
     region_data->my_flow.numfb = NUMFB;
 
-    region_data->my_beads.InitBeadList ( global_state.bfmask,region_data->region,_seqList,_numSeqListItems, sample, global_defaults.signal_process_control.AmplLowerLimit );
+    region_data->my_beads.InitBeadList ( global_state.bfmask,region_data->region, nokey, _seqList,_numSeqListItems, sample, global_defaults.signal_process_control.AmplLowerLimit );
   }
 
   if ( ( !NeverProcessRegion() ) && debug_trace_enable )
@@ -460,31 +467,73 @@ void SignalProcessingMasterFitter::BootUpModel ( double &elapsed_time,Timer &fit
   fit_timer.restart();
   //fit_control.FitInitial
   if ( global_defaults.signal_process_control.regional_sampling ){
-    // set up sampling if needed
-    region_data->my_beads.SetSampled();
+
+    ChooseSampledForRegionParamFit();
+    FirstPassSampledRegionParamFit();
+  }
+  else {
+    FirstPassRegionParamFit();
   }
 
-  if ( !global_defaults.signal_process_control.regional_sampling )
-  {
-    lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 3, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
-    region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
-    lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA, NO_NONCLONAL_PENALTY );
-    region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
-    lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
-  }
-  else
-  {
-    lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1, 3, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
-    region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true );
-    lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
-    region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true );
-    lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1,1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus,SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
-  }
   elapsed_time += fit_timer.elapsed();
-
 }
 
+// choose a sample of beads that will be used for regional parameter fitting
+void SignalProcessingMasterFitter::ChooseSampledForRegionParamFit()
+{
+  assert ( global_defaults.signal_process_control.regional_sampling );
 
+  switch (global_defaults.signal_process_control.regional_sampling_type) {
+  case REGIONAL_SAMPLING_SYSTEMATIC:
+    {
+      region_data->my_beads.SetSampled();
+      // fprintf(stdout, "Sampled %d beads from %d live in region %d\n",region_data->my_beads.NumberSampled(),region_data->my_beads.numLBeads, region_data->region->index);
+      break;
+    }
+  case REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED:
+    {
+      std::vector<float> penalty(region_data->my_beads.numLBeads, 0);
+      region_data->my_beads.ntarget = 200;  // beads to sample
+      double pool_fraction = 0.02; // sampling_rate=1 for 100x100 thumbnail
+      int sampling_rate = (region_data->my_beads.numLBeads*pool_fraction)/region_data->my_beads.ntarget;
+      sampling_rate = std::max(1.0, (double)sampling_rate);
+      region_data->CalculateFirstBlockClonalPenalty(global_defaults.data_control.nuc_flow_frame_width, penalty, global_defaults.signal_process_control.regional_sampling_type);
+      region_data->my_beads.SetSampled(penalty, sampling_rate);
+
+      // fprintf(stdout, "Sampled %d beads from %d live in region %d with rate %d\n",region_data->my_beads.NumberSampled(),region_data->my_beads.numLBeads, region_data->region->index, sampling_rate);
+    }
+    break;
+    // return;
+  default:
+    assert(false);  // this should never happen
+  }
+}
+
+// first pass fit using all sampled beads
+// initially chosen for regional parameter fitting
+void SignalProcessingMasterFitter::FirstPassSampledRegionParamFit()
+{
+  assert ( global_defaults.signal_process_control.regional_sampling );
+
+  lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1, 3, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
+  region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true );
+  lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
+  region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeSampledReads ( true );
+  lev_mar_fit->MultiFlowSpecializedSampledLevMarFitParameters ( 1,1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus,SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
+}
+
+// first pass fit using all beads
+// initially chosen for regional parameter fitting
+void SignalProcessingMasterFitter::FirstPassRegionParamFit()
+{
+  assert ( !global_defaults.signal_process_control.regional_sampling );
+
+  lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 3, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
+  region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
+  lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA, NO_NONCLONAL_PENALTY );
+  region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
+  lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( 1, 1, lev_mar_fit->fit_control.FitWellAmplBuffering, lev_mar_fit->fit_control.FitRegionTmidnucPlus, SMALL_LAMBDA , NO_NONCLONAL_PENALTY );
+}
 
 void SignalProcessingMasterFitter::PostKeyFit ( double &elapsed_time, Timer &fit_timer )
 {
@@ -505,6 +554,12 @@ void SignalProcessingMasterFitter::PostKeyFit ( double &elapsed_time, Timer &fit
   //if(do_clonal_filter)
   //    my_beads.FindClonalReads();
 
+  // new PCA-based dark matter must be computed across all wells, so it can't be done until after we've at least done some fitting of every well
+  // if regional sampling is turned off...this is the place to fit it, though fitting it later (and using regional sampling) seems to work
+  // better
+  if ( global_defaults.signal_process_control.pca_dark_matter && !global_defaults.signal_process_control.regional_sampling)
+     axion_fit->CalculatePCADarkMatter(false);
+
   fit_timer.restart();
   if ( !global_defaults.signal_process_control.regional_sampling )
     lev_mar_fit->MultiFlowSpecializedLevMarFitParameters ( NO_ADDITIONAL_WELL_ITERATIONS, 8, lev_mar_fit->fit_control.FitWellPostKey, lev_mar_fit->fit_control.FitRegionFull, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY );
@@ -519,25 +574,36 @@ void SignalProcessingMasterFitter::PostKeyFitAllWells ( double &elapsed_time, Ti
   fit_timer.restart();
   lev_mar_fit->MultiFlowSpecializedLevMarFitAllWells ( 1, lev_mar_fit->fit_control.FitWellAmplBuffering, SMALL_LAMBDA, NO_NONCLONAL_PENALTY );
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
+
+  // new PCA-based dark matter must be computed across all wells, so it can't be done until after we've at least done some fitting of every well
+  // but it is also helpful to do this step before we finish the training....so it has been inserted here between the first and second step
+  // of fitting all wells
+  if ( global_defaults.signal_process_control.pca_dark_matter )
+     axion_fit->CalculatePCADarkMatter(false);
+
   // only wells are fit here
   lev_mar_fit->MultiFlowSpecializedLevMarFitAllWells ( HAPPY_ALL_BEADS, lev_mar_fit->fit_control.FitWellPostKey, LARGER_LAMBDA, FULL_NONCLONAL_PENALTY );
   elapsed_time += fit_timer.elapsed();
   region_data->my_beads.my_mean_copy_count = region_data->my_beads.KeyNormalizeReads ( true );
 }
 
+void SignalProcessingMasterFitter::CPU_DarkMatterPCA()
+{  
+   axion_fit->CalculatePCADarkMatter(false);
+}
+
 void SignalProcessingMasterFitter::ApproximateDarkMatter ( bool isSampled )
 {
   region_data->LimitedEmphasis();
   // now figure out whatever remaining error there is in the fit, on average
-  if ( isSampled ) {
-    // lev_mar_fit->lm_state.UpdateBeadSampleList ( region_data->my_beads.high_quality ); //update the list of beads if we are sampling.
-    region_data->my_beads.UpdateSampled( lev_mar_fit->lm_state.well_completed );
-  }
+  // if ( isSampled ) {
+  //  region_data->my_beads.UpdateSampled( lev_mar_fit->lm_state.well_completed );
+  // }
   
-    if (global_defaults.signal_process_control.enable_dark_matter)
-      axion_fit->CalculateDarkMatter ( FIRSTNFLOWSFORERRORCALC, lev_mar_fit->lm_state.residual, lev_mar_fit->lm_state.avg_resid*2.0 );
-   else
-     region_data->my_regions.missing_mass.ResetDarkMatter();
+  if (global_defaults.signal_process_control.enable_dark_matter)
+    axion_fit->CalculateDarkMatter ( FIRSTNFLOWSFORERRORCALC, lev_mar_fit->lm_state.residual, lev_mar_fit->lm_state.avg_resid*2.0 );
+  else
+    region_data->my_regions.missing_mass.ResetDarkMatter();
 }
 
 void SignalProcessingMasterFitter::FitAmplitudeAndDarkMatter ( double &elapsed_time, Timer &fit_timer )
@@ -579,11 +645,15 @@ void SignalProcessingMasterFitter::RegionalFittingForInitialFlowBlock()
   // now that we know something about the wells, select a good subset
   // by any filtration we think is good
   region_data->PickRepresentativeHighQualityWells ( global_defaults.signal_process_control.ssq_filter );
+  // fprintf(stdout, "Sampled %d beads from %d live in region %d with high-quality\n",region_data->my_beads.NumberSampled(),region_data->my_beads.numLBeads, region_data->region->index);
 
   lev_mar_fit->ChooseSkipBeads ( false );
   // these two should be do-able only on representative wells
   PostKeyFit ( elapsed_time, fit_timer );
-  ApproximateDarkMatter ( global_defaults.signal_process_control.regional_sampling );
+
+  // if not doing PCA dark matter correction...do old style dark matter correction
+  if ( !global_defaults.signal_process_control.pca_dark_matter )
+     ApproximateDarkMatter ( global_defaults.signal_process_control.regional_sampling );
 }
 
 void SignalProcessingMasterFitter::FitAllBeadsForInitialFlowBlock()
@@ -592,6 +662,10 @@ void SignalProcessingMasterFitter::FitAllBeadsForInitialFlowBlock()
   {
     Timer fit_timer;
     double elapsed_time = 0;
+
+    
+    if (region_data->my_beads.doAllBeads)
+      region_data->my_beads.IgnoreQuality(); // all beads processed in all flows
 
     if ( global_defaults.signal_process_control.regional_sampling )
       PostKeyFitAllWells ( elapsed_time, fit_timer );
@@ -609,7 +683,10 @@ void SignalProcessingMasterFitter::RemainingFitStepsForInitialFlowBlock()
 
     lev_mar_fit->ChooseSkipBeads ( true );
 
-    FitAmplitudeAndDarkMatter ( elapsed_time, fit_timer );
+    // the PCA dark matter correction does it's own fitting and this step is no longer needed
+    // if PCA correction has been selected, otherwise do the old-style dark matter fit
+    if ( !global_defaults.signal_process_control.pca_dark_matter )
+       FitAmplitudeAndDarkMatter ( elapsed_time, fit_timer );
 
     // catch up well parameters on wells we didn't use in the regional estimates
     if ( lev_mar_fit->SkipBeads() )

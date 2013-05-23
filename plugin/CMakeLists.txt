@@ -30,8 +30,10 @@ SFFCreator
 coverageAnalysis
 sampleID
 variantCaller
-IonReporterUploader_V1_2
+IonReporterUploader
 ERCC_Analysis
+TorrentSuiteCloud
+FilterDuplicates
 )
 
 foreach(PLUGIN ${PLUGINS})

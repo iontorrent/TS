@@ -110,6 +110,10 @@ protected:
   vector<float>           phred_thresholds_max_;      //!< Maximum threshold for each predictor
   vector<uint8_t>         phred_quality_;             //!< Quality value associated with each predictor cut.
 
+  vector<vector<float> >  phred_cuts_;				  //!< Predictor threshold table, kNumPredictors x num_phred_cuts.
+  unsigned char*		  phred_table_;				  //!< Predictor table of QV values.
+  vector<size_t>		  offsets_;					  //!< Indexing offsets.
+
   bool                    save_predictors_;           //!< If true, dump predictor values for each processed read and base
   ofstream                predictor_dump_;            //!< File to which predictor values are dumped
   pthread_mutex_t         predictor_mutex_;           //!< Mutex protecting writes to predictor dump file
@@ -124,6 +128,9 @@ private:
   float transform_P7(float p);
   float transform_P8(float p);
   float transform_P9(float p);
+
+public:
+  bool hasBinaryExtension(string &filename);
 
 };
 

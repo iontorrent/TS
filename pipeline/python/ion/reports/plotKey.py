@@ -1,15 +1,7 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-import sys
 import os
-from operator import itemgetter
-from subprocess import *
-import numpy 
 from ion.reports.plotters import plotters
-from os import path
-from scipy import stats, signal
-from ion.utils import template
-import random
 
 class KeyPlot:
     def __init__(self, key, floworder, title=None):
@@ -26,7 +18,7 @@ class KeyPlot:
                                       self.data, 
                                       title="Consensus Key 1-Mer - %s Ave. Peak = %s" % (self.title,self.average_peak))
         tracePlot.render()
-        tracePlot.save(path.join(os.getcwd(), 'iontrace_%s' % self.title.replace(" ","_")))
+        tracePlot.save(os.path.join(os.getcwd(), 'iontrace_%s' % self.title.replace(" ","_")))
 
     def parse(self, fileIn):
         d = open(fileIn, 'r')
@@ -47,7 +39,6 @@ class KeyPlot:
             else:
                 toPlot.append([0 for i in range(max)])
         self.data = trace
-        print "done with parse"
         return toPlot
 
     def dump_max(self, fileName):
@@ -81,4 +72,3 @@ if __name__=="__main__":
     kp.parse(fileIn)
     kp.dump_max(fileOut)
     kp.plot()
-

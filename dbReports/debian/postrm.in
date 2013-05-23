@@ -2,26 +2,31 @@
 # Copyright (C) 2010-2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 set -e
+echo "postrm $@"
 
 case "$1" in
     remove)
-    
+
     #old,legacy log directory
     if [ -d /var/log/anaserve ]; then
     	rm -rf /var/log/anaserve
     fi
-    
+
     # remove sys-V init script links
     DAEMONS=(
         ionCrawler
         ionJobServer
-        ionArchive
         ionPlugin
         celeryd
         )
     for DAEMON in ${DAEMONS[@]}; do
-        update-rc.d ${DAEMON} remove || true
+        update-rc.d -f ${DAEMON} remove || true
     done
+
+    #MegaCli64 library support - remove link created during postinit
+    if [ -h /usr/lib64/libsysfs.so.2.0.2 ]; then
+        rm -f /usr/lib64/libsysfs.so.2.0.2
+    fi
     ;;
 esac
 

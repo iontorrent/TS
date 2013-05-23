@@ -27,46 +27,61 @@ class DumpBuffer
 
 char _name[DUMPNAMELEN];
 char * _buffer;
-unsigned int _sizeBytes;
-unsigned int _writeOffset;  
+size_t _sizeBytes;
+size_t _writeOffset;  
 
 
 
 public:
 
-DumpBuffer(unsigned int sizeBytes, const char * name = NULL);
+DumpBuffer(size_t sizeBytes, const char * name = NULL);
 DumpBuffer(ifstream& myFile);
 
 ~DumpBuffer();
 
 void cleanup();
 
-unsigned int addData(void * data, unsigned int bytes);
-unsigned int addCudaData(void * devData, unsigned int bytes);
+size_t addData(void * data, size_t bytes);
+size_t addCudaData(void * devData, size_t bytes);
 
 void writeToFile(ofstream& oFile);
 void readFromFile(ifstream& iFile);
 
 void * getData();
-unsigned int getSize();
+size_t getSize();
 const char * getName();
 
 bool CompareName(DumpBuffer& buffer);
 bool CompareSize(DumpBuffer& buffer);
 
+// compares twe buffer objects for name, size and data
 bool Compare(DumpBuffer& buffer, float threshold, OutputFormat output =MIN,
-int length = 0, int stride = 1,int start = 0);  // compares toe buffer objects for name, size and data
+size_t length = 0, size_t stride = 1,size_t start = 0);  // compares twe buffer objects for name, size and data
+
+// compares the data of two buffer objects (size not checked)
 bool CompareData(DumpBuffer& buffer, float threshold, OutputFormat output
-=MIN, int length = 0, int stride = 1,int start = 0); // compares the data of two buffer objects (size not checked)
-bool CompareData(float * data, float threshold, OutputFormat output =MIN, int
-length = 0, int stride = 1,int start = 0); // compares data in buffer object with data at pointer (size used from buffer object)
+=MIN, size_t length = 0, size_t stride = 1,size_t start = 0);
 
-bool CompareCuda(float * devData, float threshold, OutputFormat output =MIN); // compares data in buffer object with data on device (size from data object)
+// compares data in buffer object with data at pointer (size used from buffer object)
+bool CompareData(float * data, float threshold, OutputFormat output =MIN, size_t
+length = 0, size_t stride = 1,size_t start = 0); 
 
-static bool CompareCuda(float * devData, float * hostData, unsigned int size, float threshold, OutputFormat output =MIN);
+bool CompareData(short int * data, float threshold = 0, OutputFormat output =MIN, size_t
+length = 0, size_t stride = 1,size_t start = 0); 
 
-unsigned int PrintHeader();
-unsigned int Print();
+bool CompareData(int * data, float threshold =0 , OutputFormat output =MIN, size_t
+length = 0, size_t stride = 1,size_t start = 0); 
+
+
+
+// compares data in buffer object with data on device (size from data object)
+bool CompareCuda(float * devData, float threshold, OutputFormat output =MIN); 
+
+static bool CompareCuda(float * devData, float * hostData, size_t size, float threshold, OutputFormat output =MIN);
+
+size_t PrintHeader();
+size_t Print();
+size_t Print(size_t length , size_t stride,size_t start=0, size_t max=0);
 
 
 };
@@ -84,10 +99,10 @@ class DumpFile
   DumpFile() {};
   ~DumpFile();
 
-  int addBuffer(DumpBuffer * buffer);
-  int writeToFile(const char * filename);
-  int readFromFile(const char * filename);  
-  int getNumBuffers();
+  size_t addBuffer(DumpBuffer * buffer);
+  size_t writeToFile(const char * filename);
+  size_t readFromFile(const char * filename);  
+  size_t getNumBuffers();
   
   DumpBuffer* getBuffer(int id);
   DumpBuffer* getBuffer(const char * buffername);
@@ -96,8 +111,8 @@ class DumpFile
   void Compare(DumpBuffer& buffer, float threshold,OutputFormat output = MIN );
  
   void printContent(); 
-  void printContent(int id);
-  void printContent(const char * buffername); 
+  void printContent(int id, size_t length=0 , size_t stride=1 ,size_t start=0);
+  void printContent(const char * buffername, size_t length=0 , size_t stride=1 ,size_t start=0); 
 
 };
 

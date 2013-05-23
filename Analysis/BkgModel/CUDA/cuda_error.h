@@ -14,17 +14,23 @@
     cudaError_t err = cudaGetLastError();                                                      \
     if ( err != cudaSuccess && err != cudaErrorSetOnActiveProcess ) {                          \
       if(err != cudaErrorMemoryAllocation){                                                    \
-        std::cout << " +----------------------------------------" << std::endl                 \
+        throw cudaExceptionDebug(err,__FILE__, __LINE__);                                      \
+      }else throw cudaAllocationError(err, __FILE__, __LINE__);                                                       \
+    }                                                                       \
+}
+
+/*        std::cout << " +----------------------------------------" << std::endl                 \
                   << " | ** CUDA ERROR! ** " << std::endl                                      \
                   << " | Error: " << err << std::endl                                          \
                   << " | Msg: " << cudaGetErrorString(err) << std::endl                        \
                   << " | File: " << __FILE__ << std::endl                                      \
                   << " | Line: " << __LINE__ << std::endl                                      \
                   << " +----------------------------------------" << std::endl << std::flush;  \
-                  exit(-1);                                                                    \
-      }else throw cudaAllocationError(err, __FILE__, __LINE__);                                                       \
+                  throw cudaExecutionException(err, __FILE__, __LINE__);                      \
+      }else throw cudaAllocationError(err, __FILE__, __LINE__);                               \
     }                                                                       \
 }
+*/
 
 #else
 #define CUDA_ERROR_CHECK() {}
@@ -35,7 +41,17 @@
    cudaError_t err = cudaGetLastError();                                                      \
     if ( err != cudaSuccess && err != cudaErrorSetOnActiveProcess ) {                          \
       if(err != cudaErrorMemoryAllocation){                                                    \
-        std::cout << " +----------------------------------------" << std::endl                 \
+        throw cudaExceptionDebug(err,__FILE__, __LINE__);                                      \
+      }else throw cudaAllocationError(err, __FILE__, __LINE__);                                                       \
+    }else{                                                                       \
+      if(a == NULL) {            \
+        std::cout << "Memory Manager retunred NULL pointer!! " << __FILE__ << " " << __LINE__ <<std::endl;  \
+        throw cudaAllocationError(cudaErrorInvalidDevicePointer, __FILE__, __LINE__);  \
+      }       \
+    }                         \
+}
+
+/*        std::cout << " +----------------------------------------" << std::endl                 \
                   << " | ** CUDA ERROR! ** " << std::endl                                      \
                   << " | Error: " << err << std::endl                                          \
                   << " | Msg: " << cudaGetErrorString(err) << std::endl                        \
@@ -43,16 +59,7 @@
                   << " | Line: " << __LINE__ << std::endl                                      \
                   << " +----------------------------------------" << std::endl << std::flush;  \
                   exit(-1);                                                                    \
-      }else throw cudaAllocationError(err, __FILE__, __LINE__);                                                       \
-    }else{                                                                       \
-      if(a == NULL) {            \
-        std::cout << "====>> cudaMalloc returned cudaSuccess but the pointer is NULL!!" << std::endl;  \
-        throw cudaAllocationError(cudaErrorInvalidDevicePointer, __FILE__, __LINE__);  \
-      }       \
-    }                         \
-}
-
-
+*/
 
 /* cuda Error Codes:
   cudaSuccess                           =      0,   ///< No errors

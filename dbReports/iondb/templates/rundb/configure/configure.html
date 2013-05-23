@@ -9,208 +9,119 @@
   <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
-	<div class="content clearfix">
-		<form class="form-horizontal" id="contacts_form" >
-			<div>
-				<h1>Customer Support Contact</h1>
-				<p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
-				<div class="control-group">
-					<label for="csc_name" class="control-label">Name</label>
-					<div class="controls">
-						<input value="{{ contacts.lab_contact.name }}" name="lab_contact-name" id="id_lab_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="csc_email" class="control-label">Email</label>
-					<div class="controls">
-						<input value="{{ contacts.lab_contact.email }}" name="lab_contact-email" id="id_lab_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="csc_phone" class="control-label">Telephone Number</label>
-					<div class="controls">
-						<input value="{{ contacts.lab_contact.phone_number }}" name="lab_contact-phone_number" id="id_lab_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-			</div>
-			
-			<div>
-				<h1>IT Contact</h1>
-				<p>This is the person in your organization who should be notified during a support request of problems related to the Torrent Server's hardware or the network environment.</p>
-				<div class="control-group">
-					<label for="itc_name" class="control-label">Name</label>
-					<div class="controls">
-						<input value="{{ contacts.it_contact.name }}" name="it_contact-name" id="id_it_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="itc_email" class="control-label">Email</label>
-					<div class="controls">
-						<input value="{{ contacts.it_contact.email }}" name="it_contact-email" id="id_it_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="itc_phone" class="control-label">Telephone Number</label>
-					<div class="controls">
-						<input value="{{ contacts.it_contact.phone_number }}" name="it_contact-phone_number" id="id_it_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
-						<p class="help-block">
-							
-						</p>
-					</div>
-				</div>
-				
-			</div>
-		</form>
-		
-		<div class="pull-left">
-			<a id="upfile" class="btn btn-primary save_button" href="#">Save Contacts</a>
-			<a class="btn" href="{% url configure_configure %}">Reset</a>
-		</div>
-	</div>
-	
-	<div class="content">
-	    <h1>Customize Site Name</h1>
-	    <br>
-	    <form action="{% url configure_configure %}" method="POST" class="form-inline" id="sitename">
-	        <input type="text" name="site_name" value="{{base_site_name}}">
-	        <input class="btn btn-primary" type="submit" value="Save Name">
-	    </form>
-	</div>
-	
-	<div class="content">
-		<h1>Report Data Management</h1>
-		<br>
-		<p>This is where to <a href="/configure/reportSettings">configure</a> settings for managing results Report files</p>
-	</div>
-	<div class="content">
-		<div class="clearfix">
-			<h1 class="pull-left" name="email">Email</h1>
-	        <a id="add_email" href="{% url edit_email %}" class="btn btn-primary pull-right edit-email">Add Email</a>
-		</div>
-		{% if email %}
-			<table id="email_table" class="">
-			<thead>
-			<tr>
-			  <th>Edit</th>
-			  <th>Enabled</th>
-			  <th>Email Address</th>
-			</tr>
-			</thead>
-			<tbody>
-			{% for e in email %}
-				<tr class="data-table" id="{{e.pk}}_row">
-					<td>
-						<a class="edit-email" href="{% url edit_email e.pk %}">Edit</a>
-					</td>
-					<td class='enable_email_td'>
-						<input {% if e.selected %}checked{% endif %} type="checkbox" class="emailselected" data-pk="{{e.pk}}" />
-					</td>
-					<td>{{ e.email }}</td>
-				</tr>
-			{% endfor %}
-			</tbody>
-			</table>
-		{% else %}
-			<div class="centered_message">No Email Addresses Configured.</div>
-		{% endif %}
-	</div>
-	<div class="content">
-		<div class="clearfix">
-			<h1>Database Administration</h1>
-			<br>
-			<p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
-		</div>
-	</div>
-	</div>
-		
-<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+    <div class="content clearfix">
+        <form class="form-horizontal" id="contacts_form" enctype="application/x-www-form-urlencoded" action="{% url configure_configure %}" method="POST" >
+            <div>
+                <h1>Customer Support Contact</h1>
+                <p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
+                <div class="control-group">
+                    <label for="csc_name" class="control-label">Name</label>
+                    <div class="controls">
+                        <input value="{{ contacts.lab_contact.name }}" name="lab_contact-name" id="id_lab_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
 
-<script type="text/javascript">
-$('#contacts_form').uniform({
-	holder_class : 'control-group'
-	, msg_selector: 'p.help-block'
-	, error_class : 'alert alert-error'
-});
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="csc_email" class="control-label">Email</label>
+                    <div class="controls">
+                        <input value="{{ contacts.lab_contact.email }}" name="lab_contact-email" id="id_lab_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
 
-$('.save_button').click(function(e){
-	e.preventDefault();
-	$('#contacts_form').submit();
-});
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="csc_phone" class="control-label">Telephone Number</label>
+                    <div class="controls">
+                        <input value="{{ contacts.lab_contact.phone_number }}" name="lab_contact-phone_number" id="id_lab_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
 
-//TODO: Check this function over - I copied it and there may be extraneous cruft.
-$('#contacts_form').submit(function(e){
-	e.preventDefault();
+                        </p>
+                    </div>
+                </div>
+            </div>
 
-	if ($("#contacts_form *").hasClass("error")) {
-		console.log("There is an error");
-		$("#contacts_form").animate({scrollTop : 0}, "slow");
-		$(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
-		return false;
-	}
-	
-	var json = $('#contacts_form').serializeJSON();
-	type = "POST";
-		
-	//console.log('transmitting :', type, json );
+            <div>
+                <h1>IT Contact</h1>
+                <p>This is the person in your organization who should be notified during a support request of problems related to the Torrent Server's hardware or the network environment.</p>
+                <div class="control-group">
+                    <label for="itc_name" class="control-label">Name</label>
+                    <div class="controls">
+                        <input value="{{ contacts.it_contact.name }}" name="it_contact-name" id="id_it_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
 
-    $.ajax({
-		type: type,
-        dataType: "json",
-        contentType: "application/json",
-		data: json
-	})
-    .always(function(data) { });
-	
-});
-</script>
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="itc_email" class="control-label">Email</label>
+                    <div class="controls">
+                        <input value="{{ contacts.it_contact.email }}" name="it_contact-email" id="id_it_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
 
-<script>
-$(document).ready(function(){
-    $("#email_table").kendoGrid({
-        dataSource: {
-            pageSize: 5
-        },
-        height: 'auto',
-        groupable: false,
-        scrollable: false,
-        sortable: true,
-        pageable: true
-    });
-    $('.edit-email').click(function(e) {
-	    e.preventDefault();
-	    url = $(this).attr('href');
-	    $('#modal_configure_edit_email').remove();
-	    $.get(url, function(data) {
-	        $('body').append(data);
-	        $('#modal_configure_edit_email').modal('show');
-	    });
-	});
-	$(".emailselected").change(function(){
-		var checked = $(this).is(":checked"),
-		    pk = $(this).data("pk");
-		$.ajax({
-			type: "PATCH",
-			url: "/rundb/api/v1/emailaddress/" + pk + "/",
-			contentType: "application/json",
-			data: JSON.stringify({"selected": checked})
-		});
-	});
-});
-</script>
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="itc_phone" class="control-label">Telephone Number</label>
+                    <div class="controls">
+                        <input value="{{ contacts.it_contact.phone_number }}" name="it_contact-phone_number" id="id_it_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
+                        <p class="help-block error"></p>
+                        <p class="help-block">
+
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </form>
+
+        <div class="pull-left">
+            <a id="upfile" class="btn btn-primary save_button" href="#">Save Contacts</a>
+            <a id="contacts_form_reset" class="btn">Reset</a>
+        </div>
+    </div>
+
+    <div class="content">
+        <h1>Customize Site Name</h1>
+        <br>
+        <form action="{% url configure_configure %}" method="POST" class="form-inline" id="sitename">
+            <input type="text" name="site_name" value="{{base_site_name}}">
+            <input class="btn btn-primary" type="submit" value="Save Name">
+        </form>
+    </div>
+<!--
+    <div class="content">
+        <h1>Report Data Management</h1>
+        <br>
+        <p>This is where to <a href="/configure/reportSettings">configure</a> settings for managing results Report files</p>
+    </div>
+-->
+    <div class="content">
+        <div class="clearfix">
+            <h1 class="pull-left" name="email">Email</h1>
+            <a id="add_email" href="{% url edit_email %}" class="btn btn-primary pull-right">Add Email</a>
+        </div>
+        <div id="email_table"></div>
+        <div id="no_email_configured" class="centered_message" style="display:none">No Email Addresses Configured.</div>
+    </div>
+    <div class="content">
+        <div class="clearfix">
+            <h1>Database Administration</h1>
+            <br>
+            <p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
+        </div>
+    </div>
+    </div>
+
+<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/configure/configure/contacts.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/configure/configure/emails.js"></script>
 {% endblock content %}

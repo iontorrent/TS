@@ -1,41 +1,41 @@
 <div id="modal_queuestat" title="" class="modal hide">
- 	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		<h1>Cluster Queue Status</h1>
-	</div>
-	<div class="modal-body">
-	<div id="modal-error-messages"></div>
-  <div class="margins">
-     <table class="data-table">
-        <thead>
-          <th>Name</th>
-          <th>Pending</th>
-          <th>Used</th>
-          <th>Available</th>
-          <th>Error</th>
-          <th>Total</th>
-        </thead>
-        <tbody>
-	          {% for queue in queues %}
-	            <tr>
-	              <td>{{ queue.name }}</td>
-	              <td>{{ queue.pending }}</td>
-	              <td>{{ queue.used }}</td>
-	              <td>{{ queue.avail }}</td>
-	              <td>{{ queue.error }}</td>
-	              <td>{{ queue.total }}</td>
-	            </tr>
-	          {% endfor %}
-	      </tbody>
-      </table>
-  </div>
-</div>
-	<div class="modal-footer">
-		<a href="#" class="btn" data-dismiss="modal">Close</a>
-	</div>    
-	<script>
-		$('#modal_queuestat').on('hidden', function() {
-			$('body #modal_queuestat').remove();
-		});
-	</script>
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h1>Cluster Queue Status</h1>
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        <div class="margins">
+            <table class="data-table">
+                <thead>
+                  <th>Name</th>
+                  <th>Pending</th>
+                  <th>Used</th>
+                  <th>Available</th>
+                  <th>Error</th>
+                  <th>Total</th>
+                </thead>
+                <tbody>
+                  {% for queue in queues %}
+                    <tr>
+                      <td>{{ queue.name }}</td>
+                      <td>{{ queue.pending }}</td>
+                      <td>{{ queue.used }}</td>
+                      <td>{{ queue.avail }}</td>
+                      <td>{{ queue.error }}</td>
+                      <td>{{ queue.total }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
+    </div>
+    <script>
+        $('#modal_queuestat').on('hidden', function() {
+            $('body #modal_queuestat').remove();
+        });
+    </script>
 </div>

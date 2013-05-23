@@ -39,6 +39,7 @@ if [ ${exit_status-255} -gt 126 ]; then
   echo "==============================================================================="
   date +'end time=%Y-%m-%d %k:%M:%S.%N'
   ## Set Failed status - error not caught in script itself. probably killed due to memory/time)
+  echo "FATAL: JOB Killed by SGE. Probably killed due to exceeding maximum runtime."
   ion-plugin-status --pk ${RUNINFO__PK} --plugin "${RUNINFO__PLUGIN__NAME}" --version "${RUNINFO__PLUGIN__VERSION-0}" -s 'Error'
 fi
 

@@ -1,0 +1,108 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -u
+
+PATH=/opt/MegaRAID/MegaCli/:$PATH
+
+# Test for root privilege and send out clear message if not
+if [ $(id -u) != 0 ]; then
+    echo "Needs root privilege to access controller"
+    exit 1
+fi
+
+# Get list of devices
+# MegaCli64 -PDList -aALL -or- MegaCli64 -PDList -a0 since we only have one adapter
+
+# Get number of devices
+# MegaCli64 -PDGetNum -a0
+
+# Get all information about the adapter
+#MegaCli64 -AdpAllInfo -aALL
+
+# Get event log
+#MegaCli64 -AdpEventLog -GetEvents -aALL
+
+# Get status
+#MegaCli64 -ShowSummary -a0
+
+# Get drive info
+#MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL
+
+# prototype logic
+
+#
+# Probe for adapters
+#
+num_adp=$(MegaCli64 -adpCount | grep "Controller Count" | cut -f2 -d: | sed -e 's/ //' -e 's/\.//')
+
+# If no controllers are detected, exit now
+if [ $num_adp -eq 0 ]; then
+    echo "No RAID controllers were detected"
+fi
+
+#
+# N.B. T620 has only one adapter, we assume from here on out this is true and
+#hardcode -a0.
+#
+
+
+#
+# Probe for Adapter name
+#
+adp_name=$(MegaCli64 -AdpAllInfo -a0 | grep "^Product Name" | cut -f2 -d: )
+
+#
+# Probe for enclosure number
+#
+enc_num=$(MegaCli64 -EncInfo -a0 | grep "Device ID" | cut -f2 -d: | sed -e 's/ //' -e 's/\.//')
+
+#
+# Probe for number of drives
+#
+num_dev=$(MegaCli64 -EncInfo -a0 | grep "Number of Physical Drives" | cut -f2 -d: | sed -e 's/ //' -e 's/\.//')
+
+#
+# Probe for Alerts
+#
+for slotnum in $(seq 0 $(($num_dev-1))); do
+    echo -e "=====\nSlot $slotnum:"
+    # MediaErrorCount
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Media Error"
+# OtherErrorCount
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Other Error"
+# PredictiveFailureCount
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Predictive Failure"
+# FirmwareState
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Firmware State"
+# InquiryData
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Inquiry Data"
+# NeedsEkmAttention
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Needs EKM"
+# ForeignState
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Foreign State"
+# PortStatus
+#TODO: There are two ports!
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep -B1 "^Port status" | grep -v "\--"
+# SmartAlertFlagged
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "S.M.A.R.T."
+
+    # I think this would be fun
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Drive Temperature"
+done
+
+
+# From Proton Instrument SsdDiskScreen.java monitoring of internal RAID
+#
+# MediaErrorCount
+# OtherErrorCount
+# PredictiveFailureCount
+# FirmwareState
+# InquiryData
+# NeedsEkmAttention
+# ForeignState
+# PortStatus
+# SmartAlertFlagged
+#
+#
+
+exit

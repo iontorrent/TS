@@ -19,7 +19,7 @@ from torrentserver.cluster_settings import *
 
 from ion.utils.blockprocessing import printheader, printtime
 from ion.utils.blockprocessing import write_version
-from ion.utils.aggregate_alignment import aggregate_alignment
+from ion.utils import ionstats
 
 def submit_job(script, args, sge_queue = 'all.q', hold_jid = None):
     cwd = os.getcwd()    
@@ -86,19 +86,60 @@ def get_barcode_files(parent_folder, datasets_path, bcSetName):
         with open(datasetsFile, 'r') as f:
             datasets_json = json.loads(f.read())
         for dataset in datasets_json.get("datasets",[]):
-            bamfile = os.path.join(parent_folder, dataset["legacy_prefix"]+'.bam')
+            bamfile = os.path.join(parent_folder, dataset["file_prefix"]+'.bam')
             if os.path.exists(bamfile):
                 barcode_bams.append(bamfile)
+            elif 'legacy_prefix' in dataset.keys():
+                old_bamfile = os.path.join(parent_folder, dataset["legacy_prefix"]+'.bam')
+                if os.path.exists(old_bamfile):
+                    barcode_bams.append(old_bamfile)
     except:
         pass  
     
     if len(barcode_bams) == 0:
+        printtime("DEBUG: no barcoded files found from %s" % datasetsFile)
         barcode_bams = glob( os.path.join(parent_folder, bcSetName+'*_rawlib.bam') )
         barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )    
         barcode_bams.sort()
         
     printtime("DEBUG: found %i barcodes in %s" % (len(barcode_bams), parent_folder) )
     return barcode_bams
+
+def barcode_report_stats(bcfile_names):
+    CA_barcodes_json = []
+    ionstats_file_list = []
+    printtime("DEBUG: creating CA_barcode_summary.json")
+
+    for bcname in bcfile_names:
+        barcode_name = bcname.split('_rawlib.bam')[0]
+        ionstats_file = bcname.split('.bam')[0] + '.ionstats_alignment.json'
+        barcode_json = {"barcode_name": barcode_name, "AQ7_num_bases":0, "full_num_reads":0, "AQ7_mean_read_length":0}
+        try:
+            stats = json.load(open(ionstats_file))
+            for key in stats.keys():
+                if key in ['AQ7', 'AQ10', 'AQ17', 'AQ20', 'AQ30', 'AQ47', 'full', 'aligned']:
+                    barcode_json.update({
+                        key+ "_max_read_length": stats[key].get("max_read_length"),
+                        key+ "_mean_read_length": stats[key].get("mean_read_length"),
+                        key+ "_num_bases": stats[key].get("num_bases"),
+                        key+ "_num_reads": stats[key].get("num_reads")
+                    })
+            ionstats_file_list.append(ionstats_file)
+        except:
+            printtime("DEBUG: error reading ionstats from %s" % ionstats_file)
+            traceback.print_exc()
+
+        if barcode_name == 'nomatch':
+            CA_barcodes_json.insert(0, barcode_json)
+        else:
+            CA_barcodes_json.append(barcode_json)
+
+    with open('CA_barcode_summary.json','w') as f:
+        f.write(json.dumps(CA_barcodes_json, indent=2))
+    
+    # generate merged ionstats_alignment.json
+    if not os.path.exists('ionstats_alignment.json'):
+        ionstats.reduce_stats(ionstats_file_list,'ionstats_alignment.json')
 
 if __name__ == '__main__':
   
@@ -113,7 +154,6 @@ if __name__ == '__main__':
     traceback.print_exc()
   
   printheader()
-  status = 'Error'
   primary_key_file = os.path.join(os.getcwd(),'primary.key')
   
   try:
@@ -175,7 +215,8 @@ if __name__ == '__main__':
             for bam in bcfile_files[filename]:
                 merge_args.append('--add-file')
                 merge_args.append(bam)
-            jobId = submit_job(script, merge_args, 'plugin.q')  
+            jobId = submit_job(script, merge_args, 'plugin.q')
+            bc_jobs.append(jobId)
             printtime("DEBUG: Submitted %s job %s" % ('merge barcodes', jobId))        
         else:          
             printtime("DEBUG: copy barcode %s" % filename)
@@ -185,57 +226,51 @@ if __name__ == '__main__':
         zip_args.append('--add-file')
         zip_args.append(filename)
         
-        # create barcode alignment summary files
-        if jobId:
-            jobId = submit_job(script, ['--align-stats', filename, '--genomeinfo', env['genomeinfo']], 'plugin.q', [jobId])
-        else:
-            jobId = submit_job(script, ['--align-stats', filename, '--genomeinfo', env['genomeinfo']], 'plugin.q')    
-        printtime("DEBUG: Submitted %s job %s for %s" % ('alignStats', jobId, filename))
-        bc_jobs.append(jobId) 
-
     # zip barcoded files        
-    jobId = submit_job(script, zip_args, 'all.q', bc_jobs)  
-    printtime("DEBUG: Submitted %s job %s" % ('zip barcodes', jobId))
+    #jobId = submit_job(script, zip_args, 'all.q', bc_jobs)  
+    #printtime("DEBUG: Submitted %s job %s" % ('zip barcodes', jobId))
     
-    # TODO: could launch non-barcoded merge before waiting
     wait_on_jobs(bc_jobs, 'barcode', 'Processing barcodes')
         
-    # create barcode csv 
-    printtime("DEBUG: creating alignment_barcode_summary.csv")
-    aggregate_alignment('./', barcodelist_path)
-  
   # *** END Barcodes ***
   
   
   # merge BAM files
   bamfile = 'rawlib.bam'
   printtime("Merging bam files")
-#  merge_bam_files(env['parentBAMs'], bamfile, bamfile.replace('.bam','.bam.bai'), '')
   merge_args = ['--merge-bams', bamfile]  
   if env['mark_duplicates']:
       merge_args.append('--mark-duplicates')
+
   file_args = []
   for bam in env['parentBAMs']:
+      if not os.path.exists(bam):
+          # compatibility: try expName_resultName.bam
+          parent_path = os.path.dirname(bam)
+          with open(os.path.join(parent_path, 'ion_params_00.json'), 'r') as f:
+              parent_env = json.loads(f.read())
+          bam = "%s_%s.bam" % (parent_env.get('expName',''), parent_env.get('resultsName',''))
+          bam = os.path.join(parent_path, bam)
+      if not os.path.exists(bam):
+          printtime("WARNING: Unable to find BAM file to merge in %s" % parent_path)
+          continue
       file_args.append('--add-file')
       file_args.append(bam)
+      print 'BAM file %s' % bam
   merge_args += file_args
+  
   jobId = submit_job(script, merge_args)  
   printtime("DEBUG: Submitted %s job %s" % ('BAM merge', jobId))
 
   wait_on_jobs([jobId], 'BAM merge', 'Merging BAM files')  
 
-  # Call alignStats on merged bam file 
-  jobId = submit_job(script, ['--align-stats', bamfile, '--genomeinfo', env['genomeinfo']])
-  printtime("DEBUG: Submitted %s job %s" % ('alignStats', jobId))
-  wait_on_jobs([jobId], 'alignStats', 'Generating Alignment metrics')
-  
   # Generate files needed to display Report
-  jobId = submit_job(script, ['--merge-plots'] + file_args) 
+  if do_barcodes:
+    barcode_report_stats(sorted(bcfile_count.keys()))
+  jobId = submit_job(script, ['--merge-plots']) 
   printtime("DEBUG: Submitted %s job %s" % ('MergePlots', jobId))  
   wait_on_jobs([jobId], 'mergePlots', 'Generating Alignment plots')
     
-  status = 'Completed'
-  
   # make downloadable BAM filenames
   mycwd = os.getcwd() 
   download_links = 'download_links'
@@ -246,31 +281,41 @@ if __name__ == '__main__':
     os.symlink(filename, os.path.join(download_links, newname+'.bam'))
     os.symlink(filename+'.bai', os.path.join(download_links, newname + '.bam.bai'))
     # barcodes:
-    for bcfile in bcfile_count.keys():
-        filename = os.path.join(mycwd, bcfile)
-        os.symlink(filename, os.path.join(download_links, newname+'.'+bcfile ) )
-        os.symlink(filename+'.bai', os.path.join(download_links, newname+'.'+bcfile+'.bai' ) ) 
+    if do_barcodes:
+        #os.symlink(os.path.join(mycwd, zipname), os.path.join(download_links, newname+'.barcode.bam.zip'))
+        for bcfile in bcfile_count.keys():
+            filename = os.path.join(mycwd, bcfile)
+            os.symlink(filename, os.path.join(download_links, newname+'.'+bcfile ) )
+            os.symlink(filename+'.bai', os.path.join(download_links, newname+'.'+bcfile+'.bai' ) ) 
   except:
     traceback.print_exc()
 
-  # upload metrics
-  printtime("Upload metrics.")
-  reportLink = True
-  ret_message = jobserver.uploadmetrics(
-        "",#    os.path.join(mycwd,tfmapperstats_outputfile),
-        "",#    os.path.join(mycwd,"processParameters.txt"),
-        "",#    os.path.join(mycwd,beadPath),
-        "",#    filterPath,
-        os.path.join(mycwd,"alignment.summary"),
-        "",#    os.path.join(mycwd,"raw_peak_signal"),
-        "",#    os.path.join(mycwd,"quality.summary"),
-        "",#    os.path.join(mycwd,BaseCallerJsonPath),
-        os.path.join(mycwd,'primary.key'),
-        os.path.join(mycwd,'uploadStatus'),
-        status,
-        reportLink)
-#  print "jobserver.uploadmetrics returned: "+str(ret_message)
-  
+  if os.path.exists(bamfile):
+      status = 'Completed' 
+  elif do_barcodes:      
+      status = 'Completed' # for barcoded Proton data rawlib.bam may not get created
+  else:
+      status = 'Error'
+
+  # Upload metrics
+  try:
+      ret_message = jobserver.uploadmetrics(
+            '',
+            '',
+            '',
+            os.path.join(mycwd,'ionstats_alignment.json'),
+            os.path.join(mycwd,'ion_params_00.json'),
+            '',
+            '',
+            '',
+            os.path.join(mycwd,'primary.key'),
+            os.path.join(mycwd,'uploadStatus'),
+            status,
+            True,
+            mycwd)
+  except:
+      pass
+
   # copy php script
   os.umask(0002)
   TMPL_DIR = '/usr/share/ion/web/db/writers'

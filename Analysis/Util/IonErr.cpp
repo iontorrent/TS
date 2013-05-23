@@ -5,6 +5,8 @@
 
 #include "IonErr.h"
 
+int ExitCode::exitCode = EXIT_SUCCESS;
+
 IonErrStatus::IonErrStatus() {
   mDoThrow = false;
 }

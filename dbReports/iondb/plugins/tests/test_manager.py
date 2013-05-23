@@ -25,7 +25,6 @@ class PluginManagerTest(TestCase):
             pm = PluginManager()
             self.assertEqual(pm.default_plugin_script, 'launch.sh')
             self.assertEqual(pm.pluginroot, os.path.normpath(self.tempdir))
-            self.assertEqual(pm.infocache, {})
     
     def test_init_no_settings(self):
         with override_settings(PLUGIN_PATH = None):
@@ -33,4 +32,3 @@ class PluginManagerTest(TestCase):
             pm = PluginManager()
             self.assertEqual(pm.default_plugin_script, 'launch.sh')
             self.assertEqual(pm.pluginroot, os.path.normpath(os.path.join("/results", self.gc.plugin_folder)))
-            self.assertEqual(pm.infocache, {})

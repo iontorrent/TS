@@ -22,8 +22,6 @@
 #include "KMfilterCenters.h"		// center set structure
 #include "KMrand.h"			// random number includes
 
-#include "dbgmem.h"
-
 //----------------------------------------------------------------------
 //  Declaration of local utilities.  These are used in getNeighbors().
 //----------------------------------------------------------------------

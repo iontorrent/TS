@@ -12,7 +12,7 @@ try:
 except:
     compression = zipfile.ZIP_STORED
 
-def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True):
+def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True, compressed = True):
     """Try to make a zip of a file if it exists
     zip_file is the name of the archive file,
     to_zip is the name of the file to add to the archive,
@@ -20,6 +20,14 @@ def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True):
     use_sys_zip flag will call 'zip' shell command to create archive"""
     # bug in python 2.6 with large zip files; use system zip until its fixed.
     printtime("Start make_zip on %s" % to_zip)
+
+    if not compressed:
+        compression = zipfile.ZIP_STORED
+        printtime("not compressd")
+    else:
+        printtime("compressd")
+
+
     if os.path.exists(to_zip):
         if use_sys_zip:
             if arcname != None:

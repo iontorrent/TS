@@ -21,7 +21,8 @@ class KeySeq {
   std::string name;
   std::vector<int> flows;
   unsigned int usableKeyFlows;
-  ivec zeroFlows;
+  arma::uvec zeroFlows;
+  arma::uvec onemerFlows;
   double minSnr;
 };
 
@@ -50,14 +51,19 @@ class KeyFit {
     flag = -1;
     bfMetric = -1;
     bufferMetric = -1;
+    traceSdMin = -1;
     goodLive = false;
     isRef = false;
+    acqT0 = -1;
+    bfT0 = -1;
+    tauB = -1;
+    tauE = -1;
   }
   
   int wellIdx;
   int8_t keyIndex;
   int8_t bestKey;
-  Col<double> param;
+  arma::Col<double> param;
   float snr;
   float mad;
   float sd;
@@ -66,6 +72,7 @@ class KeyFit {
   float traceMean;
   float traceSd;
   float projResid;
+  float traceSdMin;
   float peakSig;
   int8_t ok;
   float bfMetric;
@@ -73,6 +80,10 @@ class KeyFit {
   int flag;
   bool goodLive;
   bool isRef;
+  float acqT0;
+  float bfT0;
+  float tauB;
+  float tauE;
 };
 
 
@@ -99,9 +110,21 @@ class TraceStore {
   virtual std::vector<KeySeq> GetKeys() { return mKeys; }
   virtual const std::string & GetFlowOrder() = 0;
   // @todo - fix this...
+  /* static float WeightDist(float dist) { */
+  /*   return ExpApprox(-1*dist/60.0); */
+  /* } */
   static float WeightDist(float dist) {
-    return ExpApprox(-1*dist/60.0);
+    //    return maxDist - dist;
+    return 1.0;
   }
+  static float WeightDist(float dist, float maxDist) {
+    //    return maxDist - dist;
+    //    return 1.0/sqrt(dist + maxDist);
+    return 1.0/ (log (dist + 2));
+    //return 1.0;
+  }
+
+  virtual float GetMaxDist() = 0;
   virtual size_t GetNumNucs() { return 4; }
   virtual enum Nuc GetNucForFlow(size_t flowIx) { 
     const std::string &order = GetFlowOrder();
@@ -125,7 +148,7 @@ class TraceStore {
 
   virtual size_t GetFlowBuff() = 0;
   virtual double GetTime(size_t frame) = 0;
-  virtual void SetTime(Col<double> &time)  = 0;
+  virtual void SetTime(arma::Col<double> &time)  = 0;
   virtual void SetSize(int frames) = 0;
   virtual void SetFlowIndex(size_t flowIx, size_t index) = 0;
   virtual bool HaveWell(size_t wellIx) = 0;
@@ -134,7 +157,7 @@ class TraceStore {
   virtual bool IsReference(size_t wellIx) = 0;
   virtual bool HaveFlow(size_t flowIx) = 0;
   virtual size_t WellIndex(size_t row, size_t col) {return row * GetNumCols() + col; }
-  virtual void Dump(ofstream &out) = 0;
+  virtual void Dump(std::ofstream &out) = 0;
   static void WellRowCol(size_t idx, size_t nCols, size_t &row, size_t &col) { 
     row = idx / nCols;
     col = idx % nCols;
@@ -163,14 +186,14 @@ class TraceStore {
   virtual float GetT0(int idx) = 0;
   virtual void SetMeshDist(int size) = 0;
   virtual int GetMeshDist() = 0;
-  virtual void SetTemp(Col<double> &col) { mTemp = col; }
+  virtual void SetTemp(arma::Col<double> &col) { mTemp = col; }
   virtual void SetFirst() {
-    Col<double> trace(GetNumFrames());
+    arma::Col<double> trace(GetNumFrames());
     GetTrace(0, 0, trace.begin());
     SetTemp(trace);
   }
   virtual void CheckFirst() {
-    Col<double> trace(GetNumFrames());
+    arma::Col<double> trace(GetNumFrames());
     GetTrace(0, 0, trace.begin());
     assert(trace.size() == mTemp.size());
     for (size_t f = 0; f < GetNumFrames(); f++) {

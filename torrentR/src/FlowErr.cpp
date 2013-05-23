@@ -43,7 +43,7 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
     assert(status >= 0);
 
     // Change to R-style column-major order:
-    int Rcounts[nelem];
+    std::vector<int> Rcounts(nelem);
     for(int i=0; i<numFlows; ++i){
         for(int j=0; j<maxReadHP; ++j){
             for(int k=0; k<maxRefHP; ++k){
@@ -60,12 +60,12 @@ RcppExport SEXP LoadFlowErr(SEXP RFileName)
     assert(status >= 0);
 
     // Package results for return to R:
-    RcppResultSet rs;
-    rs.add("numFlows",  numFlows);
-    rs.add("maxReadHP", maxReadHP);
-    rs.add("maxRefHP",  maxRefHP);
-    rs.add("counts",    Rcounts, nelem);
+    std::map<std::string,SEXP> map;
+    map["numFlows"]  = Rcpp::wrap( numFlows );
+    map["maxReadHP"] = Rcpp::wrap( maxReadHP );
+    map["maxRefHP"]  = Rcpp::wrap( maxRefHP );
+    map["counts"]    = Rcpp::wrap( Rcounts );
 
-    return rs.getReturnList();
+    return Rcpp::wrap( map );
 }
 

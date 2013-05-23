@@ -143,6 +143,31 @@ void NewBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, 
   }
 }
 
+void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, int len, const double *deltaFrame, float tauB, float etbR)
+{
+  int   i;
+  float xt;
+
+  float one_over_two_taub = 1.0f / (2.0f*tauB);
+  float one_over_one_plus_aval = 0.0f;
+
+// initialization is special because nothing before it to recur
+  i=0;
+  xt = deltaFrame[i]*one_over_two_taub;
+  one_over_one_plus_aval = 1.0f/ (1.0f+xt);
+  vb_out[i] = ( (etbR+xt) *blue_hydrogen[i]) *one_over_one_plus_aval;
+  i++;
+  for (;i < len;i++)
+  {
+    xt=deltaFrame[i]*one_over_two_taub;
+    one_over_one_plus_aval = 1.0f/ (1.0f+xt);
+    // again a very pretty formulation:  innovation from environment with decay of previous value
+    // note the Pade (1,1) approximant to exp(-t/tauB) appearing as the "decay" term
+    vb_out[i] = ( (etbR+xt) *blue_hydrogen[i] - (etbR-xt) *blue_hydrogen[i-1]+ (1.0f-xt) *vb_out[i-1]) *one_over_one_plus_aval;
+  }
+}
+
+
 void BlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
 {
   NewBlueSolveBackgroundTrace (vb_out,blue_hydrogen,len,deltaFrame,tauB,etbR);

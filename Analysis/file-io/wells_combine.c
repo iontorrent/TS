@@ -34,10 +34,9 @@ wells_combine_main(int argc, char *argv[])
   wells_chip_t **chips = NULL;
   int c;
   int32_t i, j, k, l, n;
-  int32_t nonzero, min_row, max_row, min_col, max_col;
+  int32_t min_row, max_row, min_col, max_col;
 
   min_row = max_row = min_col = max_col = -1;
-  nonzero=0; 
 
   while((c = getopt(argc, argv, "r:c:zh")) >= 0) {
       switch(c) {
@@ -52,7 +51,6 @@ wells_combine_main(int argc, char *argv[])
           }
           break;
         case 'z':
-          nonzero = 1;
           break;
         case 'h':
         default:

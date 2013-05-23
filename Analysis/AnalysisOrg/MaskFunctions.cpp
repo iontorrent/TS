@@ -28,7 +28,7 @@ void SetExcludeMask (SpatialContext &loc_context, Mask *maskPtr, char *chipType,
   {
     //This is a wholechip dataset
     applyExclusionMask = true;
-    fprintf (stderr, "This is a wholechip dataset so the exclusion mask will be applied\n");
+    fprintf (stderr, "This is a wholechip dataset so the exclusion mask will be applied Chip %s\n",chipType);
   }
   else
   {
@@ -36,6 +36,7 @@ void SetExcludeMask (SpatialContext &loc_context, Mask *maskPtr, char *chipType,
     {
       applyExclusionMask = false;
       fprintf (stderr, "This is a cropped dataset so the exclusion mask will not be applied\n");
+      fprintf (stderr, "rows=%d, chip_rows=%d,cols=%d, chip_cols=%d  for chip %s\n",rows, loc_context.chip_len_y,cols, loc_context.chip_len_x, chipType);
     }
     else
     {
@@ -72,7 +73,7 @@ void SetExcludeMask (SpatialContext &loc_context, Mask *maskPtr, char *chipType,
   {
     char *exclusionMaskFileName = NULL;
     char filename[64] = { 0 };
-
+    
     sprintf (filename, "exclusionMask_%s.bin", chipType);
 
     exclusionMaskFileName = GetIonConfigFile (filename);

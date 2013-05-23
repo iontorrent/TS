@@ -23,7 +23,7 @@ from iondb.bin.djangoinit import *
 from django import shortcuts
 from django.conf import settings
 from iondb.rundb import models
-from iondb.backup import devices
+from iondb.utils import devices
 from django.core import mail
 from django.db import connection
 from iondb.backup.archiveExp import Experiment
@@ -36,7 +36,7 @@ settings.EMAIL_USE_TLS = False
 gl_experiments = {}
 last_exp_size = 0
 
-__version__ = filter(str.isdigit, "$Revision: 50737 $")
+__version__ = filter(str.isdigit, "$Revision: 50781 $")
 
 # TODO: these are defined in crawler.py as well.  Needs to be consolidated.
 RUN_STATUS_COMPLETE = "Complete"
@@ -86,7 +86,7 @@ def notify(log, experiments, recipient):
         site_name = "Torrent Server"
 
     hname=socket.gethostname()
-    
+
     subject_line = 'Torrent Server Archiver Action Request'
     reply_to = 'donotreply@iontorrent.com'
     message = 'From: %s (%s)\n' % (site_name, hname)
@@ -126,11 +126,11 @@ def build_exp_list(num, grace_period, serverPath, removeOnly, log, autoArchiveAc
     Remove only mode is important feature to protect against the condition wherein the archive volume is not available
     and there are runs marked for deletion.  Without remove only mode, the list of runs to process could get filled with
     Archive runs, and the Delete Runs would never get processed.
-    
+
     When auto-acknowledge is disabled (the default) and an archive volume is configured, there can be a situation where
     the list of experiments is filled with Delete and the Archive experiments are not included and thus never processed -
     if the user fails to manually acknowledge deletion.
-    
+
     But also, the remove_experiments function handles the Delete first because those are faster and free space quicky while
     archive can take a long time copying.
     '''
@@ -377,7 +377,7 @@ def dispose_experiments(log, experiments, backupDrive, number_to_backup, backupF
 def copyrawdata(log, expDir, backupDir, bwLimit):
     def to_bool(number):
         return True if number == 0 else False
-    
+
     log.info("Copying %s to %s " % (expDir, backupDir))
     rawPath = path.join(expDir)
     backup = path.join(backupDir)
@@ -417,7 +417,7 @@ def remove_raw_data(log, expDir, inst_type):
     For PGM, delete the entire raw data directory
     For Proton, delete all but onboard_results directory
     '''
-    
+
     # if its PGM data, delete the entire folder
     if inst_type == PGM_INSTRUMENT:
         log.debug("Deleting the entire folder")

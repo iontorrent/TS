@@ -2,20 +2,17 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 import os
-import sys
 import subprocess
 import traceback
 import time
-import shlex
+import numpy
+import ConfigParser
 
 from ion.reports import beadDensityPlot, StatsMerge, plotKey
 from ion.utils.blockprocessing import printtime, isbadblock
 from ion.utils import blockprocessing
 
-
-
-def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
-
+def beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     if beadfindArgs:
         cmd = beadfindArgs  # e.g /home/user/Beadfind -xyz
     else:
@@ -28,26 +25,23 @@ def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
     cmd += " %s" % pathtorawblock
 
-    printtime("Beadfind command: " + cmd)
-    proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    stdout_value, stderr_value = proc.communicate()
-    status = proc.returncode
-    sys.stdout.write("%s" % stdout_value)
-    sys.stderr.write("%s" % stderr_value)
+    return cmd
 
-    # Ion Reporter
-    try:
-        sigproc_log_path = os.path.join(SIGPROC_RESULTS, 'sigproc.log')
-        with open(sigproc_log_path, 'a') as f:
-            if stdout_value: f.write(stdout_value)
-            if stderr_value: f.write(stderr_value)
-    except IOError:
-        traceback.print_exc()
+def beadfind(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+
+    cmd = beadfind_cmd(beadfindArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS)
+    cmd += " >> %s 2>&1" % os.path.join(SIGPROC_RESULTS, 'sigproc.log')
+
+    if not os.path.exists(SIGPROC_RESULTS):
+        os.mkdir(SIGPROC_RESULTS)
+
+    printtime("Beadfind command: " + cmd)
+    proc = subprocess.Popen(cmd, shell=True)
+    status = proc.wait()
 
     return status
 
-
-def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+def sigproc_cmd(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
 
     if analysisArgs:
         cmd = analysisArgs  # e.g /home/user/Analysis --flowlimit 80
@@ -61,21 +55,19 @@ def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
     cmd += " --output-dir=%s" % (SIGPROC_RESULTS)
     cmd += " %s" % pathtorawblock
 
-    printtime("Analysis command: " + cmd)
-    proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    stdout_value, stderr_value = proc.communicate()
-    status = proc.returncode
-    sys.stdout.write("%s" % stdout_value)
-    sys.stderr.write("%s" % stderr_value)
+    return cmd
 
-    # Ion Reporter
-    try:
-        sigproc_log_path = os.path.join(SIGPROC_RESULTS, 'sigproc.log')
-        with open(sigproc_log_path, 'a') as f:
-            if stdout_value: f.write(stdout_value)
-            if stderr_value: f.write(stderr_value)
-    except IOError:
-        traceback.print_exc()
+def sigproc(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS):
+    
+    cmd = sigproc_cmd(analysisArgs, libKey, tfKey, pathtorawblock, SIGPROC_RESULTS)
+    cmd += " >> %s 2>&1" % os.path.join(SIGPROC_RESULTS, 'sigproc.log')
+
+    if not os.path.exists(SIGPROC_RESULTS):
+        os.mkdir(SIGPROC_RESULTS)
+
+    printtime("Analysis command: " + cmd)
+    proc = subprocess.Popen(cmd, shell=True)
+    status = proc.wait()
 
     return status
 
@@ -205,6 +197,7 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
         try:
             # Makes Bead_density_contour.png, TODO have to read multiple blocks
             beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
+            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, "./", plot_title)
         except:
             traceback.print_exc()
     else:
@@ -237,3 +230,46 @@ def mergeRawPeakSignals(dirs):
         printtime("Merging raw_peak_signal files failed")
 
     printtime("Finished mergeRawPeakSignals")
+
+def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
+
+    ###############################################
+    # Merging avgNukeTrace_*.txt files            #
+    ###############################################
+    printtime("Merging avgNukeTrace_*.txt files")
+
+    try:
+        output_trace_file = os.path.join(SIGPROC_RESULTS,'avgNukeTrace_%s.txt' % key)
+        sumAvgNukeTraceData = None
+        sumWells = 0
+        config = ConfigParser.RawConfigParser()
+
+        for subdir in dirs:
+            try:
+                input_trace_file = os.path.join(subdir,SIGPROC_RESULTS,'avgNukeTrace_%s.txt' % key)
+                if os.path.exists(input_trace_file):
+                    config.read(os.path.join(subdir,SIGPROC_RESULTS,'bfmask.stats'))
+                    wells = config.getint('global', beads)
+                    labels = numpy.genfromtxt(input_trace_file, delimiter=' ',  usecols=[0], dtype=str)
+                    currentAvgNukeTraceData = numpy.genfromtxt(input_trace_file, delimiter=' ')[:,1:]
+                else:
+                    continue 
+            except:
+                traceback.print_exc()
+                continue
+
+            if sumAvgNukeTraceData == None:
+                sumAvgNukeTraceData = currentAvgNukeTraceData * wells
+            else:
+                sumAvgNukeTraceData += currentAvgNukeTraceData * wells
+            sumWells += wells
+
+        AvgNukeTraceData = sumAvgNukeTraceData / sumWells
+        AvgNukeTraceTable = numpy.column_stack((labels,AvgNukeTraceData)) 
+        numpy.savetxt(output_trace_file, AvgNukeTraceTable, fmt='%s')
+
+    except:
+        traceback.print_exc()
+        printtime("ERROR: Merging %s failed" % output_trace_file)
+
+    printtime("Finished mergeAvgNukeTraces")

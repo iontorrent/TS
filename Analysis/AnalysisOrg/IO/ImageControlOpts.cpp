@@ -23,6 +23,7 @@ void ImageControlOpts::DefaultImageOpts()
   flowTimeOffset = 1000;
   col_flicker_correct = false; //default to turn on
   col_flicker_correct_verbose = false;
+  aggressive_cnc = false;
   gain_correct_images = false;
   gain_debug_output = false;
   has_wash_flow = 0;
@@ -35,7 +36,7 @@ void ImageControlOpts::DefaultImageOpts()
   sdatSuffix = "sdat";
   //if (acqPrefix != NULL) free (acqPrefix);
   acqPrefix = strdup("acq_");
-  threaded_file_access = 0;
+  threaded_file_access = 1;
 }
 
 ImageControlOpts::~ImageControlOpts()

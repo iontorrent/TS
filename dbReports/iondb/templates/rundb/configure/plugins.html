@@ -4,6 +4,7 @@
 <link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
 {% endblock extra_head_styles %}
 {% block extra_head_js %}
+<script type="text/javascript" src="/site_media/resources/scripts/configure/plugins/modal_refresh.js"></script>
 <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
 <script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
 
@@ -110,11 +111,11 @@
 <![endif]-->
 <div class="modal container hide" id="modal-window" data-modal-Overflow="true">
     <div class="modal-header">
-        <button data-dismiss="modal" class="close" type="button">×</button>
+        <button data-dismiss="modal" class="close" type="button">&times;</button>
         <h3>Configure </h3>
     </div>
     <div class="modal-body">
-        <div id="modal-error-messages"></div>
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <iframe id="modal-content" src="" class="auto-height auto-width full-width" scrolling="no" frameborder="0"></iframe>
     </div>
     <div class="modal-footer">
@@ -152,6 +153,9 @@
             <a href="#= '{% url configure_plugins_plugin_configure 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
         </li>
         # } #
+        <li>
+            <a href="#= '{% url configure_plugins_plugin_usage 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
+        </li>
         <li>
             <a href="#= '{% url configure_plugins_plugin_refresh 999999 %}'.replace('999999',_id)#" class="refresh-plugin">Refresh</a>
         </li>
@@ -352,41 +356,41 @@ $(document).ready(function(){
 
             $(source + " .uninstall-plugin").click(function (e) {
                 e.preventDefault();
+                $('#error-messages').hide().empty();
                 url = $(this).attr('href');
                 $('body #modal_confirm_plugin_uninstall').remove();
                 $.get(url, function(data) {
-                      $('body').append(data);
-                      $( "#modal_confirm_plugin_uninstall" ).data('source', source);
+                    $('body').append(data);
+                    $( "#modal_confirm_plugin_uninstall" ).data('source', source);
                     $( "#modal_confirm_plugin_uninstall" ).modal("show");
                     return false;
                 }).done(function(data) {
                     console.log("success:",  url);
                 })
                 .fail(function(data) {
-                    $('#error-messages').empty();
+                    $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
-
                 })
                 .always(function(data) { /*console.log("complete:", data);*/ });
             });
             $(source + " .refresh-plugin").click(function (e) {
                 e.preventDefault();
+                $('#error-messages').hide().empty();
                 url = $(this).attr('href');
                 $('body #modal_confirm_plugin_refresh').remove();
                 $.get(url, function(data) {
-                      $('body').append(data);
-                      $( "#modal_confirm_plugin_refresh" ).data('source', source);
+                    $('body').append(data);
+                    $( "#modal_confirm_plugin_refresh" ).data('source', source);
                     $( "#modal_confirm_plugin_refresh" ).modal("show");
                     return false;
                 }).done(function(data) {
                     console.log("success:",  url);
                 })
                 .fail(function(data) {
-                    $('#error-messages').empty();
+                    $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
-
                 })
                 .always(function(data) { /*console.log("complete:", data);*/ });
             });
@@ -419,6 +423,7 @@ $(document).ready(function(){
     $('.install_upgrade_plugin').click(function (e) {
         var source = '#grid';
         e.preventDefault();
+        $('#error-messages').hide().empty();
 
         url = $(this).attr('href');
         // alert(url);
@@ -431,7 +436,7 @@ $(document).ready(function(){
             $('#modal_configure_plugins_plugin_install').modal("show");
         })
         .fail(function(data) {
-            $('#error-messages').empty();
+            $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 

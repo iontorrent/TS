@@ -31,7 +31,8 @@ enum FilteringOutcomes {
   kBkgmodelPolyclonal,          //!< Read filtered out by Analysis, looks polyclonal
   kBkgmodelFailedKeypass,       //!< Read filtered out by Analysis, key sequence not a perfect match
   kFilteredShortAdapterTrim,    //!< Read filtered out, too short after adapter trimming
-  kFilteredShortQualityTrim     //!< Read filtered out, too short after quality trimming
+  kFilteredShortQualityTrim,    //!< Read filtered out, too short after quality trimming
+  kFilteredAvalancheTrim        //!< Read filtered out, too short after Avalanche trimming
 };
 
 class ThousandsSeparator : public numpunct<char> {
@@ -381,12 +382,16 @@ void BaseCallerFilters::PrintHelp()
   printf ("     --beverly-filter        filter_ratio,trim_ratio,min_length / off\n");
   printf ("                                        apply Beverly filter/trimmer [off]\n");
   printf ("     --trim-adapter          STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
+  printf ("     --trim-adapter-tf       STRING/off adapter sequence for test fragments [off]\n");
   printf ("     --trim-adapter-cutoff   FLOAT      cutoff for adapter trimming, 0=off [16]\n");
   printf ("     --trim-adapter-min-match INT       minimum adapter bases in the read required for trimming  [6]\n");
   printf ("     --trim-adapter-mode     INT        0=use simplified metric, 1=use standard metric [1]\n");
   printf ("     --trim-qual-window-size INT        window size for quality trimming [30]\n");
-  printf ("     --trim-qual-cutoff      FLOAT      cutoff for quality trimming, 100=off [16]\n");
+  printf ("     --trim-qual-cutoff      FLOAT      cutoff for quality trimming, 100=off [15]\n");
   printf ("     --trim-min-read-len     INT        reads trimmed shorter than this are omitted from output [8]\n");
+  printf ("     --avalanche_start_pos   INT        Avalanche filter start base position\n");
+  printf ("     --avalanche_qual_hi     INT        Avalanche filter quality cutoff before the start position [15]\n");
+  printf ("     --avalanche_qual_lo     INT        Avalanche filter quality cutoff after the start position [5]\n");
   printf ("\n");
 }
 
@@ -420,17 +425,18 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   trim_adapter_cutoff_            = opts.GetFirstDouble ('-', "trim-adapter-cutoff", 16.0);
   trim_adapter_min_match_         = opts.GetFirstInt    ('-', "trim-adapter-min-match", 6);
   trim_adapter_mode_              = opts.GetFirstInt    ('-', "trim-adapter-mode", 1);
-
+  trim_adapter_tf_                = opts.GetFirstString ('-', "trim-adapter-tf", "");
   trim_qual_window_size_          = opts.GetFirstInt    ('-', "trim-qual-window-size", 30);
-  trim_qual_cutoff_               = opts.GetFirstDouble ('-', "trim-qual-cutoff", 16.0);
+  trim_qual_cutoff_               = opts.GetFirstDouble ('-', "trim-qual-cutoff", 15.0);
   trim_min_read_len_              = opts.GetFirstInt    ('-', "trim-min-read-len", 8);
 
+  if (trim_adapter_tf_ == "off")
+    trim_adapter_tf_ = "";
 
   //string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "0.03,0.03,8");
   string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "off");
 
   bool disable_all_filters        = opts.GetFirstBoolean('d', "disable-all-filters", false);
-
 
   if (disable_all_filters) {
     filter_keypass_enabled_ = false;
@@ -443,6 +449,26 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
     filter_beverly_args = "off";
   }
 
+  avalanche_mid_pos_             = opts.GetFirstInt    ('-', "avalanche_start_pos", -1);
+  avalanche_min_pos_             = opts.GetFirstInt    ('-', "avalanche_stop_pos", -1);
+  avalanche_max_pos_             = opts.GetFirstInt    ('-', "avalanche_max_pos", -1);
+  trim_qual_avalanche_max_       = opts.GetFirstDouble ('-', "avalanche_qual_max", 25.0);
+  trim_qual_avalanche_hi_        = opts.GetFirstDouble ('-', "avalanche_qual_hi", 15.0);
+  trim_qual_avalanche_lo_        = opts.GetFirstDouble ('-', "avalanche_qual_lo", 1.0);
+  filter_avalanche_enabled_ = avalanche_mid_pos_ >= 0 ? true : false;
+
+  if (filter_avalanche_enabled_) { // force other filters off     
+      TrimAvalanche_setup(flow_order.num_flows());
+
+      filter_keypass_enabled_ = false;
+      filter_clonal_enabled_tfs_ = false;
+      filter_clonal_enabled_ = false;
+      filter_residual_enabled_ = false;
+      filter_residual_enabled_tfs_ = false;
+      trim_adapter_cutoff_ = 0.0; // Zero means disabled for now
+      trim_qual_cutoff_ = 100.0; // 100.0 means disabled for now
+      filter_beverly_args = "off";
+  }
 
   printf("Filter settings:\n");
   printf("   --disable-all-filters %s\n", disable_all_filters ? "on (overrides other options)" : "off");
@@ -454,6 +480,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   printf("          --cr-filter-tf %s\n", filter_residual_enabled_tfs_ ? "on" : "off");
   printf("   --cr-filter-max-value %1.3f\n", filter_residual_max_value_);
   printf("          --trim-adapter %s\n", trim_adapter_.c_str());
+  printf("       --trim-adapter-tf %s\n", trim_adapter_tf_.empty() ? "off" : trim_adapter_tf_.c_str());
   printf("     --trim-adapter-mode %d\n", trim_adapter_mode_);
   printf("   --trim-adapter-cutoff %1.1f (0.0 means disabled)\n", trim_adapter_cutoff_);
   printf("--trim-adapter-min-match %d\n", trim_adapter_min_match_);
@@ -461,6 +488,15 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   printf("      --trim-qual-cutoff %1.1f (100.0 means disabled)\n", trim_qual_cutoff_);
   printf("     --trim-min-read-len %d\n", trim_min_read_len_);
   printf("        --beverly-filter %s\n", filter_beverly_args.c_str());
+
+  if (filter_avalanche_enabled_) { // force other filters off
+      printf("         --avalanche_max %d\n", avalanche_max_pos_);
+      printf("       --avalanche_start %d\n", avalanche_mid_pos_);
+      printf("        --avalanche_stop %d\n", avalanche_min_pos_);
+      printf("    --avalanche_qual_max %g\n", trim_qual_avalanche_max_);
+      printf("     --avalanche_qual_hi %g\n", trim_qual_avalanche_hi_);
+      printf("     --avalanche_qual_lo %g\n", trim_qual_avalanche_lo_);
+  }
   printf("\n");
 
 
@@ -532,6 +568,7 @@ void BaseCallerFilters::TransferFilteringResultsToMask(Mask &mask) const
       case kBkgmodelPolyclonal:         mask[idx] |= MaskFilteredBadPPF; break;
       case kFilteredShortAdapterTrim:   mask[idx] |= MaskFilteredShort; break;
       case kFilteredShortQualityTrim:   mask[idx] |= MaskFilteredShort; break;
+      case kFilteredAvalancheTrim:      mask[idx] |= MaskFilteredShort; break;
     }
   }
 }
@@ -789,8 +826,10 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
   if(trim_adapter_cutoff_ <= 0.0 or trim_adapter_.empty())  // Zero means disabled
     return;
 
-  if (read_class != 0)  // Hardcoded: Don't trim TFs
+  if (read_class != 0 and trim_adapter_tf_.empty())  // TFs only trimmed if explicitly enabled
     return;
+
+  const string& effective_adapter = (read_class == 0) ? trim_adapter_ : trim_adapter_tf_;
 
   int best_start_flow = -1;
   int best_start_base = -1;
@@ -815,14 +854,14 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
 
       adapter_path.prediction = called_path.prediction;
       int window_start = max(0,called_path.window_start - 8);
-      treephaser.AdvanceState(&adapter_path,&called_path, trim_adapter_[0], flow_order_.num_flows());
+      treephaser.AdvanceState(&adapter_path,&called_path, effective_adapter[0], flow_order_.num_flows());
 
       int inphase_flow = called_path.flow;
       float state_inphase = called_path.state[inphase_flow];
 
       int adapter_bases = 0;
-      for (int adapter_pos = 1; adapter_pos < (int)trim_adapter_.length(); ++adapter_pos) {
-        treephaser.AdvanceStateInPlace(&adapter_path, trim_adapter_[adapter_pos], flow_order_.num_flows());
+      for (int adapter_pos = 1; adapter_pos < (int)effective_adapter.length(); ++adapter_pos) {
+        treephaser.AdvanceStateInPlace(&adapter_path, effective_adapter[adapter_pos], flow_order_.num_flows());
         if (adapter_path.flow < flow_order_.num_flows())
           adapter_bases++;
       }
@@ -877,8 +916,11 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
       while (sequence_pos < (int)read.sequence.size() and base_to_flow[sequence_pos] < adapter_start_flow)
         sequence_pos++;
 
+      if (sequence_pos >= (int)read.sequence.size())
+        break;
+
       // Only consider start flows that agree with adapter start
-      if (trim_adapter_[0] != flow_order_[adapter_start_flow])
+      if (effective_adapter[0] != flow_order_[adapter_start_flow])
         continue;
 
       // Evaluate this starting position
@@ -891,7 +933,7 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
       for (int flow = adapter_start_flow; flow < flow_order_.num_flows(); ++flow) {
 
         int base_delta = 0;
-        while (adapter_pos < (int)trim_adapter_.length() and trim_adapter_[adapter_pos] == flow_order_[flow]) {
+        while (adapter_pos < (int)effective_adapter.length() and effective_adapter[adapter_pos] == flow_order_[flow]) {
           adapter_pos++;
           base_delta--;
         }
@@ -910,7 +952,7 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
           local_start_base += base_delta;
         score_len_flows++;
 
-        if (adapter_pos == (int)trim_adapter_.length())
+        if (adapter_pos == (int)effective_adapter.length() or local_sequence_pos == (int)read.sequence.size())
           break;
       }
 
@@ -921,10 +963,10 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
       if (adapter_pos < trim_adapter_min_match_)  // Match too short
         continue;
 
-      if (score_match * 2 * trim_adapter_.length() > trim_adapter_cutoff_)  // Match too dissimilar
+      if (score_match * 2 * effective_adapter.length() > trim_adapter_cutoff_)  // Match too dissimilar
         continue;
 
-      float final_metric = adapter_pos / (float)trim_adapter_.length() - score_match; // The higher the better
+      float final_metric = adapter_pos / (float)effective_adapter.length() - score_match; // The higher the better
 
       if (final_metric > best_metric) {
         best_metric = final_metric;
@@ -945,6 +987,15 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
   processed_read.bam.AddTag("ZG", "i", best_start_flow);
   processed_read.bam.AddTag("ZB", "i", best_adapter_overlap);
 
+  vector<int> pcr_duplicate_signature(3,0);
+
+  pcr_duplicate_signature[0] = best_start_flow;                       // Signature entry 1 - flow incorporating the first adapter base
+  if (best_start_base > 0)
+    pcr_duplicate_signature[1] = base_to_flow[best_start_base-1];     // Signature entry 2 - flow containing last insert base
+  for (int reverse_pos = best_start_base-1; reverse_pos >= 0 and base_to_flow[best_start_base-1] == base_to_flow[reverse_pos]; --reverse_pos)
+    pcr_duplicate_signature[2]++;                                     // Signature entry 3 - length of last insert HP
+
+  processed_read.bam.AddTag("ZC", pcr_duplicate_signature);
 
   if (filter_mask_[read_index] != kPassed) // Already filtered out?
     return;
@@ -986,13 +1037,14 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
   while (window_end < trim_qual_window_size_ and window_end < filter_history.n_bases)
     window_sum += quality[window_end++];
 
-  uint16_t clip_qual_right = 0;
-
   // Step 2: Keep sliding as long as average q-score exceeds the threshold
+  //uint16_t clip_qual_right = 0;
+  int clip_qual_right = window_sum >= minimum_sum ? (window_end + window_start) / 2 : 0;
   while (window_sum >= minimum_sum and window_end < filter_history.n_bases) {
     window_sum += quality[window_end++];
     window_sum -= quality[window_start++];
-    clip_qual_right = (window_end + window_start) / 2;
+    clip_qual_right++;
+    //clip_qual_right = (window_end + window_start) / 2;
   }
 
 
@@ -1011,6 +1063,225 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
     filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
   }
 }
+
+
+void BaseCallerFilters::TrimAvalanche_setup(int maxflows)
+{
+    if (!filter_avalanche_enabled_) // not enabled?
+        return;
+
+    static int flows[] = {360,520,800,1000,1200,1600};
+    static int stops[] = {125,200,280,330,365,420};
+    static int starts[] = {100,170,230,275,300,345};
+    //static int starts[] = {25,45,85,145,170,200,240};
+    //static int starts[] = {10,15,40,110,130,160,210};
+    //static int starts[] = {10,10,10,15,15,15,20}; // P1.2??? So different from P1???
+    int nItems = sizeof(stops) / sizeof(stops[0]);
+    int nItemsF = sizeof(flows) / sizeof(flows[0]);
+    int nItemsS = sizeof(starts) / sizeof(starts[0]);
+    assert(nItems==nItemsF);
+    assert(nItems==nItemsS);
+
+    if (trim_qual_avalanche_lo_ < 0) {
+        printf("trim_qual_avalanche_lo_(%f) < 0: resetting trim_qual_avalanche_lo_ to 0\n",trim_qual_avalanche_lo_);
+        trim_qual_avalanche_lo_ = 0;
+    }
+    if (trim_qual_avalanche_hi_ < trim_qual_avalanche_lo_) {
+      printf("trim_qual_avalanche_hi_(%f) < trim_qual_avalanche_lo_(%f): resetting trim_qual_avalanche_hi_ to %f\n",trim_qual_avalanche_hi_,trim_qual_avalanche_lo_,trim_qual_avalanche_lo_+10);
+      trim_qual_avalanche_hi_ = trim_qual_avalanche_lo_ + 15;
+    }
+    if (trim_qual_avalanche_max_ < trim_qual_avalanche_hi_) {
+      printf("trim_qual_avalanche_max_(%f) < trim_qual_avalanche_hi_(%f): resetting trim_qual_avalanche_max_ to %f\n",trim_qual_avalanche_max_,trim_qual_avalanche_hi_,trim_qual_avalanche_hi_+15);
+      trim_qual_avalanche_max_ = trim_qual_avalanche_hi_ + 15;
+    }
+
+    // automatically reset avalanche_mid_pos_ according to maxflows
+    if (avalanche_mid_pos_ <= 0) {
+        avalanche_mid_pos_ = starts[nItems-1];
+        for (int i=0; i<nItems; i++)
+            if (maxflows <= flows[i]) {
+                avalanche_mid_pos_ = starts[i];
+                //cout << "TrimAvalanche_setup... maxflows=" << maxflows << " -> avalanche_mid_pos_=" << avalanche_mid_pos_ << endl << flush;
+                break;
+            }
+    }
+    else {
+        //assert (avalanche_mid_pos_> trim_qual_window_size_) ;
+        if (avalanche_mid_pos_<= trim_qual_window_size_) {
+            cerr << "TrimAvalanche_setup... avalanche_mid_pos_(" << avalanche_mid_pos_ << ") <= trim_qual_window_size_(" << trim_qual_window_size_ << ")..." << endl;
+            avalanche_mid_pos_ = starts[nItems-1];
+            for (int i=0; i<nItems; i++)
+                if (maxflows <= flows[i]) {
+                    avalanche_mid_pos_ = starts[i];
+                    cerr << "TrimAvalanche_setup... maxflows=" << maxflows << " -> avalanche_mid_pos_=" << avalanche_mid_pos_ << endl;
+                    break;
+                }
+            cerr << "reset avalanche_mid_pos_ = " << avalanche_mid_pos_ << endl << flush;
+        }
+    }
+    avalanche_win_ = 30;
+    if (avalanche_max_pos_ < 0) {
+        avalanche_max_pos_ = avalanche_mid_pos_ - avalanche_win_;
+    }
+
+    int stop_pos = stops[nItems-1];
+    if (avalanche_min_pos_ <= 0 && avalanche_mid_pos_ > 0)
+        avalanche_min_pos_ = avalanche_mid_pos_ + avalanche_win_;
+    if (avalanche_min_pos_ > 0 && avalanche_min_pos_ <= avalanche_mid_pos_) {
+        for (int i=0; i<nItems; i++)
+            if (maxflows <= flows[i]) {
+                stop_pos = stops[i];
+                if (stop_pos > avalanche_mid_pos_)
+                    break;
+            }
+        if (stop_pos > avalanche_mid_pos_) {
+            avalanche_min_pos_ = stop_pos;
+            avalanche_win_ = avalanche_min_pos_ - avalanche_mid_pos_;
+        }
+        else
+            avalanche_min_pos_ = avalanche_mid_pos_ + avalanche_win_;
+    }
+    // trim_min_read_len_ used to decide whether reads are to be filtered, default 8 is too short for Avalanche
+    //trim_min_read_len_avalanch_ = trim_min_read_len_;
+    //trim_min_read_len_avalanch_ = trim_qual_window_size_;
+    //trim_min_read_len_avalanch_ = max(trim_qual_window_size_,avalanche_mid_pos_-trim_qual_window_size_);
+    trim_min_read_len_avalanch_ = trim_min_read_len_;
+    /*
+    */
+    cout << "trim_min_read_len_avalanch_ = " << trim_min_read_len_avalanch_ << endl;
+    cout << "avalanche_win_ = " << avalanche_win_ << endl;
+    cout << "trim_qual_avalanche_max_ = " << trim_qual_avalanche_max_ << endl;
+    cout << "trim_qual_avalanche_hi_ = " << trim_qual_avalanche_hi_ << endl;
+    cout << "trim_qual_avalanche_lo_ = " << trim_qual_avalanche_lo_ << endl;
+    cout << "avalanche_max_pos_ = " << avalanche_max_pos_ << endl;
+    cout << "avalanche_mid_pos_ = " << avalanche_mid_pos_ << endl;
+    cout << "avalanche_min_pos_ = " << avalanche_min_pos_ << endl;
+    assert(avalanche_max_pos_ >= trim_qual_window_size_);
+    assert(avalanche_max_pos_ <= avalanche_mid_pos_);
+    assert(avalanche_mid_pos_ <= avalanche_min_pos_);
+
+    if (avalanche_mid_pos_>avalanche_max_pos_)
+        avalanche_sum_delta_ = trim_qual_window_size_ * (trim_qual_avalanche_max_ - trim_qual_avalanche_hi_) / double(avalanche_mid_pos_ - avalanche_max_pos_);
+    else
+        avalanche_sum_delta_ = 0;
+    if (avalanche_min_pos_ > avalanche_mid_pos_)
+        avalanche_ava_delta_ = trim_qual_window_size_ * (trim_qual_avalanche_hi_ - trim_qual_avalanche_lo_) / double(avalanche_min_pos_ - avalanche_mid_pos_);
+    else
+        avalanche_ava_delta_ = 0;
+    avalanche_min_delta_ = 0;
+    delta_ava_ = avalanche_ava_delta_ - avalanche_sum_delta_;
+    delta_min_ = avalanche_min_delta_ - avalanche_ava_delta_;
+
+    // setup qv_sum_thresh
+    qv_sum_thresh.resize(avalanche_min_pos_+trim_qual_window_size_);
+    double minimum_sum = trim_qual_window_size_ * trim_qual_avalanche_max_;
+    for (int i=0; i<avalanche_max_pos_+trim_qual_window_size_; i++)
+        qv_sum_thresh[i] = minimum_sum;
+    for (int i=avalanche_max_pos_+trim_qual_window_size_; i<avalanche_mid_pos_+trim_qual_window_size_; i++) {
+        qv_sum_thresh[i] = minimum_sum;
+        minimum_sum -= avalanche_sum_delta_;
+    }
+    for (int i=avalanche_mid_pos_+trim_qual_window_size_; i<avalanche_min_pos_+trim_qual_window_size_; i++) {
+        qv_sum_thresh[i] = minimum_sum;
+        minimum_sum -= avalanche_ava_delta_;
+    }
+    qv_sum_thresh_max = trim_qual_window_size_ * trim_qual_avalanche_max_;
+    qv_sum_thresh_min = trim_qual_window_size_ * trim_qual_avalanche_lo_;
+    min_bases_passed_test = 5;
+    //count_filtered = 0;
+    //count_trimmed = 0;
+    //count_passed = 0;
+}
+
+
+void BaseCallerFilters::TrimAvalanche(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
+{
+  if (!filter_avalanche_enabled_) // not enabled?
+      return;
+
+  if (filter_history.is_filtered) // Already processed
+    return;
+
+  //if (read_class != 0)  // Hardcoded: Don't trim TFs
+  //  return;
+
+  int num_bases_passed_test = 0;
+  int window_start = 0;
+  int window_end = min(filter_history.n_bases,trim_qual_window_size_);
+  //int clip_qual_right = (window_end + window_start) / 2;
+  int clip_qual_right = 0;
+  int window_sum = 0;
+
+  // for long reads, check according to qv_sum_thresh
+  if (filter_history.n_bases >= avalanche_max_pos_) {
+      if (filter_history.n_bases < avalanche_mid_pos_)
+          window_end =  avalanche_max_pos_;
+      else if (filter_history.n_bases < avalanche_min_pos_)
+          window_end = avalanche_mid_pos_;
+      else
+          window_end =  avalanche_min_pos_;
+
+      window_end -= min_bases_passed_test;
+      window_start = window_end - trim_qual_window_size_;
+      assert (window_start>=0);
+      clip_qual_right = (window_end + window_start) / 2;
+      for (int w = window_start; w< window_end; w++)
+        window_sum += quality[w];
+
+      while (window_end < filter_history.n_bases) {
+          if (window_end >= avalanche_min_pos_+trim_qual_window_size_) {
+              if (window_sum < qv_sum_thresh_min) {
+                  break;
+              }
+              else
+                  num_bases_passed_test++;
+          }
+          else {
+              if (window_sum < qv_sum_thresh[window_end]) {
+                  break;
+              }
+              else
+                  num_bases_passed_test++;
+          }
+          window_sum += quality[window_end++] - quality[window_start++];
+          clip_qual_right++;
+      }
+  }
+  else { // for short reads, compare to qv_sum_thresh_max
+      window_end = min(filter_history.n_bases,trim_qual_window_size_);
+      for (int w = window_start; w< window_end; w++)
+        window_sum += quality[w];
+
+      clip_qual_right = window_sum >= qv_sum_thresh_max ? (window_end + window_start) / 2 : 0;
+      while (window_end < filter_history.n_bases) {
+          if (window_sum < qv_sum_thresh_max)
+              break;
+          else
+              num_bases_passed_test++;
+          window_sum += quality[window_end++] - quality[window_start++];
+          clip_qual_right++;
+      }
+  }
+
+  if (clip_qual_right >= filter_history.n_bases_filtered) { // pass the filter
+    return;
+  }
+
+  int trim_length = clip_qual_right - filter_history.n_bases_prefix;
+  if (trim_length < trim_min_read_len_avalanch_  || num_bases_passed_test < min_bases_passed_test) { // Quality trimming led to filtering
+    filter_mask_[read_index] = kFilteredAvalancheTrim;
+    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
+    filter_history.is_filtered = true;
+    //cout << count_filtered++ << " filtered: RL="  << filter_history.n_bases << " < trim_length=" << trim_length << endl << flush;
+  } else {
+    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
+    //cout << count_trimmed++ << " trimmed: RL="  << filter_history.n_bases << " >= trim_length=" << trim_length << endl << flush;
+    //if (trim_length < avalanche_mid_pos_)
+    //    cout << "Error: trim_length(" << trim_length << ") < avalanche_mid_pos_(" <<  avalanche_mid_pos_ << ")" << endl << flush;
+    //assert(trim_length >= avalanche_mid_pos_);
+  }
+}
+
 
 
 

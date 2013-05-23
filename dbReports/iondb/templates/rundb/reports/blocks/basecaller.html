@@ -1,6 +1,6 @@
 {% load humanize %}
 
-<div id="basecaller" class="span3 well centered">
+<div id="basecaller" class="span4 well centered">
     <div class="number-chunk">
         {% if basecaller %}
             <h2>{{basecaller.total_reads|intcomma}}</h2>
@@ -21,7 +21,7 @@
     {% if beadsummary %}
         <div class="modal hide" id="baseCallerModal" style="width: 960px; margin-left: -480px;">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">×</button>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
                 <h3>Chip Well Details</h3>
             </div>
             <div class="modal-body" style="max-height: 500px;" id="basecaller_body">
@@ -105,6 +105,6 @@ $(function(){
     $("#usable_sequence").strength('{{usable_sequence}}',
                         '{{usable_sequence_threshold}}',
                         '{{usable_sequence}}',
-                        'Usable Sequence');
+                        'Usable Reads');
 });
 </script>

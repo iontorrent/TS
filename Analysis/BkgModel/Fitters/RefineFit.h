@@ -4,6 +4,7 @@
 
 #include "SignalProcessingMasterFitter.h"
 #include "SingleFlowFit.h"
+#include "ExpTailFitter.h"
 
 // make this code look >just< like the GPU option
 class RefineFit
@@ -13,6 +14,7 @@ class RefineFit
 
     single_flow_optimizer my_single_fit;
     EmphasisClass *local_emphasis; // computation is currently cheap, save per flow
+    ExpTailFitter my_exp_tail_fit;
 
     RefineFit (SignalProcessingMasterFitter &);
     void InitSingleFlowFit();

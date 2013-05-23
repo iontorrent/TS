@@ -26,7 +26,7 @@
 #include "EmptyTraceTracker.h"
 #include "BeadScratch.h"
 #include "Serialization.h"
-
+#include "SampleClonality.h"
 
 class RegionalizedData
 {
@@ -42,7 +42,7 @@ class RegionalizedData
     TimeCompression time_c; // region specific
 // local region emphasis vectors - may vary across chip by trace
     EmphasisClass emphasis_data; // region specific, effectively a parameter
-
+    
     BkgTrace my_trace;  // initialized and populated by this object
     EmptyTraceTracker *emptyTraceTracker;
     EmptyTrace *emptytrace;
@@ -54,6 +54,8 @@ class RegionalizedData
     // initial guesses for nuc rise parameters
     float   sigma_start;
     float   t_mid_nuc_start;
+    int   t0_frame;
+
     // BkgModel wants to rezero and do other things that are
     // detrimental if using sdat data Save a little state here to
     // indicate don't rezero
@@ -152,6 +154,9 @@ class RegionalizedData
     void RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int fnum);
     void RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty);
     void PickRepresentativeHighQualityWells (float ssq_filter);
+    void ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, std::vector<int>& keyLen);
+    void ZeromerAndOnemerOneBead(std::vector<int> const& key, int const keyLen, std::vector<float> const& signal, float& key_zeromer, float& key_onemer);
+    void CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type);
 
  private:
 
@@ -173,6 +178,7 @@ class RegionalizedData
 	  my_regions &
 	  sigma_start &
 	  t_mid_nuc_start &
+          t0_frame &
 	  doDcOffset &
 	  my_scratch &
 	  regionAndTimingMatchSdat;
@@ -194,6 +200,7 @@ class RegionalizedData
 	  my_regions &
 	  sigma_start &
 	  t_mid_nuc_start &
+          t0_frame &
 	  doDcOffset &
 	  my_scratch &
 	  regionAndTimingMatchSdat;

@@ -14,7 +14,7 @@ class RandSchrange {
 
   RandSchrange(int seed = 1) {
     SetSeed(seed);
-;  }
+  }
   
   void SetSeed(int seed) {
     assert(seed != 0);

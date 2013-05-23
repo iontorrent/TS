@@ -12,7 +12,7 @@ case "$1" in
         # only if drivers were installed do we uninstall them
         if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
             cd @ION_INSTALL_PREFIX@/devdriver
-            ./nvidia-installer --uninstall --ui=none
+            ./nvidia-installer --uninstall --ui=none --no-questions
             cd - >/dev/null
         fi
     	rm -rf @ION_INSTALL_PREFIX@/devdriver
@@ -25,7 +25,7 @@ case "$1" in
         # only if drivers were installed do we uninstall them
         if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
             cd @ION_INSTALL_PREFIX@/devdriver
-            ./nvidia-installer --uninstall --ui=none
+            ./nvidia-installer --uninstall --ui=none --no-questions
             cd - >/dev/null
         fi
     ;;

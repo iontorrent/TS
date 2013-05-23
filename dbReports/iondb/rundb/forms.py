@@ -7,23 +7,44 @@ import sys
 from django import forms
 from django.forms import widgets as djangoWidget
 from django.forms.extras import widgets
+from django.forms.widgets import PasswordInput
 from django import shortcuts
 from iondb.rundb import models
 import datetime
-from iondb.backup import devices
+from iondb.utils import devices
 from iondb.rundb import tasks
 from django.forms.util import flatatt
 from django.utils.safestring import mark_safe
 from django.utils.encoding import StrAndUnicode, force_unicode
 from itertools import chain
 from django.utils.html import escape, conditional_escape
+import string
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+from django.utils.safestring import mark_safe
+class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
+    def render(self, name, value, attrs=None): 
+        csm = super(Plugins_SelectMultiple, self).render(name, value, attrs=None)
+        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>',u'').replace(u'</label>',u'')
+        # add 'configure' button for plugins
+        btn_html = '&nbsp; <button type="button" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </button>'
+        output = ''
+        for line in csm.split('<li>'):
+            if line.find('value="') > 0:
+                output += '<p>' + line.split('</li>')[0]
+                pk = line.split('value="')[1].split('"')[0]
+                plugin = models.Plugin.objects.get(pk=pk)
+                if plugin.isPlanConfig():
+                    output += btn_html.replace('XXX',pk)
+                output += '</p>'            
+        
+        return mark_safe(output)
 
 class DataSelect(djangoWidget.Widget):
     """this is added to be able to have data attribs to the options"""
-    
+
     allow_multiple_selected = False
 
     def __init__(self, attrs=None, choices=()):
@@ -78,6 +99,10 @@ class RunParamsForm(forms.Form):
                            required=False,
                            widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
+    prebasecallerArgs = forms.CharField(max_length=1024,
+                                     required=False,
+                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+
     basecallerArgs = forms.CharField(max_length=1024,
                            required=False,
                            widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
@@ -89,6 +114,10 @@ class RunParamsForm(forms.Form):
     thumbnailAnalysisArgs = forms.CharField(max_length=1024,
                                           required=False,
                                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+
+    prethumbnailBasecallerArgs = forms.CharField(max_length=1024,
+                                              required=False,
+                                              widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
     thumbnailBasecallerArgs = forms.CharField(max_length=1024,
                                      required=False,
@@ -113,6 +142,9 @@ class RunParamsForm(forms.Form):
     align_full = forms.BooleanField(required=False, initial=False)
     do_thumbnail = forms.BooleanField(required=False, initial=True, label="Thumbnail only")
     do_base_recal = forms.BooleanField(required=False, label="Enable Base Recalibration")
+
+    realign = forms.BooleanField(required=False)
+
     aligner_opts_extra = forms.CharField(max_length=100000,
                                          required=False,
                                          widget=forms.Textarea(attrs={'cols': 50, 'rows': 4, 'class': 'input-xlarge'}))
@@ -124,12 +156,10 @@ class RunParamsForm(forms.Form):
     previousThumbReport = forms.CharField(required=False,widget=DataSelect(
         attrs={'class': 'input-xlarge'}))
 
-    project_names = forms.CharField(max_length=1024,                           
+    project_names = forms.CharField(max_length=1024,
                            required=False,
                            widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}))
-    reference = forms.CharField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}
-                                                                      ))                           
-
+    
     def clean_report_name(self):
         """
         Verify that the user input doesn't have chars that we don't want
@@ -145,6 +175,41 @@ class RunParamsForm(forms.Form):
             raise forms.ValidationError(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
         else:
             return reportName
+
+    def clean_analysisArgs(self):
+        """
+        Verify that the user input doesn't have chars that we don't want
+        """
+        analysisArgs = self.cleaned_data.get("analysisArgs")
+        if not set(analysisArgs).issubset(string.printable):
+            logger.error("The Analysis command contains non ascii characters.")
+            raise forms.ValidationError(("The Analysis command contains non ascii characters."))
+        else:
+            return analysisArgs
+
+    def clean_basecallerArgs(self):
+        """
+        Verify that the user input doesn't have chars that we don't want
+        """
+        basecallerArgs = self.cleaned_data.get("basecallerArgs")
+        if not set(basecallerArgs).issubset(string.printable):
+            logger.error("The basecaller command contains non ascii characters.")
+            raise forms.ValidationError(("The basecaller command contains non ascii characters."))
+        else:
+            return basecallerArgs
+
+
+    def clean_beadfindArgs(self):
+        """
+        Verify that the user input doesn't have chars that we don't want
+        """
+        beadfindArgs = self.cleaned_data.get("beadfindArgs")
+        if not set(beadfindArgs).issubset(string.printable):
+            logger.error("The beadfind command contains non ascii characters.")
+            raise forms.ValidationError(("The beadfind command contains non ascii characters."))
+        else:
+            return beadfindArgs
+
 
     def clean_libraryKey(self):
         #TODO: note that because this is a hidden advanced field it will not be clear if it fails
@@ -173,140 +238,83 @@ class RunParamsForm(forms.Form):
             if name:
               names.append(name)
               if len(name) > 64:
-                  raise forms.ValidationError(("Project Name needs to be less than 64 characters long. Please separate different projects with a comma."))                  
+                  raise forms.ValidationError(("Project Name needs to be less than 64 characters long. Please separate different projects with a comma."))
               if not set(name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
                   logger.error("Project name has invalid characters. The valid values are letters, numbers, underscore and period.")
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
             
-  
-# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
-class ExperimentFilter(forms.Form):
-    CHOICES=()
-    YEARS = range(2008, datetime.date.today().year+2)
-    SELECT_DATE = widgets.SelectDateWidget(years=YEARS,
-                                           attrs={"class":"date_select"})
-    date_start = forms.DateField(required=False,
-                                 widget=SELECT_DATE,
-                                 initial=datetime.date(2008,11,5))
-    date_end = forms.DateField(required=False,
-                               widget=SELECT_DATE,
-                               initial=datetime.date.today)
-    pgm = forms.ChoiceField(choices=CHOICES, required=False, initial="None",
-                            label="PGM")
-    project = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    sample = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    library = forms.ChoiceField(choices=CHOICES, required=False,
-                                initial="None", label="Reference")
-    storage = forms.ChoiceField(choices=CHOICES, required=False,initial="None")
-    starred = forms.BooleanField(required=False, initial=False)
+
+from iondb.rundb.plan.views_helper import dict_bed_hotspot
+
+class bedfiles_Select(forms.Select):
+    # class to allow filtering bedfiles options by reference
+    def __init__(self, attrs=None, choices=()):
+        super(bedfiles_Select, self).__init__(attrs=attrs, choices=choices)
+        bedfiles = dict_bed_hotspot()
+        self.bedfiles = bedfiles.get(attrs['name'],[])
+    
+    def render(self, name, value, attrs=None):
+        output = '<select id="%s" class="input-xlarge" name="%s">' % (attrs['id'], name)
+        output+= '<option value=""></option>'
+        for bedfile in self.bedfiles:
+            if value and value == bedfile.file:
+                output+='<option selected class="%s" value="%s">%s</option>' % (bedfile.meta['reference'], bedfile.file, bedfile.path)
+            else:
+                output+='<option class="%s" value="%s">%s</option>' % (bedfile.meta['reference'], bedfile.file, bedfile.path)
+        output+='</select>'
+        return mark_safe(output)
+
+class AnalysisSettingsForm(forms.ModelForm):
+
+    reference = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    targetRegionBedFile = forms.ChoiceField(required=False, widget=bedfiles_Select(attrs={'name':'bedFiles'}) )
+    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=bedfiles_Select(attrs={'name':'hotspotFiles'}) )
+    plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
+        queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
+    pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
+    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
 
     def __init__(self, *args, **kwargs):
-        super(ExperimentFilter, self).__init__(*args, **kwargs)       
-        def choicify(choice_model, fieldname):
-            dbl = lambda x: (x,x)
-            rawvals = choice_model.objects.values(fieldname).distinct()
-            vals = [v[fieldname] for v in rawvals]
-            try:
-                if type(vals[0])==type(0):
-                    vals.sort()
-                    vals.reverse()
-                else:
-                    vals.sort(key=lambda x: x.lower())
-            except:
-                pass
-            choices = [("None","None")]
-            choices.extend(map(dbl,vals))
-            return choices
-
-        choice_model = models.Experiment
-        selfFields = ['pgm','sample','library']
-        fields = ["pgmName","sample","library"]
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(choice_model, field_name)
+        super(AnalysisSettingsForm, self).__init__(*args, **kwargs)
+        # initialize choices when form instance created
+        references = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True)
+        self.fields['reference'].choices= [('none','none')] + [(v[0],"%s (%s)" % (v[0],v[1])) for v in references.values_list('short_name', 'name')]
+        bedfiles = dict_bed_hotspot()
+        self.fields['targetRegionBedFile'].choices= [('','')] + [(v.file,v.path) for v in bedfiles.get('bedFiles',[])]
+        self.fields['hotSpotRegionBedFile'].choices= [('','')] + [(v.file,v.path) for v in bedfiles.get('hotspotFiles',[])]
+        self.fields['barcodeKitName'].choices= [('','')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name','name'))
+        adapters = models.ThreePrimeadapter.objects.all().order_by('-isDefault', 'name')
+        self.fields['threePrimeAdapter'].choices= [(v[1],"%s (%s)" % (v[0],v[1])) for v in adapters.values_list('name', 'sequence')]
+    
+    class Meta:
+        model = models.ExperimentAnalysisSettings
+        fields = ('reference', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'barcodeKitName', 'threePrimeAdapter')
         
-        choice_model = models.Project
-        selfFields = ['project']
-        fields = ["name"]
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(choice_model, field_name)
+class ExperimentSettingsForm(forms.ModelForm):
 
-        choices = [("None","None")]
-        s_choices = list(models.Experiment.STORAGE_CHOICES)
-        s_choices.sort(key=lambda x: x[1])
-        choices.extend(i for i in s_choices)
-        self.fields['storage'].choices = choices
-
-# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
-class SearchForm(forms.Form):
-    SEARCHBOX_WIDGET = forms.TextInput(attrs={"class":"searchbox"})
-    searchterms = forms.CharField(widget=SEARCHBOX_WIDGET)
-
-# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
-class SortForm(forms.Form):
-    SORT_WIDGET=forms.HiddenInput(attrs={"class":"sortfield"})
-    sortfield = forms.CharField(widget=SORT_WIDGET)
-       
-# TODO:DELETE with rundb.views@experiment (rundb/old_runs)
-class ReportFilter(forms.Form):
-    CHOICES=()
-    YEARS = range(2008, datetime.date.today().year+2)
-    SELECT_DATE = widgets.SelectDateWidget(years=YEARS,
-                                           attrs={"class":"date_select"})
-    date_start = forms.DateField(required=False,
-                                 widget=SELECT_DATE,
-                                 initial=datetime.date(2008,11,5))
-    date_end = forms.DateField(required=False,
-                               widget=SELECT_DATE,
-                               initial=datetime.date.today)
-    status = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    template = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    cycles = forms.ChoiceField(choices=CHOICES, required=False, initial="None", label="Flows")
-    project = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    sample = forms.ChoiceField(choices=CHOICES, required=False, initial="None")
-    library = forms.ChoiceField(choices=CHOICES, required=False,
-                                initial="None", label="Reference")
+    sample = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    barcodedSamples = forms.CharField(required=False, widget=forms.HiddenInput())
+    runtype = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'})) 
+    libraryKitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    sequencekitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))    
+    chipBarcode = forms.CharField(required=False, max_length=64, widget=forms.TextInput(attrs={'class':'textInput input-xlarge validateAlphaNumNoSpace'}) )
+    libraryKey = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    notes = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class':'textInput input-xlarge'}) )
 
     def __init__(self, *args, **kwargs):
-        super(ReportFilter, self).__init__(*args, **kwargs)
-        def choicify(fieldname,choiceModel):
-            dbl = lambda x: (x,x)
-            rawvals = choice_model.objects.values(fieldname).distinct()
-            vals = [v[fieldname] for v in rawvals]
-            try:
-                if type(vals[0])==type(0):
-                    vals.sort()
-                    vals.reverse()
-                else:
-                    vals.sort(key=lambda x: x.lower())
-            except:
-                pass
-            choices = [("None","None")]
-            choices.extend(map(dbl,vals))
-            return choices
-
-        selfFields = ['status','cycles']
-        fields = ['status','processedCycles']
-        choice_model = models.Results
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(field_name, choice_model)
-        # TODO: Cycles -> flows hack, very temporary.
-        self.fields['cycles'].choices[1:] = [(value, label * 4) for value, label in self.fields['cycles'].choices[1:]]
-        selfFields = ['template']
-        fields = ['name']
-        choice_model = models.TFMetrics
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(field_name, choice_model)
-        selfFields = ['sample', 'library']
-        fields = ['sample', 'library']
-        choice_model = models.Experiment
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(field_name, choice_model)
-        selfFields = ['project']
-        fields = ['name']
-        choice_model = models.Project
-        for field,field_name in zip(selfFields,fields):
-            self.fields[field].choices = choicify(field_name, choice_model)
+        super(ExperimentSettingsForm, self).__init__(*args, **kwargs)
+        # initialize sample and key choices when form instance created
+        self.fields['sample'].choices = [('','')]+ list(models.Sample.objects.filter().values_list('id', 'displayedName'))
+        self.fields['libraryKey'].choices = [(v[0],"%s (%s)" % (v[0],v[1])) for v in models.LibraryKey.objects.filter().values_list('sequence', 'description')]
+        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1],v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType','description')] 
+        self.fields['libraryKitname'].choices = [('','')] + list(models.KitInfo.objects.filter(kitType='LibraryKit').values_list('name','name'))
+        self.fields['sequencekitname'].choices = [('','')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name','name')) 
+    
+    class Meta:
+        model = models.Experiment
+        fields = ('sample', 'sequencekitname', 'chipBarcode', 'notes')
         
 
 class EditBackup(forms.Form):
@@ -327,7 +335,7 @@ class EditBackup(forms.Form):
     archive_directory = forms.ChoiceField(choices=())
     number_to_archive = forms.IntegerField()
     timeout = forms.IntegerField()
-    percent_full_before_archive = forms.IntegerField()
+    percent_full_before_archive = forms.IntegerField(max_value=99,min_value = 1)
     bandwidth_limit = forms.ChoiceField(make_throttle_choices())
     email = forms.EmailField(required=False)
     enabled = forms.BooleanField(required=False)
@@ -353,9 +361,9 @@ def getLevelChoices():
     pgrps = models.dm_prune_group.objects.all()
     for i,pgrp in enumerate(pgrps,start=1):
         tupleToBe.append(("%s" % pgrp.name, '%d' % i))
-        
+
     return tuple(tupleToBe)
-    
+
 class EditReportBackup(forms.Form):
     def get_dir_choices():
         basicChoice = [(None, 'None')]
@@ -367,7 +375,7 @@ class EditReportBackup(forms.Form):
         for loc in models.Location.objects.all():
             basicChoice.append((loc,loc))
         return tuple(basicChoice)
-    
+
     location = forms.ChoiceField(choices=(), label='Backup Location')
     days = forms.ChoiceField(required=False, choices=tuple([(10, '10'), (30, '30'), (60, '60'), (90, '90'), (0, '-')]))
     #autoDays = forms.ChoiceField(choices=tuple([(30, '30'), (60, '60'), (90, '90'), (180, '180'), (365, '365')]))
@@ -376,7 +384,7 @@ class EditReportBackup(forms.Form):
     pruneLevel = forms.ChoiceField(choices=getLevelChoices(), widget=forms.RadioSelect())
     #autoAction = forms.ChoiceField(choices=(tuple([('P', 'Prune'), ('A', 'Archive'), ('D', 'Delete')])), label='Act Automatically')
     autoAction = forms.ChoiceField(choices=(tuple([('P', 'Prune'), ('A', 'Archive')])), label='Auto-action')
-    
+
     def __init__(self,*args,**kwargs):
         super(EditReportBackup,self).__init__(*args,**kwargs)
         def get_dir_choices():
@@ -387,17 +395,17 @@ class EditReportBackup(forms.Form):
 
         self.fields['pruneLevel'].choices = getLevelChoices()
         self.fields['location'].choices = get_dir_choices()
-        
+
 class bigPruneEdit(forms.Form):
 
     checkField = forms.MultipleChoiceField(choices=tuple([('x','y')]), widget=forms.CheckboxSelectMultiple())
     newField = forms.CharField(widget=forms.TextInput(attrs = {'class':'textInput validateFilenameRegex'}))
     remField = forms.MultipleChoiceField(choices=tuple([('x', 'y')]),widget=forms.CheckboxSelectMultiple())
-    
+
     def __init__(self,*args,**kwargs):
         target = kwargs.pop("pk")
         super(bigPruneEdit,self).__init__(*args,**kwargs)
-        
+
         def get_selections(pkTarget):
             ruleList = models.dm_prune_field.objects.all().order_by('pk')
             choices = []
@@ -405,14 +413,14 @@ class bigPruneEdit(forms.Form):
                 choices.append(('%s:'%target+'%s'%rule.pk, rule.rule))
             logger.error(choices)
             return tuple(choices)
-        
+
         def get_removeIDs():
             ruleList = models.dm_prune_field.objects.all().order_by('pk')
             choices = []
             for rule in ruleList:
                 choices.append(('%s'%rule.pk, rule.rule))
             return tuple(choices)
-        
+
         self.fields['checkField'].choices = get_selections(target)
         self.fields['remField'].choices = get_removeIDs()
 
@@ -422,7 +430,7 @@ class EditPruneLevels(forms.Form):
         for choice in devices.to_media(devices.disk_report()):
             basicChoice.append(choice)
         return tuple(basicChoice)
-    
+
     def getLevelChoices():
         #try:
         #    numPG = models.dm_prune_group.objects.count()
@@ -443,7 +451,7 @@ class EditPruneLevels(forms.Form):
     pruneLevel = forms.MultipleChoiceField(choices=getLevelChoices(), widget=forms.CheckboxSelectMultiple())
     editChoice = forms.MultipleChoiceField(choices=getLevelChoices(), widget=forms.RadioSelect())
     name = forms.SlugField(label="Group Name", widget=forms.TextInput(attrs = {'class':'textInput required validatePhrase'}))
-    
+
     def __init__(self,*args,**kwargs):
         super(EditPruneLevels,self).__init__(*args,**kwargs)
         def get_dir_choices():
@@ -463,7 +471,7 @@ class EditPruneLevels(forms.Form):
             tupleToBe.append(('rem', 'Remove...'))
             return tuple(tupleToBe)
         #self.fields['pruneLevel'].choices = getLevelChoices()
-        self.fields['editChoice'].choices = getLevelChoices() 
+        self.fields['editChoice'].choices = getLevelChoices()
         self.fields['location'].choices = get_dir_choices()
 
 
@@ -472,7 +480,7 @@ class EmailAddress(forms.ModelForm):
     class Meta:
         model = models.EmailAddress
 
-   
+
 class EditReferenceGenome(forms.Form):
     name = forms.CharField(max_length=512,required=True)
     NCBI_name = forms.CharField(max_length=512,required=True)
@@ -643,3 +651,7 @@ class NetworkConfigForm(forms.Form):
             dns_task.get()
         self.set_to_current_values()
 
+
+class AmpliseqLogin(forms.Form):
+    username = forms.CharField()
+    password = forms.CharField(widget=PasswordInput)

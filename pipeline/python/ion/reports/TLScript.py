@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 49775 $")
+__version__ = filter(str.isdigit, "$Revision: 57236 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -49,7 +49,6 @@ from urlparse import urlunsplit
 # convention when B is a module in package A, or import A when
 # A is a module.
 #from ion.analysis import cafie,sigproc
-from ion.reports import parseBeadfind, libGraphs, beadHistogram
 
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
@@ -92,6 +91,8 @@ def get_pgm_log_files(rawdatadir):
     files=['explog_final.txt',
     'explog.txt',
     'InitLog.txt',
+    'InitLog1.txt',
+    'InitLog2.txt',
     'RawInit.txt',
     'RawInit.jpg',
     'InitValsW3.txt',
@@ -99,7 +100,8 @@ def get_pgm_log_files(rawdatadir):
     'Controller',
     'debug']
     for afile in files:
-        make_zip ('pgm_logs.zip',os.path.join(rawdatadir,afile),arcname=afile)
+        if os.path.exists(os.path.join(rawdatadir,afile)):
+            make_zip ('pgm_logs.zip',os.path.join(rawdatadir,afile),arcname=afile)
 
     return
 
@@ -109,19 +111,11 @@ def GetBlocksToAnalyze(env):
 
     if is_thumbnail or is_wholechip:
 
-        block = {'id_str':'',
-                'datasubdir':'',
-                'jobid':None,
-                'status':None}
-
         if is_thumbnail:
-            block['id_str'] = 'thumbnail'
+            blocks.append({'id_str':'thumbnail', 'datasubdir':'thumbnail', 'jobid':None, 'status':None})
 
         elif is_wholechip:
-            block['id_str'] = 'wholechip'
-
-        print block
-        blocks.append(block)
+            blocks.append({'id_str':'wholechip', 'datasubdir':'', 'jobid':None, 'status':None})
 
     else:
         explogblocks = explogparser.getBlocksFromExpLogJson(env['exp_json'],excludeThumbnail=True)
@@ -132,6 +126,7 @@ def GetBlocksToAnalyze(env):
                 print "block: " + str(block)
                 blocks.append(block)
 
+    print blocks
     return blocks
 
 
@@ -213,7 +208,7 @@ if __name__=="__main__":
     blockprocessing.printheader()
 
     env,warn = explogparser.getparameter()
-    print warn    
+    print warn
 
     try:
         primary_key = open("primary.key").readline()
@@ -222,15 +217,15 @@ if __name__=="__main__":
         printtime(env['primary_key'])
     except:
         printtime("Error, unable to get the primary key")
-    
+
     # assemble the URL path for this analysis result, relative to the webroot directory: (/var/www/)
     # <output dir>/<Location name>/<analysis dir>
     url_root = os.path.join(env['url_path'],os.path.basename(os.getcwd()))
-    
+
     printtime("DEBUG url_root string %s" % url_root)
     printtime("DEBUG net_location string %s" % env['net_location'])
     printtime("DEBUG master_node string %s" % env['master_node'])
-    
+
     report_config = ConfigParser.RawConfigParser()
     report_config.optionxform = str # don't convert to lowercase
     report_config.add_section('global')
@@ -296,12 +291,16 @@ if __name__=="__main__":
     print "blockArgs '"+str(env['blockArgs'])+"'"
     print "previousReport: '"+str(env['previousReport'])+"'"
 
-    if is_thumbnail: 
+    if is_thumbnail:
         initlogfilepath = os.path.join( env['pathToRaw'],'..','InitLog.txt')
+        initlog1filepath = os.path.join( env['pathToRaw'],'..','InitLog1.txt')
+        initlog2filepath = os.path.join( env['pathToRaw'],'..','InitLog2.txt')
         explogfilepath = os.path.join( env['pathToRaw'],'..','explog.txt')
         explogfinalfilepath = os.path.join( env['pathToRaw'],'..','explog_final.txt')
     else:
         initlogfilepath = os.path.join( env['pathToRaw'],'InitLog.txt')
+        initlog1filepath = os.path.join( env['pathToRaw'],'InitLog1.txt')
+        initlog2filepath = os.path.join( env['pathToRaw'],'InitLog2.txt')
         explogfilepath = os.path.join( env['pathToRaw'],'explog.txt')
         explogfinalfilepath = os.path.join( env['pathToRaw'],'explog_final.txt')
 
@@ -330,6 +329,8 @@ if __name__=="__main__":
         runFromSigproc = True
         runFromBasecaller = True
         initlogfilepath = os.path.join(env['previousReport'],'InitLog.txt')
+        initlog1filepath = os.path.join(env['previousReport'],'InitLog1.txt')
+        initlog2filepath = os.path.join(env['previousReport'],'InitLog2.txt')
         explogfilepath = os.path.join(env['previousReport'],'explog.txt')
         explogfinalfilepath = os.path.join(env['previousReport'],'explog_final.txt')
 
@@ -363,21 +364,21 @@ if __name__=="__main__":
             except:
                 traceback.print_exc()
 
-    #copy InitLog.txt and explog.txt into report directory
-    for filepath in [initlogfilepath, explogfilepath]:
+    #copy InitLog*.txt and explog.txt into report directory
+    for filepath in [initlogfilepath, initlog1filepath, initlog2filepath, explogfilepath]:
         try:
             if os.path.exists(filepath):
                 shutil.copy(filepath, ".")
             else:
-                printtime("ERROR: %s doesn't exist" % filepath)
+                printtime("WARN: Cannot copy %s: doesn't exist" % filepath)
         except:
             printtime(traceback.format_exc())
 
     pluginbasefolder = 'plugin_out'
     blockprocessing.initTLReport(pluginbasefolder)
-    
+
     env['report_root_dir'] = os.getcwd()
-    
+
     sys.stdout.flush()
     sys.stderr.flush()
 
@@ -389,27 +390,24 @@ if __name__=="__main__":
         debugging_cwd = os.getcwd()
     except:
         traceback.print_exc()
-    
+
     def set_result_status(status):
         try:
             primary_key_file = os.path.join(os.getcwd(),'primary.key')
             jobserver.updatestatus(primary_key_file, status, True)
-            printtime("TLStatus %s\tpid %d\tpk file %s started in %s" % 
+            printtime("TLStatus %s\tpid %d\tpk file %s started in %s" %
                 (status, os.getpid(), primary_key_file, debugging_cwd))
         except:
             traceback.print_exc()
 
     set_result_status('Started')
-        
-    
+
+
     #-------------------------------------------------------------
     # Initialize plugins
     #-------------------------------------------------------------
-    plugins = blockprocessing.get_plugins_to_run(env['plugins'], env['report_type']) 
-    blocklevel_plugins = [] 
-    if is_blockprocessing:
-      blocklevel_plugins = [p for p in plugins if ('runlevel' in p.keys() and 'block' in p['runlevel'])]    
-        
+    plugins, blocklevel_plugins = blockprocessing.get_plugins_to_run(env['plugins'], env['report_type'])
+
     #-------------------------------------------------------------
     # Gridded data processing
     #-------------------------------------------------------------
@@ -443,8 +441,8 @@ if __name__=="__main__":
         blocks_to_process.extend(blocks)
         timeout = 3*60*60
         if env['oninstranalysis'] and is_blockprocessing:
-            timeout = 36*60*60
-        
+            timeout = 20*60*60
+
         env['block_dirs'] = [os.path.join(env['report_root_dir'],result_dirs[block['id_str']]) for block in blocks_to_process]
 
         while len(blocks_to_process) > 0 and timeout > 0:
@@ -529,7 +527,7 @@ if __name__=="__main__":
                             wait_list = [ sigproc_job_dict[block['id_str']] ]
                         block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',['--do-basecalling'],wait_list)
                         basecaller_job_dict[block['id_str']] = str(block['jobid'])
-                        printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
+                        printtime("Submitted block (%s) basecaller job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
                     except:
                         printtime("submitting basecaller job for block (%s) failed" % block['id_str'])
 
@@ -566,18 +564,18 @@ if __name__=="__main__":
             job_list[block] = {'sigproc': jobid}
         for block, jobid in basecaller_job_dict.items():
             f.write(jobid+'\n')
-            if job_list.has_key(block):            
+            if job_list.has_key(block):
                 job_list[block]['basecaller'] = jobid
             else:
-                job_list[block] = {'basecaller': jobid}    
+                job_list[block] = {'basecaller': jobid}
         for block, jobid in alignment_job_dict.items():
             f.write(jobid+'\n')
-            if job_list.has_key(block):            
+            if job_list.has_key(block):
                 job_list[block]['alignment'] = jobid
             else:
-                job_list[block] = {'alignment': jobid}    
+                job_list[block] = {'alignment': jobid}
         for jobname, jobid in merge_job_dict.items():
-            f.write(jobid+'\n')            
+            f.write(jobid+'\n')
         f.close()
         # write more descriptive json list of jobs
         with open('job_list.json','w') as f:
@@ -600,9 +598,9 @@ if __name__=="__main__":
                     traceback.print_exc()
                     continue
 
-                if (len(blocklevel_plugins) > 0) and (block['status']=='done'):
+                if blocklevel_plugins and (block['status']=='done'):
                     block_pluginbasefolder = os.path.join(result_dirs[block['id_str']],pluginbasefolder)
-                    env['blockId'] = block['id_str']                    
+                    env['blockId'] = block['id_str']
                     plugins = blockprocessing.runplugins(plugins, env, block_pluginbasefolder, url_root, 'block')
 
                 if block['status']=='done' or block['status']=='failed' or block['status']=="DRMAA BUG":
@@ -610,7 +608,7 @@ if __name__=="__main__":
                     alignment_job_list.remove(block['jobid'])
 #                else:
 #                    printtime("Job %s has status %s" % (str(block['jobid']),block['status']))
-                
+
             if os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'separator.mask.bin')) and not pl_started:
                 plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'separator')
                 pl_started = True
@@ -642,51 +640,24 @@ if __name__=="__main__":
 
     printtime("All jobs processed")
 
-    # These settings do not reflect reality of block processing but are intended
-    # to 'clean up' the progress indicators only.
-    # create analysis progress bar file
-    f = open('progress.txt','w')
-    f.write('wellfinding = green\n')
-    f.write('signalprocessing = green\n')
-    f.write('basecalling = green\n')
-    f.write('alignment = green')
-    f.close()
-
     ########################################################
     #ParseFiles and Upload Metrics                         #
     ########################################################
     printtime("Attempting to Upload to Database")
 
-    alignmentSummaryPath = os.path.join(env['ALIGNMENT_RESULTS'],'alignment.summary')
-
-    if is_thumbnail:
-        # uploadMetrics will set align_sample=2 for thumbnails
-        try:
-            f = open(alignmentSummaryPath)
-            text = f.read()
-            f.close()
-            matches = re.findall(r"Thumbnail = 1", text)
-            if len(matches) == 0:
-                printtime("Adding Thumbnail = 1 to file %s" % alignmentSummaryPath)
-                f = open (alignmentSummaryPath, "a")
-                f.write("Thumbnail = 1\n")
-                f.close()
-        except:
-            printtime("Cannot open file %s" % alignmentSummaryPath)
-
-
     #attempt to upload the metrics to the Django database
     try:
         mycwd = os.getcwd()
 
+        ionParamsPath = os.path.join('.','ion_params_00.json')
         BaseCallerJsonPath = os.path.join(env['BASECALLER_RESULTS'],'BaseCaller.json')
         tfmapperstats_outputfile = os.path.join(env['BASECALLER_RESULTS'],"TFStats.json")
         merged_bead_mask_path = os.path.join(env['SIGPROC_RESULTS'], 'MaskBead.mask')
-        QualityPath = os.path.join(env['BASECALLER_RESULTS'], 'ionstats_basecaller.json')
+        ionstats_basecaller_json_path = os.path.join(env['BASECALLER_RESULTS'],'ionstats_basecaller.json')
         peakOut = os.path.join('.','raw_peak_signal')
         beadPath = os.path.join(env['SIGPROC_RESULTS'],'analysis.bfmask.stats')
         procPath = os.path.join(env['SIGPROC_RESULTS'],'processParameters.txt')
-        filterPath = None
+        ionstats_alignment_json_path = os.path.join(env['ALIGNMENT_RESULTS'],'ionstats_alignment.json')
         reportLink = True
 
         if is_thumbnail or is_wholechip:
@@ -699,20 +670,23 @@ if __name__=="__main__":
                     [component, status] = line.split('=')
                     print component, status
                     if int(status) != 0:
-                        if component == 'Analysis':
+                        if component == 'Beadfind':
                             if int(status) == 2:
                                 STATUS = 'Checksum Error'
                             elif int(status) == 3:
                                 STATUS = 'No Live Beads'
                             else:
-                                STATUS = "Error in %s" % component
-                        elif component == 'Alignment':
-                            # TS-2992 alignment failure will still mark the analysis report complete
-                            # but in the Default Report page, the alignment section will display the failure.
-                            continue
+                                STATUS = "Error in Beadfind"
+                        elif component == 'Analysis':
+                            if int(status) == 2:
+                                STATUS = 'Checksum Error'
+                            elif int(status) == 3:
+                                STATUS = 'No Live Beads'
+                            else:
+                                STATUS = "Error in Analysis"
                         else:
                             STATUS = "Error in %s" % component
-                            break
+                        break
             else:
                 STATUS = "Error"
         elif is_blockprocessing:
@@ -738,17 +712,18 @@ if __name__=="__main__":
             os.path.join(mycwd,tfmapperstats_outputfile),
             os.path.join(mycwd,procPath),
             os.path.join(mycwd,beadPath),
-            filterPath,
-            os.path.join(mycwd,alignmentSummaryPath),
+            os.path.join(mycwd,ionstats_alignment_json_path),
+            os.path.join(mycwd,ionParamsPath),
             os.path.join(mycwd,peakOut),
-            os.path.join(mycwd,QualityPath),
+            os.path.join(mycwd,ionstats_basecaller_json_path),
             os.path.join(mycwd,BaseCallerJsonPath),
             os.path.join(mycwd,'primary.key'),
             os.path.join(mycwd,'uploadStatus'),
             STATUS,
-            reportLink)
+            reportLink,
+            mycwd)
         # this will replace the five progress squares with a re-analysis button
-        printtime("jobserver.uploadmetrics returned: "+str(ret_message))
+        printtime("jobserver.uploadmetrics returned:\n"+str(ret_message))
     except:
         traceback.print_exc()
 
@@ -770,7 +745,7 @@ if __name__=="__main__":
         if os.path.exists(explogfinalfilepath):
             shutil.copy(explogfinalfilepath, ".")
         else:
-            printtime("ERROR: %s doesn't exist" % explogfinalfilepath)
+            printtime("WARN: Cannot copy %s: doesn't exist" % explogfinalfilepath)
     except:
         printtime(traceback.format_exc())
 
@@ -785,22 +760,52 @@ if __name__=="__main__":
         raw_return_code_file = os.path.join(env['BASECALLER_RESULTS'],"composite_return_code.txt")
 
     try:
-        if (is_wholechip or is_blockprocessing) and os.path.isfile(raw_return_code_file):
-            shutil.copyfile(raw_return_code_file,os.path.join(env['pathToRaw'],"checksum_status.txt"))
+        #never overwrite existing checksum_status.txt file, needed in R&D to keep important data
+        if not os.path.exists(os.path.join(env['pathToRaw'],"checksum_status.txt")):
+
+            keep_raw_data = False
+            try:
+                if env['libraryName']!='none' and len(env['libraryName'])>0:
+                    if os.path.exists(ionstats_alignment_json_path):
+                        afile = open(ionstats_alignment_json_path, 'r')
+                        ionstats_alignment = json.load(afile)
+                        afile.close()
+                        if int(ionstats_alignment['AQ17']['num_bases']) > 13000000000:
+                            keep_raw_data = True
+                            f = open(raw_return_code_file+".keep", 'w')
+                            f.write(str(99))
+                            f.close()
+                            printtime("INFO: keep raw data")
+                        else:
+                            printtime("INFO: delete raw data if all blocks have been processed successfully")
+                    else:
+                        printtime("ERROR: keep_raw_data check failed: ionstats_alignment.json is missing")
+                else:
+                    printtime("INFO: reference library not set, skip AQ17 check")
+            except:
+               printtime("ERROR: keep_raw_data check failed")
+               traceback.print_exc()
+
+            if (is_wholechip or is_blockprocessing) and os.path.isfile(raw_return_code_file):
+                if keep_raw_data:
+                    shutil.copyfile(raw_return_code_file+".keep",os.path.join(env['pathToRaw'],"checksum_status.txt"))
+                else:
+                    shutil.copyfile(raw_return_code_file,os.path.join(env['pathToRaw'],"checksum_status.txt"))
+
     except:
         traceback.print_exc()
 
     # default plugin level
-    plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root)    
+    plugins = blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root)
 
     getExpLogMsgs(explogfinalfilepath)
     get_pgm_log_files(env['pathToRaw'])
-    
+
     # multilevel plugins postprocessing
     blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'post')
     # plugins last level - plugins in this level will wait for all previously launched plugins to finish
     blockprocessing.runplugins(plugins, env, pluginbasefolder, url_root, 'last')
-    
+
     ####################################################
     # Record disk space usage for the Result directory #
     ####################################################
@@ -808,6 +813,6 @@ if __name__=="__main__":
         jobserver.resultdiskspace(env['primary_key'])
     except:
         traceback.print_exc()
-    
+
     printtime("Run Complete")
     sys.exit(0)

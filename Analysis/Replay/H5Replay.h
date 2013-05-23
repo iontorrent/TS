@@ -10,7 +10,6 @@
 #include <iostream>
 #include "hdf5.h"
 #include "CommandLineOpts.h"
-#include "FileBkgReplay.h"
 #include "IonErr.h"
 #include "Utils.h"
 #include <pthread.h>
@@ -41,7 +40,20 @@ class ReplayH5DataSet {
   void Open(hid_t hFile);    // Open dataset hdf5 handles given file handle
   bool IsOpen();       // returns true if DataSet hdf5 handles are open
 
-  unsigned int GetRank() { return( mRank ); };
+  unsigned int GetRank() { return( (unsigned int)mRank ); };
+  hid_t GetDatatype() { return( mDatatype ); };
+  size_t GetDims(size_t k)
+  {
+    assert(k<=(size_t)mRank);
+    // fprintf(stdout, "mDims[%d]=%d\n", (int)k, (int)mDims[k]);
+    return( mDims[k] );
+  }
+  size_t GetChunkDims(size_t k)
+  {
+    assert(k<=(size_t)mRank);
+    // fprintf(stdout, "mChunkDims[%d]=%d\n", (int)k, (int)mChunkDims[k]);
+    return( mChunkDims[k] );
+  }
 
   // Read a hyperslab of the hdf5 dataspace into buffer_out
   template<typename T>
@@ -135,7 +147,7 @@ void ReplayH5DataSet::Write(hsize_t *offset, hsize_t *count,
   assert(status1>=0);
 
   // now the actual write
-  // fprintf(stdout, "H5: Writing %s rank: %d, offset: [%d, %d, %d], size: [%d, %d, %d] from memory rank: %d, offset: [%d], size [%d]\n", mName, mRank, offset[0], offset[1], offset[2], count[0], count[1], count[2], rank_in, offset_in[0], count_in[0]);
+  // fprintf(stdout, "H5: Writing %s rank: %d, offset: [%d, %d, %d], size: [%d, %d, %d] from memory rank: %d, offset: [%d], size [%d]\n", mName, (int)mRank, (int)offset[0], (int)offset[1], (int)offset[2], (int)count[0], (int)count[1], (int)count[2], (int)rank_in, (int)offset_in[0], (int)count_in[0]);
 
   herr_t status2 = H5Dwrite (mDataset, mDatatype, memspace, mDataspace,
 		     H5P_DEFAULT, buffer_in);
@@ -147,27 +159,43 @@ void ReplayH5DataSet::Write(hsize_t *offset, hsize_t *count,
 // *********************************************************************
 // reader and recorder
 
+/**
+ * H5ReplayReader and H5ReplayRecorder derive from base class H5Replay
+ * Individual H5ReplayReader and H5ReplayRecorder objects are not thread safe.
+ * Do not share across threads. Construct a H5Replay reader/recorder per thread.
+ * Individual H5Replay objects from different threads should be able to
+ * read/write from/to the same hdf5 file safely as the actual reads/writes are
+ * sequential, controlled by H5Replay::h5_mutex
+ * Read & Write lock the mutex, do I/O and unlock.
+ * Setup requiring multiple function calls is handled within a pair of calls:
+ * Open() which locks the mutex and Close() which unlocks it.
+ */
 class H5Replay {
   // shared between both reader and recorder 
 
  public:
   // constructor
-  H5Replay(CommandLineOpts& clo, char *datasetname);
+  // give location of h5file explicitly, if null defaults to
+  // "process directory"/dumpfile.h5
+  H5Replay(std::string& h5file, const char *datasetname); // initialize
+
+  // explicit attributes in dataset creation
+  H5Replay(std::string& h5file, const char *datasetname, hid_t dsnType, unsigned int rank);
   
   virtual ~H5Replay(); //Destructor
 
   void Close();  // Close all hdf5 handles
 
  protected:
-  dsn mInfo;
   std::string mFilePath;
   hid_t mHFile;       ///< Id for hdf5 file operations.
-  ReplayH5DataSet mRDataset; // we may want multiple datasets in the future
+  ReplayH5DataSet mRDataset; // One dataset only per object
 
-  void Init(CommandLineOpts& clo, char *datasetname); // initialize
+  void Init(std::string& h5file, const char *datasetname);
+  void Init(std::string& h5file, const char *datasetname, hid_t dsnType, unsigned int rank);
   
-  // the one and only file that houses the data
-  void SetReplayBkgModelDataFile(CommandLineOpts &clo);
+  // write the h5file, if empty, use "process directory"/dumpfile_pid.h5
+  void SetReplayBkgModelDataFile(std::string& h5file);
 
   static pthread_mutex_t h5_mutex;
   bool locked;
@@ -183,16 +211,30 @@ class H5ReplayReader : public H5Replay {
 
  public:
   // Constructor for just checking the file
-  H5ReplayReader(CommandLineOpts& clo);
+  H5ReplayReader(std::string& h5File);
   
   // Constructor for reading a specific dataset
-  H5ReplayReader(CommandLineOpts& clo, char *datasetname);
+  H5ReplayReader(std::string& h5File, const char *datasetname);
+
   void Open();        // Open file and dataset hdf5 handles
 
   template<typename T>
     void Read(std::vector<hsize_t>& offset, std::vector<hsize_t>& count,
 	      std::vector<hsize_t>& offset_out, std::vector<hsize_t>& count_out,
 	      T *buffer_out);
+
+  int GetRank() {return  mRDataset.GetRank(); }
+  hid_t GetType();
+  void GetDims(std::vector<hsize_t>& dims)
+  {
+    for (size_t k=0; k<mRDataset.GetRank(); k++)
+      dims[k] = mRDataset.GetDims(k);
+  }
+  void GetChunkSize(std::vector<hsize_t>& chunk)
+  {
+    for (size_t k=0; k<mRDataset.GetRank(); k++)
+      chunk[k] = mRDataset.GetChunkDims(k);
+  }
   
  private:
   bool CheckValid();
@@ -200,9 +242,12 @@ class H5ReplayReader : public H5Replay {
   H5ReplayReader(); // not implemented, don't call!
 };
 
-// template read from a dataset, open & close file
+/**
+ * Read from a dataset, open & close file
+ */
 template<typename T>
-void H5ReplayReader::Read(std::vector<hsize_t>& offset, std::vector<hsize_t>& count,
+void H5ReplayReader::Read(std::vector<hsize_t>& offset,
+			  std::vector<hsize_t>& count,
 			  std::vector<hsize_t>& offset_out,
 			  std::vector<hsize_t>& count_out, T *buffer_out)
 {
@@ -224,14 +269,15 @@ class H5ReplayRecorder : public H5Replay {
 
 public:  
   // Constructor for just creating the file
-  H5ReplayRecorder(CommandLineOpts& clo);
+  H5ReplayRecorder(std::string& h5file);
+  H5ReplayRecorder(std::string& h5file, char *datasetname, hid_t dsnType, unsigned int rank);
 
   static bool fileNotCreated;  // since we only have one file possible
   void CreateFile();  // create the file to write datasets to
 
 
   // Constructor for creating or recording to a specific dataset
-  H5ReplayRecorder(CommandLineOpts& clo, char *datasetname);
+  H5ReplayRecorder(std::string& h5File, char *datasetname);
 
   void Open();        // Open file hdf5 (and if exists, dataset) handles
 
@@ -247,10 +293,14 @@ public:
 
 private:
   H5ReplayRecorder(); // not implemented, don't call!
+
+  bool FileNotCreated(std::string& h5File);
 };
 
 
-// template write to a dataset, open & close file
+/**
+ * Write to a dataset, open & close file
+ */
 template<typename T>
 void H5ReplayRecorder::Write(std::vector<hsize_t>& offset, std::vector<hsize_t>& count,
 			     std::vector<hsize_t>& offset_in,

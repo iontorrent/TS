@@ -1,6 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "DarkMatter.h"
+#include "TraceCorrector.h"
 
 using namespace std;
 
@@ -43,7 +44,7 @@ void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, float *residual
 
   for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {
-    if ( bkg.region_data->my_beads.StillSampled(ibd) ) {
+    if ( bkg.region_data->my_beads.Sampled(ibd) ) {
       // get the current parameter values for this bead
       bead_params *p = &bkg.region_data->my_beads.params_nn[ibd];
       AccumulateOneBead(p,reg_p, max_fnum, residual[ibd], res_threshold);
@@ -53,6 +54,7 @@ void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, float *residual
 
 void Axion::CalculateDarkMatter (int max_fnum, float *residual, float res_threshold)
 {
+  bkg.region_data->my_regions.missing_mass.mytype = PerNucAverage;
   bkg.region_data->my_regions.missing_mass.ResetDarkMatter();
   // prequel, set up standard bits
   reg_params *reg_p = & bkg.region_data->my_regions.rp;
@@ -65,3 +67,203 @@ void Axion::CalculateDarkMatter (int max_fnum, float *residual, float res_thresh
   // make sure everything is happy in the rest of the code
   bkg.region_data->my_regions.cache_step.Unlock();
 }
+
+// TODO: should probably put this in math util or some other shared-location
+void Axion::smooth_kern(float *out, float *in, float *kern, int dist, int npts)
+{
+   float sum;
+   float scale;
+
+   for (int i = 0; i < npts; i++) {
+      sum = 0.0f;
+      scale = 0.0f;
+
+      for (int j = i - dist, k = 0; j <= (i + dist); j++, k++) {
+         if ((j >= 0) && (j < npts)) {
+            sum += kern[k] * in[j];
+            scale += kern[k];
+         }
+      }
+      out[i] = sum / scale;
+   }
+}
+
+int Axion::Average0MerOneBead(int ibd,float *avg0p)
+{
+   float block_signal_corrected[bkg.region_data->my_trace.bead_flow_t];
+
+   bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal (block_signal_corrected, ibd);
+
+   float tmp[bkg.region_data->time_c.npts()];
+   memset(tmp,0,sizeof(tmp));
+
+   int ncnt=0;
+   for (int fnum = 0; fnum < NUMFB; fnum++)
+      if (bkg.region_data->my_beads.params_nn[ibd].Ampl[fnum] < 0.5f)
+      {
+         for (int i = 0; i < bkg.region_data->time_c.npts(); i++)
+            tmp[i] += block_signal_corrected[fnum * bkg.region_data->time_c.npts() + i];
+
+         ncnt++;
+      }
+
+   // this will force the output to all 0's if we didn't find enough 0-mers to average
+   float scale = 1.0f/ncnt;
+   if (ncnt < 4)
+      scale = 0.0f;
+
+   for (int i = 0; i < bkg.region_data->time_c.npts(); i++)
+      avg0p[i] = tmp[i]*scale;
+
+   return(ncnt);
+}
+
+void Axion::PCACalc(arma::fmat &avg_0mers,bool region_sampled)
+{
+   int npts = bkg.region_data->time_c.npts();
+   int numLBeads = bkg.region_data->my_beads.numLBeads;
+   arma::fmat coeff;
+   arma::fmat score;
+   arma::fmat amat;
+   arma::fmat vals;
+   arma::fmat mat_obs;
+   arma::fmat region_mean_0mer;
+   float samp_rate = (float)TARGET_PCA_SET_SIZE/numLBeads;
+   int icnt = 0;
+   int ilast = -1;
+   int total_vectors;
+   float kern[3] = {1.0f,1.0f,1.0f};
+   int target_sample_size;
+
+   if (region_sampled)
+      target_sample_size = NUMBEADSPERGROUP;
+   else
+      target_sample_size = TARGET_PCA_SET_SIZE;
+
+   // if we don't have very many example traces...skip the PCA analysis and just resort to using the mean trace as a single vector
+   if (numLBeads >= MIN_PCA_SET_SIZE)
+   {
+      // create an evenly distributed subset of traces for PCA analysis
+      // TARGET_PCA_SET_SIZE is the desired number of traces to be used
+      mat_obs.set_size(target_sample_size,npts);
+
+      float samp = 0.0f;
+      for (int ibd=0;(ibd < numLBeads) && (icnt < target_sample_size);ibd++)
+      {
+         int isamp = (int)samp;
+         bool sample_read;
+
+         if (region_sampled)
+            sample_read = (bkg.region_data->my_beads.Sampled(ibd));
+         else
+            sample_read = (isamp > ilast);
+
+         if (sample_read)
+         {
+            float trc[npts];
+            float trc_smooth[npts];
+
+            for (int i=0;i < npts;i++)
+               trc[i] = avg_0mers(ibd,i);
+
+            smooth_kern(trc_smooth, trc, kern, 1, bkg.region_data->time_c.npts());
+
+            for (int i=0;i < npts;i++)
+               mat_obs(icnt,i) = trc_smooth[i];
+
+            ilast = icnt++;
+         }
+
+         samp += samp_rate;
+      }
+      // just in case we wound up with fewer than the target...resize it to only the valid
+      // rows
+      if (icnt < target_sample_size)
+         mat_obs.resize(icnt,npts);
+
+      bool success = princomp(coeff,score,mat_obs);
+      
+      if (success)
+         total_vectors = NUM_DM_PCA;
+      else
+         total_vectors = 1;
+   }
+   else
+   {
+      // we shouldn't need mat_obs if we get here..but just in case set it to something reasonable
+      mat_obs.set_size(1,npts);
+      mat_obs.fill(1.0f);
+      total_vectors = 1;
+   }
+
+   amat.set_size(npts,total_vectors);
+
+   if (region_sampled)
+      region_mean_0mer = arma::mean(mat_obs,0).t();
+   else
+      region_mean_0mer = arma::mean(avg_0mers,0).t();
+
+   if (total_vectors > 1)
+      amat(arma::span::all,arma::span(1,total_vectors-1)) = coeff(arma::span::all,arma::span(0,total_vectors-2));
+   amat(arma::span::all,0) = region_mean_0mer;
+
+   vals = solve(amat,avg_0mers.t());
+
+   // store coefficients for each bead into the bead params structure
+   for (int ibd=0;ibd < numLBeads;ibd++)
+      for (int i=0;i < total_vectors;i++)
+         bkg.region_data->my_beads.params_nn[ibd].pca_vals[i] = vals(i,ibd);
+
+   // store the components of the PCA vector into the DarkHalo object
+   for (int icomp=0;icomp < total_vectors;icomp++)
+   {
+      float tmp[npts];
+      for (int i=0;i < npts;i++)
+         tmp[i] = amat(i,icomp);
+
+      bkg.region_data->my_regions.missing_mass.AccumulateDarkMatter(tmp,icomp);
+   }
+}
+
+void Axion::CalculatePCADarkMatter (bool region_sampled)
+{
+   bkg.region_data->my_regions.missing_mass.mytype = PCAVector;
+   bkg.region_data->my_regions.missing_mass.ResetDarkMatter();
+
+   // if there are very few reads...then we shouldn't attempt this
+   // if we bail here...all the vectors will be all-0s and all the
+   // coefficients will be 0, so dark matter correction will become
+   // a null operation
+   if (bkg.region_data->my_beads.numLBeads < MIN_AVG_DM_SET_SIZE)
+      return;
+
+   bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, true);
+   bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(&bkg.region_data->my_regions.rp,bkg.region_data->time_c,bkg.region_data->my_flow);
+
+   arma::fmat avg_0mers;
+
+   avg_0mers.set_size(bkg.region_data->my_beads.numLBeads,bkg.region_data->time_c.npts());
+   avg_0mers.fill(0.0f);
+
+   // calculate the average 0-mer for each bead
+   for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
+   {
+      float avg_0mer[bkg.region_data->time_c.npts()];
+
+      if ((region_sampled && bkg.region_data->my_beads.Sampled(ibd)) || ~region_sampled)
+      {
+         Average0MerOneBead(ibd,avg_0mer);
+
+         // now add this to the list of observed traces
+         for (int i=0;i < bkg.region_data->time_c.npts();i++)
+            avg_0mers(ibd,i) = avg_0mer[i];
+      }
+   }
+
+   // represent the average 0-mers using the NUM_DM_PCA most significant PCA vectors across all 0-mer signals
+   PCACalc(avg_0mers,region_sampled);
+
+   // make sure everything is happy in the rest of the code
+   bkg.region_data->my_regions.cache_step.Unlock();
+}
+

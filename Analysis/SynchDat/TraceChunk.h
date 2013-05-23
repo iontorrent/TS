@@ -128,9 +128,10 @@ public:
 
   inline void SubDcOffset(size_t row, size_t col) {
     float m = DcOffset(row, col);
-    for (size_t i = 0; i < mTimePoints.size(); i++) {
-      int16_t &val = At(row, col, i);
-      val -= m;
+    int16_t *p = &mData[(row - mRowStart) * mWidth + (col - mColStart)];
+    for (size_t i = 0; i < mDepth; i++) {
+      *p -= m;
+      p += mFrameStep;
     }
   }
 
@@ -145,10 +146,21 @@ public:
       maxFrame = i;
     }
 
-    for (size_t row = mRowStart; row < mRowStart + mHeight; row++) {
-      for (size_t col = mColStart; col < mColStart + mWidth; col++) {
+    /* for (size_t row = mRowStart; row < mRowStart + mHeight; row++) { */
+    /*   for (size_t col = mColStart; col < mColStart + mWidth; col++) { */
+    /*     for (size_t frame = 0; frame < maxFrame; frame++) { */
+    /*       avg[frame] += (At(row, col, frame)- At(row, col, 0)); */
+    /*     } */
+    /*   } */
+    /* } */
+
+    for (size_t row = 0; row < mHeight; row++) {
+      for (size_t col = 0; col < mWidth; col++) {
+	int16_t *p = &mData[row * mWidth + col];
+	int16_t first = *p;
         for (size_t frame = 0; frame < maxFrame; frame++) {
-          avg[frame] += (At(row, col, frame)- At(row, col, 0));
+          avg[frame] += *p - first;
+	  p+= mFrameStep;
         }
       }
     }
@@ -175,27 +187,31 @@ public:
 
   inline void AdjustForDrift() {
     double slope = CalcDriftAdjust();
+    int16_t *p = &mData[0];
     for (size_t frame = 0; frame < mDepth; frame++) {
       float adjust = slope * (mTimePoints[frame] + (frame == 0 ? 0 : mTimePoints[frame-1])) / 2.0f;
-      for (size_t row = mRowStart; row < mRowStart + mHeight; row++) {
-        for (size_t col = mColStart; col < mColStart + mWidth; col++) {
-          int16_t &val = At(row, col, frame);
-          val -= adjust;
+      for (size_t row = 0; row <  mHeight; row++) {
+        for (size_t col = 0; col < mWidth; col++) {
+          *p = *p - adjust;
+	  p++;
         }
       }
     }
   }
 
   inline float DcOffset(size_t row, size_t col) {
-    double frameRate = mBaseFrameRate/1000.0; 
-    double weight = 0.0;
-    double m = 0.0;
-    double t0 = mT0 * frameRate; // mT0 is in frames at baseframe rate, convert to seconds
+    float frameRate = mBaseFrameRate/1000.0; 
+    float weight = 0.0;
+    float m = 0.0;
+    float t0 = mT0 * frameRate; // mT0 is in frames at baseframe rate, convert to seconds
+    int16_t *p = &mData[(row - mRowStart) * mWidth + (col - mColStart)];
     t0 -= TC_T0_SLOP; // a frame and change at 15 frame per seconds
     for (size_t i = 0; i < mTimePoints.size() && t0 >= mTimePoints[i]; i++) {
-      double val = At(row, col, i);
-      double last = i == 0 ? 0.0 : mTimePoints[i-1];
-      double w = mTimePoints[i] - last;
+      //      double val = At(row, col, i);
+      float val = *p;
+      p+=mFrameStep;
+      float last = i == 0 ? 0.0 : mTimePoints[i-1];
+      float w = mTimePoints[i] - last;
       //      double w = log(i+2);
       m += w * val;
       weight += w;
@@ -274,7 +290,9 @@ public:
     if (i == mTimePoints.end()) {
       // extrapolate
       int end = mTimePoints.size() -1;
-      float slope = (At(row, col, end) - At(row,col,end -1))/(mTimePoints[end] - mTimePoints[end -1]);
+      //float slope = (At(row, col, end) - At(row,col,end -1))/(mTimePoints[end] - mTimePoints[end -1]);
+      size_t idx = (end * mFrameStep) + row*mWidth + col;
+      float slope = (mData[idx] - mData[idx - mFrameStep])/(mTimePoints[end] - mTimePoints[end -1]);
       float y = slope * (seconds - mTimePoints[end-1]); // y = mx + b 
       return y;
     }
@@ -283,8 +301,9 @@ public:
     int frameAbove = i - mTimePoints.begin();
     int frameBelow = frameAbove - 1;
     assert(frameAbove < (int) mDepth && frameBelow >= 0);
-    float lowerVal = At(row,col,frameBelow);
-    float upperVal = At(row,col,frameAbove);
+    size_t idx = (frameBelow * mFrameStep) + row*mWidth + col;
+    float lowerVal = mData[idx];
+    float upperVal = mData[idx+mFrameStep];
     return lowerVal + (upperVal - lowerVal) * (seconds - mTimePoints[frameBelow])/(mTimePoints[frameAbove] - mTimePoints[frameBelow]);
   }
 

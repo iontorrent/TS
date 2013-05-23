@@ -28,9 +28,9 @@ RcppExport SEXP findBestCafie(
 
     try {
 
-	RcppMatrix<double> measured_temp(measured_in);
+	Rcpp::NumericMatrix measured_temp(measured_in);
 	const char *       flowOrder_c    = Rcpp::as<const char *>(flowOrder_in);
-	RcppVector<int>    keyFlow_temp(keyFlow_in);
+	Rcpp::IntegerVector    keyFlow_temp(keyFlow_in);
 	const char *       trueSeq_c      = Rcpp::as<const char *>(trueSeq_in);
 	double             known_cf       = Rcpp::as<double>(known_cf_in);
 	double             known_ie       = Rcpp::as<double>(known_ie_in);
@@ -39,7 +39,7 @@ RcppExport SEXP findBestCafie(
 	int                nKeyFlow       = Rcpp::as<int>(nKeyFlow_in);
 	int                doKeyNorm      = Rcpp::as<int>(doKeyNorm_in);
 	int                doScale        = Rcpp::as<int>(doScale_in);
-	RcppVector<double> hpSignal_temp(hpSignal_in);
+	Rcpp::NumericVector hpSignal_temp(hpSignal_in);
 	double             sigMult        = Rcpp::as<double>(sigMult_in);
 
 	int nWell = measured_temp.rows();
@@ -61,24 +61,24 @@ RcppExport SEXP findBestCafie(
 	    hpSignal[i] = hpSignal_temp(i);
 
 	if(flowOrderLen < nFlow) {
-	    exceptionMesg = copyMessageToR("Flow order should be at least the same length as nFlow");
+	    exceptionMesg = strdup("Flow order should be at least the same length as nFlow");
 	} else if(nHpSignal < MAX_MER) {
-	    exceptionMesg = copyMessageToR("hpSignal is too short");
+	    exceptionMesg = strdup("hpSignal is too short");
 	} else if((trueSeqLen <= 0) & (!strcmp(analysisMode,"knownSeq"))) {
 	    // Maybe we should we be testing something more stringent than simply trueSeqLen > 0?
-	    exceptionMesg = copyMessageToR("True sequence must have length > 0");
+	    exceptionMesg = strdup("True sequence must have length > 0");
 	} else {
 	    // Initialize the sovler object
 	    CafieSolver solver;
 	    solver.SetFlowOrder(flowOrder);
 	    double *measured = new double[nFlow];
-	    RcppVector<double> caf(nWell);
-	    RcppVector<double> ie(nWell);
-	    RcppVector<double> dr(nWell);
-	    RcppVector<double> err(nWell);
-	    RcppMatrix<int>    call(nWell,nFlow);
-	    RcppMatrix<double> predicted(nWell,nFlow);
-	    RcppVector<double> multiplier(nWell);
+	    Rcpp::NumericVector caf(nWell);
+	    Rcpp::NumericVector ie(nWell);
+	    Rcpp::NumericVector dr(nWell);
+	    Rcpp::NumericVector err(nWell);
+	    Rcpp::IntegerMatrix call(nWell,nFlow);
+	    Rcpp::NumericMatrix predicted(nWell,nFlow);
+	    Rcpp::NumericVector multiplier(nWell);
 	    for(int well=0; well<nWell; well++) {
 	    	solver.SetCAFIE(0.0, 0.0);
 		for(int flow=0; flow<nFlow; flow++)
@@ -99,7 +99,7 @@ RcppExport SEXP findBestCafie(
 		    solver.SetCAFIE(known_cf, known_ie);
 		    solver.SetDroop(known_dr);
 		} else {
-		    exceptionMesg = copyMessageToR("analysisMode should be either knownSeq or knownCAFIE");
+		    exceptionMesg = strdup("analysisMode should be either knownSeq or knownCAFIE");
 		}
 
 		// Make the call to Solve
@@ -116,19 +116,19 @@ RcppExport SEXP findBestCafie(
 	    delete [] measured;
 
 	    // Build result set to be returned as a list to R.
-	    RcppResultSet rs;
-	    rs.add("call",                call);
-	    rs.add("predicted",           predicted);
-	    rs.add("multiplier",          multiplier);
+        std::map<std::string,SEXP> map ;
+        map["call"]           = Rcpp::wrap( call );
+        map["predicted"]      = Rcpp::wrap( predicted );
+        map["multiplier"]     = Rcpp::wrap( multiplier );
 	    if(!strcmp(analysisMode,"knownSeq")) {
-		rs.add("carryForward",        caf);
-		rs.add("incompleteExtension", ie);
-		rs.add("droop",               dr);
-		rs.add("err",                 err);
+        map["carryForward"]        = Rcpp::wrap( caf );
+        map["incompleteExtension"] = Rcpp::wrap( ie );
+        map["droop"]               = Rcpp::wrap( dr );
+        map["err"]                 = Rcpp::wrap( err );
 	    }
 
 	    // Get the list to be returned to R.
-	    rl = rs.getReturnList();
+        rl = Rcpp::wrap( map ) ;
 	}
     delete [] flowOrder;
     delete [] trueSeq;
@@ -136,9 +136,9 @@ RcppExport SEXP findBestCafie(
 	delete [] hpSignal;
 
     } catch(std::exception& ex) {
-	exceptionMesg = copyMessageToR(ex.what());
+	forward_exception_to_r(ex);
     } catch(...) {
-	exceptionMesg = copyMessageToR("unknown reason");
+	::Rf_error("c++ exception (unknown reason)");
     }
     
     if(exceptionMesg != NULL)

@@ -24,8 +24,6 @@
 #include "KMeans.h"				// all k-means includes
 #include "KCutil.h"				// kc-tree utilities
 
-#include "dbgmem.h"
-
 class KMfilterCenters;				// see KMfilterCenters.h
 
 //----------------------------------------------------------------------

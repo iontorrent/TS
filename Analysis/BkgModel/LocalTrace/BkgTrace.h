@@ -48,6 +48,13 @@ public:
     void    RezeroOneBead(float t_start, float t_end, int fnum, int ibd);
     void    RezeroBeadsAllFlows (float t_start, float t_end);
     void  GenerateAllBeadTrace(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer);
+
+#define BKTRC_VEC_SIZE 8
+#define BKTRC_VEC_SIZE_B 32
+
+    void    LoadImgWOffset(const RawImage *raw, int16_t *out[BKTRC_VEC_SIZE], std::vector<int> &compFrms,
+    		int nfrms, int l_coord[BKTRC_VEC_SIZE], float t0Shift/*, int print=0*/);
+
     void  KeepEmptyScale(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer);
     void KeepEmptyScale(Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer);
     void   FillBeadTraceFromBuffer(short *img,int iFlowBuffer);
@@ -189,7 +196,7 @@ float BkgTrace::ComputeDcOffset(const T *fgPtr, TimeCompression &tc, float t_sta
 namespace TraceHelper{
   void ShiftTrace(float *trc,float *trc_out,int pts,float frame_offset);
   void GetUncompressedTrace(float *tmp, Image *img, int absolute_x, int absolute_y, int img_frames);
-  void SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset);
+  void SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset/*, int print=0*/);
   float ComputeT0Avg(Region *region, Mask *bfmask, std::vector<float>& sep_t0_est, int img_cols);
   void BuildT0Map (Region *region, std::vector<float>& sep_t0_est, float reg_t0_avg, int img_cols, std::vector<float>& output);
   void DumpBuffer(char *ss, float *buffer, int start, int len);

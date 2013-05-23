@@ -7,11 +7,7 @@
                 <tr>
                     <td width="50%" style="line-height:100%; font-weight: bold;">Application:</td>
                     <td width="50%" id="review_application" style="line-height:100%;" >#= runType.description # </td>
-                </tr>
-                <tr>
-                    <td  width="50%" style="line-height:100%; font-weight: bold;">Run type:</td>
-                    <td width="50%"  id="review_runType" style="line-height:100%;">#= TB.runModeDescription(data.runMode) #</td>
-                </tr>                                           
+                </tr>                                     
             </table>
             </p>
             <br>
@@ -39,8 +35,8 @@
             # } #
             </p>
             
-			<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p> 	
-			<p style="line-height:100%; margin:10px;" id="review_forward3Adapter"> 
+			<p style="line-height:100%; font-weight: bold;">Forward 3' Adapter:</p>
+			<p style="line-height:100%; margin:10px; word-wrap:break-word; word-break: break-all;" id="review_forward3Adapter"> 
             # if (data.forward3primeadapter != null) { #
             	#= data.forward3primeadapter #
             # } #
@@ -54,7 +50,7 @@
 	            # } #
 	            </p>	
 				<p style="line-height:100%; font-weight: bold;">Reverse 3' Adapter:</p> 	
-				<p style="line-height:100%; margin:10px;" id="review_peReverse3Adapter"> 
+				<p style="line-height:100%; margin:10px; word-wrap:break-word; word-break: break-all;" id="review_peReverse3Adapter"> 
 	            # if (data.reverse3primeadapter != null) { #
 	            	#= data.reverse3primeadapter # 
 	            # } #

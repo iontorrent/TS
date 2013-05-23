@@ -36,7 +36,7 @@ struct RegionTiming
 {
   float t_mid_nuc;
   float t_sigma;
-
+  float t0_frame;
 private:
   friend class boost::serialization::access;
   template<typename Archive>
@@ -44,7 +44,8 @@ private:
     // fprintf(stdout, "Serialize: RegionTiming ... ");
     ar & 
       t_mid_nuc &
-      t_sigma;
+      t_sigma &
+      t0_frame;
     // fprintf(stdout, "done\n");
   }
 

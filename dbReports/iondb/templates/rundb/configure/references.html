@@ -34,7 +34,10 @@
 		<div class="content clearfix">
 			<div class="clearfix">
 				<h1 style="float:left;">Reference Sequences</h1>
-				<a href="{% url references_genome_add %}" class="btn btn-primary pull-right add_genome">Add Reference Sequence</a>
+				<div class="pull-right">
+                    <a href="{% url references_genome_download %}" class="btn">Get Ion References</a>
+                    <a href="{% url references_genome_add %}" class="btn btn-primary add_genome">Add Reference Sequence</a>
+                </div>
 			</div>
 			<div id="referenceSequences"></div>
 		</div>
@@ -408,6 +411,7 @@ $(document).ready(function(){
         , dataBound: function() {
 			$('.delete_barcodeset').click(function (e) {
 				e.preventDefault();
+		    	$('#error-messages').hide().empty();
 		    	var source = '#barcodes';
 				var url = $(this).attr('href');
 				console.log(url);
@@ -421,26 +425,30 @@ $(document).ready(function(){
 			    	console.log("success:",  url);
 		    	})
 			    .fail(function(data) {
-			    	$('#error-messages').empty();
+			    	$('#error-messages').empty().show();
 			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 			    	console.log("error:", data);
-			    	 
 			    })
 			    .always(function(data) { /*console.log("complete:", data);*/ });; 
 				
-			});        	
+			});
         }
     });
     
     $('.add_genome').click(function (e) {
 		e.preventDefault();
 		e.stopPropagation();
+        $('#error-messages').hide().empty();
 		$('body #modal_references_new_genome').remove();
 		$.get($(this).attr('href'), function(data) {
 			$('body').append(data);
 			$( '#modal_references_new_genome' ).modal("show");
 			return false;
-		});
+		}).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+            console.log("error:", data);
+        });
 	});    
 	$(document).bind('modal_references_new_genome_done', function () {
 		refreshKendoGrid("#referenceSequences");
@@ -450,12 +458,13 @@ $(document).ready(function(){
     	var source = '#barcodes';
 		e.preventDefault();
 		e.stopPropagation();
+        $('#error-messages').hide().empty();
 		
 		url = $(this).attr('href');
 		// alert(url);
 		$('body #modal_references_add_barcodeset').remove();
 		$.get(url, function(data) {
-			console.log(data);
+			// console.log(data);
 		    return false;
 		}).done(function(data) { 
 	    	$('body').append(data);
@@ -464,7 +473,7 @@ $(document).ready(function(){
 	    	console.log("success:",  url);
     	})
 	    .fail(function(data) {
-	    	$('#error-messages').empty();
+	    	$('#error-messages').empty().show();
 	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 	    	console.log("error:", data);
 	    	 

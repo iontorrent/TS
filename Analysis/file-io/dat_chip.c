@@ -139,10 +139,11 @@ dat_chip_import(FILE *fp, int32_t out_text, int32_t num_dats, char *dat_fns[])
       }
 
       for(i=0;i<chip->num_flows;i++) {
-          chip->byte_offsets[i] = ftell(fp);
-          if(chip->byte_offsets[i] < 0) {
+          long offset = ftell(fp);
+          if(offset < 0) {
               ion_error(__func__, "ftell", Exit, OutOfRange);
           }
+          chip->byte_offsets[i] = offset;
 
           // Read in
           dat_flow_t *dat_flow = NULL;

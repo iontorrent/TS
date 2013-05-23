@@ -87,7 +87,7 @@ REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 import iondb.anaserve.djangoinit
 import iondb.rundb.models
 
-__version__ = filter(str.isdigit, "$Revision: 47920 $")
+__version__ = filter(str.isdigit, "$Revision: 55938 $")
 
 
 class ProcessExecutionService(service.Service):
@@ -795,15 +795,16 @@ class AnalysisServer(xmlrpc.XMLRPC):
                              tfmapperstats_outputfile,
                              procPath,
                              beadPath,
-                             filterPath,
-                             alignmentSummaryPath,
+                             ionstats_alignment_json_path,
+                             ionParamsPath,
                              peakOut,
-                             QualityPath,
+                             ionstats_basecaller_json_path,
                              BaseCallerJsonPath,
                              primarykeyPath,
                              uploadStatusPath,
                              STATUS,
-                             reportLink):
+                             reportLink,
+                             cwd):
         """Upload Metrics to the database"""
 
         from ion.reports import uploadMetrics
@@ -812,14 +813,15 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 tfmapperstats_outputfile,
                 procPath,
                 beadPath,
-                filterPath,
-                alignmentSummaryPath,
+                ionstats_alignment_json_path,
+                ionParamsPath,
                 STATUS,
                 peakOut,
-                QualityPath,
+                ionstats_basecaller_json_path,
                 BaseCallerJsonPath,
                 primarykeyPath,
-                uploadStatusPath)
+                uploadStatusPath,
+                cwd)
 
             # this will replace the five progress squares with a re-analysis button
             uploadMetrics.updateStatus(primarykeyPath, STATUS, reportLink)
@@ -908,8 +910,8 @@ class AnalysisServer(xmlrpc.XMLRPC):
         return os.access(path, os.R_OK | os.W_OK)
 
 
-    # Creates a file named TSExperiment-UUID.txt that contains 
-    # metrics from the Results of an experiment. 
+    # Creates a file named TSExperiment-UUID.txt that contains
+    # metrics from the Results of an experiment.
     def xmlrpc_createRSMExperimentMetrics(self, resultId):
 
         try:
@@ -942,9 +944,11 @@ class AnalysisServer(xmlrpc.XMLRPC):
                     metrics.append(k + ':' + str(v))
 
             # information from libmetrics
-            keys = [ 
+            keys = [
                       'sysSNR',
                       'aveKeyCounts',
+                      'total_mapped_target_bases',
+                      'totalNumReads',
                    ]
             for k in keys:
                 try:
@@ -955,9 +959,28 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 except Exception as err:
                     pass
 
+            # information from quality metrics
+            keys = [
+                    'q17_mean_read_length',
+                    'q20_mean_read_length',
+                    ]
+            for k in keys:
+                try:
+                    # there should be only one qualitymetrics in the set
+                    v = r.qualitymetrics_set.values()[0][k]
+                    if v:
+                        metrics.append(k + ':' + str(v))
+                except Exception as err:
+                    pass
+
+            try:
+                metrics.append("RunType:" + e.plan.runType);
+            except Exception as err:
+                pass
+
             # write out the metrics
             x = uuid.uuid1()
-            fname = os.path.join("/opt/ion/RSM/",'TSexperiment-' + str(x) + '.txt') 
+            fname = os.path.join("/opt/ion/RSM/",'TSexperiment-' + str(x) + '.txt')
             f = open(fname, 'w' )
 
             try:
@@ -981,13 +1004,21 @@ class AnalysisServer(xmlrpc.XMLRPC):
         except:
             logger.error("Could not import iondb/rundb/tasks.py.  Could not determine disk space.")
         else:
+            # Update results directory disk usage
             try:
                 tasks.setResultDiskspace.delay(pk)
             except:
-                logger.exception("Diskspace celery task launch failed")
+                logger.exception("setResultDiskspace celery task launch failed")
+
+            # update raw data directory disk usage
+            try:
+                experiment_pk = iondb.rundb.models.Results.objects.filter(pk=pk).values_list('experiment', flat=True)
+                tasks.setRunDiskspace.delay(experiment_pk)
+            except:
+                logger.exception("setRunDiskspace celery task launch failed")
         return 0
-    
-    
+
+
     def xmlrpc_tmap(self, id, fasta, short, long, version, read_sample_size, read_exclude_length, index_version):
         """ Provides a way to kick off the tmap index generation
             this should spawn a process that calls the build_genome_index.pl script

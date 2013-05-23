@@ -328,6 +328,7 @@ write_html_results ()
 
   # Create scraper directory containings links to all 'visible' output files
   echo "(`date`) Creating scraper folder..." >&2
+  run "rm -rf ${OUTDIR}/scraper"
   run "mkdir ${OUTDIR}/scraper"
   create_scraper_links "${OUTDIR}/$BAMROOT" "link" "${OUTDIR}/scraper"
 }

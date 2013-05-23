@@ -21,7 +21,7 @@ class Migration(DataMigration):
             if not ionuser:
                 try:
                     ionuser = orm['auth.user'].objects.get(username='ionuser')
-                except DoesNotExist:
+                except orm['auth.user'].DoesNotExist:
                     ionuser = orm['auth.user'].objects.get(username='ionadmin')
 
             (p,created) = orm.Project.objects.get_or_create(name=e.project[0:32], defaults={'creator': ionuser})

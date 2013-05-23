@@ -10,7 +10,6 @@
 #include "KMlocal.h"
 #include "Utils.h"
 #include "LinuxCompat.h"
-#include "dbgmem.h"
 
 #define NUM_SAMPLE_REGIONS 3
 
@@ -1065,7 +1064,7 @@ void Separator::Categorize (SequenceItem *seqList, int numSeqListItems,
     {
       for (int t = 0; t < end - start; t++)
       {
-        if (region_cnt > 0)
+        if (region_cnt != NULL)
           avgRegionKeySignal[ (end - start) * rnum + t]
           /= region_cnt[rnum];
 

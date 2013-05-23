@@ -17,7 +17,7 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
 
   try {
     //vector<string> beadParamFile = Rcpp::as< vector<string> > (RbeadParamFile);
-    //RcppStringVector tBeadParamFile(RbeadParamFile);
+    //Rcpp::StringVector tBeadParamFile(RbeadParamFile);
     string beadParamFile = Rcpp::as< string > (RbeadParamFile);
     int minCol = Rcpp::as< int > (RminCol);
     int maxCol = Rcpp::as< int > (RmaxCol);
@@ -88,11 +88,11 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
     beadInitDS->ReadRangeData(starts,ends,sizeof(tbeadInit),tbeadInit);
     beadParam.Close();
 
-    RcppMatrix< double > resErrMat(nRow*nCol,nFlow);
-    RcppMatrix< double > amplMulMat(nRow*nCol,nFlow);
-    RcppMatrix< double > krateMulMat(nRow*nCol,nFlow);
-    RcppMatrix< double > beadInitMat(nRow*nCol,4);
-    RcppMatrix< double > beadDCMat(nRow*nCol,nFlow);
+    Rcpp::NumericMatrix resErrMat(nRow*nCol,nFlow);
+    Rcpp::NumericMatrix amplMulMat(nRow*nCol,nFlow);
+    Rcpp::NumericMatrix krateMulMat(nRow*nCol,nFlow);
+    Rcpp::NumericMatrix beadInitMat(nRow*nCol,4);
+    Rcpp::NumericMatrix beadDCMat(nRow*nCol,nFlow);
     vector<int> colOutInt,rowOutInt,flowOutInt;
 
     int count = 0;
@@ -111,21 +111,19 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
 	count++;
       }
 
-    RcppResultSet rs;
-    rs.add("beadParamFile", beadParamFile);
-    rs.add("nCol", (int)nCol);
-    rs.add("nRow", (int)nRow);
-    rs.add("minFlow",minFlow);
-    rs.add("maxFlow",maxFlow);
-    rs.add("nFlow", (int)nFlow);
-    rs.add("col", colOutInt);
-    rs.add("row",rowOutInt);
-    rs.add("res_error",resErrMat);
-    rs.add("ampl_multiplier",amplMulMat);
-    rs.add("krate_multiplier",krateMulMat);
-    rs.add("bead_init",beadInitMat);
-    rs.add("bead_dc",beadDCMat);
-    ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("beadParamFile")    = beadParamFile,
+                             Rcpp::Named("nCol")             = (int)nCol,
+                             Rcpp::Named("nRow")             = (int)nRow,
+                             Rcpp::Named("minFlow")          = minFlow,
+                             Rcpp::Named("maxFlow")          = maxFlow,
+                             Rcpp::Named("nFlow")            = (int)nFlow,
+                             Rcpp::Named("col")              = colOutInt,
+                             Rcpp::Named("row")              = rowOutInt,
+                             Rcpp::Named("res_error")        = resErrMat,
+                             Rcpp::Named("ampl_multiplier")  = amplMulMat,
+                             Rcpp::Named("krate_multiplier") = krateMulMat,
+                             Rcpp::Named("bead_init")        = beadInitMat,
+                             Rcpp::Named("bead_dc")          = beadDCMat);
     free(tresErr);
     free(tamplMul);
     free(tkrateMul);
@@ -133,9 +131,9 @@ RcppExport SEXP readBeadParamR(SEXP RbeadParamFile,SEXP RminCol, SEXP RmaxCol, S
     free(tbeadDC);
   }
   catch(exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch (...) {
-    exceptionMesg = copyMessageToR("Unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
   
   if ( exceptionMesg != NULL)

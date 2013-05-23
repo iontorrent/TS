@@ -11,36 +11,43 @@ from django.db import models
 
 class Migration(DataMigration):
 
-    def forwards(self, orm):        
-        from django.core.management import call_command
-        call_command("loaddata", "v3_4_0100_data_add_kitInfo_kitPart.json")
-
+    def forwards(self, orm):   
+        #20130128: 
+        # kitInfo db model has changed since v3_4_0100* was created. The following fixture can no longer be used.
+        # Instead, initial_data.json encompasses the following fixture instead
+        
+        #from django.core.management import call_command
+        #call_command("loaddata", "v3_4_0100_data_add_kitInfo_kitPart.json")
+        
+        pass
 
     def backwards(self, orm):
+        pass
+    
         # revert addition of kit
-        try:
-            seqKit = orm.kitinfo.objects.get(kitType = "SequencingKit", name = "IonPGM400Kit") 
-            seqKit.delete()
-            
-            print "*** Successfully rolled back the addition of sequencingKit IonPGM400Kit " 
-        except:            
-            print "*** Failed to delete sequencingKit IonPGM400Kit " 
-
-        try:
-            templateKit = orm.kitinfo.objects.get(kitType = "TemplatingKit", name = "Ion PGM Template OT2 400 Kit") 
-            templateKit.delete()
-            
-            print "*** Successfully rolled back the addition of templatingKit Ion PGM Template OT2 400 Kit " 
-        except:            
-            print "*** Failed to delete templatingKit Ion PGM Template OT2 400 Kit " 
-
-        try:
-            controlSeqKit = orm.kitinfo.objects.get(kitType = "ControlSequenceKit", name = "Ion PGM Controls Kit v2") 
-            controlSeqKit.delete()
-            
-            print "*** Successfully rolled back the addition of ControlSequenceKit Ion PGM Controls Kit v2 " 
-        except:            
-            print "*** Failed to delete ControlSequenceKit Ion PGM Controls Kit v2 " 
+        #try:
+        #    seqKit = orm.kitinfo.objects.get(kitType = "SequencingKit", name = "IonPGM400Kit") 
+        #    seqKit.delete()
+        #    
+        #    print "*** Successfully rolled back the addition of sequencingKit IonPGM400Kit " 
+        #except:            
+        #    print "*** Failed to delete sequencingKit IonPGM400Kit " 
+        #
+        #try:
+        #    templateKit = orm.kitinfo.objects.get(kitType = "TemplatingKit", name = "Ion PGM Template OT2 400 Kit") 
+        #    templateKit.delete()
+        #    
+        #     print "*** Successfully rolled back the addition of templatingKit Ion PGM Template OT2 400 Kit " 
+        #except:            
+        #    print "*** Failed to delete templatingKit Ion PGM Template OT2 400 Kit " 
+        #
+        #try:
+        #    controlSeqKit = orm.kitinfo.objects.get(kitType = "ControlSequenceKit", name = "Ion PGM Controls Kit v2") 
+        #    controlSeqKit.delete()
+        #    
+        #    print "*** Successfully rolled back the addition of ControlSequenceKit Ion PGM Controls Kit v2 " 
+        #except:            
+        #    print "*** Failed to delete ControlSequenceKit Ion PGM Controls Kit v2 " 
 
 
     models = {

@@ -134,8 +134,8 @@ void    IdentifyDmult ( BeadTracker &my_beads, RegionTracker &my_regions, bool s
 void IdentifyNucMultiplyRatio ( BeadTracker &my_beads, RegionTracker &my_regions );
 void DoStepDiff ( int add, float *, CpuStep_t *step, struct bead_params *p, struct reg_params *reg_p );
 
-void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask, bool skip_beads, const LevMarBeadAssistant &lm_state );
-void    IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, bool skip_beads, const LevMarBeadAssistant &lm_state );
+void IdentifyParametersFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, unsigned int well_mask, unsigned int reg_mask,const LevMarBeadAssistant &lm_state );
+void    IdentifyDmultFromSample ( BeadTracker &my_beads, RegionTracker &my_regions, const LevMarBeadAssistant &lm_state );
 void IdentifyNucMultiplyRatioFromSample ( BeadTracker &my_beads, RegionTracker &my_regions );
 
 #endif // MULTILEVMAR_H

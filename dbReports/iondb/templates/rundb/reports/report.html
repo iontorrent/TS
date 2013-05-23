@@ -31,61 +31,34 @@
 {% endblock extra_head %}
 		
 {% block report-header %}
-<div class="page-nav">
-	<div class="container-fluid">
-		<div class="row-fluid">
-			<div class="span6">
-			<ul class="nav nav-pills dynamic-navbar"><li><a href="#top" class="navitem">Top</a></li></ul>
-			</div>
-			<div style="margin-top: 3px;" class="btn-group pull-right">
-				<a href="/report/latex/{{report.pk}}.pdf" class="btn">Summary PDF</a>
-				<a href="/report/getPlugins/{{report.pk}}.pdf" class="btn">Plugins PDF</a>
-			</div>
-		</div>
-	</div>		
-</div>
-
-<div class="report-header">
-    <div class="container-fluid">
-        <div class="row-fluid">
-            <div id="nameRow" class="span6">
-                <h1 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">
-                	Run: {{report.experiment.expName}}
-                	<span rel='tooltip' title="Reanalyze experiment">
-	                	<a class="btn" href="/report/analyze/{{report.experiment.pk}}/0/">
-	                		<img src="/site_media/resources/img/gear-active.png" border="0">
-	            		</a>
-            		</span>
-                </h1>
-
-
-
-            </div>
-            <div id="resultSet" class="span6 form-inline" style="text-align: right;">
-            	<a href="{{report.reportLink}}" class="btn pull-right" style="margin-top: 0px;margin-left: 5px;">Classic Report</a>
-                <label class="form-label" style="margin-left: 25px;">
-                    Result Set
-                    <select id="resultList">
-                        	<option value="{{report.pk}}" selected="selected">{{report}} ({{report.pk}})</option>
-                        {% for otherReport in otherReports %}
-                       		 <option value="{{otherReport.pk}}">{{otherReport}} ({{otherReport.pk}})</option>    
-                        {% endfor %}  
-                    </select>   
-                </label>
-  
-            </div>
-        </div>              
-    </div>      
-</div>
+<div class="container-fluid">
+	
+</div>		
 {% endblock report-header %}
 {%block extra-main-class%}
 report
 {%endblock extra-main-class%}
 {% block content %}
-		<div id="main" class="content group">
-			<div>
-
+		<div class="row-fluid" style="margin-bottom: 10px;">
+			<div class="span12" style="text-align: right;">
+				<ul class="nav nav-pills dynamic-navbar pull-left" style="margin: 0"></ul>
+				{%if plan %}
+					<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Plan</a>
+					<a href="#" id="copy_plan" data-pk="{{plan}}" class="btn copy-plan">Copy Plan</a>
+				{% endif %}
+	        	<a href="/report/analyze/{{report.experiment.pk}}/0/" rel='tooltip' title="Reanalyze this run" class="btn">Reanalyze</a>
+				<div class="btn-group">
+					<a href="/report/latex/{{report.pk}}.pdf" class="btn">Summary PDF</a>
+					<a href="/report/getPlugins/{{report.pk}}.pdf" class="btn">Plugins PDF</a>
+				</div>
+				<a href="{{report.reportLink}}" class="btn">Classic Report</a>
 			</div>
+		</div>
+
+		{#progress indicator#}
+		{% include "rundb/reports/blocks/progress.html" %}
+		
+		<div id="main" class="content group">
 			{% if noplugins %}
 				<div class="alert alert-error">
 				  <button type="button" class="close" data-dismiss="alert">&times;</button>
@@ -96,35 +69,32 @@ report
 			{#barcodes#}
 			{% include "rundb/reports/blocks/barcodes.html" %}
 
-			{% if plan or report.experiment.notes %}
-				<div class="row-fluid">
-					{%if plan %}
-						<div class="span2">
-							<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Run Plan</a>
-						</div>
-					{% endif %}
-					{% if report.experiment.notes %}
-					<div class="span10">
-						<p>	
-							<span class="label label-info">Notes</span> {{report.experiment.notes}}
-						</p>
-					</div>
-					{%endif%}
-				</div>
-			{% endif %}
-
-			{#progress indicator#}
-			{% include "rundb/reports/blocks/progress.html" %}
-
 			<section id="RunSummary" {%spaceless%} {%if not datasets.barcode_config %} class="no_barcodes" {%endif%} {%endspaceless%}>
 				<div class="row-fluid">
-					<div class="span12">
-						<a dynamic-navbar-section="" href="#RunSummary">
-							<h2><span rel='tooltip' title="Run metrics for sequence data before and after alignment to a reference sequence.  
-">Run Summary</span></h2>
+		            <div id="nameRow" class="span12">
+						<div id="resultSet" class="pull-right">
+			                <label class="form-label" style="margin-left: 10px;">
+			                    Reports
+			                    <select id="resultList">
+			                        	<option value="{{report.pk}}" selected="selected">{{report}} ({{report.pk}})</option>
+			                        {% for otherReport in otherReports %}
+			                       		 <option value="{{otherReport.pk}}">{{otherReport}} ({{otherReport.pk}})</option>    
+			                        {% endfor %}  
+			                    </select>   
+			                </label>
+			            </div>
+		            	<a dynamic-navbar-section="" dynamic-navbar-section-title="Run Summary" href="#RunSummary">
+			                <h2 id="report" data-pk="{{report.pk}}" data-web="{{report.reportWebLink}}" data-php="{{report.reportLink}}">
+		                		<span rel='tooltip'  data-placement="right" title="Run metrics for sequence data before and after alignment to a reference sequence.">Run Summary:</span> {{report.experiment.expName}}
+							</h2>
 						</a>
-					</div>
+		            </div>
 				</div>
+				{% if report.experiment.notes %}
+					<p>	
+						<strong>Notes</strong> {{report.experiment.notes}}
+					</p>
+				{%endif%}
 
 				<div id="runSection" class="section">
           {% if report.resultsType == "CombinedAlignments" %}
@@ -145,7 +115,7 @@ report
 				      </div>
 				      {% endif %}
           {% else %}
-					<h3><span rel='tooltip' title="Metrics for sequence data without alignment to a reference
+					<h3><span rel='tooltip' data-placement="right" title="Metrics for sequence data without alignment to a reference
 ">Unaligned</span></h3>			
 					<div class="row-fluid unaligned">
 						{#beadfind#}
@@ -160,7 +130,7 @@ report
           {% endif %}
 					
 					{% if reference != "none" %}
-					<h3><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
+					<h3><span rel='tooltip' data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
 ">Aligned to {{reference.name}}</span></h3>
 					
 					<div class="row-fluid aligned">		
@@ -205,5 +175,11 @@ report
 
 		
 </div>
+
+<!--20130313kchoi -->
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" /> 
+<script type="text/javascript" src="/site_media/resources/scripts/wizard.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_plan_wizard.html.js"></script>
+
 
 {% endblock content %}

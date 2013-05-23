@@ -12,9 +12,13 @@ from django.db import models
 
 class Migration(DataMigration):
 
-    def forwards(self, orm):        
-        from django.core.management import call_command
-        call_command("loaddata", "v3_2_1_data_add_kitInfo_kitPart.json")
+    def forwards(self, orm): 
+        #20130128: 
+        # kitInfo db model has changed since v3_4_0100* was created. The following fixture can no longer be used.
+        # Instead, initial_data.json encompasses the following fixture instead
+                       
+        #from django.core.management import call_command
+        #call_command("loaddata", "v3_2_1_data_add_kitInfo_kitPart.json")
 
         #2
         defaultSeqKitName = "ProtonIKit"
@@ -30,22 +34,23 @@ class Migration(DataMigration):
 
     def backwards(self, orm):
         # revert addition of kit
-        try:
-            seqKit = orm.kitinfo.objects.get(kitType = "SequencingKit", name = "IonPGM200Kit-v2") 
-            seqKit.delete()
-            
-            print "*** Successfully rolled back the addition of sequencingKit IonPGM200Kit-v2 " 
-        except:            
-            print "*** Failed to delete sequencingKit IonPGM200Kit-v2 " 
+        #try:
+        #    seqKit = orm.kitinfo.objects.get(kitType = "SequencingKit", name = "IonPGM200Kit-v2") 
+        #    seqKit.delete()
+        #    
+        #    print "*** Successfully rolled back the addition of sequencingKit IonPGM200Kit-v2 " 
+        #except:            
+        #    print "*** Failed to delete sequencingKit IonPGM200Kit-v2 " 
+        #
+        #try:
+        #    templateKit = orm.kitinfo.objects.get(kitType = "TemplatingKit", name = "Ion PGM Template OT2 200 Kit") 
+        #    templateKit.delete()
+        #    
+        #    print "*** Successfully rolled back the addition of templatingKit Ion PGM Template OT2 200 Kit " 
+        #except:            
+        #    print "*** Failed to delete templatingKit Ion PGM Template OT2 200 Kit " 
 
-        try:
-            templateKit = orm.kitinfo.objects.get(kitType = "TemplatingKit", name = "Ion PGM Template OT2 200 Kit") 
-            templateKit.delete()
-            
-            print "*** Successfully rolled back the addition of templatingKit Ion PGM Template OT2 200 Kit " 
-        except:            
-            print "*** Failed to delete templatingKit Ion PGM Template OT2 200 Kit " 
-
+        pass
      
   
 

@@ -16,6 +16,8 @@
     <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasAxisLabelRenderer.min.js"></script>
     <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasAxisTickRenderer.min.js"></script>
     <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasTextRenderer.min.js"></script>
+    <script type="text/javascript" src="/pluginMedia/ERCC_Analysis/js/plugins/jqplot.canvasOverlay.min.js"></script>
+	
     <script class="code" type="text/javascript">
 
 	jQuery(document).ready(function(){
@@ -52,8 +54,22 @@
 			    }
 			}
 		    },
-                    $series
-                    highlighter: {
+			canvasOverlay: {
+				show: true,
+				objects: [
+					{dashedHorizontalLine: {
+						name: 'mincounts',
+						y: $log2_min_counts,
+						lineWidth: 2,
+						dashPattern: [16, 12],
+						lineCap: 'round',
+						color: 'rgb(66, 98, 144)',
+						shadow: false
+					}}
+				]
+			},
+			$series
+            highlighter: {
 		        show: true,
 		        showMarker:false,
 		        tooltipLocation: 'se',
@@ -69,33 +85,33 @@
 		        <tr class="alt"><td>reads:</td><td>%s</td></tr> \
                         <tr><td>mean mapping quality:</td><td>%s</td></tr> \
 		        <tr><td>coverage plot:</td><td>%s</td></tr></table>'
-                    },
-                    cursor:{
+            },
+            cursor:{
                         show: true,
                         zoom:true,
                         showTooltip:false
-                    } 
-		}
-                var plot1 = jQuery.jqplot('ercc_chart', [$ercc_points$trendline_points], ercc_chart_options);
+            },					
 
-                jQuery('.button-reset').click(function() { plot1.resetZoom() });
+		}
+        var plot1 = jQuery.jqplot('ercc_chart', [$ercc_points$trendline_points], ercc_chart_options);
+        jQuery('.button-reset').click(function() { plot1.resetZoom() });
 		jQuery('.transcript table').hide();
 		jQuery('.transcript h2').click(function () {
-		    var toggle_text = jQuery(this).parent().find('table').is(':visible') ? '[+]' : '[-]';
-		    jQuery(this).parent().find('table').toggle();
-		    jQuery(this).children('.toggle_tag').html(toggle_text);
+	    var toggle_text = jQuery(this).parent().find('table').is(':visible') ? '[+]' : '[-]';
+	    jQuery(this).parent().find('table').toggle();
+	    jQuery(this).children('.toggle_tag').html(toggle_text);
 		});
 	});
 	</script>
 </head>
 <body>
     <div id="main_content">
-		<h1>ERCC Report</h1>
+		<h1>ERCC Report $barcode</h1>
 		<hr>
 		<div id="dose_response">
                         <div style="position:absolute;z-index:99;display:none;" id="tooltip"></div>
 			<div id="ercc_chart" ></div>
-                        <p>All transcripts with fewer than $min_counts counts are shown in the above figure, but not used in calculating R-squared.</p>
+                        <p>$counts_msg</p>
                         <div id="msg_to_user">$msg_to_user</div>
                         <h2><a href="#static_image">Click here for a static version of the above chart</a></h2>
 			<table id="trendline_parms" >

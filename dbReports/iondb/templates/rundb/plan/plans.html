@@ -20,147 +20,18 @@
 </style>
 {% endblock extra_head %}
 {% block content %}
-        <div class="content group">
-            <div class="row-fluid">
-            <h1>Templates</h1>
-            <br>
-            <table class="favorites_recent plan-grid">
-                <tr>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/star-blue.png" class="favorite_star" border="0" width='37px;'>
-                            <h3>Favorites&nbsp;&nbsp;|<a href="{% url upload_plans_for_template %}" class="upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a></h3>
-                        </div>
-                        <table id="favorites" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                    <td width="2%">&nbsp;</td>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/recentlyused.png" border="0" width="37px;">
-                            <h3>Recently Used</h3>
-                        </div>
-                        <table id="recents" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-            </table>
-
-            <table class="dna_applications plan-grid">
-                <tr>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/appl_ampliSeq.png" border="0">
-                            <h3>Ampliseq DNA&nbsp;&nbsp;| <a href="{% url add_plan_template 1 %}" class="add-new-plan" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 1 %}" class="add-new-plan-run" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-                        </div>
-                        <table id="ampliSeqs" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                    <td width="2%">&nbsp;</td>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/appl_wholeGenome.png" border="0">
-                            <h3>Whole-Genome Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 3 %}" class="add-new-plan" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 3 %}" class="add-new-plan-run" ref="#wholeGenomes" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-                        </div>
-                        <table id="wholeGenomes" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-                <tr>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/appl_targetSeq.png" border="0">
-                            <h3>TargetSeq &nbsp;&nbsp;| <a href="{% url add_plan_template 2 %}" class="add-new-plan" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 2 %}" class="add-new-plan-run" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-                        </div>
-                        <table id="targetSeqs" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                    <td width="2%">&nbsp;</td>
-                    <td width="49%">
-                        <div class="application-template group">
-                            <img src="/site_media/resources/img/appl_wildcard.png" border="0">
-                            <h3>Generic Sequencing &nbsp;&nbsp;| <a href="{% url add_plan_template 0 %}" class="add-new-plan" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 0 %}" class="add-new-plan-run" ref="#genericSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-                        </div>
-                        <table id="genericSeqs" style="width:100%;">
-                            <thead style="display: none;">
-                                <tr>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-                <tr>
-                </table>
-
-                <table class="plan-grid">
+<div class="content group">
+    <div class="row-fluid">
+        <h1>Templates</h1>
+        <br>
+        <table class="favorites_recent plan-grid">
+            <tr>
                 <td width="49%">
                     <div class="application-template group">
-                        <img src="/site_media/resources/img/appl_ampliSeqRna.png" border="0">
-                        <h3>AmpliSeq RNA&nbsp;&nbsp;| <a href="{% url add_plan_template 5 %}" class="add-new-plan" ref="#ampliSeqRNA" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 5 %}" class="add-new-plan-run" ref="#ampliSeqsRna" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        <img src="/site_media/resources/img/star-blue.png" class="favorite_star" border="0" width='37px;'>
+                        <h3>Favorites&nbsp;&nbsp;|<a href="{% url upload_plans_for_template %}" class="upload-plan" rel="tooltip" title="Upload plan runs" >Upload Plans</a></h3>
                     </div>
-                    <table id="ampliSeqRna" style="width:100%;">
+                    <table id="favorites" style="width:100%;">
                         <thead style="display: none;">
                             <tr>
                                 <td></td>
@@ -176,6 +47,135 @@
                 </td>
                 <td width="2%">&nbsp;</td>
                 <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/recentlyused.png" border="0" width="37px;">
+                        <h3>Recently Used</h3>
+                    </div>
+                    <table id="recents" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table class="dna_applications plan-grid">
+            <tr>
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_ampliSeq.png" border="0">
+                        <h3>Ampliseq DNA&nbsp;&nbsp;| <a href="{% url configure_ampliseq %}">AmpliSeq.com Import</a> | <a href="{% url add_plan_template 1 %}" class="add-new-plan" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 1 %}" class="add-new-plan-run" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="ampliSeqs" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td width="2%">&nbsp;</td>
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_wholeGenome.png" border="0">
+                        <h3>Whole-Genome Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 3 %}" class="add-new-plan" ref="#wholeGenomes" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 3 %}" class="add-new-plan-run" ref="#wholeGenomes" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="wholeGenomes" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_targetSeq.png" border="0">
+                        <h3>TargetSeq &nbsp;&nbsp;| <a href="{% url add_plan_template 2 %}" class="add-new-plan" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 2 %}" class="add-new-plan-run" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="targetSeqs" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+                <td width="2%">&nbsp;</td>
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_wildcard.png" border="0">
+                        <h3>Generic Sequencing &nbsp;&nbsp;| <a href="{% url add_plan_template 0 %}" class="add-new-plan" ref="#genericSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 0 %}" class="add-new-plan-run" ref="#genericSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="genericSeqs" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <table class="plan-grid">
+            <tr>
+                <td width="49%">
+                    <div class="application-template group">
+                        <img src="/site_media/resources/img/appl_ampliSeqRna.png" border="0">
+                        <h3>AmpliSeq RNA&nbsp;&nbsp; | <a href="{% url configure_ampliseq %}">AmpliSeq.com Import</a> | <a href="{% url add_plan_template 5 %}" class="add-new-plan" ref="#ampliSeqRNA" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 5 %}" class="add-new-plan-run" ref="#ampliSeqsRna" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                    </div>
+                    <table id="ampliSeqRna" style="width:100%;">
+                        <thead style="display: none;">
+                            <tr>
+                                <td></td>
+                                <td></td>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </td>
+               <td width="2%">&nbsp;</td>
+               <td width="49%">
                 <div class="application-template group">
                     <img src="/site_media/resources/img/appl_rnaSeq.png" border="0">
                     <h3>RNA Seq &nbsp;&nbsp;| <a href="{% url add_plan_template 4 %}" class="add-new-plan" ref="#rnaSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url add_plan_no_template 4 %}" class="add-new-plan-run" ref="#rnaSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
@@ -193,11 +193,11 @@
                         </tr>
                     </tbody>
                 </table>
-            </td>
+               </td>
             </tr>
-            </table>
-            </div>
-        </div>
+        </table>
+    </div>
+</div>
 
 <script id="emptyRowTemplate" type="text/x-kendo-template">
     <tr>
@@ -228,4 +228,5 @@ var username = '{{user.username}}';
 <script type="text/javascript" src="/site_media/resources/scripts/plan/modal_plan_wizard.html.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/modal_batch_planning_upload.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/modal_batch_planning.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/configure/plugins/modal_refresh.js"></script>
 {% endblock content %}

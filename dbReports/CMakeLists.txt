@@ -33,16 +33,16 @@ set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 configure_file (
+	"${PROJECT_SOURCE_DIR}/debian/preinst.in"
+	"${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
+)
+configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/postinst.in"
 	"${PROJECT_BINARY_DIR}/debian/postinst" @ONLY
 )
 configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/postrm.in"
 	"${PROJECT_BINARY_DIR}/debian/postrm" @ONLY
-)
-configure_file (
-	"${PROJECT_SOURCE_DIR}/debian/preinst.in"
-	"${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
 )
 configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/prerm.in"
@@ -59,7 +59,9 @@ install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/TorrentServerSplash.jpg" DESTIN
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/media/favicon.ico" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/index.html" DESTINATION /var/www)
 install(FILES "${PROJECT_SOURCE_DIR}/iondb/docsnotfound.html" DESTINATION /var/www)
-    
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/templates/500.html" DESTINATION /var/www)
+install(FILES "${PROJECT_SOURCE_DIR}/iondb/templates/404.html" DESTINATION /var/www)
+
 install(DIRECTORY iondb DESTINATION .
     USE_SOURCE_PERMISSIONS
     PATTERN "local_settings.py" EXCLUDE
@@ -80,8 +82,8 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "iondb/wsgi/torrent-server*.in" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "*.pyo" EXCLUDE
+	PATTERN "iondb/backup" EXCLUDE
 )
-install(PROGRAMS iondb/bin/ionArchive DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionCrawler DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionJobServer DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionPlugin DESTINATION /etc/init.d)
@@ -130,7 +132,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    ion-pipeline (>= 3.4.17),
+    ion-pipeline (>= 3.5.11),
     texlive-latex-base,
     texlive-latex-extra,
     latex-xcolor,
@@ -141,16 +143,16 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     libapache2-mod-wsgi (>= 3.3),
     libapache2-mod-gnutls,
     ssl-cert,
-    python-celery (>= 2.4.0),
-    python-django (>= 1.4),
-    python-django-celery,
+    python-celery (>= 3.0.12),
+    python-django (>= 1.4.4),
+    python-django-celery (>= 3.0.11),
     python-django-south (>=0.7.6),
 	python-matplotlib,
 	python-scipy,
-	python-psycopg2, 
-	python-twisted-core, 
-	python-central, 
-	python-twisted, 
+	python-psycopg2,
+	python-twisted-core,
+	python-central,
+	python-twisted,
 	python-support,
 	python-lxml,
 	python-docutils,
@@ -162,17 +164,22 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
 	python-drmaa,
     samtools (>= 0.1.18),
     python-dev,
-    rabbitmq-server,
-    tmap (>=0.3.7)")
+    rabbitmq-server (>= 3.0.2),
+    ion-analysis (>=3.5.15),
+	megacli")
 
 # Incompatible with older tastypie, remove or upgrade before installing
 set(CPACK_DEBIAN_PACKAGE_BREAKS "python-tastypie (<= 0.9.10)")
+
+set(CMAKE_DEBIAN_PACKAGE_PREDEPENDS "python-django-celery (>= 3.0.11)")
+
 # If updating from a really old version of tastypie, make sure it is
 # removed/upgraded prior to this (or postinst fails)
 set(CPACK_DEBIAN_PACKAGE_CONFLICTS "python-django-tastypie")
 
-set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")
+set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job server and run crawler.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postrm

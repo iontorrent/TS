@@ -1,172 +1,173 @@
 {% load pagetools %}
 <div id="modal_references_addedit_barcode" title="" class="modal hide" data-width="750">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-	    {% if barcode %}
-	    <h3>Edit barcode in set <strong>{{ barCodeSet }}</strong></h3>
-	    {% else %}
-	    <h3>Add new barcode in set <strong>{{ barCodeSet }}</strong></h3>
-	    {% endif %}		
-	</div>
-	<div class="modal-body">
-		<div id="modal-error-messages"></div>
-		<form class="form-horizontal" id="modal_references_addedit_barcode_form" >
-			<fieldset>
-				<div class="control-group">
-					<label for="id_str" class="control-label">Barcode ID</label>
-					<div class="controls">
-						<input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text">
-						<p class="help-block">
-							ID of this barcode sequence
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="sequence" class="control-label">Sequence</label>
-					<div class="controls">
-						<input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-						<p class="help-block">
-							Sequence
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-					<label for="adapter" class="control-label">Adapter</label>
-					<div class="controls">
-						<input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-						<p class="help-block">
-							Adapter
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-			        <label for="floworder" class="control-label">Floworder</label>
-					<div class="controls">
-				        <input value="{{ barcode.floworder|blankIfNone }}" name="floworder"
-				               id="floworder" size="35" maxlength="128" type="text"
-				               style="text-transform: uppercase;"
-				               class="input-xlarge validateNuc" />
-						<p class="help-block">
-							Flow Order
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-			        <label for="score_mode" class="control-label">Score Mode</label>
-					<div class="controls">
-			          	<input value="{% if barcode.score_mode %}{{ barcode.score_mode }}{% else %}0{% endif %}" name="score_mode"
-							id="score_mode" size="35" maxlength="512" type="text"
-							class="input-xlarge required validateInteger"/>
-						<p class="help-block">
-							Score Mode. Default is 0
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-			       	<label for="score_cutoff"  class="control-label">Score Cutoff</label>
-					<div class="controls">
-						<input value="{% if barcode.score_cutoff %}{{ barcode.score_cutoff }}{% else %}0{% endif %}" name="score_cutoff"
-							id="score_cutoff" size="35" maxlength="512" type="text"
-							class="input-xlarge textInput required validateNumber "/>
-						<p class="help-block">
-							Score Cutoff. Default is 0
-						</p>
-					</div>
-				</div>
-				<div class="control-group">
-			        <label for="annotation" class="control-label">Annotation</label>
-					<div class="controls">
-						<input value="{{ barcode.annotation|blankIfNone }}" name="annotation"
-							id="annotation" size="35" maxlength="512" type="text"
-		        	       	class="input-xlarge textInput"/>					
-		               	<p class="help-block">
-							Notes
-						</p>
-					</div>
-				</div>
-			</fieldset>			
-			<input value="{{ index }}" name="index" id="index" type="hidden"/>
-			<input value="{{ barCodeSetName }}" name="name" id="name" type="hidden"/>
-			<input value="{{ length }}" name="length" id="length" type="hidden"/>
-	  	</form>
-		<div class="bump">
-			<div id="loadingstatus"></div>
-			<div id="return"></div>
-			<div id="error"></div>
-		</div>	  	
-	</div>
-	<div class="modal-footer">
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-		<a id="upfile" class="btn btn-primary save_button" href="#">Save Barcode</a>
-	</div>
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        {% if barcode %}
+        <h3>Edit barcode in set <strong>{{ barCodeSet }}</strong></h3>
+        {% else %}
+        <h3>Add new barcode in set <strong>{{ barCodeSet }}</strong></h3>
+        {% endif %}
+    </div>
+    <div class="modal-body">
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        <form class="form-horizontal" id="modal_references_addedit_barcode_form" >
+            <fieldset>
+                <div class="control-group">
+                    <label for="id_str" class="control-label">Barcode ID</label>
+                    <div class="controls">
+                        <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text">
+                        <p class="help-block">
+                            ID of this barcode sequence
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="sequence" class="control-label">Sequence</label>
+                    <div class="controls">
+                        <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
+                        <p class="help-block">
+                            Sequence
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="adapter" class="control-label">Adapter</label>
+                    <div class="controls">
+                        <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
+                        <p class="help-block">
+                            Adapter
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="floworder" class="control-label">Floworder</label>
+                    <div class="controls">
+                        <input value="{{ barcode.floworder|blankIfNone }}" name="floworder"
+                               id="floworder" size="35" maxlength="128" type="text"
+                               style="text-transform: uppercase;"
+                               class="input-xlarge validateNuc" />
+                        <p class="help-block">
+                            Flow Order
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="score_mode" class="control-label">Score Mode</label>
+                    <div class="controls">
+                          <input value="{% if barcode.score_mode %}{{ barcode.score_mode }}{% else %}0{% endif %}" name="score_mode"
+                            id="score_mode" size="35" maxlength="512" type="text"
+                            class="input-xlarge required validateInteger"/>
+                        <p class="help-block">
+                            Score Mode. Default is 0
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                       <label for="score_cutoff"  class="control-label">Score Cutoff</label>
+                    <div class="controls">
+                        <input value="{% if barcode.score_cutoff %}{{ barcode.score_cutoff }}{% else %}0{% endif %}" name="score_cutoff"
+                            id="score_cutoff" size="35" maxlength="512" type="text"
+                            class="input-xlarge textInput required validateNumber "/>
+                        <p class="help-block">
+                            Score Cutoff. Default is 0
+                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="annotation" class="control-label">Annotation</label>
+                    <div class="controls">
+                        <input value="{{ barcode.annotation|blankIfNone }}" name="annotation"
+                            id="annotation" size="35" maxlength="512" type="text"
+                               class="input-xlarge textInput"/>
+                           <p class="help-block">
+                            Notes
+                        </p>
+                    </div>
+                </div>
+            </fieldset>
+            <input value="{{ index }}" name="index" id="index" type="hidden"/>
+            <input value="{{ barCodeSetName }}" name="name" id="name" type="hidden"/>
+            <input value="{{ length }}" name="length" id="length" type="hidden"/>
+          </form>
+        <div class="bump">
+            <div id="loadingstatus"></div>
+            <div id="return"></div>
+            <div id="error"></div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
+        <a id="upfile" class="btn btn-primary save_button" href="#">Save Barcode</a>
+    </div>
 
 <script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
 <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
 <script type="text/javascript">
 $('#modal_references_addedit_barcode_form').uniform({
-	holder_class : 'control-group'
-	, msg_selector: 'p.help-block'
-	, error_class : 'alert alert-error'
+    holder_class : 'control-group'
+    , msg_selector: 'p.help-block'
+    , error_class : 'alert alert-error'
 });
-	
+
 //otherList - a list of all the other id_strs in use
 uniq = {{otherList|safe}};
-	
+
 $('.save_button').click(function(e){
-	e.preventDefault();
-	$('#modal_references_addedit_barcode_form').submit();
+    e.preventDefault();
+    $('#modal_references_addedit_barcode_form').submit();
 });
 $('#modal_references_addedit_barcode_form').submit(function(e){
     $("#sequence").val($("#sequence").val().toUpperCase());
     $("#adapter").val($("#adapter").val().toUpperCase());
     $("#floworder").val($("#floworder").val().toUpperCase());
     $("#length").val($("#sequence").val().length);
-	
-	e.preventDefault();
-	$(".textInput").blur();
 
-	if ($("#modal_references_addedit_barcode_form *").hasClass("error")) {
-		$("#modal_references_addedit_barcode_form").animate({scrollTop : 0}, "slow");
-		$(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
-		return false;
-	}
-    
-	var json = $('#modal_references_addedit_barcode_form').serializeJSON();
-	
-	{% if barcode %}
-	type = "PUT";
-	url = "/rundb/api/v1/dnabarcode/{{ barcode.id }}/";
-	{% else %}
-	type = "POST";
-	url = "/rundb/api/v1/dnabarcode/";
-	{% endif %}
-	
-	json = JSON.stringify(json);
-		
-	console.log('transmitting :', type, url, json );
+    e.preventDefault();
+    $(".textInput").blur();
+
+    if ($("#modal_references_addedit_barcode_form *").hasClass("error")) {
+        $("#modal_references_addedit_barcode_form").animate({scrollTop : 0}, "slow");
+        $(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
+        return false;
+    }
+
+    $('#modal_references_addedit_barcode #modal-error-messages').hide().empty();
+    var json = $('#modal_references_addedit_barcode_form').serializeJSON();
+
+    {% if barcode %}
+    type = "PUT";
+    url = "/rundb/api/v1/dnabarcode/{{ barcode.id }}/";
+    {% else %}
+    type = "POST";
+    url = "/rundb/api/v1/dnabarcode/";
+    {% endif %}
+
+    json = JSON.stringify(json);
+
+    console.log('transmitting :', type, url, json );
 
     $.ajax({
-		type: type,
+        type: type,
         url: url,
         dataType: "json",
         contentType: "application/json",
-		data: json
-    }).done(function(data) { 
+        data: json
+    }).done(function(data) {
         $('#modal_references_addedit_barcode').trigger('modal_references_addedit_barcode_done', {});
-    	$('body #modal_references_addedit_barcode').modal("hide");
-	})
+        $('body #modal_references_addedit_barcode').modal("hide");
+    })
     .fail(function(data) {
-    	alert('Error saving barcode!');
-    	 
+        $('#modal_references_addedit_barcode #modal-error-messages').empty().append('<p class="error">Error saving barcode!</p><p>' + data.responseText + '</p>').show()
+
     })
     .always(function(data) { });
     //always return false because the POSTing is done to the API.
-    return false;	        
-	
+    return false;
+
 });
 
 $('#modal_references_addedit_barcode').on('hidden', function () {
-	$('body #modal_references_addedit_barcode').remove();
-});	  	
+    $('body #modal_references_addedit_barcode').remove();
+});
 </script>
 </div>

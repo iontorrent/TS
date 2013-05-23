@@ -9,9 +9,9 @@ def ion_readable(value):
     try:
         charlist = []
         charlist.append("")
-        charlist.append("K")
-        charlist.append("M")
-        charlist.append("G")
+        charlist.append(" K")
+        charlist.append(" M")
+        charlist.append(" G")
 
         charindex = 0
         val = float(value)

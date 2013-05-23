@@ -74,7 +74,10 @@ struct LocalSigProcControl{
   bool proton_dot_wells_post_correction;
   int  single_flow_fit_max_retry;
   bool per_flow_t_mid_nuc_tracking;
+  bool exp_tail_fit;
+  bool pca_dark_matter;
   bool regional_sampling;
+  int regional_sampling_type;
   bool prefilter_beads;
 
   LocalSigProcControl();
@@ -104,8 +107,11 @@ private:
       & proton_dot_wells_post_correction
       & single_flow_fit_max_retry
       & per_flow_t_mid_nuc_tracking
+      & exp_tail_fit
+      & pca_dark_matter
       & prefilter_beads
-      & regional_sampling;
+      & regional_sampling
+      & regional_sampling_type;
   }
 };
   

@@ -3,13 +3,13 @@
 import sys
 import os
 import json
+import glob
 import datetime
 import traceback
 
 sys.path.append('/opt/ion/')
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
-from django.db import models
-from django.db import connection
+from django.db import connection, transaction, IntegrityError
 from iondb.rundb import models
 import subprocess
 from ion.reports import parseBeadfind
@@ -39,6 +39,7 @@ def getCurrentAnalysis(procMetrics, res):
     res.save()
     return res
 
+@transaction.commit_on_success
 def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
     ###Populate metrics for each TF###
     
@@ -77,6 +78,7 @@ def addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res):
             tfm.save()
 
 
+@transaction.commit_on_success
 def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
     #print 'addAnalysisMetrics'
     analysis_metrics_map = {
@@ -87,7 +89,29 @@ def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
         'tfKp': 0,
         'tfFinal': 0,
         'lib_pass_basecaller': 0,
-        'lib_pass_cafie': 0
+        'lib_pass_cafie': 0,
+        'empty': 0,
+        'bead': 0,
+        'live': 0,
+        'dud': 0,
+        'amb': 0,
+        'tf': 0,
+        'lib': 0,
+        'pinned': 0,
+        'ignored': 0,
+        'excluded': 0,
+        'washout': 0,
+        'washout_dud': 0,
+        'washout_ambiguous': 0,
+        'washout_live': 0,
+        'washout_test_fragment': 0,
+        'washout_library': 0,
+        'keypass_all_beads': 0,
+        'sysCF' : 0.0,
+        'sysIE' : 0.0,
+        'sysDR' : 0.0,
+        'libFinal' : 0,
+        'tfFinal' : 0,
     }
 
     bead_metrics_map = {
@@ -112,33 +136,33 @@ def addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res):
 
     kwargs = {'report':res,'libMix':0,'tfMix':0,'sysCF':0.0,'sysIE':0.0,'sysDR':0.0}
 
-    try:
-        analysis_metrics_map["libFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["lib"]["valid"]
-        analysis_metrics_map["tfFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["tf"]["valid"]
-    except Exception as err:
-        print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
+    if BaseCallerMetrics:
+        try:
+            analysis_metrics_map["libFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["lib"]["valid"]
+            analysis_metrics_map["tfFinal"] = BaseCallerMetrics["Filtering"]["ReadDetails"]["tf"]["valid"]
+        except Exception as err:
+            print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
+
     kwargs.update(analysis_metrics_map)
 
     if beadMetrics:
         for dbname, key in bead_metrics_map.iteritems():
             kwargs[dbname]=set_type(beadMetrics.get(key, 0))
     
-    try:
-        kwargs['sysCF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
-        kwargs['sysIE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
-        kwargs['sysDR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
-    except Exception as err:
-        print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
-        kwargs['sysCF'] = 0.0
-        kwargs['sysIE'] = 0.0
-        kwargs['sysDR'] = 0.0
+    if BaseCallerMetrics:
+        try:
+            kwargs['sysCF'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
+            kwargs['sysIE'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
+            kwargs['sysDR'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
+        except Exception as err:
+            print("During AnalysisMetrics creation, reading from BaseCaller.json: %s", err)
    
-    am, created = models.AnalysisMetrics.objects.get_or_create(report=res, 
-                                                            defaults=kwargs)
-    if not created:
-        for key, value in kwargs.items():
-            setattr(am, key, value)
-        am.save()
+    analysismetrics = res.analysismetrics or models.AnalysisMetrics()
+    for key, value in kwargs.items():
+        setattr(analysismetrics, key, value)
+    analysismetrics.save()
+    res.analysismetrics = analysismetrics
+    res.save()
 
 
 def updateAnalysisMetrics(beadPath, primarykeyPath):
@@ -155,6 +179,7 @@ def updateAnalysisMetrics(beadPath, primarykeyPath):
     try:
         addAnalysisMetrics(beadMetrics, None, result)
     except Exception as err:
+        logging.exception()
         return str(err)
     return "Alls well that ends well"
 
@@ -172,12 +197,12 @@ def set_type(num_string):
         except ValueError:
             val = str(num_string)
     return val
-    
-def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
-    #print 'addlibmetrics'
-    metric_map = {'totalNumReads':'Total number of Reads', 
-    'total_mapped_reads':'Total Mapped Reads',
-    'total_mapped_target_bases':'Total Mapped Target Bases',
+
+
+@transaction.commit_on_success
+def addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPeak, BaseCallerMetrics, res, extra):
+    print 'addlibmetrics'
+    metric_map = {
     'genomelength':'Genomelength',
     'rNumAlignments':'Filtered relaxed BLAST Alignments',
     'rMeanAlignLen':'Filtered relaxed BLAST Mean Alignment Length',
@@ -205,106 +230,11 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
     's50Q20':'Filtered strict BLAST 50Q20 Reads',
     's100Q20':'Filtered strict BLAST 100Q20 Reads',
     's200Q20':'Filtered strict BLAST 200Q20 Reads',
-
-    "q7_coverage_percentage":"Filtered Q7 Coverage Percentage",
-    "q7_alignments":"Filtered Q7 Alignments",
-    "q7_mean_alignment_length":"Filtered Q7 Mean Alignment Length",
-    "q7_mapped_bases":"Filtered Mapped Bases in Q7 Alignments",
-    "q7_longest_alignment":"Filtered Q7 Longest Alignment",
-    "i50Q7_reads":"Filtered 50Q7 Reads",
-    "i100Q7_reads":"Filtered 100Q7 Reads",
-    "i150Q7_reads":"Filtered 150Q7 Reads",
-    "i200Q7_reads":"Filtered 200Q7 Reads",
-    "i250Q7_reads":"Filtered 250Q7 Reads",
-    "i300Q7_reads":"Filtered 300Q7 Reads",
-    "i350Q7_reads":"Filtered 350Q7 Reads",
-    "i400Q7_reads":"Filtered 400Q7 Reads",
-    "i450Q7_reads":"Filtered 450Q7 Reads",
-    "i500Q7_reads":"Filtered 500Q7 Reads",
-    "i550Q7_reads":"Filtered 550Q7 Reads",
-    "i600Q7_reads":"Filtered 600Q7 Reads",
-
-    "q10_coverage_percentage":"Filtered Q10 Coverage Percentage",
-    "q10_alignments":"Filtered Q10 Alignments",
-    "q10_mean_alignment_length":"Filtered Q10 Mean Alignment Length",
-    "q10_mapped_bases":"Filtered Mapped Bases in Q10 Alignments",
-    "q10_longest_alignment":"Filtered Q10 Longest Alignment",
-    "i50Q10_reads":"Filtered 50Q10 Reads",
-    "i100Q10_reads":"Filtered 100Q10 Reads",
-    "i150Q10_reads":"Filtered 150Q10 Reads",
-    "i200Q10_reads":"Filtered 200Q10 Reads",
-    "i250Q10_reads":"Filtered 250Q10 Reads",
-    "i300Q10_reads":"Filtered 300Q10 Reads",
-    "i350Q10_reads":"Filtered 350Q10 Reads",
-    "i400Q10_reads":"Filtered 400Q10 Reads",
-    "i450Q10_reads":"Filtered 450Q10 Reads",
-    "i500Q10_reads":"Filtered 500Q10 Reads",
-    "i550Q10_reads":"Filtered 550Q10 Reads",
-    "i600Q10_reads":"Filtered 600Q10 Reads",
-
-    "q17_coverage_percentage":"Filtered Q17 Coverage Percentage",
-    "q17_alignments":"Filtered Q17 Alignments",
-    "q17_mean_alignment_length":"Filtered Q17 Mean Alignment Length",
-    "q17_mapped_bases":"Filtered Mapped Bases in Q17 Alignments",
-    "q17_longest_alignment":"Filtered Q17 Longest Alignment",
-    "i50Q17_reads":"Filtered 50Q17 Reads",
-    "i100Q17_reads":"Filtered 100Q17 Reads",
-    "i150Q17_reads":"Filtered 150Q17 Reads",
-    "i200Q17_reads":"Filtered 200Q17 Reads",
-    "i250Q17_reads":"Filtered 250Q17 Reads",
-    "i300Q17_reads":"Filtered 300Q17 Reads",
-    "i350Q17_reads":"Filtered 350Q17 Reads",
-    "i400Q17_reads":"Filtered 400Q17 Reads",
-    "i450Q17_reads":"Filtered 450Q17 Reads",
-    "i500Q17_reads":"Filtered 500Q17 Reads",
-    "i550Q17_reads":"Filtered 550Q17 Reads",
-    "i600Q17_reads":"Filtered 600Q17 Reads",
-
-    "q20_coverage_percentage":"Filtered Q20 Coverage Percentage",
-    "q20_alignments":"Filtered Q20 Alignments",
-    "q20_mean_alignment_length":"Filtered Q20 Mean Alignment Length",
-    "q20_mapped_bases":"Filtered Mapped Bases in Q20 Alignments",
-    "q20_longest_alignment":"Filtered Q20 Longest Alignment",
-    "i50Q20_reads":"Filtered 50Q20 Reads",
-    "i100Q20_reads":"Filtered 100Q20 Reads",
-    "i150Q20_reads":"Filtered 150Q20 Reads",
-    "i200Q20_reads":"Filtered 200Q20 Reads",
-    "i250Q20_reads":"Filtered 250Q20 Reads",
-    "i300Q20_reads":"Filtered 300Q20 Reads",
-    "i350Q20_reads":"Filtered 350Q20 Reads",
-    "i400Q20_reads":"Filtered 400Q20 Reads",
-    "i450Q20_reads":"Filtered 450Q20 Reads",
-    "i500Q20_reads":"Filtered 500Q20 Reads",
-    "i550Q20_reads":"Filtered 550Q20 Reads",
-    "i600Q20_reads":"Filtered 600Q20 Reads",
-
-    "q47_coverage_percentage":"Filtered Q47 Coverage Percentage",
-    "q47_alignments":"Filtered Q47 Alignments",
-    "q47_mean_alignment_length":"Filtered Q47 Mean Alignment Length",
-    "q47_mapped_bases":"Filtered Mapped Bases in Q47 Alignments",
-    "q47_longest_alignment":"Filtered Q47 Longest Alignment",
-    "i50Q47_reads":"Filtered 50Q47 Reads",
-    "i100Q47_reads":"Filtered 100Q47 Reads",
-    "i150Q47_reads":"Filtered 150Q47 Reads",
-    "i200Q47_reads":"Filtered 200Q47 Reads",
-    "i250Q47_reads":"Filtered 250Q47 Reads",
-    "i300Q47_reads":"Filtered 300Q47 Reads",
-    "i350Q47_reads":"Filtered 350Q47 Reads",
-    "i400Q47_reads":"Filtered 400Q47 Reads",
-    "i450Q47_reads":"Filtered 450Q47 Reads",
-    "i500Q47_reads":"Filtered 500Q47 Reads",
-    "i550Q47_reads":"Filtered 550Q47 Reads",
-    "i600Q47_reads":"Filtered 600Q47 Reads",
-
     "q7_qscore_bases":"Filtered Mapped Q7 Bases",
     "q10_qscore_bases":"Filtered Mapped Q10 Bases",
     "q17_qscore_bases":"Filtered Mapped Q17 Bases",
     "q20_qscore_bases":"Filtered Mapped Q20 Bases",
     "q47_qscore_bases":"Filtered Mapped Q47 Bases",
-    "Genome_Version":"Genome Version",
-    "Index_Version":"Index Version",
-    'genome':'Genome',
-    'genomesize':'Genomesize',
     'total_number_of_sampled_reads':'Total number of Sampled Reads',
     'sampled_q7_coverage_percentage':'Sampled Filtered Q7 Coverage Percentage',
     'sampled_q7_mean_coverage_depth':'Sampled Filtered Q7 Mean Coverage Depth',
@@ -416,7 +346,8 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
     'extrapolated_100q47_reads':'Extrapolated Filtered 100Q47 Reads',
     'extrapolated_200q47_reads':'Extrapolated Filtered 200Q47 Reads',
     'extrapolated_300q47_reads':'Extrapolated Filtered 300Q47 Reads',
-    'extrapolated_400q47_reads':'Extrapolated Filtered 400Q47 Reads'
+    'extrapolated_400q47_reads':'Extrapolated Filtered 400Q47 Reads',
+    'duplicate_reads': 'Count of Duplicate Reads',
     }
 
     if keyPeak != None:
@@ -425,47 +356,86 @@ def addLibMetrics(libMetrics, qualityMetrics, keyPeak, BaseCallerMetrics, res):
         aveKeyCount = 0.0
         
     align_sample = 0
-    if libMetrics == None:
+    if ionstats_alignment == None:
         align_sample = -1
-    else:
-        #check to see if this is a samled or full alignment 
-        if libMetrics.has_key('Total number of Sampled Reads'):
-            align_sample = 1
-        if libMetrics.has_key('Thumbnail'):
-            align_sample = 2
+    #check to see if this is a samled or full alignment 
+    #if libMetrics.has_key('Total number of Sampled Reads'):
+    #    align_sample = 1
+    if res.metaData.get('thumb','0') == 1:
+        align_sample = 2
 
     kwargs = {'report':res, 'aveKeyCounts':aveKeyCount, 'align_sample': align_sample }
 
     for dbname, key in metric_map.iteritems():
-        if libMetrics != None:
-            # convert all "N/A" values to 0, e.g. 20_coverage_percentage=N/A, see TS-5044
-            value = set_type(libMetrics.get(key, '0'))
-            if value == "N/A":
-                kwargs[dbname] = set_type('0')
-            else:
-                kwargs[dbname] = value
-        else:
-            kwargs[dbname] = set_type('0')
-        
+        kwargs[dbname] = set_type('0')
+
+    kwargs['Genome_Version'] = genomeinfodict['genome_version']
+    kwargs['Index_Version'] = genomeinfodict['index_version']
+    kwargs['genome'] = genomeinfodict['genome_name']
+    kwargs['genomesize'] = genomeinfodict['genome_length']
+
+    quallist = ['7', '10', '17', '20', '47'] #TODO Q30
+    bplist = [50,100,150,200,250,300,350,400,450,500,550,600]
+    if ionstats_alignment != None:
+        kwargs['totalNumReads'] = ionstats_alignment['full']['num_reads']
+        kwargs['total_mapped_reads'] = ionstats_alignment['aligned']['num_reads']
+        kwargs['total_mapped_target_bases'] = ionstats_alignment['aligned']['num_bases']
+
+        for q in quallist:
+            kwargs['q%s_longest_alignment' % q] = ionstats_alignment['AQ'+q]['max_read_length']
+            kwargs['q%s_mean_alignment_length' % q] = ionstats_alignment['AQ'+q]['mean_read_length']
+            kwargs['q%s_mapped_bases' % q] = ionstats_alignment['AQ'+q]['num_bases']
+            kwargs['q%s_alignments' % q] = ionstats_alignment['AQ'+q]['num_reads']
+            kwargs['q%s_coverage_percentage' % q] = 0.0 #'N/A' # TODO
+#           'Filtered %s Mean Coverage Depth' % q, '%.1f' % (float(ionstats_alignment['AQ'+q]['num_bases'])/float(3095693981)) ) TODO
+            for bp in bplist:
+                kwargs['i%sQ%s_reads' % (bp,q)] = sum(ionstats_alignment['AQ'+q]['read_length_histogram'][bp:])
+
+        try:
+            raw_accuracy = round( (1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
+            kwargs['raw_accuracy'] = raw_accuracy
+        except:
+            kwargs['raw_accuracy'] = 0.0
+    else:
+        kwargs['totalNumReads'] = 0
+        kwargs['total_mapped_reads'] = 0
+        kwargs['total_mapped_target_bases'] = 0
+
+        for q in quallist:
+            for bp in bplist:
+                kwargs['i%sQ%s_reads' % (bp,q)] = 0
+            kwargs['q%s_longest_alignment' % q] = 0
+            kwargs['q%s_mean_alignment_length' % q] = 0
+            kwargs['q%s_mapped_bases' % q] = 0
+            kwargs['q%s_alignments' % q] = 0
+            kwargs['q%s_coverage_percentage' % q] = 0.0
+            kwargs['raw_accuracy'] = 0.0
+
+
     try:
-        kwargs['sysSNR'] = qualityMetrics['system_snr']
+        kwargs['sysSNR'] = ionstats_basecaller['system_snr']
         kwargs['cf'] = 100.0 * BaseCallerMetrics['Phasing']['CF']
         kwargs['ie'] = 100.0 * BaseCallerMetrics['Phasing']['IE']
         kwargs['dr'] = 100.0 * BaseCallerMetrics['Phasing']['DR']
     except:
+        kwargs['sysSNR'] = 0.0
         kwargs['cf'] = 0.0
         kwargs['ie'] = 0.0
         kwargs['dr'] = 0.0
-    
-    lib, created = models.LibMetrics.objects.get_or_create(report=res, 
-                                                            defaults=kwargs)
-    if not created:
-        for key, value in kwargs.items():
-            setattr(lib, key, value)
-        lib.save()
+
+    if extra:
+        kwargs["duplicate_reads"] = extra.get("duplicate_reads", None)
+
+    libmetrics = res.libmetrics or models.LibMetrics()
+    for key, value in kwargs.items():
+        setattr(libmetrics, key, value)
+    libmetrics.save()
+    res.libmetrics = libmetrics
+    res.save()
 
 
-def addQualityMetrics(QualityMetrics, res):
+@transaction.commit_on_success
+def addQualityMetrics(ionstats_basecaller, res):
 
     kwargs = {'report':res }
 
@@ -473,26 +443,26 @@ def addQualityMetrics(QualityMetrics, res):
         kwargs["q0_50bp_reads"]        = 0
         kwargs["q0_100bp_reads"]       = 0
         kwargs["q0_150bp_reads"]       = 0
-        kwargs["q0_bases"]             = sum(QualityMetrics["qv_histogram"])
-        kwargs["q0_reads"]             = QualityMetrics["full"]["num_reads"]
-        kwargs["q0_max_read_length"]   = QualityMetrics["full"]["max_read_length"]
-        kwargs["q0_mean_read_length"]  = QualityMetrics["full"]["mean_read_length"]
+        kwargs["q0_bases"]             = sum(ionstats_basecaller["qv_histogram"])
+        kwargs["q0_reads"]             = ionstats_basecaller["full"]["num_reads"]
+        kwargs["q0_max_read_length"]   = ionstats_basecaller["full"]["max_read_length"]
+        kwargs["q0_mean_read_length"]  = ionstats_basecaller["full"]["mean_read_length"]
         kwargs["q17_50bp_reads"]       = 0
         kwargs["q17_100bp_reads"]      = 0
         kwargs["q17_150bp_reads"]      = 0
-        kwargs["q17_bases"]            = sum(QualityMetrics["qv_histogram"][17:])
-        kwargs["q17_reads"]            = QualityMetrics["Q17"]["num_reads"]
-        kwargs["q17_max_read_length"]  = QualityMetrics["Q17"]["max_read_length"]
-        kwargs["q17_mean_read_length"] = QualityMetrics["Q17"]["mean_read_length"]
+        kwargs["q17_bases"]            = sum(ionstats_basecaller["qv_histogram"][17:])
+        kwargs["q17_reads"]            = ionstats_basecaller["Q17"]["num_reads"]
+        kwargs["q17_max_read_length"]  = ionstats_basecaller["Q17"]["max_read_length"]
+        kwargs["q17_mean_read_length"] = ionstats_basecaller["Q17"]["mean_read_length"]
         kwargs["q20_50bp_reads"]       = 0
         kwargs["q20_100bp_reads"]      = 0
         kwargs["q20_150bp_reads"]      = 0
-        kwargs["q20_bases"]            = sum(QualityMetrics["qv_histogram"][20:])
-        kwargs["q20_reads"]            = QualityMetrics["Q20"]["num_reads"]
-        kwargs["q20_max_read_length"]  = QualityMetrics["Q20"]["max_read_length"]
-        kwargs["q20_mean_read_length"] = QualityMetrics["Q20"]["mean_read_length"]
+        kwargs["q20_bases"]            = sum(ionstats_basecaller["qv_histogram"][20:])
+        kwargs["q20_reads"]            = ionstats_basecaller["Q20"]["num_reads"]
+        kwargs["q20_max_read_length"]  = ionstats_basecaller["Q20"]["max_read_length"]
+        kwargs["q20_mean_read_length"] = ionstats_basecaller["Q20"]["mean_read_length"]
 
-        read_length_histogram = QualityMetrics['full']['read_length_histogram']
+        read_length_histogram = ionstats_basecaller['full']['read_length_histogram']
         if len(read_length_histogram) > 50:
             kwargs["q0_50bp_reads"] = sum(read_length_histogram[50:])
         if len(read_length_histogram) > 100:
@@ -500,7 +470,7 @@ def addQualityMetrics(QualityMetrics, res):
         if len(read_length_histogram) > 150:
             kwargs["q0_150bp_reads"] = sum(read_length_histogram[150:])
 
-        read_length_histogram = QualityMetrics['Q17']['read_length_histogram']
+        read_length_histogram = ionstats_basecaller['Q17']['read_length_histogram']
         if len(read_length_histogram) > 50:
             kwargs["q17_50bp_reads"] = sum(read_length_histogram[50:])
         if len(read_length_histogram) > 100:
@@ -508,7 +478,7 @@ def addQualityMetrics(QualityMetrics, res):
         if len(read_length_histogram) > 150:
             kwargs["q17_150bp_reads"] = sum(read_length_histogram[150:])
 
-        read_length_histogram = QualityMetrics['Q20']['read_length_histogram']
+        read_length_histogram = ionstats_basecaller['Q20']['read_length_histogram']
         if len(read_length_histogram) > 50:
             kwargs["q20_50bp_reads"] = sum(read_length_histogram[50:])
         if len(read_length_histogram) > 100:
@@ -520,14 +490,15 @@ def addQualityMetrics(QualityMetrics, res):
     except Exception as err:
         print("During QualityMetrics creation: %s", err)
 
-    quality, created = models.QualityMetrics.objects.get_or_create(report=res, 
-                                                            defaults=kwargs)
-    if not created:
-        for key, value in kwargs.items():
-            setattr(quality, key, value)
-        quality.save()
+    qualitymetrics = res.qualitymetrics or models.QualityMetrics()
+    for key, value in kwargs.items():
+        setattr(qualitymetrics, key, value)
+    qualitymetrics.save()
+    res.qualitymetrics = qualitymetrics
+    res.save()
 
 
+@transaction.commit_on_success
 def pluginStoreInsert(pluginDict):
     """insert plugin data into the django database"""
     print "Insert Plugin data into database"
@@ -545,6 +516,8 @@ def pluginStoreInsert(pluginDict):
     res.pluginStore = json.dumps(pluginDict)
     res.save()
 
+
+@transaction.commit_on_success
 def updateStatus(primarykeyPath, status, reportLink = False):
     """
     A function to update the status of reports
@@ -578,9 +551,29 @@ def updateStatus(primarykeyPath, status, reportLink = False):
 
     res.save()
 
-def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, keyPath, QualityPath, BaseCallerJsonPath, primarykeyPath, uploadStatusPath):
+def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, ionParamsPath, status, keyPath, ionstats_basecaller_json_path, BaseCallerJsonPath, primarykeyPath, uploadStatusPath,cwd):
 
     return_message = ""
+
+    afile = open(ionParamsPath, 'r')
+    ionparams = json.load(afile)
+    afile.close()
+
+    procParams = None
+    if os.path.exists(procPath):
+        procParams = fileToDict(procPath)
+
+    beadMetrics = None
+    if os.path.isfile(beadPath):
+        try:
+            beadMetrics = parseBeadfind.generateMetrics(beadPath)
+        except:
+            beadMetrics = None
+            return_message += traceback.print_exc()
+    else:
+        beadMetrics = None
+        return_message += 'ERROR: generating beadMetrics failed - file %s is missing\n' % beadPath
+
     tfMetrics = None
     if os.path.exists(tfPath):
         try:
@@ -591,8 +584,15 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
             tfMetrics = None
             return_message += traceback.print_exc()
     else:
-        beadMetrics = None
-        return_message += 'ERROR: generating tfMetrics failed - file %s is missing' % tfPath
+        tfMetrics = None
+        return_message += 'ERROR: generating tfMetrics failed - file %s is missing\n' % tfPath
+
+    if os.path.exists(keyPath):
+        keyPeak = parse_metrics(keyPath)
+    else:
+        keyPeak = {}
+        keyPeak['Test Fragment'] = 0
+        keyPeak['Library'] = 0
 
     BaseCallerMetrics = None
     if os.path.exists(BaseCallerJsonPath):
@@ -605,54 +605,82 @@ def writeDbFromFiles(tfPath, procPath, beadPath, filterPath, libPath, status, ke
             return_message += traceback.print_exc()
     else:
         BaseCallerMetrics = None
-        return_message += 'ERROR: generating BaseCallerMetrics failed - file %s is missing' % BaseCallerJsonPath
+        return_message += 'ERROR: generating BaseCallerMetrics failed - file %s is missing\n' % BaseCallerJsonPath
 
-    beadMetrics = None
-    if os.path.isfile(beadPath):
+    ionstats_basecaller = None
+    if os.path.exists(ionstats_basecaller_json_path):
         try:
-            beadMetrics = parseBeadfind.generateMetrics(beadPath)
-        except:
-            beadMetrics = None
-            return_message += traceback.print_exc()
-    else:
-        beadMetrics = None
-        return_message += 'ERROR: generating beadMetrics failed - file %s is missing' % beadPath
-
-    libMetrics = None
-    if os.path.exists(libPath):
-        libMetrics = parse_metrics(libPath)
-    else:
-        libMetrics = None
-
-    QualityMetrics = None
-    if os.path.exists(QualityPath):
-        try:
-            afile = open(QualityPath, 'r')
-            QualityMetrics = json.load(afile)
+            afile = open(ionstats_basecaller_json_path, 'r')
+            ionstats_basecaller = json.load(afile)
             afile.close()
         except:
-            QualityMetrics = None
+            ionstats_basecaller = None
             return_message += traceback.print_exc()
     else:
-        QualityMetrics = None
-        return_message += 'ERROR: generating QualityMetrics failed - file %s is missing' % QualityPath
+        ionstats_basecaller = None
+        return_message += 'ERROR: generating ionstats_basecaller failed - file %s is missing\n' % ionstats_basecaller_json_path
 
-    if os.path.exists(keyPath):
-        keyPeak = parse_metrics(keyPath)
+    ionstats_alignment = None
+    if ionparams['libraryName'] != 'none':
+        if os.path.exists(ionstats_alignment_json_path):
+            try:
+                afile = open(ionstats_alignment_json_path, 'r')
+                ionstats_alignment = json.load(afile)
+                afile.close()
+            except:
+                ionstats_alignment = None
+                return_message += traceback.print_exc()
+        else:
+            ionstats_alignment = None
+            return_message += 'ERROR: generating ionstats_alignment failed - file %s is missing\n' % ionstats_alignment_json_path
+
+    genomeinfodict = {}
+    try:
+        if ionparams['libraryName'] != 'none' and ionstats_alignment != None:
+            genomeinfofilepath = '/results/referenceLibrary/%s/%s/%s.info.txt' % (ionparams['tmap_version'], ionparams['libraryName'], ionparams['libraryName'])
+            with open(genomeinfofilepath) as genomeinfofile:
+                for line in genomeinfofile:
+                    key, value = line.partition("\t")[::2]
+                    genomeinfodict[key.strip()] = value.strip()
+        else:
+            genomeinfodict['genome_version'] = 'None'
+            genomeinfodict['index_version'] = 'None'
+            genomeinfodict['genome_name'] = 'None'
+            genomeinfodict['genome_length'] = 0
+    except:
+        return_message += traceback.print_exc()
+
+    extra_files = glob.glob(os.path.join(cwd,'BamDuplicates*.json'))
+    extra = { u'reads_with_adaptor':0, u'duplicate_reads':0, u'total_reads':0, u'fraction_with_adaptor':0, u'fraction_duplicates':0 }
+    for extra_file in extra_files:
+      if os.path.exists(extra_file):
+          try:
+              with open(extra_file, 'r') as afile:
+                val = json.load(afile)
+                for key in extra.keys():
+                    extra[key] += val.get(key,0)
+          except:
+              return_message += traceback.print_exc()
+      else:
+          return_message += 'INFO: generating extra metrics failed - file %s is missing\n' % extra_file
     else:
-        keyPeak = {}
-        keyPeak['Test Fragment'] = 0
-        keyPeak['Library'] = 0
+        # No data, send None/null instead of zeros
+        extra = { u'reads_with_adaptor':None, u'duplicate_reads':None, u'total_reads':None, u'fraction_with_adaptor':None, u'fraction_duplicates':None }
 
-    procParams = None
-    if os.path.exists(procPath):
-        procParams = fileToDict(procPath)
-
-    writeDbFromDict(tfMetrics, procParams, beadMetrics, None, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath)
+    try:
+        if extra[u'total_reads']:
+            extra[u'fraction_with_adaptor'] = extra[u'reads_with_adaptor'] / float( extra[u'total_reads'] )
+            extra[u'fraction_duplicates'] = extra[u'duplicate_reads'] / float( extra[u'total_reads'] )
+    except:
+        return_message += traceback.print_exc()
+        
+    #print "BamDuplicates stats: ", extra
+    
+    writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath,extra)
 
     return return_message
 
-def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetrics, status, keyPeak, QualityMetrics, BaseCallerMetrics, primarykeyPath, uploadStatusPath):
+def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, genomeinfodict, status, keyPeak, ionstats_basecaller, BaseCallerMetrics, primarykeyPath, uploadStatusPath,extra):
     print "writeDbFromDict"
 
     # We think this will fix "DatabaseError: server closed the connection unexpectedly"
@@ -690,6 +718,9 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
     try:
         e.write('Adding TF Metrics\n')
         addTfMetrics(tfMetrics, keyPeak, BaseCallerMetrics, res)
+    except IntegrityError:
+        e.write("Failed addTfMetrics\n")
+        logging.exception()
     except:
         e.write("Failed addTfMetrics\n")
         print traceback.format_exc()
@@ -697,38 +728,53 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, filterMetrics, libMetric
     try:
         e.write('Adding Analysis Metrics\n')
         addAnalysisMetrics(beadMetrics, BaseCallerMetrics, res)
+    except IntegrityError:
+        e.write("Failed addAnalysisMetrics\n")
+        logging.exception()
     except:
         e.write("Failed addAnalysisMetrics\n")
         print traceback.format_exc()
         print sys.exc_info()[0]
     try:
         e.write('Adding Library Metrics\n')
-        addLibMetrics(libMetrics, QualityMetrics, keyPeak, BaseCallerMetrics, res)
+        addLibMetrics(genomeinfodict, ionstats_alignment, ionstats_basecaller, keyPeak, BaseCallerMetrics, res, extra)
+    except IntegrityError:
+        e.write("Failed addLibMetrics\n")
+        logging.exception()
     except:
         e.write("Failed addLibMetrics\n")
         print traceback.format_exc()
         print sys.exc_info()[0] 
-        
+
     #try to add the quality metrics
     try:
         e.write('Adding Quality Metrics\n')
-        addQualityMetrics(QualityMetrics, res)
+        if ionstats_basecaller:
+            addQualityMetrics(ionstats_basecaller, res)
+        else:
+            e.write("Failed to add QualityMetrics, missing object ionstats_basecaller\n")
+    except IntegrityError:
+        e.write("Failed addQualityMetrics\n")
+        logging.exception()
     except:
         e.write("Failed addQualityMetrics\n")
         print traceback.format_exc()
         print sys.exc_info()[0] 
-    
+
     e.close()
 
 if __name__=='__main__':
-
-    # TODO: return if argv[1] is not specified
+    logging.basicConfig()
+    if len(sys.argv) < 2:
+        folderPath = os.getcwd()
+        logging.warn("No path specified. Assuming cwd: '%s'", folderPath)
+    else:
+        folderPath = sys.argv[1]
 
     SIGPROC_RESULTS="sigproc_results"
     BASECALLER_RESULTS="basecaller_results"
     ALIGNMENT_RESULTS="./"
 
-    folderPath = sys.argv[1]
     print "processing: " + folderPath
 
     status = None
@@ -736,24 +782,25 @@ if __name__=='__main__':
     tfPath = os.path.join(folderPath, BASECALLER_RESULTS, 'TFStats.json')
     procPath = os.path.join(SIGPROC_RESULTS,"processParameters.txt")
     beadPath = os.path.join(folderPath, SIGPROC_RESULTS, 'analysis.bfmask.stats')
-    filterPath = os.path.join(folderPath, SIGPROC_RESULTS, 'filterMetrics.txt')
-    alignmentSummaryPath = os.path.join(folderPath, ALIGNMENT_RESULTS, 'alignment.summary')
+    ionstats_alignment_json_path = os.path.join(folderPath, ALIGNMENT_RESULTS, 'ionstats_alignment.json')
+    ionParamsPath = os.path.join(folderPath, 'ion_params_00.json')
     primarykeyPath = os.path.join(folderPath, 'primary.key')
     BaseCallerJsonPath = os.path.join(folderPath, BASECALLER_RESULTS, 'BaseCaller.json')
-    QualityPath = os.path.join(folderPath, BASECALLER_RESULTS, 'ionstats_basecaller.json')
+    ionstats_basecaller_json_path = os.path.join(folderPath, BASECALLER_RESULTS, 'ionstats_basecaller.json')
     keyPath = os.path.join(folderPath, 'raw_peak_signal')
     uploadStatusPath = os.path.join(folderPath, 'status.txt')
 
     ret_messages = writeDbFromFiles(tfPath,
                      procPath,
                      beadPath,
-                     filterPath,
-                     alignmentSummaryPath,
+                     ionstats_alignment_json_path,
+                     ionParamsPath,
                      status,
                      keyPath,
-                     QualityPath,
+                     ionstats_basecaller_json_path,
                      BaseCallerJsonPath,
                      primarykeyPath,
-                     uploadStatusPath)
+                     uploadStatusPath,
+                     folderPath)
 
     print("messages: '%s'" % ret_messages)

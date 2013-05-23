@@ -38,7 +38,7 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision: 27453 $'|awk '{print $2}'`
+version=`echo '$Revision: 58487 $'|awk '{print $2}'`
 DEMO=0
 interactive=1
 REMOVE=0
@@ -57,7 +57,7 @@ while [ $# != 0 ]; do
             print_help
             exit 0
         ;;
-        
+
         '--version'|'-v')
             echo "`basename $0` version $version"
             if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
@@ -66,48 +66,48 @@ while [ $# != 0 ]; do
             fi
             exit 0
         ;;
-        
+
         '--debug'|'-d')
         set -x
         ;;
-        
+
         '--demo')
         DEMO=1
         ;;
-        
+
         '--address')
         shift
         proxy_addr=$1
         interactive=0
         ;;
-        
+
         '--port')
         shift
         proxy_port=$1
         interactive=0
         ;;
-        
+
         '--username')
         shift
         username=$1
         ;;
-        
+
         '--password')
         shift
         password=$1
         ;;
-        
+
         '--remove')
         REMOVE=1
         ;;
-        
+
         *)
         log "Unknown option: $1"
         echo "Unknown option: $1.  Exiting"
         echo "Use TSsetproxy --help for options."
         exit 1
         ;;
-        
+
     esac
     shift
 done
@@ -137,9 +137,13 @@ if [ $REMOVE -eq 1 ]; then
             unset http_proxy
             echo -e "\nRebooting will ensure the http_proxy environment variable is cleared.\n"
         fi
-        
+
         if [ -e /etc/apt/apt.conf ]; then
             sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
+        fi
+
+        if [ -e /etc/wgetrc ]; then
+            sed -i 's/^http_proxy.*/#&/' /etc/wgetrc
         fi
     fi
     log "$0 completed successfully"
@@ -227,7 +231,7 @@ else
         # no username provided; skip authentication
         :
     fi
-    
+
 fi
 
 if [ $DEMO -eq 1 ]; then
@@ -247,16 +251,30 @@ else
         sed -i '/http_proxy/d' $environment
     fi
 
+    if ! grep -q ^no_proxy $environment; then
+        echo "no_proxy=localhost,127.0.0.1/8" >> $environment
+    fi
+
     # = write to $environment file and reload it
     echo "http_proxy="$proxy_addr:$proxy_port >> $environment
     source $environment
     echo "http_proxy is set to "$http_proxy
-    
+
     # Edit apt.conf
     if [ -e /etc/apt/apt.conf ]; then
         sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
     fi
     echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" >> /etc/apt/apt.conf
+
+    # Edit /etc/wgetrc.  Could be either
+    # http_proxy=
+    # #http_proxy=
+    if [ -e /etc/wgetrc ]; then
+        # First, find the pattern and update the values
+        sed -i "s,\(http_proxy=\).*,\1$proxy_addr\:$proxy_port," /etc/wgetrc
+        # Second, enable if it is commented by removing the comment character
+        sed -i 's/^#\(http_proxy.*\)/\1/' /etc/wgetrc
+    fi
 fi
 log "$0 completed successfully"
 exit 0

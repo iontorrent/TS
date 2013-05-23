@@ -54,7 +54,7 @@ void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
   // set up wells data structure
   MemUsage ("BeforeWells");
   //rawWells.SetFlowChunkSize(flowChunk);
-  rawWells.SetCompression (3);
+  rawWells.SetCompression (inception_state.bkg_control.wellsCompression);
   rawWells.SetRows (numRows);
   rawWells.SetCols (numCols);
   rawWells.SetFlows (numFlows);
@@ -76,11 +76,20 @@ void OpenExistingWellsForOneChunk(RawWells &rawWells,  int start_of_chunk, int c
     rawWells.OpenForReadWrite();
 }
 
-void WriteOneChunkAndClose(RawWells &rawWells)
+
+void WriteOneChunkAndClose(RawWells &rawWells, SumTimer &timer)
 {
-    rawWells.WriteWells();
-    rawWells.Close();
+  timer.StartInterval();
+  rawWells.WriteWells();
+  timer.EndInterval();
+  rawWells.Close();
 }
+
+// void WriteOneChunkAndClose(RawWells &rawWells)
+// {
+//     rawWells.WriteWells();
+//     rawWells.Close();
+// }
 
 // our logic here:  either we are writing an entire chunk_depth
 // or we are writing to the end of the current block

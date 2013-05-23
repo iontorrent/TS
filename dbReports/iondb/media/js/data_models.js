@@ -10,20 +10,21 @@ function addCommas(nStr) {
     return x1 + x2;
 }
 
-function precisionUnits(num) {
+function precisionUnits(num, div) {
     // console.log(num + ' ' + typeof(num));
+    if (typeof div === "undefined") div = 1000;
     num = parseFloat(num);
     var postfix = "";
-    var exponent = Math.floor(Math.log(num) / Math.log(1000));
+    var exponent = Math.floor(Math.log(num) / Math.log(div));
     if (exponent >= 0) {
-        num = Math.round(100 * num / Math.pow(1000, exponent)) / 100;
+        num = Math.round(100 * num / Math.pow(div, exponent)) / 100;
     }
-    if (Math.round(num) >= 1000) {
-        num /= 1000;
+    if (Math.round(num) >= div) {
+        num /= div;
         exponent += 1;
     }
     if (exponent >= 1) {
-        postfix = "kMGTPEY"[exponent - 1];
+        postfix = "kMGTPEZY"[exponent - 1];
     }
     return num.toPrecision(3) + ' ' + postfix;
 }
@@ -38,7 +39,8 @@ $(function(){
 
     PaginatedCollection = Backbone.Collection.extend({
         initialize: function(models, options) {
-            _.bindAll(this, 'parse', 'url', 'pageInfo', 'nextPage', 'previousPage', 'filtrate', 'order_by');
+            _.bindAll(this, 'parse', 'url', 'pageInfo', 'nextPage', 'previousPage', 'filtrate', 'order_by', 
+                'goToPage', 'lastPage', 'firstPage');
             typeof(options) != 'undefined' || (options = {});
             typeof(options.limit) != 'undefined' && (this.limit = options.limit);
             typeof(this.limit) != 'undefined' || (this.limit = 20);
@@ -146,7 +148,6 @@ $(function(){
                     model.change();
                 } else {
                     console.log("Add");
-                    console.log(model);
                     model.trigger('add', model, this, options);
                 }
             }
@@ -167,19 +168,18 @@ $(function(){
         pageInfo: function() {
             var max = Math.min(this.total, this.offset + this.limit);
             
-            if (this.total == this.pages * this.limit) {
-                max = this.total;
-            }
-            
             var info = {
                 total: this.total,
                 offset: this.offset,
                 limit: this.limit,
+                page: Math.floor(this.offset / this.limit) + 1,
                 pages: Math.ceil(this.total / this.limit),
                 lower_range: this.offset + 1,
                 upper_range: max,
                 prev: false,
-                next: false
+                next: false,
+                is_first: this.offset == 0,
+                is_last: this.offset + this.limit >= this.total
             };
 
             if (this.offset > 0) {
@@ -225,6 +225,15 @@ $(function(){
             return this.fetch();
         },
 
+        goToPage: function (page) {
+            var offset = (page - 1) * this.limit;
+            if(offset >= this.total) {
+                return false;
+            }
+            this.offset = offset;
+            return this.fetch();
+        },
+
         filtrate: function (options) {
             console.log("Filtering");
             this.filter_options = options || {};
@@ -241,23 +250,52 @@ $(function(){
     
     PaginatedView = Backbone.View.extend({
         initialize: function() {
-            _.bindAll(this, 'previous', 'next', 'render');
+            _.bindAll(this, 'previous', 'next', 'render', 'first', 'last', 
+                'destroy_view', 'pageRange', 'page');
             this.collection.bind('reset', this.render);
             this.collection.bind('add', this.render);
             this.collection.bind('remove', this.render);
         },
 
         events: {
-            'click .prev': 'previous',
-            'click .next': 'next',
-            'click .first': 'first',
-            'click .last': 'last'
+            'click a.prev': 'previous',
+            'click a.next': 'next',
+            'click a.first': 'first',
+            'click a.last': 'last',
+            'click a.page': 'page'
         },
 
         template: Hogan.compile($("#pagination_template").html()),
 
         render: function () {
-            this.$el.html(this.template.render(this.collection.pageInfo()));
+            var page_info = this.collection.pageInfo();
+            page_info.page_numbers = this.pageRange(page_info);
+            console.log("Pagination");
+            console.log(page_info);
+            this.$el.html(this.template.render(page_info));
+        },
+
+        pageRange: function (info) {
+            var page_numbers = {
+                prev: null,
+                pages: [],
+                next: null
+            };
+            var lower_page = info.page - (info.page - 1) % 10;
+            var upper_page = Math.min(info.pages, lower_page + 9);
+            for(var i=lower_page; i <= upper_page; i++) {
+                page_numbers.pages.push({
+                    number: i,
+                    is_current: i == info.page
+                });
+            }
+            if(lower_page > 1) {
+                page_numbers.prev = lower_page - 1;
+            }
+            if(upper_page < info.pages) {
+                page_numbers.next = upper_page + 1;
+            }
+            return page_numbers;
         },
 
         previous: function () {
@@ -278,7 +316,23 @@ $(function(){
         last: function () {
             this.collection.lastPage();
             return false;
-        }
+        },
+        
+        page: function (event) {
+            var page = $(event.target).data("page");
+            this.collection.goToPage(page);
+            return false;
+        },
+
+        destroy_view: function() {
+            console.log("Destroying report view");
+            //COMPLETELY UNBIND THE VIEW
+            this.undelegateEvents();
+            $(this.el).removeData().unbind(); 
+            //Remove view from DOM
+            this.remove();  
+            Backbone.View.prototype.remove.call(this);
+        },
     });
 
     TastyModel = Backbone.Model.extend({
@@ -348,7 +402,8 @@ $(function(){
     RunRouter = Backbone.Router.extend({
         routes: {
             'full': 'full_view',
-            'table': 'table_view'
+            'table': 'table_view',
+            'old_table': 'old_table'
         },
 
         full_view: function () {
@@ -357,6 +412,10 @@ $(function(){
 
         table_view: function () {
             console.log("Table view!");
+        },
+
+        old_table: function () {
+            console.log("Development view!");
         }
     });
     

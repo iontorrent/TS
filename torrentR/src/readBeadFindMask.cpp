@@ -10,12 +10,12 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
     try {
 
 	// Recasting of input arguments
-	RcppStringVector  beadFindFile_temp(beadFindFile_in);
+	Rcpp::StringVector  beadFindFile_temp(beadFindFile_in);
 	std::string *beadFindFile = new std::string(beadFindFile_temp(0));
 	// x
-	RcppVector<int> x_temp(x_in);
+	Rcpp::IntegerVector x_temp(x_in);
 	uint64_t nX = x_temp.size();
-	RcppVector<int> x(nX);
+	Rcpp::IntegerVector x(nX);
 	int xMin = INT_MAX;
 	int xMax = -1;
 	int newVal = 0;
@@ -28,9 +28,9 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 		xMax = newVal;
 	}
 	// y
-	RcppVector<int> y_temp(y_in);
+	Rcpp::IntegerVector y_temp(y_in);
 	uint64_t nY = y_temp.size();
-	RcppVector<int> y(nX);
+	Rcpp::IntegerVector y(nX);
 	int yMin = INT_MAX;
 	int yMax = -1;
 	for(uint64_t i=0; i<nY; i++) {
@@ -44,23 +44,23 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
  
 	// Ensure lower bounds are positive and less than the upper bounds, then proceed to open the file
 	if(nX != nY) {
-	    exceptionMesg = copyMessageToR("x and y should be of the same length");
+	    exceptionMesg = strdup("x and y should be of the same length");
 	} else if(nX < 0) {
-	    exceptionMesg = copyMessageToR("x and y should be of posiive length");
+	    exceptionMesg = strdup("x and y should be of posiive length");
 	} else if(xMin < 0) {
-	    exceptionMesg = copyMessageToR("xMin must be positive");
+	    exceptionMesg = strdup("xMin must be positive");
 	} else if(yMin < 0) {
-	    exceptionMesg = copyMessageToR("yMin must be positive");
+	    exceptionMesg = strdup("yMin must be positive");
 	} else if(xMin > xMax) {
-	    exceptionMesg = copyMessageToR("xMin must be less than xMax");
+	    exceptionMesg = strdup("xMin must be less than xMax");
 	} else if(yMin > yMax) {
-	    exceptionMesg = copyMessageToR("yMin must be less than yMax");
+	    exceptionMesg = strdup("yMin must be less than yMax");
 	} else {
 	    FILE *fp = NULL;
 	    fp = fopen(beadFindFile->c_str(),"rb");
 	    if(!fp) {
 		std::string exception = "unable to open beadFindFile " + *beadFindFile;
-		exceptionMesg = copyMessageToR(exception.c_str());
+		exceptionMesg = strdup(exception.c_str());
 	    } else {
 		int32_t nRow = 0;
 		int32_t nCol = 0;
@@ -68,36 +68,36 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 		if ((fread (&nRow, sizeof(uint32_t), 1, fp )) != 1) {
 		    // Read number of rows (aka "y" or "height")
 		    std::string exception = "Problem reading nRow from beadFindFile" + *beadFindFile;
-		    exceptionMesg = copyMessageToR(exception.c_str());
+		    exceptionMesg = strdup(exception.c_str());
 		} else if ((fread (&nCol, sizeof(uint32_t), 1, fp )) != 1) {
 		    // Read number of cols (aka "x" or "width")
 		    std::string exception = "Problem reading nCol from beadFindFile" + *beadFindFile;
-		    exceptionMesg = copyMessageToR(exception.c_str());
+		    exceptionMesg = strdup(exception.c_str());
 		} else {
 		    // Ensure upper bounds are within range before continuing
 		    if(yMax >= nRow) {
-			exceptionMesg = copyMessageToR("yMax must be less than the number of rows");
+			exceptionMesg = strdup("yMax must be less than the number of rows");
 		    } else if(xMax >= nCol) {
-			exceptionMesg = copyMessageToR("xMax must be less than the number of cols");
+			exceptionMesg = strdup("xMax must be less than the number of cols");
 		    } else {
 			// Iterate over mask data and store out the encoded Boolean values
 			uint16_t mask = 0;
-			RcppVector<int> maskEmpty(nX);
-			RcppVector<int> maskBead(nX);
-			RcppVector<int> maskLive(nX);
-			RcppVector<int> maskDud(nX);
-			RcppVector<int> maskReference(nX);
-			RcppVector<int> maskTF(nX);
-			RcppVector<int> maskLib(nX);
-			RcppVector<int> maskPinned(nX);
-			RcppVector<int> maskIgnore(nX);
-			RcppVector<int> maskWashout(nX);
-			RcppVector<int> maskExclude(nX);
-			RcppVector<int> maskKeypass(nX);
-			RcppVector<int> maskFilteredBadKey(nX);
-			RcppVector<int> maskFilteredShort(nX);
-			RcppVector<int> maskFilteredBadPPF(nX);
-			RcppVector<int> maskFilteredBadResidual(nX);
+			Rcpp::IntegerVector maskEmpty(nX);
+			Rcpp::IntegerVector maskBead(nX);
+			Rcpp::IntegerVector maskLive(nX);
+			Rcpp::IntegerVector maskDud(nX);
+			Rcpp::IntegerVector maskReference(nX);
+			Rcpp::IntegerVector maskTF(nX);
+			Rcpp::IntegerVector maskLib(nX);
+			Rcpp::IntegerVector maskPinned(nX);
+			Rcpp::IntegerVector maskIgnore(nX);
+			Rcpp::IntegerVector maskWashout(nX);
+			Rcpp::IntegerVector maskExclude(nX);
+			Rcpp::IntegerVector maskKeypass(nX);
+			Rcpp::IntegerVector maskFilteredBadKey(nX);
+			Rcpp::IntegerVector maskFilteredShort(nX);
+			Rcpp::IntegerVector maskFilteredBadPPF(nX);
+			Rcpp::IntegerVector maskFilteredBadResidual(nX);
 			int64_t headerSkipBytes = 2 * sizeof(uint32_t);
 			int64_t dataSkipBytes = sizeof(uint16_t);
 			int64_t offset;
@@ -108,7 +108,7 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			    fseek(fp, offset, SEEK_SET);
 			    if ((fread (&mask, sizeof(uint16_t), 1, fp)) != 1) {
 				std::string exception = "Problem reading mask values from " + *beadFindFile;
-				exceptionMesg = copyMessageToR(exception.c_str());
+				exceptionMesg = strdup(exception.c_str());
 				break;
 			    } else {
 				maskEmpty(i)                = (mask & MaskEmpty) > 0;
@@ -143,34 +143,34 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 			//}
 
 			// Build result set to be returned as a list to R.
-			RcppResultSet rs;
-			rs.add("beadFindMaskFile", *beadFindFile);
-			rs.add("nCol",             nCol);
-			rs.add("nRow",             nRow);
-			rs.add("col",              x);
-			rs.add("row",              y);
-			rs.add("maskEmpty",        maskEmpty);
-			rs.add("maskBead",         maskBead);
-			rs.add("maskLive",         maskLive);
-			rs.add("maskDud",          maskDud);
-			rs.add("maskReference",    maskReference);
-			rs.add("maskTF",           maskTF);
-			rs.add("maskLib",          maskLib);
-			rs.add("maskPinned",       maskPinned);
-			rs.add("maskIgnore",       maskIgnore);
-			rs.add("maskWashout",      maskWashout);   
+            std::map<std::string,SEXP> map;
+            map["beadFindMaskFile"] = Rcpp::wrap( *beadFindFile );
+            map["nCol"]             = Rcpp::wrap( nCol );
+            map["nRow"]             = Rcpp::wrap( nRow );
+            map["col"]              = Rcpp::wrap( x );
+            map["row"]              = Rcpp::wrap( y );
+            map["maskEmpty"]        = Rcpp::wrap( maskEmpty );
+            map["maskBead"]         = Rcpp::wrap( maskBead );
+            map["maskLive"]         = Rcpp::wrap( maskLive );
+            map["maskDud"]          = Rcpp::wrap( maskDud );
+            map["maskReference"]    = Rcpp::wrap( maskReference );
+            map["maskTF"]           = Rcpp::wrap( maskTF );
+            map["maskLib"]          = Rcpp::wrap( maskLib );
+            map["maskPinned"]       = Rcpp::wrap( maskPinned );
+            map["maskIgnore"]       = Rcpp::wrap( maskIgnore );
+            map["maskWashout"]      = Rcpp::wrap( maskWashout );
 			//if(haveFiltered) {
-                rs.add("maskExclude",      maskExclude);
-                rs.add("maskKeypass",      maskKeypass);
-			    rs.add("maskFilteredBadKey",       maskFilteredBadKey);
-			    rs.add("maskFilteredShort",        maskFilteredShort);
-			    rs.add("maskFilteredBadPPF",       maskFilteredBadPPF);
-			    rs.add("maskFilteredBadResidual",  maskFilteredBadResidual);
-			//}
+              map["maskExclude"]              = Rcpp::wrap( maskExclude );
+              map["maskKeypass"]              = Rcpp::wrap( maskKeypass );
+              map["maskFilteredBadKey"]       = Rcpp::wrap( maskFilteredBadKey );
+              map["maskFilteredShort"]        = Rcpp::wrap( maskFilteredShort );
+              map["maskFilteredBadPPF"]       = Rcpp::wrap( maskFilteredBadPPF );
+              map["maskFilteredBadResidual"]  = Rcpp::wrap( maskFilteredBadResidual );
+            //}
 
 
 			// Get the list to be returned to R.
-			rl = rs.getReturnList();
+            rl = Rcpp::wrap( map ) ;
 		    }
 		}
 
@@ -181,9 +181,9 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 	delete beadFindFile;
 	
     } catch(std::exception& ex) {
-	exceptionMesg = copyMessageToR(ex.what());
+	forward_exception_to_r(ex);
     } catch(...) {
-	exceptionMesg = copyMessageToR("unknown reason");
+	::Rf_error("c++ exception (unknown reason)");
     }
     
     if(exceptionMesg != NULL)

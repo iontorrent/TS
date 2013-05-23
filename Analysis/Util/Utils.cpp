@@ -238,7 +238,7 @@ char *GetIonConfigFile (const char filename[])
 {
   char *string = NULL;
 
-  //fprintf (stdout, "# DEBUG: Looking for '%s'\n", filename);
+  fprintf (stdout, "# DEBUG: Looking for '%s'\n", filename);
   // Search for TF config file:
   //  Current working directory
   size_t bufsize = 512;
@@ -253,6 +253,7 @@ char *GetIonConfigFile (const char filename[])
   else
   {
     free (string);
+    string = NULL;
   }
 
   // Search for config file in $HOME:
@@ -270,6 +271,7 @@ char *GetIonConfigFile (const char filename[])
     else
     {
       free (string);
+      string = NULL;
     }
     //free (HOME);
   }
@@ -283,11 +285,14 @@ char *GetIonConfigFile (const char filename[])
     sprintf (string, "%s/%s", ION_CONFIG, filename);
     if (isFile (string))
     {
+      fprintf(stdout, "Found ... %s\n", string);
       return (string);
     }
     else
     {
+      fprintf(stdout,"%s is not a file \n", string);
       free (string);
+      string = NULL;
     }
     free(ION_CONFIG);
   }
@@ -305,6 +310,7 @@ char *GetIonConfigFile (const char filename[])
   sprintf (string, "%s/config/%s", INSTALL, filename);
   if (isFile (string))
   {
+    fprintf(stdout, "Found ... %s\n", string);
     return (string);
   }
   else
@@ -318,11 +324,13 @@ char *GetIonConfigFile (const char filename[])
   sprintf (string, "/opt/ion/config/%s", filename);
   if (isFile (string))
   {
+    fprintf(stdout, "Found ... %s\n", string);
     return (string);
   }
   else
   {
     free (string);
+    string = NULL;
   }
 
   // (YALDE): Yet another Ultimate last ditch: hardcoded path
@@ -330,11 +338,13 @@ char *GetIonConfigFile (const char filename[])
   sprintf (string, "/opt/ion/alignTools/%s", filename);
   if (isFile (string))
   {
+    fprintf(stdout, "Found ... %s\n", string);
     return (string);
   }
   else
   {
     free (string);
+    string = NULL;
   }
 
   fprintf (stderr, "Cannot find Ion Config file: %s\n", filename);
@@ -515,7 +525,7 @@ void defineSubRegion (int rows, int cols, int runIndex, int regionIdx, Region *c
     {
       int xinc = cols/2;
       int yinc = rows/2;
-      Region regions[regionIdx];
+   std::vector<Region> regions(regionIdx);
       int i;
       int x;
       int y;
@@ -865,6 +875,9 @@ short GetPinHigh()
     case ChipId316:
       pin_high = 0x3fff;
       break;
+    case ChipId316v2:
+      pin_high = 0x3fff;
+      break;  
     case ChipId318:
       pin_high = 0x3fff;
       break;

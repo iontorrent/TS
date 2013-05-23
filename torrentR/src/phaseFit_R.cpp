@@ -20,15 +20,15 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
     string resSummary      = Rcpp::as<string>(RresSummary);
     string fitType         = Rcpp::as<string>(RfitType);
     bool ignoreHPs         = Rcpp::as<bool>(RignoreHPs);
-    RcppStringVector   seqString(RseqString);
-    RcppMatrix<double> seqFlow(RseqFlow);
-    RcppMatrix<double> sig(Rsig);
-    RcppMatrix<double> cc(RnucConc);
-    RcppVector<double> cf(Rcf);
-    RcppVector<double> ie(Rie);
-    RcppVector<double> dr(Rdr);
-    RcppVector<double> hpScale(RhpScale);
-    RcppVector<double> flowWeight(RflowWeight);
+    Rcpp::StringVector  seqString(RseqString);
+    Rcpp::NumericMatrix seqFlow(RseqFlow);
+    Rcpp::NumericMatrix sig(Rsig);
+    Rcpp::NumericMatrix cc(RnucConc);
+    Rcpp::NumericVector cf(Rcf);
+    Rcpp::NumericVector ie(Rie);
+    Rcpp::NumericVector dr(Rdr);
+    Rcpp::NumericVector hpScale(RhpScale);
+    Rcpp::NumericVector flowWeight(RflowWeight);
 
     // This block determines if the sequence has been specified by a vector of strings
     // or by a matrix of integer flow values with one row per read
@@ -42,10 +42,10 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
     string seqSource = "";
     if((nSeqString == 0) && (nSeqFlow == 0)) {
       std::string exception = "both seqString and seqFlow specify no sequences\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if((nSeqString > 0) && (nSeqFlow > 0)) {
       std::string exception = "both seqString and seqFlow specify sequences - use only one\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(nSeqString > 0) {
       nSeq = nSeqString;
       seqSource = "String";
@@ -95,23 +95,23 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
   
     if(badDroopType) {
       std::string exception = "bad droop type supplied\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(badResidualType) {
       std::string exception = "bad residual type supplied\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(badResidualSummary) {
       std::string exception = "bad residual summary supplied\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(sig.rows() != nSeq) {
       std::string exception = "number of entries in signal vector should be equal to the number of sequences\n";
     } else if(sig.cols() != (int) nFlow) {
       std::string exception = "number of cols in signal matrix should be equal to number of flows\n";
     } else if(cc.rows() != (int) N_NUCLEOTIDES) {
       std::string exception = "concentration matrix should have 4 rows\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(cc.cols() != (int) N_NUCLEOTIDES) {
       std::string exception = "concentration matrix should have 4 columns\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
 
       // Start with typecasts of some of the inputs
@@ -173,7 +173,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
       vector<weight_vec_t> residualRaw,residualWeighted;
       float residualSummarized = 0;
       int nIter = 0;
-      RcppResultSet rs;
+      std::map<std::string,SEXP> map ;
       if(fitType == "CfIe") {
         PhaseFitCfIe pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -215,8 +215,8 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         CfIeParam param_out = pFit.GetParam();
-        rs.add("param.cf", param_out.cf);
-        rs.add("param.ie", param_out.ie);
+        map["param.cf"] = Rcpp::wrap( param_out.cf );
+        map["param.ie"] = Rcpp::wrap( param_out.ie );
       } else if (fitType == "CfIeDr") {
         PhaseFitCfIeDr pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -261,9 +261,9 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         CfIeDrParam param_out = pFit.GetParam();
-        rs.add("param.cf", param_out.cf);
-        rs.add("param.ie", param_out.ie);
-        rs.add("param.dr", param_out.dr);
+        map["param.cf"] = Rcpp::wrap( param_out.cf );
+        map["param.ie"] = Rcpp::wrap( param_out.ie );
+        map["param.dr"] = Rcpp::wrap( param_out.dr );
       } else if (fitType == "CfIeDrHpScale") {
         PhaseFitCfIeDrHpScale pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -311,10 +311,10 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         CfIeDrHpScaleParam param_out = pFit.GetParam();
-        rs.add("param.cf",      param_out.cf);
-        rs.add("param.ie",      param_out.ie);
-        rs.add("param.dr",      param_out.dr);
-        rs.add("param.hpScale", param_out.hpScale);
+        map["param.cf"]      = Rcpp::wrap( param_out.cf );
+        map["param.ie"]      = Rcpp::wrap( param_out.ie );
+        map["param.dr"]      = Rcpp::wrap( param_out.dr );
+        map["param.hpScale"] = Rcpp::wrap( param_out.hpScale );
       } else if (fitType == "HpScale") {
         PhaseFitHpScale pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -353,7 +353,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         HpScaleParam param_out = pFit.GetParam();
-        rs.add("param.hpScale", param_out.hpScale);
+        map["param.hpScale"]      = Rcpp::wrap( param_out.hpScale );
       } else if (fitType == "CfIeDrHpScale4") {
         if(hpScaleMod.size()==1) {
           hpScaleMod.assign(4,hpScaleMod.front());
@@ -413,15 +413,15 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         CfIeDrHpScale4Param param_out = pFit.GetParam();
-        rs.add("param.cf",      param_out.cf);
-        rs.add("param.ie",      param_out.ie);
-        rs.add("param.dr",      param_out.dr);
-        RcppVector<double> out_hpScale(N_NUCLEOTIDES);
+        map["param.cf"]      = Rcpp::wrap( param_out.cf );
+        map["param.ie"]      = Rcpp::wrap( param_out.ie );
+        map["param.dr"]      = Rcpp::wrap( param_out.dr );
+        Rcpp::NumericVector out_hpScale(N_NUCLEOTIDES);
         out_hpScale(0) = param_out.hpScaleA;
         out_hpScale(1) = param_out.hpScaleC;
         out_hpScale(2) = param_out.hpScaleG;
         out_hpScale(3) = param_out.hpScaleT;
-        rs.add("param.hpScale", out_hpScale);
+        map["param.hpScale"] = Rcpp::wrap( out_hpScale );
       } else if (fitType == "HpScale4") {
         if(hpScaleMod.size()==1) {
           hpScaleMod.assign(4,hpScaleMod.front());
@@ -472,12 +472,12 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         HpScale4Param param_out = pFit.GetParam();
-        RcppVector<double> out_hpScale(N_NUCLEOTIDES);
+        Rcpp::NumericVector out_hpScale(N_NUCLEOTIDES);
         out_hpScale(0) = param_out.hpScaleA;
         out_hpScale(1) = param_out.hpScaleC;
         out_hpScale(2) = param_out.hpScaleG;
         out_hpScale(3) = param_out.hpScaleT;
-        rs.add("param.hpScale", out_hpScale);
+        map["param.hpScale"] = Rcpp::wrap( out_hpScale );
       } else if (fitType == "NucContam") {
         PhaseFitNucContam pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -549,7 +549,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // retrieve parameter estimates
         NucContamParam param_out = pFit.GetParam();
-        RcppMatrix<double> conc_out(N_NUCLEOTIDES,N_NUCLEOTIDES);
+        Rcpp::NumericMatrix conc_out(N_NUCLEOTIDES,N_NUCLEOTIDES);
         for(unsigned int iNuc=0; iNuc < N_NUCLEOTIDES; iNuc++)
           conc_out(iNuc,iNuc) = 1;
         conc_out(0,1) = param_out.C_in_A;
@@ -564,7 +564,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
         conc_out(3,0) = param_out.A_in_T;
         conc_out(3,1) = param_out.C_in_T;
         conc_out(3,2) = param_out.G_in_T;
-        rs.add("param.conc", conc_out);
+        map["param.conc"] = Rcpp::wrap( conc_out );
       } else if (fitType == "NucContamIe") {
         PhaseFitNucContamIe pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -640,7 +640,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
         // retrieve parameter estimates
         NucContamIeParam param_out = pFit.GetParam();
         double ie_out = param_out.ie;
-        RcppMatrix<double> conc_out(N_NUCLEOTIDES,N_NUCLEOTIDES);
+        Rcpp::NumericMatrix conc_out(N_NUCLEOTIDES,N_NUCLEOTIDES);
         for(unsigned int iNuc=0; iNuc < N_NUCLEOTIDES; iNuc++)
           conc_out(iNuc,iNuc) = 1;
         conc_out(0,1) = param_out.C_in_A;
@@ -655,8 +655,8 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
         conc_out(3,0) = param_out.A_in_T;
         conc_out(3,1) = param_out.C_in_T;
         conc_out(3,2) = param_out.G_in_T;
-        rs.add("param.ie",   ie_out);
-        rs.add("param.conc", conc_out);
+        map["param.ie"]   = Rcpp::wrap( ie_out );
+        map["param.conc"] = Rcpp::wrap( conc_out );
       } else if (fitType == "CfIe4") {
         PhaseFitCfIe4 pFit;
         pFit.SetExtraTaps(extraTaps);
@@ -713,38 +713,38 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Retrieve parameter estimates
         CfIe4Param param_out = pFit.GetParam();
-        rs.add("param.cf", param_out.cf);
-        RcppVector<double> ie_out(N_NUCLEOTIDES);
+        map["param.cf"] = Rcpp::wrap( param_out.cf );
+        Rcpp::NumericVector ie_out(N_NUCLEOTIDES);
         ie_out(0) = param_out.ieA;
         ie_out(1) = param_out.ieC;
         ie_out(2) = param_out.ieG;
         ie_out(3) = param_out.ieT;
-        rs.add("param.ie", ie_out);
+        map["param.ie"] = Rcpp::wrap( ie_out );
       } else {
         std::string exception = "bad droop type supplied\n";
-        exceptionMesg = copyMessageToR(exception.c_str());
+        exceptionMesg = strdup(exception.c_str());
       }
 
       // Add some other outputs to the returned data
-      rs.add("nIter", nIter);
-      rs.add("residualSummarized", residualSummarized);
-      RcppMatrix<double> residualRaw_out(nSeq,nFlow);
-      RcppMatrix<double> residualWeighted_out(nSeq,nFlow);
+      map["nIter"] = Rcpp::wrap( nIter );
+      map["residualSummarized"] = Rcpp::wrap( residualSummarized );
+      Rcpp::NumericMatrix residualRaw_out(nSeq,nFlow);
+      Rcpp::NumericMatrix residualWeighted_out(nSeq,nFlow);
       for(int iRead=0; iRead < nSeq; iRead++) {
         for(unsigned int iFlow=0; iFlow < nFlow; iFlow++) {
           residualRaw_out(iRead,iFlow)      = (double) residualRaw[iRead][iFlow];
           residualWeighted_out(iRead,iFlow) = (double) residualWeighted[iRead][iFlow];
         }
       }
-      rs.add("residualRaw", residualRaw_out);
-      rs.add("residualWeighted", residualWeighted_out);
+      map["residualRaw"] = Rcpp::wrap( residualRaw_out );
+      map["residualWeighted"] = Rcpp::wrap( residualWeighted_out );
 
-      ret = rs.getReturnList();
+      ret = Rcpp::wrap( map ) ;
     }
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

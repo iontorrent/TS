@@ -43,14 +43,6 @@ class AcqMovie {
 };
 
 
-/* shared mem sem.h */
-typedef struct Image_semaphore {
-    pthread_mutex_t lock;
-    pthread_cond_t nonzero;
-    unsigned count;
-    pthread_t owner;
-}Image_semaphore_t;
-
 class Image : public AcqMovie
 {
 public:
@@ -140,7 +132,7 @@ public:
     void SetDir ( const char* directory );
     int  FilterForPinned ( Mask *mask, MaskType these, int markBead = 0 );
 
-    void SetMeanOfFramesToZero ( int startPos, int endPos );
+    void SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed_frame_nums=0 );
     // void SubtractImage(Image *sub);
     void SubtractLocalReferenceTrace ( Mask *mask, MaskType apply_to_these, MaskType derive_from_these, int inner, int outer, bool bkg = false, bool onlyBkg = false, bool replaceWBkg = false );
     void SubtractLocalReferenceTrace ( Mask *mask, MaskType apply_to_these, MaskType derive_from_these, int innerx, int innery, int outerx, int outery, bool bkg = false, bool onlyBkg = false, bool replaceWBkg = false );
@@ -271,7 +263,6 @@ public:
 
     RawImage *raw;    // the raw image
     char   *results_folder;  // really the directory
-    static Image_semaphore_t *Image_SemPtr;
 
 protected:
     double  *results;   // working memory filled with results from various methods
@@ -290,6 +281,8 @@ protected:
     float *smooth_max_amplitude;
 
 };
+
+double TinyTimer();
 
 // prototype for deInterlace.cpp
 

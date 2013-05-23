@@ -5,6 +5,7 @@
 #include "Image.h"
 #include <vector>
 #include "Serialization.h"
+#include "SynchDat.h"
 
 // keeps track of well pinning across all flows
 // Every well is unpinned until it becomes pinned in a flow,
@@ -16,7 +17,8 @@ class PinnedInFlow
   virtual ~PinnedInFlow();
 
   virtual void Initialize (Mask *maskPtr);
-  virtual int Update(int flow, AcqMovie *img);
+  virtual int Update(int flow, Image *img, float *gainPtr);
+  virtual int Update (int flow, class SynchDat *img, float *gainPtr);
 
   void UpdateMaskWithPinned (Mask *maskPtr);
   short *Pins() { return (&mPinnedInFlow[0]); };
@@ -27,6 +29,7 @@ class PinnedInFlow
   int GetPinnedCount (int flow) { return (mPinsPerFlow[flow]); };
 
   void DumpSummaryPinsPerFlow (char *experimentName);
+  inline void SetPinned(int idx, int flow);
 
  protected:
    // array that tracks first occurrence of pinning per well
@@ -34,6 +37,7 @@ class PinnedInFlow
   int mNumWells;      // number of wells
   int mNumFlows;      // number of flows
   std::vector<int> mPinsPerFlow;  // per flow count of pinned wells
+
 
  private:
   PinnedInFlow(){ mNumWells=0; mNumFlows=0;} // don't use

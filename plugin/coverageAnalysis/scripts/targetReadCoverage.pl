@@ -109,7 +109,7 @@ open( MAPPINGS, "samtools view $samopt -L \"$bedfile\" \"$bamfile\" |" )
 while( <MAPPINGS> )
 {
   next if(/^@/);
-  my ($rid,$flag,$chrid,$srt,$scr,$cig) = split;
+  my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
   my $end = $srt-1;
   my $rev = $flag & 16;
   # set up arrays for new contig (to avoid repeated hash-lookups)
@@ -226,11 +226,11 @@ open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
 while( <BEDFILE> )
 {
   chomp;
-  my @fields = split("\t",$_);
+  my @fields = split('\t',$_);
   my $chrid = $fields[0];
   next if( $chrid !~ /\S/ );
   # silently ignore extra tracks and duplicate amplicons this time
-  if( $chrid =~ /^track/ )
+  if( $chrid =~ /^track / )
   {
     last if( ++$numTracks > 1 );
     print "$_\n" if( $bedout );
@@ -293,7 +293,7 @@ sub loadBedRegions
   {
     my ($chrid,$srt,$end) = split('\t',$_);
     next if( $chrid !~ /\S/ );
-    if( $chrid =~ /^track/ )
+    if( $chrid =~ /^track / )
     {
       ++$numTracks;
       if( $numTracks > 1 )
@@ -324,22 +324,22 @@ sub loadBedRegions
       exit 1;
     }
     # Anticipate overlapping regions here and only warn for obscured regions
+    $lastSrt = $srt;
     if( $srt <= $lastEnd )
     {
       if( $srt == $lastSrt && $end == $lastEnd )
       {
         ++$numWarn;
         print STDERR "Warning: Region $chrid:$srt-$end is a repeat - skipping.\n" if( $bedwarn );
+        $lastEnd = $end;
         next;
       }
       if( $end <= $lastEnd )
       {
         ++$numWarn;
         print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
-        #next;
       }
     }
-    $lastSrt = $srt;
     $lastEnd = $end;
     ++$numTargets;
     push( @{$targSrts{$chrid}}, $srt );

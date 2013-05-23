@@ -21,6 +21,7 @@ import os
 import os.path
 import httplib
 import mimetypes
+import shutil
 
 from tastypie.bundle import Bundle
 
@@ -179,7 +180,7 @@ def write_plupload(request, pub_name):
                 upload = move_upload(pub, dest_path, name, request.REQUEST['meta'])
                 async_upload = run_pub_scripts.delay(pub, upload)
             except Exception as err:
-                logger.error(str(err))
+                logger.exception("There was a problem during upload of a file for a publisher.")
             else:
                 logger.info("Successfully pluploaded %s" % name)
 
@@ -209,7 +210,7 @@ def new_upload(pub, file_name, meta_data=None):
 
 def move_upload(pub, file_path, file_name, meta_data=None):
     upload = new_upload(pub, file_name, meta_data)
-    os.rename(file_path, upload.file_path)
+    shutil.move(file_path, upload.file_path)
     upload.status = "Queued for processing"
     upload.save()
     return upload

@@ -18,7 +18,7 @@
 #include <sstream>
 #include <sstream>
 #include <sys/time.h>
-#include <emmintrin.h>
+#include <x86intrin.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include "DeltaCompFstSmX.h"

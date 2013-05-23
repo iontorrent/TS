@@ -78,9 +78,9 @@ open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
 while( <BEDFILE> )
 {
   chomp;
-  @fields = split;
+  @fields = split('\t',$_);
   next if( $fields[0] !~ /\S/ );
-  if( $fields[0] eq "track" )
+  if( $fields[0] =~ /^track / )
   {
     ++$numTracks;
     if( $numTracks > 1 )
@@ -145,7 +145,7 @@ while( <BEDFILE> )
   {
     my $f = $exFields[$i]-1;
     next if( $f < 0 );
-    print "\t$fields[$exFields[$i]-1]";
+    print "\t$fields[$f]";
   }
   print "\t$gc\n";
 }

@@ -52,10 +52,10 @@ from iondb.rundb import tasks
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
 from iondb.utils.crawler_utils import getFlowOrder
-from iondb.utils.crawler_utils import folder_mtime
+from iondb.utils.crawler_utils import folder_mtime, explog_time
 from iondb.utils.crawler_utils import tdelt2secs
 
-__version__ = filter(str.isdigit, "$Revision: 48113 $")
+__version__ = filter(str.isdigit, "$Revision: 57230 $")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -198,10 +198,138 @@ def extract_prefix(folder):
     return os.path.dirname(os.path.dirname(folder))
 
 
+def get_planned_exp_objects(d, folder):
+    '''
+    Find pre-created Plan, Experiment and ExperimentAnalysisSettings objects.
+    If not found, create from system default templates.
+    '''
+    planObj = None
+    expObj = None
+    easObj = None
+
+    expName = d.get("experiment_name", '')
+
+    # Check if User selected Plan on instrument: explog contains guid or shortId
+    selectedPlanGUId = d.get("planned_run_guid", '')
+
+    planShortId = d.get("planned_run_short_id", '')
+    if (planShortId is None or len(planShortId) == 0):
+        planShortId = d.get("pending_run_short_id", '')
+
+    logger.errors.debug("...planShortId=%s; selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))
+
+    # Find selected Plan
+    if selectedPlanGUId:
+        try:
+            planObj = models.PlannedExperiment.objects.get(planGUID=selectedPlanGUId)
+        except models.PlannedExperiment.DoesNotExist:
+            logger.errors.warn("No plan with GUId %s found in database " % selectedPlanGUId)
+        except models.PlannedExperiment.MultipleObjectsReturned:
+            logger.errors.warn("Multiple plan with GUId %s found in database " % selectedPlanGUId)
+    elif planShortId:
+        # Warning: this is NOT guaranteed to be unique in db!
+        try:
+            planObj = models.PlannedExperiment.objects.filter(planShortID=planShortId, planExecuted=True).order_by("-date")[0]
+        except IndexError:
+            logger.errors.warn("No plan with short id %s and planExecuted=True found in database " % planShortId)
+
+    if planObj:
+        try:
+            expObj = planObj.experiment
+            easObj = expObj.get_EAS()
+
+            # Make sure this plan is not already used by an existing experiment!
+            if expObj.status == 'run':
+                logger.errors.info('WARNING: Plan %s is already associated to an experiment, a copy will be created' % planObj.pk)
+                planObj.pk = None
+                planObj.save()
+
+                expObj.pk = None
+                expObj.unique = folder
+                expObj.plan = planObj
+                expObj.save()
+
+                easObj.pk = None
+                easObj.experiment = expObj
+                easObj.save()
+
+        except:
+            logger.errors.warn(traceback.format_exc())
+            logger.errors.warn("Error in trying to retrieve experiment and eas for planName=%s, pk=%s" % (planObj.planName, planObj.pk))
+    else:
+    #if user does not use a plan for the run, fetch the system default plan template, and clone it for this run
+        logger.errors.warn("expName: %s not yet in database and needs a sys default plan" % expName)
+        try:
+            explogChipType = d.get('chiptype','')
+            systemDefaultPlanTemplate = None
+
+            if explogChipType:
+                systemDefaultPlanTemplate = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(explogChipType)
+
+            if not systemDefaultPlanTemplate:
+                logger.errors.debug("Chip-specific system default plan template not found in database for chip=%s; experiment=%s" % (explogChipType, expName))
+                systemDefaultPlanTemplate = models.PlannedExperiment.get_latest_plan_or_template_by_chipType()
+
+            logger.errors.debug("Use system default plan template=%s for chipType=%s in experiment=%s" % (systemDefaultPlanTemplate.planDisplayedName, explogChipType, expName))
+            
+            # copy Plan
+            currentTime = datetime.datetime.now()
+            
+            planObj = copy.copy(systemDefaultPlanTemplate)
+            planObj.pk = None
+            planObj.planGUID = None
+            planObj.planShortID = None
+            planObj.isReusable = False
+            planObj.isSystem = False
+            planObj.isSystemDefault = False
+            planObj.planName = "CopyOfSystemDefault_" + expName
+            planObj.planDisplayedName = planObj.planName   
+            planObj.planStatus = 'run'            
+            planObj.planExecuted = True  
+            planObj.date = currentTime      
+            planObj.save()
+
+            # copy Experiment
+            expObj = copy.copy(systemDefaultPlanTemplate.experiment)
+            expObj.pk = None
+            expObj.unique = folder
+            expObj.plan = planObj
+            expObj.date = currentTime                  
+            expObj.save()
+
+            # copy EAS
+            easObj = systemDefaultPlanTemplate.experiment.get_EAS()
+            easObj.pk = None
+            easObj.experiment = expObj
+            easObj.isEditable = True
+            easObj.date = currentTime      
+            easObj.save()
+
+            logger.errors.debug("cloned systemDefaultPlanTemplate: planObj.pk=%s; easObj.pk=%s; expObj.pk=%s" % (planObj.pk, easObj.pk, expObj.pk))
+
+            #clone the qc thresholds as well
+            qcValues = systemDefaultPlanTemplate.plannedexperimentqc_set.all()
+
+            for qcValue in qcValues:
+                qcObj = copy.copy(qcValue)
+
+                qcObj.pk = None
+                qcObj.plannedExperiment = planObj
+                qcObj.save()
+
+            logger.errors.info("crawler (using template=%s) AFTER SAVING SYSTEM DEFAULT CLONE %s for experiment=%s;" % (systemDefaultPlanTemplate.planDisplayedName, planObj.planName, expName))
+
+        except:
+            logger.errors.warn(traceback.format_exc())
+            logger.errors.warn("Error in trying to clone system default plan template for experiment=%s" % (expName))
+
+    return planObj, expObj, easObj
+
 def exp_kwargs(d, folder):
     """Converts the output of `parse_log` to the a dictionary of
-    keyword arguments needed to create an ``Experiment`` database object. """
-    identical_fields = ("sample", "library", "cycles", "flows",)
+    keyword arguments needed to create an ``Experiment`` database object.
+    """
+    identical_fields = ("sample", "cycles", "flows", "project",)
     simple_maps = (
         ("experiment_name", "expName"),
         ("chiptype", "chipType"),
@@ -210,9 +338,10 @@ def exp_kwargs(d, folder):
         ##("seqbarcode", "seqKitBarcode"),
         ("autoanalyze", "autoAnalyze"),
         ("prebeadfind", "usePreBeadfind"),
-        ##("librarykeysequence", "libraryKey"),
-        ("barcodeid", "barcodeId"),
+        ("librarykeysequence", "libraryKey"),
+        ("barcodeid", "barcodeKitName"),
         ("isReverseRun", "isReverseRun"),
+        ("library", "reference"),
     )
     full_maps = (
         ("pgmName", d.get('devicename', extract_rig(folder))),
@@ -220,16 +349,14 @@ def exp_kwargs(d, folder):
         ("expDir", folder),
         ("unique", folder),
         ("baselineRun", d.get("runtype") == "STD" or d.get("runtype") == "Standard"),
-        ("date", folder_mtime(folder)),
+        ("date", explog_time(d.get("start_time", ""), folder)),
         ("storage_options", models.GlobalConfig.objects.all()[0].default_storage_options),
         ("flowsInOrder", getFlowOrder(d.get("image_map", ""))),
         ("reverse_primer", d.get('reverse_primer', 'Ion Kit')),
     )
 
-    derive_attribute_list = ["libraryKey", "reverselibrarykey", "forward3primeadapter",
-                             "reverse3primeadapter", "sequencekitname", "seqKitBarcode",
-                             "sequencekitbarcode", "librarykitname", "librarykitbarcode",
-                             "runMode"]
+    derive_attribute_list = ["sequencekitname", "seqKitBarcode", "sequencekitbarcode",
+                             "libraryKitName", "libraryKitBarcode"]
 
     ret = {}
     for f in identical_fields:
@@ -255,8 +382,8 @@ def exp_kwargs(d, folder):
         ret['flows'] = len(ret['flowsInOrder']) * int(ret['cycles'])
         logger.errors.warn("Flows keyword missing: Calculated Flows is %d" % int(ret['flows']))
 
-    if ret['barcodeId'].lower() == 'none':
-        ret['barcodeId'] = ''
+    if ret['barcodeKitName'].lower() == 'none':
+        ret['barcodeKitName'] = ''
 
     if len(d.get('blocks', [])) > 0:
         ret['rawdatastyle'] = 'tiled'
@@ -275,18 +402,6 @@ def exp_kwargs(d, folder):
     else:
         ret['rawdatastyle'] = 'single'
 
-    planShortId = d.get("planned_run_short_id", '')
-
-    #fix [TS-3064] for PGM backward compatibility
-    if (planShortId is None or len(planShortId) == 0):
-        planShortId = d.get("pending_run_short_id", '')
-
-    selectedPlanGUId = d.get("planned_run_guid", '')
-
-    logger.errors.debug("...planShortId=%s; selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))
-    print 'crawler: plannedRunShortId=', planShortId
-    print 'crawler: plannedRunGUId=', selectedPlanGUId
-
     sequencingKitName = d.get("seqkitname", '')
     if sequencingKitName != "NOT_SCANNED":
         ret['sequencekitname'] = sequencingKitName
@@ -297,302 +412,27 @@ def exp_kwargs(d, folder):
         ret['seqKitBarcode'] = sequencingKitBarcode
         ret['sequencekitbarcode'] = sequencingKitBarcode
 
-    libraryKitName = d.get('libkit', '')
-    if libraryKitName != "NOT_SCANNED":
-        ret['librarykitname'] = libraryKitName
-
     libraryKitBarcode = d.get("libbarcode", '')
     if libraryKitBarcode != "NOT_SCANNED":
-        ret['librarykitbarcode'] = libraryKitBarcode
+        ret['libraryKitBarcode'] = libraryKitBarcode
+
+    libraryKitName = d.get('libkit', '')
+    if libraryKitName != "NOT_SCANNED":
+        ret['libraryKitName'] = libraryKitName
 
     ##note: if PGM is running the old version, there is no isReverseRun in explog.txt.
     isReverseRun = d.get("isreverserun", '')
     if isReverseRun == "Yes":
         ret['isReverseRun'] = True
-        ret['reverselibrarykey'] = ''
-        ret["runMode"] = "pe"
-
-        logger.errors.warn("PAIRED-END is NO LONGER SUPPORTED. Skipping experiment %s" % ret['expName'])
-        return ret, False
-    
-    #Rules for applying the library key overrides:
-    #1) If plan is used and library key is specified, use that value
-    #2) Otherwise, if user has specified one on PGM's advanced page
-    #   Validation required:
-    #   Why: It could be left-over from a previous run and is not compatible with current run)
-    #   How: It has to be pre-defined in db and is in the direction of the the new run.
-    #   What: If it passes validation, use it
-    #3) Otherwise, use system default for that direction
-    #4) If plan is NOT used, and user has specified one in PGM's advanced page, do validation as above
-    #5) If it passes validation, use it
-    #6) Otherwise, use system default for that direction as defined in db
-    #7) If the system default somehow has no value, we'll use the library key from
-    #   PGM's advanced setup page
-    isPlanFound = False
-    planObj = None
-    if selectedPlanGUId:
-        try:
-            planObj = models.PlannedExperiment.objects.get(planGUID=selectedPlanGUId)
-            isPlanFound = True
-            ret["runMode"] = planObj.runMode
-
-            expName = d.get("experiment_name", '')
-            #fix TS-4714: fail-safe measure, mark the plan executed if instrument somehow does not mark it as executed
-            if (not planObj.planExecuted):
-                logger.errors.warn("REPAIR: marking plan %s as executed for experiment %s" % (planObj.planGUID, expName))
-                planObj.planExecuted = True
-
-            planObj.expName = expName
-            planObj.save()
-
-        except models.PlannedExperiment.DoesNotExist:
-            logger.errors.warn("No plan with GUId %s found in database " % selectedPlanGUId)
-        except models.PlannedExperiment.MultipleObjectsReturned:
-            logger.errors.warn("Multiple plan with GUId %s found in database " % selectedPlanGUId)
-    else:
-        if (planShortId and len(planShortId) > 0):
-            try:
-                #PGM should have set the plan as executed already
-                #note: if instrument does not include plan GUID for the plan and does not mark the plan as executed,
-                #crawler will not do any repair (to mark a plan as executed) and actually indexError will likely happen
-                planObj = models.PlannedExperiment.objects.filter(planShortID=planShortId, planExecuted=True).order_by("-date")[0]
-                isPlanFound = True
-                ret["runMode"] = planObj.runMode
-
-                planObj.expName = d.get("experiment_name", '')
-                planObj.save()
-
-                logger.errors.debug("...planShortId=%s is for runMode=%s; reverse=%s" % (planShortId, planObj.runMode, planObj.isReverseRun))
-            except IndexError:
-                logger.errors.warn("No plan with short id %s found in database " % planShortId)
-
-    if not isPlanFound:
-        #if user does not use a plan for the run, fetch the system default plan template, and clone it for this run
-
-        isNeedSystemDefaultTemplate = False
-        experiment = None
-
-        #if we have already saved the experiment to db, and is using the cloned system default plan, explog will
-        #not know that
-        try:
-            experiment = models.Experiment.objects.get(expName=d.get("experiment_name", ''))
-
-            logger.errors.debug("crawler experiment already exists!! name=%s" % (d.get("experiment_name", '')))
-
-        except models.Experiment.DoesNotExist:
-            logger.errors.warn("expName: %s not yet in database and may need a sys default plan" % d.get("experiment_name", ''))
-
-            #fix TS-4713 if a system default has somehow been cloned for this run, don't bother to clone again
-            try:
-                sysDefaultClones = models.PlannedExperiment.objects.filter(expName=d.get("experiment_name", ''))
-
-                if sysDefaultClones:
-                    #logger.errors.debug("SKIP cloning system default plan for %s since one already exists " % (d.get("experiment_name", '')))
-                    isNeedSystemDefaultTemplate = False
-                else:
-                    isNeedSystemDefaultTemplate = True
-            except:
-                logger.errors.warn(traceback.format_exc())
-                isNeedSystemDefaultTemplate = False
-        except models.Experiment.MultipleObjectsReturned:
-            #this should not happen since instrument assign uniques run name. But if it happens, don't bother to apply the
-            #system default plan template to the experiment
-            logger.errors.warn("multiple expName: %s found in database" % d.get("experiment_name", ''))
-            isNeedSystemDefaultTemplate = False
-
-        if isNeedSystemDefaultTemplate is True:
-            try:
-                explogChipType = ret['chipType'][:3]
-
-                systemDefaultPlanTemplate = models.PlannedExperiment.objects.filter(isReusable=True, isSystem=True, isSystemDefault=True, chipType = None).order_by("-date")[0]
-
-                try:
-                    if explogChipType:
-                        chipSystemDefaultPlanTemplate = models.PlannedExperiment.objects.filter(isReusable=True, isSystem=True, isSystemDefault=True, chipType=explogChipType).order_by("-date")[0]
-                        systemDefaultPlanTemplate = chipSystemDefaultPlanTemplate
-                        logger.errors.debug("Chip-specific system default plan template found in database for chip=%s; experiment=%s" % (explogChipType, d.get("experiment_name", '')))
-                except IndexError:
-                    logger.errors.debug("No chip-specific system default plan template found in database for chip=%s; experiment=%s. Going to use generic system default template instead." % (explogChipType, d.get("experiment_name", '')))
-
-                planObj = copy.copy(systemDefaultPlanTemplate)
-                planObj.pk = None
-                planObj.planGUID = None
-                planObj.planShortID = None
-                planObj.isReusable = False
-                planObj.isSystem = False
-                planObj.isSystemDefault = False
-
-                #fix TS-4664: include experiment name to system default clone
-                expName = d.get("experiment_name", '')
-                planObj.planName = "CopyOfSystemDefault_" + expName
-                planObj.expName = expName
-
-                planObj.planExecuted = True
-                
-                if not planObj.chipType:
-                    planObj.chipType = ""
-                    
-                planObj.save()
-
-                #clone the qc thresholds as well
-                qcValues = systemDefaultPlanTemplate.plannedexperimentqc_set.all()
-
-                for qcValue in qcValues:
-                    qcObj = copy.copy(qcValue)
-
-                    qcObj.pk = None
-                    qcObj.plannedExperiment = planObj
-                    qcObj.save()
-
-                logger.errors.info("crawler AFTER SAVING SYSTEM DEFAULT CLONE %s for experiment=%s;" % (planObj.planName, expName))
-                isPlanFound = True
-                ret["runMode"] = planObj.runMode
-
-            except IndexError:
-                logger.errors.warn("No system default plan template found in database ")
-            except:
-                logger.errors.warn(traceback.format_exc())
-                logger.errors.warn("Error in trying to use system default plan template for experiment=%s" % (d.get("experiment_name", '')))
-
-    # planObj is initialized as None, which is an acceptable foreign key value
-    # for Experiment.plan; however, by this point, we have either found a plan
-    # or created one from the default plan template, so there should be a plan
-    # and in all three cases, None, found plan, and default plan, we're ready
-    # to commit the plan object to the Experiment.plan foreign key relationship.
-    ret["plan"] = planObj
-
-    #if PGM is running the old version, there is no isReverseRun in explog.txt. Check the plan if used
-    if not isReverseRun:
-        if isPlanFound:
-            if planObj.isReverseRun:
-                isReverseRun = "Yes"
-            else:
-                isReverseRun = "No"
-
-    if isReverseRun == "Yes":
-        ret['isReverseRun'] = True
-        ret['reverselibrarykey'] = ''
-        ret["runMode"] = "pe"
-
-        logger.errors.warn("PAIRED-END is NO LONGER SUPPORTED. Skipping experiment %s" % ret['expName'])
-        return ret, False
     else:
         ret['isReverseRun'] = False
-        ret['libraryKey'] = ''
 
-        if isPlanFound is False:
-            ret["runMode"] = "single"
-
-        defaultPairedEndForward3primeAdapter = None
-        try:
-            #Note: In v3.0, plan has concept of "runMode".
-            #TS-4524: allow crawler to be more tolerant, especially PE 3' adapter is only used for PE run
-            defaultPairedEndForward3primeAdapter = models.ThreePrimeadapter.objects.get(direction="Forward", name__iexact="Ion Paired End Fwd")
-
-        except models.ThreePrimeadapter.DoesNotExist:
-            logger.errors.warn("No default pairedEnd forward 3' adapter in database for experiment %s" % ret['expName'])
-        except models.ThreePrimeadapter.MultipleObjectsReturned:
-            logger.errors.warn("Multiple default pairedEnd forward 3' adapters found in database for experiment %s" % ret['expName'])
-
-        try:
-            #NOTE: In v2.2, there is no way to tell if a run (aka an experiment) is part of a paired-end forward run or not
-            defaultForwardLibraryKey = models.LibraryKey.objects.get(direction='Forward', isDefault=True)
-            defaultForward3primeAdapter = models.ThreePrimeadapter.objects.get(direction='Forward', isDefault=True)
-
-            validatedPgmLibraryKey = None
-            dbPgmLibraryKey = None
-            pgmLibraryKey = d.get("librarykeysequence", '')
-            #logger.errors.debug("...pgmLibraryKey is %s " % pgmLibraryKey)
-
-            hasPassed = False
-            if pgmLibraryKey is None or len(pgmLibraryKey) == 0:
-                #logger.errors.debug("...pgmLibraryKey not specified. ")
-                hasPassed = False
-            else:
-                dbPgmLibraryKeys = models.LibraryKey.objects.filter(sequence=pgmLibraryKey)
-
-                if dbPgmLibraryKeys:
-                    for dbKey in dbPgmLibraryKeys:
-                        if dbKey.direction == "Forward":
-                            #logger.errors.debug("...pgmLibraryKey %s has been validated for forward run" % pgmLibraryKey)
-                            validatedPgmLibraryKey = dbKey
-                            hasPassed = True
-                            break
-                else:
-                    hasPassed = False
-
-            #set default in case plan is not used or not found in db
-            if hasPassed:
-                #logger.errors.debug("...Default for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
-
-                ret['libraryKey'] = validatedPgmLibraryKey.sequence
-            else:
-                #logger.errors.debug("...Default for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
-
-                ret['libraryKey'] = defaultForwardLibraryKey.sequence
-
-            ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
-
-            if isPlanFound:
-                #logger.errors.debug("...FORWARD plan is FOUND for planShortId=%s " % planShortId)
-
-                if planObj.libraryKey:
-                    #logger.errors.debug("...Plan used for forward run. Use plan library key=%s " % planObj.libraryKey)
-
-                    ret['libraryKey'] = planObj.libraryKey
-                else:
-                    if hasPassed:
-                        #logger.errors.debug("...Plan used for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
-
-                        ret['libraryKey'] = validatedPgmLibraryKey.sequence
-                    else:
-                        #logger.errors.debug("...Plan used for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
-
-                        ret['libraryKey'] = defaultForwardLibraryKey.sequence
-
-                if planObj.forward3primeadapter:
-                    ret['forward3primeadapter'] = planObj.forward3primeadapter
-                else:
-                    if (planObj.runMode == "pe"):
-                        if defaultPairedEndForward3primeAdapter:
-                            ret['forward3primeadapter'] = defaultPairedEndForward3primeAdapter.sequence
-                        else:
-                            ret['forward3primeadapter'] = ""
-                    else:
-                        ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
-            else:
-                if hasPassed:
-                    #logger.errors.debug("...Plan used but not on db for forward run. Use PGM library key=%s " % validatedPgmLibraryKey.sequence)
-
-                    ret['libraryKey'] = validatedPgmLibraryKey.sequence
-                else:
-                    #logger.errors.debug("...Plan used but not on db for forward run. Use default library key=%s " % defaultForwardLibraryKey.sequence)
-
-                    ret['libraryKey'] = defaultForwardLibraryKey.sequence
-
-                ret['forward3primeadapter'] = defaultForward3primeAdapter.sequence
-
-            if ret['libraryKey'] is None or ret['libraryKey'] == "":
-                #logger.errors.debug("...A library key cannot be determined for this FORWARD run  Use PGM default. ")
-                ret['libraryKey'] = d.get("librarykeysequence", '')
-
-        except models.LibraryKey.DoesNotExist:
-            logger.errors.warn("No default forward library key in database for experiment %s" % ret['expName'])
-            return ret, False
-        except models.LibraryKey.MultipleObjectsReturned:
-            logger.errors.warn("Multiple default forward library keys found in database for experiment %s" % ret['expName'])
-            return ret, False
-        except models.ThreePrimeadapter.DoesNotExist:
-            logger.errors.warn("No default forward 3' adapter in database for experiment %s" % ret['expName'])
-            return ret, False
-        except models.ThreePrimeadapter.MultipleObjectsReturned:
-            logger.errors.warn("Multiple default forward 3' adapters found in database for experiment %s" % ret['expName'])
-            return ret, False
-        except:
-            logger.errors.warn("Experiment %s" % ret['expName'])
-            logger.errors.warn(traceback.format_exc())
-            return ret, False
-
+    #instrument could have blank runType or be absent all together in explog
+    runType = d.get('runtype', "")
+    if not runType:
+        runType = "GENS"
+    ret['runType'] = runType
+                
     # Limit input sizes to defined field widths in models.py
     ret['notes'] = ret['notes'][:1024]
     ret['expDir'] = ret['expDir'][:512]
@@ -600,53 +440,140 @@ def exp_kwargs(d, folder):
     ret['pgmName'] = ret['pgmName'][:64]
     ret['unique'] = ret['unique'][:512]
     ret['storage_options'] = ret['storage_options'][:200]
- #   ret['project'] = ret['project'][:64]
+    ret['project'] = ret['project'][:64]
     ret['sample'] = ret['sample'][:64]
-    ret['library'] = ret['library'][:64]
+    ret['reference'] = ret['reference'][:64]
     ret['chipBarcode'] = ret['chipBarcode'][:64]
     ret['seqKitBarcode'] = ret['seqKitBarcode'][:64]
     ret['chipType'] = ret['chipType'][:32]
     ret['flowsInOrder'] = ret['flowsInOrder'][:512]
     ret['libraryKey'] = ret['libraryKey'][:64]
-    ret['barcodeId'] = ret['barcodeId'][:128]
+    ret['barcodeKitName'] = ret['barcodeKitName'][:128]
     ret['reverse_primer'] = ret['reverse_primer'][:128]
-    ret['reverselibrarykey'] = ret['reverselibrarykey'][:64]
-    ret['reverse3primeadapter'] = ret['reverse3primeadapter'][:512]
-    ret['forward3primeadapter'] = ret['forward3primeadapter'][:512]
-    ret['sequencekitbarcode'] = ret['sequencekitbarcode'][:512]
-    ret['librarykitbarcode'] = ret['librarykitbarcode'][:512]
     ret['sequencekitname'] = ret['sequencekitname'][:512]
     ret['sequencekitbarcode'] = ret['sequencekitbarcode'][:512]
-    ret['librarykitname'] = ret['librarykitname'][:512]
-    ret['librarykitbarcode'] = ret['librarykitbarcode'][:512]
-    ret['runMode'] = ret['runMode'][:64]
+    ret['libraryKitName'] = ret['libraryKitName'][:512]
+    ret['libraryKitBarcode'] = ret['libraryKitBarcode'][:512]
+    ret['runType'] = ret['runType'][:512]
 
-    logger.errors.debug("For experiment %s" % ret['expName'])
-    logger.errors.debug("...Ready to save run: isReverseRun=%s;" % ret['isReverseRun'])
-    logger.errors.debug("...Ready to save run: libraryKey=%s;" % ret['libraryKey'])
-    logger.errors.debug("...Ready to save run: forward3primeadapter=%s;" % ret['forward3primeadapter'])
-    logger.errors.debug("...Ready to save run: reverselibrarykey=%s;" % ret['reverselibrarykey'])
-    logger.errors.debug("...Ready to save run: reverse3primeadapter=%s;" % ret['reverse3primeadapter'])
-
-    return ret, True
+    return ret
 
 
-def exp_from_kwargs(kwargs, logger, save=True):
-    """Create an experiment from the given keyword arguments.
+def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
+    """ Update plan, experiment, sample and experimentAnalysisSettings
+        Returns the experiment object
     """
-    ret = models.Experiment(**kwargs)
-    matches = models.Experiment.objects.filter(unique=ret.unique)
-    if matches:
-        e = matches[0]
-        if e.ftpStatus != RUN_STATUS_COMPLETE:
-            return e
-        else:
+
+    if planObj:
+        logger.errors.info("Going to update db objects for plan=%s" % planObj.planName)
+
+    kwargs = exp_kwargs(d, folder)
+
+    # PairedEnd runs no longer supported
+    if kwargs['isReverseRun']:
+        logger.errors.warn("PAIRED-END is NO LONGER SUPPORTED. Skipping experiment %s" % expObj.expName)
+        return None
+
+    # get valid libraryKey (explog or entered during planning), if failed use default value
+    libraryKey = kwargs['libraryKey']
+    if libraryKey and models.LibraryKey.objects.filter(sequence=libraryKey, direction='Forward').exists():
+        pass
+    elif easObj.libraryKey and models.LibraryKey.objects.filter(sequence=easObj.libraryKey, direction='Forward').exists():
+        kwargs['libraryKey'] = easObj.libraryKey
+    else:
+        try:
+            defaultForwardLibraryKey = models.LibraryKey.objects.get(direction='Forward', isDefault=True)
+            kwargs['libraryKey'] = defaultForwardLibraryKey.sequence
+        except models.LibraryKey.DoesNotExist:
+            logger.errors.warn("No default forward library key in database for experiment %s" % expObj.expName)
+            return None
+        except models.LibraryKey.MultipleObjectsReturned:
+            logger.errors.warn("Multiple default forward library keys found in database for experiment %s" % expObj.expName)
             return None
 
-    if save:
-        ret.save()
-    logger.add_experiment(ret)
-    return ret
+    #20121104-PDD-TODO: change .info to .debug or remove the print line all together
+
+    # *** Update Experiment ***
+    expObj.status = 'run'
+    expObj.runMode = planObj.runMode
+    for key,value in kwargs.items():
+        setattr(expObj, key, value)
+
+    expObj.save()
+    logger.errors.info("Updated experiment=%s, pk=%s, expDir=%s" % (expObj.expName, expObj.pk, expObj.expDir) )
+
+
+    # *** Update Plan ***
+    plan_keys = ['expName', 'runType', 'isReverseRun']
+    for key in plan_keys:
+        setattr(planObj, key, kwargs[key])
+
+    planObj.planStatus = 'run'
+    planObj.planExecuted = True # this should've been done by instrument already
+
+    # add project from instrument, if any. Note: this will not create a project if doesn't exist
+    projectName = kwargs['project']
+    if projectName and projectName not in planObj.projects.values_list('name', flat=True):
+        try:
+            planObj.projects.add(models.Project.objects.get(name=projectName))
+        except:
+            logger.errors.warn("Couldn't add project %s to %s plan: project does not exist" % (projectName, planObj.planName))
+
+    planObj.save()
+    logger.errors.info("Updated plan=%s, pk=%s" % (planObj.planName, planObj.pk))
+
+
+    # *** Update ExperimentAnalysisSettings ***
+    eas_keys = ['barcodeKitName', 'reference', 'libraryKey', 'libraryKitName', 'libraryKitBarcode']
+    for key in eas_keys:
+        setattr(easObj, key, kwargs[key])
+    easObj.status = 'run'
+    easObj.save()
+    logger.errors.info("Updated EAS=%s" % easObj)
+
+
+    # *** Update samples associated with experiment***
+    sampleCount = expObj.samples.all().count()
+    sampleName = kwargs['sample']
+
+    #if this is a barcoded run, user can't change any sample names on the instrument, only sample status update is needed
+    if sampleName and not easObj.barcodeKitName:
+        need_new_sample = False
+        if sampleCount == 1:
+            sample = expObj.samples.all()[0]
+            # change existing sample name only if this sample has association to 1 experiment,
+            # otherwise need to dissociate the original sample and add a new one
+            if sample.name != sampleName:
+                if sample.experiments.count() == 1:
+                   sample.name = sampleName
+                   sample.displayedName = sampleName
+                   sample.save()
+                   logger.errors.info("Updated sample=%s; sample.id=%s" %(sampleName, sample.pk))
+                else:
+                    sample.experiments.remove(expObj)
+                    need_new_sample = True
+
+        if sampleCount == 0 or need_new_sample:
+            sample_kwargs = {
+                            'name' : sampleName,
+                            'displayedName' : sampleName,
+                            'date' : expObj.date,
+                            }
+            try:
+                sample, created = models.Sample.objects.get_or_create(name=sampleName, defaults=sample_kwargs)
+                sample.experiments.add(expObj)
+                sample.save()
+                logger.errors.info("Added sample=%s; sample.id=%s" %(sampleName, sample.pk))
+            except:
+                logger.errors.debug("Failed to add sample=%s to experiment=%s" %(sampleName, expObj.expName))
+                logger.errors.debug(traceback.format_exc())
+
+    # update status for all samples
+    for sample in expObj.samples.all():
+        sample.status = expObj.status
+        sample.save()
+
+    return expObj
 
 
 def construct_crawl_directories(logger):
@@ -654,25 +581,15 @@ def construct_crawl_directories(logger):
     Returns an array.
     For every Rig in the database, construct a filesystem path and
     get all subdirectories in that path."""
-    def dbase_isComplete(name):
-        try:
-            run = models.Experiment.objects.get(expDir=name)
-            if run.ftpStatus.strip() == RUN_STATUS_COMPLETE or \
-                run.ftpStatus.strip() == RUN_STATUS_ABORT or \
-                    run.ftpStatus.strip() == RUN_STATUS_SYS_CRIT:
-                return True
-            else:
-                return False
-        except models.Experiment.DoesNotExist:
-            logger.errors.debug("Experiment %s does not exist in database" % name)
-            return False
-        except models.Experiment.MultipleObjectsReturned:
-            logger.errors.debug("Multiple Experiments %s exist " % name)
-            return False
-        except:
-            logger.errors.debug("Experiment %s" % name)
-            logger.errors.debug(traceback.format_exc())
-            return False
+    def dbase_isComplete(name, explist):
+        '''
+        explist consists of tuples containing experiment name and ftpstatus
+        '''
+        for item in explist:
+            if name == item[0]:
+                if item[1] in [RUN_STATUS_COMPLETE,RUN_STATUS_ABORT,RUN_STATUS_MISSING,RUN_STATUS_SYS_CRIT]:
+                    return True
+        return False
 
     fserves = models.FileServer.objects.all()
     ret = []
@@ -682,13 +599,15 @@ def construct_crawl_directories(logger):
         for r in rigs:
             rig_folder = os.path.join(fs.filesPrefix, r.name)
             if os.path.exists(rig_folder):
+                logger.errors.debug("Checking %s" % rig_folder)
+                exp_val_list = models.Experiment.objects.filter(expDir__startswith=rig_folder).values_list('expDir', 'ftpStatus')
                 try:
                     subdir_bases = os.listdir(rig_folder)
                     # create array of paths for all directories in Rig's directory
                     s1 = [os.path.join(rig_folder, subd) for subd in subdir_bases]
                     s2 = [subd for subd in s1 if os.path.isdir(subd)]
                     # create array of paths of not complete ftp transfer only
-                    s3 = [subd for subd in s2 if dbase_isComplete(subd) is False]
+                    s3 = [subd for subd in s2 if dbase_isComplete(subd, exp_val_list) is False]
                     ret.extend(s3)
                 except:
                     logger.errors.error(traceback.format_exc())
@@ -708,14 +627,13 @@ def get_percent(exp):
     else:
         expDir = exp.expDir
 
-    expectedFiles = float(exp.flows)
-    file_count = float(filecount(expDir))
+    file_count = filecount(expDir)
     try:  # don't want zero division to kill us
-        percent_complete = int((file_count / expectedFiles) * 100)
+        percent_complete = int((float(file_count) / float(exp.flows)) * 100)
     except:
         percent_complete = 0
-    if percent_complete >= 99:  # make the bar never quite reach 100% since we don't count beadfind files
-        percent_complete = 99
+    if exp.flows == file_count:
+        percent_complete = 100
 
     return percent_complete
 
@@ -742,12 +660,16 @@ def get_name_from_json(exp, key, thumbnail_analysis):
         return '%s_%s%s' % (str(name), exp.pk, twig)
 
 
-def generate_http_post(exp, projectName, thumbnail_analysis=False):
+def generate_http_post(exp, thumbnail_analysis=False):
     try:
         GC = models.GlobalConfig.objects.all().order_by('pk')[0]
         base_recalibrate = GC.base_recalibrate
+        mark_duplicates = GC.mark_duplicates
+        realign = GC.realign
     except models.GlobalConfig.DoesNotExist:
         base_recalibrate = False
+        mark_duplicates = False
+        realign = False
 
     report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 
@@ -756,8 +678,10 @@ def generate_http_post(exp, projectName, thumbnail_analysis=False):
                                'path': exp.expDir,
                                'submit': ['Start Analysis'],
                                'do_thumbnail': "%r" % thumbnail_analysis,
-                               'project_names': projectName,
-                               'do_base_recal': base_recalibrate})
+                               'do_base_recal': base_recalibrate,
+                               'realign': realign,
+                               'mark_duplicates': mark_duplicates
+    })
 
     status_msg = "Generated POST"
     try:
@@ -1026,101 +950,114 @@ def crawl(folders, logger):
             # Check for a valid explog.txt file
             #------------------------------------
             if text is not None:
-    
+
                 logger.current_folder = f
                 # Catch any errors parsing this log file and continue to the next experiment.
-                d = parse_log(text)
-                kwargs, status = exp_kwargs(d, f)
-    
-                if status is True:
-                    exp = exp_from_kwargs(kwargs, logger, False)
-                    projectName = d.get('project', '')   # part of explog but not a field in Experiment table
-                    if exp is not None:
-    
-                        logger.errors.info("%s" % f)
-                        
-                        #make sure 1-1 exp-plan relationship is enforced when new experiment is created
-                        planObj = exp.plan                    
-                        if planObj and exp.pk == None and len(models.Experiment.objects.filter(plan__pk = planObj.pk)) > 0:
-                            logger.errors.info('WARNING: Plan %s is already associated to an experiment, a copy will be created' % planObj.pk)
-                            planObj.pk = None
-                            planObj.save()
-                            exp.plan = planObj
-    
-                        #--------------------------------
-                        # Update FTP Transfer Status
-                        #--------------------------------
-                        if check_for_completion(exp):
-                            # FTP transfer is complete
-                            if exp.ftpStatus == RUN_STATUS_ABORT or exp.ftpStatus == RUN_STATUS_SYS_CRIT:
-                                logger.errors.info("FTP status: Aborted")
-                            else:
-                                exp.ftpStatus = RUN_STATUS_COMPLETE
-    
-                            exp.log = json.dumps(parse_log(load_log(f, LOG_FINAL_BASENAME)), indent=4)
-                            exp.save()
-    
-                            # Measure and record disk space usage of this dataset
-                            # This is celery task which will execute in separate worker thread
-                            try:
-                                tasks.setRunDiskspace.delay(exp.pk)
-                            except:
-                                logger.errors.exception(traceback.format_exc())
-    
-                        else:
-                            if exp.ftpStatus != RUN_STATUS_MISSING:
-                                exp.ftpStatus = get_percent(exp)
-                                exp.save()
-                                logger.errors.info("FTP status: Transferring")
-    
-                        #--------------------------------
-                        # Handle auto-run analysis
-                        #--------------------------------
-                        composite_exists, thumbnail_exists = reports_exist(exp)
-                        logger.errors.debug("Reports Exist? %s %s" % (composite_exists, thumbnail_exists))
-                        if not composite_exists:
-                            logger.errors.debug("No auto-run analysis has been started")
-                            # Check if auto-run for whole chip has been requested
-                            if exp.autoAnalyze:
-                                logger.errors.debug("  auto-run whole chip analysis has been requested")
-                                #if check_analyze_early(exp) or check_for_completion(exp):
-                                if ready_to_process(exp) or check_for_completion(exp):
-                                    logger.errors.info("  Start a whole chip auto-run analysis job")
-                                    generate_http_post(exp, projectName)
-                                else:
-                                    logger.errors.info("  Do not start a whole chip auto-run job yet")
-                            else:
-                                logger.errors.debug("  auto-run whole chip analysis has not been requested")
-                        else:
-                            logger.errors.debug("composite report already exists")
-    
-                        if not thumbnail_exists:
-                            # Check if auto-run for thumbnail has been requested
-                            # But only if its a block dataset
-                            if 'tiled' in exp.rawdatastyle:
-                                if autorun_thumbnail(exp):
-                                    logger.errors.debug("auto-run thumbnail analysis has been requested")
-                                    if ready_to_process_thumbnail(exp) or check_for_completion(exp):
-                                        logger.errors.info("  Start a thumbnail auto-run analysis job")
-                                        generate_http_post(exp, projectName, DO_THUMBNAIL)
-                                    else:
-                                        logger.errors.info("  Do not start a thumbnail auto-run job yet")
-                                else:
-                                    logger.errors.debug("auto-run thumbnail analysis has not been requested")
-                            else:
-                                logger.errors.debug("This is not a block dataset; no thumbnail to process")
-                        else:
-                            logger.errors.debug("thumbnail report already exists")
-                    else:
-                        logger.errors.debug("exp is empty")
+                try:
+                        d = parse_log(text)
+                except:
+                	logger.errors.info("Error parsing explog, skipping %s" % f)
+                	logger.errors.exception(traceback.format_exc())
+                	continue
+
+                exp = None
+                exp_set = models.Experiment.objects.filter(unique=f)
+                if exp_set:
+                    # Experiment already in database
+                    exp = exp_set[0]
+                    if exp.ftpStatus == RUN_STATUS_COMPLETE:
+                        continue
                 else:
-                    logger.errors.warn("folder %s is not added due to invalid experiment status from exp_kwargs. " % f)
+                    # Need to create experiment for this folder
+                    try:
+                        planObj, expObj, easObj = get_planned_exp_objects(d, f)
+                        exp = update_exp_objects_from_log(d, f, planObj, expObj, easObj)
+                    except:
+                        logger.errors.info("Error updating experiment objects, skipping %s" % f)
+                        logger.errors.exception(traceback.format_exc())
+                        continue
+
+                if exp is not None:
+
+                    logger.errors.info("%s" % f)
+
+                    #--------------------------------
+                    # Update FTP Transfer Status
+                    #--------------------------------
+                    if check_for_completion(exp):
+                        exptxt = load_log(f, LOG_FINAL_BASENAME)
+                        if exptxt is not None:
+                            exp.log = json.dumps(parse_log(exptxt), indent=4)
+                        else:
+                            # explog_final exists, but is not readable yet.
+                            continue
+
+                        # FTP transfer is complete
+                        if exp.ftpStatus == RUN_STATUS_ABORT or exp.ftpStatus == RUN_STATUS_SYS_CRIT:
+                            logger.errors.info("FTP status: Aborted")
+                        else:
+                            exp.ftpStatus = RUN_STATUS_COMPLETE
+                        exp.save()
+
+                        # Measure and record disk space usage of this dataset
+                        # This is celery task which will execute in separate worker thread
+                        try:
+                            tasks.setRunDiskspace.delay(exp.pk)
+                        except:
+                            logger.errors.exception(traceback.format_exc())
+
+                    else:
+                        if exp.ftpStatus != RUN_STATUS_MISSING:
+                            exp.ftpStatus = get_percent(exp)
+                            exp.save()
+                            logger.errors.info("FTP status: Transferring")
+
+                    #--------------------------------
+                    # Handle auto-run analysis
+                    #--------------------------------
+                    composite_exists, thumbnail_exists = reports_exist(exp)
+                    logger.errors.debug("Reports Exist? %s %s" % (composite_exists, thumbnail_exists))
+                    if not composite_exists:
+                        logger.errors.debug("No auto-run analysis has been started")
+                        # Check if auto-run for whole chip has been requested
+                        if exp.autoAnalyze:
+                            logger.errors.debug("  auto-run whole chip analysis has been requested")
+                            #if check_analyze_early(exp) or check_for_completion(exp):
+                            if ready_to_process(exp) or check_for_completion(exp):
+                                logger.errors.info("  Start a whole chip auto-run analysis job")
+                                generate_http_post(exp)
+                            else:
+                                logger.errors.info("  Do not start a whole chip auto-run job yet")
+                        else:
+                            logger.errors.debug("  auto-run whole chip analysis has not been requested")
+                    else:
+                        logger.errors.debug("composite report already exists")
+
+                    if not thumbnail_exists:
+                        # Check if auto-run for thumbnail has been requested
+                        # But only if its a block dataset
+                        if 'tiled' in exp.rawdatastyle:
+                            if autorun_thumbnail(exp):
+                                logger.errors.debug("auto-run thumbnail analysis has been requested")
+                                if ready_to_process_thumbnail(exp) or check_for_completion(exp):
+                                    logger.errors.info("  Start a thumbnail auto-run analysis job")
+                                    generate_http_post(exp, DO_THUMBNAIL)
+                                else:
+                                    logger.errors.info("  Do not start a thumbnail auto-run job yet")
+                            else:
+                                logger.errors.debug("auto-run thumbnail analysis has not been requested")
+                        else:
+                            logger.errors.debug("This is not a block dataset; no thumbnail to process")
+                    else:
+                        logger.errors.debug("thumbnail report already exists")
+                else:
+                    logger.errors.debug("exp is empty")
             else:
                 # No explog.txt exists; probably an engineering test run
                 logger.errors.debug("no %s was found in %s" % (LOG_BASENAME, f))
         except:
             logger.errors.exception(traceback.format_exc())
-            
+
     logger.current_folder = '(none)'
 
 

@@ -67,8 +67,6 @@ $(document).ready(function(){
                         , name: { type: "string" }
                         , adapter: { type: "string" }
                         , floworder: { type: "string" }
-                        , score_cutoff: { type: "string" }
-                        , score_mode: { type: "string" }
                         , sequence: { type: "string" }
                         , type: { type: "string" }
                     }
@@ -104,14 +102,6 @@ $(document).ready(function(){
                 , title: "Flow Order"
             } 
 			, {
-                field: "score_mode"
-                , title: "Score Mode"
-            } 
-			, {
-                field: "score_cutoff"
-                , title: "Score Cutoff"
-            } 
-			, {
                 field: "annotation"
                 , title: "Annotation"
             }  
@@ -126,6 +116,7 @@ $(document).ready(function(){
 		    $('.edit_barcode').click(function (e) {
 		    	var source = '#barcodes';
 				e.preventDefault();
+                $('#error-messages').hide().empty();
 				
 				var url = $(this).attr('href');
 				// alert(url);
@@ -138,16 +129,16 @@ $(document).ready(function(){
 			    	$('#modal_references_addedit_barcode').modal("show");
 		    	})
 			    .fail(function(data) {
-			    	$('#error-messages').empty();
+			    	$('#error-messages').empty().show();
 			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 			    	console.log("error:", data);
-			    	 
 			    })
 			    .always(function(data) { /*console.log("complete:", data);*/ });; 
 				
 			});
 			$(".delete_barcode").click(function(e){
 				e.preventDefault();
+                $('#error-messages').hide().empty();
 		    	var source = '#barcodes';
 				var url = $(this).attr('href');
 				$.get(url, function(data) {
@@ -160,10 +151,9 @@ $(document).ready(function(){
 			    	console.log("success:",  url);
 				})
 			    .fail(function(data) {
-			    	$('#error-messages').empty();
+			    	$('#error-messages').empty().show();
 			    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 			    	console.log("error:", data);
-			    	 
 			    })
 			    .always(function(data) { /*console.log("complete:", data);*/ });			
 			});
@@ -179,6 +169,7 @@ $(document).ready(function(){
     $('.add_barcode').click(function (e) {
     	var source = '#barcodes';
 		e.preventDefault();
+        $('#error-messages').hide().empty();
 		
 		var url = $(this).attr('href');
 		console.log(url);
@@ -191,17 +182,17 @@ $(document).ready(function(){
 	    	console.log("success:",  url);
     	})
 	    .fail(function(data) {
-	    	$('#error-messages').empty();
+	    	$('#error-messages').empty().show();
 	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 	    	console.log("error:", data);
-	    	 
 	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });; 
+	    .always(function(data) { /*console.log("complete:", data);*/ });
 		
 	});
     $('.delete_barcodeset').click(function (e) {
     	var source = '#barcodes';
 		e.preventDefault();
+        $('#error-messages').hide().empty();
 		
 		var url = $(this).attr('href');
 		console.log(url);
@@ -215,12 +206,11 @@ $(document).ready(function(){
 	    	console.log("success:",  url);
     	})
 	    .fail(function(data) {
-	    	$('#error-messages').empty();
+	    	$('#error-messages').empty().show();
 	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 	    	console.log("error:", data);
-	    	 
 	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });; 
+	    .always(function(data) { /*console.log("complete:", data);*/ });
 		
 	});
 	$(document).bind('delete_barcodeset_done', function(e){

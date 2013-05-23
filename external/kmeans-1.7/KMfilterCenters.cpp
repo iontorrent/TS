@@ -21,7 +21,6 @@
 #include "KMfilterCenters.h"
 #include "KMrand.h"
 
-#include "dbgmem.h"
 					// standard constructor
 KMfilterCenters::KMfilterCenters(int k, KMdata& p, double df)
     : KMcenters(k, p) {

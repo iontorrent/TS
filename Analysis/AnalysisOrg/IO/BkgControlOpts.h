@@ -20,11 +20,15 @@
 #include "SpecialDataTypes.h"
 #include "SeqList.h"
 #include "ChipIdDecoder.h"
+#include "GpuControlOpts.h"
 
+#define REGIONAL_SAMPLING_SYSTEMATIC -1
+#define REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED 1
 
 // What does the bkg-model section of the software need to know?
 class BkgModelControlOpts{
   public:
+    int bkg_debug_files;
     int bkgModelHdf5Debug;
     float bkg_model_emphasis_width;
     float bkg_model_emphasis_amplitude;
@@ -68,9 +72,10 @@ class BkgModelControlOpts{
     int debug_bead_only;
     int region_vfrc_debug; // dump a sample region as text file for debugging.
     // commandline options for GPU for background model computation
-    float gpuWorkLoad;
-    int gpuMultiFlowFit;
-    int gpuSingleFlowFit;
+    
+    GpuControlOpts gpuControl;
+  
+
     int numCpuThreads;
 
     int vectorize;
@@ -80,6 +85,7 @@ class BkgModelControlOpts{
     
     int readaheadDat;
     int saveWellsFrequency;
+    int wellsCompression;  // compression level to use in hdf5 for wells data, 3 by default 0 for no compression
 
     bool useProjectionSearchForSingleFlowFit;
     int choose_time;
@@ -90,7 +96,10 @@ class BkgModelControlOpts{
     bool use_dud_and_empty_wells_as_reference;
     int  single_flow_fit_max_retry;
     bool per_flow_t_mid_nuc_tracking;
+    bool exp_tail_fit;
+    bool pca_dark_matter;
     bool regional_sampling;
+    int regional_sampling_type;
 
     // how many wells to force processing on
     int unfiltered_library_random_sample;
@@ -105,6 +114,8 @@ class BkgModelControlOpts{
     float cutoff_quantile;
 
     std::string region_list;  // CSV string of regions to use, eg "0,1,2,4"
+    
+    bool nokey; // keyless background model calling
 
 };
 

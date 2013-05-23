@@ -1,5 +1,9 @@
 /* sytles for the reports */
 
+#resultList {
+    width: auto;
+}
+
 .image {
     margin: 5px;
     border: 0px solid;

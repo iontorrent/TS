@@ -129,7 +129,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
 # TODO: putty-tools is only here so that it gets installed with 3.0 from 2.2 GUI update
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, python-pysam (>= 0.7)")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

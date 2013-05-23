@@ -1,0 +1,230 @@
+{
+    "torrent_variant_caller":{
+
+        "data_quality_stringency":["Filter: Phred-scaled minimum average evidence per read or no-call.",
+                                   "Related VCF field: MLLD",
+                                   "Allowed values: Decimal numbers >= 0",
+                                   "Recommended values >= 6.5"],
+
+        "downsample_to_coverage":["Reduce coverage in over-sampled locations to this value",
+                                  "Allowed values: Integers >= 1",
+                                  "Recommended values: 400 (germline), 2000 (somatic)" ],
+
+         "snp_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
+                                     "Allowed values: Integers >= 0",
+                                     "Recommended values >= 3" ],
+
+        "snp_min_variant_score":["Filter: Phred-scaled evidence that the reads support a variant above minimum frequency",
+                                  "Quality: Integers >= 0",
+                                  "Recommended values >= 10"],
+
+        "snp_min_allele_freq":["Frequency cutoff for supporting a variant",
+                                "Allowed values: Decimal numbers between 0 and 1.0",
+                                "Recommended values between 0.01 and 0.2"],
+
+        "snp_min_coverage":["total coverage required of reads or no-call",
+                                "Allowed values: Integers >= 0 ",
+                                "Recommended values between 5 and 20 "],
+
+        "snp_strand_bias":["Filter: proportion of variant alleles comes overwhelmingly from one strand.",
+                               "Related VCF field: STB",
+                               "Allowed values: Decimal numbers between 0.5 and 1.0",
+                               "Recommended 0.95"],
+
+        "snp_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
+                              "Related VCF field: SXB",
+                              "Allowed values: Decimal numbers >= 0",
+                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
+
+        "indel_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
+                                     "Allowed values: Integers >= 0",
+                                     "Recommended >= 3" ],
+
+        "indel_min_variant_score":["Filter: Phred-scaled evidence that the reads support a variant above minimum frequency",
+                                  "Quality: Integers >= 0",
+                                  "Recommended values >= 10"],
+
+        "indel_min_allele_freq":["Frequency cutoff for supporting a variant",
+                                "Allowed values: Decimal numbers between 0 and 1.0 ",
+                                "Recommended values between 0.05 and 0.2 "],
+
+        "indel_min_coverage":["Total coverage required of reads or no-call",
+                                "Allowed values: Integers >= 0",
+                                "Recommended values between 15 and 30"],
+
+        "indel_strand_bias":["Filter: proportion of variant alleles comes overwhelmingly from one strand.",
+                               "Related VCF field: STB",
+                               "Allowed values: Decimal numbers between 0.5 and 1.0",
+                               "Recommended 0.95"],
+
+        "indel_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
+                              "Related VCF field: SXB",
+                              "Allowed values: Decimal numbers >= 0",
+                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
+        
+        "hotspot_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
+                                     "Allowed values: Integers >= 0",
+                                     "Recommended >= 3" ],
+
+        "indel_min_variant_score":["Phred-scaled evidence that the reads support a variant above minimum frequency",
+                                  "Quality: Integers >= 0",
+                                  "Recommended values >= 10"],
+
+        "hotspot_min_allele_freq":["Frequency cutoff for supporting a variant",
+                                "Allowed values: Decimal numbers between 0 and 1.0 ",
+                                "Recommended values between 0.01 and 0.2"],
+
+        "hotspot_min_coverage":["Total coverage required of reads or no-call",
+                                "Allowed values: Integers >=0",
+                                "Recommended values between 5 and 20"],
+
+        "hotspot_strand_bias":["Filter:  proportion of variant alleles comes overwhelmingly from one strand.",
+                               "Related VCF field: STB",
+                               "Allowed values: Decimal numbers between 0.5 and 1.0",
+                               "Recommended 0.95"],
+
+        "hotspot_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
+                              "Related VCF field: SXB",
+                              "Allowed values: Decimal numbers >= 0",
+                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
+        
+        "prediction_precision":["Number of pseudo-data-points suggesting our predictions match the measurements without bias",
+                                "Allowed values: Decimal numbers >= 0  ",
+                                "Recommended value 1.0 "],
+
+        "outlier_probability":["Prior probability that a read comes from some other distribution",
+                                "Allowed values: Decimal numbers between 0 and 1.0",
+                                "Recommended values between 0.005 and 0.01"],
+
+        "heavy_tailed":["How heavy the t-distribution tails are to allow for unusual spread in the data",
+                                "Allowed values: Decimal numbers >= 0",
+                                "Recommended value 3.0"],
+
+        "filter_unusual_predictions":["Filter:  predictions are distorted to fit the data more than this distance (relative to the size of the variant).",
+                                       "Related VCF fields: FWDB, REVB [RBI = sqrt(FWDB ^ 2 + REVB ^ 2)]",
+                                       "Allowed values: Decimal numbers >= 0",
+                                       "Recommended value: 0.3 = 30% of variant change size"],
+
+        "filter_insertion_predictions":["Filter:  observed clusters deviate from predictions more than this amount (relative to the size of the variant).",
+                                       "Related VCF fields: VARB, REFB",
+                                       "Allowed values: Decimal numbers >= 0",
+                                       "Recommended value: 0.2 = 20% of variant change size"],
+
+        "filter_deletion_predictions":["Filter:  observed clusters deviate from predictions more than this amount (relative to the size of the variant).",
+                                       "Related VCF fields: VARB, REFB",
+                                       "Allowed values: Decimal numbers >= 0",
+                                       "Recommended value: 0.2 = 20% of variant change size"],
+        
+        "hp_max_length":["Filter:  homopolymer length involved in an in/del",
+                         "Related VCF field: HRUN",
+                         "Allowed values: Integers >= 1",
+                         "Recommended value: 8" ],
+ 
+        "sse_prob_threshold":["If the motif model predicts an error likely at this position, filter me",
+                        "Related VCF fields: SSEN, SSEP ",
+                        "Allowed values: Decimal numbers between 0.0 and 1.0"],
+
+        "min_ratio_reads_non_sse_strand":["If there is a predicted error, and the opposite strand may be fine, tentatively evaluate.",
+                                "Allowed values: ",
+                                "Recommended values "]
+
+    },
+
+    
+    "freebayes":{
+        "allow_indels":[
+            "Enable indels in FreeBayes hypothesis generator.",
+            "Allowed values: 1 = generate indel hypotheses, 0 = don't generate",
+            "Recommended value: 1"],
+            
+        "allow_snps":[
+            "Enable SNPs in FreeBayes hypothesis generator.",
+            "Allowed values: 1 = generate SNP hypotheses, 0 = don't generate",
+            "Recommended value: 1"],
+            
+        "allow_mnps":[
+            "Enable MNPs in FreeBayes hypothesis generator.",
+            "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
+            "Recommended value: 1"],
+                        
+        "min_mapping_qv":[
+            "Minimum mapping QV value required for reads to be allowed into the pileup (both freebayes and evaluator)",
+            "Allowed values: Integers >= 0",
+            "Recommended value: 4"],
+            
+        "min_base_qv":[
+            "Minimum base QV value required",
+            "Allowed values: Integers >= 0",
+            "Recommended value: 4"],
+            
+        "read_mismatch_limit":[
+            "Read mismatch limit on number of mismatches: filter potential mis-mapped reads",
+            "Allowed values: Integers >= 0",
+            "Recommended value: 10"],
+            
+        "read_max_mismatch_fraction":[
+            "Read maximum mismatch fraction of mismatches in length of read: filter potential mis-mapped reads",
+            "Allowed values: Decimal numbers between 0 and 1.0",
+            "Recommended value: 1.0"],
+            
+        "gen_min_alt_allele_freq": [
+            "Generate variants with at least this frequency in the pileup",
+            "Allowed values: Decimal numbers between 0 and 1.0",
+            "Recommended values: between 0.02 and 0.15"],
+
+        "gen_min_indel_alt_allele_freq": [
+            "Generate INDEL variants with at least this frequency in the pileup",
+            "Allowed values: Decimal numbers between 0 and 1.0",
+            "Recommended values: between 0.02 and 0.15"],
+            
+        "gen_min_coverage":[
+            "Generate variants in locations with at least this depth of coverage",
+            "Allowed values: Integers >= 0",
+            "Recommended value: 6"]
+    },
+    
+    "long_indel_assembler":{
+        "kmer_len": [
+            "Size of the smallest k-mer used in assembly.",
+            "Allowed values: Integers greater than 5",
+            "Recommended values: between 11 and 30",
+            "Impact: Increasing values make indel calls less sensitive but more specific. "],
+            
+        "min_var_count":[
+            "Minimum support for a variant to be evaluated.",
+            "Allowed values: Integers greater than 1",
+            "Recommended values: between 3 and 30",
+            "Impact: Increasing values make indel calls less sensitive but more specific. "],
+            
+        "short_suffix_match":[
+            "Minimum assembled sequence match on both sides of the variant.",
+            "Allowed values: Integers greater than 2",
+            "Recommended values: between 4 and the value given to the kmer_len parameter",
+            "Impact: Increasing values make indel calls less sensitive but more specific. "],
+            
+        "min_indel_size":[
+            "Minimum size indel reported by assembly.",
+            "Allowed values: Integers greater than 0",
+            "Recommended values: between 2 and 30",
+            "Impact: Increasing values make indel calls less sensitive but more specific. "],
+            
+        "max_hp_length":[
+            "Variants containing HP larger than this are not reported.",
+            "Allowed values: Integers greater than 1",
+            "Recommended values: between 2 and 11",
+            "Impact: Increasing values make indel calls more sensitive but less specific. "],
+            
+        "min_var_freq":[
+            "Minimum frequency of the variant to be reported.",
+            "Allowed values: Decimal numbers between 0.0 and 1.0",
+            "Recommended values: between 0.1 and 0.4",
+            "Impact: Increasing values make indel calls less sensitive but more specific. "],
+            
+        "relative_strand_bias":[
+            "Variants with strand bias above this are not reported.",
+            "Allowed values: Decimal numbers between 0.0 and 1.0",
+            "Recommended values: between 0.6 and 1.0",
+            "Impact: Increasing values make indel calls more sensitive but less specific. "]
+            
+    }
+}

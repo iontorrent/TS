@@ -37,6 +37,7 @@ struct buffer_params_block_flows {
 
 void RedSolveHydrogenFlowInWell(float *vb_out, float *red_hydrogen, int len, int i_start,float *deltaFrame, float tauB);
 void BlueSolveBackgroundTrace(float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR);
+void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, int len, const double *deltaFrame, float tauB, float etbR);
 void PurpleSolveTotalTrace(float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR);
 
 // some fun utilities

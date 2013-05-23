@@ -1,0 +1,42 @@
+{% extends "rundb/configure/base.html" %}
+{% block current_tab %}about{% endblock %}
+{% block sub-nav %}
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li class="active"><a href="{% url configure_account %}">Accounts</a></li>
+{% endblock sub-nav %}
+
+{% block content %}
+<div class="content">
+    <h1>AmpliSeq</h1>
+    <div class="row">
+        <div class="span12">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                {% for download in downloads %}
+                    <tr>
+                        <td>
+                            {{ download.name }} <small>{{ download.url }}</small>
+                        </td>
+                        <td>
+                            {{ download.percent_progress }}
+                        </td>
+                        <td>
+                            {{ download.status }}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock content %}

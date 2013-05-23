@@ -12,9 +12,13 @@ SimulateCAFIE <- function(
   conc         = diag(4),
   maxAdvances  = 2,
   droopType    = c("ONLY_WHEN_INCORPORATING","EVERY_FLOW"),
-  extraTaps    = 0
+  extraTaps    = 0,
+  getStates    = 0
 ) {
 
+  if(nflows<1)
+    stop ("Error in SimulateCAFIE: argument <nflows> must be greater than zero.")
+    
   simModel <- match.arg(simModel)
   if(nchar(flowOrder) < nflows){
     flowOrder <- substring(paste(rep(flowOrder,ceiling(nflows/nchar(flowOrder))),collapse=""),1,nflows)
@@ -26,7 +30,7 @@ SimulateCAFIE <- function(
     stop("hpScale must be of length 1 or 4\n");
 
   if (simModel == "treePhaserSim") {
-    val <- .Call("treePhaserSim", seq, flowOrder, cf, ie, dr, nflows, PACKAGE="torrentR")
+    val <- .Call("treePhaserSim", seq, flowOrder, cf, ie, dr, nflows, getStates, PACKAGE="torrentR")
   } else if(simModel == "CafieSolver") {
     val <- .Call("SimulateCAFIE", seq, flowOrder, cf, ie, dr, nflows, hpSignal, sigMult, PACKAGE="torrentR")
   } else {

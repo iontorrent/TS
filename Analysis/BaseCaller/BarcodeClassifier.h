@@ -75,6 +75,8 @@ protected:
 
   vector<Barcode>           barcode_;
 
+  int                       windowSize_;
+
 public:
   int                       no_barcode_read_group_;
 

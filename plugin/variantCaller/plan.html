@@ -1,299 +1,525 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
- <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
 
- <style type="text/css">
-  #formwrap {
-   line-height: 2em;
-   background: #eef;
-   margin: 10px;
-   padding: 10px;
-   height: 500px;
-   text-align: center;
-  }
-  body {
-   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-   font-size: 14px;
-  }
-  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
- </style>
+    <link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css"/>
 
- <script>
-  $(function()
-  {
-    // turn off async JavaScript so we can easily get/set var names
-    $.ajaxSetup({async: false});
-    var descriptions = {};
-    function addAdvancedSettings() {
-    var libType = $("#librarytype option:selected").val();
-    var varType = (document.getElementById('variationtype')[document.variantcaller.variationtype.selectedIndex].text).replace(/\s/g,'_');
-    var paramsFileName = libType + "." + varType + ".json";
-    $.get( '/pluginMedia/variantCaller/'+paramsFileName, function(data) {
-	if(data) {
-		var lines = data.match(/^.*((\r\n|\n|\r)|$)/gm);
-		var currGroup = "";
-		var commentText = "";
-		$.each(lines, function(intIndex, objValue) {
-				if(objValue.search("#") != -1) {
-					objValue = objValue.replace(/\#/g, "");
-					commentText = commentText + objValue + " ";
-				}
-				else if(objValue.search(":") != -1) {
-                			var tokens = objValue.split(":");
-					tokens[0] = tokens[0].replace(/\s/g, "");
-					tokens[1] = tokens[1].replace(/\s/g, "");
-				
-					if(tokens[1] == "{") {
-						currGroup = tokens[0];
-						commentText = "";
-					}
-					else {
-						var labelText = tokens[0];
-						var paramName = labelText.replace(/-/g, "___");
-						var paramValue = tokens[1].replace(/,$/, "");
-						if($("#"+paramName).length > 0) {
-							$("#"+paramName).val(paramValue);
-						}
-						else {
-							//var desc = commentText;
-							var desc = "";
-							if(desc == "") {
-								desc = descriptions[labelText]; 
-							}
-							var htmlText = "<tr>";
-							var labelName = "label_"+paramName;
-							htmlText = htmlText + "<td><span class='help' id=" + labelName +"> </span> </td>";
-							htmlText = htmlText + "<td><input type='text' size='10' id=" + paramName + "> </td> </tr>";
-							$("#"+currGroup).append(htmlText);
-							$("#"+paramName).val(paramValue);
-							var groupName = currGroup.replace(/-/g, "___");
-							$("#"+paramName).attr("name", "param__" + groupName +"__" + paramName);
-							$("#"+labelName).text(labelText+":");
-							$("#"+labelName).attr("title", desc);
-						}
-						commentText = "";
-					}
-				}
-		});
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
+    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/site_media/js/chosen.jquery.min.js"></script>
+
+
+    <style type="text/css">
+        .dropdown {
+            width: 300px;
         }
-    });
-    }
 
-    function loadDescriptions() {
-    var libType = "ampliseq";
-    var varType = "Germ_Line";
-    var paramsFileName = libType + "." + varType + ".json";
-    $.get( '/pluginMedia/variantCaller/'+paramsFileName, function(data) {
-	if(data) {
-		var lines = data.match(/^.*((\r\n|\n|\r)|$)/gm);
-		var currGroup = "";
-		var commentText = "";
-		$.each(lines, function(intIndex, objValue) {
-				if(objValue.search("#") != -1) {
-					objValue = objValue.replace(/\#/g, "");
-					commentText = commentText + objValue + " ";
-				}
-				else if(objValue.search(":") != -1) {
-                			var tokens = objValue.split(":");
-					tokens[0] = tokens[0].replace(/\s/g, "");
-					tokens[1] = tokens[1].replace(/\s/g, "");
-				
-					if(tokens[1] == "{") {
-						currGroup = tokens[0];
-						commentText = "";
-					}
-					else {
-						var paramName = tokens[0];
-						var paramValue = tokens[1].replace(/,$/, "");
-						descriptions[paramName] = commentText;
-					}
-					commentText = "";
-				}
-		});
+        .help {
+            cursor: default;
+            border-bottom: 1px dotted #A9A9A9;
+            font-weight: bold;
         }
-    });
-    }
-    
-    loadDescriptions();
-    addAdvancedSettings();
 
-    $("#librarytype").change(function() {
-      var opt = $("#librarytype option:selected").val();
-      if( opt == "ampliseq" ) {
-        $("#ptrim").show();
-        $("#tpadding").hide();
-        $("#ustarts").hide();
-      } else if( opt == "targetseq" ) {
-        $("#ptrim").hide();
-        $("#tpadding").show();
-        $("#ustarts").hide();
-      } else {
-        $("#ptrim").hide();
-        $("#tpadding").hide();
-        $("#ustarts").hide();
-      }
-      addAdvancedSettings();
-    });
-
-    $("#variationtype").change(function() {
-    	addAdvancedSettings();
-    });
- });
-
-function toggle2(id, id2, link) {
-        var e = document.getElementById(id);
-        if (e.style.display == '') {
-                e.style.display = 'none';
-                link.innerHTML = 'Frequently Asked Questions         +';
-        } 
-        else {
-                e.style.display = '';
-                link.innerHTML = 'Frequently Asked Questions         -';
+        .vcconfig {
+            font-weight: bold;
+            border-bottom: 1px dotted #A9A9A9;
         }
-        document.getElementById(id2).style.display = 'none';
-        document.getElementById('advText').innerHTML = 'Advanced Settings         +';
-  }
 
-  function toggle(id, id2, link) {
-        var e = document.getElementById(id);
-        if (e.style.display == '') {
-                e.style.display = 'none';
-                link.innerHTML = 'Advanced Settings         +';
-        } 
-        else {
-                e.style.display = '';
-                link.innerHTML = 'Advanced Settings         -';
+        .vcSpace {
+            margin-bottom: 10px;
         }
-        document.getElementById(id2).style.display = 'none';
-        document.getElementById('faqText').innerHTML = 'Frequently Asked Questions         +';
- }
- </script>
+
+        h4 {
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+
+        #showAdv {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        .row {
+            margin-bottom: 8px;
+        }
+
+        .container {
+            width: 840px;
+        }
+
+        .zebra {
+            padding: 5px;
+        }
+
+        .hot {
+        }
+
+        .container {
+            width: 640px;
+        }
+
+        .zebra:nth-child(odd) {
+            background: -moz-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, rgba(244, 245, 247, 0.75)), color-stop(50%, rgba(229, 230, 232, 0.75)), color-stop(100%, rgba(244, 245, 247, 0.75)));
+            background: -webkit-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -o-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -ms-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: linear-gradient(to bottom, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#bff4f5f7', endColorstr='#bff4f5f7', GradientType=0);
+        }
+
+        textarea {
+            -webkit-box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+            width: 605px;
+        }
+
+        .hide {
+            display: none;
+        }
+
+    </style>
 </head>
 
+<script>
+
+    var setconfig = false;
+
+    function restoreForm(data) {
+
+        setconfig = true;
+        advancedTmpl(data);
+
+        $("#tvcargs").val(data["meta"]["tvcargs"]);
+        $("#trimreads").prop("checked", data["meta"]["trimreads"]);
+        var config = data["meta"]["configuration"];
+        console.log("config is " + config );
+
+        $('input:radio').each(function(){
+            var radio = $(this);
+            if (radio.attr("value") === config ){
+                radio.prop("checked", true);
+            }
+        });
+
+
+    }
+
+    function serializeForm() {
+        return inputToJSON();
+    }
+
+    function generateMeta() {
+        var meta = {};
+        var tvcargs = $("#tvcargs").val();
+        meta["tvcargs"] = tvcargs.replace(/(\r\n|\n|\r)/gm, " ");
+        meta["trimreads"] = $("#trimreads").prop('checked');
+
+        meta["configuration"] = $("#configGroup input[type='radio']:checked").val();
+
+        return meta;
+    }
+
+    function inputToJSON() {
+        //turns the input into the JSON the plugin needs
+        var output = { "torrent_variant_caller": {}, "long_indel_assembler": {}, "freebayes": {}, "meta": {} };
+        $(".plugin_input").each(function (i) {
+            output[$(this).data("key")][$(this).data("subkey")] = $(this).val();
+        });
+        //add meta to the output json
+        output["meta"] = generateMeta();
+        return output;
+    }
+
+    function advancedTmpl(data) {
+
+        var topparams = ["snp_min_cov_each_strand",
+            "snp_min_variant_score",
+            "snp_min_allele_freq",
+            "snp_min_coverage",
+            "snp_strand_bias",
+            "indel_min_cov_each_strand",
+            "indel_min_variant_score",
+            "indel_min_allele_freq",
+            "indel_min_coverage",
+            "indel_strand_bias",
+            "hotspot_min_cov_each_strand",
+            "hotspot_min_variant_score",
+            "hotspot_min_allele_freq",
+            "hotspot_min_coverage",
+            "hotspot_strand_bias"
+        ];
+
+        //write the advanced options to the ui
+        $.each(data, function (key, value) {
+            $("#" + key + "> form").html("");
+            $.each(value, function (subkey, subvalue) {
+                if ($.inArray(subkey, topparams) === -1) {
+                    tmpl = '<div class="row zebra"> <div class="span3"> <span>' + subkey + '</span> </div> <div class="span1">';
+                    tmpl += '<input class="plugin_input input-mini" data-key="' + key + '" data-subkey="' + subkey + '" type="text" id="' + subkey + '" value="' + subvalue + '">';
+                    tmpl += '</div><div class="span4"><ul>';
+
+                    //add the help as well
+                    try {
+                        $.each(window.help[key][subkey], function (i, help) {
+                            tmpl += '<li><small>' + help + '</small></li>';
+                        });
+                    } catch (e) {
+                        console.log("out of sync description.json");
+                    }
+
+                    tmpl += '</ul></div></div>';
+                    $("#" + key + "> form").append(tmpl);
+                } else {
+                    $("#" + subkey).val(subvalue);
+                }
+            });
+        });
+    }
+
+    function loadConfig(file) {
+
+        var request = $.ajax({
+            type: "GET",
+            url: file,
+            dataType: "json"
+        });
+
+        request.done(function (data) {
+            advancedTmpl(data);
+        });
+
+        request.fail(function () {
+            console.log("failed to load json config file");
+        });
+    }
+
+
+    $(function () {
+
+        var desc = $.ajax({
+            type: "GET",
+            url: TB_pluginMedia + "configs/description.json",
+            dataType: "json",
+            async: false
+        });
+
+        desc.done(function (data) {
+            window.help = data;
+        });
+
+
+        //load the correct config
+        $("#configGroup").find('input').click(function () {
+            if (config != "custom") {
+                var config = $("#configGroup input[type='radio']:checked").val();
+                loadConfig(TB_pluginMedia + "configs/" + config + ".json");
+            }
+        });
+
+        function waitForDefault(){
+                //set a default config if there was not one restored
+		if (setconfig === false){
+		    console.log("setting default to germline_high_stringency");
+                    $("#germline_high_stringency").prop("checked", true);
+                    loadConfig(TB_pluginMedia + "configs/germline_high_stringency.json");
+		}
+	}
+       setTimeout(function(){waitForDefault()},1000);
+
+        //if anything gets changed, select the 'custom' radio button
+        $("#tvcargs, .input-mini").live("keypress", function () {
+            $("#customconfig").prop("checked", true);
+        });
+
+        //init UI bits
+        $("#showAdv").click(function () {
+            $("#advanced").collapse('toggle');
+        });
+
+        $('.help').tooltip({"placement": "right"});
+        $('.vcconfig').tooltip({"placement": "bottom"});
+
+        $('#advanced').on('show', function () {
+            $("#showAdv").html('Hide Advanced Settings <i class="icon-chevron-up"></i>');
+        });
+
+        $('#advanced').on('hide', function () {
+            $("#showAdv").html('Show Advanced Settings <i class="icon-chevron-down"></i>');
+        });
+
+        //file upload
+        function handleFileSelect(evt) {
+            var JsonObj = null;
+            var files = evt.target.files; // FileList object
+            f = files[0];
+            var reader = new FileReader();
+
+            // Closure to capture the file information.
+            reader.onload = (function (theFile) {
+                return function (e) {
+                    JsonObj = e.target.result;
+                    var parsedJSON = JSON.parse(JsonObj);
+
+                    try {
+                        advancedTmpl(parsedJSON);
+                        $("#customconfig").prop("checked", true);
+                    }
+                    catch (e) {
+                        console.log("Failed");
+                        console.log(parsedJSON);
+                    }
+
+
+                };
+            })(f);
+
+            // Read in JSON as a data URL.
+            reader.readAsText(f, 'UTF-8');
+        }
+
+        $("#files").change(function (evt) {
+            handleFileSelect(evt);
+        });
+
+    });
+
+</script>
+
+
 <body>
- <div align="center">
-  <form id="variantcaller" name="variantcaller" style="margin-left:auto;margin-right:auto">
-   <h1>Torrent Variant Caller Plugin</h1>
-   <table cellpadding="5px">
-    <tr>
-     <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
-     <td><select id="librarytype" name="librarytype" style="width:120px">
-      <option value="fullgenome">Full Genome</option>
-      <option value="ampliseq">Ion AmpliSeq</option>
-      <option value="targetseq">Ion TargetSeq</option>
-     </select></td>
-    </tr>
-    <tr>
-     <td><span class="help" title="Select the type of variants you are interested in detecting.">Variant Frequency:</span></td>
-     <td><select id="variationtype" name="variationtype" style="width:120px">
-      <option value="Germ_Line">Germ Line</option>
-      <option value="Somatic">Somatic</option>
-     </select></td>
-    </tr>
-    <tr id="ptrim" style="display:none">
-    <td><span class="help"
-       title="Trim reads to amplicon targets. Primarily to avoid variant sites from being covered by residual primers from overlapping amplicons.">
-       Trim Reads:</span></td>
-     <td><input type="checkbox" id="trimreads" name="trimreads" checked="checked" value="Yes"/></td>
-    </tr>
-    <tr id="tpadding" style="display:none">
-     <td><span class="help"
-       title="Number of bases target regions are extended at both ends. A value greater than 0 allows variants to be detected in regions where individual reads overlap the boundaries of targeted regions.">
-       Target Padding:</span></td>
-     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td>
-    </tr>
-    <tr id="ustarts" style="display:none">
-     <td><span class="help"
-       title="Analyze variants for a sampling of on-target reads using just one read starting at each reference position for both read orientations. This removes bias due to non-uniform library enrichment but produces a most conservative representation of target coverage.">
-       Use Unique Starts:</span></td>
-     <td><input type="checkbox" id="uniquestarts" name="uniquestarts" value="No"/></td> 
-    </tr>
-   </table>
-   <br/>
-   <br/>
-   <p> <H3> <a href="#" id='advText' onClick="toggle('advanced', 'faq', this)"> Advanced Settings                +</a> </H3> </p>
-   <p> <H3> <a href="#" id='faqText' onClick="toggle2('faq', 'advanced', this)"> Frequently Asked Questions                +</a> </H3> </p>
 
-   <div id="faq" width="60%" style="display:none">
+<div class="container">
+<h3>Torrent Variant Caller Plugin</h3>
 
-   <table bgcolor="#EFF5FB" width="60%" >
-   <tr><td>
- <b> 1) What is new in this version of the Torrent Variant Caller (TVC) ? </b>
-                <p>In this version of the plugin you will be able to adjust all the parameters used by the Variant Caller and set the same parameters when creating a  “Plan”. For information about creating a plan please refer to the “Torrent Browser User Interface Guide” .</p>
-  </td></tr>
-  <tr><td>
-    <b>2) Will my parameters be saved for the next run when I am using the TVC interface?</b>
-        <p> No.  Every time you run the plugin the default parameters will be displayed, you can change all parameters, but they will not be saved.  It is advisable to take note of the changes you make. This information will be useful in case of needing troubleshooting.</p>
-  </td></tr>
-  <tr> <td> 
-  <b>3) How can I use my parameters repeatedly without typing them over and over?</b>
-        <p>You can create a “Plan” of analysis that can be saved and applied to several runs. Plan creation allows setting all the parameters for the TVC. For information about creating a plan please refer to the “Torrent Browser User Interface Guide” </p>
-   </td></tr>
-   <tr><td>
-    <b>4) Are there any performance improvements in this new version of TVC?</b>
-        <p> The calling of INDELs is slightly faster.
-        There is an  increase  in the number of True Positives and a  decrease in the number of False Positives for INDEL calling.</p>
-    </td></tr>
-    <tr><td>
-<b> 5) Where can I get more information about the TVC? </b>
-        <br>
-        <a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Overview of Variant Calling in Ion Sequencing Data </a> <br>
-        <a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Torrent Variant Caller Plugin </a> <br>
-        <a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Advanced Topics in Variant Calling </a> <br>
-   </td></tr>
-   </table>
-   </div>
+<div class="row">
+    <div class="span6">
 
-   <div id="advanced" style="display:none">
-   <table border="2" bgcolor="#EFF5FB">
+
+        <div class="vcSpace span4">
+            <span class="help" title="Select one of predefined Variant Caller parameter settings.
+                                      Alternatively, provide a customized settings by uploading a json parameter file
+                                      or manually editing the parameter tables below.">
+                                      Variant Caller Parameter Settings:</span>
+        </div>
+
+        <div id="configGroup" class="span4">
+            <!-- variationtype Somatic Germ_Line-->
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_high_stringency" id="germline_high_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and high frequency variants">
+                      Germ Line - High Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_low_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false negatives and high frequency variants">
+                      Germ Line - Low Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_high_stringency">
+                 <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and low frequency variants">
+                      Somatic - High Stringency</span>
+           </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_low_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false negatives and low frequency variants">
+                      Somatic - Low Stringency</span>
+            </label>
+
+            <label class="radio" style="display: none;">
+                <input type="radio" name="variationtype" value="ampliseq_dot_com">
+                <span class="help" style="font-weight:normal"
+                      title="Parameters settings downloaded from Ampliseq.com">
+                      Ampliseq.com</span>
+            </label>
+
+            <label class="radio">
+                <input id="customconfig" type="radio" name="variationtype" value="custom" disabled>
+                <span class="help" style="font-weight:normal"
+                      title="Custom parameter settings, enabled by either manually editing the parameter tables or uploading a parameters file.">
+                      Custom</span>
+            </label>
+        </div>
+
+
+        <div class="span4">
+                <span class="vcconfig"
+                      title="Populate parameter tables with values from a parameters json file.
+                             Parameters file can be obtained from a completed variant caller report page
+                             or downloaded from Ion Community.">
+                      Upload Custom Parameter Settings:</span>
+
+            <label for="files">
+                <input type="file" id="files" name="files[]"/>
+            </label>
+        </div>
+
+        <div class="span4">
+            <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7430" target="_blank">
+            Get the latest platform-optimized Parameter Settings from Ion Community</a>
+        </div>
+
+        <div class="span2">
+                        <span class="help"
+                              title="Trim reads to amplicon targets. Primarily to avoid variant sites from being covered by residual primers from overlapping amplicons.">
+                        Trim Reads:</span>
+        </div>
+        <div class="span2">
+            <input type="checkbox" id="trimreads" name="trimreads" checked="checked"/>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="row">
+
+    <table class="table table-bordered">
+        <thead>
         <tr>
-        <td width="49%"> 
-        <div id="dibayes_advanced">
-        <p> <H4> <u> SNP Caller Settings: </u> </H4> </p>
-        <table id="dibayes"> 
-        </table>
-        </div>
-        </td>
-        <td width="2%">
-        </td>
-        <td width="49%">
-        <div id="tvc_advanced">
-        <p> <H4> <u> Indel Caller Settings: </u> </H4> </p>
-        <table id="torrent-variant-caller"> 
-        </table>
-        </div>
-        <div id="assembly_advanced">
-        <p> <H4> <u> Long Indel Assembly Settings: </u> </H4> </p>
-        <table id="long-indel-assembler"> </table>
-        </div>
-        <div id="filter_advanced">
-        <p><H4> <u> Indel Filter Advanced Settings: </u> </H4> </p>
-        <table id="filter-indels"> </table>
-        </div>
-        </td>
+            <th>Parameter</th>
+            <th>SNP</th>
+            <th>INDEL</th>
+            <th class="hot hothead">Hotspot</th>
         </tr>
-   </table>
-   </div>
-   <div align="left">
-    <h3>Description and Usage Notes</h3>
-    <p>
-     This plugin analyzes mapped reads coverage over each individual reference base to deduce whether there is sufficient
-     variation to call a SNP or INDEL at that position. If a target region and/or hotspot region is defined, then this
-     analysis is restricted to just those regions and more detailed information is presented on the report pages.</p>
-    <p>
-     The target regions selected should correspond to your reference and enriched fragment library. You may also select
-     'Whole genome' to analyze coverage against the full reference, but this option is only recommended if your library (type)
-     is for a small genome and is not enriched.</p> 
-    <p>
-     A run fails almost immediately (after queuing) if your selected targeted regions do not appear to match
-     the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
-    <p>
-     NOTE: This plugin is designed to work with alignment files containing Ion Torrent flowspace information and will fail
-     to call variants for older alignments without flow order information or for combined alignments generated from runs
-     that use differrent flow sequences.</p>
-   </div>
-  </form>
-  </div>
+        </thead>
+        <tbody>
+        <tr class="zebra">
+            <td>
+                <span class="help"
+                      title="minimum coverage required on each strand or no-call">
+                    min cov each strand
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
+                       id="snp_min_cov_each_strand" class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_cov_each_strand"
+                       id="indel_min_cov_each_strand" class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
+                                   id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help"
+                      title="Phred-scaled evidence that the reads support a variant above minimum frequency">
+                    min variant score
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_variant_score" id="snp_min_variant_score"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
+                       id="indel_min_variant_score" class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_variant_score"
+                                   id="hotspot_min_variant_score" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" title="Frequency cutoff for supporting a variant">
+                    min allele freq
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_allele_freq" id="snp_min_allele_freq"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_allele_freq"
+                                   id="hotspot_min_allele_freq" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" title="Total coverage required of reads or no-call">
+                    min coverage
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_coverage" id="snp_min_coverage"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_coverage" id="indel_min_coverage"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_coverage"
+                                   id="hotspot_min_coverage" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help"
+                      title="Filter if the proportion of variant alleles comes overwhelmingly from one strand [STB] (0.5-1.0)">
+                    strand bias
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_strand_bias" id="snp_strand_bias"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_strand_bias" id="indel_strand_bias"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_strand_bias"
+                                   id="hotspot_strand_bias" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="span3 offset5">
+        <button type="button" class="btn clearfix" id="showAdv">
+            Show Advanced Settings <i class="icon-chevron-down"></i>
+        </button>
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div id="advanced" class="collapse">
+
+        <div id="torrent_variant_caller">
+            <h4>Torrent Variant Caller</h4>
+
+            <form class="form-horizontal tvc"></form>
+        </div>
+
+        <div id="long_indel_assembler">
+            <h4>Long Indel Assembly Settings</h4>
+
+            <form class="form-horizontal"></form>
+        </div>
+
+        <div id="freebayes">
+            <h4>FreeBayes</h4>
+
+            <form class="form-horizontal"></form>
+        </div>
+
+        <div id="advancedSettings">
+            <h4>Advanced Settings</h4>
+
+            <form class="form-horizontal">
+                <div class="row zebra">
+                    <div class="span3">
+                        <span>Torrent Variant Caller arguments</span>
+                    </div>
+
+                    <div class="span7">
+                        <textarea id="tvcargs" rows="5" cols="150">tvc</textarea>
+                    </div>
+
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+</div>
+
 </body>
 </html>
 

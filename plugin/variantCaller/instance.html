@@ -1,468 +1,695 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
- <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
 
- <style type="text/css">
-  #formwrap {
-   line-height: 2em;
-   background: #eef;
-   margin: 10px;
-   padding: 10px;
-   height: 500px;
-   text-align: center;
-  }
-  body {
-   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-   font-size: 14px;
-  }
-  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
- </style>
+    <link rel="stylesheet" media="all" href="/site_media/css/chosen.css"/>
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css"/>
 
- <script>
-  $(function()
-  {
-    // turn off async JavaScript so we can easily get/set var names
-    $.ajaxSetup({async: false});
-    // get the reference for the current report - TS_result is defined in run verison of this script
-    var reportUrl = '/rundb/api/v1/results/' + TB_result + '/?format=json&noplugin=True';
-    var referenceID;
-    var experimentUrl;
-    var analysisUrl;
-    $.get( reportUrl, function(data)
-    {
-     analysisUrl = data.reportLink;
-     experimentUrl = data.experiment;
-     referenceID = data.reference;
-    });
-    document.getElementById('referenceid').innerHTML = referenceID;
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
+    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/site_media/js/chosen.jquery.min.js"></script>
 
-    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + referenceID + '/unmerged/detail/';
-    $.get( refBedURL, function(data)
-    {
-      $.each( data.objects, function(intIndex,result)
-      {
-       var targfile = result.file;
-       var i = targfile.lastIndexOf('/unmerged/detail/');
-       if( i < 0 ) return true;
-       var selName = targfile.substr(i+17)
-       if( selName.substr(0,7) == 'example' ) return true;
-       var j = selName.lastIndexOf('.bed');
-       if( j > 0 )
-       {
-        selName = selName.substr(0,j);
-        if( result.meta.hotspot )
-        {
-         $("#targetloci").append("<option value='" + targfile + "'>" +  selName + "</option>");
+
+    <style type="text/css">
+        .dropdown {
+            width: 300px;
         }
-        else
-        {
-         $("#targetregions").append("<option value='" + targfile + "'>" +  selName + "</option>");
+
+        .help {
+            cursor: default;
+            border-bottom: 1px dotted #A9A9A9;
+            font-weight: bold;
         }
-       }
-      });
-    });
 
-    var descriptions = {};
-    
-    function addAdvancedSettings() {
-    var libType = $("#librarytype option:selected").val();
-    var varType = (document.getElementById('variationtype')[document.variantcaller.variationtype.selectedIndex].text).replace(/\s/g,'_');
-    var paramsFileName = libType + "." + varType + ".json";
-    $.get( '/pluginMedia/variantCaller/'+paramsFileName, function(data) {
-	if(data) {
-		var lines = data.match(/^.*((\r\n|\n|\r)|$)/gm);
-		var currGroup = "";
-		var commentText = "";
-		$.each(lines, function(intIndex, objValue) {
-				if(objValue.search("#") != -1) {
-					objValue = objValue.replace(/\#/g, "");
-					commentText = commentText + objValue + " ";
-				}
-				else if(objValue.search(":") != -1) {
-                			var tokens = objValue.split(":");
-					tokens[0] = tokens[0].replace(/\s/g, "");
-					tokens[1] = tokens[1].replace(/\s/g, "");
-				
-					if(tokens[1] == "{") {
-						currGroup = tokens[0];
-						commentText = "";
-					}
-					else {
-						var labelText = tokens[0];
-						var paramName = labelText.replace(/-/g, "___");
-						var paramValue = tokens[1].replace(/,$/, "");
-						if($("#"+paramName).length > 0) {
-							$("#"+paramName).val(paramValue);
-						}
-						else {
-							//var desc = commentText;
-							var desc = "";
-							if(desc == "") {
-								desc = descriptions[labelText]; 
-							}
-							var htmlText = "<tr>";
-							var labelName = "label_"+paramName;
-							htmlText = htmlText + "<td><span class='help' id=" + labelName +"> </span> </td>";
-							htmlText = htmlText + "<td><input type='text' size='10' id=" + paramName + "> </td> </tr>";
-							$("#"+currGroup).append(htmlText);
-							$("#"+paramName).val(paramValue);
-							var groupName = currGroup.replace(/-/g, "___");
-							$("#"+paramName).attr("name", "param__" + groupName +"__" + paramName);
-							$("#"+labelName).text(labelText+":");
-							$("#"+labelName).attr("title", desc);
-						}
-						commentText = "";
-					}
-				}
-		});
+        .vcconfig {
+            font-weight: bold;
+            border-bottom: 1px dotted #A9A9A9;
         }
-    });
-    }
 
-    function loadDescriptions() {
-    var libType = "ampliseq";
-    var varType = "Germ_Line";
-    var paramsFileName = libType + "." + varType + ".json";
-    $.get( '/pluginMedia/variantCaller/'+paramsFileName, function(data) {
-	if(data) {
-		var lines = data.match(/^.*((\r\n|\n|\r)|$)/gm);
-		var currGroup = "";
-		var commentText = "";
-		$.each(lines, function(intIndex, objValue) {
-				if(objValue.search("#") != -1) {
-					objValue = objValue.replace(/\#/g, "");
-					commentText = commentText + objValue + " ";
-				}
-				else if(objValue.search(":") != -1) {
-                			var tokens = objValue.split(":");
-					tokens[0] = tokens[0].replace(/\s/g, "");
-					tokens[1] = tokens[1].replace(/\s/g, "");
-				
-					if(tokens[1] == "{") {
-						currGroup = tokens[0];
-						commentText = "";
-					}
-					else {
-						var paramName = tokens[0];
-						var paramValue = tokens[1].replace(/,$/, "");
-						descriptions[paramName] = commentText;
-					}
-					commentText = "";
-				}
-		});
+        .vcSpace {
+            margin-bottom: 10px;
         }
-    });
-    }
-    
-    loadDescriptions();
-    addAdvancedSettings();
 
-    $("#librarytype").change(function() {
-      var opt = $("#librarytype option:selected").val();
-      if( opt == "ampliseq" ) {
-        $("#ptrim").show();
-        $("#tpadding").hide();
-        $("#ustarts").hide();
-      } else if( opt == "targetseq" ) {
-        $("#ptrim").hide();
-        $("#tpadding").show();
-        $("#ustarts").hide();
-      } else {
-        $("#ptrim").hide();
-        $("#tpadding").hide();
-        $("#ustarts").hide();
-      }
-      addAdvancedSettings();
-    });
-
-    $("#variationtype").change(function() {
-    	addAdvancedSettings();
-    });
-
-    $.fn.serializeObject = function()
-    {
-     var o = {};
-     var a = this.serializeArray();
-     $.each(a, function()
-     {
-       if (o[this.name] != null) {
-        if (!o[this.name].push) {
-         o[this.name] = [o[this.name]];
+        h4 {
+            padding-top: 15px;
+            padding-bottom: 15px;
         }
-        o[this.name].push(this.value || '');
-       } else {
-        o[this.name] = this.value || '';
-       }
-      });
-      return o;
-    };
 
-    $( function()
-    {
-     $('#postbutton').click( function()
-     {
-      // pass user selection with spaces translated to underscores
-      var libName = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].text;
-      document.variantcaller.librarytype_id.value = libName.replace(/\s/g,'_');
-      var usrSel = document.getElementById('variationtype')[document.variantcaller.variationtype.selectedIndex].text;
-      document.variantcaller.variationtype_id.value = usrSel.replace(/\s/g,'_');
-      usrSel = document.getElementById('targetregions')[document.variantcaller.targetregions.selectedIndex].text;
-      document.variantcaller.targetregions_id.value = usrSel.replace(/\s/g,'_');
-      usrSel = document.getElementById('targetloci')[document.variantcaller.targetloci.selectedIndex].text;
-      document.variantcaller.targetloci_id.value = usrSel.replace(/\s/g,'_');
-      // store the merged versions of the file: selecting None results in ""
-      var targets = document.getElementById('targetregions')[document.variantcaller.targetregions.selectedIndex].value;
-      var i = targets.lastIndexOf('/unmerged/detail/');
-      if( i < 0 )
-      {
-       document.variantcaller.targetregions_merge.value = "";
-      }
-      else
-      {
-       document.variantcaller.targetregions_merge.value = targets.substr(0,i) + '/merged/plain/' + targets.substr(i+17);
-      }
-      var hotspots = document.getElementById('targetloci')[document.variantcaller.targetloci.selectedIndex].value;
-      i = hotspots.lastIndexOf('/unmerged/detail/');
-      if( i < 0 )
-      {
-       document.variantcaller.targetloci_merge.value = "";
-      }
-      else
-      {
-       document.variantcaller.targetloci_merge.value = hotspots.substr(0,i) + '/merged/plain/' + hotspots.substr(i+17);
-      }
-      // confirm user selection combos - may later include library specific targets fields
-      var libType = document.getElementById('librarytype')[document.variantcaller.librarytype.selectedIndex].value;
-      if( libType == "fullgenome" ) {
-       if( targets != "" || hotspots != "" ) {
-        var msg = "Selecting Targeted or Hotspot regions is typically not appropriate for Library Type: " + libName;
-        msg += ". (Variants will be considered in these just regions.)";
-        msg += "\n\nDo you wish to continue?";
-        if( !confirm(msg) ) return false;
-       }
-       $("#trimreads").attr("checked",false);
-       $("#uniquestarts").attr("checked",false);
-       $("#padtargets").attr("value","0");
-      } else {
-       if( targets == "" && hotspots == "" ) {
-        var msg = "A Targeted Regions or Hotspot Regions selection is required for Library Type: " + libName;
-        alert(msg);
-        return false;
-       }
-       if( libType == "ampliseq" ) {
-        $("#uniquestarts").attr("checked",false);
-        $("#padtargets").attr("value","0");
-       } else {
-        $("#trimreads").attr("checked",false);
-       }
-      }
-      // only the checked state value can be set (always "" for unchecked)
-      $("#trimreads").attr("value", $("#trimreads").attr("checked") ? "Yes" : "");
-      $("#uniquestarts").attr("value", $("#uniquestarts").attr("checked") ? "Yes" : "");
-      var regex = /^[0-9]+$/;
-      var padval = $("#padtargets").attr("value");
-      if( !regex.test(padval) )
-      {
-       alert("Target padding value must be a non-negative integer (>=0).");
-       return false;
-      }
-      // serialize user selections and run the plugin
-      obj = $('#variantcaller').serializeObject();
-      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
-      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
-      $.ajax({ type: 'POST', url: pluginURL, async: false, contentType: "application/json; charset=utf-8", data: pluginAPIJSON, dataType: "json",
-       success: function(data)
-       {
-        $("#json_result").html(
-         '<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
-        setTimeout("parent.$.fn.colorbox.close()",2000);
-       }
-      });
-     });
-    });
+        #showAdv {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
 
-  });
+        .row {
+            margin-bottom: 8px;
+        }
 
-  function toggle2(id, id2, link) {
-  	var e = document.getElementById(id);
-  	if (e.style.display == '') {
-  		e.style.display = 'none';
-    		link.innerHTML = 'Frequently Asked Questions         +';
-  	} 
-	else {
-   		e.style.display = '';
-    		link.innerHTML = 'Frequently Asked Questions         -';
-  	}
-	document.getElementById(id2).style.display = 'none';
-	document.getElementById('advText').innerHTML = 'Advanced Settings         +';
-  }
+        .container {
+            width: 840px;
+        }
 
-  function toggle(id, id2, link) {
-  	var e = document.getElementById(id);
-  	if (e.style.display == '') {
-  		e.style.display = 'none';
-    		link.innerHTML = 'Advanced Settings         +';
-  	} 
-	else {
-   		e.style.display = '';
-    		link.innerHTML = 'Advanced Settings         -';
-  	}
-	document.getElementById(id2).style.display = 'none';
-	document.getElementById('faqText').innerHTML = 'Frequently Asked Questions         +';
- }
+        .zebra {
+            padding: 5px;
+        }
 
- </script>
+        .hot {
+            display: none;
+        }
+
+        .zebra:nth-child(odd) {
+            background: -moz-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, rgba(244, 245, 247, 0.75)), color-stop(50%, rgba(229, 230, 232, 0.75)), color-stop(100%, rgba(244, 245, 247, 0.75)));
+            background: -webkit-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -o-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: -ms-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            background: linear-gradient(to bottom, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
+            filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#bff4f5f7', endColorstr='#bff4f5f7', GradientType=0);
+        }
+
+        textarea {
+            -webkit-box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+            width: 605px;
+        }
+
+        .hide {
+            display: none;
+        }
+
+    </style>
 </head>
 
-<body>
- <div align="center">
-  <form id="variantcaller" name="variantcaller" style="margin-left:auto;margin-right:auto">
-   <h1>Torrent Variant Caller Plugin</h1>
-   <table cellpadding="5px">
-    <tr>
-     <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for variant calling.">Reference Genome:</span></td>
-     <td><div id="referenceid"></div></td>
-    </tr>
-    <tr>
-     <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
-     <td><select id="librarytype" name="librarytype" style="width:120px">
-      <option value="fullgenome">Full Genome</option>
-      <option value="ampliseq">Ion AmpliSeq</option>
-      <option value="targetseq">Ion TargetSeq</option>
-     </select></td>
-    </tr>
-    <tr>
-     <td><span class="help" title="Select the type of variants you are interested in detecting.">Variant Frequency:</span></td>
-     <td><select id="variationtype" name="variationtype" style="width:120px">
-      <option value="Germ_Line">Germ Line</option>
-      <option value="Somatic">Somatic</option>
-     </select></td>
-    </tr>
-    <tr>
-    <td><span class="help"
-       title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Notes below.">
-       Targeted Regions:</span></td>
-     <td><select id="targetregions" name="targetregions" style="width:300px"><option value="">None</option></select></td>
-    <tr>
-     <td><span class="help"
-       title="Select the 'hotspot' regions (variant loci) matching your reference and enriched fragment library. See Description and Notes below.">
-       Hotspot Regions:</span></td>
-     <td><select id="targetloci" name="targetloci" style="width:300px"><option value="">None</option></select></td>
-    </tr>
-    <tr id="ptrim" style="display:none">
-    <td><span class="help"
-       title="Trim reads to amplicon targets. Primarily to avoid variant sites from being covered by residual primers from overlapping amplicons.">
-       Trim Reads:</span></td>
-     <td><input type="checkbox" id="trimreads" name="trimreads" checked="checked" value="Yes"/></td>
-    </tr>
-    <tr id="tpadding" style="display:none">
-     <td><span class="help"
-       title="Number of bases target regions are extended at both ends. A value greater than 0 allows variants to be detected in regions where individual reads overlap the boundaries of targeted regions.">
-       Target Padding:</span></td>
-     <td><input type="text" size=6 id="padtargets" name="padtargets" value=0></select></td>
-    </tr>
-    <tr id="ustarts" style="display:none">
-     <td><span class="help"
-       title="Analyze variants for a sampling of on-target reads using just one read starting at each reference position for both read orientations. This removes bias due to non-uniform library enrichment but produces a most conservative representation of target coverage.">
-       Use Unique Starts:</span></td>
-     <td><input type="checkbox" id="uniquestarts" name="uniquestarts" value="No"/></td> 
-    </tr>
-   </table>
-   <br/>
-   <div id="json_result">
-    <input id="postbutton" type="submit" value="Submit">
-   </div>
-   <input type="hidden" id="librarytype_id" name="librarytype_id"/>
-   <input type="hidden" id="variationtype_id" name="variationtype_id"/>
-   <input type="hidden" id="targetregions_id" name="targetregions_id"/>
-   <input type="hidden" id="targetloci_id" name="targetloci_id"/>
-   <input type="hidden" id="targetregions_merge" name="targetregions_merge"/>
-   <input type="hidden" id="targetloci_merge" name="targetloci_merge"/>
-   <br/>
-   <p> <H3> <a href="#" id='advText' onClick="toggle('advanced', 'faq', this)"> Advanced Settings                +</a> </H3> </p>
-   <p> <H3> <a href="#" id='faqText' onClick="toggle2('faq', 'advanced', this)"> Frequently Asked Questions                +</a> </H3> </p>
- 
-   <div id="faq" width="60%" style="display:none">
-   
-   <table bgcolor="#EFF5FB" width="60%" >
-   <tr><td>
- <b> 1) What is new in this version of the Torrent Variant Caller (TVC) ? </b>
-		<p>In this version of the plugin you will be able to adjust all the parameters used by the Variant Caller and set the same parameters when creating a  “Plan”. For information about creating a plan please refer to the “Torrent Browser User Interface Guide” .</p>
-  </td></tr>
-  <tr><td>
-    <b>2) Will my parameters be saved for the next run when I am using the TVC interface?</b>
-	<p> No.  Every time you run the plugin the default parameters will be displayed, you can change all parameters, but they will not be saved.  It is advisable to take note of the changes you make. This information will be useful in case of needing troubleshooting.</p>
-  </td></tr>
-  <tr> <td> 
-  <b>3) How can I use my parameters repeatedly without typing them over and over?</b>
-	<p>You can create a “Plan” of analysis that can be saved and applied to several runs. Plan creation allows setting all the parameters for the TVC. For information about creating a plan please refer to the “Torrent Browser User Interface Guide” </p>
-   </td></tr>
-   <tr><td>
-    <b>4) Are there any performance improvements in this new version of TVC?</b>
-	<p> The calling of INDELs is slightly faster.
-	There is an  increase  in the number of True Positives and a  decrease in the number of False Positives for INDEL calling.</p>
-    </td></tr>
-    <tr><td>
-<b> 5) Where can I get more information about the TVC? </b>
-        <br>
-        <a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Overview of Variant Calling in Ion Sequencing Data </a> <br>
-	<a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Torrent Variant Caller Plugin </a> <br>
-	<a href="http://ioncommunity.lifetechnologies.com/login.jspa" target="_blank">Advanced Topics in Variant Calling </a> <br>
-   </td></tr>
-   </table>
-   </div>
-   <div id="advanced" style="display:none">
-   <table border="2" bgcolor="#EFF5FB">
-	<tr>
-	<td width="49%"> 
-	<div id="dibayes_advanced">
-	<p> <H4> <u> SNP Caller Settings: </u> </H4> </p>
- 	<table id="dibayes"> 
-	</table>
-	</div>
-	</td>
-	<td width="2%">
-	</td>
-	<td width="49%">
-	<div id="tvc_advanced">
-	<p> <H4> <u> Indel Caller Settings: </u> </H4> </p>
-	<table id="torrent-variant-caller"> 
-	</table>
-	</div>
-	<div id="assembly_advanced">
-	<p> <H4> <u> Long Indel Assembly Settings: </u> </H4> </p>
-	<table id="long-indel-assembler"> </table>
-	</div>
-	<div id="filter_advanced">
-	<p><H4> <u> Indel Filter Advanced Settings: </u> </H4> </p>
-	<table id="filter-indels"> </table>
-	</div>
-	</td>
-	</tr>
-   </table>
-   </div>
+<script>
 
-   <div align="left">
-    <h3>Description and Usage Notes</h3>
-    <p>
-     This plugin analyzes mapped reads coverage over each individual reference base to deduce whether there is sufficient
-     variation to call a SNP or INDEL at that position. If a target region and/or hotspot region is defined, then this
-     analysis is restricted to just those regions and more detailed information is presented on the report pages.</p>
-    <p>
-     The target regions selected should correspond to your reference and enriched fragment library. You may also select
-     'Whole genome' to analyze coverage against the full reference, but this option is only recommended if your library (type)
-     is for a small genome and is not enriched.</p> 
-    <p>
-     A run fails almost immediately (after queuing) if your selected targeted regions do not appear to match
-     the reference that the reads were mapped to. (Check the log file if the plugin status is 'Error').</p>
-    <p>
-     NOTE: This plugin is designed to work with alignment files containing Ion Torrent flowspace information and will fail
-     to call variants for older alignments without flow order information or for combined alignments generated from runs
-     that use differrent flow sequences.</p>
-   </div>
-  </form>
-  </div>
+$(function () {
+
+    function generateMeta() {
+        var meta = {};
+        var tvcargs = $("#tvcargs").val();
+        meta["reference"] = TB_result_json["fields"]["reference"];
+        meta["tvcargs"] = tvcargs.replace(/(\r\n|\n|\r)/gm, " ");
+
+        meta["librarytype"] = $("#libraryGroup input[type='radio']:checked").val();
+
+        meta["targetregions_id"] = $("#targetregions option:selected").text();
+        meta["targetregions"] = $("#targetregions option:selected").val();
+        meta["targetloci_id"] = $("#targetloci option:selected").text();
+        meta["targetloci"] = $("#targetloci option:selected").val();
+        meta["trimreads"] = $("#trimreads").prop('checked');
+
+        meta["configuration"] = $("#configGroup input[type='radio']:checked").val();
+
+        var targets = $("#targetregions").val();
+        var i = targets.lastIndexOf('/unmerged/detail/');
+
+        if (i < 0) {
+            meta["targetregions_merge"] = "";
+        } else {
+            meta["targetregions_merge"] = targets.substr(0, i) + '/merged/plain/' + targets.substr(i + 17);
+        }
+
+        var hotspots = $('#targetloci').val();
+        i = hotspots.lastIndexOf('/unmerged/detail/');
+        if (i < 0) {
+            meta["targetloci_merge"] = "";
+        } else {
+            meta["targetloci_merge"] = hotspots.substr(0, i) + '/merged/plain/' + hotspots.substr(i + 17);
+        }
+
+        return meta;
+    }
+
+    function serializeForm() {
+        //turns the input into the JSON the plugin needs
+        var output = { "torrent_variant_caller": {}, "long_indel_assembler": {}, "freebayes": {}, "meta": {} };
+        $(".plugin_input").each(function (i) {
+            output[$(this).data("key")][$(this).data("subkey")] = $(this).val();
+        });
+        //add meta to the output json
+        output["meta"] = generateMeta();
+        return output;
+    }
+
+    function advancedTmpl(data) {
+
+        var topparams = ["snp_min_cov_each_strand",
+            "snp_min_variant_score",
+            "snp_min_allele_freq",
+            "snp_min_coverage",
+            "snp_strand_bias",
+            "indel_min_cov_each_strand",
+            "indel_min_variant_score",
+            "indel_min_allele_freq",
+            "indel_min_coverage",
+            "indel_strand_bias",
+            "hotspot_min_cov_each_strand",
+            "hotspot_min_variant_score",
+            "hotspot_min_allele_freq",
+            "hotspot_min_coverage",
+            "hotspot_strand_bias"
+        ];
+
+        //write the advanced options to the ui
+        $.each(data, function (key, value) {
+            $("#" + key + "> form").html("");
+            $.each(value, function (subkey, subvalue) {
+                if ($.inArray(subkey, topparams) === -1) {
+                    tmpl = '<div class="row zebra"> <div class="span3"> <span>' + subkey + '</span> </div> <div class="span2">';
+                    tmpl += '<input class="plugin_input input-mini" data-key="' + key + '" data-subkey="' + subkey + '" type="text" id="' + subkey + '" value="' + subvalue + '">';
+                    tmpl += '</div><div class="span5"><ul>';
+
+                    //add the help as well
+                    try {
+                        $.each(window.help[key][subkey], function (i, help) {
+                            tmpl += '<li><small>' + help + '</small></li>';
+                        });
+                    } catch (e) {
+                        console.log("out of sync description.json");
+                    }
+
+                    tmpl += '</ul></div></div>';
+                    $("#" + key + "> form").append(tmpl);
+                } else {
+                    $("#" + subkey).val(subvalue);
+                }
+            });
+        });
+    }
+
+    function loadConfig(file) {
+
+        var request = $.ajax({
+            type: "GET",
+            url: file,
+            dataType: "json"
+        });
+
+        request.done(function (data) {
+            advancedTmpl(data);
+            $("#postbutton").removeAttr('disabled')
+        });
+
+        request.fail(function () {
+            console.log("failed to load json config file");
+        });
+    }
+
+    var desc = $.ajax({
+        type: "GET",
+        url: TB_pluginMedia + "configs/description.json",
+        dataType: "json",
+        async: false
+    });
+
+    desc.done(function (data) {
+        window.help = data;
+    });
+
+    //init the page
+    loadConfig(TB_pluginMedia + "configs/" + $("#configGroup input[type='radio']:checked").val() + ".json");
+
+    //load the correct config
+    $("#configGroup").find('input').click(function () {
+        var config = $("#configGroup input[type='radio']:checked").val();
+        if (config != "custom") {
+            loadConfig(TB_pluginMedia + "configs/" + config + ".json");
+        }
+    });
+
+    //if anything gets changed, select the 'custom' radio button
+    $("#tvcargs, .input-mini").live("keypress", function () {
+        $("#customconfig").prop("checked", true);
+    });
+
+    //init UI bits
+    $("#showAdv").click(function () {
+        $("#advanced").collapse('toggle');
+    });
+
+    $('.help').tooltip({"placement": "right"});
+    $('.vcconfig').tooltip({"placement": "bottom"});
+
+    $('#advanced').on('show', function () {
+        $("#showAdv").html('Hide Advanced Settings <i class="icon-chevron-up"></i>');
+    });
+
+    $('#advanced').on('hide', function () {
+        $("#showAdv").html('Show Advanced Settings <i class="icon-chevron-down"></i>');
+    });
+
+    $(".dropdown").chosen({disable_search_threshold: 5});
+
+    $('#referenceid').html(TB_result_json["fields"]["reference"]);
+
+    var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' + TB_result_json["fields"]["reference"] + '/unmerged/detail/';
+
+    $.get(refBedURL, function (data) {
+        $.each(data.objects, function (intIndex, result) {
+            var targfile = result.file;
+            var i = targfile.lastIndexOf('/unmerged/detail/');
+            if (i < 0) return true;
+            var selName = targfile.substr(i + 17);
+            if (selName.substr(0, 7) == 'example') return true;
+            var j = selName.lastIndexOf('.bed');
+            if (j > 0) {
+                selName = selName.substr(0, j);
+                if (result.meta.hotspot) {
+                    $("#targetloci").append("<option value='" + targfile + "'>" + selName + "</option>");
+                }
+                else {
+                    $("#targetregions").append("<option value='" + targfile + "'>" + selName + "</option>");
+                }
+            }
+        });
+        //chosen wants this to update the dropdowns
+        $(".dropdown").trigger("liszt:updated");
+    });
+
+    $(".libraryGroup").click(function () {
+
+        if ($("#libraryGroup input[type='radio']:checked").val() == "ampliseq") {
+            $("#ptrim").show();
+        } else {
+            $("#ptrim").hide();
+        }
+
+    });
+
+    function hotspotcol() {
+        if ($("#targetloci").val()) {
+            $(".hot, .hothead, .hotcol").show();
+        } else {
+            $(".hot, .hothead, .hotcol").hide();
+        }
+    }
+
+    hotspotcol();
+
+    //toggle the hotspot cols
+    $("#targetloci").chosen().change(
+            function () {
+                hotspotcol();
+            }
+    );
+
+    //file upload
+    function handleFileSelect(evt) {
+        var JsonObj = null;
+        var files = evt.target.files; // FileList object
+        f = files[0];
+        var reader = new FileReader();
+
+        // Closure to capture the file information.
+        reader.onload = (function (theFile) {
+            return function (e) {
+                JsonObj = e.target.result;
+                var parsedJSON = JSON.parse(JsonObj);
+
+                try {
+                    advancedTmpl(parsedJSON);
+                    $("#customconfig").prop("checked", true);
+                }
+                catch (e) {
+                    console.log("Failed");
+                    console.log(parsedJSON);
+                }
+
+
+            };
+        })(f);
+
+        // Read in JSON as a data URL.
+        reader.readAsText(f, 'UTF-8');
+    }
+
+    $("#files").change(function (evt) {
+        handleFileSelect(evt);
+    });
+
+    $('#postbutton').click(function () {
+        $('#postbutton').attr('disabled','disabled')
+        $("#postbutton").val("Submitting...");
+        //TODO: add validation
+        // serialize user selections and run the plugin
+        obj = serializeForm();
+        pluginAPIJSON = { "plugin": [TB_plugin.fields.name], "pluginconfig": obj };
+        pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+        pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+
+        $.ajax({
+            type: 'POST',
+            url: pluginURL,
+            async: false,
+            contentType: "application/json; charset=utf-8",
+            data: pluginAPIJSON, dataType: "json",
+            success: function (data) {
+                $("#json_result").html(
+                        '<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
+                setTimeout("parent.$.fn.colorbox.close()", 2000);
+            }
+        });
+
+        /*
+         console.log(obj);
+         */
+
+    });
+
+
+});
+
+</script>
+
+
+<body>
+
+<div class="container">
+<h3>Torrent Variant Caller Plugin</h3>
+
+<div class="row">
+    <div class="span6">
+
+        <div class="row">
+            <div class="span2">
+                    <span class="help"
+                          title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for variant calling.">
+                        Reference Genome:
+                    </span>
+            </div>
+            <div class="span4">
+                <div id="referenceid"></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="span2">
+                <span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span>
+            </div>
+
+            <div id="libraryGroup" class="span4">
+
+                <label class="radio">
+                    <input class="libraryGroup" type="radio" name="librarytype" value="wholegenome" checked>
+                    Whole Genome
+                </label>
+                <label class="radio">
+                    <input class="libraryGroup" type="radio" id="ampliseq" name="librarytype" value="ampliseq">
+                    AmpliSeq
+                </label>
+                <label class="radio">
+                    <input class="libraryGroup" type="radio" name="librarytype" value="targetseq">
+                    TargetSeq
+                </label>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="span2">
+                        <span class="help"
+                              title="Select the target regions (ROI) matching your reference and enriched fragment library.">
+               Targeted Regions:
+                        </span>
+            </div>
+
+            <div class="span4">
+                <select id="targetregions" name="targetregions" class="dropdown long">
+                    <option value="">None</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="span2">
+                        <span class="help"
+                              title="Select the 'hotspot' regions (variant loci) matching your reference and enriched fragment library.">
+               Hotspot Regions:</span>
+            </div>
+
+            <div class="span4">
+                <select id="targetloci" name="targetloci" class="dropdown long">
+                    <option value="">None</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="row" id="ptrim" style="display:none">
+            <div class="span2">
+                        <span class="help"
+                              title="Trim reads to amplicon targets. Primarily to avoid variant sites from being covered by residual primers from overlapping amplicons.">
+                        Trim Reads:</span>
+            </div>
+            <div class="span4">
+                <input type="checkbox" id="trimreads" name="trimreads" checked="checked"/>
+            </div>
+        </div>
+
+
+    </div>
+
+    <div class="span4">
+
+        <div class="vcSpace span4">
+            <span class="help" title="Select one of predefined Variant Caller parameter settings.
+                                      Alternatively, provide a customized settings by uploading a json parameter file
+                                      or manually editing the parameter tables below.">
+                                      Variant Caller Parameter Settings:</span>
+        </div>
+
+        <div id="configGroup" class="span4">
+            <!-- variationtype Somatic Germ_Line-->
+
+            <label class="radio">
+                <input type="radio" name="variationtype" id="germline_high_stringency" value="germline_high_stringency" checked>
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and high frequency variants">
+                      Germ Line - High Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_low_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false negatives and high frequency variants">
+                      Germ Line - Low Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_high_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and low frequency variants">
+                      Somatic - High Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_low_stringency">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false negatives and low frequency variants">
+                      Somatic - Low Stringency</span>
+            </label>
+
+            <label class="radio" style="display: none;">
+                <input type="radio" name="variationtype" value="ampliseq_dot_com">
+                <span class="help" style="font-weight:normal"
+                      title="Parameters settings downloaded from Ampliseq.com">
+                      Ampliseq.com</span>
+            </label>
+
+            <label class="radio">
+                <input id="customconfig" type="radio" name="variationtype" value="custom" disabled>
+                <span class="help" style="font-weight:normal"
+                      title="Custom parameter settings, enabled by either manually editing the parameter tables or uploading a parameters file.">
+                      Custom</span>
+            </label>
+        </div>
+
+        <div class="span4">
+            <div>
+                <span class="vcconfig"
+                      title="Populate parameter tables with values from a parameters json file.
+                             Parameters file can be obtained from a completed variant caller report page
+                             or downloaded from Ion Community.">
+                      Upload Custom Parameter Settings:</span>
+            </div>
+
+            <label for="files">
+                <input type="file" id="files" name="files[]"/>
+            </label>
+        </div>
+
+        <div class="span4">
+            <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7430" target="_blank">
+            Get the latest platform-optimized Parameter Settings from Ion Community</a>
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="row">
+
+    <table class="table table-bordered">
+        <thead>
+        <tr>
+            <th>Parameter</th>
+            <th>SNP</th>
+            <th>INDEL</th>
+            <th class="hot hothead">Hotspot</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr class="zebra">
+            <td>
+                <span class="help" style="font-weight:normal"
+                      title="Do not call variants where coverage on either strand is below this minimum value.">
+                    min cov each strand
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
+                       id="snp_min_cov_each_strand" class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_cov_each_strand"
+                       id="indel_min_cov_each_strand" class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
+                                   id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" style="font-weight:normal"
+                      title="Do not call variants where phred-scaled call quality is below this minimum value.">
+                    min variant score
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_variant_score" id="snp_min_variant_score"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
+                       id="indel_min_variant_score" class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_variant_score"
+                                   id="hotspot_min_variant_score" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" style="font-weight:normal"
+                      title="Minimum observed allele frequency required for a non-reference variant call.">
+                    min allele freq
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_allele_freq" id="snp_min_allele_freq"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_allele_freq"
+                                   id="hotspot_min_allele_freq" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" style="font-weight:normal"
+                    title="Do not call variants where total coverage on both strands is below this minimum value.">
+                    min coverage
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_coverage" id="snp_min_coverage"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_coverage" id="indel_min_coverage"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_coverage"
+                                   id="hotspot_min_coverage" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <span class="help" style="font-weight:normal"
+                      title="Do not call variants if the proportion of variant alleles comes overwhelmingly from one strand [STB] (0.5-1.0)">
+                    strand bias
+                </span>
+            </td>
+            <td><input data-key="torrent_variant_caller" data-subkey="snp_strand_bias" id="snp_strand_bias"
+                       class="snp plugin_input input-mini"/></td>
+            <td><input data-key="torrent_variant_caller" data-subkey="indel_strand_bias" id="indel_strand_bias"
+                       class="indel plugin_input input-mini"/></td>
+            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_strand_bias"
+                                   id="hotspot_strand_bias" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="span3 offset8">
+        <button type="button" class="btn clearfix" id="showAdv">
+            Show Advanced Settings <i class="icon-chevron-down"></i>
+        </button>
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div id="advanced" class="collapse">
+
+        <div id="torrent_variant_caller">
+            <h4>Torrent Variant Caller</h4>
+
+            <form class="form-horizontal tvc"></form>
+        </div>
+
+        <div id="long_indel_assembler">
+            <h4>Long Indel Assembly Settings</h4>
+
+            <form class="form-horizontal"></form>
+        </div>
+
+        <div id="freebayes">
+            <h4>FreeBayes</h4>
+
+            <form class="form-horizontal"></form>
+        </div>
+
+        <div id="advancedSettings">
+            <h4>Advanced Settings</h4>
+
+            <form class="form-horizontal">
+                <div class="row zebra">
+                    <div class="span3">
+                        <span>Torrent Variant Caller arguments</span>
+                    </div>
+
+                    <div class="span7">
+                        <textarea id="tvcargs" rows="5" cols="150">tvc</textarea>
+                    </div>
+
+                </div>
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="row">
+
+    <div class="span3 offset8">
+        <input id="postbutton" class="btn btn-primary" type="submit" value="Submit">
+    </div>
+
+</div>
+
+
+<div id="json_result"></div>
+
+<div class="row">
+    <h4>Torrent Variant Caller 3.6</h4>
+    <p>TVC 3.6 analyzes mapped reads covering each individual reference base
+       to deduce whether there is sufficient statistical evidence to support calling
+       a SNP or INDEL at a given position.
+       The analysis can be restricted to a subset of the genome by defining targeted regions.
+       If hotspot regions are defined, TVC includes their positions in the report,
+       even if variants have not been specifically identified.</p>
+    
+    <p>Get more information by visiting <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7426" target="_blank">
+      Torrent Variant Caller page on Ion Community</a>.</p>
+
+</div>
+
+</div>
+
 </body>
 </html>
 

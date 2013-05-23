@@ -13,11 +13,14 @@ from djangoinit import settings
 from iondb.plugins.config import config
 from iondb.plugins.runner import PluginRunner
 from iondb.plugins.manager import pluginmanager
+from iondb.plugins.launch_utils import depsolve, add_hold_jid
+from iondb.plugins.plugin_json import make_plugin_json
+from ion.plugin import constants
 
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 47186 $")
+__version__ = filter(str.isdigit, "$Revision: 52594 $")
 
 # Setup log file logging
 try:
@@ -142,6 +145,8 @@ def SGEPluginJob(start_json):
         # Prepare drmaa Job - SGE/gridengine only
         jt = _session.createJobTemplate()
         jt.nativeSpecification = " -q %s" % ("plugin.q")
+        if constants.Feature.EXPORT in plugin['features']:
+            jt.nativeSpecification += ' -l ep=1 '
 
         hold = plugin.get('hold_jid', [])
         if hold:
@@ -194,7 +199,57 @@ class Plugin(xmlrpc.XMLRPC):
         except:
             logger.error(traceback.format_exc())
             return -1
+    
+    def xmlrpc_launchPlugins(self, env, plugins, plugin_basefolder, url_root):
+        """
+        Launch multiple plugins with dependencies
+        """
+        msg = ''
+        logger.debug("[launchPlugins] requested plugins: " + ','.join(plugins.keys()))        
         
+        try:        
+            result_pk = env['primary_key']
+            runlevel = env.get('runlevel','')
+            
+            plugins, sorted_names = depsolve(plugins, result_pk)
+            logger.debug("[launchPlugins] depsolved launch order: " + ','.join(sorted_names))
+            
+            for name in sorted_names:
+                if name not in plugins:
+                    logger.debug("[launchPlugins] dependency plugin %s already launched" % name)                    
+                    continue                
+                p = plugins[name]
+                p = add_hold_jid(p, plugins, runlevel)
+                start_json = make_plugin_json(env,p,result_pk,plugin_basefolder,url_root)
+                
+                #TS-5227:
+                # multilevel plugins (e.g. IRU) run on 'pre', 'block' and 'post' runlevels
+                # save 'pre' level plugin folder to be used as shared folder
+                # provide separate folder to store plugin 'post' level output
+                if (runlevel == 'pre'):
+                    p['results_dir'] = start_json['runinfo']['results_dir']
+                if (runlevel == 'post'):
+                    start_json['runinfo']['results_dir'] = start_json['runinfo']['results_dir'] + "/post"
+                    
+                # launch plugin
+                try:
+                    jid = SGEPluginJob(start_json)
+                    msg += 'Launched plugin %s: jid %s, depends %s, hold_jid %s \n' % \
+                           (p['name'], jid, p['depends'], p['hold_jid'])
+                    
+                    if runlevel != 'block':
+                        p['jid'] = jid
+                    else:
+                        p.setdefault('block_jid',[]).append(jid)
+                    
+                except:
+                    logger.error(traceback.format_exc())
+                    msg += 'ERROR: Plugin %s failed to launch.\n' % p['name']
+        except:
+            logger.error(traceback.format_exc())
+            msg += 'ERROR: Failed to launch requested plugins.'
+        
+        return plugins, msg
 
     def xmlrpc_sgeStop(self, x):
         """

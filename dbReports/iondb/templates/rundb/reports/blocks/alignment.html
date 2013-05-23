@@ -1,10 +1,10 @@
 {% load humanize %}
 {% load ion_readable %}
 
-<div id="alignment" class="span3 well centered">
+<div id="alignment" class="span4 well centered">
     <div class="number-chunk">
-        {% if alignment %}
-            <h2>{{ alignment.Filtered_Mapped_Bases_in_Q17_Alignments|ion_readable }}</h2>
+        {% if ionstats_alignment %}
+            <h2>{{ ionstats_alignment.AQ17.num_bases|ion_readable }}</h2>
         {% else %}
             <h2>Still calculating.</h2>
         {% endif %}
@@ -29,30 +29,30 @@
 
             <tr>
             <th>Total Number of Bases [bp]</th>
-            <td> {{ alignment.Filtered_Mapped_Bases_in_Q17_Alignments|ion_readable }} </td>
-            <td> {{ alignment.Filtered_Mapped_Bases_in_Q20_Alignments|ion_readable }} </td>
-            <td> {{ alignment.Filtered_Mapped_Bases_in_Q47_Alignments|ion_readable }} </td>
+            <td> {{ ionstats_alignment.AQ17.num_bases|ion_readable }} </td>
+            <td> {{ ionstats_alignment.AQ20.num_bases|ion_readable }} </td>
+            <td> {{ ionstats_alignment.AQ47.num_bases|ion_readable }} </td>
             </tr>
 
             <tr>
             <th>Mean Length [bp]</th>
-            <td> {{ alignment.Filtered_Q17_Mean_Alignment_Length }} </td>
-            <td> {{ alignment.Filtered_Q20_Mean_Alignment_Length }} </td>
-            <td> {{ alignment.Filtered_Q47_Mean_Alignment_Length }} </td>
+            <td> {{ ionstats_alignment.AQ17.mean_read_length }} </td>
+            <td> {{ ionstats_alignment.AQ20.mean_read_length }} </td>
+            <td> {{ ionstats_alignment.AQ47.mean_read_length }} </td>
             </tr>
 
             <tr>
             <th>Longest Alignment [bp]</th>
-            <td> {{ alignment.Filtered_Q17_Longest_Alignment }} </td>
-            <td> {{ alignment.Filtered_Q20_Longest_Alignment }} </td>
-            <td> {{ alignment.Filtered_Q47_Longest_Alignment }} </td>
+            <td> {{ ionstats_alignment.AQ17.max_read_length }} </td>
+            <td> {{ ionstats_alignment.AQ20.max_read_length }} </td>
+            <td> {{ ionstats_alignment.AQ47.max_read_length }} </td>
             </tr>
 
             <tr>
             <th>Mean Coverage Depth</th>
-            <td> {{ alignment.Filtered_Q17_Mean_Coverage_Depth }} </td>
-            <td> {{ alignment.Filtered_Q20_Mean_Coverage_Depth }} </td>
-            <td> {{ alignment.Filtered_Q47_Mean_Coverage_Depth }} </td>
+            <td> {{ ionstats_alignment.AQ17.mean_coverage }} </td>
+            <td> {{ ionstats_alignment.AQ20.mean_coverage }} </td>
+            <td> {{ ionstats_alignment.AQ47.mean_coverage }} </td>
             </tr>
 
             </tbody>
@@ -60,11 +60,3 @@
 
 
 </div>
-<script>
-$(function(){
-    $("#usable_sequence").strength('{{usable_sequence}}',
-                        '{{usable_sequence_threshold}}',
-                        '{{usable_sequence}}',
-                        'Usable Sequence');
-});
-</script>

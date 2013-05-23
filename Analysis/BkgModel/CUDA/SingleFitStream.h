@@ -15,23 +15,21 @@
 #include "ParamStructs.h"
 #include "JobWrapper.h"
 
+#include "ChipIdDecoder.h"
 
 
-class SingleFitStream : public cudaStreamExecutionUnit
+class SimpleSingleFitStream : public cudaSimpleStreamExecutionUnit
 {
+
+  //Execution config
+  static int _bpb; // beads per block
+  static int _l1type;  // 0:sm=l1, 1:sm>l1, 2:sm<l1
+  static int _fittype; // 0:gauss newton, 1:lev mar, 2:hybrid
+  static int _hybriditer; //num iter after hyubrid switchens from GN to LM
 
   int _N;
   int _F;
 
-  static int _bpb;
-  static int _cntSingleFitStream[MAX_CUDA_DEVICES];
-
-  int _devId;
-
-  int _BeadBaseAllocSize;
-  int _FgBufferAllocSizeHost;
-  int _FgBufferAllocSizeDevice;
- 
   int _padN; 
   int _copyInSize;
   int _copyOutSize;
@@ -41,7 +39,6 @@ class SingleFitStream : public cudaStreamExecutionUnit
   //referencing memory inside the _Dev/_Host buffers!!!
 
   //host memory
-  char * _HostBeadBase;
   ConstParams* _HostConstP;
   FG_BUFFER_TYPE * _HostFgBuffer;
 
@@ -51,7 +48,7 @@ class SingleFitStream : public cudaStreamExecutionUnit
   float* _h_pDarkMatter; // NUMNUC*F
   float* _h_pEmphVector; // (MAX_HPLEN+1) *F
   float* _h_pShiftedBkg; //NUMFB*F  
-	float* _h_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
+  float* _h_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
 
   //device memory
   
@@ -69,17 +66,19 @@ class SingleFitStream : public cudaStreamExecutionUnit
   float* _d_pDarkMatter; // NUMNUC*F
   float* _d_pEmphVector; // (MAX_HPLEN+1) *F
   float* _d_pShiftedBkg; //NUMFB*F  
-	float* _d_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
+  float* _d_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
 
 
   // device pointers to transposed 
   // bead params
   float* _d_pR; //N
   float* _d_pCopies; //N
-  float* _d_pAmpl; // N
-  float* _d_pKmult; // N
+  float* _d_pAmpl; // N * NUMFB
+  float* _d_pKmult; // N * NUMFB
   float* _d_pDmult; // N
   float* _d_pGain; // N
+  float* _d_pTau_Adj; // N
+  float* _d_pPCA_Vals; // N * NUM_DM_PCA
 
   //device pointers to transposed
   //bead state 
@@ -96,28 +95,34 @@ class SingleFitStream : public cudaStreamExecutionUnit
   float *avg_err;
 
   //device scratch space pointers
-//  float* _d_pTauB; // FNUM* N
-//  float* _d_pSP; // N*NUMFB
-//  float* _d_pwtScale; //N 
-   float* _d_err; // NxF
+  float* _d_err; // NxF
   float* _d_fval; // NxF
   float* _d_tmp_fval; // NxF
-  float* _d_jac; // NxF 
-  float* _d_pMeanErr; // N*NUMFB
+  float* _d_jac; // 3xNxF 
+  float* _d_pMeanErr; // NxNUMFB
+  float* _d_avg_trc; // NxF
 
-  WorkSet _myJob;
+  // host and device pointer for xtalk
+  ConstXtalkParams* _HostConstXtalkP;
+  int* _HostNeiIdxMap;
+  float* _d_pXtalk;
+  float* _d_pNeiContribution;
+  int* _d_pNeiIdxMap;
+  float* _d_pXtalkScratch;
 
-
-//  int * _DevMonitor;   
-//  int * _HostMonitor;
+ //TODO Monitor
+ // int * _DevMonitor;   
+ // int * _HostMonitor;
+ // static int * _IterBuffer;
 protected:
 
   void cleanUp();
-
+  int l1DefaultSetting();
+  int BlockSizeDefaultSetting();
 public:
 
-  SingleFitStream(WorkerInfoQueue * Q);
-  ~SingleFitStream();
+  SimpleSingleFitStream(streamResources * res, WorkerInfoQueueItem info);
+  ~SimpleSingleFitStream();
 
 
   void resetPointers();
@@ -125,18 +130,33 @@ public:
   void preProcessCpuSteps();
 
   // implementatin of stream execution methods
-  bool ValidJob();
-  void ExecuteJob(int * control = NULL);
+  void ExecuteJob();
   int handleResults();
 
+  int getBeadsPerBlock();
+  int getL1Setting();
+
   static void setBeadsPerBLock(int bpb);
+  static void setL1Setting(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
+  static void setFitType(int type); // 0:gauss newton, 1:lev mar
+  static void setHybridIter(int hybridIter); 
+
+  static void printSettings();
+
+
+  static size_t getScratchSpaceAllocSize(WorkSet Job);
+  static size_t getMaxHostMem();  
+  static size_t getMaxDeviceMem(int numFrames = 0, int numBeads = 0);
+
+  //static void printDeleteMonitor();
 
 private:
   void prepareInputs();
   void copyToDevice();
   void executeKernel();
   void copyToHost();
-
 };
+
+
 
 #endif // SINGLEFITSTREAM_H

@@ -90,5 +90,6 @@ export(
   RepeatSeqBasecalling,
   writeFASTQ,
   calcHypothesesDistances,
-  SimulateAndSolveSeq
+  SimulateAndSolveSeq,
+  readIonBamStack
 )

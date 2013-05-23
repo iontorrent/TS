@@ -12,7 +12,11 @@ QUICK START on Ubuntu 10.04 (=Lucid)
         libatlas-headers \
         gfortran \
         zlib1g-dev \
-        libgsl0-dev
+        libgsl0-dev \
+        libbz2-dev \
+        libcurl4-openssl-dev \
+        libncurses-dev
+
 
    ./buildTools/build.sh
 
@@ -38,7 +42,14 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
         zlib1g-dev \
         libarmadillo-dev \
         libboost-serialization-dev \
-        libgsl0-dev
+        libgsl0-dev \
+        libncurses-dev \
+        libbz2-dev
+        libbz2-dev \
+        libcurl4-openssl-dev \
+        libncurses-dev
+
+   # icc needs sudo apt-get install libboost1.42-all-dev
 
    ./buildTools/build.sh
 

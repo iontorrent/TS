@@ -17,7 +17,7 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
 
   try {
     //vector<string> beadParamFile = Rcpp::as< vector<string> > (RbeadParamFile);
-    //RcppStringVector tBeadParamFile(RbeadParamFile);
+    //Rcpp::StringVector tBeadParamFile(RbeadParamFile);
     string beadParamFile = Rcpp::as< string > (RbeadParamFile);
     vector<int> colInt           = Rcpp::as< vector<int> > (Rcol);
     vector<int> rowInt = Rcpp::as< vector<int> > (Rrow);
@@ -113,7 +113,7 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
 	  }
     beadParam.Close();
     
-    //RcppMatrix< double > resErrMat(nRow*nCol,nonZeroFlow);    
+    //Rcpp::NumericMatrix resErrMat(nRow*nCol,nonZeroFlow);    
     vector<int> colOutInt,rowOutInt,flowOutInt;
     colOutInt.resize(colOut.size());
     for(unsigned int i=0;i<colOutInt.size();++i)
@@ -136,9 +136,9 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
     regFlowMean.reserve(nReg * nFlow);
     regFlowMedian.reserve(nReg * nFlow);
     regFlowSd.reserve(nReg * nFlow);
-    RcppMatrix<double> mregFlowMean(nReg,nFlow);
-    RcppMatrix<double> mregFlowMedian(nReg,nFlow);
-    RcppMatrix<double> mregFlowSd(nReg,nFlow);
+    Rcpp::NumericMatrix mregFlowMean(nReg,nFlow);
+    Rcpp::NumericMatrix mregFlowMedian(nReg,nFlow);
+    Rcpp::NumericMatrix mregFlowSd(nReg,nFlow);
 
     for(size_t i=0;i<regStats.size();++i)
       {
@@ -167,48 +167,48 @@ RcppExport SEXP readFitResidualR(SEXP RbeadParamFile, SEXP Rcol, SEXP Rrow, SEXP
 	  if(regFlowStats[nFlow * ireg + iflow].GetNumSeen()>0)
 	    mregFlowMedian(ireg,iflow) = (double)regFlowStats.at(nFlow * ireg + iflow).GetMedian();
 	}
-    RcppResultSet rs;
-    rs.add("beadParamFile", beadParamFile);
-    rs.add("nCol", (int)nCol);
-    rs.add("nRow", (int)nRow);
-    rs.add("nFlow", (int)nFlow);
-    rs.add("nRegCol",nRegCol);
-    rs.add("nRegRow",nRegRow);
-    rs.add("col", colOutInt);
-    rs.add("row",rowOutInt);
-    rs.add("flow",flowOutInt);
-    rs.add("regRow",regRow);
-    rs.add("regCol",regCol);
+    std::map<std::string,SEXP> map;
+    map["beadParamFile"] = Rcpp::wrap( beadParamFile );
+    map["nCol"]          = Rcpp::wrap( (int)nCol );
+    map["nRow"]          = Rcpp::wrap( (int)nRow );
+    map["nFlow"]         = Rcpp::wrap( (int)nFlow );
+    map["nRegCol"]       = Rcpp::wrap( nRegCol );
+    map["nRegRow"]       = Rcpp::wrap( nRegRow );
+    map["col"]           = Rcpp::wrap( colOutInt );
+    map["row"]           = Rcpp::wrap( rowOutInt );
+    map["flow"]          = Rcpp::wrap( flowOutInt );
+    map["regRow"]        = Rcpp::wrap( regRow );
+    map["regCol"]        = Rcpp::wrap( regCol );
     if ( returnResErr ) 
-      rs.add("res_error",resErr);
+      map["res_error"]   = Rcpp::wrap( resErr );
     if(returnRegStats)
       {
 	vector<double> dregMean(regMean.begin(),regMean.end());
 	vector<double> dregMedian(regMedian.begin(),regMedian.end());
 	vector<double> dregSd(regSd.begin(),regSd.end());
-	rs.add("regMean",dregMean);
-	rs.add("regMedian",dregMedian);
-	rs.add("regSd",dregSd);
+    map["regMean"]       = Rcpp::wrap( dregMean );
+    map["regMedian"]     = Rcpp::wrap( dregMedian );
+    map["regSd"]         = Rcpp::wrap( dregSd );
       }
     if(returnRegFlowStats)
       {
 	vector<double> dregFlowMean(regFlowMean.begin(),regFlowMean.end());
 	vector<double> dregFlowMedian(regFlowMedian.begin(),regFlowMedian.end());
 	vector<double> dregFlowSd(regFlowSd.begin(),regFlowSd.end());
-	rs.add("regFlowMean",dregFlowMean);
-	rs.add("regFlowMedian",dregFlowMedian);
-	rs.add("regFlowSd",dregFlowSd);
+    map["regFlowMean"]       = Rcpp::wrap( dregFlowMean );
+    map["regFlowMedian"]     = Rcpp::wrap( dregFlowMedian );
+    map["regFlowSd"]         = Rcpp::wrap( dregFlowSd );
 
-	rs.add("mregFlowMean",mregFlowMean);
-	rs.add("mregFlowMedian",mregFlowMedian);
-	rs.add("mregFlowSd",mregFlowSd);
+    map["mregFlowMean"]      = Rcpp::wrap( mregFlowMean );
+    map["mregFlowMedian"]    = Rcpp::wrap( mregFlowMedian );
+    map["mregFlowSd"]        = Rcpp::wrap( mregFlowSd );
       }
-    ret = rs.getReturnList();
+    ret = Rcpp::wrap( map );
   }
   catch(exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch (...) {
-    exceptionMesg = copyMessageToR("Unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
   
   if ( exceptionMesg != NULL)

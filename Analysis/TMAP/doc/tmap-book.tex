@@ -1,0 +1,1125 @@
+\documentclass[a4paper,12pt]{book}
+
+\usepackage{natbib}
+\usepackage{amsmath}
+\usepackage[pdftex]{graphicx}
+\usepackage{array}
+\usepackage{moreverb}
+\usepackage{color}
+\usepackage{minitoc}
+\usepackage[plainpages=false,pdfpagelabels]{hyperref}
+\usepackage{url}
+% new color
+\definecolor{mylinkcolor}{rgb}{0,0,0.75}
+\definecolor{mycitecolor}{rgb}{0,0.5,0}
+\definecolor{myfilecolor}{rgb}{1,0,0}
+\definecolor{myurlcolor}{rgb}{0.25,0.5,0.25}
+\hypersetup{
+bookmarks=true,         % show bookmarks bar?
+pdftoolbar=true,        % show Acrobat’s toolbar?
+pdfmenubar=true,        % show Acrobat’s menu?
+pdffitwindow=true,       % page fit to window when opened
+colorlinks=true,        % false: boxed links; true: colored links
+linkcolor=mylinkcolor,  % color of internal links
+citecolor=mycitecolor,  % color of links to bibliography
+filecolor=myfilecolor,    % color of file links
+urlcolor=myurlcolor     % color of external links
+}
+
+\usepackage[all]{hypcap}
+\usepackage{courier}
+
+% TODO check all options are present
+
+% Version number
+\newcommand{\Version}{3.4.1}
+
+% layout
+\setlength\topmargin{0in}
+\setlength\headheight{0in}
+\setlength\headsep{1in}
+\setlength\textheight{7.7in}
+\setlength\textwidth{6.5in}
+\setlength\oddsidemargin{0in}
+\setlength\evensidemargin{0in}
+\pagestyle{headings}
+
+% Set that there is no numbering for chapters, parts, sections, etc.
+\setcounter{secnumdepth}{2}
+% Set that there is a table of contents for all.
+\setcounter{tocdepth}{2}
+
+% MACROS
+\newcommand{\TT}[1]{{\tt #1}} % typewriter typeface
+\newcommand{\BF}[1]{{\bf #1}} % bold
+\newcommand{\IF}[1]{{\it #1}} % italic
+\newcommand{\QU}[1]{``#1''} % strict quotation marks
+\newenvironment{script}{\\\\\footnotesize\$\TT}{\normalsize\\\\}
+
+% DATE
+\author{Nils Homer}
+\date{}
+\title{TMAP: the torrent mapping program
+\thanks{Copyright \copyright 2010-2011 Ion Torrent Systems, Inc. All Rights, made for TMAP version \Version}
+}
+\begin{document}
+\frontmatter
+
+% TITLE PAGE
+%\thispagestyle{empty} % Suppress page numberings on the first page
+\maketitle
+
+% TABLE OF CONTENTS
+\dominitoc
+\tableofcontents
+\addcontentsline{toc}{chapter}{Table of Contents}
+
+%\listoffigures
+%\addcontentsline{toc}{chapter}{List of Figures}
+%\listoftables
+%\addcontentsline{toc}{chapter}{List of Tables}
+
+\chapter{Preface}
+This document is meant to serve as a guide for the practical use of TMAP.
+It includes explanations of all command-line options for each command and binary in TMAP to give an idea of basic usage.
+Input and output file formats are also detailed.
+The default options of the various programs are designed intelligently to adapt to the various program uses, but in some cases the options may need to be customized.
+
+This document does not try to explain the underlying algorithms or data-structures used in TMAP.
+Without proper understanding of the underlying algorithms, it is difficult to use this very flexible program knowledgeably to obtain your desired results.
+Please see \autoref{chap:faq} for common questions and their answers.
+
+If you have anything that you would be useful to add to this guide, feel free to relay the addition to the TMAP developers.
+This includes but is not limited to bugs, typos, and explanations.
+Please see the \url{http://ioncommunity.iontorrent.com}{Ion Community} for more details.
+
+Enjoy!
+
+%\section{Acknowledgements}
+\mainmatter
+
+\chapter{Basic Usage}
+
+\section{Program Organization}
+TMAP consists of a set of utilities, combined into one command line program called \TT{tmap}.  
+Each utility is specified by a unique name or command.
+Specifying TMAP without a command will give a list of commands, while specifying TMAP with a command but no options will give a list of options for that command.
+
+There are two steps in mapping with TMAP.
+The first step is to build an index of the reference genome onto which we map.
+This index needs only to be built once for each genome, performing much of the mapping work upfront.
+The second step is to map the reads to the reference genome using this index.
+
+TMAP is implemented as a command-line program.
+It accepts many command-line options to customize and tune the mapping algorithm.
+The key commands are organized into one binary program called \TT{tmap}.
+To access each command, we use \TT{tmap <name>}, where \TT{<name>} is the name of the command we wish to execute.
+
+\section{Officially Supported Versions}
+The latest TMAP is unsupported.  
+To use a supported version, please see the TMAP version associated with a Torrent Suite release in \autoref{tab:tmap2TS}
+\begin{table}
+	\begin{tabular}{|l|>{\small}l|}
+		\hline
+		Torrent Suite 2.2 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.3.7} \\ \hline
+		Torrent Suite 2.0.1 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.2.3} \\ \hline
+		Torrent Suite 2.0 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.2.3} \\ \hline
+		Torrent Suite 1.5.1 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.1.3} \\ \hline
+		Torrent Suite 1.5 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.1.3} \\ \hline
+		Torrent Suite 1.4.1 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.0.28} \\ \hline
+		Torrent Suite 1.4 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.0.25} \\ \hline
+		Torrent Suite 1.3 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.0.19} \\ \hline
+		Torrent Suite 1.2 & \url{http://github.com/iontorrent/TMAP/tarball/tmap.0.0.9} \\ \hline
+		Latest TMAP & \url{http://github.com/iontorrent/TMAP/tags} \\ \hline
+	\end{tabular}
+	\caption{TMAP versions associated with Torrent Suite versions}
+	\label{tab:tmap2TS}
+\end{table}
+
+\section{Common Mapping Options}
+\label{sec:commonoptions}
+Some common options exist across some or all of the mapping commands (\TT{map1}, \TT{map2}, \TT{map3}, \TT{map4}, \TT{mapvsw} and \TT{mapall}). 
+These options will be discussed here to avoid duplication.
+
+The TMAP mapping commands can accept their input file from the standard input stream.
+The output of these commands also write to the standard output stream.
+This facilitates the use of these TMAP commands in a pipe-and-filter model.
+
+\subsection{Global Options}
+\subsubsection{\TT{-f,--fn-fasta FILE}}
+Specifies the file name of the reference genome in FASTA format.
+The maximum number of bases in the reference genome can be $4294967295$, due to the use of 32-bit values to represent each position in the reference.
+
+\subsubsection{\TT{-r,--fn-reads FILE}}
+Specifies the file name of the reads to mapped.
+The input reads can be in FASTA, FASTQ, or SFF format.
+If an SFF is input, only reads that have a matching key sequence will be mapped.
+
+\subsubsection{\TT{-i,--reads-format STRING}}
+Specifies the file format of the reads file.
+Without this option, the format is auto-recognized by the file extension.
+The valid inputs are \TT{fa} or \TT{fasta} for FASTA, \TT {fq} or \TT{fastq} for FASTQ, or \TT{sff} for SFF.
+If compiled with SAMTools support, the option also supports \TT{sam} for SAM, or \TT{bam} for BAM.
+
+\subsubsection{\TT{-s,--fn-sam FILE}}
+Specifies the file name of the output file SAM format.
+If this is not specified, the output will be written to stdout.
+
+\subsubsection{\TT{-A,--score-match INT}}
+Specifies the match score.
+This number must always be positive.
+
+\subsubsection{\TT{-M,--pen-mismatch INT}}
+Specifies the mismatch penalty.
+This number must always be positive.
+
+\subsubsection{\TT{-O,--pen-gap-open INT}}
+Specifies the gap open penalty.
+This number must always be positive.
+
+See \autoref{sec:indel-scoring} for more information how insertions and deletions are scored.
+\subsubsection{\TT{-E,--pen-gap-extension INT}}
+Specifies the gap extension penalty.
+This number must always be positive.
+See \autoref{sec:indel-scoring} for more information how insertions and deletions are scored.
+
+\subsubsection{\TT{-G,--pen-gap-long INT}}
+Specifies the long gap penalty.
+This number must always be positive.
+See \autoref{sec:indel-scoring} for more information how insertions and deletions are scored.
+
+\subsubsection{\TT{-K,--gap-long-length INT}}
+Specifies the number of extra bases to add when searching for long indels.
+If this number is negative, long indels are not considered.
+See \autoref{sec:indel-scoring} for more information how insertions and deletions are scored.
+
+\subsubsection{\TT{-w,--band,width INT}}
+Specifies the band width for local alignment.
+This number must always be positive.
+
+\subsubsection{\TT{-g,--softclip-type INT}}
+Specifies that the type of soft-clipping to perform.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item soft-clip both the left and right portions of the read.
+	\item soft-clip only the left portion of the read.
+	\item soft-clip only the right portion of the read.
+	\item do not soft-clip any portion of the read
+\end{enumerate}
+See \autoref{sec:howtosoftclip} to learn how bases are soft clipped.
+
+\subsubsection{\TT{-W,--duplicate-window INT}}
+Specifies to remove duplicate mappings that occur within this bp window.
+
+\subsubsection{\TT{-B,--max-seed-band INT}}
+Specifies the window in bases in which to group seeds prior to Smith Waterman.
+
+\subsubsection{\TT{-U,--unroll-banding}}
+Specifies to unroll the grouped seeds from banding if multiple alignments are found.
+With this option, if multiple best scoring alignments are found within a group of seeds (see \TT{-B}), the seeds are ungrouped and Smith Waterman is performed on each seed.
+
+\subsubsection{\TT{--long-hit-mult FLOAT}}
+Specifies the multiplier of the query length for a minimum target length to identify a repetitive group.
+When seeds are merged into groups for Smith Waterman scoring, sometimes tandem repeats (ex. chr1:1796527-1797575) can be grouped into one hit.
+Then the mapping quality is artificially large as sub-optimal hits in this region are not considered.
+Therefore, if the target length for a group is larger than this value times the query (read) length, then the sub-optimal score is set to a value slightly smaller than the returned score for this group.
+This should result in more accurate mappings.
+
+\subsubsection{\TT{-T,--score-thres INT}}
+Specifies the number of multiples of the match score (\TT{-A}) for the minimum scoring threshold.
+
+\subsubsection{\TT{-q,--reads-queue-size INT}}
+Specifies the number of reads to cache or load into memory at one time.
+
+\subsubsection{\TT{-n,--num-threads INT}}
+Specifies the number of threads to run.
+The default value will be auto-detected on the system.
+
+\subsubsection{\TT{-a,--aln-output-mode INT}}
+Specifies the output filter for the mappings.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item returns the mapping with the best score only if all other mappings had worse score, otherwise the read is unmapped.
+	\item returns the mapping with the best score.  
+		If more than one mapping has this score, a random mapping with this score is returned.
+	\item returns all the mappings with the best score.
+	\item returns all the mappings, regardless of score.
+\end{enumerate}
+Reads that have no mapping are returned as unmapped reads.
+
+\subsubsection{\TT{-R,--sam-read-group STRING}}
+Specifies the RG (read group) line to use in the SAM file (with tab separators).
+The ``PG'', ``FO'', and ``KS'' tags should not be specified in this string; they will be added by tmap.
+Alternatively, multiple \TT{-R} options can also be used to populate the RG line. 
+For example, \TT{-R CN:SEQUENCING\_CENTER -R PG:TMAP -R PL:IONTORRENT} will populate the \TT{CN}, \TT{PG}, and \TT{PL} tags in the RG record.
+
+\subsubsection{\TT{-D,--bidirectional}}
+Specifies the input reads are to be annotated as bidirectional using the XB SAM record optional tag.
+
+\subsubsection{\TT{-I,--use-seq-equal}}
+Specifies to use the '=' symbol in the SEQ field.
+
+\subsubsection{\TT{-u,--rand-read-name}}
+Specifies to randomize based on the read name.
+
+\subsubsection{\TT{--prefix-exclude INT}}
+Specifies the number of letters to be excluded from the prefix of read name before we randomize based on the read name. This is only effective when -u is set.
+
+\subsubsection{\TT{--suffix-exclude INT}}
+Specifies the number of letters to be excluded from the suffix of read name before we randomize based on the read name. This is only effective when -u is set
+.
+
+
+\subsubsection{\TT{-C,--ignore-rg-from-sam}}
+Specifies to do not use the RG header and RG record tags in the SAM file (if the input file is a SAM file, and SAM input files are enabled).
+
+\subsubsection{\TT{-j,--input-bz2}, \TT{-z,--input-gz}}
+Specifies that the input is bzip2 (\TT{-j}) or gzip (\TT{-z}) compressed.
+This is auto-recognized if the input file name has the extension \TT{.bz2} for bzip2 and \TT{.gz} for gzip.
+
+\subsubsection{\TT{-o,--output-type}}
+Specifies the output type:
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item SAM.
+	\item BAM (compressed). This is equivalent of using \TT{-o 0} and piping the output into \TT{samtools view -Sb -}.
+	\item BAM (uncompressed). This is equivalent of using \TT{-o 0} and piping the output into \TT{samtools view -Su -}.
+\end{enumerate}
+
+\subsubsection{\TT{--end-repair}}
+Specifies to perform end repair.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item Disable.
+	\item Prefer mismatches (when breaking ties).
+	\item Prefer indels (when breaking ties).
+\end{enumerate}
+The basic algorithm is to examine each alignment for a stretch of match/mismatches at the 5' end of the read with at least one mismatch.
+We then perform a new Smith-Waterman alignment on a prefix of the read (beginning/5'-end) where we set the gap open penalty is set to zero, the gap extension penalty is set to the previous mismatch penalty, and the mismatch penalty is set to effectively infinity.
+
+This solves a problem where mismatches can be over-represented at the 5' end of the read when no 5' soft-clipping is performed, and there is a more likely (homopolymer error) explanation.
+
+\subsubsection{\TT{-J,--max-adapter-bases-for-soft-clipping}}
+Specifies to perform 3' soft-clipping (via -g) if at most this \# of adapter bases were found (ZB tag).
+
+\subsubsection{\TT{-k,--shared-memory-key INT}}
+Specifies the shared memory key if the reference index has been loaded into shared memory.
+
+\subsubsection{\TT{-H,--vsw-type INT}}
+Specifies the vectorized Smith Waterman algorithm to use.
+There are many existing implementations of Smith Waterman, which is a crucial step in TMAP used to determine the quality of each candidate alignment.
+TMAP includes a number of implementations, including those obtained from a  \href{http://community.topcoder.com/longcontest/?module=ViewProblemStatement&rd=15078&pm=11786}{Top Coder contest}.
+These implementations vary on speed and correctness, and so your mileage may vary.  
+Please proceed with caution. 
+The algorithms included are:
+\begin{enumerate}
+\item lh3/ksw.c/nh13
+\item simple VSW
+\item SHRiMP2 VSW [not working]
+\item Psyho (Top Coder \#1)
+\item ACRush (Top Coder \#2)
+\item folsena (Top Coder \#3)
+\item logicmachine (Top Coder \#4)
+\item venco (Top Coder \#5) [not working]
+\item Bladze (Top Coder \#6)
+\item ngthuydiem (Top Coder \#7) [Farrar cut-and-paste]
+\end{enumerate}
+NB: currently only \#1, \#4, and \#6 have been tested.
+\subsubsection{\TT{-v,--verbose}}
+Specifies to print verbose progress messages, otherwise progress messages will be surpressed.
+
+\subsubsection{\TT{-h,--help}}
+Specifies to print a help message, listing all available options.
+
+\subsubsection{\TT{--min-seq-length INT}}
+Specifies the minimum sequence length to consider (inclusive).
+This is applied to each algorithm independently.
+Therefore, when using \TT{mapall}, we could specify a unique sequence length range (using \TT{---min-seq-length} and \TT{---max-seq-length}) each algorithm.
+
+\subsubsection{\TT{--max-seq-length INT}}
+Specifies the maximum sequence length to consider (inclusive).
+This is applied to each algorithm independently.
+Therefore, when using \TT{mapall}, we could specify a unique sequence length range (using \TT{---min-seq-length} and \TT{---max-seq-length}) each algorithm.
+
+\subsection{Flowspace Options}
+These options control how TMAP uses and outputs information about the flow order from the sequencing machine.
+Flow space re-alignment will be performed when the flow order is specified (\TT{-F,--flow-order}).
+See \autoref{sec:fs-realign} for a description of flow space re-alignment.
+
+\subsubsection{\TT{-X,--pen-flow-error INT}}
+Specifies the flow score penalty.
+This number must always be positive.
+
+\subsubsection{\TT{-y,--softclip-key}}
+Specifies to soft clip only the last base of the key sequence.
+
+\subsubsection{\TT{-Y,--sam-flowspace-tags}}
+Specifies that flowspace specific tags should be added to the output SAM file when available.
+See \autoref{sec:samformat} for more information.
+
+\subsubsection{\TT{-N,--ignore-flowgram}}
+Specifies to not use the flowgram, otherwise uses the flowgram for flowspace re-alignment when available.
+
+\subsubsection{\TT{-G,--remove-sff-clipping}}
+Specifies to not remove bases and qualities based on the adapter and quality clipping fields found in the an input SFF file.
+
+\subsubsection{\TT{-F,--final-flowspace}}
+Specifies to produce the final alignment in flow space.
+
+\subsection{Pairing Options}
+These options control how TMAP uses and outputs information about the paired end or mate pair reads.
+Pairing will be performed when exactly two input read files are given using the \TT{-r} option twice.
+The insert size distribution (mean and standard deviation) are computed from the first chunk of reads (\TT{-q}).
+Currently, the strandedness (\TT{-S}) and positioning (\TT{-P}) must be given.
+Read rescue significantly improves specificity at the cost of slower run times.
+
+\subsubsection{\TT{-Q,--pairing}}
+Specifies the pairing orientation.
+This will override \TT{-S} and \TT{-P}.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item no pairing is to be performed
+	\item 1 - mate pairs (\TT{-S 0 -P 1})
+	\item 2 - paired end (\TT{-S 1 -P 0})
+\end{enumerate}
+
+\subsubsection{\TT{-S,--strandedness}}
+Specifies the strand orientation between the pairs.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item the reads should be mapped to the same strand
+	\item the reads should be mapped to opposite strands
+\end{enumerate}
+
+\subsubsection{\TT{-P,--positioning}}
+Specifies that position orientation between the pairs.
+\begin{enumerate}
+	\setcounter{enumi}{-1} % start at zero
+	\item the first read of the pair (A) is before the second read of the pair (B).
+	\item the second read of the pair (B) is before the first read of the pair (A).
+\end{enumerate}
+
+\subsubsection{\TT{-b,--ins-size-mean FLOAT}}
+Specifies the expected mean insert size.
+
+\subsubsection{\TT{-c,--ins-size-std FLOAT}}
+Specifies the expected insert size standard deviations.
+
+\subsubsection{\TT{-d,--ins-size-std-max-num FLOAT}}
+Specifies the maximum number of standard deviations for a pair to be proper.
+See \autoref{sec:samformat} for more informaton about proper pairs.
+
+
+\subsubsection{\TT{-p,--ins-size-outlier-bound FLOAT}}
+Specifies the insert size 25/75 quartile outlier bound.
+
+\subsubsection{\TT{-t,--ins-size-min-mapq INT}}
+Specifies the minimum mapping quality to consider for computing the insert size.
+
+\subsubsection{\TT{-L,--read-rescue}}
+Specifies to perform read rescuing during pairing.
+
+\subsubsection{\TT{-l,--read-rescue-std-num FLOAT}}
+Specifies the number of insert size standard deviations to search around the inferred rescue position.
+
+\subsubsection{\TT{-m,--read-rescue-mapq-thr INT}}
+Specifies the mapping quality threshold for read rescue.
+
+\section{tmap index}
+\label{sec:index}
+The \BF{index} command creates a compact version of the reference genome and associated index.
+The index is stored as a compressed suffix array using the FM-index and BWT transform (\cite{FM-index,BWT}).
+A hash into this index accelerates this lookups of DNA sequences in this index.
+In fact, a second additional index of the reference genome is created that indexes the reverse (but not complimented) reference genome.
+This second index further speeds up the search time.
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+
+\subsubsection{\TT{-o INT}}
+Specifies the occurence interval size $o$, storing only every $o$th occurrence interval.
+This be a power of two greater than or equal to $32$.
+
+\subsubsection{\TT{-w INT}}
+Specifies the k-mer size (the number of bases) to hash.
+The size of the hash give the k-mer size $k$ in bytes is:
+\[
+= 2 \sum_{n=1}^{k} 4^{n}
+= 2 \left(\frac{1 - 4^{k+1}}{1-4} - 1\right)
+\]
+using the Taylor series.
+
+\subsubsection{\TT{-i INT}}
+Specifies the suffix array interval size $i$, storing only every $i$th suffix array interval.
+This must be one, or a powerof two.
+
+\subsubsection{\TT{-a STRING}}
+Specifies the BWT construction algorithm (\TT{bwtsw} or \TT{is}).
+The \TT{bwtsw} algorithm is for genomes larger than or equal to $10$Mb, and the \TT{is} algorithm is for genomes smaller than $10$Mb.
+This will be auto-recognized during index creation if this option is omitted.
+
+\subsubsection{\TT{-H}}
+Specifies to not validate the BWT hash.
+
+\subsubsection{\TT{--version}}
+Specifies to print the index format that will be created byt TMAP and exit.
+Format strings are of the form \TT{tmap-f<n>}, where \TT{<n>} will only increase as new formats are created.
+Format strings will be the same for all compatible indices.
+\subsection{IUPAC Ambiguity Codes}
+Please see \autoref{sec:iupac} for more details. 
+
+\section{tmap map1}
+\label{sec:map1}
+The \BF{map1} is a command to quickly map short sequences to a reference genome by intelligently enumerating errors.
+This algorithm is not well suited for longer reads ($<150$bp) and based off of the BWA short-read algorithm (\cite{BWA-short}).
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+
+\subsubsection{\TT{--seed-length INT}}
+Specifies the primary seed (k-mer) length; reads must be of at least this length.
+
+\subsubsection{\TT{--seed-max-diff INT}}
+Specifies the maximum number of edits allowed in the primary seed.
+This includes both mismatches and each base in an insertion or deletion. 
+
+\subsubsection{\TT{--seed2-length INT}}
+Specifies the secondary seed (k-mer) length; this number of bases will be examimed before extending all mappings.
+
+\subsubsection{\TT{--max-diff NUM}}
+Specified the maximum number of edits or false-negative probability assuming the maximum error rate (\TT{--max-error-rate}).
+This former includes both mismatches and each base in an insertion or deletion. 
+The latter false-negative probability is the probability of not consideing the correct mapping if it exists. 
+
+\subsubsection{\TT{--max-error-rate NUM}}
+Specified the assumed maximum per-base error rate.
+This classifies both mismatches and each base in an insertion or deletion as errors 
+
+\subsubsection{\TT{--max-mismatches NUM}}
+Specifies the maximum number of mismatches allowed, or the fraction of mismatches with respect to the read length.
+When the secondary seed is enabled, this parameter is relative to the secondary seed length, not the read length;
+
+\subsubsection{\TT{--max-gap-opens NUM}}
+Specifies the maximum number of indels allowed in the mapping, or the fraction of indels with respect to the read length.
+The number of indels is equal to the number of gap opens.
+When the secondary seed is enabled, this parameter is relative to the secondary seed length, not the read length;
+
+\subsubsection{\TT{--max-gap-extensions NUM}}
+Specifies the maximum number of indel extensions allowed in the mapping, or the fraction of indel extensionswith respect to the read length.
+The number of indel extensions is equal to the number of gap extensions.
+When the secondary seed is enabled, this parameter is relative to the secondary seed length, not the read length;
+
+\subsubsection{\TT{--max-cals-deletion INT}}
+Specifies the maximum number of candidate alignment locations (CALs) to allow a deletion to be extended.
+
+\subsubsection{\TT{--indel-ends-bound INT}}
+Specifies to disallow indels within this number of bases from the ends of the read.
+
+\subsubsection{\TT{--max-best-cals INT}}
+Specifies to stop searching for mappings when this many best scoring mappings have been found.
+
+\subsubsection{\TT{--max-nodes INT}}
+Specifies the maximum number of alignment nodes in memory in the implicite prefix trie traversal before the search is stopped.
+
+\section{tmap map2}
+\label{sec:map2}
+The \BF{map2} is a command to quickly map long sequences to a reference genome.
+This algorithm is well suited for longer reads ($\geq 150$bp) and based off of the BWA long-read algorithm (\cite{BWA-long}).
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+
+\subsubsection{\TT{--max-seed-hits INT}}
+Specifies the maximum number of CALs allowed to be returned by a seed before it is ignored.
+
+\subsubsection{\TT{--length-coef FLOAT}}
+Specifies the coefficient to adjust the mapping score threshold based on the read length.
+Given a $l$-long read, the threshold for a mapping to be retained is $a*max\{T,c*log(l)\}$, where $a$ is the match score (\TT{-A}) and $T$ is the minimum score threshold (\TT{-T}).
+
+\subsubsection{\TT{--max-seed-intv INT}}
+Specifies the maximum seed interval size (mappings) to retain at during extension of the seed.
+
+\subsubsection{\TT{--z-best INT}}
+Specifies the maximum number of top-scoring nodes to keep on each iteration.
+
+\subsubsection{\TT{--seeds-rev INT}}
+Specifies the maximum seeding interval size for extending a mapping.
+
+\subsubsection{\TT{--narrow-rmdup}}
+Specifies to remove duplicate seeds for narrow suffix array.
+
+\subsubsection{\TT{--max-chain-gap INT}}
+Specifies the maximum gap size during chaining.
+
+\section{tmap map3}
+\label{sec:map3}
+The \BF{map3} is a command to map sequences to a reference genome.
+This algorithm is well suited for longer reads ($\geq 150$bp) and a simplification of the SSAHA long-read algorithm (\cite{SSAHA}).
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+
+\subsubsection{\TT{--hit-frac FLOAT}}
+Specifies the fraction of seed positions that are under the maximum (\TT{--max-seed-hits}).
+
+\subsubsection{\TT{--seed-step INT}}
+Specifies the number of bases to increase the seed while repetitive (-1 to disable).
+
+
+\subsubsection{\TT{--seed-length INT}}
+Specifies the $k$-mer length to seed candidate alignment locations (CALs).
+With a value of $-1$ will set the seed length to $\left(ceiling(log_4(R)) + 2\right)$ where $R$ is the reference genome length.
+
+\subsubsection{\TT{--max-seed-hits INT}}
+Specifies the maximum number of CALs allowed to be returned by a seed before it is ignored.
+
+\subsubsection{\TT{--hp-diff INT}}
+Specifies the number of bases to enumerate for a single homopolymer within the seed.
+
+\subsubsection{\TT{--fwd-search}}
+Specifies to perform a forward search instead of a reverse search.
+
+\subsubsection{\TT{--skip-seed-frac FLOAT}}
+Specifies the fraction of a seed to skip when a lookup succeeds.
+
+\section{tmap map4}
+\label{sec:map4}
+The \BF{map4} is a command to map sequences to a reference genome.
+This algorithm is well suited for longer reads ($\geq 100$bp) and is a variation of the super-maximal exact matching (SMEM) algorithm proposed by Heng Li (\cite{Fastmap}).
+SMEMs are equivalent to returning all longest common substrings between the read and reference.
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+
+\subsubsection{\TT{--hit-frac FLOAT}}
+Specifies the fraction of seed positions that are under the maximum (\TT{--max-seed-hits}).
+
+\subsubsection{\TT{--seed-step INT}}
+Specifies the number of bases to increase the seed for each seed increase iteration (-1 to disable).
+The algorithm tries to find SMEMs starting at specific offsets within the read.
+Beginning at the start of the read, this option controls how many bases to skip to obtain the next offset
+
+\subsubsection{\TT{--min-seed-length INT}}
+Specifies the minimum number of bases to use to seed (smallest SMEM).
+With a value of $-1$ will set the seed length to $\left(ceiling(log_4(R)) + 2\right)$ where $R$ is the reference genome length.
+
+\subsubsection{\TT{--max-seed-length INT}}
+Specifies the maximum number of bases to use to seed (longest SMEM).
+
+\subsubsection{\TT{--max-seed-length-adj-coef FLOAT}}
+Specifies the maximum seed length adjustment coefficient.
+Suppose the maximum seed length is $L$, the query length is $N$, and the co-efficient is $Z$.
+If $N < L * Z$ then the maximum seed length will be adjusted to $(N + 1) / Z$. 
+
+\subsubsection{\TT{--max-iwidth INT}}
+Specifies the maximum interval size to accept a hit.
+
+\subsubsection{\TT{--max-repr INT}}
+Specified the maximum representitive hits for repetitive hits.
+This is useful in repetitive genomes, where the returned SMEM masks the correct seed, which is contained in smaller SMEM.
+This will keep a number of repetitive SMEM hits.
+
+\subsubsection{\TT{--rand-repr}}
+Specifies to choose the representitive hits randomly, otherwise uniformly.
+See \TT{--max-repr} for details on repetitive htis.
+
+\subsubsection{\TT{--use-min}}
+Specifies when seed stepping, try seeding when at least the minimum seed length is present, otherwise maximum.
+
+\section{tmap mapvsw}
+\label{sec:mapvsw}
+The \BF{mapvsw} is a command to map sequences to a reference genome.
+This algorithm performs the full Smith Waterman algorithm alignment of the read to the reference genome, using SSE2 (vectorized) programming instructions.
+This algorithm should not be used for large number of reads or large genomes, and instead should be used for debugging and investigating small numbers of reads..
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Usage}
+There are no algorithm specific options.
+
+\section{tmap mapall}
+\label{sec:mapall}
+The \BF{mapall} is a command to quickly map short sequences to a reference genome.
+This command combines available mapping algorithms for fast and sensitive alignment.
+The algorithms follows a multi-stage approach, with a set of algorithms and associated settings for each stage.
+If there are no mappings for a read by applying the algorithms in the $i$th stage that pass filters, then the algorithms in the $i+1$th stage are applied. 
+For example, a set of algorithms to quickly align near-perfect reads may be used in the first stage, while a set of sensitive algorithms may be used to map difficult reads in the second stage
+
+It is recommended that \TT{mapvsw} is not used for any large scale mapping project.  
+Please see \autoref{sec:mapvsw} for more details.
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+
+\subsection{Overview}
+First, a set of global options is specified that will be used for the algorithms to be applied at all stages.
+Global options should not be given in the options for a specific stage or algorithm.
+Next, a stage will be specified and its associate options that will be applied across algorithms in that stage.
+Stage-specific options should not be given in the options for any algorithm in that stage.
+The stage name should be specified by ``stage\%d'', where ``\%d'' is the stage number (one-based).
+Finally, the algorithms and their associated options will be specified for the given stage.
+
+An example would be:
+\begin{verbatim}
+tmap mapall -f ref.fasta -r reads.fastq -g 1 -M 3 stage1 
+--stage-keep-all map1 --seed-length 12 --seed-max-diff 4 
+stage2 map2 --z-best 5 map3 --max-seed-hits 10
+\end{verbatim}
+In this case, the global options \TT{-f ref.fasta -r reads.fastq -g 1 -M 3} will be applied to all stages and algorithms. 
+Therefore, \TT{map1} algorithm will be applied with the options \TT{-g 1 -M 3 --seed-length 12 --seed-max-diff 4} in the first stage.
+If no mapping is found for a read, the \TT{map2} algorithm with the options \TT{-g 1 -M 3 --z-best 5} and the \TT{map3} algorithm with the options \TT{-g 1 -M 3 --max-seed-hits 10} will be applied in the second stage.
+Notice how the global options \TT{-g 1 -M 3} are applied to all the algorithms where applicable.
+It is possible to have the same algorithm run in two different stages.
+
+The recommended values are pre-set, and the following command line is recommended:
+\begin{verbatim}
+tmap mapall -f <in.fasta> -r <in.fastq> -n <num.threads> -v 
+stage1 map1 map2 map3 > <out.sam>
+\end{verbatim}
+
+\subsection{Usage}
+The following options apply to a single stage, and control how mappings are handled between stages.
+\subsubsection{\TT{--stage-score-thres INT}}
+Specifies the number of multiples of the match score (\TT{-A}) for the minimum scoring threshold for the current  stage.
+An alignment is filtered in the given stage if it has an alignment score less than this threshold, and there are more stages to process.
+\subsubsection{\TT{--stage-mapq-thres INT}}
+Specifies the mapping quality threshold for the current stage.
+An alignment is filtered in the current stage if it has a mapping quality less than this threshold, and there are more stages to process.
+\subsubsection{\TT{--stage-keep-all}}
+Specifies to keep mappings from the current stage for the next stage.
+If this option is given, the mappings from the previous stage are added to any mappings from the subsequent stage as candidates.
+
+\subsubsection{\TT{--stage-seed-freq-cutoff FLOAT}}
+Specifies the minimum frequency a seed must occur in order to be considered for mapping.
+
+\subsubsection{\TT{--stage-seed-freq-cutoff-group-frac FLOAT}}
+Specifies if more than this fraction of groups were filtered, keep representative hits.
+                  
+\subsubsection{\TT{--stage-seed-freq-cutoff-rand-repr INT}}
+Specifies the number of representative hits to keep.
+In addition, the group with most seeds will always be kept if this option has a greater than zero value.
+
+\subsubsection{\TT{--stage-seed-freq-cutoff-min-groups INT}}
+Specifies the minimum of groups required after the filter has been applied, otherwise iteratively reduce the filter.
+
+\subsubsection{\TT{--stage-seed-max-length INT}}
+Specifies the length of the prefix of the read to consider during seeding.
+
+\section{tmap server}
+\label{sec:server}
+The \BF{server} command loads the reference genome index and data into shared memory.
+This lets other mapping instances avoid having to load the index upon each execution.
+This program will try to fail gracefully, detaching shared memory upon exiting.
+
+See \autoref{sec:commonoptions} for common options that are in use in this command.
+\subsection{Usage}
+
+\subsubsection{\TT{-c STRING}}
+Specifies the command for the server (\TT{start}, \TT{stop}, \TT{kill}).
+The \TT{start} command loads data into shared memory, and waits for a \TT{ctrl-c} or \TT{SIGINT} signal.
+The \TT{stop} command will signal a currently running server to stop and detach shared memory.
+The \TT{kill} command will forcible detach the shared memory segment and signal a currently running server to exit.
+The latter command is especially useful for killing zombied processes and detaching lost shared memory segments.
+
+\subsubsection{\TT{-k INT}}
+Specifies the shared memory key for this server.
+The shared memory segment will be identified by this key.
+
+\subsubsection{\TT{-a}}
+Specifies to load all reference genome data structures into memory.
+
+\subsubsection{\TT{-r}}
+Specifies to load the forward packed reference sequence.
+
+\subsubsection{\TT{-R}}
+Specifies to load the reverse packed reference sequence.
+
+\subsubsection{\TT{-b}}
+Specifies to load the forward BWT sequence.
+
+\subsubsection{\TT{-B}}
+Specifies to load the reverse BWT sequence.
+
+\subsubsection{\TT{-s}}
+Specifies to load the forward suffix array.
+
+\subsubsection{\TT{-S}}
+Specifies to load the reverse suffix array.
+
+\chapter{File Formats}
+
+\section{SAM Alignment Format}
+\label{sec:samformat}
+TMAP is produces mappings in the SAM format (\cite{SAM-format}).
+Optional tags are used to store information about mappings useful for downstream processing.
+
+\subsection{SAM Header Fields}
+
+The HD, RG, SQ, and PG SAM header fields will be outputted.
+Specific details can be found below.
+
+\subsubsection{RG}
+The RG field can be populated using the \TT{-R} option.
+By default the \TT{ID}, \TT{SM}, and \TT{PG} tags are included.
+When specifying an RG line, do not include the PG tag as it will be populated by tmap:
+If the input is a file with flowspace information (SFF or SAM/BAM), then the read group will include the FO and KS tags.
+The FO and KS tags indicate the flow order and the key sequence.
+
+\subsubsection{PG}
+The PG field will include the ID, VN, and CL tags.
+The ID tag should always be \TT{tmap}.
+
+\subsection{SAM Record Optional Tags}
+
+\subsubsection{AS}
+This tag stores the alignment score.
+All IUPAC code positions are treated as mismatches.
+If the alignment contains an N in the reference but an A in the read, this score will be incorrect (overestimated) as the N was converted to an A in the reference.
+Please see \autoref{sec:iupac} for more details. 
+
+\subsubsection{FZ}
+This tag stores the flow signals when an SFF is inputted and the \TT{-Y} option is used.
+The flowgram values are stored as a string of hexidecimal values, with each group of four hexidecimal values corresponding to one flow signal.
+
+\subsubsection{MD}
+This tag stores the MD array.
+The goal of this array is to follow the conventions in SAMTools (\cite{SAM-format}).
+Any IUPAC code originally in the reference will be present in this field.
+Please see \autoref{sec:iupac} for more details. 
+
+\subsubsection{NM}
+This tag stores the edit distance from the reference sequence.
+Matches to any non-DNA IUPAC ambiguity code (B, D, H, K, M, N, R, S, V, W, Y) will be counted as a mismatch.
+Please see \autoref{sec:iupac} for more details. 
+
+\subsubsection{PG}
+This tag stores the program group identifier corresponding to the PG SAM header field.
+
+\subsubsection{RG}
+This tag stores the read group identifier corresponding to the RG SAM header field.
+
+\subsubsection{NH}
+This tag stores the number of hits found during alignment.
+The number of alignments reported in the output is determined by \TT{-a} and therefore fewer alignments may be present in the output than specified by the \TT{NH} tag.
+
+\subsubsection{XA}
+This tag stores the algorithm that produced this mapping and from what stage.
+The format is the algorithm name, and then the zero-based stage, separated by a dash.
+
+\subsubsection{XB}
+This tag indicates that the given read originates from a bidirectional read.
+
+\subsubsection{XE}
+This tag stores the number of seeds supporting this mapping specifically for \TT{map2}.
+
+\subsubsection{XF}
+This tag stores from where the mappings originated: one indicates from the forward search, two indicates from the reverse search, and three indicates from both the forward and reverse search.
+
+\subsubsection{XG}
+This tag stores the number of indel extensions (gap extensions) in the mapping, or in the secondary seed if used.
+
+\subsubsection{XI}
+This tag stores the size of the suffix interval for this mapping.
+
+\subsubsection{XM}
+This tag stores the number of mismatches in the mapping, or in the secondary seed if used.
+
+\subsubsection{XO}
+This tag stores the number of indels (gap opens) in the mapping, or in the secondary seed if used.
+
+\subsubsection{XS}
+This tag stores the alignment score of next-best sub-optimal mapping.
+
+\subsubsection{XT}
+This tag stores the number of seeds supporting this mapping.
+\subsubsection{XZ}
+This tag stores the original alignment score, if an SFF was inputted.
+
+
+\subsubsection{ZF}
+This tag stores the zero-based index of the first flow signal corresponding to the template, inferred from the clipping values in the SFF.
+This this is outputted only when an SFF is inputted and the \TT{-Y} option is used.
+
+\chapter{Commonly Asked Questions}
+\label{chap:faq}
+
+% inform mintoc of a new chapter
+\mtcaddchapter 
+\minitoc
+
+\section{How are IUPAC ambiguity codes handled in the reference/target FASTA?}
+\label{sec:iupac}
+Ambiguous IUPAC codes in the reference/target FASTA will be converted to the lexicographically smallest DNA base that is not compatible to the IUPAC code to ensure minimum reference bias.
+For example, an IUPAC base \TT{R}, which represents an \TT{A} or a \TT{G}, will be converted to a C.
+All Ns in the reference will be converted to As.
+Furthermore, any non-IUPAC character will be treated as an N.
+The ambiguity codes will only be re-considered when calculating the NM and MD SAM record optional tags.
+
+\section{How are insertions and deletions scored?}
+\label{sec:indel-scoring}
+Given gap open and gap extension penalties $O$ and $E$, a contiguous indel of length $L$ will have a score of $O + (E * L)$.
+
+\section{How are insertions and deletions justified?}
+\label{sec:indel-justification}
+TMAP will attempt to justify insertions and deletions (indels) to the 5' (left-most) end of the genomic (reference) forward strand.
+This allows the indel to be consistently placed with respect the reference, regardless of the strand during sequencing.
+Neither the query sequence nor the reference sequence are changed, only the indel position in the alignment.
+
+For example, if we have the alignment (query on top, target on the bottom):
+\begin{verbatim}
+CGAACATTTTTCGTGGA
+||||||||||-||||||
+CGAACATTTT-CGTGGA
+\end{verbatim}
+the insertion will be moved to its left-most equivalent position:
+\begin{verbatim}
+CGAACATTTTTCGTGGA
+||||||-||||||||||
+CGAACA-TTTTCGTGGA
+\end{verbatim}
+Another example would be in a non-homopolymer deletion: 
+\begin{verbatim}
+CGAACAT----CGTGGA
+|||||||----||||||
+CGAACATACATCGTGGA
+\end{verbatim}
+Justifying this deletion to the left would give:
+\begin{verbatim}
+CGA----CAATCGTGGA
+|||----||||||||||
+CGAACATACATCGTGGA
+\end{verbatim}
+Justification will not occur if it disconnects a contiguous indel, causing a potential difference in the alignment score.
+The following alignment:
+\begin{verbatim}
+AGGTGC--TTTACAAGC
+||||||--|||||||||
+AGGTGCCTTTTACAAGC
+\end{verbatim}
+could be changed to: 
+\begin{verbatim}
+AGGTG-C-TTTACAAGC
+|||||-|-|||||||||
+AGGTGCCTTTTACAAGC
+\end{verbatim}
+This would change the alignment and decrease) the resulting score.
+
+\section{Will the output of TMAP be the same if run twice?}
+TMAP will always produce the same output if run twice, even when using multiple threads (\TT{-n}).
+This is enabled by using a complementary-multiply-with-carry random number generator, one per thread.
+Of course, if different options are used, then the results will most likely vary, even if a different number of threads are used.
+
+\section{How does TMAP soft clip bases in the read?} 
+\label{sec:howtosoftclip}
+TMAP has the ability to soft clip bases during alignment, that is to not include in the alignment bases that are present in the read.  
+This may be useful to only map high quality portions of the read, for example if the 3' end of the read has many low quality bases called but their inclusion in the alignment results in many mismatches or insertions/deletions (indels).
+
+The user may specify the desired type of soft-clipping using the \TT{-g} option, with any combination of 5' and 3' soft-clipping (or neither) allowed. 
+The clipped bases are determined from local alignment (glocal or semi-global alignment).  
+For example, if 3' end soft-clipping is enabled, then a prefix of the read is aligned to a sub-sequence of the reference.  
+Where the read prefix ends in the alignment all comes from the local alignment, which is heavily influenced by the scoring parameters. 
+
+For example, consider the alignment below, which aligns the full read (GATTACA) to (a subsequence of) the reference (AGATTAAC).  
+Suppose we have scoring parameters (1,-3,-7,-2) for the match, mismatch, indel start, and indel extend operations.  
+The alignment score would be 1+1+1+1+1-7+1 = -1.
+
+\begin{verbatim}
+READ: GATTACA
+      |||||+|
+REF:  GATTA-A
+\end{verbatim}
+
+If instead we allow soft-clipping at the end of the read, we need only align a prefix of the read to (a subsequence of) the reference.  
+The optimal alignment score would be 5, with the alignment shown below.
+\begin{verbatim}
+READ: GATTACA
+      |||||SS
+REF:  GATTA
+\end{verbatim}
+
+The details of the local alignment algorithms and their variations are well characterized in the Literature or in an Introduction to Bioinformatics text book (\cite{jones2004}).  
+Using the local alignment and the scoring parameters to determine the soft-clipping is a powerful and flexible solution to trade off reduced alignment length for higher quality alignments via soft-clipping.
+
+For how soft-clipping is represented in SAM files, see the \href{http://samtools.sourceforge.net/SAM1.pdf}{SAM specification} for more details.
+
+\section{What is flow space re-alignment}
+\label{sec:fs-realign}
+Re-alignment in flow space is possible with TMAP, and is turned on only when the flow order option is set (\TT{-F}).
+With normal Smith Waterman, errors in homopolymers are treated similarly to insertions and deletions (indels) that are from biological origins.
+Re-alignment in flow space allows TMAP to consider indels and errors in homopolymers differently than other insdels, even though the resultant base space alignment may be similar.
+
+For example, the following alignment (read on top) shows a one-base insertion of a G.
+This could be due to an error estimating the number of Gs from a specific flow, or a true biological difference/insertion.
+\begin{verbatim}
+TAGGACACCGGTCTGA
+|||||||||-||||||
+TAGGACACC-GTCTGA
+\end{verbatim}
+
+In the following example, we observe a mismatch/SNP difference in base space:
+\begin{verbatim}
+TAGGACACCGGTCTGA
+||||||||| ||||||
+TAGGACACCCGTCTGA
+\end{verbatim}
+This could be due to a biological difference/SNP, or due to an under-call of the C and an overcall of the adjacent G.
+In the latter case, an acceptable alignment may be:
+\begin{verbatim}
+TAGGACACC-GGTCTGA
+|||||||||--||||||
+TAGGACACCC-GTCTGA
+\end{verbatim}
+
+Finally, more complicated scenarios can arise, where flow space re-alignment may yield a more faithful alignment.
+In the following example, a base space alignment may be:
+\begin{verbatim}
+TCAT--AAATTTT
+||| --|||||||
+TCAATAAAATTTT
+\end{verbatim}
+A suitable flow space re-alignment would be:
+\begin{verbatim}
+TCA-T-AAATTTT
+|||-|-||||||
+TCAATAAAATTTT
+\end{verbatim}
+The first alignment may be preferred in base space due to the use of affine gap penalties (see \autoref{sec:indel-scoring}) and the other scoring parameters.
+If we penalize insertions or deletions due to homopolymer differences less than other insertions or deletions, the latter alignment may be more likely.
+Given Ion Torrent data, the latter may be more faithful to the underlying error mode.
+
+Another feature is the \TT{-G} and \TT{-K} options.
+When indels are detected using this method, the score for the indel is given by \TT{-G}.
+Since this is applied after the above alignment, typically only long gaps are given this score.
+Indels may not be justified in this case.
+
+\section{How are multiple equally scoring alignments in the same region chosen?}
+
+In some cases, there exist two alignments of a read in the same target region with equal score. 
+Although these alignments have the same score, they may contain a different number of query bases.
+For example, the following two alignments can be produced when the end of the query is allowed to be clipped. 
+
+Example 1:
+\begin{verbatim}
+GGGCGGTAGCAGCCTGCCTGGGAATGGGCCACCCCGAATCCCGACCCGAAATAAATGCAC
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+GGGCGGTAGCAGCCTGCCTGGGAATGGGCCACCCCGAATCCCGACCCGAAATAAATGCAC
+
+CAGCATGCTGACGCGGTAAAACAGGAGCCGCCGGCAATACGCCAGTTTCACCCTCATCCA
+||||||||||||||||||||||||||||||||||||||| --||||||||||||||||| 
+CAGCATGCTGACGCGGTAAAACAGGAGCCGCCGGCAATAG--CAGTTTCACCCTCATCCC
+
+CCTGAGGTCCTATGTTATCACCTACTGCCATAGAG
+ ||||||SSSSSSSSSSSSSSSSSSSSSSSSSSSS
+ACTGAGG----------------------------
+\end{verbatim}
+
+Example 2:
+\begin{verbatim}
+GGGCGGTAGCAGCCTGCCTGGGAATGGGCCACCCCGAATCCCGACCCGAAATAAATGCAC
+||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+GGGCGGTAGCAGCCTGCCTGGGAATGGGCCACCCCGAATCCCGACCCGAAATAAATGCAC
+
+CAGCATGCTGACGCGGTAAAACAGGAGCCGCCGGCAATACGCCAGTTTCACCCTCATCCA
+||||||||||||||||||||||||||||||||||||||| --|||||||||||||||||S
+CAGCATGCTGACGCGGTAAAACAGGAGCCGCCGGCAATAG--CAGTTTCACCCTCATCC-
+
+CCTGAGGTCCTATGTTATCACCTACTGCCATAGAG
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
+-----------------------------------
+\end{verbatim}
+
+If the penalty for having two mismatches is equal to the score of having six matches, then the two alignments will be equivalently scored.
+
+TMAP will guarantee to find the alignment with the contains the most number of query bases (the first one above) unless the user specifies that soft-clipping is allowed on both ends of the read.
+In the latter case, no guarantee can be made.
+
+\section{How do I view the default parameters?}
+
+The default parameters are shown using the \TT{-h} option.
+The displayed values are updated for any command line parameters that are given before the \TT{-h} option.
+
+To see the default values for the mapall command:
+\begin{verbatim}
+tmap mapall -h
+\end{verbatim}
+
+To see the default values for the mapall command and stage-specific options:
+\begin{verbatim}
+tmap mapall stage1 -h
+\end{verbatim}
+
+To see the default values for the mapall command, stage-specific options, and a subset of algorithms:
+\begin{verbatim}
+tmap mapall stage1 map1 map2 map3 -h
+\end{verbatim}
+
+\section{How does the TMAP algorithm work on a high level?}
+
+There are two steps in mapping with TMAP.
+The first step is to build an index of the reference genome onto which we map.
+This index needs only to be built once for each genome, performing much of the mapping work upfront.
+The second step is to map the reads to the reference genome using this index.
+	
+The second step is performed for each run or experiment and there are two sub-steps for each read. 
+The first sub-step tries to quickly find a short/small list of candidate mapping locations, effectively reducing our search space from billions of bases to thousands of bases.  
+This is called the seeding step.  
+The next step examines these locations with a more sensitive algorithm, Smith Waterman, to prioritize these candidates.
+
+\section{Is mapping done in base space or flow space?}
+
+The mapping is done in base space.  
+Due to the high quality of the input data, mapping considering the flow information yields little advantage.  
+TMAP does however carry forward any flow information, outputting it to the SAM file.  The flow information is critical to the downstream variant calling.
+
+\section{How many errors can a read have and still be mapped?}
+\label{sec:numerr}
+
+There is no hard limit to the number of errors a read can have for it to be mapped.
+The practical limit is bounded by a number of factors including but not limited to:
+\begin{enumerate}
+	\item The length of the read (longer reads have a better chance of mapping).
+	\item The quality across the read (reads with the first 100 bp of high quality will more likely be mapped than those with a uniform error rate).
+	\item The sequence complexity of the read relative to the reference (repetitive elements confound mapping).
+	\item The reference genome size (the larger the reference, the more evidence is necessary for confident mapping).
+	\item The error mode of the read (mismatches versus indel error modes).
+	\item The algorithms and parameters chosen (algorithm choice and parameter choice can be tuned to run slower but have higher sensitivity).
+\end{enumerate}
+		
+\section{How long must a read be to map?}
+
+There is no lower or upper limit to how long a read must be to map.
+However, depending on the genome size, we need more evidence for a read to map.  
+Therefore, for larger genomes, for example human, reads must be longer or of higher quality.
+This is intimately related to \autoref{sec:numerr}.
+
+\section{Are mismatches favored over indels when making an alignment?}
+
+The favoring of indels versus mismatches is determined by the alignment
+scoring parameters specified in TMAP.  
+These include the \TT{-A/-M/-O/-E} options.  
+Using these parameters, we favor indels over mismatches, or vice versa.  
+By default, mismatches are favored over indels as SNPs (biological mismatches) are more likely in human (a main application) than indels.
+
+\section{How do I reconcile choices made by TMAP regarding whether to create an indel or mismatch when doing variant calling?}
+
+The final step of TMAP is producing the alignment with Smith Waterman.
+This algorithm is may find multiple optimal alignments in the same small window, but only one is reported by default.
+For example, justifying indels does not change the alignment score but the alignment. 
+Furthermore, TMAP does not use flow space information during mapping, but outputs it to the SAM file.  
+This information is more informative when combining multiple observations (reads) within variant calling.
+Therefore, performing variant calling in a flow space aware manner is critical to the accurate detection of variants. 
+Due to the ambiguity of selecting between multiple optimal alignments, it is difficult to select consistent alignments across reads without examining them all in aggregate, which is effectively variant calling.
+
+\chapter{Appendix}
+
+% References
+\phantomsection
+\addcontentsline{toc}{chapter}{References}
+\bibliography{tmap-book}
+\bibliographystyle{natbib}
+
+\end{document}

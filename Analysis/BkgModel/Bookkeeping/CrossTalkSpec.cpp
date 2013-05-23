@@ -324,12 +324,12 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
                 if (strncmp("simple_model",line,12)==0)
                 {
                   int simple_tmp;
-                    sscanf(line,"three_series: %d", &simple_tmp);
+                    sscanf(line,"simple_model: %d", &simple_tmp);
                     if (simple_tmp>0)
                         simple_model = true;
                     else
                         simple_model= false;
-                    //printf("three_series: %d\n", three_tmp);
+                    //printf("simple_model: %d\n", simple_model);
                 }                
                if (strncmp("rescale_flag",line,12)==0)
                 {
@@ -428,7 +428,7 @@ void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const
         {
             ReadCrossTalkFromFile(xtalk_name);
         } else {
-            if (strcmp (chipType, "318") == 0)
+            if ((strcmp (chipType, "318") == 0)||(strcmp (chipType, "316v2") == 0)) 
                 SetNewHexGrid(); // find out who we really are!
             else if (strcmp(chipType,"900")==0)
                 SetAggressiveHexGrid(); // 900 may have different cross-talk!

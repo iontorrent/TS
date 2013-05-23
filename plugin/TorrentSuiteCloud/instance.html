@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <!--java script for interacting with the RESTful API-->
+  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+  <script type="text/javascript" src="/pluginMedia/IonCloud/bootstrap-scrollspy.js"></script>
+  <link href="/pluginMedia/IonCloud/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
+  <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+  <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
+
+  <!--page style-->
+  <style type='text/css'>
+    #formwrap {
+     line-height: 2em;
+     background: #eef;
+     margin: 10px;
+     padding: 10px;
+     height: 130px;
+     text-align: center;
+    }
+
+    input {
+     height:30px;
+    }
+
+    body {
+     font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+     font-size: 14px;
+    }
+  </style>
+
+  <script type='text/javascript'>
+    default_key = "";
+    pluginGET = "";
+
+    $(document).ready(function(){
+     $.ajax({
+      url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
+      dataType:"json",
+      type: "GET",
+      async: false,
+      success:function(data){
+       //get the plugin data
+       pluginGET = data;
+
+       //delete the resource_uri
+       delete pluginGET.resource_uri;
+
+       $.each(pluginGET.config, function(key,val){
+        if(key == "ip"){
+           document.getElementById("ip").value = val;
+          }
+
+          //set the vlaue of user_name
+          else if(key == "user_name"){
+           document.getElementById("user_name").value = val;
+          }
+
+          //set the vlaue of user_password
+          else if(key == "user_password"){
+           document.getElementById("user_password").value = val;
+          }
+
+          //set the vlaue of upload_path
+          else if(key == "upload_path"){
+           document.getElementById("upload_path").value = val;
+          }
+       });
+      }
+     });
+    });
+
+    //process form to grab html objects and turn them into json objects
+    $(function() {
+     $.fn.serializeObject = function(){
+      var o = {};
+      var a = this.serializeArray();
+
+      $.each(a, function() {
+       if (o[this.name] != null) {
+        if (!o[this.name].push) {
+         o[this.name] = [o[this.name]];
+        }
+
+        o[this.name].push(this.value || '');
+       } else if(this.name == "file") {
+
+       o[this.name] = [this.value || ''];
+      }
+      else {
+       o[this.name] = this.value || '';
+      }
+     });
+
+     return o;
+    };
+
+    //use the RESTful API to post the json variable
+    $(function() {
+     $('#postbutton').click(function() {
+
+      //check that values were given
+      if(document.getElementById("ip").val == ""){
+        alert("Please provide IP address");
+        return(false);
+      }
+
+      if(document.getElementById("user_name").val == ""){
+        alert("Please provide user name");
+        return(false);
+      }
+
+      if(document.getElementById("user_password").val == ""){
+        alert("Please provide user password");
+        return(false);
+      }
+
+      if(document.getElementById("upload_path").val == ""){
+        alert("Please provide upload_path");
+        return(false);
+      }
+
+      //the name of the form used here, in this case "inputform" should match the one in the html code
+      obj =  $('#inputform').serializeObject();
+
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+
+      $.ajax({
+       type: 'POST',
+       url: pluginURL,
+       contentType: "application/json; charset=utf-8",
+       success: function(data) {
+        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Starting the Plugin...</p></div>');
+        setTimeout("parent.$.fn.colorbox.close()" ,2000); },
+        data: pluginAPIJSON,
+        dataType: "json"
+       });
+      });
+     })
+    });
+  </script>
+</head>
+
+<!--build the html page for what the user sees-->
+<body>
+  <div>
+    <!-- the form name here, in this case "inputform" should match the one used in the put java script -->
+    <div class="page-header">
+      <h1> Configuration</h1></center>
+    </div>
+
+    <center>This will push data for this analysis to your cloud account using the settings provided in the global configuration.
+
+    <form id="inputform">
+      <div id="adv_parent">
+        <h3 id="adv" align=right>Advanced Settings:&nbsp &nbsp &nbsp &nbsp<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a></h3>
+        <div>
+          <fieldset id=Error_vs_Coverage>
+          <b>Do not change these settings unless you are sure of what you are doing</b>
+          <center><table align="center">
+            <tr>
+              <td align=right>IP: </td><td align=left><input id="ip" name="ip" value=""/></td>
+            </tr><tr>
+            <td align=right>User: </td><td align=left><input id="user_name" name="user_name" value=""/></td>
+            </tr><tr>
+              <td align=right>Password: </td><td align=left><input type="password" id="user_password" name="user_password" value=""/></td>
+            </tr><tr>
+              <td align=right>Upload Path: </td><td align=left><input id="upload_path" name="upload_path" value=""/></td>
+            <tr>
+              <td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" checked
+                                                              title="Only affects Proton datasets"/></td>
+            </tr></table>
+          </fieldset>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <br><center><input id="postbutton" type="submit" value="Submit"></center> <p><br>
+
+  <div id="json_result"> </div>
+  <script>
+    $('.expandCollapseButton').toggle(function() {
+    if ( $(this).attr('title') == 'Collapse Section'){
+    $(this).css('background-position','right top');
+    $(this).attr('title','Expand Section');
+    }else{
+    $(this).css('background-position','left top');
+    $(this).attr('title','Collapse Section');
+    }
+    }, function() {
+    if ( $(this).attr('title') == 'Expand Section'){
+    $(this).css('background-position','left top');
+    $(this).attr('title','Collapse Section');
+    }else{
+    $(this).css('background-position','right top');
+    $(this).attr('title','Expand Section');
+    }
+    });
+
+    $('.expandCollapseButton').click(function(event){
+    $(event.target).parent().parent().toggleClass('small');
+    $(event.target).parent().next().slideToggle();
+    });
+
+    $('#adv .expandCollapseButton').css('background-position','right top');
+    $('#adv .expandCollapseButton').attr('title','Expand Section');
+    $('#adv').parent().toggleClass('small');
+    $('#adv').next().toggle();
+  </script>
+</body>
+</html>

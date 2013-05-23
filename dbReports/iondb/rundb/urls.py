@@ -22,6 +22,7 @@ v1_api.register(api.AnalysisMetricsResource())
 v1_api.register(api.QualityMetricsResource())
 v1_api.register(api.RunTypeResource())
 v1_api.register(api.dnaBarcodeResource())
+v1_api.register(api.PlannedExperimentDbResource())
 v1_api.register(api.PlannedExperimentResource())
 v1_api.register(api.PublisherResource())
 v1_api.register(api.ContentResource())
@@ -66,11 +67,30 @@ v1_api.register(api.ChipResource())
 
 v1_api.register(api.AccountResource())
 
+v1_api.register(api.SampleResource())
+v1_api.register(api.ExperimentAnalysisSettingsResource())
+v1_api.register(api.CompositeDataManagementResource())
+v1_api.register(api.DataManagementHistoryResource())
+
+v1_api.register(api.IonChefPrepKitInfoResource())
+v1_api.register(api.ActiveIonChefPrepKitInfoResource())
+
+v1_api.register(api.AvailableIonChefPlannedExperimentResource())
+v1_api.register(api.AvailableIonChefPlannedExperimentSummaryResource())
+v1_api.register(api.IonChefPlanTemplateResource())
+v1_api.register(api.IonChefPlanTemplateSummaryResource())
+
+v1_api.register(api.AvailableOneTouchPlannedExperimentResource())
+v1_api.register(api.AvailableOneTouchPlannedExperimentSummaryResource())
+v1_api.register(api.OneTouchPlanTemplateResource())
+v1_api.register(api.OneTouchPlanTemplateSummaryResource())
+
+v1_api.register(api.AvailablePlannedExperimentSummaryResource())
+v1_api.register(api.PlanTemplateSummaryResource())
+
 urlpatterns = patterns(
     'iondb.rundb',
     url(r'^$', 'data.views.rundb_redirect'),
-    url(r'^old_runs$', 'views.experiment', name='old_homepage'),
-    (r'^reports/$', 'views.reports'),
     url(r'^metaDataLog/(?P<pkR>.*)/$', 'views.viewLog', name="report_metadata_log"),
     (r'^getCSV.csv$', 'views.getCSV'),
     (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
@@ -85,8 +105,7 @@ urlpatterns = patterns(
     (r'^api$', 'ajax.apibase'),
     (r'^changelibrary/(\d+)$', 'ajax.change_library'),
     (r'^reports/progressbox/(\d+)$', 'ajax.progressbox'),
-    
-    (r'^addplans/$', 'views.add_plans'),
+
     (r'^report/(\d+)$', 'views.displayReport'),
     (r'^graphiframe/(\d+)/$', 'report.classic.graph_iframe'),
      

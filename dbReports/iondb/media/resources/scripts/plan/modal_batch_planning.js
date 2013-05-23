@@ -29,8 +29,8 @@ TB.plan.batchdownload.ready = function() {
 
             console.log("planCount=", planCount, "templateId=", templateId);
 
-            if (!planCount.match(/^[0-9]+$/) || (parseInt(planCount, 10) < 2)) {
-                planCountError += 'Number of plans should be a whole number and be at least 2.';
+            if (!planCount.match(/^[0-9]+$/) || (parseInt(planCount, 10) < 2) || (parseInt(planCount, 10) > 100)) {
+                planCountError += 'Number should be a whole number between 2 and 100.';
             }
 
             if (planCountError) {

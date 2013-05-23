@@ -58,6 +58,9 @@ struct RadioButtonOptions{
   bool amplitude_lower_limit_set;
   bool clonal_solve_bkg_set;
   bool col_flicker_correct_set;
+  bool col_flicker_correct_aggressive_set;
+  bool bkg_exp_tail_fit_set;
+  bool bkg_pca_dark_matter_set;
   RadioButtonOptions(){
     use_dud_reference_set = false;
     empty_well_normalization_set = false;
@@ -69,6 +72,9 @@ struct RadioButtonOptions{
     use_proton_correction_set = false;
     amplitude_lower_limit_set = false;
     clonal_solve_bkg_set = false;
+    col_flicker_correct_aggressive_set = false;
+    bkg_exp_tail_fit_set = false;
+    bkg_pca_dark_matter_set = false;
   };
 };
 

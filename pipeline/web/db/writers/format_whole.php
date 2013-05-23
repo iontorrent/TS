@@ -1547,6 +1547,9 @@ if (file_exists("drmaa_stderr_block.txt")) {
 if (file_exists("drmaa_stdout.txt")) {
     print "<tr><td><a href='drmaa_stdout.txt'>Developer link: std_out_err</a> </td> </tr>";
 }
+if (file_exists("sigproc_results/sigproc.log")) {
+    print "<tr><td><a href='sigproc_results/sigproc.log'>Developer link: sigproc.log</a> </td> </tr>";
+}
 
 if (file_exists("/opt/ion/.developerversion")) {
     if ($is_proton_composite) {

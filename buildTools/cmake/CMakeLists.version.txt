@@ -24,17 +24,23 @@ if(LSB_RELEASE_COMMAND)
     message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
 endif(LSB_RELEASE_COMMAND) 
 
-set(cuda_proj_name "cudatoolkit")
-if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric" OR ${LSB_RELEASE_CODENAME} STREQUAL "precise")
-    set(cuda_proj_version "4.2.9-11.04")
-    set(cuda_tar_file "cudatoolkit_4.2.9_linux_64_ubuntu11.04.tar.gz")
-    set(CUDA_VERSION "4.2")
+if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric" OR ${LSB_RELEASE_CODENAME} STREQUAL "precise" OR ${LSB_RELEASE_CODENAME} STREQUAL "wheezy")
+    set(cuda_proj_version "5.0.35-11.10")
+    set(cuda_toolkit_tar_file "cudatoolkit_5.0.35_linux_64_ubuntu11.10.tar.gz")
+    set(cuda_devdriver_file "devdriver_5.0_linux_64_304.54.run")
+    set(CUDA_VERSION "5.0")
 else()
-    set(cuda_proj_version "4.2.9-10.04")
-    set(cuda_tar_file "cudatoolkit_4.2.9_linux_64_ubuntu10.04.tar.gz")
-    set(CUDA_VERSION "4.2")
+    set(cuda_proj_version "5.0.35-10.04")
+    set(cuda_toolkit_tar_file "cudatoolkit_5.0.35_linux_64_ubuntu10.04.tar.gz")
+    set(cuda_devdriver_file "devdriver_5.0_linux_64_304.54.run")
+    set(CUDA_VERSION "5.0")
 endif()
-set(cuda_proj_name_version "${cuda_proj_name}-${cuda_proj_version}")
+
+set(cuda_toolkit "cuda_toolkit")
+set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
+
+set(cuda_devdriver "cuda_devdriver")
+set(cuda_devdriver_version "${cuda_devdriver}-${cuda_proj_version}")
 
 # Figure out state of current build
 execute_process(COMMAND "hostname" "-f" 

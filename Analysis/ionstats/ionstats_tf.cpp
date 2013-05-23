@@ -129,13 +129,13 @@ int IonstatsTestFragments(int argc, const char *argv[])
 
   // Need these metrics stratified by TF.
 
-  ReadLengthHistogram called_histogram[num_tfs];
-  ReadLengthHistogram aligned_histogram[num_tfs];
-  ReadLengthHistogram AQ10_histogram[num_tfs];
-  ReadLengthHistogram AQ17_histogram[num_tfs];
-  SimpleHistogram error_by_position[num_tfs];
-  MetricGeneratorSNR system_snr[num_tfs];
-  MetricGeneratorHPAccuracy hp_accuracy[num_tfs];
+  vector<ReadLengthHistogram> called_histogram(num_tfs);
+  vector<ReadLengthHistogram> aligned_histogram(num_tfs);
+  vector<ReadLengthHistogram> AQ10_histogram(num_tfs);
+  vector<ReadLengthHistogram> AQ17_histogram(num_tfs);
+  vector<SimpleHistogram> error_by_position(num_tfs);
+  vector<MetricGeneratorSNR> system_snr(num_tfs);
+  vector<MetricGeneratorHPAccuracy> hp_accuracy(num_tfs);
 
   for (int tf = 0; tf < num_tfs; ++tf) {
     called_histogram[tf].Initialize(histogram_length);

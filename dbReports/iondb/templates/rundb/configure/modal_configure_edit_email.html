@@ -1,6 +1,6 @@
 <div id="modal_configure_edit_email" title="" class="modal modal-750 hide">
 	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
 		<h3>{{ name }}</h3>	
 	</div>
 	<div class="modal-body">  
@@ -35,8 +35,8 @@
 			}),
 			success: function (data) {
 				console.log("Success");
+				$("#modal_configure_edit_email").trigger("modal_configure_edit_email_done", {} );
 				$("#modal_configure_edit_email").modal("hide");
-				window.location.reload();
 			},
 			error: function (data) {
 				$("#email_group").addClass("error");

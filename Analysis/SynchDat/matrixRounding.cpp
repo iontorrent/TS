@@ -13,9 +13,8 @@
 #include <utility>
 #include <cmath>
 #include <functional>
-#include <omp.h>
 #include "matrixRounding.h"
-#include "xmmintrin.h"
+#include <x86intrin.h>
 
 using namespace std;
 

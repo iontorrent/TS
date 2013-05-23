@@ -4,7 +4,7 @@ $(function(){
         parse: true,
         limit: pageSize
     });
-    exps.baseUrl = "/rundb/api/v1/monitorexperiment";
+    exps.baseUrl = "/rundb/api/v1/monitorexperiment/";
     exps.total = initial_runs.meta.total_count;
     console.log("Created RunList");
     mainRouter = new RunRouter();

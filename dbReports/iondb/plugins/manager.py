@@ -420,7 +420,6 @@ class PluginManager(object):
                 oldp.path=''
             if oldp.active:
                 oldp.active=False
-                oldplugin = oldp
             oldp.save()
 
         if count:

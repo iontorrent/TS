@@ -52,7 +52,7 @@ int main(int argc, char * argv[]) {
     for (size_t col = 0; col < sdat.NumCol(); col++) {
       o << row << D << col << D << sdat.GetT0(row, col);
       for (int frame = 0; frame < sdat.GetFrames(); frame++) {
-        o << D << sdat.At(row, col, frame);
+        o << D << sdat.AtWell(row, col, frame);
       }
       o << endl;
     }

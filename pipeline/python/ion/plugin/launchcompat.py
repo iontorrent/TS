@@ -31,6 +31,7 @@ class IonLaunchPlugin(IonPlugin):
     _runtypes = [ RunType.FULLCHIP, RunType.THUMB ]
     _features = []
     _runlevels = []
+    _depends = []
 
     @classmethod
     def getContent(cls):
@@ -143,6 +144,18 @@ class IonLaunchPlugin(IonPlugin):
                 ret.append(c)
         return ret
 
+    @classmethod
+    def depends(cls):
+        pluginsettings = cls.pluginsettings()
+        if not pluginsettings:
+            return cls._depends
+
+        ret = []
+        for k in pluginsettings.get('depend', pluginsettings.get('depends', [])):
+            c = k # lookupEnum(Feature, k)
+            if c:
+                ret.append(c)
+        return ret
 
     def launch(self):
         lenv = {}

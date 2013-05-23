@@ -5,8 +5,14 @@ import glob
 import string
 import datetime
 
+import time
+
 from iondb.rundb import models
 TIMESTAMP_RE = models.Experiment.PRETTY_PRINT_RE
+
+PGM_START_TIME_FORMAT = "%a %b %d %H:%M:%S %Y"
+PROTON_START_TIME_FORMAT = "%m/%d/%Y %H:%M:%S"
+DB_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def tdelt2secs(td):
     """Convert a ``datetime.timedelta`` object into a floating point
@@ -74,3 +80,25 @@ def folder_mtime(folder):
             fname = folder
         stat = os.stat(fname)
         return datetime.datetime.fromtimestamp(stat.st_mtime)
+
+
+def explog_time(timeValue, folder):
+    """ Try to construct a timestamp based on the value found in explog.
+    Note that Proton and PGM have different timestamp format in their explog.
+    If all fails, use the folder-based time
+    """
+    
+    timestamp = ""
+    try:
+        timestamp = time.strptime(timeValue, PGM_START_TIME_FORMAT)
+    except:
+        try:
+            timestamp = time.strptime(timeValue, PROTON_START_TIME_FORMAT)
+        except:
+            return folder_mtime(folder)
+    
+    if timestamp:
+        return time.strftime(DB_TIME_FORMAT, timestamp)
+    else:
+        return folder_mtime(folder)
+    

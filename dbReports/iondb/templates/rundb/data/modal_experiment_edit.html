@@ -1,272 +1,86 @@
 {% load pagetools %}
-<div id="modal_experiment_edit" title="" class="modal modal-800 hide">
+<div id="modal_experiment_edit" title="" class="modal modal-900 hide">
 	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		<h3>Edit Run</h3>
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		<h3>Edit Run: {{name}}</h3>
 	</div>
 	<div class="modal-body">
 		<div id="modal-error-messages" class="alert alert-danger hide"></div>
-		<form class="form-horizontal" id="modal_experiment_edit_form" method="GET" enctype="application/json">
+		<form id="modal_experiment_edit_form" action="{% url experiment_edit pk %}" method="POST" enctype="multipart/form-data" class="form-horizontal">
 			<fieldset>
-				<div class="control-group">
-					<label for="sample" class="control-label">Sample</label>
+				<div id="sample_container" class="control-group">
+					<label for="id_sample" class="control-label">Sample</label>
 					<div class="controls">
-						<input value="{{ exp.sample|blankIfNone }}" name="sample" id="sample"
-						size="35" maxlength="64" type="text" class="textInput validateAlphaNumNoSpace"/>
-						<p class="help-block">
-							Descriptive name of the biological sample
-						</p>
+						{{ exp_form.sample }}
+						<p class="help-block"> {{ exp_form.sample.errors }}	</p>
 					</div>
 				</div>
-				{# TODO: find a way to set the runtype using the API.  Extend the API or add a new field to the database for runtypes that can be PUT to #}
-				<div class="control-group">
-					<label for="runtype" class="control-label">Application</label>
-					<div class="controls">
-						<select id="runtype" name="runtype">
-							{% for runType in runTypes %}
-							{% ifequal runType.runType exp.log.runtype %}
-							<option SELECTED value="{{ runType }}">{{ runType.description }}
-								({{ runType }}) </option>
-							{% else %}
-							<option value="{{ runType }}">{{ runType.description }}
-								({{ runType }}) </option>
-							{% endifequal %}
-							{% endfor %}
-						</select>
-						<p class="help-block">
-							Select a Run Type
-						</p>
+                <div id="barcodedSamples_container" class="control-group" style="display: none">
+					<label for="barcodedSamples" class="control-label">Barcoded Samples</label>
+					<div class="controls" style="border:1px solid #0981d2;overflow:auto;width:auto;height:175px;padding:5px;">
+						<table id="barcodedSamples" >
+                            <thead>
+                            <tr>
+                                <th align="left">BC #</th>
+                                <th align="left">Sequence</th>
+                                <th align="left">Sample</th>
+                            </tr>
+                            </thead>
+                        </table>
 					</div>
 				</div>
 				<div class="control-group">
-					<label for="library" class="control-label">Reference</label>
+					<label for="id_runtype" class="control-label">Application</label>
 					<div class="controls">
-					<select data-placeholder="No Reference" id="library" name="library">
-						<option value=""></option>
-						{% for reference in references %}
-						{% ifequal reference.short_name exp.library %}
-						<option SELECTED
-						value="{{ reference.short_name }}">{{ reference.short_name }}
-							({{ reference.name }}) </option>
-						{% else %}
-						<option value="{{ reference.short_name }}">{{ reference.short_name }}
-							({{ reference.name }}) </option>
-						{% endifequal %}
-						{% endfor %}
-					</select>
-
-					<p class="help-block">
-						Select the reference library used for
-						alignment. </br> If none leave blank
-					</p>
+						 {{ exp_form.runtype }}
+						<p class="help-block"> {{ exp_form.runtype.errors }} </p>
 					</div>
 				</div>
 				<div class="control-group">
-					<label for="barcodeId" class="control-label">Barcode</label>
+					<label for="id_librarykitname" class="control-label">Library Kit</label>
 					<div class="controls">
-					<select data-placeholder="No Barcode" id="barcodeId" name="barcodeId">
-						<option value=""></option>
-						{% for barcode in barcodes %}
-						{% ifequal barcode.name exp.barcodeId %}
-						<option SELECTED
-						value="{{ barcode.name }}">{{ barcode.name }}</option>
-						{% else %}
-						<option value="{{ barcode.name }}">{{ barcode.name }}</option>
-						{% endifequal %}
-						{% endfor %}
-					</select>
-
-					<p class="help-block">
-						Select the barcode set used for this sample. </br>
-						If not barcoded leave blank
-					</p>
+					    {{ exp_form.libraryKitname }}
+					<p class="help-block"> {{ exp_form.libraryKitname.errors }} </p>
 					</div>
 				</div>
-
 				<div class="control-group">
-					<label for="librarykitname" class="control-label">Library Kit</label>
+					<label for="id_sequencekitname" class="control-label">Sequencing Kit</label>
 					<div class="controls">
-					<select id="librarykitname" name="librarykitname">
-						<option value=""></option>
-
-						{% if not exp.librarykitbarcode or exp.librarykitname %}
-						{% for libKit in libKits %}
-						{% ifequal libKit.name exp.librarykitname %}
-						<option SELECTED value="{{ libKit.name }}">{{ libKit }} </option>
-						{% else %}
-						<option value="{{ libKit.name }}">{{ libKit }} </option>
-						{% endifequal %}
-						{% endfor %}
-						{% else %}
-						{% for libKit in libKits %}
-						{% with libKit.kitpart_set.all|first as firstKitPart %}
-						{% for kitpart in libKit.kitpart_set.all %}
-						{% ifequal kitpart.barcode exp.librarykitbarcode %}
-						<option SELECTED value="{{ libKit.name }}">{{ libKit }} </option>
-						{% else %}
-						{% ifequal kitpart.barcode firstKitPart.barcode %}
-						<option value="{{ libKit.name }}">{{ libKit }} </option>
-						{% endifequal %}
-						{% endifequal %}
-						{% endfor %}
-						{% endwith %}
-						{% endfor %}
-						{% endif %}
-					</select>
-
-					<p class="help-block">
-						Can be entered during PGM setup
-					</p>
+						  {{ exp_form.sequencekitname }}					
+					<p class="help-block"> {{ exp_form.sequencekitname.errors }} </p>
 					</div>
 				</div>
-
 				<div class="control-group">
-					<label for="sequencekitname" class="control-label">Sequencing Kit</label>
+					<label for="id_chipBarcode" class="control-label">ChipBarCode</label>
 					<div class="controls">
-						<select id="sequencekitname" name="sequencekitname">
-							<option value=""></option>
-							{% if not exp.sequencekitbarcode and not exp.seqKitBarcode %}
-							{% for seqKit in seqKits %}
-							{% ifequal seqKit.name exp.sequencekitname %}
-							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% else %}
-							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% endifequal %}
-							{% endfor %}
-							{% else %}
-							{% if exp.sequencekitname %}
-							{% for seqKit in seqKits %}
-							{% ifequal seqKit.name exp.sequencekitname %}
-							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% else %}
-							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% endifequal %}
-							{% endfor %}
-							{% else %}
-							{% for seqKit in seqKits %}
-							{% with seqKit.kitpart_set.all|first as firstKitPart %}
-							{% for kitpart in seqKit.kitpart_set.all %}
-	
-							{% ifequal kitpart.barcode exp.sequencekitbarcode %}
-							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% else %}
-							{% ifequal kitpart.barcode exp.seqKitBarcode %}
-							<option SELECTED value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% else %}
-							{% ifequal kitpart.barcode firstKitPart.barcode %}
-							<option value="{{ seqKit.name }}">{{ seqKit }} </option>
-							{% endifequal %}
-							{% endifequal %}
-							{% endifequal %}
-							{% endfor %}
-							{% endwith %}
-							{% endfor %}
-							{% endif %}
-							{% endif %}
-						</select>
-	
-						<p class="help-block">
-							Can be entered during PGM setup
-						</p>
+						  {{ exp_form.chipBarcode }}					
+					<p class="help-block"> {{ exp_form.chipBarcode.errors }} </p>
 					</div>
 				</div>
-
 				<div class="control-group">
-					<label for="chipBarcode" class="control-label">ChipBarCode</label>
+					<label for="id_libraryKey" class="control-label">Library Key</label>
 					<div class="controls">
-						<input value="{{ exp.chipBarcode|blankIfNone }}" name="chipBarcode" id="chipBarcode"
-						size="35" maxlength="64" type="text"
-						class="textInput validateAlphaNumNoSpace"/>
-						<p class="help-block">
-							Barcode generated from run name
-						</p>
+						  {{ exp_form.libraryKey }}					
+					<p class="help-block"> {{ exp_form.libraryKey.errors }} </p>
 					</div>
 				</div>
-
 				<div class="control-group">
-					<label for="libraryKey" class="control-label">Library Key</label>
+					<label for="id_notes" class="control-label">Notes</label>
 					<div class="controls">
-						<select id="libraryKey" name="libraryKey">
-							<option value=""></option>
-							{% for forwardLibKey in forwardLibKeys %}
-	
-							{% ifequal forwardLibKey.sequence exp.libraryKey %}
-							{% if forwardLibKey.isDefault %}
-							<option SELECTED value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ forwardLibKey.sequence }}">{{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }})
-								{% endif %} </option>
-							{% else %}
-							{% if forwardLibKey.isDefault %}
-							{% if exp.libraryKey and exp.libraryKey.strip %}
-							<option value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key: {{ forwardLibKey.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ forwardLibKey.sequence }}">Default* - {{ forwardLibKey.name }}  (Key:  {{ forwardLibKey.sequence }}) </option>
-							{% endif %}
-							{% else %}
-							<option value="{{ forwardLibKey.sequence }}">{{ forwardLibKey.name }}  (Key: {{ forwardLibKey.sequence }}) </option>
-							{% endif %}
-							{% endifequal %}
-	
-							{% endfor %}
-						</select>
-	
-						<p class="help-block">
-							Leave as blank if to use the current default. </br>Select specific forward library key otherwise
-						</p>
+						  {{ exp_form.notes }}					
+					<p class="help-block"> {{ exp_form.notes.errors }} </p>
 					</div>
 				</div>
-
-				<div class="control-group">
-					<label for="forward3primeadapter" class="control-label">3' Adapter</label>
-					<div class="controls">
-						<select id="forward3primeadapter" name="forward3primeadapter">
-							<option value=""></option>
-							{% for forwardAdapter in forward3Adapters %}
-	
-							{% ifequal forwardAdapter.sequence exp.forward3primeadapter %}
-							{% if forwardAdapter.isDefault %}
-							<option SELECTED value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ forwardAdapter.sequence }}">{{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }})
-								{% endif %} </option>
-							{% else %}
-							{% if forwardAdapter.isDefault %}
-							{% if exp.forward3primeadapter and exp.forward3primeadapter.strip %}
-							<option value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq: {{ forwardAdapter.sequence }}) </option>
-							{% else %}
-							<option SELECTED value="{{ forwardAdapter.sequence }}">Default* - {{ forwardAdapter.name }}  (Seq:  {{ forwardAdapter.sequence }}) </option>
-							{% endif %}
-							{% else %}
-							<option value="{{ forwardAdapter.sequence }}">{{ forwardAdapter.name }}  (Seq: {{ forwardAdapter.sequence }}) </option>
-							{% endif %}
-							{% endifequal %}
-	
-							{% endfor %}
-						</select>
-	
-						<p class="help-block">
-							Leave as blank if to use the current default. </br>Select specific forward 3' adapter otherwise
-						</p>
-					</div>
-				</div>
-
-				<div class="control-group">
-					<label for="notes" class="control-label">Notes</label>
-					<div class="controls">
-						<input value="{{ exp.notes|blankIfNone }}" name="notes" id="notes"
-						size="35" maxlength="128" type="text" class="textInput"/>
-						<p class="help-block">
-							Notes
-						</p>
-					</div>
-				</div>
+                {{ exp_form.barcodedSamples }}
 			</fieldset>
+			<div id="analysis_panel" >
+			    {% include "rundb/common/analysis_settings.html" %}
+		</div>
 		</form>				
 	</div>
 	<div class="modal-footer">
 	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-	    <a id="expButton" class="btn btn-primary" href="#">Save</a>
+	    <a id="submitButton" class="btn btn-primary" href="#">Save</a>
 	</div>
 <script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
 <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
@@ -284,15 +98,15 @@ $.ajaxSetup({
 	async : false
 });
 
-$('#expButton').click(function(e){
+$('#submitButton').click(function(e){
 	e.preventDefault();
 	$('#modal_experiment_edit_form').submit();	
 });
 
 $('#modal_experiment_edit_form').submit(function(e) {
 	e.preventDefault();
+	$('#modal_experiment_edit #modal-error-messages').hide().empty();
 	$(".textInput").blur();
-	$('#modal-error-messages').hide();
 	if ($("#modal_experiment_edit_form *").hasClass("error")) {
 		$("#modal_experiment_edit .modal-body").animate({
 			scrollTop : 0
@@ -302,31 +116,43 @@ $('#modal_experiment_edit_form').submit(function(e) {
 		}, 2000);
 		return false;
 	}
-	formData = $("#modal_experiment_edit_form").serializeJSON();
-	//we have to feed an empty results field
-	formData["results"] = [];
+    
+    var barcodedSamples = {};
+    $('.bcsample_select').each(function(i,elem){
+        var sample = $(this).find(':selected').text();        
+        if (sample != ''){
+            if (barcodedSamples[sample] == null){
+                barcodedSamples[sample] = { 'id': elem.value }; // selected sample pk
+                barcodedSamples[sample]['barcodes'] = [elem.id]; // barcode id_str
+            }
+            else{
+                barcodedSamples[sample]['barcodes'].push(elem.id);
+            }
+        }
+    });
+    $('#id_barcodedSamples').val(JSON.stringify(barcodedSamples));
+    
+	formData = $("#modal_experiment_edit_form").serialize();
+    URL = $("#modal_experiment_edit_form").attr('action')
+	METHOD = $("#modal_experiment_edit_form").attr('method')
 
+    console.log(METHOD, URL, formData);
 	$.ajax({
-		type : "PATCH",
-		url : "/rundb/api/v1/experiment/{{ exp.id }}/",
+		type : METHOD,
+		url : URL,
 		async : false,
-		dataType : "json",
-		contentType : "application/json",
-		data : JSON.stringify(formData),
-		processData: false,
-		success : function(msg) {
+		dataType : "html",
+		data : formData,		
+		success : function(data) {
 			$('#modal_experiment_edit').trigger('modal_experiment_edit_done', {});
 			$('#modal_experiment_edit').modal("hide");
 		},
-		error : function(msg) {
-			$('#modal-error-messages').empty();
-			$('#modal-error-messages').show();
-	    	$('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
-	    	$('#modal-error-messages').append('<p class="error">ERROR: ' + msg.status + '</p>');
-	    	$("#modal_experiment_edit .modal-body").animate({
-				scrollTop : 0
-				}, "slow"); 
-	    	console.error("error:", msg);
+		error : function(data) {
+	    	$('#modal_experiment_edit #modal-error-messages').empty().append('<p class="error">Error saving Run!</p>'); 
+	    	$('#modal_experiment_edit #modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+	    	$('#modal_experiment_edit #modal-error-messages').show();
+	    	$("#modal_experiment_edit .modal-body").animate({	scrollTop : 0 }, "slow");
+	    	console.error("error:", data);
 		}
 	});
 	//always return false because the POSTing is done to the API.
@@ -335,9 +161,52 @@ $('#modal_experiment_edit_form').submit(function(e) {
 $('#modal_experiment_edit').on('hidden', function () {
 	$('body #modal_experiment_edit').remove();
 });
-	
+
+// generate barcode samples table
+update_samples = function(barcodeKit){
+    if (barcodeKit==null || barcodeKit==''){
+        // Non-barcoded
+        $('#sample_container').show();
+        $('#barcodedSamples_container').hide();            
+    }
+    else{
+        // Barcoded
+        barcodes = {{barcodes|safe}}[barcodeKit];
+        $('#barcodedSamples tbody').remove();
+        var table = '<tbody>';            
+        $.each(barcodes, function(i, bc){
+            table+='<tr>';
+            table+='<td style="width:150px;">'+bc.id_str+'</td>'
+            table+='<td style="width:150px;">'+bc.sequence+'</td>'
+            table+='<td><select class="bcsample_select" id="'+bc.id_str+'" style="width:200px;"></select></td>'
+            table+='</tr>';
+        });
+        table+='</tbody>';
+        $('#barcodedSamples').append(table);
+        
+        // fill in samples dropdowns and set selected option based on barcodedSamples JSON if any
+        $('#sample_container #id_sample option').clone().appendTo('.bcsample_select').attr('selected', false);
+        try {
+            var bcSamples = JSON.parse($('#id_barcodedSamples').val());
+        } catch(e) {
+            var bcSamples = {};
+        }
+        for (var sampleName in bcSamples){
+            for (var i=0; i<bcSamples[sampleName]['barcodes'].length; i++){
+                var select = "select#" +bcSamples[sampleName]['barcodes'][i]+ " option";
+                $(select).filter(function () {return ($(this).text() == sampleName); }).attr('selected','selected')
+            }
+        }
+
+        $('#sample_container').hide();
+        $('#barcodedSamples_container').show();
+    }
+}
+
+$('#modal_experiment_edit #id_barcodeKitName').change(function(){
+    var barcodeKit = this.value;
+    update_samples(barcodeKit);
+}).change();
+
 </script>
-
-  
-
 </div>

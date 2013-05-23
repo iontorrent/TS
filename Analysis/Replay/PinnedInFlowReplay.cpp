@@ -2,6 +2,7 @@
 #include "PinnedInFlowReplay.h"
 #include <vector>
 #include <assert.h>
+#include "FileBkgReplay.h"
 
 using namespace std;
 
@@ -12,8 +13,14 @@ PinnedInFlowReader::PinnedInFlowReader(Mask *maskPtr, int numFlows, CommandLineO
   : PinnedInFlow(maskPtr, numFlows)
 {
   // specify the file and section to read from
-  reader_1 = new H5ReplayReader(clo, PINNEDINFLOW);
-  reader_2 = new H5ReplayReader(clo, PINSPERFLOW);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key_1(PINNEDINFLOW);
+  dsn info_1 = dsninfo.GetDsn(key_1);
+  reader_1 = new H5ReplayReader(dumpfile, info_1.dataSetName);
+  std::string key_2(PINNEDINFLOW);
+  dsn info_2 = dsninfo.GetDsn(key_2);
+  reader_2 = new H5ReplayReader(dumpfile, info_2.dataSetName);
 
   mW = maskPtr->W();
   mH = maskPtr->H();
@@ -94,8 +101,14 @@ PinnedInFlowRecorder::PinnedInFlowRecorder(Mask *maskPtr, int numFlows, CommandL
   : PinnedInFlow(maskPtr, numFlows)
 {
   // specify the file and section to record to
-  recorder_1 = new H5ReplayRecorder(clo, PINNEDINFLOW);
-  recorder_2 = new H5ReplayRecorder(clo, PINSPERFLOW);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key_1(PINNEDINFLOW);
+  dsn info_1 = dsninfo.GetDsn(key_1);
+  recorder_1 = new H5ReplayRecorder(dumpfile, info_1.dataSetName, info_1.dsnType, info_1.rank);
+  std::string key_2(PINSPERFLOW);
+  dsn info_2 = dsninfo.GetDsn(key_2);
+  recorder_2 = new H5ReplayRecorder(dumpfile, info_2.dataSetName, info_2.dsnType, info_2.rank);
 
   mW = maskPtr->W();
   mH = maskPtr->H();

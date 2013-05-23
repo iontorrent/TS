@@ -13,6 +13,13 @@ Region ImageCropping::chipSubRegion(0,0,0,0);
 int ImageCropping::cropped_region_offset_x = 0;
 int ImageCropping::cropped_region_offset_y = 0;
 
+#define CHANXT_VEC_SIZE    8
+#define CHANXT_VEC_SIZE_B 32
+typedef float ChanVecf_t __attribute__ ((vector_size (CHANXT_VEC_SIZE_B)));
+typedef union{
+	ChanVecf_t V;
+	float A[CHANXT_VEC_SIZE];
+}ChanVecf_u;
 
 
 // this is perhaps a prime candidate for something that is a json set of parameters to read in
@@ -26,7 +33,7 @@ static float chan_xt_vect_318_even[DEFAULT_VECT_LEN] = {0.0132,-0.1511,-0.0131,1
 static float chan_xt_vect_318_odd[DEFAULT_VECT_LEN]  = {0.0356,-0.1787,-0.1732,1.3311,-0.0085,-0.0066,0.0001};
 static float *default_318_xt_vectors[] = {chan_xt_vect_318_even, chan_xt_vect_318_even,chan_xt_vect_318_even, chan_xt_vect_318_even,
     chan_xt_vect_318_odd, chan_xt_vect_318_odd,chan_xt_vect_318_odd, chan_xt_vect_318_odd
-                                         };
+                                          };
 int ImageTransformer::chan_xt_column_offset[DEFAULT_VECT_LEN]   = {-12,-8,-4,0,4,8,12};
 
 ChipXtVectArrayType ImageTransformer::default_chip_xt_vect_array[] = {
@@ -50,82 +57,235 @@ ChannelXTCorrectionDescriptor ImageTransformer::selected_chip_xt_vectors = {NULL
 // the average of the surrounding neighbor pixels.  This helps limit the spread of invalid data in the pinned
 // pixels to neighboring wells
 // void Image::XTChannelCorrect (Mask *mask)
-void ImageTransformer::XTChannelCorrect (RawImage *raw, char *experimentName)
-{
-  short tmp[raw->cols];
+void ImageTransformer::XTChannelCorrect(RawImage *raw,
+		const char *experimentName) {
 
-  float **vects = NULL;
-  int nvects = 0;
-  int *col_offset = NULL;
-  float *vect;
-  int vector_len;
+	float **vects = NULL;
+	int nvects = 0;
+	int *col_offset = NULL;
+	int vector_len;
+	int frame, row, col, vn;
+	short *pfrm, *prow;
+	int i, lc;
+	uint32_t vndx;
 
-  // If no correction has been configured for (by a call to CalibrateChannelXTCorrection), the try to find the default
-  // correction using the chip id as a guide.
-  if ( selected_chip_xt_vectors.xt_vector_ptrs == NULL )
-    for ( int nchip = 0;default_chip_xt_vect_array[nchip].id != ChipIdUnknown;nchip++ )
-      if ( default_chip_xt_vect_array[nchip].id == ChipIdDecoder::GetGlobalChipId() ) {
-        memcpy ( &selected_chip_xt_vectors,& ( default_chip_xt_vect_array[nchip].descr ),sizeof ( selected_chip_xt_vectors ) );
-        break;
-      }
+	// If no correction has been configured for (by a call to CalibrateChannelXTCorrection), the try to find the default
+	// correction using the chip id as a guide.
+	if (selected_chip_xt_vectors.xt_vector_ptrs == NULL)
+		for (int nchip = 0;
+				default_chip_xt_vect_array[nchip].id != ChipIdUnknown; nchip++)
+			if (default_chip_xt_vect_array[nchip].id
+					== ChipIdDecoder::GetGlobalChipId()) {
+				memcpy(&selected_chip_xt_vectors,
+						&(default_chip_xt_vect_array[nchip].descr),
+						sizeof(selected_chip_xt_vectors));
+				break;
+			}
 
-  // if the chip type is unsupported, silently return and do nothing
-  if ( selected_chip_xt_vectors.xt_vector_ptrs == NULL )
-    return;
+	// if the chip type is unsupported, silently return and do nothing
+	if (selected_chip_xt_vectors.xt_vector_ptrs == NULL)
+		return;
 
-  vects = selected_chip_xt_vectors.xt_vector_ptrs;
-  nvects = selected_chip_xt_vectors.num_vectors;
-  col_offset = selected_chip_xt_vectors.vector_indicies;
-  vector_len = selected_chip_xt_vectors.vector_len;
+	vects = selected_chip_xt_vectors.xt_vector_ptrs;
+	nvects = selected_chip_xt_vectors.num_vectors;
+	col_offset = selected_chip_xt_vectors.vector_indicies;
+	vector_len = selected_chip_xt_vectors.vector_len;
 
-  // fill in pinned pixels with average of surrounding valid wells
-  //BackgroundCorrect(mask, MaskPinned, (MaskType)(MaskAll & ~MaskPinned & ~MaskExclude),0,5,false,false,true);
+	// fill in pinned pixels with average of surrounding valid wells
+	//BackgroundCorrect(mask, MaskPinned, (MaskType)(MaskAll & ~MaskPinned & ~MaskExclude),0,5,false,false,true);
+	if ((raw->cols % 8) != 0) {
+		short tmp[raw->cols];
+		float *vect;
+		int ndx;
+		float sum;
 
-  for ( int frame = 0;frame < raw->frames;frame++ ) {
-    short *pfrm = & ( raw->image[frame*raw->frameStride] );
-    for ( int row = 0;row < raw->rows;row++ ) {
-      short *prow = pfrm + row*raw->cols;
-      for ( int col = 0;col < raw->cols;col++ ) {
-        int vndx = ( ( col+ImageCropping::cropped_region_offset_x ) % nvects );
-        vect = vects[vndx];
+		for (frame = 0; frame < raw->frames; frame++) {
+			pfrm = &(raw->image[frame * raw->frameStride]);
+			for (row = 0; row < raw->rows; row++) {
+				prow = pfrm + row * raw->cols;
+				for (col = 0; col < raw->cols; col++) {
+					vndx = ((col + ImageCropping::cropped_region_offset_x)
+							% nvects);
+					vect = vects[vndx];
 
-        float sum = 0.0;
-        for ( int vn = 0;vn < vector_len;vn++ ) {
-          int ndx = col + col_offset[vn];
-          if ( ( ndx >= 0 ) && ( ndx < raw->cols ) )
-            sum += prow[ndx]*vect[vn];
-        }
-        tmp[col] = ( short ) ( sum );
-      }
-      // copy result back into the image
-      memcpy ( prow,tmp,sizeof ( short[raw->cols] ) );
-    }
-  }
+					sum = 0.0;
+					for (vn = 0; vn < vector_len; vn++) {
+						ndx = col + col_offset[vn];
+						if ((ndx >= 0) && (ndx < raw->cols))
+							sum += prow[ndx] * vect[vn];
+					}
+					tmp[col] = (short) (sum);
+				}
+				// copy result back into the image
+				memcpy(prow, tmp, sizeof(short[raw->cols]));
+			}
+		}
 
-  //Dump XT vectors to file
-  if ( dump_XTvects_to_file ) {
-    char xtfname[512];
-    sprintf ( xtfname,"%s/cross_talk_vectors.txt", experimentName );
-    FILE* xtfile = fopen ( xtfname, "wt" );
+	} else {
+//#define XT_TEST_CODE
+#ifdef XT_TEST_CODE
+		short *tstImg = (short *)malloc(raw->rows*raw->cols*2*raw->frames);
+		memcpy(tstImg,raw->image,raw->rows*raw->cols*2*raw->frames);
+		{
+			short tmp[raw->cols];
+			float *vect;
+			int ndx;
+			float sum;
 
-    if ( xtfile !=NULL ) {
-      //write vector length and number of vectors on top
-      fprintf ( xtfile, "%d\t%d\n", vector_len, nvects );
-      //write offsets in single line
-      for ( int nl=0; nl<vector_len; nl++ )
-        fprintf ( xtfile, "%d\t", col_offset[nl] );
-      fprintf ( xtfile, "\n" );
-      //write vectors tab-separated one line per vector
-      for ( int vndx=0; vndx < nvects; vndx++ ) {
-        vect = vects[vndx];
-        for ( int vn=0; vn < vector_len; vn++ )
-          fprintf ( xtfile, "%4.6f\t", vect[vn] );
-        fprintf ( xtfile, "\n" );
-      }
-      fclose ( xtfile );
-    }
-    dump_XTvects_to_file = 0;
-  }
+			for ( frame = 0;frame < raw->frames;frame++ ) {
+				pfrm = & ( tstImg[frame*raw->frameStride] );
+				for ( row = 0;row < raw->rows;row++ ) {
+					prow = pfrm + row*raw->cols;
+					for ( col = 0;col < raw->cols;col++ ) {
+						vndx = ( ( col+ImageCropping::cropped_region_offset_x ) % nvects );
+						vect = vects[vndx];
+
+						sum = 0.0;
+						for ( vn = 0;vn < vector_len;vn++ ) {
+							ndx = col + col_offset[vn];
+							if ( ( ndx >= 0 ) && ( ndx < raw->cols ) )
+							sum += prow[ndx]*vect[vn];
+						}
+						tmp[col] = ( short ) ( sum );
+					}
+					// copy result back into the image
+					memcpy ( prow,tmp,sizeof ( short[raw->cols] ) );
+				}
+			}
+		}
+#endif
+		{
+			ChanVecf_u vectsV[8][7];
+			ChanVecf_u Avect[4], Svect[4];
+			uint32_t j;
+
+			for (vn = 0; vn < nvects; vn++) {
+				for (i = 0; i < 8; i++) {
+					if (i < vector_len)
+						vectsV[vn][6].A[i] = vects[vn][i];
+					else
+						vectsV[vn][6].A[i] = 0;
+				}
+			}
+			for (vn = 0; vn < nvects; vn++) {
+				for (j = 0; j < 6; j++) {
+					for (i = 0; i < 7; i++) {
+						vectsV[vn][j].A[i] = vectsV[vn][6].A[(i + 7 - (j + 1))
+								% 7];
+					}
+					vectsV[vn][j].A[7] = 0;
+				}
+			}
+
+#ifdef XT_TEST_CODE
+			static int doneOnce=0;
+			if(!doneOnce)
+			{
+				doneOnce=1;
+				for(vn=0;vn<nvects;vn++)
+				{
+					printf("vn=%d\n",vn);
+					for(j=0;j<7;j++)
+					{
+						printf(" %d(%d) %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f\n",vn,j,
+								vectsV[vn][j].A[0],vectsV[vn][j].A[1],vectsV[vn][j].A[2],
+								vectsV[vn][j].A[3],vectsV[vn][j].A[4],vectsV[vn][j].A[5],
+								vectsV[vn][j].A[6],vectsV[vn][j].A[7]);
+					}
+				}
+
+			}
+#endif
+			for (frame = 0; frame < raw->frames; frame++) {
+				pfrm = &(raw->image[frame * raw->frameStride]);
+				for (row = 0; row < raw->rows; row++) {
+					prow = pfrm + row * raw->cols;
+
+					// prime the Avect values
+					for (lc = 0; lc < 4; lc++) {
+						Avect[lc].A[0] = 0; // -12
+						Avect[lc].A[1] = 0; // -8
+						Avect[lc].A[2] = 0; // -4
+						Avect[lc].A[3] = prow[lc]; //  0
+						Avect[lc].A[4] = prow[lc + 4]; //  4
+						Avect[lc].A[5] = prow[lc + 8]; //  8
+						Avect[lc].A[6] = 0; //  12
+						Avect[lc].A[7] = 0;
+					}
+					for (col = 0, j = 6; col < raw->cols;
+							col += 4, j = ((j + 1) % 7)) {
+
+						// fill in the last values...
+						if ((col + 16) <= raw->cols) {
+							for (lc = 0; lc < 4; lc++)
+								Avect[lc].A[j] = prow[col + 12 + lc];
+						} else {
+							for (lc = 0; lc < 4; lc++)
+								Avect[lc].A[j] = 0.0f;
+						}
+
+						for (lc = 0; lc < 4; lc++) {
+							Svect[lc].V =
+									Avect[lc].V
+											* vectsV[((col
+													+ ImageCropping::cropped_region_offset_x)
+													+ lc) % nvects][j].V; // apply the vector
+
+							prow[col + lc] = Svect[lc].A[0] + Svect[lc].A[1]
+									+ Svect[lc].A[2] + Svect[lc].A[3]
+									+ Svect[lc].A[4] + Svect[lc].A[5]
+									+ Svect[lc].A[6]/* + Svect[lc].A[7]*/;
+						}
+					}
+				}
+			}
+		}
+
+#ifdef XT_TEST_CODE
+		{
+			short *pTstFrm, *pTstRow;
+
+			// test that we did the right thing...
+			for (frame = 0; frame < raw->frames; frame++) {
+				pfrm = &(raw->image[frame * raw->frameStride]);
+				pTstFrm = &(tstImg[frame * raw->frameStride]);
+				for (row = 0; row < raw->rows; row++) {
+					prow = pfrm + row * raw->cols;
+					pTstRow = pTstFrm + row * raw->cols;
+					for (col = 0; col < raw->cols; col++) {
+						if (pTstRow[col] > (prow[col]+1) ||
+								pTstRow[col] < (prow[col]-1) )
+						printf("%s: frame=%d row=%d col=%d   tst=%d img=%d\n",__FUNCTION__,frame,row,col,pTstRow[col],prow[col]);
+					}
+				}
+			}
+			free(tstImg);
+		}
+#endif
+	}
+	//Dump XT vectors to file
+	if (dump_XTvects_to_file) {
+		char xtfname[512];
+		sprintf(xtfname, "%s/cross_talk_vectors.txt", experimentName);
+		FILE* xtfile = fopen(xtfname, "wt");
+
+		if (xtfile != NULL) {
+			//write vector length and number of vectors on top
+			fprintf(xtfile, "%d\t%d\n", vector_len, nvects);
+			//write offsets in single line
+			for (int nl = 0; nl < vector_len; nl++)
+				fprintf(xtfile, "%d\t", col_offset[nl]);
+			fprintf(xtfile, "\n");
+			//write vectors tab-separated one line per vector
+			for (int vndx = 0; vndx < nvects; vndx++) {
+				for (int vn = 0; vn < vector_len; vn++)
+					fprintf(xtfile, "%4.6f\t", vects[vndx][vn]);
+				fprintf(xtfile, "\n");
+			}
+			fclose(xtfile);
+		}
+		dump_XTvects_to_file = 0;
+	}
 }
 
 ChannelXTCorrection *ImageTransformer::custom_correction_data = NULL;
@@ -147,7 +307,7 @@ void ImageTransformer::CalibrateChannelXTCorrection ( const char *exp_dir,const 
 
   // LSRowImageProcessor can generate a correction for the 314, but application of the correction is much more
   // difficult than for 316/318, and the expected benefit is not as high, so for now...we're skipping the 314
-  if ( ( ChipIdDecoder::GetGlobalChipId() != ChipId316 ) && ( ChipIdDecoder::GetGlobalChipId() != ChipId318 ) )
+  if ( ( ChipIdDecoder::GetGlobalChipId() != ChipId316 ) && ( ChipIdDecoder::GetGlobalChipId() != ChipId318 ) && ( ChipIdDecoder::GetGlobalChipId() != ChipId316v2 ) )
     return;
 
   int len = strlen ( exp_dir ) +strlen ( filename ) + 2;
@@ -220,15 +380,19 @@ void ImageTransformer::GainCorrectImage(RawImage *raw)
 
 void ImageTransformer::GainCorrectImage(SynchDat *sdat)
 {
-  for (size_t row = 0;row < sdat->NumRow();row++)
-  {
-    for (size_t col = 0;col < sdat->NumCol();col++)
-    {
-      float gain = gain_correction[row*sdat->NumCol() + col];
-      size_t numFrames = sdat->NumFrames(row, col);
-      for (size_t frame=0;frame < numFrames;frame++)
-      {
-        sdat->At(row, col, frame) = std::min(MAX_GAIN_CORRECT, (int)round(sdat->At(row, col, frame) * gain));
+  for (size_t bIx = 0; bIx < sdat->mChunks.mBins.size(); bIx++) {
+    TraceChunk &chunk = sdat->mChunks.mBins[bIx];
+    for (size_t row = 0; row < chunk.mHeight; row++) {
+      for (size_t col = 0; col < chunk.mWidth; col++){
+        float gain = gain_correction[(row+chunk.mRowStart)*sdat->NumCol() + (col+chunk.mColStart)];
+        //      size_t numFrames = sdat->NumFrames(row, col);
+        size_t numFrames = chunk.mDepth;
+        size_t idx = row * chunk.mWidth + col;
+        for (size_t frame=0;frame < numFrames;frame++) {
+          //        sdat->At(row, col, frame) = std::min(MAX_GAIN_CORRECT, (int)round(sdat->At(row, col, frame) * gain));
+          chunk.mData[idx] = std::min(MAX_GAIN_CORRECT, (int)round(chunk.mData[idx]* gain));
+          idx += chunk.mFrameStep;
+        }
       }
     }
   }
@@ -238,6 +402,7 @@ float CalculatePixelGain(float *my_trc,float *reference_trc,int min_val_frame, i
 {
   float asq = 0.0;
   float axb = 0.0;
+  float gain = 1.0f;
 
 
   for (int i=0;i < raw_frames;i++)
@@ -248,15 +413,16 @@ float CalculatePixelGain(float *my_trc,float *reference_trc,int min_val_frame, i
     asq += reference_trc[i]*reference_trc[i];
     axb += my_trc[i]*reference_trc[i];
   }
-
-  float gain = asq/axb;
+  
+  if (axb != 0.0f )
+    gain = asq/axb;
 
   // cap gain to reasonable values
-  if (gain < 0.9)
-    gain = 0.9;
+  if (gain < 0.9f)
+    gain = 0.9f;
 
-  if (gain > 1.1)
-    gain = 1.1;
+  if (gain > 1.1f)
+    gain = 1.1f;
 
   return gain;
 }

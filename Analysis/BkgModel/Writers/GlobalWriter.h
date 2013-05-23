@@ -16,7 +16,6 @@
 #include "BeadTracker.h"
 
 class BkgTrace;
-class Region;
 
 class BkgDataPointers; // forward declaration to avoid including <armadillo> which is in BkgDataPointers.h
 class RawWells;

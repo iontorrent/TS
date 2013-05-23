@@ -76,6 +76,8 @@ int IonstatsReduce(int argc, const char *argv[])
     return IonstatsBasecallerReduce(output_json_filename, input_jsons);
   if (format_name == "ionstats_tf")
     return IonstatsTestFragmentsReduce(output_json_filename, input_jsons);
+  if (format_name == "ionstats_alignment")
+    return IonstatsAlignmentReduce(output_json_filename, input_jsons);
 
   fprintf(stderr, "[ionstats] ERROR: %s is not a valid input file for ionstats reduce\n", input_jsons[0].c_str());
   return 1;

@@ -38,14 +38,21 @@ class XtalkCurry{
     XtalkCurry();
     ~XtalkCurry();
     void ExecuteXtalkFlux(int ibd, float *my_xtflux);
-   void NewXtalkFlux (int cx, int cy,float *my_xtflux);
-   void ExcessXtalkFlux (int cx, int cy,float *my_xtflux, float *my_nei_flux);
-   void ComputeTypicalCrossTalk(float *my_xtalk_buffer, float *my_nei_buffer);
-   void CloseOverPointers(Region *_region, CrossTalkSpecification *_xtalk_spec_p,
+    void NewXtalkFlux (int cx, int cy,float *my_xtflux);
+    void ExcessXtalkFlux (int cx, int cy,float *my_xtflux, float *my_nei_flux);
+    void ComputeTypicalCrossTalk(float *my_xtalk_buffer, float *my_nei_buffer);
+    void CloseOverPointers(Region *_region, CrossTalkSpecification *_xtalk_spec_p,
                              BeadTracker *_my_beads_p, RegionTracker *_my_regions_p,
                              TimeCompression *_time_cp, PoissonCDFApproxMemo *_math_poiss,
                              BeadScratchSpace *_my_scratch_p, flow_buffer_info *_my_flow_p,
                              BkgTrace *_my_trace_p, bool _use_vectorization);
+    const int* GetNeighborIndexMap() const { return neiIdxMap; }
+
+  private:
+    void GenerateNeighborIndexMapForAllBeads();
+
+    // For each bead, list all its neighbour beads
+    int* neiIdxMap; // neis x beads
 };
 
 #endif // XTALKCURRY_H

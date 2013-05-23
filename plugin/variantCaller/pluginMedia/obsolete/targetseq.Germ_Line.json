@@ -1,0 +1,67 @@
+dibayes : {
+  call-stringency : "medium",
+  het-skip-high-coverage : 0,
+  reads-min-mapping-qv : 10,
+  het-min-lca-start-pos : 1,
+  het-min-lca-base-qv : 14,
+  het-lca-both-strands : 1,
+  het-min-allele-ratio : 0.2,
+  het-min-allele-ratio-hotspot : 0.2,
+  het-max-coverage-bayesian : 60,
+  het-min-nonref-base-qv : 15,
+  snps-min-base-qv : 15,
+  snps-min-nonref-base-qv : 15,
+  reads-with-indel-exclude : 0,
+  het-min-coverage : 2,
+  het-min-start-pos : 2,
+  hom-min-coverage : 1,
+  hom-min-nonref-allele-count : 3,
+  snps-min-filteredreads-rawreads-ratio : 0.15,
+  het-min-validreads-totalreads-ratio : 0.65,
+  reads-min-alignlength-readlength-ratio : 0.2,
+  hom-min-nonref-base-qv : 15,
+  hom-min-nonref-start-pos : 2,
+  snps-both-strands : 1,
+  hp-penalty1 : 4.0,
+  hp-pen-slope : 0.5,
+  hp-jump-pos : 6,
+  hp-jump-amount : 15,
+  relative-variant-strand-bias : 0.95,
+  mini-strandcount-fpr-strand-bias : 10,
+  C : 0   
+}
+
+
+torrent-variant-caller : {
+  downsample_to_coverage : 1000,
+  min_indel_count_for_genotyping : 3,
+  min_mapping_quality_score : 5,
+  min_allele_frequency : 0.2,
+  hp_low_stringency : 0,
+  hp_min_cov_each_strand : 3,
+  hp_stb_fpe_min_coverage : 30,
+  hp_stb_max_avg_peak_srand_distance : 40,
+  hp_stb_max_two_peaks_relative_bias : 0.6,
+  hp_max_single_peak_std_23 : 18,
+  hp_max_single_peak_std_increment : 5,
+  fpe_max_peak_deviation : 31,
+  hp_max_length : 7,
+  info_vcf: 0,
+ }
+
+long-indel-assembler : {
+  kmer_len : 19,
+  min_var_count : 5,
+  short_suffix_match : 5,
+  min_indel_size : 4,
+  max_hp_length : 8,
+  min_var_freq : 0.15,
+  relative_strand_bias : 0.80
+}
+
+filter-indels : {
+  min-bayesian-score : 2.5,
+  min-var-freq : 0.199,
+  bay-score-minlen : 11,
+  variant-strand-bias : 0.98
+}

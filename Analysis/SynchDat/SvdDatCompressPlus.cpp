@@ -27,7 +27,7 @@
 #include <sstream>
 #include <sstream>
 #include <sys/time.h>
-#include <emmintrin.h>
+#include <x86intrin.h>
 #include <string.h>
 #include "SvdDatCompressPlus.h"
 #include "DelicatoCompression.h"

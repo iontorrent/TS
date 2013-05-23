@@ -8,6 +8,7 @@
 #include <string>
 #include "KeyClassifier.h"
 #include "TraceStore.h"
+#include "PJobQueue.h"
 
 using namespace arma;
 
@@ -21,8 +22,10 @@ class ZeromerModel {
 
   virtual void SetTime(const Col<T> &time) = 0;
 
-  virtual void FitWellZeromers(TraceStore<T> &traceStore,
+  virtual void FitWellZeromers(PJobQueue &jQueue,
+                               TraceStore<T> &traceStore,
                                std::vector<char> &keyAssignments,
+                               Col<int> &zeroFlows,
                                std::vector<KeySeq> &keys) = 0;
 
   virtual int ZeromerPrediction(int wellIdx,

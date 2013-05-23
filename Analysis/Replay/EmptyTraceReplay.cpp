@@ -5,6 +5,8 @@
 #include <vector>
 #include <assert.h>
 #include <pthread.h>
+#include "FileBkgReplay.h"
+
 using namespace std;
 
 // *********************************************************************
@@ -13,7 +15,12 @@ using namespace std;
 EmptyTraceReader::EmptyTraceReader(CommandLineOpts &clo) : EmptyTrace(clo)
 {
   // specify the file and section to read from
-  reader = new H5ReplayReader(clo, EMPTYTRACE);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key(EMPTYTRACE);
+  dsn info = dsninfo.GetDsn(key);
+
+  reader = new H5ReplayReader(dumpfile, info.dataSetName);
 
   bufferCount = 0;
 
@@ -96,7 +103,12 @@ void EmptyTraceReader::FillBuffer(int flow, int regionindex)
 EmptyTraceRecorder::EmptyTraceRecorder(CommandLineOpts &clo) : EmptyTrace(clo)
 {
   // specify the file and section to record to
-  recorder = new H5ReplayRecorder(clo ,EMPTYTRACE);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key(EMPTYTRACE);
+  dsn info = dsninfo.GetDsn(key);
+
+  recorder = new H5ReplayRecorder(dumpfile, info.dataSetName, info.dsnType, info.rank);
 
   bufferCount = 0;
 

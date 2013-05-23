@@ -12,6 +12,9 @@
 #define REGIONTRACKER_REGIONPARAMS "region_param"
 #define REGIONTRACKER_MISSINGMATTER "missing_matter"
 #define FLOWINDEX "flowIndex"
+#define RAWSIGNAL "rawsignal"
+#define NORMSIGNAL "normsignal"
+#define WELLS "wells"
 
 // layout for the background model replay file
 struct dsn {

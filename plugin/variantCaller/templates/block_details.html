@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_parent"/>
+<style type="text/css">
+table {font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif; font-size: 12px; cellspacing: 0; cellpadding: 0}
+td{border: 0px solid #BBB;overflow: visible;color: black}
+th{border: 1px solid #BBB;overflow: visible;background-color: #E4E5E4;}
+p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
+.zebra {  background-color: #E1EFFA;}
+.table_hover{    color: #009;    background-color: #6DBCEE;}
+</style></head><body>
+
+<table>
+  <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
+  {% if options.has_targets %}
+    <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
+  {% else %}
+    <tr><td>Targeted regions:</td>    <td>None</td></tr>
+  {% endif %}
+  {% if options.has_hotspots %}
+    <tr><td>Hotspot regions:</td>     <td>{{options.hotspots_name}}</td></tr>
+  {% else %}
+    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
+  {% endif %}
+  <tr><td>Configuration:</td>         <td>{{options.configuration}}</td></tr>
+</table>
+
+<table>
+  <tr>
+    <th><span class="help" title="Sample name">Sample Name</span></th>
+    <th><span class="help" title="Number of called variants">Variants</span></th>
+    {% if options.has_hotspots %}
+      <th><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
+    {% endif %}
+    <th><span class="help" title="Download links">Download Links</span></th>
+  </tr>
+  <tr>
+    <td><a href="variantCaller.html">{{summary.sample_name}}</a></td>
+    <td>{{summary.variants_total.variants}}</td>
+    {% if options.has_hotspots %}
+      <td>{{summary.hotspots_total.variants}}</td>
+    {% endif %}
+    <td><a href="{{variants_vcf_gz_link}}">[VCF.GZ]</a> <a href="{{variants_tbi_link}}">[VCF.GZ.TBI]</a></td>
+  </tr>
+</table>
+
+</body>
+</html>
+

@@ -1,0 +1,214 @@
+{% extends "rundb/configure/base.html" %}
+{% block extra_head_styles %}
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+{% endblock extra_head_styles %}
+{% block extra_head_js %}
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"></script>
+<script type="text/javascript">
+// Copied from data_model.js - needs new home
+function precisionUnits(num, div) {
+    // console.log(num + ' ' + typeof(num));
+    if (typeof div === "undefined") div = 1000;
+    num = parseFloat(num);
+    var postfix = "";
+    var exponent = Math.floor(Math.log(num) / Math.log(div));
+    if (exponent >= 0) {
+        num = Math.round(100 * num / Math.pow(div, exponent)) / 100;
+    }
+    if (Math.round(num) >= div) {
+        num /= div;
+        exponent += 1;
+    }
+    if (exponent >= 1) {
+        postfix = "kMGTPEZY"[exponent - 1];
+    }
+    return num.toPrecision(3) + ' ' + postfix;
+}
+</script>
+
+{% endblock extra_head_js %}
+{% block sub-nav %}
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li class="active"><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li><a href="{% url configure_account %}">Accounts</a></li>
+{% endblock sub-nav %}
+{% block content %}
+<div class="content clearfix">
+    <div class="clearfix">
+        <h1 class="pull-left clearfix">{{ plugin.name }} -- v{{ plugin.version }}</h1>
+        <p><!-- Description: -->{{ plugin.description }}</p>
+        <p>Script: {{ plugin.script }}</p>
+        {% if plugin.hasAbout %}<iframe src="{{plugin.hasAbout}}"
+            class="auto-height auto-width full-width"
+            frameborder="1"></iframe>{% endif %}
+        <!-- FIXME show toggles
+        Selected: {{ plugin.selected }}
+        AutoRun: {{ plugin.autorun }}
+        -->
+    </div>
+</div>
+<div class="content clearfix">
+    <div class="clearfix">
+        <h1 class="pull-left">Recent Plugin Results</h1>
+    </div>
+    {% if not pluginresults.count %}
+    <div class="alert alert-info">No instances of plugin results found.</div>
+    {% endif %}
+    <div id="grid"></div>
+</div>
+
+<div id="modal_plugin_log" class="modal container hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3></h3>
+    </div>
+    <div class="modal-body"></div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
+    </div>
+    <script>
+        $('#modal_plugin_log').on('hidden', function() {
+            $(this).removeData('modal').find('.modal-body').empty();
+            $(this).removeData('modal').find('.modal-header h3').empty();
+        });
+    </script>
+</div>
+
+<script id="ResultColumnTemplate" type="text/x-kendo-template">
+    # var _result = data.result.match(/(\d+)(?=\/$)/)[0]; #
+    <a href="#= "{% url report 999999 %}".replace('999999', _result)#\#PluginOutput">#=data.resultName#</a>
+</script>
+<script id="SizeColumnTemplate" type="text/x-kendo-template">
+    <span rel='tooltip' title="Size (bytes): #=data.size#, Inode Count: #=data.inodes#" >
+        #= precisionUnits(data.size, 1024)#B
+    </span>
+</script>
+<script id="StateColumnTemplate" type="text/x-kendo-template">
+    # var _id = id; #
+    #= data.state #
+    <a class="pluginLog ui-icon ui-icon-script"
+        data-title="Log for {{plugin.name}} result #=data.id #"
+        title="Log File for {{plugin.name }} result #=data.id#"
+        href="{% url report 9999 %}/plugin_out/{{plugin.name}}_out/drmaa_stdout.txt"/>
+</script>
+
+<script type="text/javascript">
+
+$(document).ready(function(){
+    var grid = $("#grid").kendoGrid({
+        dataSource: {
+            type: "json"
+            , transport: {
+                read: {
+                    url: "{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}"
+                    , contentType: 'application/json; charset=utf-8'
+                    , type: 'GET'
+                    , dataType: 'json'
+                }
+                , parameterMap: function(options, action) {
+                    $.extend({ "plugin__name": "{{ plugin.name|escapejs }}",
+                               "endtime__isnull": true }, options);
+                    return buildParameterMap(options)
+                }
+                , destroy: {
+                    url: function(params) {
+                       return "{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}" + params.id + "/";
+                    }
+                    , contentType: 'application/json; charset=utf-8'
+                    , type: "DELETE"
+                }
+            }
+            , schema: {
+                data: "objects"
+                , total: "meta.total_count"
+                , model: {
+                    id: "id"
+                    , fields: {
+                        id: { type: "number" }
+                        , starttime: { type: "date" }
+                        , endtime: { type: "date" }
+                        , duration: { type: "string" }
+                        , inodes: { type: "number" }
+                        , size: { type: "string" }
+                        , path: { type: "string" }
+                        , state: { type: "string" }
+                        , result: { type: "string" }
+                    }
+                }
+            }
+            , serverSorting: true
+            , sort: { field: "endtime", dir: "desc" }
+            , serverPaging: true
+            , pageSize: 20
+            , serverFiltering: true
+            , filter: [ {field: "plugin__name", operator:"", value:"{{ plugin.name|escapejs }}"} ]
+            , autoSync: true
+        }
+        , height: '446'
+        , groupable: false
+        , scrollable: {
+            virtual: true
+        }
+        , selectable: false
+        , editable: { destroy: true, update: false
+            , confirmation: "Are you sure you want to remove this plugin result? All output files will be removed."
+        }
+        , sortable: true
+        , pageable: false
+        , columns: [
+            {
+                field: "result"
+                ,title: "Result"
+                ,template: kendo.template($("#ResultColumnTemplate").html())
+            } , {
+                field: "starttime"
+                ,title: "Start"
+                ,template: '#= kendo.toString(new Date(Date.parse(starttime)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "endtime"
+                ,title: "End"
+                ,template: '#= kendo.toString(new Date(Date.parse(endtime)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "duration"
+                ,title: "Duration"
+            } , {
+                field: "state"
+                ,title: "State"
+            } , {
+                field: "size"
+                ,title: "Output Size"
+                ,sortable: true
+                ,template: kendo.template($("#SizeColumnTemplate").html())
+            } , {
+                command: [ "destroy"
+                           ,{ name: "rescan" , text: "Rescan" , className:
+                               "rescanButton", click: refreshPluginResult } ]
+                , title: "&nbsp;"
+            }
+        ]
+    });
+
+   $('iframe.auto-height').iframeAutoHeight({minHeight: 400, heightOffset: 20});
+
+});
+
+   function refreshPluginResult(e) {
+        e.preventDefault();
+        var pr = this.dataItem($(e.currentTarget).closest("tr"));
+        console.log(JSON.stringify(pr));
+        $.ajax({
+             url: "{% url api_dispatch_rescan resource_name="pluginresult" api_name="v1" pk="999999" %}".replace("999999", pr.id)
+             , contentType: 'application/json; charset=utf-8'
+        }).success(function () {
+            var grid = $("#grid").data("kendoGrid");
+            grid.dataSource.sync();
+            grid.refresh();
+        });
+   }
+</script>
+{% endblock content %}

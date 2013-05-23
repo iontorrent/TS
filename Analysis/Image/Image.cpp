@@ -30,15 +30,14 @@
 
 #include "ImageTransformer.h"
 
-#include "dbgmem.h"
 #include "IonErr.h"
 
 #include "PinnedInFlow.h"
 #include "SynchDat.h"
+#include "IonImageSem.h"
 
 using namespace std;
 
-Image_semaphore_t *Image::Image_SemPtr=0;
 
 // default constructor
 Image::Image()
@@ -122,7 +121,16 @@ void Image::cleanupRaw()
     free ( raw->interpolatedMult );
     raw->interpolatedMult = NULL;
   }
-
+  if ( raw->interpolatedDiv )
+  {
+    free ( raw->interpolatedDiv );
+    raw->interpolatedDiv = NULL;
+  }
+  if ( raw->compToUncompFrames ) 
+    { 
+      free ( raw->compToUncompFrames );
+      raw->compToUncompFrames = NULL;
+    }
   memset ( raw,0,sizeof ( *raw ) );
 }
 
@@ -303,144 +311,7 @@ void Image::JustCacheOneImage(const char *name)
 }
 
 
-Image_semaphore_t *IMG_semaphore_create(const char *semaphore_name)
-{
-	int fd;
-	Image_semaphore_t *semap;
 
-    fd = open(semaphore_name, O_RDWR | O_CREAT /*| O_EXCL*/, 0666);
-    if (fd < 0){
-    	printf("%s: failed, %s\n",__FUNCTION__,strerror(errno));
-        return (NULL);
-    }
-    if( ftruncate(fd, sizeof(Image_semaphore_t)))
-    {}
-#ifdef USE_IMG_PTHREAD_SEM
-    pthread_mutexattr_t psharedm;
-    pthread_condattr_t psharedc;
-    (void) pthread_mutexattr_init(&psharedm);
-//    int robustness=0;
-//    (void) pthread_mutexattr_getrobust_np(&psharedm,&robustness);
-//	DTRACEP("%s: robust: %d\n",__FUNCTION__,robustness);
-    (void) pthread_mutexattr_setpshared(&psharedm,
-        PTHREAD_PROCESS_SHARED);
-    (void)pthread_mutexattr_setrobust_np(&psharedm, PTHREAD_MUTEX_ROBUST_NP);
-    (void) pthread_condattr_init(&psharedc);
-    (void) pthread_condattr_setpshared(&psharedc,
-        PTHREAD_PROCESS_SHARED);
-#endif
-    semap = (Image_semaphore_t *) mmap(NULL, sizeof(Image_semaphore_t),
-            PROT_READ | PROT_WRITE, MAP_SHARED,
-            fd, 0);
-    close (fd);
-    if(semap)
-    {
-    	memset(semap,0,sizeof(Image_semaphore_t));
-#ifdef USE_IMG_PTHREAD_SEM
-    	(void) pthread_mutex_init(&semap->lock, &psharedm);
-#endif
-    //    (void) pthread_cond_init(&semap->nonzero, &psharedc);
-    }
-    return (semap);
-}
-
-
-Image_semaphore_t *IMG_semaphore_open(const char *semaphore_name)
-{
-    int fd;
-    Image_semaphore_t *semap;
-
-    fd = open(semaphore_name, O_RDWR, 0666);
-    if (fd < 0){
-    	printf("%s: Creating sema, %s\n",__FUNCTION__,strerror(errno));
-    	semap = IMG_semaphore_create(semaphore_name);
-    }
-    else
-    {
-		semap = (Image_semaphore_t *) mmap(NULL, sizeof(Image_semaphore_t),
-				PROT_READ | PROT_WRITE, MAP_SHARED,
-				fd, 0);
-
-	    close (fd);
-
-	    if(semap == NULL)
-	    	semap = IMG_semaphore_create(semaphore_name);
-
-#ifdef USE_IMG_PTHREAD_SEM
-	    int lock_rc;
-	    if((lock_rc = pthread_mutex_lock(&semap->lock)) != 0)
-		{
-			munmap(semap,sizeof(Image_semaphore_t));
-			semap = IMG_semaphore_create(semaphore_name);
-		}
-	    else
-	    {
-	    	pthread_mutex_unlock(&semap->lock);
-	    }
-#endif
-    }
-
-    return (semap);
-}
-
-
-void initImageSem(void)
-{
-  static const char *SemName="/tmp/ImageSem";
-  Image::Image_SemPtr = IMG_semaphore_open(SemName);
-}
-
-void Image::ImageSemTake()
-{
-	uint32_t msecs_waited=0;
-	if(Image_SemPtr)
-	{
-#ifdef USE_IMG_PTHREAD_SEM
-		int lock_rc;
-		if((lock_rc = pthread_mutex_lock(&Image_SemPtr->lock)) != 0)
-			  printf("problems taking image sem %s\n",strerror(lock_rc));
-#else
-		uint32_t i;
-		static const uint32_t sleepUsecs = 20000;
-		static const uint32_t limit=(2*60*(1000000/sleepUsecs));
-
-		for(i=0;i<limit;i++)
-		{
-			if(Image_SemPtr->owner == 0)
-			{
-				break;
-			}
-			usleep(sleepUsecs); // sleep for 1/50 of a second
-		}
-		if(i == limit)
-			printf("issues taking semaphore %lx\n",Image_SemPtr->owner);
-
-		msecs_waited = i*sleepUsecs/1000;
-		if(msecs_waited > 0)
-			printf("waited %d msecs for file semaphore\n",msecs_waited);
-		Image_SemPtr->owner = pthread_self();
-#endif
-	}
-	else
-	{
-		printf("Image Sem is NULL\n");
-	}
-}
-
-void Image::ImageSemGive()
-{
-	if(Image_SemPtr)
-	{
-#ifdef USE_IMG_PTHREAD_SEM
-        pthread_mutex_unlock(&Image_SemPtr->lock);
-#else
-		if(Image_SemPtr->owner == pthread_self())
-		{
-			Image_SemPtr->owner = 0;
-		}
-#endif
-	}
-}
 
 // This is the actual function
 bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly,
@@ -460,23 +331,24 @@ bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool h
   }
 
   //DEBUG: monitor file access time
-  double startT = TinyTimer();
+//  double startT = TinyTimer();
 
   if ( !WaitForMyFileToWakeMeFromSleep ( rawFileName ) )
     return ( false );
 
-  int rc = ActuallyLoadRaw ( rawFileName,frames,headerOnly );
+  //int rc =
+  ActuallyLoadRaw ( rawFileName,frames,headerOnly );
   
-  TimeStampReporting ( rc );
+  //TimeStampReporting ( rc );
 
   // No magic post-processing that is invisible
   // static variables are bugs waiting to happen.
   // >explicitly< do transformations of images
 
 
-  double stopT = TinyTimer();
-  fprintf ( stdout, "File access = %0.2lf sec.\n", stopT - startT );
-  fflush ( stdout );
+//  double stopT = TinyTimer();
+//  fprintf ( stdout, "File access = %0.2lf sec.\n", stopT - startT );
+//  fflush ( stdout );
 
   return true;
 }
@@ -524,7 +396,7 @@ void Image::InitFromSdat(SynchDat *sdat) {
   for (int row = 0; row < raw->rows; row++) {
     for (int col = 0; col < raw->cols; col++) {
       for (int frame = 0; frame < raw->frames; frame++) {
-        At(row,col,frame) = sdat->At(row,col,frame);
+        At(row,col,frame) = sdat->AtWell(row,col,frame);
       }
     }
   }
@@ -532,7 +404,6 @@ void Image::InitFromSdat(SynchDat *sdat) {
 
 int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly )
 {
-  static pthread_once_t  onceControl = PTHREAD_ONCE_INIT;
   int rc;
   raw->channels = 4;
   raw->interlaceType = 0;
@@ -540,7 +411,6 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
   if ( frames )
     raw->frames = frames;
 
-  pthread_once(&onceControl, initImageSem);
 
   if ( headerOnly )
   {
@@ -554,13 +424,15 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
   else
   {
 
-	  if(Image_SemPtr)
-	  {
-		  ImageSemTake();
+	  if(	  ImageCropping::chipSubRegion.col == 0 && ImageCropping::chipSubRegion.w == 0 &&
+			  ImageCropping::chipSubRegion.row == 0 && ImageCropping::chipSubRegion.h == 0 &&
+			  raw->frames == 0)
+	  { // only cache whole-file reads...
+		  IonImageSem::Take();
 
 		  JustCacheOneImage(rawFileName);
 
-		  ImageSemGive();
+		  IonImageSem::Give();
 	  }
 
     rc = deInterlace_c ( ( char * ) rawFileName,&raw->image,&raw->timestamps,
@@ -615,8 +487,11 @@ bool Image::WaitForMyFileToWakeMeFromSleep ( const char *rawFileName )
       }
       //DEBUG
       fprintf ( stdout, "Waiting to load %s\n", rawFileName );
-      sleep ( waitTime );
-      timeOut -= waitTime;
+      uint32_t timeWaited = 0;
+      uint32_t timeLeft = sleep ( waitTime );
+      timeWaited = waitTime - timeLeft;
+      //      fprintf ( stdout, "Waited to %u load %s\n", timeWaited, rawFileName );
+      timeOut -= timeWaited;
     }
 
   }
@@ -636,60 +511,70 @@ bool Image::WaitForMyFileToWakeMeFromSleep ( const char *rawFileName )
 
 void Image::TimeStampCalculation()
 {
+  int i,j;
   raw->baseFrameRate=raw->timestamps[0];
   if ( raw->baseFrameRate == 0 )
-    raw->baseFrameRate=raw->timestamps[1];
-  if ( raw->uncompFrames != raw->frames )
+    { // there were a couple of versions where the thumbnail had a zero first timestamp.
+      // correct this by adding the second timestamp to all timestamps...
+      raw->baseFrameRate=raw->timestamps[1];
+      for (i=0;i<raw->frames;i++)
+        raw->timestamps[i] += raw->baseFrameRate;
+    }
+
+  raw->interpolatedFrames = ( int * ) malloc ( sizeof ( int ) *raw->uncompFrames );
+  raw->interpolatedMult = ( float * ) malloc ( sizeof ( float ) *raw->uncompFrames );
+  raw->interpolatedDiv  = ( float * ) malloc ( sizeof ( float ) *raw->uncompFrames );
+  raw->compToUncompFrames = (int *) malloc(sizeof(int) * raw->frames);
+  fill(raw->compToUncompFrames, raw->compToUncompFrames + raw->frames, -1);
+  //  if ( raw->uncompFrames != raw->frames )
   {
-
-    // create a temporary set of timestamps that indicate the centroid of each averaged data point
-    // from the ones in the file (which indicate the end of each data point)
-    float *centr_timestamps = ( float * ) malloc ( sizeof ( float ) *raw->frames );
-    float last_timestamp = 0.0;
-    for ( int j=0;j<raw->frames;j++ )
-    {
-      centr_timestamps[j] = ( raw->timestamps[j] + last_timestamp ) /2.0;
-      last_timestamp = raw->timestamps[j];
-    }
-
-    raw->interpolatedFrames = ( int * ) malloc ( sizeof ( int ) *raw->uncompFrames );
-    raw->interpolatedMult = ( float * ) malloc ( sizeof ( float ) *raw->uncompFrames );
-    for ( int i=0;i<raw->uncompFrames;i++ )
-    {
-      int curTime=raw->baseFrameRate*i;
-      int prevTime,nextTime;
-
-      if ( curTime > centr_timestamps[raw->frames-1] )
+    int prevTime,nextTime;
+    int numFrames,addedFrames;
+    double numFramesF;
+    j=0;
+    // some dat files have bug with first timestamp being 0
+    double baseline = raw->timestamps[0] > 0 ? raw->timestamps[0] : raw->timestamps[1];
+    assert(baseline > 0);
+    for (i=0;i<raw->frames;i++)
       {
-        // the last several points must actually be extrapolated
-        nextTime = centr_timestamps[raw->frames-1];
-        prevTime = centr_timestamps[raw->frames-2];
-
-        raw->interpolatedFrames[i] = raw->frames-1;
-        raw->interpolatedMult[i] = ( float ) ( nextTime-curTime ) / ( float ) ( nextTime-prevTime );
-      }
-      else
-        for ( int j=0;j<raw->frames;j++ )
-        {
-          if ( centr_timestamps[j] >= curTime )
+        nextTime = raw->timestamps[i];
+        if(i)
+          prevTime = raw->timestamps[i-1];
+        else
+          prevTime = 0;
+        
+        numFramesF = ((nextTime - prevTime) + 2);
+        numFramesF /= baseline; // gets rounded down.  because of the +2 above, this should be right
+        numFrames = (uint32_t)numFramesF;
+        int prevFrame = i ? raw->compToUncompFrames[i-1] : -1;
+        raw->compToUncompFrames[i] = prevFrame + numFrames;
+        // add this many entries
+        for(addedFrames=0;addedFrames<numFrames;addedFrames++)
           {
-            nextTime = centr_timestamps[j];
-
-            if ( j )
-              prevTime = centr_timestamps[j-1];
+            if ((i+1) < raw->frames)
+              raw->interpolatedFrames[j] = (i+1);
             else
-              prevTime = 0;
-
-            raw->interpolatedFrames[i] = j;
-            raw->interpolatedMult[i] = ( float ) ( nextTime-curTime ) / ( float ) ( nextTime-prevTime );
-
-            break;
+              raw->interpolatedFrames[j] = raw->frames-1; // don't go past the end..
+            //			else
+            //				raw->interpolatedFrames[j] = i | 0x8000;
+            raw->interpolatedMult[j] = ((float)(numFrames - (float)addedFrames))/((float)numFrames);
+            raw->interpolatedDiv[j++] = numFrames;
           }
-        }
-    }
-
-    free ( centr_timestamps );
+      }
+    if(j != raw->uncompFrames)
+      {
+	printf("Got the mult wrong %d %d....\n",j,raw->uncompFrames);
+      }
   }
+  //  else
+  //  {
+  //	for (i=0;i<raw->uncompFrames;i++)
+  //	{
+  //		raw->interpolatedFrames[i] = i;
+  //		raw->interpolatedMult[i] = 1.0f;
+  //		raw->interpolatedDiv[i] = 1.0f;
+  //	}
+  //  }
 }
 
 
@@ -890,36 +775,116 @@ int Image::FilterForPinned ( Mask *mask, MaskType these, int markBead )
   return pinnedCount;
 }
 
-void Image::SetMeanOfFramesToZero ( int startPos, int endPos )
+typedef int16_t v8s16_t __attribute__ ((vector_size (16)));
+typedef union{
+	v8s16_t V;
+	int16_t A[8];
+}v8s16_e;
+
+void Image::SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed_frame_nums )
 {
   // normalize trace data to the input frame per well
-  printf ( "SetMeanOfFramesToZero from frame %d to %d\n",startPos,endPos );
-  int frame, x, y;
+  double stopT,startT = TinyTimer();
+//  printf ( "SetMeanOfFramesToZero from frame %d to %d\n",startPos,endPos );
+  int frame, x, y,rStartPos=0,rEndPos=0;
+  int32_t refLA[8];
+  v8s16_e refA;
+  v8s16_t *imgV;
   int ref;
   int i = 0;
   short *imagePtr;
   int nframes = raw->frames;
+  int32_t idx;
 
-  for ( y=0;y<raw->rows;y++ )
+  if(use_compressed_frame_nums)
   {
-    for ( x=0;x<raw->cols;x++ )
-    {
-      int pos;
-      ref = 0;
-      for ( pos=startPos;pos<=endPos;pos++ )
-        ref += raw->image[pos*raw->frameStride+i];
-      ref /= ( endPos-startPos+1 );
-      imagePtr = &raw->image[i];
-      for ( frame=0;frame<nframes;frame++ )
-      {
-        *imagePtr -= ref;
-        imagePtr += raw->frameStride;
-      }
-      i++;
-    }
+	  int frm;
+	  for(frm=0;frm<raw->frames;frm++)
+	  {
+		  if(rStartPos == 0 && raw->timestamps[frm] > startPos)
+			  rStartPos = frm;
+		  if(rEndPos == 0 && raw->timestamps[frm] > endPos)
+			  rEndPos = frm;
 
+	  }
   }
-  printf ( "SetMeanOfFramesToZero...done\n" );
+  else
+  {
+	  rStartPos = startPos;
+	  rEndPos = endPos;
+  }
+
+  if((raw->cols % 8) != 0)
+  {
+	  for ( y=0;y<raw->rows;y++ )
+	  {
+	    for ( x=0;x<raw->cols;x++ )
+	    {
+	      int pos;
+	      ref = 0;
+	      for ( pos=rStartPos;pos<=rEndPos;pos++ )
+	        ref += raw->image[pos*raw->frameStride+i];
+	      ref /= ( rEndPos-rStartPos+1 );
+	      imagePtr = &raw->image[i];
+	      for ( frame=0;frame<nframes;frame++ )
+	      {
+	        *imagePtr -= ref;
+	        imagePtr += raw->frameStride;
+	      }
+	      i++;
+	    }
+	  }
+  }
+  else
+  {
+	  for ( y=0;y<raw->rows;y++ )
+	  {
+	    for ( x=0;x<raw->cols;x+=8 )
+	    {
+	      int pos;
+	      refLA[0] = 0;
+	      refLA[1] = 0;
+	      refLA[2] = 0;
+	      refLA[3] = 0;
+	      refLA[4] = 0;
+	      refLA[5] = 0;
+	      refLA[6] = 0;
+	      refLA[7] = 0;
+	      for ( pos=rStartPos;pos<=rEndPos;pos++ )
+	      {
+	          imagePtr = &raw->image[pos*raw->frameStride+i];
+	          refLA[0] += imagePtr[0];
+	    	  refLA[1] += imagePtr[1];
+	    	  refLA[2] += imagePtr[2];
+	    	  refLA[3] += imagePtr[3];
+	    	  refLA[4] += imagePtr[4];
+	    	  refLA[5] += imagePtr[5];
+	    	  refLA[6] += imagePtr[6];
+	    	  refLA[7] += imagePtr[7];
+	      }
+	      idx = ( endPos-startPos+1 );
+	      refA.A[0] = (int16_t)(refLA[0]/idx);
+	      refA.A[1] = (int16_t)(refLA[1]/idx);
+	      refA.A[2] = (int16_t)(refLA[2]/idx);
+	      refA.A[3] = (int16_t)(refLA[3]/idx);
+	      refA.A[4] = (int16_t)(refLA[4]/idx);
+	      refA.A[5] = (int16_t)(refLA[5]/idx);
+	      refA.A[6] = (int16_t)(refLA[6]/idx);
+	      refA.A[7] = (int16_t)(refLA[7]/idx);
+
+	      imagePtr = &raw->image[i];
+	      for ( frame=0;frame<nframes;frame++ )
+	      {
+	    	imgV = (v8s16_t *)imagePtr;
+	        *imgV -= refA.V;
+	        imagePtr += raw->frameStride;
+	      }
+	      i += 8;
+	    }
+	  }
+  }
+  stopT = TinyTimer();
+  printf ( "SetMeanOfFramesToZero(%d-%d) in %0.2lf sec\n",startPos,endPos,stopT - startT );
 }
 
 void Image::IntegrateRaw ( Mask *mask, MaskType these, int start, int end )
@@ -2393,6 +2358,10 @@ bool Image::LoadSlice (
     {
       chipID = strdup ( "316" );
     }
+    else if (nColFull == 3392 && nRowFull ==2120 )
+    {
+        chipID =strdup ( "316v2");
+    }
     else if ( nColFull == 3392 && nRowFull == 3792 )
     {
       chipID = strdup ( "318" );
@@ -2406,7 +2375,7 @@ bool Image::LoadSlice (
   // Only allow for XTCorrection on 316 and 318 chips
   if ( XTCorrect )
   {
-    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) ) )
+    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) && strcmp ( chipID,"316v2" )) )
     {
       XTCorrect = false;
     }

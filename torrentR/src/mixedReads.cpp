@@ -15,20 +15,16 @@ RcppExport SEXP percentPositive(SEXP RIonoGram, SEXP RCutoff)
 	vector<double> ionoGram = Rcpp::as<vector<double> >(RIonoGram);
 	double cutoff = Rcpp::as<double>(RCutoff);
 	double ppf    = percent_positive(ionoGram.begin(), ionoGram.end(), cutoff);
-	RcppResultSet rs;
-	rs.add("ppf", ppf);
 
-	return rs.getReturnList();
+	return Rcpp::List::create(Rcpp::Named("ppf") = ppf);
 }
 
 RcppExport SEXP sumFractionalPart(SEXP RIonoGram)
 {
 	vector<double> ionoGram = Rcpp::as<vector<double> >(RIonoGram);
 	double ssq = sum_fractional_part(ionoGram.begin(), ionoGram.end());
-	RcppResultSet rs;
-	rs.add("ssq", ssq);
 
-	return rs.getReturnList();
+	return Rcpp::List::create(Rcpp::Named("ssq") = ssq);
 }
 
 RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
@@ -50,12 +46,12 @@ RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
 	bool converged = fit_normals(mean, sigma, prior, ppf, ssq, false); // avoid verbose
 
 	// (Wrapping the results would be much simpler with RcppArmadillo.)
-	RcppVector<double> RCloneMean  = Rcpp::wrap(mean[0]);
-	RcppVector<double> RMixedMean  = Rcpp::wrap(mean[1]);
-	RcppVector<double> RPrior      = Rcpp::wrap(prior);
+	Rcpp::NumericVector RCloneMean  = Rcpp::wrap(mean[0]);
+	Rcpp::NumericVector RMixedMean  = Rcpp::wrap(mean[1]);
+	Rcpp::NumericVector RPrior      = Rcpp::wrap(prior);
 
-	RcppMatrix<double> RCloneSigma(2,2);
-	RcppMatrix<double> RMixedSigma(2,2);
+	Rcpp::NumericMatrix RCloneSigma(2,2);
+	Rcpp::NumericMatrix RMixedSigma(2,2);
 	for(int r=0; r<2; ++r){
 		for(int c=0; c<2; ++c){
 			RCloneSigma(r,c) = sigma[0](r,c);
@@ -63,22 +59,20 @@ RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
 		}
 	}
 
-	RcppResultSet rs;
-	rs.add("converged",  converged);
-	rs.add("cloneMean",  RCloneMean);
-	rs.add("mixedMean",  RMixedMean);
-	rs.add("cloneSigma", RCloneSigma);
-	rs.add("mixedSigma", RMixedSigma);
-	rs.add("prior",      RPrior);
+	return Rcpp::List::create(Rcpp::Named("converged")  = converged,
+                              Rcpp::Named("cloneMean")  = RCloneMean,
+                              Rcpp::Named("mixedMean")  = RMixedMean,
+                              Rcpp::Named("cloneSigma") = RCloneSigma,
+                              Rcpp::Named("mixedSigma") = RMixedSigma,
+                              Rcpp::Named("prior")      = RPrior);
 
-	return rs.getReturnList();
 }
 
 RcppExport SEXP distanceFromMean(SEXP RMean, SEXP RSigma, SEXP RX)
 {
-	RcppVector<double> tmpMean(RMean);
-	RcppMatrix<double> tmpSigma(RSigma);
-	RcppVector<double> tmpX(RX);
+	Rcpp::NumericVector tmpMean(RMean);
+	Rcpp::NumericMatrix tmpSigma(RSigma);
+	Rcpp::NumericVector tmpX(RX);
 
 	//vec2  mean;
 	//mat22 sigma;

@@ -25,6 +25,13 @@ class BFReference {
     Reference
   };
 
+  /** Beadfind metric type. */
+  enum BufferMeasurement {
+    BFLegacy = 0,    // Traditional measurement from back in the days
+    BFMaxSd = 1,     // What is the dc offset value at the frame with the most variation
+    BFIntMaxSd = 2   // Itegrate over a few frames around the most variation
+  };
+
   /** Basic constructor with default values. See Init() for configuration */
   BFReference();
 
@@ -74,8 +81,10 @@ class BFReference {
    * @param dataFile - beadfind dat file
    * @param mask - Exclusion mask to use for this chip. 
    */
-  void CalcReference(const std::string &datFile, Mask &mask);
+  void CalcReference(const std::string &datFile, Mask &mask, BufferMeasurement bf_type=BFLegacy);
   void CalcReference(const std::string &datFile, Mask &mask, std::vector<float> &metric);
+  void CalcShiftedReference(const std::string &datFile, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type=BFLegacy);
+  void CalcSignalShiftedReference(const std::string &datFile, const std::string &bgFile, Mask &mask, std::vector<float> &metric, float minTraceSd, int bfIntegrationWindow, int bfIntegrationWidth, BufferMeasurement bf_type);
   void CalcDualReference(const std::string &datFile1, const std::string &datFile2, Mask &mask);
 
   void CalcSignalReference(const std::string &datFile, const std::string &bgFile,
@@ -86,7 +95,8 @@ class BFReference {
                             int rowStart, int rowEnd, int colStart, int colEnd);
 
   void FilterForOutliers(Image &bfImg, Mask &mask, float iqrThreshold, int rowStep, int colStep);
-
+  void FilterOutlierSignalWells(int rowStart, int rowEnd, int colStart,  int colEnd, int chipWidth,
+                                arma::Mat<float> &data, std::vector<char> &wells);
   /**
    * Convert row and column to single index. 
    */
@@ -140,6 +150,12 @@ class BFReference {
   void SetIqrOutlierMult(float mult) { mIqrOutlierMult = mult; }
   void SetNumEmptiesPerRegion( int num ) { ION_ASSERT(num > 0, "Must specify positive number of empties.");  mNumEmptiesPerRegion = num; }
   void SetDoSdat(bool _doSdat) { doSdat = _doSdat; }
+  void SetT0(std::vector<float> &t0) { mT0 = t0; }
+  void SetDebugH5(const std::string &file) { mDebugH5File = file; }
+  float GetTraceSd(size_t wIx) { return mTraceSd[wIx]; }
+  bool IsThumbnail() { return mIsThumbnail; }
+  void SetThumbnail(bool isThumbnail) { mIsThumbnail = isThumbnail; }
+  void SetComparatorCorrect(bool comparatorCorrect) { mDoComparatorCorrect = comparatorCorrect; }
  private:
   bool LoadImage(Image &img, const std::string &fileName);
   void DebugTraces(const std::string &fileName,  Mask &mask, Image &bfImg);
@@ -147,7 +163,8 @@ class BFReference {
 	      const std::vector<int> &rowStarts,
 	      const std::vector<int> &colStarts,
 	      int span);
-  
+  void GetNEigenScatter(arma::Mat<float> &YY, arma::Mat<float> &E, int nEigen);  
+  void GetEigenProjection(arma::Mat<float> &data, arma::Col<unsigned int> &goodRows, size_t nEigen, arma::Mat<float> &proj);
   bool doSdat;
   bool mDoRegionalBgSub;
   float mIqrOutlierMult;
@@ -158,12 +175,19 @@ class BFReference {
   double mMinQuantile;  ///< Starting quantile to use for reference wells
   double mMaxQuantile;  ///< Ending quantile to use for reference wells
   int mNumEmptiesPerRegion;
+  std::string mDebugH5File; ///< If set some debug output data will be written
   std::string mDebugFile; ///< File to dump some debug traces to.
   GridMesh<int> mGrid;  ///< GridMesh defining the different regions of the chip
   std::vector<char> mWells;  ///< Classification of wells as reference, exclude, etc.
   std::vector<float> mBfMetric; ///< Metric calculated by beadfind flow and image code
+  std::vector<float> mT0;
   SampleQuantiles<float> mMadSample;
+  std::vector<float> mTraceSd;
+  bool mIsThumbnail;
+  bool mDoComparatorCorrect;
   const static int MIN_OK_WELLS = 10;
+  arma::Col<float> EVal;
+  arma::Mat<float> Y, X, B, Proj, Cov, EVec, Diff, Copy,  Corr;
 };
 
 #endif // BFREFERENCE_H

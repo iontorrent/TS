@@ -17,10 +17,13 @@ struct RawImage
   short *image;    // raw image (loaded in as unsigned short, and byte-swapped, masked with 0x3fff, and promoted to short)
   int *timestamps; // milliseconds range over which the data is averaged with 0 implied for first data point. i.e. if 66,599 then 1st datapoint is avg over 0-66 millisec & 2nd is average over 67-599 millisec.
   short *compImage;
+  int *compToUncompFrames;
   int *compTimestamp;
   int baseFrameRate;
   int *interpolatedFrames;
   float *interpolatedMult;
+  float *interpolatedDiv;
+
   RawImage()
   {
     rows = 0;
@@ -37,6 +40,8 @@ struct RawImage
     compTimestamp=NULL;
     interpolatedFrames=NULL;
     interpolatedMult=NULL;
+    interpolatedDiv=NULL;
+    compToUncompFrames=NULL;
     uncompFrames=0;
     compFrames=0;
     baseFrameRate=0;

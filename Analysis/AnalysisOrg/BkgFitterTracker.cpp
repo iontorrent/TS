@@ -34,24 +34,24 @@ void BkgFitterTracker::SetRegionProcessOrder ()
 }
 
 
-void BkgFitterTracker::UnSpinSingleFlowFitGpuThreads ()
+void BkgFitterTracker::UnSpinGpuThreads ()
 {
 
-  if (analysis_queue.GetSingleFitGpuQueue())
+  if (analysis_queue.GetGpuQueue())
   {
     WorkerInfoQueueItem item;
     item.finished = true;
     item.private_data = NULL;
-    for (int i=0;i < analysis_compute_plan.numSingleFlowFitGpuWorkers;i++)
-      analysis_queue.GetSingleFitGpuQueue()->PutItem (item);
-    analysis_queue.GetSingleFitGpuQueue()->WaitTillDone();
+    for (int i=0;i < analysis_compute_plan.numBkgWorkers_gpu;i++)
+      analysis_queue.GetGpuQueue()->PutItem (item);
+    analysis_queue.GetGpuQueue()->WaitTillDone();
 
-    delete analysis_queue.GetSingleFitGpuQueue();
-    analysis_queue.SetSingleFitGpuQueue(NULL);
+    delete analysis_queue.GetGpuQueue();
+    analysis_queue.SetGpuQueue(NULL);
 
   }
 }
-
+/*
 void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
 {
 
@@ -69,7 +69,7 @@ void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
     analysis_queue.SetMultiFitGpuQueue(NULL);
   }
 }
-
+*/
 
 
 BkgFitterTracker::BkgFitterTracker (int numRegions)
@@ -160,11 +160,12 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
 					       bool restart)
 {
   // a debugging file if needed
-  all_params_hdf.Init ( inception_state.sys_context.results_folder,
+  if (inception_state.bkg_control.bkg_debug_files) {
+    all_params_hdf.Init ( inception_state.sys_context.results_folder,
                         inception_state.loc_context,  
                         my_image_spec, inception_state.flow_context.GetNumFlows(),
                         inception_state.bkg_control.bkgModelHdf5Debug );
-
+  }
   
   int totalRegions = regions.size();
   // designate a set of reads that will be processed regardless of whether they pass filters
@@ -174,7 +175,8 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
 
   InitCacheMath();
     
-  TrivialDebugGaussExp(inception_state.sys_context.analysisLocation, regions,region_timing);
+  if (inception_state.bkg_control.bkg_debug_files)
+    TrivialDebugGaussExp(inception_state.sys_context.analysisLocation, regions,region_timing);
 
   ImageInitBkgWorkInfo *linfo = new ImageInitBkgWorkInfo[numFitters];
   for (int r = 0; r < numFitters; r++)
@@ -195,6 +197,7 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
     linfo[r].uncompFrames = my_image_spec.uncompFrames;
     linfo[r].timestamps = my_image_spec.timestamps;
     
+    linfo[r].nokey = inception_state.bkg_control.nokey;
     linfo[r].seqList = my_keys.seqList;
     linfo[r].numSeqListItems= my_keys.numSeqListItems;
 
@@ -208,6 +211,7 @@ void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOp
     linfo[r].numRegions = (int)totalRegions;
     //linfo[r].kic = keyIncorporation;
     linfo[r].t_mid_nuc = region_timing[r].t_mid_nuc;
+    linfo[r].t0_frame = region_timing[r].t0_frame;
     linfo[r].t_sigma = region_timing[r].t_sigma;
     linfo[r].sep_t0_estimate = &smooth_t0_est;
     

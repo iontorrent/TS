@@ -1,51 +1,51 @@
 <div id="modal_confirm_plugin_uninstall" title="" class="modal hide" action="{{action}}" method="{{method}}">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">&times;</button>
-		<h3 id="single_h3">Confirm Uninstall {{type|title}}</h3>
-	</div>
-	<div class="modal-body">
-		<p id="single_msg">Are you sure you want to uninstall {{plugin.versionedName}} {{type|lower}} ({{id}})?</p>
-		<div id="modal-error-messages"></div>
-	</div>
-	<div class="modal-footer">
-		<a href="#" class="btn" data-dismiss="modal">Cancel</a>
-		<a href="#" class="btn btn-danger">Yes, Uninstall!</a>
-	</div>		
-	
-	<script>
-		$('#modal_confirm_plugin_uninstall .btn-danger').click(function(e) {
-			var that = this;				
-			e.preventDefault();
-			var url = $('#modal_confirm_plugin_uninstall').attr('action')
-				, type = $('#modal_confirm_plugin_uninstall').attr('method');
-				
-			console.log('transmitting :', type, url);
-	   		var jqxhr = $.ajax(url, {  
-	   						 type: type
-	   						, contentType: 'application/json'
-	   						, dataType: 'json'
-	   						, processData: false
-			    }).done(function(data) { 
-			    	console.log("success:",  url);
-			    	if ($('#modal_confirm_plugin_uninstall').data('customevents')) {
-				    	jQuery.each($('#modal_confirm_plugin_uninstall').data('customevents'), function(i, elem) {
-				    		$('#modal_confirm_plugin_uninstall').trigger(elem, {}) 
-			    		});
-			    	}
-					$('#modal_confirm_plugin_uninstall').trigger('modal_confirm_plugin_uninstall_done', { values: e.values } );
-			    	$('#modal_confirm_plugin_uninstall').modal("hide");
-		    	})
-			    .fail(function(data) {
-			    	$('#modal_confirm_plugin_uninstall #modal-error-messages').empty();
-			    	$('#modal_confirm_plugin_uninstall #modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    	 
-			    })
-			    .always(function(data) { /*console.log("complete:", data);*/ });
-		});
-		$('#modal_confirm_plugin_uninstall').on('hidden', function () {
-    		$('body #modal_confirm_plugin_uninstall').remove();
-   		});
-	</script>
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3 id="single_h3">Confirm Uninstall {{type|title}}</h3>
+    </div>
+    <div class="modal-body">
+        <p id="single_msg">Are you sure you want to uninstall {{plugin.versionedName}} {{type|lower}} ({{id}})?</p>
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <a href="#" class="btn btn-danger">Yes, Uninstall!</a>
+    </div>
+
+    <script>
+        $('#modal_confirm_plugin_uninstall .btn-danger').click(function(e) {
+            var that = this;
+            e.preventDefault();
+            $('#modal_confirm_plugin_uninstall #modal-error-messages').hide().empty();
+            var url = $('#modal_confirm_plugin_uninstall').attr('action')
+                , type = $('#modal_confirm_plugin_uninstall').attr('method');
+
+            console.log('transmitting :', type, url);
+               var jqxhr = $.ajax(url, {
+                                type: type
+                               , contentType: 'application/json'
+                               , dataType: 'json'
+                               , processData: false
+                }).done(function(data) {
+                    console.log("success:",  url);
+                    if ($('#modal_confirm_plugin_uninstall').data('customevents')) {
+                        jQuery.each($('#modal_confirm_plugin_uninstall').data('customevents'), function(i, elem) {
+                            $('#modal_confirm_plugin_uninstall').trigger(elem, {})
+                        });
+                    }
+                    $('#modal_confirm_plugin_uninstall').trigger('modal_confirm_plugin_uninstall_done', { values: e.values } );
+                    $('#modal_confirm_plugin_uninstall').modal("hide");
+                })
+                .fail(function(data) {
+                    $('#modal_confirm_plugin_uninstall #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                    console.log("error:", data);
+
+                })
+                .always(function(data) { /*console.log("complete:", data);*/ });
+        });
+        $('#modal_confirm_plugin_uninstall').on('hidden', function () {
+            $('body #modal_confirm_plugin_uninstall').remove();
+           });
+</script>
 
 </div>

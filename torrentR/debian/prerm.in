@@ -1,39 +1,62 @@
 #!/bin/bash
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 set -e
 
 case "$1" in
-    upgrade|remove)
+    remove)
     LIBLIST=(\
-	    bitops \
-	    caTools \
-	    gplots \
-	    Rcpp \
-	    digest \
-	    spam \
-	    fields \
-	    plyr \
-	    reshape \
-	    proto \
-	    ggplot2 \
-	    Biobase \
-	    DBI \
-	    RSQLite \
-	    AnnotationDbi \
-	    xtable \
-	    annotate \
-	    ellipse \
-	    ROCR \
-	    geneplotter \
-        Hmisc \
-        RCurl \
-        rjson \
+        annotate
+        AnnotationDbi
+        Biobase
+        BiocGenerics
+        Biostrings
+        bitops
+        caTools
+        colorspace
+        DBI
+        dichromat
+        digest
+        ellipse
+        fields
+        gdata
+        geneplotter
+        GenomicRanges
+        getopt
+        ggplot2
+        gplots
+        gtools
+        hdf5
+        Hmisc
+        hwriter
+        IRanges
+        labeling
+        latticeExtra
+        memoise
+        munsell
+        optparse
+        plyr
+        proto
+        rbamtools
+        RColorBrewer
+        Rcpp
+        RCurl
+        reshape2
+        rjson
+        ROCR
+        Rsamtools
+        RSQLite
+        scales
+        ShortRead
+        spam
+        stringr
+        xtable
+        zlibbioc
     )
     for LIB in ${LIBLIST[@]}; do
     	if [ -d /usr/local/lib/R/site-library/$LIB ]; then
     		R CMD REMOVE $LIB
-                rm -rf /usr/local/lib//R/site-library/$LIB
+            rm -rf /usr/local/lib/R/site-library/$LIB
             echo "Removed $LIB"
         fi
     done

@@ -1,122 +1,121 @@
 <div id="modal_projects_select" title="" class="modal hide">
-	<div class="modal-header">
-		<button type="button" class="close" data-dismiss="modal">×</button>
-		<h3 id="modal_projects_select_heading">Pick projects to be associated with selected results:</h3>
-	</div>
-	<div class="modal-body" style="max-height: 600px;">		
-<!-- 		<script src="/site_media/js/modal_projects_select.js" type="text/javascript"> -->
-		<div id="modal-error-messages"></div>									
-		<form class="form-horizontal" id="modal_projects_select_form" method="{{method}}" action="{{action}}">
-			<fieldset>
-				<div class="control-group">				
-				  {%spaceless%}
-	        <div id="search_bar" class="well well-small" style="margin-bottom:-5px;">
-			        <div class="input-append search-field">
-				        <label for="search_text" class="hide">Search Names</label>
-				        <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-				        <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
-			        </div>
-			        <div class="pull-right">	                
-	                <a id="modal_projects_select_btn" class="btn btn-primary hide" href="#">Add projects</a>
-	            </div>
-	        </div>
-	        {%endspaceless%}	
-					<div id="modal_projects_select-grid"></div>				 
-				 </div> 
-				 </fieldset> 
-	  	</form>
-	</div>	
-	<script type="text/javascript">
-	  $("#modal_projects_select #search_text").change(function (e) {	    
-	    e.preventDefault();	    
-	    console.log($("#modal_projects_select #search_text").val() );
-	    $("#modal_projects_select-grid").data("kendoGrid").dataSource.filter({
-			    field: "name",
-			    operator: "__icontains",
-			    value: $("#modal_projects_select #search_text").val()
-		    });
-    });
-	
-		$('#modal_projects_select').on('hidden', function() {
-			$('body #modal_projects_select').remove();
-		});	
-		$('#modal_projects_select_form').submit(function(e){
-			e.preventDefault();
-			return false;
-		});
-		$('#modal_projects_select .btn-primary').click(function(e) {
-			var that = this;
-			e.preventDefault();
-			var checked_ids = $("#modal_projects_select-grid input:checked").map(function() {
-				return $(this).attr("value");
-			}).get();
-			
-			console.log('checked_ids :', checked_ids );
-			var json = { projects : checked_ids}
-				, url = $('#modal_projects_select_form').attr('action')
-				, type = $('#modal_projects_select_form').attr('method');
-				
-			if ($('#modal_projects_select_form').attr('method') == "POST") {
-				
-			}
-			console.log('json :', json );
-			json = JSON.stringify(json);
-				
-			console.log('transmitting :', type, url, json );
-	   		var jqxhr = $.ajax(url, {  
-	   						 type: type
-	   						, data: json
-	   						, contentType: 'application/json'
-	   						, dataType: 'json'
-	   						, processData: false
-			    }).done(function(data) { 
-			    	$('#modal-error-messages').empty();
-			    	console.log("success:",  data);
-			    	$(that).trigger('modal_projects_select_done', {values: e.values});
-			    	$('#modal_projects_select').modal("hide");
-		    	})
-			    .fail(function(data) {
-			    	$('#modal-error-messages').empty();
-			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-			    	console.log("error:", data);
-			    	 
-			    })
-			    .always(function(data) { });
-		});
-		$('#modal_projects_select .btn-primary').removeClass('hide');
-		var grid = $("#modal_projects_select-grid").kendoGrid({
-	        dataSource: {
-	        	type: "json",
-				transport: {
-	                read: {
-	                	url: "/rundb/api/v1/project/",
-	                	contentType: 'application/json; charset=utf-8',
-					    type: 'GET',
-					    dataType: 'json'
-	                },
-					parameterMap: function(options) {
-						return buildParameterMap(options)
-					}
-	                
-	            },
-	            schema: {
-	            	data: "objects",
-	            	total: "meta.total_count",
-	                model: {
-	                    fields: {
-	                        id: { type: "number" },
-	                        name: { type: "string" },	  
-	                        resultsCount: { type: "number" },                      
-	                        modified: { type: "string" }
-	                    }
-	                }
-	            },
-	            serverSorting: true,
-	            serverFiltering: true,	            
-	            serverPaging: true,                        	
-	        	pageSize: 50
-	        },
-	        height: '408', /* shows 10 records */
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3 id="modal_projects_select_heading">Pick projects to be associated with selected results:</h3>
+    </div>
+    <div class="modal-body" style="max-height: 600px;">
+<!--         <script src="/site_media/js/modal_projects_select.js" type="text/javascript"> -->
+        <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+        <form class="form-horizontal" id="modal_projects_select_form" method="{{method}}" action="{{action}}">
+            <fieldset>
+                <div class="control-group">
+                    {%spaceless%}
+                    <div id="search_bar" class="well well-small" style="margin-bottom:-5px;">
+                            <div class="input-append search-field">
+                                <label for="search_text" class="hide">Search Names</label>
+                                <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
+                                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+                            </div>
+                            <div class="pull-right">
+                            <a id="modal_projects_select_btn" class="btn btn-primary hide" href="#">Add projects</a>
+                        </div>
+                    </div>
+                    {%endspaceless%}
+                    <div id="modal_projects_select-grid"></div>
+                </div>
+            </fieldset>
+        </form>
+    </div>
+    <script type="text/javascript">
+        $("#modal_projects_select #search_text").change(function (e) {
+            e.preventDefault();
+            console.log($("#modal_projects_select #search_text").val() );
+            $("#modal_projects_select-grid").data("kendoGrid").dataSource.filter({
+                field: "name",
+                operator: "__icontains",
+                value: $("#modal_projects_select #search_text").val()
+            });
+        });
+
+        $('#modal_projects_select').on('hidden', function() {
+            $('body #modal_projects_select').remove();
+        });
+        $('#modal_projects_select_form').submit(function(e){
+            e.preventDefault();
+            return false;
+        });
+        $('#modal_projects_select .btn-primary').click(function(e) {
+            var that = this;
+            e.preventDefault();
+            $('#modal_projects_select #modal-error-messages').hide().empty();
+            var checked_ids = $("#modal_projects_select-grid input:checked").map(function() {
+                return $(this).attr("value");
+            }).get();
+
+            console.log('checked_ids :', checked_ids );
+            var json = { projects : checked_ids}
+                , url = $('#modal_projects_select_form').attr('action')
+                , type = $('#modal_projects_select_form').attr('method');
+
+            if ($('#modal_projects_select_form').attr('method') == "POST") {
+
+            }
+            console.log('json :', json );
+            json = JSON.stringify(json);
+
+            console.log('transmitting :', type, url, json );
+            var jqxhr = $.ajax(url, {
+                type: type
+               , data: json
+               , contentType: 'application/json'
+               , dataType: 'json'
+               , processData: false
+            }).done(function(data) {
+                console.log("success:",  data);
+                $(that).trigger('modal_projects_select_done', {values: e.values});
+                $('#modal_projects_select').modal("hide");
+            })
+            .fail(function(data) {
+                $('#modal_projects_select #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                console.log("error:", data);
+            
+            })
+            .always(function(data) { });
+        });
+        $('#modal_projects_select .btn-primary').removeClass('hide');
+        var grid = $("#modal_projects_select-grid").kendoGrid({
+            dataSource: {
+                type: "json",
+                transport: {
+                    read: {
+                        url: "/rundb/api/v1/project/",
+                        contentType: 'application/json; charset=utf-8',
+                        type: 'GET',
+                        dataType: 'json'
+                    },
+                    parameterMap: function(options) {
+                        return buildParameterMap(options)
+                    }
+
+                },
+                schema: {
+                    data: "objects",
+                    total: "meta.total_count",
+                    model: {
+                        fields: {
+                            id: { type: "number" },
+                            name: { type: "string" },
+                            resultsCount: { type: "number" },
+                            modified: { type: "string" }
+                        }
+                    }
+                },
+                serverSorting: true,
+                serverFiltering: true,
+                serverPaging: true,
+                pageSize: 50
+            },
+            height: '408', /* shows 10 records */
           groupable: false,
           scrollable: {
               virtual: true
@@ -124,32 +123,32 @@
           sortable: true,
           selectable: false,
           pageable: false,
-			columns: [ {
-	                field: "id",
-	                title: " ",
-	                sortable:false,
-	                width: '7%',
-	                template: "<input value='${id}' name='projects' type='checkbox'>"
-	            } , {
-	                field: "name",
-	                title: "Name",
-	                width: '40%'	 
-	            } , {
+            columns: [ {
+                    field: "id",
+                    title: " ",
+                    sortable:false,
+                    width: '7%',
+                    template: "<input value='${id}' name='projects' type='checkbox'>"
+                } , {
+                    field: "name",
+                    title: "Name",
+                    width: '40%'
+                } , {
                   field: "resultsCount",
                   title: "Results",
-                  width: '15%',                  
-                  sortable: false              
-	            } , {
+                  width: '15%',
+                  sortable: false
+                } , {
                   field: "modified",
                   title: "Last Modified",
                   width: '30%',
-                  template: '#= kendo.toString(new Date(Date._parse(modified)),"yyyy/MM/dd hh:mm tt") #'    
-	            }
-	        ],
-	        dataBound: function(e) {
-				$('#modal_projects_select .btn-primary').removeClass('hide');
-			}                        
-	    });			       		
-	</script>
+                  template: '#= kendo.toString(new Date(Date._parse(modified)),"yyyy/MM/dd hh:mm tt") #'
+                }
+            ],
+            dataBound: function(e) {
+                $('#modal_projects_select .btn-primary').removeClass('hide');
+            }
+        });
+</script>
 </div>
 

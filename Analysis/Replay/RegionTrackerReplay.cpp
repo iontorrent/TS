@@ -5,6 +5,8 @@
 #include <vector>
 #include <assert.h>
 #include <pthread.h>
+#include "FileBkgReplay.h"
+
 using namespace std;
 
 // *********************************************************************
@@ -14,8 +16,14 @@ RegionTrackerReader::RegionTrackerReader(CommandLineOpts &_clo, int _regionindex
   : clo(_clo), regionindex(_regionindex)
 {
   // specify the file and section to read from
-  reader_rp = new H5ReplayReader(clo, REGIONTRACKER_REGIONPARAMS);
-  reader_mm = new H5ReplayReader(clo, REGIONTRACKER_MISSINGMATTER);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key_rp(REGIONTRACKER_REGIONPARAMS);
+  dsn info_rp = dsninfo.GetDsn(key_rp);
+  reader_rp = new H5ReplayReader(dumpfile, info_rp.dataSetName);
+  std::string key_mm(REGIONTRACKER_MISSINGMATTER);
+  dsn info_mm = dsninfo.GetDsn(key_mm);
+  reader_mm = new H5ReplayReader(dumpfile, info_mm.dataSetName);
 
   reg_params_length = sizeof(reg_params_H5)/sizeof(float);
   numFlows = clo.flow_context.numTotalFlows;
@@ -66,7 +74,11 @@ void RegionTrackerReader::ReadFlowIndex()
   vector<hsize_t> count_out(1);
   count_out[0] = numFlows;
 
-  H5ReplayReader reader = H5ReplayReader(clo, FLOWINDEX);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key(FLOWINDEX);
+  dsn info = dsninfo.GetDsn(key);
+  H5ReplayReader reader = H5ReplayReader(dumpfile, info.dataSetName);
   reader.Read(offset, count,  offset_out, count_out, &flowToIndex[0]);
   fprintf(stdout, "H5 RegionTrackerReader flowToIndex:  region %d: %d, %d, ...\n", regionindex, flowToIndex[0], flowToIndex[1]);
 
@@ -155,8 +167,14 @@ RegionTrackerRecorder::RegionTrackerRecorder(CommandLineOpts &_clo, int _regioni
   : clo(_clo), regionindex(_regionindex)
 {
   // specify the file and section to record to
-  recorder_rp = new H5ReplayRecorder(clo, REGIONTRACKER_REGIONPARAMS);
-  recorder_mm = new H5ReplayRecorder(clo, REGIONTRACKER_MISSINGMATTER);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key_rp(REGIONTRACKER_REGIONPARAMS);
+  dsn info_rp = dsninfo.GetDsn(key_rp);
+  recorder_rp = new H5ReplayRecorder(dumpfile, info_rp.dataSetName, info_rp.dsnType, info_rp.rank);
+  std::string key_mm(REGIONTRACKER_MISSINGMATTER);
+  dsn info_mm = dsninfo.GetDsn(key_mm);
+  recorder_mm = new H5ReplayRecorder(dumpfile, info_mm.dataSetName, info_mm.dsnType, info_mm.rank);
 
   reg_params_length = sizeof(reg_params_H5)/sizeof(float);
   numFlows = clo.flow_context.numTotalFlows;
@@ -297,8 +315,11 @@ void  RegionTrackerRecorder::WriteFlowInfo()
     flowToBlockId[i] = flowBlockIndex[i+numFlows];
   }
 
-
-  H5ReplayRecorder recorder = H5ReplayRecorder(clo, FLOWINDEX);
+  fileReplayDsn dsninfo;
+  std::string dumpfile = clo.sys_context.analysisLocation + "dump.h5";
+  std::string key(FLOWINDEX);
+  dsn info = dsninfo.GetDsn(key);
+  H5ReplayRecorder recorder = H5ReplayRecorder(dumpfile, info.dataSetName, info.dsnType, info.rank);
   recorder.CreateDataset(flowindex_dims);
 
   // hyperslab layout on disk

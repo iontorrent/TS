@@ -6,6 +6,7 @@ import zipfile
 import socket
 import re
 import logging
+import traceback
 from glob import glob
 import os.path
 
@@ -40,15 +41,16 @@ def makeCSA(reportDir,rawDataDir):
 
     # Change cwd to the report directory
     os.chdir(reportDir)
-    
+
     # Define output file name
     csaFileName = "%s.support.zip" % os.path.basename(reportDir)
     csaFullPath = os.path.join(reportDir,csaFileName)
-    
-    # Files to find in the results directory heirarchy
+
+    # Files to find in the results directory hierarchy
     patterns = [
                 'alignment.log',
                 'report.pdf',
+                'backupPDF.pdf',
                 'DefaultTFs.conf',
                 'drmaa_stderr_block.txt',
                 'drmaa_stdout.txt',
@@ -89,11 +91,11 @@ def makeCSA(reportDir,rawDataDir):
                 file = str(file).replace(reportDir,"")
                 if file[0] == '/': file = file[1:]
                 zipList.append(file)
-    
+
     # Open a zip archive file (overwrite if it already exists)
-    csa = zipfile.ZipFile(csaFullPath, mode='w', 
+    csa = zipfile.ZipFile(csaFullPath, mode='w',
         compression=zipfile.ZIP_DEFLATED, allowZip64=True)
-    
+
     # Compress/Add each file to the zip archive file
     for file in zipList:
         if os.path.exists(file):
@@ -108,13 +110,15 @@ def makeCSA(reportDir,rawDataDir):
         pgmlogzip.close()
     else:
         # If pgm_logs.zip not available, try the raw data directory
-        
+
         if os.path.isdir(rawDataDir):
             os.chdir(rawDataDir)
             # Files to find in the Raw Data Directory
             zipList = [
                 'explog_final.txt',
                 'InitLog.txt',
+                'InitLog1.txt',
+                'InitLog2.txt',
                 'RawInit.txt',
                 'RawInit.jpg',
                 'InitValsW3.txt',
@@ -144,10 +148,13 @@ def make_ssa():
         "/var/log/apache2/error.log*",
         "/var/log/ion/crawl.log*",
         "/var/log/ion/django.log*",
-        "/var/log/ion/iarchive.log*",
+        "/var/log/ion/celery_*.log*",
         "/var/log/ion/ionPlugin.log*",
         "/var/log/ion/jobserver.log*",
         "/var/log/ion/tsconfig_install.log*",
+        "/var/log/ion/tsconfig_*.log*",
+        "/var/log/ion/RSMAgent.log*",
+        "/var/log/ion/data_management.log*",
         "/var/log/kern.log*",
         "/var/log/postgresql/postgresql-8.4-main.log",
         "/var/log/syslog*",
@@ -164,12 +171,15 @@ def make_ssa():
         servicetag = "0"
     archive_name = "%s_systemStats.zip" % servicetag
     path = os.path.join("/tmp", archive_name)
-    archive = zipfile.ZipFile(path, mode='w', 
+    archive = zipfile.ZipFile(path, mode='w',
         compression=zipfile.ZIP_DEFLATED, allowZip64=True)
     for pattern in globs:
         files = glob(pattern)
         files.sort(key=natsort_key)
         for filename in files[:5]:
-            archive.write(filename, os.path.basename(filename))
+            try:
+                archive.write(filename, os.path.basename(filename))
+            except:
+                logger.warn(traceback.format_exc())
     archive.close()
     return path, archive_name

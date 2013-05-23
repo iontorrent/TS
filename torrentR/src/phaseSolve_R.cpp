@@ -9,13 +9,13 @@ RcppExport SEXP phaseSolve(SEXP Rsignal, SEXP RflowCycle, SEXP RnucConc, SEXP Rc
   char *exceptionMesg = NULL;
 
   try {
-    RcppMatrix<double> signal(Rsignal);
+    Rcpp::NumericMatrix signal(Rsignal);
     string flowCycle         = Rcpp::as<string>(RflowCycle);
-    RcppMatrix<double> cc(RnucConc);
-    RcppVector<double> cf(Rcf);
-    RcppVector<double> ie(Rie);
-    RcppVector<double> dr(Rdr);
-    RcppVector<double> hpScale(RhpScale);
+    Rcpp::NumericMatrix cc(RnucConc);
+    Rcpp::NumericVector cf(Rcf);
+    Rcpp::NumericVector ie(Rie);
+    Rcpp::NumericVector dr(Rdr);
+    Rcpp::NumericVector hpScale(RhpScale);
     string drType                     = Rcpp::as<string>(RdroopType);
     unsigned int maxAdv               = (unsigned int) Rcpp::as<int>(RmaxAdv);
     unsigned int nIterations          = (unsigned int) Rcpp::as<int>(RnIterations);
@@ -40,13 +40,13 @@ RcppExport SEXP phaseSolve(SEXP Rsignal, SEXP RflowCycle, SEXP RnucConc, SEXP Rc
   
     if(badDroopType) {
       std::string exception = "bad droop type supplied\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(cc.rows() != (int) N_NUCLEOTIDES) {
       std::string exception = "concentration matrix should have 4 rows\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(cc.cols() != (int) N_NUCLEOTIDES) {
       std::string exception = "concentration matrix should have 4 columns\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
       // recast cf, ie, dr, hpScale
       weight_vec_t cfMod(cf.size());
@@ -74,11 +74,11 @@ RcppExport SEXP phaseSolve(SEXP Rsignal, SEXP RflowCycle, SEXP RnucConc, SEXP Rc
       hpLen_t maxAdvMod = (hpLen_t) maxAdv;
 
       // Prepare objects for holding and passing back results
-      RcppMatrix<double>        predicted_out(nRead,nFlow);
-      RcppMatrix<double>        residual_out(nRead,nFlow);
-      RcppMatrix<int>           hpFlow_out(nRead,nFlow);
-      std::vector< std::string> seq_out(nRead);
-      RcppMatrix<double>        multiplier_out(nRead,1+nIterations);
+      Rcpp::NumericMatrix        predicted_out(nRead,nFlow);
+      Rcpp::NumericMatrix        residual_out(nRead,nFlow);
+      Rcpp::IntegerMatrix        hpFlow_out(nRead,nFlow);
+      std::vector< std::string>  seq_out(nRead);
+      Rcpp::NumericMatrix        multiplier_out(nRead,1+nIterations);
 
       // Iterate over all reads
       weight_vec_t sigMod(nFlow);
@@ -125,20 +125,20 @@ RcppExport SEXP phaseSolve(SEXP Rsignal, SEXP RflowCycle, SEXP RnucConc, SEXP Rc
       }
 
       // Store results
-      RcppResultSet rs;
-      rs.add("seq",        seq_out);
-      rs.add("predicted",  predicted_out);
-      rs.add("residual",   residual_out);
-      rs.add("hpFlow",     hpFlow_out);
+      std::map<std::string,SEXP> map;
+      map["seq"]          = Rcpp::wrap( seq_out );
+      map["predicted"]    = Rcpp::wrap( predicted_out );
+      map["residual"]     = Rcpp::wrap( residual_out );
+      map["hpFlow"]       = Rcpp::wrap( hpFlow_out );
       if(residualScale)
-        rs.add("multiplier", multiplier_out);
+        map["multiplier"] = Rcpp::wrap( multiplier_out );
 
-      ret = rs.getReturnList();
+      ret = Rcpp::wrap( map );
     }
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

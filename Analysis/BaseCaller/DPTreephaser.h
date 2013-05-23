@@ -11,6 +11,7 @@
 #include <vector>
 #include "BaseCallerUtils.h"
 #include "SystemMagicDefines.h"
+#include "PIDloop.h"
 
 using namespace std;
 
@@ -20,6 +21,7 @@ using namespace std;
 
 struct BasecallerRead {
   void SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows);
+  void SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased = false);
 
   float           key_normalizer;           //!< Scaling factor used for initial key normalization
   vector<float>   raw_measurements;         //!< Measured, key-normalized flow signal
@@ -34,8 +36,23 @@ struct BasecallerRead {
   vector<float>   state_total;              //!< Fraction of live polymerase
   vector<float>   penalty_residual;         //!< Absolute score of the called nuc hypothesis
   vector<float>   penalty_mismatch;         //!< Score difference to second-best nuc hypothesis
+
+  // Nuc gain data
+  const static float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
+  const static float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
+  const static float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
+  const static float  kOnemerMax    =  1.35f;       //!< Key flow corrected non-key flow onemer 3-sigma maximum
+  const static float  kZeromerMean  = 0.08555f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  const static float  kOnemerMean   = 0.90255f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  const static float  kRunZeroSigSq = 0.0078146f;   //!< Non-key flow zeromer sigma squared
+  const static float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
+  const static float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
+  const static float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
 };
 
+
+const  int    kMinWindowSize_     = 20;   //!< Minimum normalization window size
+const  int    kMaxWindowSize_     = 60;   //!< Maximum normalization window size
 
 
 //! @brief    Performs dephasing and base calling by tree search
@@ -52,15 +69,27 @@ struct BasecallerRead {
 class DPTreephaser {
 
 public:
+    // These need to be public for TreephaserSSE to use.
+    const static int    kWindowSizeDefault_ = 38;   //!< Default normalization window size
+
   //! @brief  Constructor.
   //! @param[in] flow_order   Flow order object, also stores number of flows
-  DPTreephaser(const ion::FlowOrder& flow_order);
+  DPTreephaser(const ion::FlowOrder& flow_order, const int windowSize=kWindowSizeDefault_);
+
+  //! @brief  Set the normalization window size
+  //! @param[in]  windowSize  Size of the normalization window to use.
+  inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(kMinWindowSize_, min(windowSize, kMaxWindowSize_));}
 
   //! @brief  Initializes phasing model using specific phasing parameters.
   //! @param[in]  cf          Carry forward rate, how much nuc from previous flow is encountered
   //! @param[in]  ie          Incomplete extension rate, how much polymerase fails to incorporate
   //! @param[in]  dr          Droop, how much polymerase deactivates during an incorporation
   void  SetModelParameters(double cf, double ie, double dr);
+
+  //! @brief  Initializes phasing model using specific phasing parameters.
+  //! @param[in]  cf          Carry forward rate, how much nuc from previous flow is encountered
+  //! @param[in]  ie          Incomplete extension rate, how much polymerase fails to incorporate
+  void  SetModelParameters(double cf, double ie);
 
   //! @brief  Perform adaptive normalization using WindowedNormalize (slow on long reads)
   //! @param[in,out]  read      Input and output information for the read
@@ -91,13 +120,20 @@ public:
   //! @param[in]  max_flows         Number of flows to process
   void  Simulate(BasecallerRead& read, int max_flows);
 
-  //! @brief  Compute state vector at a query main incorporating flow
+  //! @brief  Computes the state vector at a query main incorporating flow
   //! @param[in]  read.sequence     Base sequence
   //! @param[out] query_state       State vector
   //! @param[out] current_hp        Homopolymer length incorporating at query_flow
   //! @param[in]  max_flows         Vector size of query_state
   //! @param[in]  query_flow        Flow at which to compute state vector
   void QueryState(BasecallerRead& data, vector<float>& query_state, int& current_hp, int max_flows, int query_flow);
+
+  //! @brief  Simulates a sequence and returns the progression of state vectors
+  //! @param[in]  read.sequence     Base sequence
+  //! @param[out] query_states      State vectors
+  //! @param[out] hp_lengths        Vector of homopolymer lengths in the sequence
+  //! @param[in]  max_flows         Size of a state vector
+  void QueryAllStates(BasecallerRead& data, vector< vector<float> >& query_states, vector<int>& hp_lengths, int max_flows);
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
   //! @param[in]  read.sequence         Base sequence
@@ -121,7 +157,19 @@ public:
   //! @param[in]  window_size                   Size of a window in flows
   void  WindowedNormalize(BasecallerRead& read, int num_steps, int window_size) const;
 
+  //! @brief    Use PID loop approach to correct for flow-varying gain and offset distortion
+  //! @param[in]  read.prediction               Model-predicted signal
+  //! @param[in]  read.raw_measurements         Flow signal before normalization
+  //! @param[out] read.normalized_measurements  Flow signal after normalization
+  //! @param[in]  num_samples                   Number of samples to correct
+  void  PIDNormalize(BasecallerRead& read, const int num_samples);
+  float PIDNormalize(BasecallerRead& read, const int start_flow, const int end_flow);
 
+  void SetAsBs(vector<vector< vector<float> > > As, vector<vector< vector<float> > > Bs,  bool pm_model_available){
+    As_ = As;
+    Bs_ = Bs;
+    pm_model_available_ =  pm_model_available;
+  };
 
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending
   struct TreephaserPath {
@@ -141,6 +189,13 @@ public:
     float             residual_left_of_window;  //!< Residual left of the state window
     float             per_flow_metric;          //!< Auxiliary tree search metric, useful for stack pruning
     int               dot_counter;              //!< Number of extreme mismatch flows encountered so far
+
+    // PID loop state
+    PIDloop           pidOffsetState;           //!< State of the pidOffset_ loop at window_start;
+    PIDloop           pidGainState;             //!< State of the pidGain_ loop at window_start;
+
+    vector<int>       flow2base_pos;
+    int               base_pos;
   };
 
   TreephaserPath& path(int idx) { return path_[idx]; }
@@ -163,7 +218,11 @@ public:
   //! @param[in]     max_flow  Do not read/write past this flow
   void AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_flow) const;
 
+
+
 protected:
+
+  int                 windowSize_;                //!< Normalization window size
 
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows
   vector<float>       transition_base_[8];        //!< Probability of polymerase incorporating and staying active
@@ -179,6 +238,23 @@ protected:
   const static float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
   const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
 
+  // PID loop and coefficients
+  PIDloop             pidOffset_;
+  PIDloop             pidGain_;
+
+  const static float  kPgainO       = 0.06f;//0.075f;
+  const static float  kIgainO       = 0.005f;
+  const static float  kDgainO       = 0.0f;
+  const static float  kInitOffset   = 0.0f;
+  const static float  kPgainG       = 0.06f;//0.075f;
+  const static float  kIgainG       = 0.005f;
+  const static float  kDgainG       = 0.0f;
+  const static float  kInitGain     = 1.0f;
+
+  vector< vector< vector<float> > > As_;
+  vector< vector< vector<float> > > Bs_;
+  bool pm_model_available_;
+  bool pm_model_enabled_;
 };
 
 #endif // DPTREEPHASER_H

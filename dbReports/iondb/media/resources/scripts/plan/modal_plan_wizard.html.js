@@ -51,7 +51,19 @@ TB.plan.wizard.submit = function(e) {
         });
         $('input[name=bcSamples_workaround]').val(bcSamples);
     }
-
+    else {
+        var rows = $('table.ws-8_nonBarcodedNonIrSampleTable tr');
+        
+        var samples = [];
+        $('table.ws-8_nonBarcodedNonIrSampleTable tr input').each(function (index, input) {
+        	if (input.name.indexOf("sample_nonIrConfig_sampleName") >= 0) {
+            	if (input.value) {
+            		samples.push(input.value);
+            	}
+            }
+        });
+        $('input[name=samples_workaround]').val(samples);    	
+    }
 
     var json = $('#modal_plan_wizard #planTemplateWizard').serializeJSON(),
         url = $('#modal_plan_wizard #planTemplateWizard').attr('action'),
@@ -75,6 +87,7 @@ TB.plan.wizard.submit = function(e) {
                     if (elem.value){
                         irConfigList.push({
                         'sample': elem.value,
+                        'Gender': $('select[id="sample_irGender_select_nn"]'.replace('nn',i+1)).val(),                        
                         'Workflow': $('select[id="sample_irWorkflow_select_nn"]'.replace('nn',i+1)).val(),
                         'Relation': $('select[id="sample_irRelation_select_nn"]'.replace('nn',i+1)).val(),
                         'RelationRole': $('select[id="sample_irRelationRole_select_nn"]'.replace('nn',i+1)).val(),
@@ -88,6 +101,7 @@ TB.plan.wizard.submit = function(e) {
                     if (elem.value) {
                         irConfigList.push({
                         'sample': elem.value,
+                        'Gender': $('select[id="bcSample_irGender_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),                        
                         'Workflow': $('select[id="bcSample_irWorkflow_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
                         'Relation': $('select[id="bcSample_irRelation_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
                         'RelationRole': $('select[id="bcSample_irRelationRole_select_BarcodeKit_nn"]'.replace('nn',i+1).replace('BarcodeKit',bcKit)).val(),
@@ -102,39 +116,52 @@ TB.plan.wizard.submit = function(e) {
     json.irConfigList = irConfigList;
 
     // find selected plugins
-    var selectedPlugins = [];
+    var selectedPlugins = {};
     $('input:checkbox[name=plugins]:checked').each(function() {
         var autorun = $(this)[0].getAttribute('data-autorun');
         if (autorun && autorun == 'auto'){
             return true;
         }
-        var tokens = $(this).val().split("|");
-        var userInput = "";
-        if ($("#configure_plugin_"+ tokens[0]).length==1)
-            userInput = JSON.parse($("#configure_plugin_"+tokens[0])[0].getAttribute('data-plugin_config'));
 
-        selectedPlugins.push({
-            "id": tokens[0],
-            "name": tokens[1],
-            "version": tokens[2],
-            "userInput": userInput
-        });
+    	var planConfig = $(this)[0].getAttribute('data-planconfig');
+    	//console.log("plugin=", $(this)[0], "; planConfig=", planConfig);
+    	
+    	if (planConfig) {
+            var tokens = $(this).val().split("|");
+            var userInput = "";
+
+            var pluginId = tokens[0];
+
+            //we can be creating or editing a plan
+            if (planConfig != "False" && ($("#configure_plugin_"+ pluginId).length==1)) {
+            	$.do_save_plugin_config(pluginId);    
+                userInput = JSON.parse($("#configure_plugin_"+pluginId)[0].getAttribute('data-plugin_config')); 
+            }
+            
+            selectedPlugins[tokens[1]] = {
+                    "id": tokens[0],
+                    "name": tokens[1],
+                    "version": tokens[2],
+                    "features": [],
+                    "userInput": userInput
+            };
+    	}
     });
 
-    var selectedUploaders =[];
     $('input:checkbox[name=uploaders]:checked').each(function() {
         var autorun = $(this)[0].getAttribute('data-autorun');
         if (autorun && autorun == 'auto'){
             return true;
         }
         var tokens = $(this).val().split("|");
-        selectedUploaders.push({
+        selectedPlugins[tokens[1]] = {
             "id": tokens[0],
             "name": tokens[1],
-            "version": tokens[2]
-        });
+            "version": tokens[2],
+            "features": ["export"]
+        };
     });
-    json.selectedPlugins = {"planplugins": selectedPlugins, "planuploaders": selectedUploaders};
+    json.selectedPlugins = selectedPlugins;
     console.log(json);
 
     if (submitUrl) {
@@ -161,7 +188,7 @@ TB.plan.wizard.submit = function(e) {
             //$('#error-messages').empty();
             //$('#error-messages').append('<p class="error">ERROR: ' + msg.error + '</p>');
         } else {
-            if ((INTENT == "Plan Run New") || (INTENT == "Plan Run")) {
+            if ((INTENT == "Plan Run New") || (INTENT == "Plan Run") || (INTENT == "CopyPlan")) {
                 $('body #modal_plan_wizard').modal("hide");
                 window.location = PLANNED_URL;
             } else {
@@ -241,7 +268,7 @@ TB.plan.wizard.initialize = function() {
     });
 
     $('#modal_plan_wizard #planTemplateWizard').submit(TB.plan.wizard.submit);
-
+    
     //both click and change works
     //radio button clicked for run mode
     $("input:radio[name=runMode]").click(function() {
@@ -347,15 +374,38 @@ TB.plan.wizard.initialize = function() {
         }
     });
 
+	//sample prep templating kit toggle
+    $("input:radio[name=samplePrepInstrumentType]").click(function() {
+    	var instrumentType = $(this).val();
+    	
+    	if (instrumentType == "oneTouch") {
+    		$("#review_templateKit").text($("#templatekitname").val());
+    		
+    		$("div.template_kit_oneTouch").show();
+    		$("div.template_kit_ionChef").hide();
+    	}
+    	if (instrumentType == "ionChef") {
+    		$("#review_templateKit").text($("#templatekitionchefname").val());
+    		
+    		$("div.template_kit_oneTouch").hide();
+    		$("div.template_kit_ionChef").show();
+    	}    	
+    });
 
     //dropdown list selection change for template kit
     $("#templatekitname").change(function() {
         var value = $(this).val();
-        $("#review_templateKit").text($('#templatekitname option:selected').val());
-
+        $("#review_templateKit").text(value);
     });
 
 
+    //dropdown list selection change for template kit
+    $("#templatekitionchefname").change(function() {
+        var value = $(this).val();
+        $("#review_templateKit").text(value);
+
+    });
+    
     //dropdown list selection change for control sequence kit
     $("#controlsequence").change(function() {
         var value = $(this).val();
@@ -463,6 +513,14 @@ TB.plan.wizard.initialize = function() {
     $("#library").change(function() {
         var value = $(this).val();
         $("#review_refLib").text($('#library option:selected').val());
+        
+        //clear previous bed file selection
+        $('#bedfile option').attr('selected', false);
+        $('#regionfile option').attr('selected', false);
+        $("#review_bedfile").text($('#bedfile option:selected').val());
+        $("#review_regionfile").text($('#regionfile option:selected').val());
+        
+        $("#bedfile option, #regionfile option").filter('[value != ""]').hide().filter("[class ~= "+value+"]").show();
     });
 
     //dropdown list selection change for target regions bed file
@@ -484,6 +542,12 @@ TB.plan.wizard.initialize = function() {
         var plugin_pk = this.getAttribute('data-plugin_pk');
         var url = this.getAttribute('href');
         var iframe = document.getElementById('plugin_iframe');
+        
+    	var prevPluginId = iframe.getAttribute('data-plugin_pk');
+        if (prevPluginId && prevPluginId != plugin_pk) {
+        	//console.log("--- CONFIG BUTTON CLICKED. GOING TO SAVE PREVIOUS... prevPluginId=", prevPluginId, "; plugin_pk=", plugin_pk);
+        	$.do_save_plugin_config(prevPluginId);
+        }
         iframe.src = url;
         iframe.setAttribute('data-plugin_pk',plugin_pk);
         $(iframe).bind('load', function() {});
@@ -493,23 +557,99 @@ TB.plan.wizard.initialize = function() {
         var plugin_json_obj = JSON.parse($("#configure_plugin_"+plugin_pk)[0].getAttribute('data-plugin_config'));
         $(iframe).one("load", function(){
           if (plugin_json_obj !== null){
-              console.log('calling restoreJson', plugin_json_obj);
-              $(iframe.contentDocument.forms).restoreJSON(plugin_json_obj);
-              iframe.contentWindow.$(':input').trigger('change')
+              console.log('restore plugin configuration', plugin_json_obj);
+              if ($.isFunction(iframe.contentWindow.restoreForm)){
+                      // use plugin's restoreForm function if exists
+                      iframe.contentWindow.restoreForm(plugin_json_obj);
+                  }
+                  else {
+                      // call generic form json restore);
+                      $(iframe.contentDocument.forms).restoreJSON(plugin_json_obj);
+                      iframe.contentWindow.$(':input').trigger('change')
+                 }
           }
         });
     });
 
+    (function($) {
+    	$.find_plugin_iframe_index = function(pluginId) {
+    		if (pluginId <= 0) {
+    			return 0;
+    		}
+    		for (var i=0; i < $("#plugin_iframe").length;i++) {
+    			var plugin_pk = $("#plugin_iframe")[i].getAttribute('data-plugin_pk');
+    			//console.log(">>> at find_plugin_iframe_index() plugin_pk=", plugin_pk, "; pluginId=", pluginId);
+    			
+    			if (plugin_pk == pluginId) {
+    				return i;
+    			}
+    		}
+    		//if not found, return -1
+    		return -1;
+    	};
+    	
+        $.do_save_plugin_config = function(pluginId) { 
+        	//var useFrameConfigData = true;
+        	var userInput_snapshot = null;
+        	
+        	if (pluginId != 0) {
+            	userInput_snapshot = $("#configure_plugin_"+pluginId)[0].getAttribute('data-plugin_config_snapshot');
+        	}
+
+        	frameIndex = 0;
+
+            var iframe = document.getElementById('plugin_iframe');
+            var plugin_json;
+
+
+            // use plugin's serializeForm function if exists
+            if ($.isFunction(iframe.contentWindow.serializeForm)){
+                plugin_json = iframe.contentWindow.serializeForm();
+            }else{
+                plugin_json = $($("#plugin_iframe")[frameIndex].contentDocument.forms).serializeJSON();
+            }
+
+            plugin_json = JSON.stringify(plugin_json);
+            var plugin_pk = $("#plugin_iframe")[frameIndex].getAttribute('data-plugin_pk');
+            console.log("--- do_save_plugin_config--- plugin_pk", plugin_pk, "; pluginId=", pluginId, "; plugin configuration=", plugin_json);
+                
+            if (pluginId == 0 || (pluginId != 0 && plugin_pk == pluginId)) {
+            	$("#configure_plugin_"+plugin_pk)[0].setAttribute('data-plugin_config', plugin_json);
+            	$("#configure_plugin_"+plugin_pk)[0].setAttribute('data-plugin_config_snapshot', plugin_json);
+            }
+            else {
+            	if (userInput_snapshot != null) {
+                    console.log("--- do_save_plugin_config--- PREVIOUS --- pluginId", pluginId, "; userInput_snapshot=", userInput_snapshot);
+                    $("#configure_plugin_"+pluginId)[0].setAttribute('data-plugin_config', userInput_snapshot);            		
+                }
+            }
+        };
+        
+    })(jQuery);            
+            
+            
     $("#plugin_config_save").click(function(){
-        var plugin_json = $($("#plugin_iframe")[0].contentDocument.forms).serializeJSON();
-        plugin_json = JSON.stringify(plugin_json);
-        var plugin_pk = $("#plugin_iframe")[0].getAttribute('data-plugin_pk');
-        console.log(plugin_pk + ' plugin configuration', plugin_json);
-        $("#configure_plugin_"+plugin_pk)[0].setAttribute('data-plugin_config',plugin_json);
+    	$.do_save_plugin_config(0);
         $("#plugin_config").hide();
     });
 
     $("#plugin_config_cancel").click(function(){
+    	//revert to snapshot value
+    	var plugin_pk = $("#plugin_iframe")[0].getAttribute('data-plugin_pk');
+        var userInput_snapshot = $("#configure_plugin_"+plugin_pk)[0].getAttribute('data-plugin_config_snapshot');
+
+        $("#configure_plugin_"+plugin_pk)[0].setAttribute('data-plugin_config', userInput_snapshot);
+
+		//plugin config persistence at time of saving a plan may read the iframe contents since user may not have clicked plugin config "save"
+        if (userInput_snapshot != null) {
+            var plugin_json_obj = JSON.parse(userInput_snapshot);
+            
+            console.log('revert to snapshot plugin_json_obj=', plugin_json_obj);
+            var iframe = document.getElementById('plugin_iframe');
+            $(iframe.contentDocument.forms).restoreJSON(plugin_json_obj);
+            iframe.contentWindow.$(':input').trigger('change')
+        }
+        
         $("#plugin_config").hide();
     });
     //when plugin selection changes
@@ -570,10 +710,17 @@ TB.plan.wizard.initialize = function() {
                     var eachUploaderName = $(this).val().split("|")[1];
                     if ((eachUploaderName.toLowerCase() != "ionreporteruploader_v1_0") && (eachUploaderName.toLowerCase().search('ionreporteruploader') >= 0)) {
                         $(this).removeAttr("checked");
+                        $("#review_export").text($("#review_export").text().replace(eachUploaderName, "").replace(/,,/g, ","));
                         $("#review_export").text($("#review_export").text().replace(eachUploaderName + ",", "").replace(/,,/g, ","));
                     }
                 });
-                $("#review_export").append(uploaderName + ",");
+                
+                //we could have added the autorun uploader name to the review text already
+                currentText = $("#review_export").text();
+                if (currentText.toLowerCase().search(uploaderName.toLowerCase()) < 0) {
+                	$("#review_export").append(uploaderName + ",");
+                }
+
                 if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "Plan Run New" || INTENT == "CopyPlan") {
                     $('.ir1_hideable_IRConfig').slideDown();
                     $.showAndHide_ws8();
@@ -584,16 +731,25 @@ TB.plan.wizard.initialize = function() {
                     if ((eachUploaderName.toLowerCase().search('ionreporteruploader_v1_0') >= 0)) {
                         $(this).removeAttr("checked");
                         $("#review_export").text($("#review_export").text().replace(eachUploaderName + ",", "").replace(/,,/g, ","));
+                        $("#review_export").text($("#review_export").text().replace(eachUploaderName, "").replace(/,,/g, ","));
                     }
                 });
-                $("#review_export").append(uploaderName + ",");
+                
+                //we could have added the autorun uploader name to the review text already
+                currentText = $("#review_export").text();
+                if (currentText.toLowerCase().search(uploaderName.toLowerCase()) < 0) {
+                	$("#review_export").append(uploaderName + ",");
+                }
+
                 if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "Plan Run New" || INTENT == "CopyPlan") {
                     $('.ir1_hideable_IRConfig').slideUp();
                     $.showAndHide_ws8();
                 }
             }
         } else {
+            $("#review_export").text($("#review_export").text().replace(uploaderName, "").replace(/,,/g, ","));
             $("#review_export").text($("#review_export").text().replace(uploaderName + ",", "").replace(/,,/g, ","));
+            
             //user unchecks IR v1.0
             if (uploaderName.toLowerCase() == "ionreporteruploader_v1_0") {
                 $('.ir1_hideable_IRConfig').slideUp();
@@ -664,6 +820,9 @@ TB.plan.wizard.initialize = function() {
         if (applProduct) {
             if (INTENT == "New") {
                 $('#modal_plan_wizard-title').text(INTENT + " " + applProduct.runTypeDescription + " Plan");
+            } else if (INTENT == 'Plan Run' ) {
+                //Holding off with this until I confer more with Kirindi
+                //$('#modal_plan_wizard-title').text('New' + " " + applProduct.runTypeDescription + " Run Plan");
             }
 
             //The selector 'input[name=field]:eq(1)' means find all input elements with a name attribute equal to 'field' and
@@ -676,7 +835,14 @@ TB.plan.wizard.initialize = function() {
 
             runMode = $("input:radio[name=runMode]").val();
             console.log("at application selection change. runMode=", runMode);
-
+            
+            if (applProduct.isHotspotRegionBEDFileSupported == "True") {               	
+            	$("div.hotspot_bed_file_section").show();                	
+            }
+            else {
+            	$("div.hotspot_bed_file_section").hide();
+            }
+            
             if (runMode == "pe") {
                 $("#review_runType").text("Paired-End");
             } else {
@@ -693,6 +859,15 @@ TB.plan.wizard.initialize = function() {
             $("#librarykitname option[value='" + applProduct.libKitName + "']").attr('selected', 'selected');
             $('#sequencekitname option:selected', 'select').removeAttr('selected');
             $("#sequencekitname option[value='" + applProduct.seqKitName + "']").attr('selected', 'selected');
+
+            $("#controlsequence option:selected", 'select').removeAttr('selected');
+            $("#controlsequence option[value='" + applProduct.controlSeqName + "']").attr('selected', 'selected');
+
+            $('#templatekitname option:selected', 'select').removeAttr('selected');
+            $("#templatekitname option[value='" + applProduct.defaultOneTouchTemplateKitName + "']").attr('selected', 'selected');
+
+            $('#templatekitionchefname option:selected', 'select').removeAttr('selected');
+            $("#templatekitionchefname option[value='" + applProduct.defaultIonChefKitName + "']").attr('selected', 'selected');
 
             //console.log("#flows", applProduct.flowCount);
             $("#flows").val(applProduct.flowCount);
@@ -720,7 +895,7 @@ TB.plan.wizard.initialize = function() {
                 $("#review_chipType").text("Ion " + applProduct.chipType + "&trade; Chip");
             }
 
-            $("#review_templateKit").text(applProduct.templateKitName);
+            $("#review_templateKit").text(applProduct.defaultOneChefTemplateKitName);
             $("#review_controlSeq").text(applProduct.controlSeqName);
         }
     });
@@ -877,6 +1052,7 @@ TB.plan.wizard.initialize = function() {
         });
         $(source + " .refresh-uploader-information").click(function(e) {
             e.preventDefault();
+            $('#modal_plan_wizard #modal-error-messages').hide().empty();
             url = $(this).attr('href');
             $('body #modal_confirm_plugin_refresh').remove();
             $.get(url, function(data) {
@@ -887,8 +1063,7 @@ TB.plan.wizard.initialize = function() {
             }).done(function(data) {
                 console.log("success:", url);
             }).fail(function(data) {
-                $('#error-messages').empty();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#modal_plan_wizard #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
                 console.log("error:", data);
             }).always(function(data) {/*console.log("complete:", data);*/
             });
@@ -900,6 +1075,11 @@ TB.plan.wizard.initialize = function() {
         /** TS-4640: IE6,7,8 long text within fixed width <select> is clipped, set width:auto temporarily */
         TB.utilities.browser.selectAutoExpand();
 
+        console.log("plan wizard INTENT=", INTENT);
+        
+        $("div.template_kit_oneTouch").show();
+        $("div.template_kit_ionChef").hide();
+        
         if (INTENT == "New" || INTENT == "Plan Run New") {
             $(".review_extra_kit_info").slideDown('fast');
             $(".review_extra_pe_kit_info").slideUp('fast');
@@ -924,13 +1104,28 @@ TB.plan.wizard.initialize = function() {
                     $(".review_extra_pe_kit_info").slideUp('fast');
                     $('div.review_extra_pe_kit_info').hide();
                 }
+
+                if (selectedApplProductData.isHotspotRegionBEDFileSupported == "True") {
+                	console.log("going to SHOW hotSpot bed file section!!");                	
+                	$("div.hotspot_bed_file_section").show();                	
+                }
+                else {
+                	console.log("going to HIDE hotSpot bed file section!!");
+                	$("div.hotspot_bed_file_section").hide();
+                }
+
+                var defaultGenomeRef = selectedApplProductData.reference;
+                if (defaultGenomeRef) {
+                	$("#bedfile option, #regionfile option").filter('[defaultGenomeRef != ""]').hide().filter("[class ~= "+defaultGenomeRef+"]").show();
+            	}
+				
             } else {
                 //alert("NO selectedApplProductData at documentReady")
             }
         } else {
             if (selectedPlanTemplate && selectedPlanTemplate.runMode === "pe") {
                 //if we no PE lib kits are active, peForwardLibKeys will be none and we'll hide the pe run mode
-                if (planTemplateDataplanTemplateData.peForwardLibKeys === "None") {
+                if (planTemplateData.peForwardLibKeys === "None") {
                     apprise("Paired-end is not officially supported. Please activate paired-end kits in your database before proceeding with paired-end plan/template creation or edit.");
                 }
 
@@ -942,29 +1137,66 @@ TB.plan.wizard.initialize = function() {
                 $(".review_extra_pe_kit_info").slideUp('fast');
                 $('div.review_extra_pe_kit_info').hide();
             }
+            
+            if (planTemplateData.isHotspotRegionBEDFileSupported) {
+                $("div.hotspot_bed_file_section").show();                	
+            }
+            else {
+            	$("div.hotspot_bed_file_section").hide();
+        	}
+
+            var genomeRef = selectedPlanTemplate.reference;
+            if (genomeRef) {
+            	$("#bedfile option, #regionfile option").filter('[genomeRef != ""]').hide().filter("[class ~= "+genomeRef+"]").show();
+        	}
         }
 
-
-
-        if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "CopyPlan" ) {
+        if (selectedPlanTemplate) {
+        	applProduct = TB.plan.wizard.getApplProduct(selectedPlanTemplate.runType);
+        	if (applProduct) {         
+        		if (applProduct.isHotspotRegionBEDFileSupported == "True") {               	
+        			$("div.hotspot_bed_file_section").show();                	
+        		}
+        		else {
+        			$("div.hotspot_bed_file_section").hide();
+        		}
+        	}
+        }
+        
+        if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "CopyPlan" || INTENT == "Plan Run New" ) {
         //init with previous sample and notes info
             if (selectedPlanTemplate) {
                 $("#samples_workaround").val(selectedPlanTemplate.sampleDisplayedName);
                 $("#notes_workaround").val(selectedPlanTemplate.notes);
+                
+                if (selectedPlanTemplate.isIonChef == "True") {
+                    $("div.template_kit_oneTouch").hide();
+                    $("div.template_kit_ionChef").show();                	
+                }                
             }
-            if (selectedPlanTemplate && selectedPlanTemplate.barcodeId !== "") {
-                var selectedBarcodeKit = selectedPlanTemplate.barcodeId;
-            
-                if (!jQuery.isEmptyObject(selectedPlanTemplate.barcodedSamples)) {
-                    var bcSamples = selectedPlanTemplate.barcodedSamples;
-                    
-					          for (var sampleName in bcSamples) {
-						            for (var i=0; i<bcSamples[sampleName]['barcodes'].length; i++){
-							              var fieldName = "bcKey|" + selectedBarcodeKit + "|" + bcSamples[sampleName]['barcodes'][i];
-							              $("input[name='"+fieldName+"']").val(sampleName); 
-						            }
-					          }
-                }
+
+            if ((selectedPlanTemplate && selectedPlanTemplate.barcodeId !== "") || 
+            	(selectedApplProductData && selectedApplProductData.isDefaultBarcoded && selectedApplProductData.defaultBarcodeKitName !== "")) {
+
+            	var selectedBarcodeKit = ""
+            	if (selectedPlanTemplate) {
+            		selectedBarcodeKit = selectedPlanTemplate.barcodeId;
+                    //var selectedBarcodeKit = selectedPlanTemplate.barcodeId;
+            		
+                    if (!jQuery.isEmptyObject(selectedPlanTemplate.barcodedSamples)) {
+                        var bcSamples = selectedPlanTemplate.barcodedSamples;
+                        
+    					          for (var sampleName in bcSamples) {
+    						            for (var i=0; i<bcSamples[sampleName]['barcodes'].length; i++){
+    							              var fieldName = "bcKey|" + selectedBarcodeKit + "|" + bcSamples[sampleName]['barcodes'][i];
+    							              $("input[name='"+fieldName+"']").val(sampleName); 
+    						            }
+    					          }
+                    }            		
+            	}
+            	else {
+            		selectedBarcodeKit = selectedApplProductData.defaultBarcodeKitName;
+            	}
 
                 var rows = $('table.ws-8_barcodedSampleTable tr');
                 var rowsToShow = rows.filter("."+selectedBarcodeKit+"");
@@ -986,8 +1218,11 @@ TB.plan.wizard.initialize = function() {
         $(".configure_plugin").each(function(){
             var plugin_pk = this.getAttribute('data-plugin_pk');
             var userInput = planTemplateData.pluginUserInput[plugin_pk];
-            if (userInput)
+            if (userInput) {
                 this.setAttribute('data-plugin_config',userInput);
+                //take plugin config snapshot to support save/cancel
+                this.setAttribute('data-plugin_config_snapshot', userInput);
+            }
         });
         
 
@@ -1010,18 +1245,31 @@ TB.plan.wizard.initialize = function() {
             var irVersion = planTemplateData.irConfigSaved_version;
             var obj = jQuery.parseJSON(irUserSelection);
             if (obj === null){
+            	if (selectedPlanTemplate) {
+            		$('input[id="sample_nonIr_sampleName_1"]').val(selectedPlanTemplate.sampleDisplayedName);
+            	}
+
                 return;
             }
+
+            //console.log("irVersion=", irVersion);
+            //console.log("ir obj=", obj);
+            
             // IR version 1.0
             if (irVersion < 1.2) {
                 $('select[id="ir1_irWorkflow"]').val(obj[0].Workflow);
                 return;
             }
-
+            
             if (selectedPlanTemplate && selectedPlanTemplate.barcodeId === "") {
                 // non-barcoded case
                 obj = obj[0];
+                if (obj === null) {
+                	return;
+                }
+                
                 $('input[id="sample_irSample_1"]').val(obj.sample);
+                $.setIR_select('select[id="sample_irGender_select_1"]', obj.Gender);                
                 $.setIR_select('select[id="sample_irWorkflow_select_1"]', obj.Workflow);
                 $.setIR_select('select[id="sample_irRelation_select_1"]', obj.Relation);
                 $.setIR_select('select[id="sample_irRelationRole_select_1"]', obj.RelationRole);
@@ -1031,6 +1279,7 @@ TB.plan.wizard.initialize = function() {
                 var count = 0;
                 $('input[id^="bcSample_sample_BarcodeKit_"]'.replace('BarcodeKit', selectedPlanTemplate.barcodeId)).each(function(i, elem) {
                     if (elem.value) {
+                        $.setIR_select('select[id="bcSample_irGender_select_BarcodeKit_nn"]'.replace('nn', i + 1).replace('BarcodeKit', selectedPlanTemplate.barcodeId), obj[count].Gender);                    	
                         $.setIR_select('select[id="bcSample_irWorkflow_select_BarcodeKit_nn"]'.replace('nn', i + 1).replace('BarcodeKit', selectedPlanTemplate.barcodeId), obj[count].Workflow);
                         $.setIR_select('select[id="bcSample_irRelation_select_BarcodeKit_nn"]'.replace('nn', i + 1).replace('BarcodeKit', selectedPlanTemplate.barcodeId), obj[count].Relation);
                         $.setIR_select('select[id="bcSample_irRelationRole_select_BarcodeKit_nn"]'.replace('nn', i + 1).replace('BarcodeKit', selectedPlanTemplate.barcodeId), obj[count].RelationRole);
@@ -1288,6 +1537,16 @@ TB.plan.wizard.initialize = function() {
                         $("[name='bcIrWorkflow_select']").append(option);
                     });
                 }
+                else if (field === "Gender") {
+                    $("select[name='irGender_select']").empty().append('<option value=""></option>');
+                    $("[name='bcIrGender_select']").empty().append('<option value=""></option>');
+              	
+                    $.each(values, function(i, value){
+                        var option = '<option value="' + value + '">' + value + '</option>';
+                       	$("select[name='irGender_select']").append(option);
+                    	$("[name='bcIrGender_select']").append(option);
+                    });           	
+                }                
             });
         }
     };
@@ -1322,7 +1581,7 @@ TB.plan.wizard.initialize = function() {
             console.log('$.refreshPluginDone updating IR1 form fields');
             $.irConfigSelection_1 = plugininfo.config;
             $.addIR1FormFields(plugininfo.config);
-        } else if (plugininfo.name.toLowerCase().search('ionreporteruploader_v') === 0) {
+        } else if (plugininfo.name.toLowerCase().search('ionreporteruploader') === 0) {
             console.log('$.refreshPluginDone updating IR form fields');
             console.log("Found [name='irWorkflow_select']:" + $("[name='irWorkflow_select']").exists());
             $.irConfigSelection = plugininfo.config;

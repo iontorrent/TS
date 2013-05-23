@@ -881,7 +881,14 @@ void BAMUtils::score_alignments(const std::string& qscores, bool calc_region_err
 			if(current_flow > max_aligned_flow)
 				max_aligned_flow = current_flow;
 			if(consecutive_error > 0) {
-				flow_err.push_back(current_flow);
+				if(flow_err.size()<1 || flow_err[flow_err.size()-1]!=current_flow) 
+                                  	{flow_err.push_back(current_flow); 
+					flow_err_bases.push_back(consecutive_error);
+                                 	}
+				else    
+					{flow_err_bases[flow_err_bases.size()-1]+=consecutive_error;
+                                 	}
+
 				flow_err_bases.push_back(consecutive_error);
 			}
 		}

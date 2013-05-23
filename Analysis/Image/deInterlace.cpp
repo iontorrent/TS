@@ -31,7 +31,9 @@
 #include "deInterlace.h"
 #include "datacollect_global.h"
 #else
+#ifndef WIN32
 #include "ByteSwapUtils.h"
+#endif
 #endif
 #define KEY_0     0x44
 #define KEY_8_1   0x99
@@ -753,12 +755,12 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
 
   // regional t0
   int numRegions = num_regions_x*num_regions_y;
-  int regionalT0[numRegions];
+  int *regionalT0 = (int *)malloc(numRegions*sizeof(int));
   for ( int reg=0; reg < numRegions; ++reg )
     regionalT0[reg] = -1;
 
   if ( ( start_frame == 0 ) && ( mincols == 0 ) && ( minrows == 0 ) &&
-       ( maxcols == cols ) && ( maxrows == rows ) )
+       ( maxcols == cols ) && ( maxrows == rows ))
     WholeImage=1;
 
   for ( frame = 0; frame <= end_frame; frame++ )
@@ -1209,9 +1211,11 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
     FreeFileData ( fd );
     offset += len;
   }
-
-  InterpolateFramesBeforeT0 ( regionalT0, out, rows, cols, start_frame, end_frame,
-                              mincols, minrows, maxcols, maxrows, x_region_size, y_region_size, timestamps );
+ // only interpolate for full time histories as the checks aren't sufficient for sub-sets
+  if(WholeImage && ((totalFrames-1) == end_frame)) {
+	InterpolateFramesBeforeT0 ( regionalT0, out, rows, cols, start_frame, end_frame,
+                                    mincols, minrows, maxcols, maxrows, x_region_size, y_region_size, timestamps );
+  }
 
   if ( mincols==0 && maxcols == cols && minrows==0 && maxrows==rows )
   {
@@ -1245,6 +1249,9 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
 
   if ( WholeFrameOrig )
     free ( WholeFrameOrig );
+
+  if(regionalT0)
+	  free(regionalT0);
 
   CloseFile ( fd );
 
@@ -1642,6 +1649,18 @@ extern "C" int __declspec ( dllexport ) deInterlace_c (
   unsigned int cksum=0;
   int *timestamps=NULL;
 
+#if 0
+  FILE *fp;
+  fopen_s(&fp,"params.txt","w");
+  if(fp)
+  {
+	  fprintf(fp,"  params= %s %p %p %d %d %d %d %d %d %d %d %d %d %d\n",
+		  fname,_out,_timestamps,(_rows?_rows:0),(_cols?_cols:0),(_frames?_frames:0),
+		  (_uncompFrames?_uncompFrames:0),start_frame,end_frame,mincols,minrows,maxcols,maxrows,ignoreErrors);
+	  fclose(fp);
+  }
+#endif
+
   fd = OpenFile ( fname );
 
   char *file_memory = GetFileData ( fd, 0, fd->PageSize,cksum );
@@ -1842,14 +1861,18 @@ extern "C" int __declspec ( dllexport ) deInterlaceHdr (
 
 
 #ifdef WIN32
-int main ( int argc, char *argv[] )
+#include "stdafx.h"
+#include <tchar.h>
+
+
+int _tmain(int argc, _TCHAR* argv[])
 {
   int start_frame = 0;
   int end_frame = 0;
   short *output=NULL;
   int *timestamps=NULL;
   int minx, miny, maxx, maxy;
-  char *fname = argv[1];
+  char fname[1024]="e:\\acq_0005.dat";
   int frameStride;
   int rows,cols;
 // DWORD bytesWritten;
@@ -1858,12 +1881,13 @@ int main ( int argc, char *argv[] )
 // char *ptr;
   int frames=0, uncompFrames=0;
 
-  sscanf ( argv[2], "%d", &start_frame );
-  sscanf ( argv[3], "%d", &end_frame );
-  sscanf ( argv[4], "%d", &minx );
-  sscanf ( argv[5], "%d", &miny );
-  sscanf ( argv[6], "%d", &maxx );
-  sscanf ( argv[7], "%d", &maxy );
+  //swscanf_s ( argv[1], _T("%s"), &fname );
+  swscanf_s ( argv[2], _T("%d"), &start_frame );
+  swscanf_s ( argv[3], _T("%d"), &end_frame );
+  swscanf_s ( argv[4], _T("%d"), &minx );
+  swscanf_s ( argv[5], _T("%d"), &miny );
+  swscanf_s ( argv[6], _T("%d"), &maxx );
+  swscanf_s ( argv[7], _T("%d"), &maxy );
 
   frameStride = ( maxx - minx ) * ( maxy - miny );
 

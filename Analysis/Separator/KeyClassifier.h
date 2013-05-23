@@ -65,13 +65,14 @@ class KeyClassifier {
                          Mat<double> &wellFlows,
                          Mat<double> &refFlows,
                          Col<double> &time,
-                         const Col<double> &incorp,
+                         Mat<double> *darkMatter,
+                         Mat<double> *onemers,
+                         size_t frameCandEnd,
                          double minSnr,
                          double tauE,
                          KeyFit &fit,
                          TraceStore<double> &store,
                          Mat<double> &predicted);
-
 
  private:
   Col<double> param;
@@ -79,18 +80,28 @@ class KeyClassifier {
   Col<double> diff;
   Col<float> signal;
   Col<float> projSignal;
+  Col<double> weights;
+  Mat<double> mPredictions;
   SampleQuantiles<double> onemerSig;
   SampleQuantiles<double> zeromerSig;
-  SampleStats<double> zeroStats;
+  //SampleStats<double> zeroStats;
+  SampleQuantiles<double> zeroStats;
   SampleStats<double> mad;
   SampleStats<double> traceSd;  
-  SampleStats<double> sigVar;  
+  //  SampleStats<double> sigVar;  
+  SampleQuantiles<double> sigVar;  
   SampleStats<double> onemerProj;  
   SampleQuantiles<double> onemerProjMax;  
   SampleStats<double> onemerIncorpMad;  
   ZeromerDiff<double> mBg;
+  Col<double> trace;
+  Col<double> traceIntegral;
+  Col<double> bulk;
+  Col<double> bulkTrace;
+  Col<double> bulkIntegral;
   std::vector<double> mDist;
   std::vector<std::vector<double> *> mValues;
+  
 };
 
 #endif // KEYCLASSIFIER_H

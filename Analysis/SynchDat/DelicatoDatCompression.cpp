@@ -6,7 +6,7 @@
 #include <cmath>
 #include <sys/time.h>
 #include <cstring>
-#include <xmmintrin.h>
+#include <x86intrin.h>
 #include <cassert>
 #include <malloc.h>
 #include <stdint.h> 

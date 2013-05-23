@@ -26,39 +26,42 @@
 	/*
 	 * Fill the barcodes obj list with the corresponding samples 
 	 */
+    var bcSamples = formdata.barcodedSamples;
+
 	for (var i = 0 ; i < barcodes.length; i++) {
-            barcodes[i].sample = '';            
-            if (formdata.barcodedSamples[barcodes[i].id])  
-		barcodes[i].sample = formdata.barcodedSamples[barcodes[i].id].sample; 
-            for (var sampleName in formdata.barcodedSamples){
-		if (formdata.barcodedSamples[sampleName].hasOwnProperty(barcodes[i].id)){
-                        barcodes[i].sample = sampleName;
-		}
-            }
+		barcodes[i].sample = '';          
+
+        for (var sampleName in bcSamples) {            	
+        	sampleBarcodes = bcSamples[sampleName]['barcodes'];
+            	
+            for (var k = 0; k < sampleBarcodes.length; k++) {
+            	sampleBarcode = sampleBarcodes[k];
+                	
+                if (barcodes[i].id_str == sampleBarcode) {
+                	barcodes[i].sample = sampleName
+                }
+            }            	
+        }
 	}
-	// Fill in selected plugins	
+	// Fill in selected plugins and uploaders
 	formdata.plugins = []
-	var plugins = formdata.selectedPlugins.planplugins;
+	formdata.uploaders = []
+	var plugins = formdata.selectedPlugins;
 	var v = '';
 	if (plugins){
-	    for (var i = 0 ; i < plugins.length; i++) {
+	    for (var i in plugins) {
 	        if (isPlan)
 	            v = ' v' + plugins[i].version;
-	        formdata.plugins.push(plugins[i].name + v);
+	        if ($.inArray('export',plugins[i].features) > -1){
+	            formdata.uploaders.push(plugins[i].name + v);
+	        }
+	        else{
+	            formdata.plugins.push(plugins[i].name + v);
+	        }     
 	    }
-	} else {
-	    formdata.plugins.push("No selection saved with the Plan. <br>All active plugins selected by default")
 	}
-	// Fill in selected uploaders
-	formdata.uploaders = []
-	var uploaders = formdata.selectedPlugins.planuploaders;
-	if (uploaders){
-	    for (var i = 0 ; i < uploaders.length; i++) {
-	        if (isPlan)
-	            v = ' v' + plugins[i].version;
-	        formdata.uploaders.push(uploaders[i].name + v)	
-	    }
-	} 
+	if (formdata.plugins.length == 0)
+	    formdata.plugins.push("No selection saved with the Plan.")
 
 	console.log(formdata);
 	$.ajax({
@@ -88,7 +91,7 @@
 		            }
 		        	, pageSize: 10
 	           	}
-		        , height: 'auto'
+		        , height: 200
 		        , groupable: false
 		        , scrollable : {
 		            virtual : true

@@ -14,7 +14,6 @@
 #include <armadillo>
 #include <stdint.h>
 #include <cassert>
-#include <omp.h>
 #include <cmath>
 #include "secantFind.h"
 #include "matrixRounding.h"
@@ -26,7 +25,7 @@
 #include "VencoLossless.h"
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
-#include "xmmintrin.h"
+#include <x86intrin.h>
 
 using namespace std;
 using namespace arma;

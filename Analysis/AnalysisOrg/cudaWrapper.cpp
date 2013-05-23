@@ -1,12 +1,12 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "cudaWrapper.h"
+#include "SignalProcessingFitterQueue.h"
 
 #ifdef ION_COMPILE_CUDA
 #include "SingleFitStream.h"
 #include "MultiFitStream.h"
 #include "StreamingKernels.h"
 #include "JobWrapper.h"
-#include "SignalProcessingFitterQueue.h"
 #endif
 
 void* BkgFitWorkerGpu(void *arg)
@@ -16,6 +16,7 @@ void* BkgFitWorkerGpu(void *arg)
     BkgFitWorkerGpuInfo* info = static_cast<BkgFitWorkerGpuInfo*>(arg);
 
     // Wrapper to create a GPU worker and set GPU
+    printf("GPU_INDEX %d\n", info->gpu_index);
     cudaSetDevice( info->gpu_index );
     cudaError_t err = cudaGetLastError();
 
@@ -27,12 +28,14 @@ void* BkgFitWorkerGpu(void *arg)
         cudaGetDevice( &dev_id );
         cudaGetDeviceProperties( &cuda_props, dev_id );
 
-        printf( "CUDA: Created GPU BkgModel worker...  (%d: %s v%d.%d)\n", dev_id, cuda_props.name, cuda_props.major, cuda_props.minor );
+        printf( "CUDA %d: Created GPU BkgModel worker...  (%d:%s v%d.%d)\n", dev_id, dev_id, cuda_props.name, cuda_props.major, cuda_props.minor );
 
-        if (info->type == GPU_SINGLE_FLOW_FIT)
+/*        if (info->type == GPU_SINGLE_FLOW_FIT)
           return(SingleFlowFitGPUWorker( info->queue) );
         else if (info->type == GPU_MULTI_FLOW_FIT)
-          return(MultiFlowFitGPUWorker( info->queue) );
+          return(MultiFlowFitGPUWorker( info->queue) );*/
+        return SimpleBkgFitWorkerGpu(info->queue);
+        //return BkgFitWorkerGpu( info->queue);
     }
         
     printf( "CUDA: Failed to initialize GPU worker... (%d: %s)\n", info->gpu_index, cudaGetErrorString(err) );
@@ -120,11 +123,11 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
   for(int i=valid_devices.size()-1 ; i >= 0; i--){
     try{
       //cudaSetDevice(valid_devices[i]);
-      cout << "CUDA: Creating Context and Contant memory on device with id: "<<  valid_devices[i]<< endl;
+      cout << "CUDA "<< valid_devices[i] << ": Creating Context and Constant memory on device with id: "<<  valid_devices[i]<< endl;
       InitConstantMemoryOnGpu(valid_devices[i],poiss_cache);
     }
     catch(cudaException &e) {
-      cout << "CUDA: Context could not be created. removing device with id: "<<  valid_devices[i] << " from valid device list" << endl;
+      cout << "CUDA "<< valid_devices[i] << ": Context could not be created. removing device with id: "<<  valid_devices[i] << " from valid device list" << endl;
       valid_devices.erase (valid_devices.begin()+i);
       numBkgWorkers_gpu -= 1;
       if(numBkgWorkers_gpu == 0) cout << "CUDA: no context could be created, defaulting to CPU only execution" << endl; 
@@ -133,8 +136,6 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
   }
 
   if(numBkgWorkers_gpu == 0) return false;
-
-  cudaStreamPool::initLockNotThreadSafe();
 
   return true;
 
@@ -149,193 +150,44 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
 void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache) {
 #ifdef ION_COMPILE_CUDA
   initPoissonTablesLUT(device, (void**) poiss_cache.poissLUT);
-#endif
-}
-
-void SingleFlowStreamExecutionOnGpu(WorkerInfoQueue* q) {
-#ifdef ION_COMPILE_CUDA
-  bool fallBackToCPU = false;
-  cudaStreamManager sM;
-  int dev_id;
-  //stream config
-  SingleFitStream::setBeadsPerBLock(128); // cuda block size
-  cudaGetDevice( &dev_id );
- 
-//  SingleFitStream * temp;
-
-  sM.printMemoryUsage();
-
-  for(int i=0; i < NUM_CUDA_FIT_STREAMS-1; i++){
-
- /*  try{ // exception handling to allow fallback to CPU Fit if not a single strweam could be created
-      sM.addStreamUnit(new SingleFitStream(q));
-      cudaGetDevice( &dev_id );
-      std::cout <<"CUDA: Device " <<  dev_id <<  " SingleFitStream " << i <<" created " << std::endl;
-      sM.printMemoryUsage();
-    }
-    catch(cudaException& e)
-    {
-      cout << e.what() << endl;
-      if(i > 0){ 
-          cout << "CUDA: Device " << dev_id<< " could not create more than " << i << " SingleFitStreams" << std::endl;  
-          sM.printMemoryUsage();
-      }else{
-        std::cout << "CUDA: Device " << dev_id << " no SingleFitStreams could be created >>>>>>>>>>>>>>>>> FALLING BACK TO CPU!"<< std::endl;
-        fallBackToCPU = true;
-      }
-      break;
-    }
-
-*/
-      if(!TryToAddSingleFitStream(&sM,q)){
-        if(i == 0 ) fallBackToCPU = true;
-        break;
-      }
-  } 
-
-
-  
-  if(!fallBackToCPU){ // GPU WORKGER
-    int flownum = 0; 
-    int tryedCreateSecondStream = false;
-    while ( sM.DoWork(&flownum) ){ 
-    
-     if (!tryedCreateSecondStream && flownum >= NUMFB )
-      {
-        std::cout << "CUDA: starting second block of 20 flows, try to create second SingleFitStream " << std::endl;  
-        TryToAddSingleFitStream(&sM,q);
-        tryedCreateSecondStream = true;
-      }
-    };
-    
-    std::cout << "CUDA: Device " << dev_id << " GPU memory profile when GPU thread exits" << std::endl; 
-    sM.printMemoryUsage();
-  
-  }else{ // FALLBACK CPU WORKER
-
-    bool done = false;
-    while(!done)
-    {
-      
-      //reverte to be a blocking CPU thread if no GPU stream got created
-      WorkerInfoQueueItem item = q->GetItem();
-    
-      if (item.finished == true){
-        // we are no longer needed...go away!
-        done = true;
-        q->DecrementDone();
-        continue;
-      }
-      // only single flow fit and post processing is done 
-      DoSingleFlowFitAndPostProcessing(item);
-      // indicate we finished that bit of work
-      q->DecrementDone();
-    }
-
-      
-  }
+  //initPoissonTables(device, (float**) poiss_cache.poiss_cdf);
 
 #endif
 }
 
-void MultiFlowStreamExecutionOnGpu(WorkerInfoQueue* q)
+void configureKernelExecution(GpuControlOpts opts)
 {
 #ifdef ION_COMPILE_CUDA
-  std::cout << "CUDA: Creating MultiFlowFit GPU workers" << std::endl;
-  bool fallBackToCPU = false;
-  cudaStreamManager sM;
-  int dev_id;
-  //stream config
-  MultiFitStream::setBeadsPerBLock(128); // cuda block size
-  
-  sM.printMemoryUsage();
+  // configure MultiFlowFit Execution
+  SimpleMultiFitStream::setBeadsPerBLockMultiF(opts.gpuThreadsPerBlockMultiFit);
+  SimpleMultiFitStream::setL1SettingMultiF(opts.gpuL1ConfigMultiFit);
+  SimpleMultiFitStream::setBeadsPerBLockPartialD(opts.gpuThreadsPerBlockPartialD);
+  SimpleMultiFitStream::setL1SettingPartialD(opts.gpuL1ConfigPartialD);
+  SimpleMultiFitStream::printSettings();
+  // configure SingleFlowFit Execution
+  SimpleSingleFitStream::setBeadsPerBLock(opts.gpuThreadsPerBlockSingleFit);
+  SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
+  SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType); 
+  SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations); 
 
-  GpuMultiFlowFitControl fit_control;
-  for(int i=0; i < 1; i++)
-  {  
-    try{ // exception handling to allow fallback to CPU Fit if not a single strweam could be created
-      sM.addStreamUnit(new MultiFitStream(fit_control, q));
-      cudaGetDevice( &dev_id );
-      std::cout <<"CUDA: Device " <<  dev_id <<  " MultiFitStream " << i <<" created " << std::endl;
-      sM.printMemoryUsage();
-    }
-    catch(cudaException& e)
-    {
-      cout << e.what() << endl;
-      if(i > 0){ 
-          cout << "CUDA: Device " << dev_id<< " could not create more than " << i << " Multi Fit streams" << std::endl;  
-          sM.printMemoryUsage();
-      }else{
-        std::cout << "CUDA: Device " << dev_id << " no Multi Fit streams could be created >>>>>>>>>>>>>>>>> FALLING BACK TO CPU!"<< std::endl;
-        fallBackToCPU = true;
-      }
-      break;
-    }
-  } 
-
-  if(!fallBackToCPU){ // GPU WORKGER
-     
-    while ( sM.DoWork() ) {};
-    
-    std::cout << "CUDA: Device " << dev_id << " GPU memory profile when GPU threads exits" << std::endl; 
-    sM.printMemoryUsage();
-  
-  }
-
-  if (fallBackToCPU)
-  { // FALLBACK CPU WORKER
-
-    bool done = false;
-    while(!done)
-    {
-      
-      //reverte to be a blocking CPU thread if no GPU stream got created
-      WorkerInfoQueueItem item = q->GetItem();
-    
-      if (item.finished == true){
-        // we are no longer needed...go away!
-        done = true;
-        q->DecrementDone();
-        continue;
-      }
-      DoInitialBlockOfFlowsAllBeadFit(item);
-      // indicate we finished that bit of work
-      q->DecrementDone();
-    }
-  }
-
-#endif
+  SimpleSingleFitStream::printSettings();
+#endif 
 }
 
 
-bool TryToAddSingleFitStream(void * vpsM, WorkerInfoQueue* q){
+void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q) {
 #ifdef ION_COMPILE_CUDA
-  int dev_id = 0;
-  cudaStreamManager * psM = (cudaStreamManager *) vpsM;
-  SingleFitStream * temp;
+  int dev_id;
+
   cudaGetDevice( &dev_id );
-  int i;
-    try{ // exception handling to allow fallback to CPU Fit if not a single strweam could be created
-      temp =  new SingleFitStream(q);
-      i = psM->addStreamUnit( temp);
-      std::cout <<"CUDA: Device " <<  dev_id <<  " Single Fit stream " << i <<" created " << std::endl;
-      psM->printMemoryUsage();
-    }
-    catch(cudaException& e)
-    {
-      cout << e.what() << endl;
-      if(psM->getNumStreams() > 0){ 
-        cout << "CUDA: Device " << dev_id<< " could not create more than " << psM->getNumStreams() << " Single Fit streams" << std::endl;       
-        psM->printMemoryUsage();
-      }else{
-        std::cout << "CUDA: Device " << dev_id << " no Single Fit streams could be created >>>>>>>>>>>>>>>>> FALLING BACK TO CPU!"<< std::endl;
-        return false;
-      }
-    }
+  std::cout << "CUDA " << dev_id << ": Creating GPU workers" << std::endl;
+
+  cudaSimpleStreamManager  sM( q, 2);
+
+  sM.DoWork();
+
+  std::cout << "CUDA " << dev_id << ": Destroying GPU workers" << std::endl;
 
 #endif
-  return true;
 }
-
-
 

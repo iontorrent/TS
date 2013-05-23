@@ -1,7 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
-VERSION="3.4.48391"
+VERSION="3.6.56201"
 #AUTORUNDISABLE
 
 if ! which python; then

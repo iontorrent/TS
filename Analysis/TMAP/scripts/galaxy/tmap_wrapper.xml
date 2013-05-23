@@ -1,0 +1,204 @@
+<tool id="tmap_wrapper" name="Map with TMAP" version="0.3.3">
+	<description>for Ion Torrent</description>
+	<parallelism method="basic"></parallelism>
+	<command interpreter="python">
+		tmap_wrapper.py 
+
+		## reference source
+		--fileSource=$genomeSource.refGenomeSource
+		#if $genomeSource.refGenomeSource == "history":
+			##build index on the fly
+			--ref="${genomeSource.ownFile}"
+			--dbkey=$dbkey
+		#else:
+			##use precomputed indexes
+			--ref="${ filter( lambda x: str( x[0] ) == str( $genomeSource.indices ), $__app__.tool_data_tables[ 'tmap_indexes' ].get_fields() )[0][-1] }"
+			--do_not_build_index
+		#end if
+
+		## input SFF/fastq
+		--input=$inputs.input
+		--inputtype=$inputs.inputtype
+
+		## output file
+		--output=$output
+
+		## run parameters
+		--params=$params.source_select
+		#if $params.source_select != "pre_set":
+			--algorithm=$params.algorithm
+			--globalOptions=$params.globalOptions
+			--flowspaceOptions=$params.flowspaceOptions
+			--pairingOptions=$params.pairingOptions
+			--algorithmOptions=$params.algorithmOptions
+			--threads=$params.threads
+		#else:
+			--algorithm=''
+			--globalOptions=''
+			--flowspaceOptions=''
+			--pairingOptions=''
+			--algorithmOptions=''
+			--threads="4"
+		#end if
+
+		## suppress output SAM header
+		--suppressHeader=$suppressHeader
+  </command>
+  <requirements>
+	  <requirement type='package'>tmap</requirement>
+  </requirements>
+  <inputs>
+	  <conditional name="genomeSource">
+		  <param name="refGenomeSource" type="select" label="Will you select a reference genome from your history or use a built-in index?">
+			  <option value="indexed">Use a built-in index</option>
+			  <option value="history">Use one from the history</option>
+		  </param>
+		  <when value="indexed">
+			  <param name="indices" type="select" label="Select a reference genome">
+				  <options from_data_table="tmap_indexes">
+					  <filter type="sort_by" column="3" />
+					  <validator type="no_options" message="No indexes are available for the selected input dataset" />
+				  </options>
+			  </param>
+		  </when>
+		  <when value="history">
+			  <param name="ownFile" type="data" format="fasta" metadata_name="dbkey" label="Select a reference from history" />
+		  </when>
+	  </conditional>
+	  <conditional name="inputs">
+		  <param name="source_select" type="select" label="The input type" help="The input type" >
+			  <option value="fastq">FASTQ</option>
+			  <option value="sff">SFF</option>
+		  </param>
+		  <when value="fastq">
+			  <param name="input" type="data" value="" format="fastqsanger" label="FASTQ file" help="Must have Sanger-scaled quality values with ASCII offset 33" />
+			  <param name="inputtype" type="text" value="fastq" label="the input type (do not modify)"/>
+		  </when>
+		  <when value="sff">
+			  <param name="input" type="data" value="" format="sff" label="SFF file" help="Must be a SFF file" />
+			  <param name="inputtype" type="text" value="sff" label="the input type (do not modify)"/>
+		  </when>
+	  </conditional>
+	  <conditional name="params">
+		  <param name="source_select" type="select" label="TMAP settings to use" help="For most mapping needs use Commonly Used settings. If you want full control use Full Parameter List">
+			  <option value="pre_set">Commonly Used</option>
+			  <option value="full">Full Parameter List</option>
+		  </param>
+		  <when value="pre_set" />
+		  <when value="full">
+			  <param name="algorithm" type="select" label="The main algorithm to use">
+				  <option value="mapall" selected="true">mapall</option>
+				  <option value="map1" selected="false">map1</option>
+				  <option value="map2" selected="false">map2</option>
+				  <option value="map3" selected="false">map3</option>
+				  <option value="map4" selected="false">map4</option>
+			  </param>
+			  <param name="threads" type="integer" value="4" label="The number of threads (-n)" />
+			  <param name="globalOptions" type="text" value="" label="The global options" />
+			  <param name="flowspaceOptions" type="text" value="" label="The flowspace options" />
+			  <param name="pairingOptions" type="text" value="" label="The pairing options" />
+			  <param name="algorithmOptions" type="text" value="" label="The algorithm options" />
+		  </when>
+	  </conditional>
+	  <param name="suppressHeader" type="boolean" truevalue="true" falsevalue="false" checked="true" label="Suppress the header in the output SAM file" help="TMAP produces SAM with several lines of header information" />
+  </inputs>
+  <outputs>
+	  <data format="sam" name="output" label="${tool.name} on ${on_string}: mapped reads">
+		  <actions>
+			  <conditional name="genomeSource.refGenomeSource">
+				  <when value="indexed">
+					  <action type="metadata" name="dbkey">
+						  <option type="from_data_table" name="tmap_indexes" column="0">
+							  <filter type="param_value" ref="genomeSource.indices" column="1"/>
+						  </option>
+					  </action>
+				  </when>
+			  </conditional>
+		  </actions>
+	  </data>
+  </outputs>
+  <help>
+
+**What it does**
+
+See the TMAP manual for more information.
+ 
+It combines multiple mapping algorithms to give sensitive and accurate alignments quickly.  It uses three core algorithms, BWA-short, BWA-long, and a variant of the SSAHA algorithm. These algorithms are described in the following publications:
+ - Li, H. and Durbin, R. (2009). Fast and accurate short read alignment with Burrows-Wheeler transform. Bioinformatics, 25, 1754–1760.
+ - Li, H. and Durbin, R. (2010). Fast and accurate long-read alignment with Burrows-Wheeler
+ - Ning, Z., Cox, A., and Mullikin, J. (2001). SSAHA: a fast search method for large DNA databases. Genome Res., 11, 1725–1729.
+
+------
+
+**Know what you are doing**
+
+.. class:: warningmark
+
+There is no such thing (yet) as an automated gearshift in short read mapping. It is all like stick-shift driving in San Francisco. In other words = running this tool with default parameters will probably not give you meaningful results. A way to deal with this is to **understand** the parameters by carefully reading the `documentation`__ and experimenting. Fortunately, Galaxy makes experimenting easy.
+
+.. __: http://github.com/iontorrent/TMAP
+
+------
+
+**Input formats**
+
+TMAP accepts files in Sanger FASTQ format. Use the FASTQ Groomer to prepare your files. TMAP also accepts SFF files.
+
+------
+
+**A Note on Built-in Reference Genomes**
+
+Some genomes have multiple variants. If only one "type" of genome is listed, it is the Full version, which means that everything that came in the original genome data download (possibly with mitochondrial and plasmid DNA added if it wasn't already included). The Full version is available for every genome. Some genomes also come in the Canonical variant, which contains only the "canonical" (well-defined) chromosomes or segments, such as chr1-chr22, chrX, chrY, and chrM for human. Other variations include gender. These will come in the canonical form only, so the general Canonical variant is actually Canonical Female and the other is Canonical Male (identical to female excluding chrX).
+
+------
+
+**Outputs**
+
+The output is in SAM format, and has the following columns::
+
+    Column  Description
+  --------  --------------------------------------------------------
+  1  QNAME  Query (pair) NAME
+  2  FLAG   bitwise FLAG
+  3  RNAME  Reference sequence NAME
+  4  POS    1-based leftmost POSition/coordinate of clipped sequence
+  5  MAPQ   MAPping Quality (Phred-scaled)
+  6  CIGAR  extended CIGAR string
+  7  MRNM   Mate Reference sequence NaMe ('=' if same as RNAME)
+  8  MPOS   1-based Mate POSition
+  9  ISIZE  Inferred insert SIZE
+  10 SEQ    query SEQuence on the same strand as the reference
+  11 QUAL   query QUALity (ASCII-33 gives the Phred base quality)
+  12 OPT    variable OPTional fields in the format TAG:VTYPE:VALU
+  
+The flags are as follows::
+
+    Flag  Description
+  ------  -------------------------------------
+  0x0001  the read is paired in sequencing
+  0x0002  the read is mapped in a proper pair
+  0x0004  the query sequence itself is unmapped
+  0x0008  the mate is unmapped
+  0x0010  strand of the query (1 for reverse)
+  0x0020  strand of the mate
+  0x0040  the read is the first read in a pair
+  0x0080  the read is the second read in a pair
+  0x0100  the alignment is not primary
+
+It looks like this (scroll sideways to see the entire example)::
+
+  QNAME	FLAG	RNAME	POS	MAPQ	CIAGR	MRNM	MPOS	ISIZE	SEQ	QUAL	OPT
+  HWI-EAS91_1_30788AAXX:1:1:1761:343	4	*	0	0	*	*	0	0	AAAAAAANNAAAAAAAAAAAAAAAAAAAAAAAAAAACNNANNGAGTNGNNNNNNNGCTTCCCACAGNNCTGG	hhhhhhh;;hhhhhhhhhhh^hOhhhhghhhfhhhgh;;h;;hhhh;h;;;;;;;hhhhhhghhhh;;Phhh
+  HWI-EAS91_1_30788AAXX:1:1:1578:331	4	*	0	0	*	*	0	0	GTATAGANNAATAAGAAAAAAAAAAATGAAGACTTTCNNANNTCTGNANNNNNNNTCTTTTTTCAGNNGTAG	hhhhhhh;;hhhhhhhhhhhhhhhhhhhhhhhhhhhh;;h;;hhhh;h;;;;;;;hhhhhhhhhhh;;hhVh
+
+-------
+
+**TMAP settings**
+
+All of the options have a default value. You can change most of them. Most of the options in TMAP have been implemented here.
+
+
+  </help>
+</tool>
+
+

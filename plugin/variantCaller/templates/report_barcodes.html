@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE html>
+<html>
+<head>
+<script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+<script type="text/javascript" src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
+
+<script type="text/javascript" src="./js/FixedColumns.js"></script>
+<script type="text/javascript" src="./js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="./js/table2CSV.js"></script>
+
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="stylesheet"/>
+<link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen"/>
+
+<link rel="stylesheet" type="text/css" href="./css/demo_table_jui.css"/>
+<link rel="stylesheet" type="text/css" href="./css/demo_table.css"/>
+<link rel="stylesheet" type="text/css" href="./css/stylesheet.css"/>
+
+<script type="text/javascript">
+$(function() {
+  $().tipTipDefaults({ delay : 0 });
+  $(".tip").tipTip({ position : "bottom" });
+});
+$(function() {
+  $( "#accordion").accordion();
+});
+</script>
+
+{% if autorefresh %}
+<META HTTP-EQUIV="refresh" CONTENT="15">
+{% endif %}
+
+</head>
+<title>Variant Caller Report</title>
+<body>
+<div class="topbar"><div class="logoholder">
+  <a href="http://www.iontorrent.com/"><img src="/site_media/images/raw_name_small.png"
+     alt="IonTorrent Systems, Inc." style="border:none;"/></a>
+</div></div>
+
+<div style=\"width:1040px;margin-left:auto;margin-right:auto;height:100%\">
+  <h1><center>Variant Caller Report</center></h1>
+    
+  <div>
+   <br/>
+   <style type="text/css">
+    th {text-align:center;width=100%}
+    td {text-align:right;width=100%}
+    .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+   </style>
+   <table class="noheading" style="table-layout:fixed">
+    <tr>
+     <th><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
+      <th><span class="help" title="Sample name">Sample Name</span></th>
+      <th><span class="help" title="Number of called variants">Variants</span></th>
+      {% if options.has_hotspots %}
+        <th><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
+      {% endif %}
+      <th><span class="help" title="Download links">Download Links</span></th>
+    </tr>
+    
+  {% for barcode in barcode_data %}
+    <tr>
+      {% if barcode.status == "completed" %}
+        <td style="text-align:left"><a style="cursor:help" href="{{barcode.name}}/variantCaller.html">
+          <span title="Click to view the detailed coverage report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
+        </td>
+        
+        <td style="text-align:left">{{barcode.summary.sample_name}}</td>
+
+        <td>{{barcode.summary.variants_total.variants}}</td>
+        
+        {% if options.has_hotspots %}
+          <td>{{barcode.summary.hotspots_total.variants}}</td>
+        {% endif %}
+        
+        <td><a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">[VCF.GZ]</a>
+            <a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">[VCF.GZ.TBI]</a></td>
+
+      {% elif barcode.status == "queued" %}
+        <td style="text-align:left">{{barcode.name}}</td><td colspan="3" style="text-align:left">Queued</td>
+
+      {% elif barcode.status == "in_progress" %}
+        <td style="text-align:left">{{barcode.name}}</td><td colspan="3" style="text-align:left">In progress...</td>
+        
+     {% elif barcode.status == "error" %}
+        <td style="text-align:left"><span class="help" title="Barcode {{barcode.name}} was not processed. Check Log File." style="color:red">{{barcode.name}}</span></td>
+        <td colspan="3" style="color:red;text-align:left">Error. Check log file.</td>
+     {% elif barcode.status == "insufficient_reads" %}
+        <td style="text-align:left"><span class="help" title="Barcode {{barcode.name}} was not processed. Number of mapped reads was assumed to be too few for variant calling based on file size." style="color:grey">{{barcode.name}}</span></td>
+        <td colspan="3" style="color:red;text-align:left">Insufficient reads.</td>
+     {% elif barcode.status == "invalid_bam" %}
+        <td style="text-align:left"><span class="help" title="Barcode {{barcode.name}} was not processed. Incorrect BAM file format, ZM tag containg flow signals is missing. Re-generate BAM with new TS." style="color:red">{{barcode.name}}</span></td>
+        <td colspan="3" style="color:red;text-align:left">Error. Incorrect BAM file format.</td>
+     {% else %}
+        <td style="text-align:left"><span class="help" title="No Data for barcode {{barcode.name}}" style="color:grey">{{barcode.name}}</span></td>
+        <td colspan="3" style="color:red;text-align:left">No data. Check log file.</td>
+     {% endif %}
+    
+    </tr>
+  {% endfor %}
+
+
+   </table></div>
+   
+  {% if autorefresh %}
+    <br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+    <a href="javascript:document.location.reload();" ONMOUSEOVER="window.status=\'Refresh\'; return true">
+    <div style="text-align:center">Click here to refresh</div></a>
+  {% endif %}
+
+
+
+<script type="text/javascript">
+$(document).ready(function(){
+  $('h2').prepend('<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a>');
+  $('.expandCollapseButton').toggle(function() {
+    if ( $(this).attr('title') == 'Collapse Section'){
+      $(this).css('background-position','right top');
+      $(this).attr('title','Expand Section');
+    }else{
+      $(this).css('background-position','left top');
+      $(this).attr('title','Collapse Section');
+    }
+  }, function() {
+    if ( $(this).attr('title') == 'Expand Section'){
+      $(this).css('background-position','left top');
+      $(this).attr('title','Collapse Section');
+    }else{
+      $(this).css('background-position','right top');
+      $(this).attr('title','Expand Section');
+    }
+  });
+    
+  $('.expandCollapseButton').click(function(event){
+    $(event.target).parent().parent().toggleClass('small');
+    $(event.target).parent().next().slideToggle();
+  });
+
+  $('#tf .expandCollapseButton').css('background-position','right top');
+  $('#tf .expandCollapseButton').attr('title','Expand Section');
+  $('#tf').parent().toggleClass('small');
+  $('#tf').next().toggle();
+
+  $(".heading tbody tr").mouseover(function(){
+      $(this).addClass("table_hover");
+   }).mouseout(function(){
+      $(this).removeClass("table_hover");
+   });
+
+  $(".noheading tbody tr").mouseover(function(){
+      $(this).addClass("table_hover");
+   }).mouseout(function(){
+      $(this).removeClass("table_hover");
+   });
+    
+  $(".heading tr:odd").addClass("zebra");
+  $(".noheading tr:odd").addClass("zebra");
+});
+</script>
+
+<div class="clear"></div>
+<div class="footer">
+  <a href=http://www.iontorrent.com/support>Request Support</a>&nbsp;|&nbsp;<a href=/ion-docs/Home.html>Help/Documentation</a>&nbsp;|&nbsp;
+  <a href=/licenses/terms-of-use.txt>Terms of Use</a>
+  <br/>Copyright&nbsp;&copy; 2011<a href="http://www.iontorrent.com/">Life Technologies, Inc.</a>
+</div>
+
+<br/><br/></div>
+</body></html>

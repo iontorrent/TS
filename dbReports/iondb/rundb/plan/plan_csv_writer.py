@@ -65,7 +65,7 @@ def _get_sample_prep_kit_description(template):
 def _get_lib_kit_description(template):
     desc = ""
     if template:
-        kitName = template.librarykitname
+        kitName = template.get_librarykitname()
         desc = _get_kit_description("LibraryKit", kitName)
     return desc
 
@@ -87,7 +87,7 @@ def _get_control_seq_kit_description(template):
 def _get_seq_kit_description(template):
     desc = ""
     if template:
-        kitName = template.sequencekitname
+        kitName = template.get_sequencekitname()
         desc = _get_kit_description("SequencingKit", kitName)
     return desc
 
@@ -95,7 +95,7 @@ def _get_seq_kit_description(template):
 def _get_chip_type_description(template):
     desc = ""
     if template:
-        chipName = template.chipType
+        chipName = template.get_chipType()
         if chipName:
             try:
                 chip = Chip.objects.get(name = chipName)
@@ -106,7 +106,7 @@ def _get_chip_type_description(template):
 
 def _get_flow_count(template):
     if template:
-        return template.flows
+        return template.get_flows()
     return ""
 
 def _get_qc(qcName, template):
@@ -132,15 +132,15 @@ def _get_usable_seq_qc(template):
 def _get_reference(template):
     ref = ""
     if template:
-        ref = template.library
+        ref = template.get_library()
     return ref
 
 def _get_target_regions_bed_file(template):
     filePath = ""
     
-    if template and template.bedfile:
+    if template and template.get_bedfile():
         try:
-            bed = Content.objects.get(file = template.bedfile)
+            bed = Content.objects.get(file = template.get_bedfile())
             filePath = bed.path
         except:
             logger.exception(format_exc())
@@ -149,9 +149,9 @@ def _get_target_regions_bed_file(template):
 def _get_hotspot_regions_bed_file(template):
     filePath = ""
     
-    if template and template.bedfile:
+    if template and template.get_bedfile():
         try:
-            bed = Content.objects.get(file = template.regionfile)
+            bed = Content.objects.get(file = template.get_regionfile())
             filePath = bed.path
         except:
             logger.exception(format_exc())
@@ -160,10 +160,12 @@ def _get_hotspot_regions_bed_file(template):
 def _get_plugins(template, delimiter):
     plugins = ''
     
-    planPlugins = template.selectedPlugins.get("planplugins")
+    planPlugins = template.get_selectedPlugins()
     
     if planPlugins:
-        for planPlugin in planPlugins:
+        for planPlugin in planPlugins.values():
+            if 'export' in planPlugin.get('features',[]):
+                continue
             pluginName = planPlugin.get("name", '')
             if pluginName:
                 plugins += pluginName
@@ -176,12 +178,14 @@ def _get_plugins(template, delimiter):
 def _get_export(template, delimiter):
     uploaders = ''
     
-    planUploaders = template.selectedPlugins.get("planuploaders")
+    planPlugins = template.get_selectedPlugins()
     #logger.info("plan_csv_writer._get_export() planUploaders=%s" %(planUploaders))
     
-    if planUploaders:
-        for planUploader in planUploaders:
-            uploaderName = planUploader.get("name", '')
+    if planPlugins:
+        for planPlugin in planPlugins.values():
+            if 'export' not in planPlugin.get('features',[]):
+                continue
+            uploaderName = planPlugin.get("name", '')
             if uploaderName:
                 uploaders += uploaderName
                 uploaders += delimiter
@@ -206,7 +210,7 @@ def _get_projects(template, delimiter):
     return projectNames
 
 def _get_notes(template):
-    return template.notes
+    return template.get_notes()
 
 
 def _has_ir(template):
@@ -236,12 +240,12 @@ def _get_sample_name(template):
     return ""
 
 def _is_barcoded(template):
-    return True if template.barcodeId else False
+    return True if template.get_barcodeId() else False
 
 def _get_barcoded_sample_headers(template, prefix):
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.barcodeId)
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
         barcodeCount = barcodes.count()
         for barcode in barcodes:
             hdrs.append(barcode.id_str + prefix)
@@ -251,7 +255,7 @@ def _get_barcoded_sample_headers(template, prefix):
 def _get_barcoded_sample_names(template):
     cells = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.barcodeId)
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
         for barcode in barcodes:
             cells.append("")
 
@@ -260,7 +264,7 @@ def _get_barcoded_sample_names(template):
 def _get_barcoded_sample_IR_beyond_v1_0_headers(template, prefix):    
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.barcodeId)
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
         barcodeCount = barcodes.count()
         index = 0
         for barcode in barcodes:

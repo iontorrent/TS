@@ -165,7 +165,6 @@ body {
   width:100%;
   border-collapse:collapse;
   margin:0;
-  table-layout:fixed;
   background:white;
   border-spacing: 0;
   border:2px solid silver;
@@ -191,7 +190,6 @@ body {
 .statsdata table {
   width:100%;
   border-collapse:collapse;
-  table-layout:fixed;
   background:transparent;
   border-spacing:0;
   border:0;

@@ -17,7 +17,7 @@
 #include <sstream>
 #include <sstream>
 #include <sys/time.h>
-#include <emmintrin.h>
+#include <x86intrin.h>
 #include <string.h>
 #include "SampleStats.h"
 #include "SvdDatCompress.h"
@@ -588,7 +588,7 @@ void SvdDatCompress::Compress(TraceChunk &chunk, int8_t **compressed, size_t *ou
   bc.put_u32((int)mPrecision);
 
   // Pull off the mean for coefficients in B
-  SampleStats<double> stats[B.n_rows];
+  vector< SampleStats<double> > stats(B.n_rows);
   vector<float> coeffMeans(B.n_rows);
   coeffMeans.resize(B.n_rows);
   for (size_t row = 0; row < B.n_rows; row++) {

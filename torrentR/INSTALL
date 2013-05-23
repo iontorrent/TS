@@ -52,7 +52,7 @@ same OS that the Torrent Server runs.
    plug-ins use them.
 
      for PKG in \
-       Rcpp_0.7.8.tar.gz \
+       Rcpp_0.10.3.tar.gz \
        spam_0.22-0.tar.gz \
        plyr_1.0.3.tar.gz \
        reshape_0.8.3.tar.gz \

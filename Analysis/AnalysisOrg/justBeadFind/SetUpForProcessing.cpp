@@ -53,6 +53,17 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
     // get any state from beadFind
     LoadBeadFindState(inception_state, my_keys, my_image_spec);
 
+	// save current command line options to state file
+	std::string stateFile = inception_state.sys_context.analysisLocation + "/analysisState.json";
+    if (rename(stateFile.c_str(),(inception_state.sys_context.analysisLocation+"/analysisState_beadfind.json").c_str()) )
+    {
+      fprintf(stdout, "Unable to copy beadfind analysisState.json");
+    }
+    SetUpKeys(my_keys, inception_state.key_context, inception_state.flow_context);
+    ProgramState state ( stateFile );
+    state.Save ( inception_state,my_keys,my_image_spec );
+    state.WriteState();
+	
     inception_state.SetProtonDefault();
 
     // region layout saved in inception_state.loc_context

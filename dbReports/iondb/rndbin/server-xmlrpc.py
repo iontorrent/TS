@@ -12,7 +12,7 @@ from os import path
 
 import iondb.bin.djangoinit
 from iondb.rundb import models
-from iondb.backup import devices
+from iondb.utils import devices
 from django import db
 
 last_exp_size = 0
@@ -24,7 +24,7 @@ def get_current_location(ip_address):
         #log.error('No locations configured, please configure at least one location')
         return
     return cur_loc
-    
+
 def get_params(cur_loc):
     try:
         bk = models.BackupConfig.objects.get(location=cur_loc)
@@ -67,7 +67,7 @@ def get_server_full_space(cur_loc):
         if path.exists(fs.filesPrefix):
             ret.append(free_percent(fs.filesPrefix))
     return ret
-    
+
 def free_percent(path):
     resDir = os.statvfs(path)
     totalSpace = resDir.f_blocks
@@ -92,15 +92,15 @@ def build_exp_list(cur_loc, num, serverPath, removeOnly): #removeOnly needs to b
                                     str(e.expName),
                                     str(e.date),
                                     str(e.star),
-                                    str(e.storage_options), 
+                                    str(e.storage_options),
                                     str(e.expDir),
                                     location,
                                     e.pk)
-                        
+
             try:
                 # don't add anything to the list if its already archived
                 bk = models.Backup.objects.get(backupName=experiment.get_exp_name())
-                continue 
+                continue
             except:
                 # check that the path exists, and double check that its not marked to 'Keep'
                 if not path.islink(experiment.get_exp_path()) and \
@@ -108,7 +108,7 @@ def build_exp_list(cur_loc, num, serverPath, removeOnly): #removeOnly needs to b
                         experiment.location==cur_loc and \
                         experiment.get_storage_option() != 'KI' and \
                         path.samefile(experiment.get_prefix(),serverPath):
-                    experiments.append(experiment)                    
+                    experiments.append(experiment)
         else:
             return experiments
     return experiments
@@ -163,13 +163,13 @@ class Experiment:
 
     def get_storage_option(self):
         return self.store_opt
-    
+
     def get_prefix(self):
         '''This returns the first directory in the path'''
         temp = self.dir.split('/')[1]
         return '/'+temp
 
-      
+
 class Status(xmlrpc.XMLRPC):
     """Allow remote access to this server"""
 
@@ -184,7 +184,7 @@ class Status(xmlrpc.XMLRPC):
             serverFullSpace = get_server_full_space(cur_loc)
             for serverpath, space in serverFullSpace:
                 retdict[serverpath] = build_exp_list(cur_loc, params['NUMBER_TO_BACKUP'], serverpath, removeOnly)
-        
+
         db.reset_queries()
         return retdict
 
@@ -194,7 +194,7 @@ class Example(xmlrpc.XMLRPC):
     def xmlrpc_next_to_archive(self):
         '''Ion's function called from Service Tab'''
         return "FOOBAR"
-        
+
     def xmlrpc_echo(self, x):
         """
         Return all passed args.

@@ -172,6 +172,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"beadfind-num-threads",    required_argument,  NULL,               0},
     {"beadfind-sep-ref",    required_argument,  NULL,               0},
     {"beadfind-gain-correction",    required_argument,  NULL,               0},
+    {"beadfind-blob-filter",    required_argument,  NULL,               0},
     {"bead-washout",            no_argument,    NULL,       0},
     {"use-beadmask",      required_argument,  NULL,       0},
     {"bkg-use-duds",  required_argument, NULL, 0},
@@ -182,11 +183,20 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
 //---------------signal processing options
     {"readaheadDat",            required_argument,  NULL,             0},
     {"save-wells-freq",         required_argument,  NULL,             0},
+    {"wells-compression",       required_argument,  NULL,             0},
     {"gpuWorkLoad",             required_argument,  NULL,             0},
     {"numcputhreads",           required_argument,  NULL,       0},
-    {"gpu-single-flow-fit",           required_argument,  NULL,       0},
-    {"gpu-multi-flow-fit",           required_argument,  NULL,       0},
-
+    {"gpu-single-flow-fit",     required_argument,  NULL,       0},
+    {"gpu-single-flow-fit-blocksize",     required_argument,  NULL,       0},
+    {"gpu-single-flow-fit-l1config",     required_argument,  NULL,       0},
+    {"gpu-multi-flow-fit",      required_argument,  NULL,       0},
+    {"gpu-multi-flow-fit-blocksize",      required_argument,  NULL,       0},
+    {"gpu-multi-flow-fit-l1config",      required_argument,  NULL,       0},
+    {"gpu-single-flow-fit-type",      required_argument,  NULL,       0},
+    {"gpu-hybrid-fit-iter",      required_argument,  NULL,       0},
+    {"gpu-partial-deriv-blocksize",      required_argument,  NULL,       0},
+    {"gpu-partial-deriv-l1config",      required_argument,  NULL,       0},
+    {"gpu-fitting-only",        no_argument,  &bkg_control.gpuControl.doGpuOnlyFitting,  1},
     {"bkg-record",     no_argument,    &bkg_control.recordBkgModelData,  1},
     {"bkg-replay",     no_argument,    &bkg_control.replayBkgModelData,   1},
     {"restart-from",        required_argument,    NULL,   0},
@@ -197,7 +207,6 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"bkg-debug-param",     required_argument,    NULL,   0},
     {"debug-all-beads",         no_argument,    &bkg_control.debug_bead_only,              0}, // turn off what is turned on
     {"region-vfrc-debug",         no_argument,    &bkg_control.region_vfrc_debug,              1}, 
-    {"bkg-h5-debug",           required_argument,  NULL,               0},
     {"n-unfiltered-lib",        required_argument,        &bkg_control.unfiltered_library_random_sample,    1},
     {"bkg-dbg-trace",           required_argument,  NULL,               0},
 
@@ -210,6 +219,8 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"bkg-empty-well-normalization",required_argument,     NULL,  0},
     {"bkg-single-flow-retry-limit", required_argument,  NULL,       0},
     {"bkg-per-flow-time-tracking", required_argument,  NULL,       0},
+    {"bkg-exp-tail-fit",required_argument, NULL, 0},
+    {"bkg-pca-dark-matter",required_argument, NULL, 0},
     {"regional-sampling", required_argument,  NULL,       0},
     {"bkg-prefilter-beads", required_argument, NULL, 0},
     {"bkg-empty-well-normalization",required_argument,     NULL,  0},
@@ -234,6 +245,9 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"time-half-speed",     no_argument,    NULL,   0},
     {"pass-tau",            required_argument,  NULL,             0},
     {"single-flow-projection-search",required_argument,     NULL,  0},
+    {"nokey",         required_argument,  NULL,       0}, // experimental
+    {"vectorize", required_argument,  NULL,       0},
+    {"bkg-debug-files", no_argument,  &bkg_control.bkg_debug_files,      1},
 
 
 //-----------------spatial control
@@ -249,6 +263,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"img-gain-correct",required_argument,     NULL,  0},
     {"col-flicker-correct",required_argument,     NULL,  0},
     {"col-flicker-correct-verbose",required_argument,     NULL,  0},
+    {"col-flicker-correct-aggressive",required_argument, NULL, 0},
     {"nnMask",          required_argument,  NULL,       0},
     {"nnmask",          required_argument,  NULL,       0},
     {"nnMaskWH",        required_argument,  NULL,       0},
@@ -407,7 +422,17 @@ void CommandLineOpts::SetUpProcessing()
   printf ( "Proton 1.wells correction enabled   : %s\n",bkg_control.proton_dot_wells_post_correction ? "yes" : "no" );
   printf ( "Empty well normalization enabled    : %s\n",bkg_control.empty_well_normalization ? "yes" : "no" );
   printf ( "Per flow t-mid-nuc tracking enabled : %s\n",bkg_control.per_flow_t_mid_nuc_tracking ? "yes" : "no" );
-  printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "yes" : "no" );
+  switch (bkg_control.regional_sampling_type) {
+  case REGIONAL_SAMPLING_SYSTEMATIC :
+    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "systematic" : "no" );
+    break;
+  case REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED :
+    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "clonal" : "no" );
+    break;
+  default :
+    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "unknown type" : "no" );
+  }
+
   printf ( "Image gain correction enabled       : %s\n",img_control.gain_correct_images ? "yes" : "no" );
   printf ( "Col flicker correction enabled      : %s\n",img_control.col_flicker_correct ? "yes" : "no" );
   printf ( "timeout                             : %d\n",img_control.total_timeout);
@@ -481,6 +506,20 @@ void CommandLineOpts::SetProtonDefault()
 
     if ( !radio_buttons.regional_sampling_set )
       bkg_control.regional_sampling = true;
+
+    if ( !radio_buttons.col_flicker_correct_aggressive_set )
+      img_control.aggressive_cnc = true;
+    fprintf ( stdout, "Option %s: %s\n", "--col-flicker-correct-aggressive",(img_control.aggressive_cnc)?"on":"off");
+
+    if ( !radio_buttons.bkg_exp_tail_fit_set ) {
+      bkg_control.exp_tail_fit = true;
+      bkg_control.choose_time = 2;
+    }
+    fprintf ( stdout, "Option %s: %s\n", "--bkg-exp-tail-fit",(bkg_control.exp_tail_fit)?"on":"off");
+
+    if ( !radio_buttons.bkg_pca_dark_matter_set )
+      bkg_control.pca_dark_matter = true;
+    fprintf ( stdout, "Option %s: %s\n", "--bkg-pca-dark-matter",(bkg_control.pca_dark_matter)?"on":"off");
 
     if ( !radio_buttons.use_proton_correction_set )
     {
@@ -728,7 +767,7 @@ void CommandLineOpts::SetAnyLongSpatialContextOption ( char *lOption, const char
         fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
         exit ( EXIT_FAILURE );
       }
-      if ( (&loc_context.regionXSize <= 0) || (&loc_context.regionYSize <= 0) )
+      if ( (loc_context.regionXSize <= 0) || (loc_context.regionYSize <= 0) )
       {
         fprintf ( stderr, "Option Error: %s %s must be positive\n", original_name,optarg );
         exit ( EXIT_FAILURE );
@@ -920,6 +959,10 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
   {
     bfd_control.gainCorrection = atoi( optarg );
   }
+  if ( strcmp ( original_name, "beadfind-blob-filter" ) == 0 )
+  {
+    bfd_control.blobFilter = atoi( optarg );
+  }
   if ( strcmp ( original_name, "beadfind-num-threads" ) == 0 )
   {
     bfd_control.numThreads = atoi ( optarg );
@@ -929,6 +972,11 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
 
 void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const char *original_name )
 {
+  if ( strcmp ( lOption, "wells-compression" ) == 0 ) {
+    bkg_control.wellsCompression = atoi(optarg);
+    ION_ASSERT(bkg_control.wellsCompression >= 0 && bkg_control.wellsCompression <= 10, "--wells-compression must be between (0,10) inclusive.");
+    fprintf(stdout, "wells compression: %d\n", bkg_control.wellsCompression);
+  }
   if ( strcmp ( lOption, "save-wells-freq" ) == 0 )
   {
     bkg_control.saveWellsFrequency = atoi ( optarg );
@@ -1008,7 +1056,41 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
     }
     radio_buttons.per_flow_t_mid_nuc_tracking_set = true;
   }
-
+  if ( strcmp ( lOption, "bkg-exp-tail-fit" ) == 0 )
+  {
+    if ( !strcmp ( optarg,"off" ) )
+    {
+      bkg_control.exp_tail_fit = false;
+    }
+    else if ( !strcmp ( optarg,"on" ) )
+    {
+      bkg_control.exp_tail_fit = true;
+      bkg_control.choose_time = 2;  // if exp tail fitting is chosen...also force the necessary time compression
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    radio_buttons.bkg_exp_tail_fit_set = true;
+  }
+  if ( strcmp ( lOption, "bkg-pca-dark-matter" ) == 0 )
+  {
+    if ( !strcmp ( optarg,"off" ) )
+    {
+      bkg_control.pca_dark_matter = false;
+    }
+    else if ( !strcmp ( optarg,"on" ) )
+    {
+      bkg_control.pca_dark_matter = true;
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    radio_buttons.bkg_pca_dark_matter_set = true;
+  }
   if ( strcmp ( lOption, "regional-sampling" ) == 0 )
   {
     if ( !strcmp ( optarg,"off" ) )
@@ -1018,6 +1100,12 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
     else if ( !strcmp ( optarg,"on" ) )
     {
       bkg_control.regional_sampling = true;
+      bkg_control.regional_sampling_type = REGIONAL_SAMPLING_SYSTEMATIC;
+    }
+    else if ( !strcmp ( optarg,"clonal" ) )
+    {
+      bkg_control.regional_sampling = true;
+      bkg_control.regional_sampling_type = REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED;
     }
     else
     {
@@ -1297,7 +1385,7 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
   if ( strcmp ( original_name, "gopt" ) == 0 )
   {
     bkg_control.gopt = optarg;
-    if ( strcmp ( bkg_control.gopt, "disable" ) == 0 || strcmp ( bkg_control.gopt, "opt" ) == 0 );
+    if ( strcmp ( bkg_control.gopt, "disable" ) == 0 || strcmp ( bkg_control.gopt, "default" ) == 0 || strcmp ( bkg_control.gopt, "opt" ) == 0 );
     else
     {
       FILE *gopt_file = fopen ( bkg_control.gopt,"r" );
@@ -1409,13 +1497,13 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
 
   if ( strcmp ( lOption, "gpuworkload" ) == 0 )
   {
-    int stat = sscanf ( optarg, "%f", &bkg_control.gpuWorkLoad );
+    int stat = sscanf ( optarg, "%f", &bkg_control.gpuControl.gpuWorkLoad );
     if ( stat != 1 )
     {
       fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
       exit ( EXIT_FAILURE );
     }
-    else if ( ( bkg_control.gpuWorkLoad > 1 ) || ( bkg_control.gpuWorkLoad < 0 ) )
+    else if ( ( bkg_control.gpuControl.gpuWorkLoad > 1 ) || ( bkg_control.gpuControl.gpuWorkLoad < 0 ) )
     {
       fprintf ( stderr, "Option Error: %s must specify a value between 0 and 1 (%s invalid).\n", original_name,optarg );
       exit ( EXIT_FAILURE );
@@ -1423,32 +1511,122 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
   }
   if ( strcmp ( lOption, "gpu-single-flow-fit" ) == 0 )
   {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuSingleFlowFit );
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuSingleFlowFit );
     if ( stat != 1 )
     {
       fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
       exit ( EXIT_FAILURE );
     }
-    else if ( bkg_control.gpuSingleFlowFit != 0 && bkg_control.gpuSingleFlowFit != 1 )
+    else if ( bkg_control.gpuControl.gpuSingleFlowFit != 0 && bkg_control.gpuControl.gpuSingleFlowFit != 1 )
     {
       fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
       exit ( EXIT_FAILURE );
     }
   }
+  if ( strcmp ( lOption, "gpu-single-flow-fit-blocksize") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockSingleFit);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    else if ( bkg_control.gpuControl.gpuThreadsPerBlockSingleFit <= 0 )
+    {
+      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-single-flow-fit-l1config") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigSingleFit);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+
   if ( strcmp ( lOption, "gpu-multi-flow-fit" ) == 0 )
   {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuMultiFlowFit);
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuMultiFlowFit);
     if ( stat != 1 )
     {
       fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
       exit ( EXIT_FAILURE );
     }
-    else if ( bkg_control.gpuMultiFlowFit != 0 && bkg_control.gpuMultiFlowFit != 1 )
+    else if ( bkg_control.gpuControl.gpuMultiFlowFit != 0 && bkg_control.gpuControl.gpuMultiFlowFit != 1 )
     {
       fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
       exit ( EXIT_FAILURE );
     }
   }
+
+  if ( strcmp ( lOption, "gpu-multi-flow-fit-blocksize") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockMultiFit);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    else if ( bkg_control.gpuControl.gpuThreadsPerBlockMultiFit <= 0 )
+    {
+      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-multi-flow-fit-l1config") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigMultiFit);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-single-flow-fit-type") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuSingleFlowFitType);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-hybrid-fit-iter") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuHybridIterations);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-partial-deriv-blocksize") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockPartialD);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    else if ( bkg_control.gpuControl.gpuThreadsPerBlockMultiFit <= 0 )
+    {
+      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "gpu-partial-deriv-l1config") == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigPartialD);
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+
 
   if ( strcmp ( lOption, "numcputhreads" ) == 0 )
   {
@@ -1536,6 +1714,39 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
   {
     bkg_control.choose_time=1;
   }
+
+  if ( strcmp ( lOption, "nokey" ) == 0 )
+  {
+    if ( !strcmp ( optarg,"off" ) )
+    {
+      bkg_control.nokey = false;
+    }
+    else if ( !strcmp ( optarg,"on" ) )
+    {
+      bkg_control.nokey = true;
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+  if ( strcmp ( lOption, "vectorize" ) == 0 )
+  {
+    if ( !strcmp ( optarg,"off" ) )
+    {
+      bkg_control.vectorize = false;
+    }
+    else if ( !strcmp ( optarg,"on" ) )
+    {
+      bkg_control.vectorize = true;
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
 }
 
 void CommandLineOpts::SetAnyLongImageProcessingOption ( char *lOption, const char *original_name )
@@ -1573,6 +1784,23 @@ void CommandLineOpts::SetAnyLongImageProcessingOption ( char *lOption, const cha
         fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
         exit ( EXIT_FAILURE );
       }
+    }
+    if ( strcmp ( lOption, "col-flicker-correct-aggressive" ) == 0 )
+    {
+      if ( !strcmp ( optarg,"off" ) )
+      {
+        img_control.aggressive_cnc = false;
+      }
+      else if ( !strcmp ( optarg,"on" ) )
+      {
+        img_control.aggressive_cnc = true;
+      }
+      else
+      {
+        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+        exit ( EXIT_FAILURE );
+      }
+      radio_buttons.col_flicker_correct_aggressive_set = true;
     }
 
   if ( strcmp ( lOption, "img-gain-correct" ) == 0 )

@@ -84,7 +84,7 @@ def alignTFs(basecaller_bam_filename,bam_filename,fasta_filename):
 
     # Step 2. Perform mapping of the bam file
 
-    com1 = "tmap mapall -n 12 -f %s -r %s -Y -v stage1 map1 map2 map3" % (indexFile, basecaller_bam_filename)
+    com1 = "tmap mapall -n 12 -f %s -r %s -Y -v stage1 map4" % (indexFile, basecaller_bam_filename)
     com2 = "samtools view -Sb -o %s -" % bam_filename
     p1 = subprocess.Popen(com1, stdout=subprocess.PIPE, shell=True)
     p2 = subprocess.Popen(com2, stdin=p1.stdout, shell=True)

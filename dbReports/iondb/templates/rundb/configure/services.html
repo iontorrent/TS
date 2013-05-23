@@ -8,8 +8,46 @@
   <li><a href="{% url configure_account %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
-<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
 <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css"/>
+<link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        zoom: 1;
+		*display: inline;
+        width: 200px;
+        height: 10px;
+        float: left;
+        margin: 0 15px 15px 0;
+    }
+    .search-field [name=rangeA] {
+        margin: 0px;
+        width: 190px;
+    }
+    .icon-unchecked {
+        opacity: 0.25;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=25);
+    }
+    .icon-unchecked:hover {
+        opacity: 1.0;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=100);
+    }
+	.filter-field {
+		width:100px;
+		margin:0px;
+		font-size:small;
+	}
+</style>
+
+<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+<script src="/site_media/js/date.min.js"></script>
+<script src="/site_media/js/jquery.daterangepicker.js"></script>
+
 <script type="text/javascript">
 function terminate_job(url,name){
     apprise("\nAre you sure you want to terminate " + name + "?\n", {'verify': true}, function (r) {
@@ -22,143 +60,383 @@ function terminate_job(url,name){
 		}
 	});
 }
-$(document).ready(function () {
-	$(".id_storage_options").change(function () {
-		if ($(this).val() === "D") {
-		  $("#" + $(this).data("runname")).show();
-		} else {
-		  $("#" + $(this).data("runname")).hide();
-		}
-	});
-  
-	$(".acknowledgeButton").click(function () {
-		runpk = $(this).data("runpk");
-	
-		if ($(this).prop("checked")) {
-		  runstate = "A"
-		} else {
-		  runstate = "S"
-		}
-	
-		$.ajax({
-		  url: 'expack/',
-		  dataType: 'json',
-		  type: 'POST',
-		  async: false,
-		  contentType: "application/json; charset=utf-8",
-		  data: "runpk=" + runpk + "&runstate=" + runstate,
-		  success: function (data) {
-		  }
-		});
-	});
-	
-	$(".enable_archive").change(function(){
-		pk = $(this).data("bkpk");
-		if ($(this).is(':checked')) {
-			setstr = '1';
-		}
-		else {
-			setstr = '0';
-		}
-		$.ajax({
-			type: "POST",
-			url: "/configure/services/enablearchive/" + pk + "/" + setstr
-		});
-	});
-	
-	$(".id_storage_options").change(function(){
-		runpk = $(this).data("runpk");
-		name = $(this).data("runname");
-		setstr = $(this).val();
-		var message = null;
-		if (setstr == 'A') {
-			message = 'Archive';
-		}
-		else if (setstr == 'D') {
-			message = 'Delete';
-		}
-		else if (setstr == 'KI') {
-			message = 'Keep';
-		}
-		//Change storage_options immediately - no confirmation box.
-		$.ajax({
-			type: "POST",
-			url: "/configure/services/storage/" + runpk + "/" + setstr
-		});
-	});
 
-	    $('.queueStat').live('click',function(e){
-		    e.preventDefault();	
-		    url = $(this).attr('href');	
-		    $('body #modal_queuestat').remove();	
+function filter(e){
+	  e.preventDefault();
+	  e.stopPropagation();
+
+	  var id = $(e.currentTarget).data('id');
+	  var daterange = $("#rangeA_"+id).val();
+
+    if (daterange) {
+        if (!/ - /.test(daterange)) {
+            daterange = daterange + ' - ' + daterange;
+        }
+        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
+    }
+
+	  $("#grid_"+id).data("kendoGrid").dataSource.filter([
+		  {
+			  field: "timeStamp",
+			  operator: "__range",
+			  value: daterange
+		  }
+		  , {
+			  field: "search_name",
+			  operator: "",
+			  value: $("#search_text_"+id).val()
+		  }
+		  , {
+			field: "sigproc_filter",
+			operator: "",
+			value: $("#filter_sigproc_"+id).val()
+		  }
+		  , {
+			field: "basecall_filter",
+			operator: "",
+			value: $("#filter_basecall_"+id).val()
+		  }
+		  , {
+			field: "output_filter",
+			operator: "",
+			value: $("#filter_output_"+id).val()
+		  }
+		  , {
+			field: "misc_filter",
+			operator: "",
+			value: $("#filter_misc_"+id).val()
+		  }
+	  ]);
+}
+
+function show_ack(data){
+    if(data.sigproc_keep=='true'){
+        return false;
+    } else if (data.sigproc_state == 'Notified' || data.sigproc_state == 'Selected' || data.sigproc_state == 'Acknowledged'){
+        return true;
+    }
+    return false;
+}
+
+function refresh_grid_timer(source, refresh){
+	var grid = $(source).data('kendoGrid');
+	clearInterval(grid.update_timer);
+	if (refresh)
+		grid.update_timer = setInterval(function(){ grid.dataSource.read(); }, 10000);
+}
+
+
+$(document).ready(function () {
+
+	$('.queueStat').live('click',function(e){
+		    e.preventDefault();
+		    url = $(this).attr('href');
+		    $('body #modal_queuestat').remove();
 		    $.get(url, function(data) {
 		       $('body').append(data);
 		       $( "#modal_queuestat" ).modal("show");
 		       return false;
 		    })
-	    });
+	});
 
-	$(".acknowledgeButton").click(function () {
-		runpk = $(this).data("runpk");
-	
-		if ($(this).prop("checked")) {
-		  runstate = "A"
-		} else {
-		  runstate = "S"
-		}
-	
+	$("#enable_archive").change(function(){
+		var enabled = $(this).is(':checked');
 		$.ajax({
-		  url: 'expack/',
-		  dataType: 'json',
-		  type: 'POST',
-		  async: false,
-		  contentType: "application/json; charset=utf-8",
-		  data: "runpk=" + runpk + "&runstate=" + runstate,
-		  success: function (data) {
-		  }
+			type: "PATCH",
+			dataType: 'json',
+			url: "/rundb/api/v1/globalconfig/1/",
+			data: '{"auto_archive_enable":'+enabled+'}',
+			contentType: 'application/json'
+		}).done(function(data) {
+			if (enabled) {
+				var log_entry = 'ENABLED Data Management automactic action';
+			} else {
+				var log_entry = 'DISABLED Data Management automactic action';
+			}
+			$.post('{% url dm_configuration_log %}', {log: log_entry});
+		});
+	});
+
+	$("#dm_config_log").click(function(e){
+		e.preventDefault();
+		$('body #modal_event_log').remove();
+		$.get($(this).attr('href'), function(data) {
+			$('body').append(data);
+			$( "#modal_event_log" ).modal("show");
+			return false;
 		});
 	});
 	
-	$(".enable_archive").change(function(){
-		pk = $(this).data("bkpk");
-		if ($(this).is(':checked')) {
-			setstr = '1';
-		}
-		else {
-			setstr = '0';
-		}
-		$.ajax({
-			type: "POST",
-			url: "/configure/services/enablearchive/" + pk + "/" + setstr
-		});
+	$('[name=rangeA]').each(function(){ $(this).daterangepicker({dateFormat: 'yy-mm-dd'}); });
+	$('.rangeA').change(function (e) { filter(e); });
+	$('.search_text').change(function (e) { filter(e); });
+	$('.filter_state').change(function (e) { filter(e); });
+	$('.clear_filters').click(function (e) {
+		var id = $(e.currentTarget).data('id');
+		$('#search_bar_'+id).find('input').each(function(){$(this).val(''); });
+		$('#search_bar_'+id).find('select').each(function(){$(this).val(''); });
+		filter(e);
 	});
-	
-	//modal job status goes here.
-	
-	$(".id_storage_options").change(function(){
-		
-		runpk = $(this).data("runpk");
-		name = $(this).data("runname");
-		setstr = $(this).val();
-		var message = null;
-		if (setstr == 'A') {
-			message = 'Archive';
-		}
-		else if (setstr == 'D') {
-			message = 'Delete';
-		}
-		else if (setstr == 'KI') {
-			message = 'Keep';
-		}
-		//Change storage_options immediately - no confirmation box.
-		$.ajax({
-			type: "POST",
-			url: "/configure/services/storage/" + runpk + "/" + setstr
+
+	// Data Space Management tables
+	{% for server in dm_tables %}
+		console.log('url', "{{server.url|safe}}")
+		$("#grid_"+"{{forloop.counter}}").kendoGrid({
+			dataSource: {
+				type: "json",
+				transport: {
+					read: "{{server.url|safe}}",
+					parameterMap: function(options) {
+						return buildParameterMap(options)
+					}
+				},
+				schema: {
+					data: "objects",
+					total: "meta.total_count",
+					model: {
+						fields: {
+							id: {type: "number"},
+							resultsName: { type: "string" },
+							expName: { type: "string" },
+							reportLink: { type: "string" },
+							timeStamp: { type: "string" },
+							diskusage: {type:"string"},
+							sigproc_state: {type:"string"},
+							basecall_state: {type:"string"},
+							output_state: {type:"string"},
+							misc_state: {type:"string"},
+							sigproc_keep: {type:"string"},
+							basecall_keep: {type:"string"},
+							output_keep: {type:"string"},
+							misc_keep: {type:"string"}
+						}
+					}
+				},
+				serverPaging: true,
+				serverFiltering: true,
+				serverSorting: true,
+				sort: { field: "timeStamp", dir: "desc" },
+				pageSize: 10
+			},
+			height: 'auto',
+			groupable: false,
+			sortable: true,
+			selectable: false,
+			pageable: true,
+			scrollable: false,
+			columns: [ {
+					field: "resultsName",
+					title: "Report Name",
+					width: '25%',
+					template: "<a href=/report/${id}>${resultsName}</a>"
+				} , {
+					field: "userAck",
+					title: "Acknowledge",
+					sortable: false,
+					width: '90px',
+					template: kendo.template($("#ackDeleteTemplate").html())
+				} , {
+					field: "expName",
+					title: "Run Name",
+					width: '25%',
+				} , {
+					field: "timeStamp",
+					title: "Date",
+					width: '10%',
+					template: '#= kendo.toString(new Date(Date._parse(timeStamp)),"yyyy/MM/dd hh:mm tt") #'
+				} , {
+					field: "diskusage",
+					title: "Size (MB)",
+					sortable: false,
+					width: '65px'
+				} , {
+					field: "sigproc_keep",
+					title: "Keep",
+					sortable: false,
+					width: '45px',
+					template: kendo.template($("#keepSigproc").html())
+				} , {
+					field: "sigproc_state",
+					title: "SignalProcessing",
+					sortable: false,
+					width: '110px',
+				} , {
+					field: "basecall_keep",
+					title: "Keep",
+					sortable: false,
+					width: '45px',
+					template: kendo.template($("#keepBasecall").html())
+				} , {
+					field: "basecall_state",
+					title: "Basecalling",
+					sortable: false,
+					width: '80px',
+				} , {
+					field: "output_keep",
+					title: "Keep",
+					sortable: false,
+					width: '45px',
+					template: kendo.template($("#keepOutput").html())
+				} , {
+					field: "output_state",
+					title: "Output",
+					sortable: false,
+					width: '60px',
+				} , {
+					field: "misc_keep",
+					title: "Keep",
+					sortable: false,
+					width: '45px',
+					template: kendo.template($("#keepMisc").html())
+				} , {
+					field: "misc_state",
+					title: "Intermediate",
+					sortable: false,
+					width: '85px',
+				} , {
+					title: "",
+					sortable: false,
+					width: '55px',
+					template: kendo.template($("#ActionColumnTemplate").html())
+				}
+			],
+			dataBound: function(e) {
+				var source = "#grid_"+"{{forloop.counter}}";
+
+				$(source + " .dm-actions").click(function(e){
+					e.preventDefault();
+					$('body #modal_dm_actions').remove();
+					url = $(this).attr('href');
+					$.get(url, function(data) {
+						$('body').append(data);
+						$( "#modal_dm_actions" ).modal("show");
+						$('body #modal_dm_actions').on('modal_dm_actions_done', function () {
+							refreshKendoGrid(source);
+							refresh_grid_timer(source, true);
+						});
+						return false;
+					});
+				});
+
+				$(source + " .dm-log").click(function(e){
+					e.preventDefault();
+					$('body #modal_event_log').remove();
+					$.get($(this).attr('href'), function(data) {
+						$('body').append(data);
+						$( "#modal_event_log" ).modal("show");
+						return false;
+					});
+				});
+
+				$(".autoExempt").change(function () {
+					var pk = $(this).attr('data-pk');
+					var type = $(this).attr('data-type');
+					var checked = $(this).is(':checked');
+
+					$.ajax({
+						url: 'preserve_data/',
+						dataType: 'json',
+						type: 'POST',
+						async: false,
+						contentType: "application/json; charset=utf-8",
+						data: "reportpk=" + pk + "&keep=" + checked + "&type=" + type,
+						success: function (data) {
+							console.log(data);
+							refreshKendoGrid(source);
+						}
+					});
+
+				});
+
+				$(".acknowledge").change(function (e) {
+				  e.stopPropagation();
+					var pk = $(this).attr('data-pk');
+					var runstate = $(this).is(':checked') ? "A":"S";
+
+					$.ajax({
+						url: 'ack/',
+						dataType: 'json',
+						type: 'POST',
+						async: false,
+						contentType: "application/json; charset=utf-8",
+						data: "runpk=" + pk + "&runstate=" + runstate,
+						success: function (data) {
+							console.log(data);
+							refreshKendoGrid(source);
+						}
+					});
+
+				});
+
+				var gridDataArray = this._data;
+				var hide_userAck = true;
+				var in_process_state = false;
+				for( var i=0; i<gridDataArray.length;i++) {
+					if( show_ack(gridDataArray[i]) ) hide_userAck = false;
+					if( gridDataArray[i].in_process ) in_process_state = true;
+				}
+				// hide Acknowledge column if no runs need to be acknowledged
+				if(hide_userAck){
+					this.hideColumn("userAck");
+				}
+				else{
+					this.showColumn("userAck");
+				}
+				// periodically refresh data when states are in-process
+				refresh_grid_timer(source, in_process_state);
+			}
 		});
-	});
+	{% endfor %}
 });
 </script>
-	
+
+<script id="ActionColumnTemplate" type="text/x-kendo-template">
+	<div class="btn-group">
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"></img></a>
+		<ul class="dropdown-menu pull-right">
+			<li>
+				<a class="dm-actions" href="#= '{% url dm_actions '99999' %}'.replace('99999',id)#" title="Data Management Actions">Actions</a>
+			</li>
+			<li>
+				<a class="dm-log" href="#= '{% url dm_log '99999' %}'.replace('99999',id)#" title="Data Management Log">View Log</a>
+			</li>
+
+		</ul>
+	</div>
+</script>
+
+<script id="keepSigproc" type="text/x-kendo-template">
+	# if (data.sigproc_keep) { #
+    <input id='keepSig-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="sig" # if(data.sigproc_keep=='true'){ # checked="checked" # } # >
+	# } #
+</script>
+<script id="keepBasecall" type="text/x-kendo-template">
+	# if (data.basecall_keep) { #
+    <input id='keepBase-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="base" # if(data.basecall_keep=='true'){ # checked="checked" # } # >
+	# } #
+</script>
+<script id="keepOutput" type="text/x-kendo-template">
+	# if (data.output_keep) { #
+    <input id='keepOut-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="out" # if(data.output_keep=='true'){ # checked="checked" # } # >
+	# } #
+</script>
+<script id="keepMisc" type="text/x-kendo-template">
+	# if (data.misc_keep) { #
+    <input id='keepIntr-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="intr" # if(data.misc_keep=='true'){ # checked="checked" # } # >
+	# } #
+</script>
+
+<script id="ackDeleteTemplate" type="text/x-kendo-template">
+	# if (show_ack(data)) { #
+		<input id='ackDelete-#=id#' type='checkbox' class="acknowledge" data-pk="#=id#"
+		# if (data.sigproc_state == 'Acknowledged') { #
+			checked="checked"
+		# } #
+		>
+		<label class="acknowledgeLabel" for="ackDelete-#=id#"> Delete </label>
+	# } #
+</script>
+
 	<div class="content clearfix">
 		<h1>Jobs Server</h1>
 		<table class="data-table">
@@ -193,7 +471,7 @@ $(document).ready(function () {
 				</tr>
 			{% endspaceless %}{% endfor %}
 			</tbody>
-		</table>	
+		</table>
 		<table class="data-table">
 			<thead>
 				<tr>
@@ -215,15 +493,15 @@ $(document).ready(function () {
 			  </tr>
 			{% endfor %}
 			</tbody>
-		</table>			
-	</div>			
+		</table>
+	</div>
 	<div class="content clearfix">
 		<h1>Active Jobs</h1>
 		<h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
 		<br>
 		{% if not jobs.jobs %}
 			<p class="centered_message">No active jobs.</p>
-		{% else %}		
+		{% else %}
 		<table class="data-table">
 			<thead>
 				<tr>
@@ -251,7 +529,7 @@ $(document).ready(function () {
 						{% else %}
 						<td>{{ report.resultsName }}</td>
 					  {% endif %}
-		
+
 					  <td class="termtd">
 						<a href="javascript:terminate_job('{% url control_job report.pk "term" %}', '{{ report.resultsName }}')">
 						  Terminate
@@ -261,9 +539,9 @@ $(document).ready(function () {
 				  {% endspaceless %}{% endfor %}
 			</tbody>
 		</table>
-		{% endif %}			
-		</div>			
-	
+		{% endif %}
+		</div>
+
 	<div class="content clearfix">
 
 		<h1>ionCrawler Service Details</h1>
@@ -317,164 +595,196 @@ $(document).ready(function () {
 			</tbody>
 		</table>
 		{% endif %}
-	</div>			
+	</div>
 	<div class="content clearfix">
-		<h1>ionArchive Service Details</h1>
-		<br />
+		<h1>Data Management</h1>
 		<div class="content">
 			<h2>Configuration</h2>
 			<br/>
-			<table class="data-table">
+			<table class="data-table" border="0">
 				<thead>
 					<tr>
-						<th></th>
-						<th>Enabled</th>
-						<th>ionArchive Status</th>
-						<th>Current Activity</th>
-						<th>Auto-Acknowledge</th>
+						<th rowspan="2"></th>
+						<th rowspan="2">Enabled</th>
+						<th rowspan="2">Auto-Acknowledge</th>
+						<th colspan="4" style="text-align:center;">Default Storage Settings</th>
+						<th rowspan="2"></th>
+					</tr>
+					<tr>
+						{%for entry in dm_filesets %}
+							<th>{{entry.type}}</th>
+						{% endfor %}
 					</tr>
 				</thead>
 				<tbody>
-					{% for bu in backups %}{% spaceless %}
+					{% spaceless %}
 					<tr class="{% cycle 'row1' 'row2' %}">
 						<td>
-							<a href="{% url edit_archive bu.pk %}">Edit</a>
+							<a href="{% url dm_configuration %}">Configure</a>
 						</td>
 						<td class='archive_td'>
-							<input {% if bu.online %}checked{% endif %} type='checkbox'
-								class="enable_archive"
-								data-bkpk="{{ bu.pk }}"
-								id='enableArchive_{{bu.pk}}'/>
+							<input {% if autoArchiveEnable %}checked{% endif %} type='checkbox' id="enable_archive">
 						</td>
-
-						{% if iastatus %}
-							<td>Running</td>
-							<td>{{ bu.status }}</td>
-						{% else %}
-							<td>Down</td>
-							<td>-</td>
-						{% endif %}
-						<td>{% if autoArchive %}Enabled{% else %}Disabled{% endif %}</td>
+						<td>
+							{% if autoArchive %}Enabled{% else %}Disabled{% endif %}
+						</td>
+						{%for entry in dm_filesets %}
+							<td>{{entry.get_auto_action_display}}</td>
+						{% endfor %}
+						<td>
+							<a href= {% url dm_configuration_log %} id="dm_config_log" class="btn">Configuration Log</a>
+							<a href= {% url dm_history %} id="dm_history" class="btn" style="margin-left:5px">History</a>
+						</td>
 					</tr>
 					{% endspaceless %}
-					{% endfor %}
 				</tbody>
 			</table>
-			
-			<table class="data-table">
+			<br />
+			<table class="data-table" border="0">
 				<thead>
 					<tr>
-					<th>Archive Location</th>
+					<th>Data Archive</th>
 					<th>Mounted</th>
+					<th></th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for bu in backups %}{% spaceless %}
+					{% for entry in archive_paths %}{% spaceless %}
 						<tr class="{% cycle 'row1' 'row2' %}">
-							<td>{{ bu.backup_directory }}</td>
-							{% if bu.check_if_online %}
+							<td>{{ entry.backup_directory }}</td>
+							{% if entry.exists %}
 								<td>Mounted</td>
 							{% else %}
 								<td>Not Mounted</td>
 							{% endif %}
+							<td></td>
 						</tr>
 					{% endspaceless %}
-					{% endfor %}
-					<tr>
-						<th>Filesystem</th>
-						<th>Used Space</th>
-					</tr>
-					{% for key,value in fs_stats.items %}
-						<tr>
-							<td>{{ key }}</td>
-							<td><img src="{{ value|floatformat:1 }}/file_server_status.png">
-						</tr>
 					{% endfor %}
 				</tbody>
 			</table>
 		</div>
 
 		<div id="advancedSec" class="content">
-			<h2>Usage</h2>
+			<h2>Disk Usage</h2>
 			<div class="">
-				{% if backups.0.check_if_online %}
-				<img src="archive_drivespace.png">
-				{% endif %}<br />
-				<img src="arch_gone.png"><br />
-				<!--
-				<img src="file_server_status.png">
-				<img src="per_file_server_status.png">
-				-->
-				<img src="residence_time.png">
+				<table class="data-table" border="0">
+					<thead>
+						<tr>
+							<th>Filesystem</th>
+							<th>Used Space</th>
+							<th>Used Space</th>
+							<th>Size (GB)</th>
+							<th>Free (GB)</th>
+							<th>Raw Data (GB)</th>
+							<th>Reports (GB)</th>
+							<th>Other (GB)</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for key,v in fs_stats.items %}
+							<tr>
+								<td align="center">{{ key }}</td>
+								<td align="left"><img title="Threshold shown is for Signal Processing Input"
+													  src="{{ v.percentfull|floatformat:1 }}/file_server_status.png"></td>
+								<td>{{ v.percentfull|floatformat:1 }}%</td>
+								<td>{{ v.disksize|floatformat:1 }}</td>
+								<td>{{ v.diskfree|floatformat:1 }}</td>
+								<td>{{ v.rawused|floatformat:1 }}</td>
+								<td>{{ v.reportsused|floatformat:1 }}</td>
+								<td>{{ v.other|floatformat:1 }}</td>
+							</tr>
+						{% endfor %}
+						{% for entry in archive_paths %}
+							{% if entry.exists %}
+							<tr>
+								<td>{{ entry.backup_directory }}</td>
+								<td><img src="{{ entry.id }}/archive_drivespace.png"></td>
+								<td>{{ entry.percentfull|floatformat:1 }}%</td>
+								<td>{{ entry.disksize|floatformat:1 }}</td>
+								<td>{{ entry.diskfree|floatformat:1 }}</td>
+								<td></td>
+								<td></td>
+								<td></td>
+							</tr>
+							{% endif %}
+						{% endfor %}<br />
+					</tbody>
+				</table>
+				<br />
 			</div>
 		</div>
 		<div class="content">
-			<h2>Contents
+			<h2>Disk Space Management
 				<small>
-					A Run will not be removed unless authorized. Click the <em>Acknowledge</em> check box to authorize removal.
+					Signal Processing Data will not be automatically removed unless authorized. Click the Acknowledge check box to authorize removal.
 				</small>
 			</h2>
 			<br />
-				{% for key,values in to_archive.items %}
-					{% if values %}
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th colspan="5">{{ key }}</th>
-							</tr>
-							<tr>
-								<th>Run</th>
-								<th>Run Date</th>
-								<th>Size (Mb)</th>
-								<th>Storage Option</th>
-								<th>Acknowledge Delete</th>
-							</tr>
-						</thead>
-						<tbody>
-							{% for v in values %}
-							<tr class="{% cycle 'row1' 'row2' %}">
-								<td>{{ v.name }}</td>
-								<td>{{ v.date }}</td>
-                                <!--TODO: Clean up this formatting.  Desire right-justified column of numbers-->
-								<td style="text-align:right">{{ v.diskusage }}&nbsp;&nbsp;&nbsp;</td>
-								<td class='ch_storage_td'>
-									<select name="storage_options"
-									data-runname="{{ v.name|slugify }}"
-									class="id_storage_options"
-									data-runpk="{{ v.pk }}"
-									data-expname="{{ v.name }}">
-										<option value="KI"
-										{% ifequal v.store_opt "KI" %}selected="selected"{% else %}{% endifequal %}> Keep </option>
-										<option value="A"
-										{% ifequal v.store_opt "A" %}selected="selected"{% else %}{% endifequal %}> Archive Raw </option>
-										<option value="D"
-										{% ifequal v.store_opt "D" %}selected="selected"{% else %}{% endifequal %}> Delete Raw </option>
-									</select>
-								</td>
-								<td>
-									<div id="{{ v.name|slugify }}" 
-										class="acknowledgeGroup"
-										style="{% ifequal v.store_opt "D" %}display: inline;{% else %}display: none;{% endifequal %}">
-									{% spaceless %}
-										<input id="{{ v.name|slugify }}_box"
-											data-runpk="{{ v.pk }}"  class="acknowledgeButton"
-											type="checkbox"
-											{% ifequal v.user_ack "A" %}
-												CHECKED
-											{% endifequal %}
-											/>
-									{% endspaceless %}
-									<label class="acknowledgeLabel"
-										for="{{ v.name|slugify }}_box">Acknowledge </label>
-									</div>
-								</td>
-							</tr>
-							{% endfor %}				
-						</tbody>
-					</table>
-					{% endif %}
-				{% endfor %}
-			</div>
+			{% for server in dm_tables %}
+				<h2> {{server.filesPrefix|safe}} </h2>
+				<div id="search_bar_{{forloop.counter}}" class="well" style="margin-top:5px;">
+					{%spaceless%}
+					<div class="row-fluid">
+						<div class="search-field">
+							<label for="rangeA" class="hide">Report Date</label>
+							<input type="text" name="rangeA" class="rangeA" data-id="{{forloop.counter}}" id="rangeA_{{forloop.counter}}" placeholder="Report Date"/>
+						</div>
+						<div class="input-append search-field">
+							<label for="search_text" class="hide">Search Report Names</label>
+							<input id="search_text_{{forloop.counter}}" data-id="{{forloop.counter}}" class="search_text" type="text" placeholder="Search names" style="width: 150px;" />
+							<button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+						</div>
+						<button id="clear_filters_{{forloop.counter}}" data-id="{{forloop.counter}}" class="btn pull-left clear_filters" type="button" style="margin: 0 0 0 10px">Clear</button>
+						<div class="pull-right">
+							Filter:<small> SigProc
+							<select id='filter_sigproc_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Signal Processing Input">
+								<option value="">Any</option>
+								<option value="K">Keep</option>
+								<option value="L">Local</option>
+								<option value="AD">Archived</option>
+								<option value="DD">Deleted</option>
+								<option value="P">In-process</option>
+								<option value="E">Error</option>
+							</select>
+							Basecalling
+							<select id='filter_basecall_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Basecalling Input">
+								<option value="">Any</option>
+								<option value="K">Keep</option>
+								<option value="L">Local</option>
+								<option value="AD">Archived</option>
+								<option value="DD">Deleted</option>
+								<option value="P">In-process</option>
+								<option value="E">Error</option>
+							</select>
+							Output
+							<select id='filter_output_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Output Files">
+								<option value="">Any</option>
+								<option value="K">Keep</option>
+								<option value="L">Local</option>
+								<option value="AD">Archived</option>
+								<option value="DD">Deleted</option>
+								<option value="P">In-process</option>
+								<option value="E">Error</option>
+							</select>
+							Intermediate
+							<select id='filter_misc_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Intermediate Files">
+								<option value="">Any</option>
+								<option value="K">Keep</option>
+								<option value="L">Local</option>
+								<option value="AD">Archived</option>
+								<option value="DD">Deleted</option>
+								<option value="P">In-process</option>
+								<option value="E">Error</option>
+							</select>
+							</small>
+						</div>
+					</div>
+					{%endspaceless%}
+				</div>
+				<div id="grid_{{forloop.counter}}" style="margin-top: 5px; margin-bottom: 5px;"></div>
+			{% endfor %}
 		<div class="clear"></div>
-	</div>	
+	</div>
+
 {% endblock content %}

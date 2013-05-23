@@ -23,7 +23,7 @@ uptime
 echo
 echo "=================================================================="
 echo "Ion Software Package Status:"
-dpkg -l 'ion-*' tmap
+dpkg -l 'ion-*'
 echo
 echo "=================================================================="
 echo "Reference Library Installed:"

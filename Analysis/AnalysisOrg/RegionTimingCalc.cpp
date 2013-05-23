@@ -52,10 +52,11 @@ void FindStartingParametersForBkgModel(GaussianExponentialParams &my_initial_par
 
 void FillOneRegionTimingParameters(RegionTiming *region_time, Region *regions, int r, AvgKeyIncorporation *kic){
      // Extract what we need from the incorporation trace
-      int T0Start = kic->GetStart(r,regions[r].row,
+      float T0Start = kic->GetStart(r,regions[r].row,
                                        regions[r].row + regions[r].h,
                                        regions[r].col, regions[r].col+regions[r].w);
-     float *avg_sig = kic->GetAvgKeySig(r,
+      
+      float *avg_sig = kic->GetAvgKeySig(r,
                        regions[r].row, regions[r].row + regions[r].h,
                        regions[r].col, regions[r].col + regions[r].w);
       int avg_len = kic->GetAvgKeySigLen();
@@ -72,7 +73,7 @@ void FillOneRegionTimingParameters(RegionTiming *region_time, Region *regions, i
         my_initial_params.t_mid_nuc, my_initial_params.tau,
         my_fit_residual,
         T0Start);*/ // now dumped directly to file
-        
+      region_time[r].t0_frame = T0Start; 
         region_time[r].t_mid_nuc = T0Start + my_initial_params.t_mid_nuc;
         region_time[r].t_sigma = my_initial_params.sigma;
 }

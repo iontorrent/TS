@@ -1,152 +1,143 @@
 {% extends "rundb/configure/base.html" %}
 {% block content %}
 
-  <style>
-    table, th, tr {
-      border-collapse: collapse;
-    }
-
-    tr, th, td {
-      border-left: 0px;
-      border-right: 0px;
-      border-bottom: 1px solid black;
-      padding-top: 10px;
-      padding-bottom: 10px;
-      margin: 10px;
-      font-size: 10pt;
-      margin-left: 10px;
-
-    }
-
-    input {
-      margin-right: 15px;
-    }
-
-    #toolbar {
-      padding: .5em;
-      margin: 1px;
-      margin-top: 20px;
-      font-size: 12px;
-      margin-bottom: 6px;
-      overflow: hidden;
-    }
-
-    #save {
-      float: right;
-    }
-
-    #can {
-      float: right;
-    }
-  </style>
-
-  <script>
-    $(document).ready(function () {
-
-      $("#toolbar").addClass("ui-widget-header ui-corner-all");
-
-      $("#save").button();
-      $("#can").button();
-
-    });
-  </script>
-
-  <div class="margins">
-    {% if name %}
-      <h1>{{ name }}</h1>
-    {% endif %}
-    <form action="" method='post' enctype="multipart/form-data">
-      <table>
-        <tbody>
-        <tr>
-          <th>{{ temp.archive_directory.label }}</th>
-          <td>{{ temp.archive_directory }}</td>
-          <td>
-            {{ temp.archive_directory.errors }} Select the archive directory.
-            The archive directory appears in the drop down menu after the drive
-            is mounted.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.number_to_archive.label }}(Runs)</th>
-          <td>{{ temp.number_to_archive }}</td>
-          <td>
-            {{ temp.number_to_archive.errors }} Define how many runs are to be
-            moved to the archive after the archive process is initiated.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.timeout.label }}(s)</th>
-          <td>{{ temp.timeout }}</td>
-          <td>
-            {{ temp.timeout.errors }} Specify the time interval, in seconds,
-            that the data archive tool waits between filesystem status checks.
-            The default value 60 gives a one minute interval.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.percent_full_before_archive.label }}(%)</th>
-          <td>{{ temp.percent_full_before_archive }}</td>
-          <td>
-            {{ temp.perfect_full_before_archive.errors }} Specify the Torrent
-            Server local disk capacity before data are archived. The default
-            value is 75%. After the local Torrent Server disks utilization
-            reaches a percentage higher than the specified value, the archive
-            process starts.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.grace_period.label }}(hr)</th>
-          <td>{{ temp.grace_period }}</td>
-          <td>
-            {{ temp.grace_period.errors }} Time interval, in hours, that
-            experiment raw data is protected from deletion; measured from the
-            experiment start time. The default value is 72 hours.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.bandwidth_limit.label }}</th>
-          <td>{{ temp.bandwidth_limit }}</td>
-          <td>
-            {{ temp.bandwidth_limit.errors }} Specify the rate at which data
-            flows to the archive source. The following options are available in
-            the drop down menu:</br>
-            <ul>
-              <li>unlimited (DEFAULT)</li>
-              <li>10 MB/sec</li>
-            </ul>
-            </br>Select the 10 MB/sec rate if the archive location is an
-            NAS-formatted device and you are concerned about the archive process
-            overloading the network. For USB attached devices, the *unlimited
-            the default value is recommended.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.email.label }}</th>
-          <td>{{ temp.email }}</td>
-          <td>
-            {{ temp.email.errors }} Enter an email address where notifications
-            are sent, if the archive location becomes full. When the archive
-            location is full, one email a day is sent to this email address
-            until the drive has been replaced. Email is sent through
-            unauthenticated postfix, a Linux e-mail program.
-          </td>
-        </tr>
-        <tr>
-          <th>{{ temp.enabled.label }}</th>
-          <td>{{ temp.enabled }}</td>
-          <td>
-            {{ temp.enabled.errors }} Check this checkbox to enable the Archive
-            tool to run. Uncheck to disable archiving.
-          </td>
-        </tr>
-        </tbody>
-      </table>
-      <div id="toolbar">
-        <input id="save" type="submit" value="Save" name="submit"/>
-        <input id="can" type="Button" value="Cancel" name="cancel"
-               onclick="javascript:window.location.href='{% url configure_services %}';"/>
-      </div>
+  <div class="content">
+    <h1>Edit ionArchive Service Details</h1>
+    <form class="form-horizontal" action="" method='post' enctype="multipart/form-data">
+        <fieldset>
+            <div class="control-group {%spaceless%}{%if temp.archive_directory.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_archive_directory">{{temp.archive_directory.label}}</label>
+                <div class="controls">
+                    {{ temp.archive_directory }}
+                    {%if temp.archive_directory.errors%}
+                    <div class="help-block error">
+                        {{temp.archive_directory.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Select the archive directory. The archive directory appears in the drop down menu after the drive is mounted.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.number_to_archive.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_number_to_archive">{{temp.number_to_archive.label}} (Runs)</label>
+                <div class="controls">
+                    {{ temp.number_to_archive }}
+                    {%if temp.number_to_archive.errors%}
+                    <div class="help-block error">
+                        {{temp.number_to_archive.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Define how many runs are to be moved to the archive after the archive process is initiated.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.timeout.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_timeout">{{temp.timeout.label}} (Seconds)</label>
+                <div class="controls">
+                    {{ temp.timeout }}
+                    {%if temp.timeout.errors%}
+                    <div class="help-block error">
+                        {{temp.timeout.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Specify the time interval, in seconds, that the data archive tool waits between filesystem status checks. The default value 60 gives a one minute interval.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.percent_full_before_archive.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_percent_full_before_archive">{{temp.percent_full_before_archive.label}} (Percent)</label>
+                <div class="controls">
+                    {{ temp.percent_full_before_archive }}
+                    {%if temp.percent_full_before_archive.errors%}
+                    <div class="help-block error">
+                        {{temp.percent_full_before_archive.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Specify the Torrent Server local disk capacity before data are archived. The default value is 75%. After the local Torrent Server disks utilization
+                        reaches a percentage higher than the specified value, the archive
+                        process starts.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.grace_period.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_grace_period">{{temp.grace_period.label}} (Hours)</label>
+                <div class="controls">
+                    {{ temp.grace_period }}
+                    {%if temp.grace_period.errors%}
+                    <div class="help-block error">
+                        {{temp.grace_period.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Time interval, in hours, that experiment raw data is protected from deletion; measured from the experiment start time. The default value is 72 hours.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.bandwidth_limit.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_bandwidth_limit">{{temp.bandwidth_limit.label}}</label>
+                <div class="controls">
+                    {{ temp.bandwidth_limit }}
+                    {%if temp.bandwidth_limit.errors%}
+                    <div class="help-block error">
+                        {{temp.bandwidth_limit.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Specify the rate at which data
+                        flows to the archive source. The following options are available in
+                        the drop down menu:</br>
+                        <ul>
+                          <li>unlimited (DEFAULT)</li>
+                          <li>10 MB/sec</li>
+                        </ul>
+                        </br>Select the 10 MB/sec rate if the archive location is an
+                        NAS-formatted device and you are concerned about the archive process
+                        overloading the network. For USB attached devices, the *unlimited
+                        the default value is recommended.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.email.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_email">{{temp.email.label}}</label>
+                <div class="controls">
+                    {{ temp.email }}
+                    {%if temp.email.errors%}
+                    <div class="help-block error">
+                        {{temp.email.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Enter an email address where notifications
+                        are sent, if the archive location becomes full. When the archive
+                        location is full, one email a day is sent to this email address
+                        until the drive has been replaced. Email is sent through
+                        unauthenticated postfix, a Linux e-mail program.
+                    </div>
+                </div>
+            </div>
+            <div class="control-group {%spaceless%}{%if temp.enabled.errors%}error alert alert-error{%endif%}{%endspaceless%}">
+                <label class="control-label" for="id_enabled">{{temp.enabled.label}}</label>
+                <div class="controls">
+                    {{ temp.enabled }}
+                    {%if temp.enabled.errors%}
+                    <div class="help-block error">
+                        {{temp.enabled.errors}}
+                    </div>
+                    {% endif %}
+                    <div class="help-block">
+                        Check this checkbox to enable the Archive tool to run. Uncheck to disable archiving.
+                    </div>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-100 pull-right">Save</button>
+                <a href="{% url configure_services %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
+            </div>
+        </fieldset>
     </form>
   </div>
 {% endblock content %}

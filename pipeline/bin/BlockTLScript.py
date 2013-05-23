@@ -66,27 +66,72 @@ if __name__=="__main__":
         traceback.print_exc()
 
 
+    if os.path.exists(primary_key_file):
+        isProtonBlock = False
+    else:
+        isProtonBlock = True
+
+
+    def set_result_status(status):
+        try:
+            if not isProtonBlock:
+                if status == 'Processing finished':
+                    # filter out this status (31x and Thumbnail)
+                    return
+                jobserver.updatestatus(primary_key_file, status, True)
+                printtime("BlockTLStatus %s\tpid %d\tpk file %s started" % 
+                    (status, os.getpid(), primary_key_file))
+            else: # Proton Block
+                if status == 'Beadfind':
+                    f = open('progress.txt','w')
+                    f.write('wellfinding = yellow\n')
+                    f.write('signalprocessing = grey\n')
+                    f.write('basecalling = grey\n')
+                    f.write('alignment = grey')
+                    f.close()
+                elif status == 'Signal Processing':
+                    f = open('progress.txt','w')
+                    f.write('wellfinding = green\n')
+                    f.write('signalprocessing = yellow\n')
+                    f.write('basecalling = grey\n')
+                    f.write('alignment = grey')
+                    f.close()
+                elif status == 'Base Calling':
+                    f = open('progress.txt','w')
+                    f.write('wellfinding = green\n')
+                    f.write('signalprocessing = green\n')
+                    f.write('basecalling = yellow\n')
+                    f.write('alignment = grey')
+                    f.close()
+                elif status == 'Alignment':
+                    f = open('progress.txt','w')
+                    f.write('wellfinding = green\n')
+                    f.write('signalprocessing = green\n')
+                    f.write('basecalling = green\n')
+                    f.write('alignment = yellow')
+                    f.close()
+                elif status == 'Processing finished':
+                    f = open('progress.txt','w')
+                    f.write('wellfinding = green\n')
+                    f.write('signalprocessing = green\n')
+                    f.write('basecalling = green\n')
+                    f.write('alignment = green')
+                    f.close()
+        except:
+            traceback.print_exc()
+
+
     def add_status(process, status, message=""):
         f = open("blockstatus.txt", 'a')
         f.write(process+"="+str(status)+" "+str(message)+"\n")
         f.close()
 
 
-    def set_result_status(status):
-        try:
-            if os.path.exists(primary_key_file):
-                jobserver.updatestatus(primary_key_file, status, True)
-                printtime("BlockTLStatus %s\tpid %d\tpk file %s started" % 
-                    (status, os.getpid(), primary_key_file))
-        except:
-            traceback.print_exc()
-
-
     def upload_analysismetrics(bfmaskstatspath):
 
         print("Starting Upload Analysis Metrics")
         try:
-            if os.path.exists(primary_key_file):
+            if not isProtonBlock:
                 full_bfmaskstatspath = os.path.join(os.getcwd(), bfmaskstatspath)
                 result = jobserver.uploadanalysismetrics(full_bfmaskstatspath, primary_key_file)
                 printtime("Completed Upload Analysis Metrics: %s" % result)
@@ -95,11 +140,11 @@ if __name__=="__main__":
             traceback.print_exc()
 
 
-    def update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title):
+    def update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, outputdir, plot_title):
 
         printtime("Make Bead Density Plots")
         try:
-            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
+            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, outputdir, plot_title)
         except IOError as err:
             printtime("Bead Density Plot file error: %s" % err)
         except Exception as err:
@@ -110,15 +155,6 @@ if __name__=="__main__":
 
     if args.do_sigproc:
 
-        set_result_status('Signal Processing')
-        # create analysis progress bar file
-        f = open('progress.txt','w')
-        f.write('wellfinding = yellow\n')
-        f.write('signalprocessing = grey\n')
-        f.write('basecalling = grey\n')
-        f.write('alignment = grey')
-        f.close()
-
         if env['doThumbnail']:
             oninstrumentanalysis = False
         else:
@@ -126,6 +162,8 @@ if __name__=="__main__":
 
 
         if not oninstrumentanalysis:
+
+            set_result_status('Beadfind')
             status = sigproc.beadfind(
                         env['beadfindArgs'],
                         env['libraryKey'],
@@ -147,12 +185,14 @@ if __name__=="__main__":
         try:
             upload_analysismetrics(bfmaskstatspath)
             update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
         except:
             traceback.print_exc()
 
 
         if not oninstrumentanalysis:
 
+            set_result_status('Signal Processing')
             status = sigproc.sigproc(
                 env['analysisArgs'],
                 env['libraryKey'],
@@ -160,10 +200,6 @@ if __name__=="__main__":
                 env['pathToRaw'],
                 env['SIGPROC_RESULTS'])
             add_status("Analysis", status)
-
-            if status != 0:
-                printtime("ERROR: Analysis finished with status '%s'" % status)
-                sys.exit(1)
 
             # write return code into file
             try:
@@ -174,6 +210,10 @@ if __name__=="__main__":
             except:
                 traceback.print_exc()
 
+            if status != 0:
+                printtime("ERROR: Analysis finished with status '%s'" % status)
+                sys.exit(1)
+
         ########################################################
         # Make Bead Density Plots                              #
         ########################################################
@@ -182,6 +222,7 @@ if __name__=="__main__":
         try:
             upload_analysismetrics(bfmaskstatspath)
             update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
         except:
             traceback.print_exc()
 
@@ -202,11 +243,13 @@ if __name__=="__main__":
         if not os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'1.wells')):
             printtime ("ERROR: missing %s" % os.path.join(env['SIGPROC_RESULTS'],'1.wells') )
             printtime ("ERROR: basecaller pre-conditions not met")
+            add_status("Pre Basecalling Step", status=1)
             sys.exit(1)
 
         if not os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt')):
             printtime ("ERROR: missing %s" % os.path.join(env['SIGPROC_RESULTS'],'analysis_return_code.txt'))
             printtime ("ERROR: basecaller pre-conditions not met")
+            add_status("Pre Basecalling Step", status=1)
             sys.exit(1)
 
         try:
@@ -214,31 +257,24 @@ if __name__=="__main__":
                 return_code = f.read()
                 if not int(return_code) == 0:
                     printtime ("ERROR: basecaller pre-conditions not met")
+                    add_status("Pre Basecalling Step", status=1)
                     raise Exception("Analysis failed with %s" % return_code)
         except:
             traceback.print_exc()
             sys.exit(1)
 
 
-        set_result_status('Base Calling')
-        # create analysis progress bar file
-        f = open('progress.txt','w')
-        f.write('wellfinding = green\n')
-        f.write('signalprocessing = green\n')
-        f.write('basecalling = yellow\n')
-        f.write('alignment = grey')
-        f.close()
-        
         ########################################################
         # Flow Space Recalibration and re-basecalling          #
         ########################################################
         additional_basecallerArgs = ""
         if env['libraryName']!='none' and len(env['libraryName'])>=1 and env['doBaseRecal']:
             printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['libraryName'])
+            set_result_status('Flow Space Recalibration')
             try:
                 qvtable = flow_space_recal.base_recalib(
                                                 env['SIGPROC_RESULTS'],
-                                                env['basecallerArgs'],
+                                                env['prebasecallerArgs'],
                                                 env['libraryKey'],
                                                 env['tfKey'],
                                                 env['runID'],
@@ -265,15 +301,18 @@ if __name__=="__main__":
                                                 "BaseCaller.json" #file containing dimension info (offsets, rows, cols) and flow info for stratification
                                                )
                 printtime("QVTable: %s" % qvtable)
-                additional_basecallerArgs = " --calibration-file " + qvtable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json")
+                additional_basecallerArgs = " --calibration-file " + qvtable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json") + " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
                 add_status("Recalibration", 0)
             except:
+                traceback.print_exc()
                 add_status("Recalibration", 1)
 
         else:
             printtime("DEBUG: Flow Space Recalibration is disabled, Reference: '%s'" % env['libraryName'])
             updated_basecallerArgs = env['basecallerArgs']
 
+
+        set_result_status('Base Calling')
         try:
             basecaller.basecalling(
                 env['SIGPROC_RESULTS'],
@@ -302,51 +341,78 @@ if __name__=="__main__":
             )
             add_status("Basecaller", 0)
         except:
+            traceback.print_exc()
             add_status("Basecaller", 1)
 
 
-        
-        # create analysis progress bar file
-        f = open('progress.txt','w')
-        f.write('wellfinding = green\n')
-        f.write('signalprocessing = green\n')
-        f.write('basecalling = green\n')
-        f.write('alignment = grey')
-        f.close()
+        set_result_status('Post Basecalling')
+        try:
+            basecaller.post_basecalling(env['BASECALLER_RESULTS'],env['expName'],env['resultsName'],env['flows'])
+            add_status("PostBasecaller", 0)
+        except:
+            traceback.print_exc()
+            add_status("PostBasecaller", 1)
 
-        # Work in progress: migrate post-basecaller steps to use datasets_*.json to drive processing
-        basecaller.post_basecalling(env['BASECALLER_RESULTS'],env['expName'],env['resultsName'],env['flows'])
+        if not isProtonBlock:
+            set_result_status('Merge Barcoded Basecaller Bams')
+            try:
+                basecaller.merge_barcoded_basecaller_bams(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'))
+                add_status("MergeBarcodedBasecallerBamsUntrimmed", 0)
+            except:
+                traceback.print_exc()
+                add_status("MergeBarcodedBasecallerBamsUntrimmed", 1)
+            try:
+                basecaller.merge_barcoded_basecaller_bams(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'))
+                add_status("MergeBarcodedBasecallerBamsTrimmed", 0)
+            except:
+                traceback.print_exc()
+                add_status("MergeBarcodedBasecallerBamsTrimmed", 1)
+            try:
+                basecaller.merge_barcoded_basecaller_bams(env['BASECALLER_RESULTS'])
+                add_status("MergeBarcodedBasecallerBams", 0)
+            except:
+                traceback.print_exc()
+                add_status("MergeBarcodedBasecallerBams", 1)
 
 
-        basecaller.tf_processing(
-            os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
-            env['tfKey'],
-            env['flowOrder'],
-            env['BASECALLER_RESULTS'],
-            '.')
+        set_result_status('TF Processing')
+        try:
+            basecaller.tf_processing(
+                os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
+                env['tfKey'],
+                env['flowOrder'],
+                env['BASECALLER_RESULTS'],
+                '.')
+            add_status("TF Processing", 0)
+        except:
+            traceback.print_exc()
+            add_status("TF Processing", 1)
 
 
         ##################################################
         # Unfiltered BAM
         ##################################################
-        
-        try:
-            if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed')):
-                basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'),env['expName'],env['resultsName'],env['flows'])
-            
-            if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed')):
-                basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'),env['expName'],env['resultsName'],env['flows'])
-   
-        except IndexError:
-            printtime("Error, unfiltered handling")
-            traceback.print_exc()
-            
-            
+
+        if not isProtonBlock:
+            try:
+                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed')):
+                    basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'),env['expName'],env['resultsName'],env['flows'])
+
+                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed')):
+                    basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'),env['expName'],env['resultsName'],env['flows'])
+
+            except IndexError:
+                printtime("Error, unfiltered handling")
+                traceback.print_exc()
+
+
     if args.do_alignment:
 
         #make sure pre-conditions for alignment step are met
-        if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):
+        # TODO if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):
+        if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "ionstats_basecaller.json")):
             printtime ("ERROR: alignment pre-conditions not met")
+            add_status("Pre Alignment Step", status=1)
             sys.exit(1)
         
         if env['libraryName']=='none' or len(env['libraryName'])<1:
@@ -354,13 +420,6 @@ if __name__=="__main__":
             printtime("DEBUG: No Reference Library selected (libraryName = %s)",env['libraryName'])        
         else:
             set_result_status('Alignment')
-            # create analysis progress bar file
-            f = open('progress.txt','w')
-            f.write('wellfinding = green\n')
-            f.write('signalprocessing = green\n')
-            f.write('basecalling = green\n')
-            f.write('alignment = yellow')
-            f.close()
             
             bidirectional = False
             
@@ -368,29 +427,43 @@ if __name__=="__main__":
             # Unfiltered BAM
             ##################################################
 
-            if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed")):
-                alignment.alignment_unmapped_bam(
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-                    env['align_full'],
-                    env['libraryName'],
-                    env['flows'],
-                    env['aligner_opts_extra'],
-                    env['mark_duplicates'],
-                    bidirectional,
-                    env['sam_parsed'])
-        
-            if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed")):
-                alignment.alignment_unmapped_bam(
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-                    os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-                    env['align_full'],
-                    env['libraryName'],
-                    env['flows'],
-                    env['aligner_opts_extra'],
-                    env['mark_duplicates'],
-                    bidirectional,
-                    env['sam_parsed'])
+            if not isProtonBlock:
+
+                try:
+                    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed")):
+                        alignment.alignment_unmapped_bam(
+                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
+                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
+                            env['align_full'],
+                            env['libraryName'],
+                            env['flows'],
+                            env['realign'],
+                            env['aligner_opts_extra'],
+                            env['mark_duplicates'],
+                            bidirectional,
+                            env['sam_parsed'])
+                        #add_status("Alignment", 0)
+                except:
+                    traceback.print_exc()
+                    #add_status("Alignment", 1)
+
+                try:
+                    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed")):
+                        alignment.alignment_unmapped_bam(
+                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
+                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
+                            env['align_full'],
+                            env['libraryName'],
+                            env['flows'],
+                            env['realign'],
+                            env['aligner_opts_extra'],
+                            env['mark_duplicates'],
+                            bidirectional,
+                            env['sam_parsed'])
+                        #add_status("Alignment", 0)
+                except:
+                    traceback.print_exc()
+                    #add_status("Alignment", 1)
 
             try:
                 alignment.alignment_unmapped_bam(
@@ -399,22 +472,17 @@ if __name__=="__main__":
                     env['align_full'],
                     env['libraryName'],
                     env['flows'],
+                    env['realign'],
                     env['aligner_opts_extra'],
                     env['mark_duplicates'],
                     bidirectional,
                     env['sam_parsed'])
                 add_status("Alignment", 0)
             except:
+                traceback.print_exc()
                 add_status("Alignment", 1)
 
-
-        # create analysis progress bar file
-        f = open('progress.txt','w')
-        f.write('wellfinding = green\n')
-        f.write('signalprocessing = green\n')
-        f.write('basecalling = green\n')
-        f.write('alignment = green')
-        f.close()
+        set_result_status('Processing finished')
 
     printtime("BlockTLScript exit")
     sys.exit(0)

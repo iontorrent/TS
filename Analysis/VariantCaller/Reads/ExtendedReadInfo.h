@@ -1,0 +1,105 @@
+/* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
+
+//! @file     ExtendedReadInfo.h
+//! @ingroup  VariantCaller
+//! @brief    HP Indel detection
+
+
+#ifndef EXTENDEDREADINFO_H
+#define EXTENDEDREADINFO_H
+
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <math.h>
+#include <ctype.h>
+#include <algorithm>
+#include "api/api_global.h"
+#include "api/BamAux.h"
+#include "api/BamConstants.h"
+#include "api/BamReader.h"
+#include "api/SamHeader.h"
+#include "api/BamAlignment.h"
+#include "api/SamReadGroup.h"
+#include "api/SamReadGroupDictionary.h"
+#include "api/SamSequence.h"
+#include "api/SamSequenceDictionary.h"
+
+#include "sys/types.h"
+#include "sys/stat.h"
+#include <map>
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+#include <Variant.h>
+
+#include "FlowDist.h"
+#include "InputStructures.h"
+#include "MiscUtil.h"
+
+
+using namespace std;
+using namespace BamTools;
+using namespace ion;
+
+class ExtendedReadInfo{
+  public:
+  BamTools::BamAlignment     alignment;         //!< BamTools Alignment Information
+  bool                       is_forward_strand; //!< Indicates whether read is from the forward or reverse strand
+  string                     read_seq;          //!< Read sequence as base called (minus hard clips)
+  string                     ref_aln;           //!< Gap padded read sequence
+  string                     seq_aln;           //!< Gap padded reference sequence
+  string                     pretty_aln;        //!< pretty alignment string displaying matches, insertions, deletions
+  vector<float>              measurementValue;  //!< The measurement values for this read
+  vector<int>                flowIndex;         //!< Main Incorporating flow for each base
+  vector<float>              phase_params;      //!< cf, ie, droop parameters of this read
+  int                        startSC;           //!< Number of soft clipped bases at the start of the read
+  int                        endSC;             //!< Number of soft clipped bases at the start of the read
+  int                        start_flow;        //!< Flow corresponding to the first base in read_seq
+  int                        start_pos;         //!< Start position of the alignment as reported in BAM
+  bool                       is_happy_read;
+
+  ExtendedReadInfo(){
+    Default();
+  };
+
+  ExtendedReadInfo(int nFlows){
+    Default();
+    measurementValue.resize(nFlows,0);
+    ref_aln.reserve(nFlows);
+    seq_aln.reserve(nFlows);
+    pretty_aln.reserve(nFlows);
+  };
+
+  void Default(){
+    phase_params.resize(3,0);
+    startSC = endSC = 0;
+    is_forward_strand = true;
+    start_flow = 0;
+    start_pos = 0;
+    is_happy_read = false;
+  };
+
+  //! @brief  Populates object variables
+  bool UnpackThisRead( InputStructures &global_context, const string &local_contig_sequence, int DEBUG);
+
+  //! @ brief  Loading BAM tags into internal variables
+  void GetUsefulTags(int DEBUG);
+
+  //! @brief  Sets member variables containing alignment information
+  //! @brief [in]  local_contig_sequence    reference sequence
+  //! @brief [in]  aln_start_position       start position of the alignment
+  void UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position);
+
+  //! @brief  Populates object members flowIndex and read_seq
+  void CreateFlowIndex(string &flowOrder);
+
+  //! @brief Has this read been nicely unpacked and is it useful?
+  // Moved all functionality into StackPlus object
+  //bool CheckHappyRead(InputStructures &global_context, int variant_start_pos, int DEBUG);
+};
+
+#endif //EXTENDEDREADINFO_H

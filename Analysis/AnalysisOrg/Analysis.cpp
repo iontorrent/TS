@@ -3,8 +3,8 @@
 // Ion Torrent Systems, Inc.
 // Analysis Pipeline
 // (c) 2009
-// $Rev: 47540 $
-//  $Date: 2012-11-24 13:25:22 -0800 (Sat, 24 Nov 2012) $
+// $Rev: 51942 $
+//  $Date: 2013-02-11 14:09:47 -0800 (Mon, 11 Feb 2013) $
 //
 
 #include <stdio.h>
@@ -37,7 +37,6 @@
 
 #include "RawWells.h"
 
-//#include "fstrcmp.h"
 #include "LinuxCompat.h"
 #include "Utils.h"
 #include "SeqList.h"
@@ -57,8 +56,6 @@
 
 #include "MaskFunctions.h"
 
-#include "dbgmem.h"
-
 
 void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progress)
 {
@@ -76,15 +73,6 @@ void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progr
   fprintf (stdout, "\n");
   fflush (NULL);
 }
-
-#ifdef _DEBUG
-void memstatus (void)
-{
-  memdump();
-  dbgmemClose();
-}
-
-#endif /* _DEBUG */
 
 
 void TheSilenceOfTheArmadillos(ofstream &null_ostream)
@@ -105,10 +93,6 @@ void TheSilenceOfTheArmadillos(ofstream &null_ostream)
 int main (int argc, char *argv[])
 {
   init_salute();
-#ifdef _DEBUG
-  atexit (memstatus);
-  dbgmemInit();
-#endif /* _DEBUG */
   ofstream null_ostream("/dev/null"); // must stay live for entire scope, or crash when writing
   TheSilenceOfTheArmadillos(null_ostream);
   
@@ -136,7 +120,7 @@ int main (int argc, char *argv[])
 
   my_progress.ReportState ("Analysis (wells file only) Complete");
 
-  exit (EXIT_SUCCESS);
+  exit (ExitCode::GetExitCode());
 }
 
 

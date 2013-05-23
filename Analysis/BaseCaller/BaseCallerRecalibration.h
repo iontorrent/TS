@@ -57,6 +57,7 @@ protected:
   vector< vector< vector<int> > > calibrated_table_hp_;
   vector< vector< vector<float> > > calibrated_table_delta_;
   Stratification* stratification_;
+  int recal_model_hp_thres_;
 
 };
 

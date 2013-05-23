@@ -1,119 +1,124 @@
 
-if [ -z $BUILD_ROOT ]
+if [ -z $TS_SOURCE_ROOT ]
 then
-  BUILD_ROOT=$PWD
+  echo "ERROR: TS_SOURCE_ROOT is missing"
 fi
 
 if [$BUILDTOOLS_INC == ""]
 then
-  BUILDTOOLS_INC=$BUILD_ROOT/../buildTools
+  BUILDTOOLS_INC=$TS_SOURCE_ROOT/buildTools
 fi
 
 if [$ANALYSIS_INC == ""]
 then
-  ANALYSIS_INC=$BUILD_ROOT/../Analysis
+  ANALYSIS_INC=$TS_SOURCE_ROOT/Analysis
 fi
 
 if [$ANALYSIS_ORG_INC == ""]
 then
-  ANALYSIS_ORG_INC=$BUILD_ROOT/../Analysis/AnalysisOrg
+  ANALYSIS_ORG_INC=$TS_SOURCE_ROOT/Analysis/AnalysisOrg
 fi
 
 if [$BKGMODEL_INC == ""]
 then
-  BKGMODEL_INC=$BUILD_ROOT/../Analysis/BkgModel
+  BKGMODEL_INC=$TS_SOURCE_ROOT/Analysis/BkgModel
 fi
 
 if [$SYNCHDAT_INC == ""]
 then
-  SYNCHDAT_INC=$BUILD_ROOT/../Analysis/SynchDat
+  SYNCHDAT_INC=$TS_SOURCE_ROOT/Analysis/SynchDat
 fi
 
 if [$BKGMODEL_MATH_INC == ""]
 then
-  BKGMODEL_MATH_INC=$BUILD_ROOT/../Analysis/BkgModel/MathModel
+  BKGMODEL_MATH_INC=$TS_SOURCE_ROOT/Analysis/BkgModel/MathModel
 fi
 
 if [$BKGMODEL_FITTERS_INC == ""]
 then
-  BKGMODEL_FITTERS_INC=$BUILD_ROOT/../Analysis/BkgModel/Fitters
+  BKGMODEL_FITTERS_INC=$TS_SOURCE_ROOT/Analysis/BkgModel/Fitters
 fi
 
 if [$BKGMODEL_WRITERS_INC == ""]
 then
-  BKGMODEL_WRITERS_INC=$BUILD_ROOT/../Analysis/BkgModel/Writers
+  BKGMODEL_WRITERS_INC=$TS_SOURCE_ROOT/Analysis/BkgModel/Writers
 fi
 
 if [$BKGMODEL_BOOK_INC == ""]
 then
-  BKGMODEL_BOOK_INC=$BUILD_ROOT/../Analysis/BkgModel/Bookkeeping
+  BKGMODEL_BOOK_INC=$TS_SOURCE_ROOT/Analysis/BkgModel/Bookkeeping
 fi
 
 if [$PHASE_INC == ""]
 then
-  PHASE_INC=$BUILD_ROOT/../Analysis/BaseCaller
+  PHASE_INC=$TS_SOURCE_ROOT/Analysis/BaseCaller
 fi
 
 if [$ANALYSIS_IMAGE == ""]
 then
-  ANALYSIS_IMAGE=$BUILD_ROOT/../Analysis/Image
+  ANALYSIS_IMAGE=$TS_SOURCE_ROOT/Analysis/Image
 fi
 
 if [$ANALYSIS_MASK == ""]
 then
-  ANALYSIS_MASK=$BUILD_ROOT/../Analysis/Mask
+  ANALYSIS_MASK=$TS_SOURCE_ROOT/Analysis/Mask
 fi
 
 if [$ANALYSIS_LIB == ""]
 then
-  ANALYSIS_LIB=$BUILD_ROOT/../build/Analysis
+  ANALYSIS_LIB=$TS_BUILD_ROOT/Analysis
 fi
 
 if [${UTIL_INC} == ""]
 then
-  UTIL_INC=$BUILD_ROOT/../Analysis/Util
+  UTIL_INC=$TS_SOURCE_ROOT/Analysis/Util
 fi
 
 if [${WELLS_INC} == ""]
 then
-  WELLS_INC=$BUILD_ROOT/../Analysis/Wells
+  WELLS_INC=$TS_SOURCE_ROOT/Analysis/Wells
 fi
 
 if [$ANALYSIS_REPLAY_INC == ""]
 then
-  ANALYSIS_REPLAY_INC=$BUILD_ROOT/../Analysis/Replay
+  ANALYSIS_REPLAY_INC=$TS_SOURCE_ROOT/Analysis/Replay
 fi
 
 if [$ANALYSIS_SEPARATOR_INC == ""]
 then
-  ANALYSIS_SEPARATOR_INC=$BUILD_ROOT/../Analysis/Separator
+  ANALYSIS_SEPARATOR_INC=$TS_SOURCE_ROOT/Analysis/Separator
 fi
 
 if [$BUILD_INC == ""]
 then
-  BUILD_INC=$BUILD_ROOT/../build/torrentR
+  BUILD_INC=$TS_BUILD_ROOT/torrentR
 fi
 
 
 if [$ARMADILLO_INC == ""]
 then
-    ARMADILLO_INC=$BUILD_ROOT/../external/armadillo-3.0.2/include
+    ARMADILLO_INC=$TS_BUILD_ROOT/armadillo-3.800.2+ion0-install/include
 fi
 
+if [$HDF5_INC == ""]
+then
+    HDF5_INC=$TS_BUILD_ROOT/hdf5-1.8.8-install/include
+    HDF5_LIB=$TS_BUILD_ROOT/hdf5-1.8.8-install/lib
+fi
 
 if [$BAMTOOLS_ROOT == ""]
 then
-    BAMTOOLS_ROOT=$BUILD_ROOT/../external/bamtools-2.1.1.20121113+gitbe1727d1e5
+    BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.2.2.20121216+gitefd4f7b683-install
     BAMTOOLS_INC=$BAMTOOLS_ROOT/include/bamtools
     BAMTOOLS_LIB=$BAMTOOLS_ROOT/lib/bamtools
 fi
 
 
-PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$BUILD_ROOT/../external/hdf5-1.8.8/include -I$ARMADILLO_INC -Wall -g"
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$HDF5_INC -I$ARMADILLO_INC -Wall -g"
 
 CPPFLAGS=-O2
 
-PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $BUILD_ROOT/../external/hdf5-1.8.8/lib/libhdf5.a $BAMTOOLS_LIB/libbamtools.a -llapack -lblas -L/usr/lib"
+PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $HDF5_LIB/libhdf5.a $BAMTOOLS_LIB/libbamtools.a -llapack -lblas -L/usr/lib"
 
 sed -e "s|@PKG_LIBS@|${PKG_LIBS}|" \
     -e "s|@PKG_CPPFLAGS@|${PKG_CPPFLAGS}|" \

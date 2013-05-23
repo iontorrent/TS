@@ -11,7 +11,7 @@ from ion.plugin import *
 
 
 class SFFCreator(IonPlugin):
-    version = "3.4.49884"
+    version = "3.6.56201"
     runtypes = [ RunType.COMPOSITE, RunType.THUMB, RunType.FULLCHIP ]
 
 

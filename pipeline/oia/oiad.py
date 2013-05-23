@@ -1,10 +1,6 @@
 #!/usr/bin/python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-# python 3.0 will have something similar: http://www.python.org/dev/peps/pep-3143/
-
-# LIMITATION, can process only multiple 0f 20 flows
-
 import os
 import hashlib
 import shutil
@@ -17,6 +13,12 @@ import subprocess
 import shlex
 import random
 import fnmatch
+
+import json
+import string
+import httplib
+import base64
+
 from collections import deque
 
 from Queue import Queue
@@ -62,27 +64,56 @@ class Worker(Thread):
             try:
                 if not os.path.exists( block.sigproc_results_path_tmp ):
                     os.makedirs( block.sigproc_results_path_tmp )
-                    logger.info('mkdir %s' % block.sigproc_results_path_tmp)
+                    logger.debug('mkdir %s' % block.sigproc_results_path_tmp)
+
+                try:
+                    if 'justBeadFind' in block.command and block.run.exp_ecc_enabled:
+                        outfile = open(os.path.join(block.sigproc_results_path_tmp,'ecc.log'), "a")
+                        ecc_command="/usr/share/ion/oia/ecc.py -i %s -o %s" % (block.dat_path, block.sigproc_results_path_tmp)
+                        args = shlex.split(ecc_command.encode('utf8'))
+                        logger.info("%s: run process: %s" % (self.id, args) )
+                        p = subprocess.Popen(args, stdout=outfile, stderr=subprocess.STDOUT)
+                        # add popen process to block
+                        block.process = p
+                        ret = p.wait()
+                except:
+                    logger.error(traceback.format_exc())               
+                    pass
 
                 logger.info("%s: run process: %s" % (self.id, block) )
 
                 # don't use shell=True , otherwise child process cannot be killed
                 outfile = open(os.path.join(block.sigproc_results_path_tmp,'sigproc.log'), "a")
                 args = shlex.split(block.command.encode('utf8'))
-                p = subprocess.Popen(args, stdout=outfile, stderr=subprocess.STDOUT)
+                my_environment=os.environ.copy()
+                if not "/usr/local/bin" in my_environment['PATH']:
+                    my_environment['PATH'] = my_environment['PATH']+":/usr/local/bin"
+                #logger.info(my_environment)
+                p = subprocess.Popen(args, stdout=outfile, stderr=subprocess.STDOUT, env=my_environment)
                 # add popen process to block
                 block.process = p
                 ret = p.wait()
 
                 # error generation
-                #rand = random.randint(0,100)
-                #if rand > 5: ret = 4
-                #else: ret = 0
+                #rand = random.randint(0,99)
+                #if rand < 2:
+                #    ret = 777
+                #else:
+                #    ret = 0
+
                 block.ret = ret
             except:
                 logger.error(traceback.format_exc())
                 block.ret = 666
 
+            try:
+                f = open(os.path.join(block.sigproc_results_path_tmp,'analysis_return_code.txt'), 'w')
+                f.write(str(block.ret))
+                f.close()
+            except:
+                logger.error('%s failed to write return code' % block.name)
+                logger.error(traceback.format_exc())
+                pass
 
             block.status = "processed"
             self.tasks.task_done()
@@ -126,33 +157,36 @@ def run_a_shell_process(command):
 
 
 def getSeparatorCommand(config,block):
-    command = "%s" % config.get('global','separatorArgs')
+    #command = "strace -o %s/strace.log %s" % (block.sigproc_results_path_tmp,block.run.exp_beadfindArgs)
+    command = "nice -n 1 %s" % block.run.exp_beadfindArgs
+    command += " --local-wells-file off"
     command += " --beadfind-num-threads %s" % config.get('global','nb_beadfind_threads')
     command += " --no-subdir"
     command += " --output-dir=%s" % block.sigproc_results_path_tmp
-    command += " --librarykey=%s" % config.get('global','libraryKey')
-    command += " --tfkey=%s" % config.get('global','tfKey')
+    command += " --librarykey=%s" % block.run.libraryKey
+    command += " --tfkey=%s" % block.run.tfKey
     command += " %s" % block.dat_path
+    logger.debug('beadfindArgs(PR):"%s"' % command)
     return command
 
 
-def getAnalysisCommand(config,block,reentrant):
-    command = "%s" % config.get('global','analysisArgs')
+def getAnalysisCommand(config,block):
+    command = "nice -n 1 %s" % block.run.exp_analysisArgs
     command += " --numcputhreads %s" % config.get('global','nb_analysis_threads')
-    if reentrant:
-        command += " --from-beadfind"
-        command += " --local-wells-file off"
-        if block.flow_start != 0:
-            command += " --restart-from step.%s" % (block.flow_start-1)
-        if block.flow_end != block.flows_total-1:
-            command += " --restart-next step.%s" % (block.flow_end)
-        command += " --flowlimit %s" % block.flows_total
-        command += " --start-flow-plus-interval %s,%s" % (block.flow_start, block.flow_end-block.flow_start+1)
+    command += " --threaded-file-access"
+    command += " --local-wells-file off"
+    if block.flow_start != 0:
+        command += " --restart-from step.%s" % (block.flow_start-1)
+    if block.flow_end != block.flows_total-1:
+        command += " --restart-next step.%s" % (block.flow_end)
+    command += " --flowlimit %s" % block.flows_total
+    command += " --start-flow-plus-interval %s,%s" % (block.flow_start, block.flow_end-block.flow_start+1)
     command += " --no-subdir"
     command += " --output-dir=%s" % block.sigproc_results_path_tmp
-    command += " --librarykey=%s" % config.get('global','libraryKey')
-    command += " --tfkey=%s" % config.get('global','tfKey')
+    command += " --librarykey=%s" % block.run.libraryKey
+    command += " --tfkey=%s" % block.run.tfKey
     command += " %s" % block.dat_path
+    logger.debug('analysisArgs(PR):"%s"' % command)
     return command
 
 
@@ -164,7 +198,7 @@ def Transfer(run_name, directory_to_transfer, file_to_transfer):
     else:
         logger.error("TransferBlock: no directory or file specified")
         return 1
-        
+
     logger.info(args)
     p = subprocess.Popen(args, stdout=subprocess.PIPE)
     out, err = p.communicate()
@@ -222,8 +256,95 @@ class Run:
 
             self.explogdict = parse_log(explogtext)
             self.exp_flows = int(self.explogdict["flows"])
-            self.exp_oninstranalysis = 'yes' in self.explogdict['oninstranalysis'] #yes, no
-            self.exp_usesynchdats = 'yes' in self.explogdict['use_synchdats'] #yes, no
+            self.exp_oninstranalysis = 'yes' in self.explogdict.get('oninstranalysis','no')
+            self.exp_usesynchdats = 'yes' in self.explogdict.get('use_synchdats','no')
+            self.exp_oia_during_run = 'yes' in self.explogdict.get('oia_during_run','yes')
+            self.exp_ecc_enabled = 'yes' in self.explogdict.get('ecc_enabled','no')
+            self.exp_planned_run_short_id = self.explogdict.get('planned_run_short_id','')
+            self.exp_chiptype = self.explogdict["chiptype"]
+            logger.info('chiptype:-%s-' % self.exp_chiptype)
+            self.exp_runtype = self.explogdict["runtype"]
+            logger.info('runtype:-%s-' % self.exp_runtype)
+
+            '''
+            if os.path.exists(os.path.join(self.dat_path, "chips.json")):
+                chips = json.load(open('os.path.join(self.dat_path, "chips.json")','r'))
+            else:
+                logger.error('use default args /usr/share/ion/oia/chips.json')
+                chips = json.load(open('/usr/share/ion/oia/chips.json','r'))
+            '''
+
+            if os.path.exists('/software/config/DataCollect.config'):
+                f = open('/software/config/DataCollect.config')
+                text = f.readlines()
+                f.close()
+                for line in text:
+                    [key, value] = line.split(':')
+                    key = key.strip()
+                    value = value.strip()
+                    logger.info('%s %s' % (key, value))
+                    if key == 'TSUrl':
+                        TSUrl = value
+                    elif key == 'TSUserName':
+                        TSUserName = value
+                    elif key == 'TSPasswd':
+                        TSPasswd = value
+                    else:
+                        continue
+            else:
+                raise
+
+            logger.info('connect to:%s user:%s password:%s' % (TSUrl,TSUserName,TSPasswd))
+
+            headers = {
+                "Authorization": "Basic "+ string.strip(base64.encodestring(TSUserName + ':' + TSPasswd)),
+                "Content-type": "application/json",
+                "Accept": "application/json" }
+
+            # get chip data
+            conn = httplib.HTTPConnection(TSUrl)
+            conn.request("GET", "/rundb/api/v1/chip/?format=json", "", headers)
+            response = conn.getresponse()
+            data = response.read()
+            chips = json.loads(data)
+
+            # get plan data
+            conn = httplib.HTTPConnection(TSUrl)
+            conn.request("GET", "/rundb/api/v1/plannedexperiment/?format=json", "", headers)
+            response = conn.getresponse()
+            logger.info('%s %s' % (response.status, response.reason))
+            data = response.read()
+            # Need to limit plans
+            #logger.debug(data)
+            plans = json.loads(data)
+
+            for chip in chips['objects']:
+                logger.info(chip)
+                logger.info('chiptype test: test normal chiptype: [%s]' % self.exp_chiptype)
+                if chip['name']==self.exp_chiptype:
+                    logger.info('chiptype test: found normal chiptype: [%s]' % chip['name'])
+                    self.exp_beadfindArgs = chip['beadfindargs']
+                    self.exp_analysisArgs = chip['analysisargs']
+                logger.info('chiptype test: test special chiptype/runtype: [%s%s]' % (self.exp_chiptype,self.exp_runtype))
+                if chip['name']==self.exp_chiptype+self.exp_runtype:
+                    logger.info('chiptype test: found special chiptype/runtype: [%s]' % chip['name'])
+                    self.exp_beadfindArgs = chip['beadfindargs']
+                    self.exp_analysisArgs = chip['analysisargs']
+                    break
+            logger.info('beadfindArgs:-%s-' % self.exp_beadfindArgs)
+            logger.info('analysisArgs:-%s-' % self.exp_analysisArgs)
+
+            plan = [plan for plan in plans['objects'] if plan.get('planShortID','not_available') == self.exp_planned_run_short_id]
+            if plan:
+                logger.debug("Plan: %s" % plan[0])
+                self.libraryKey=plan[0].get('libraryKey','TCAG') # TODO
+                self.tfKey=plan[0].get('tfKey','ATCG') # TODO
+            else:
+                logger.debug("no plan")
+                self.libraryKey="TCAG"
+                self.tfKey="ATCG"
+
+
         except:
             logger.error(traceback.format_exc())
             raise
@@ -231,14 +352,14 @@ class Run:
 
         self.blocks = []
         try:
-            self.block_to_process_start = int(config.get('global','block_to_process_start'))
-            self.block_to_process_end = int(config.get('global','block_to_process_end'))
+            self.block_to_process_start = config.getint('global','block_to_process_start')
+            self.block_to_process_end = config.getint('global','block_to_process_end')
             self.discover_blocks()
         except:
             logger.error(traceback.format_exc())
             raise
 
-            
+
     def aborted(self):
 
         aborted = False
@@ -304,9 +425,10 @@ class Run:
             full_block_dat_path = os.path.join(self.dat_path, block_dir)
             full_block_sigproc_results_path = os.path.join(self.sigproc_results_path, "block_"+block_dir)
 
-            if os.path.exists(full_block_sigproc_results_path):
-                # TODO transferred?
+            if os.path.exists(os.path.join(self.sigproc_results_path, "block_"+block_dir, 'transfer_requested.txt')):
                 block_status = "done"
+            elif os.path.exists(full_block_sigproc_results_path):
+                block_status = "ready_to_transfer"
             else:
                 # default entry status
                 block_status = "idle"
@@ -315,8 +437,9 @@ class Run:
             nb_attempts = 0
             while os.path.exists(full_block_sigproc_results_path + "." + str(nb_attempts)):
                 nb_attempts += 1
-             
+
             newblock = Block(
+                         self,
                          self.name,
                          block_dir,
                          block_status,
@@ -345,13 +468,13 @@ class Run:
         return s
 
 class Block:
-    def __init__(self,run_name,name,status,storage,nb_attempts,flows_total,dat_path,sigproc_results_path):
+    def __init__(self,run,run_name,name,status,storage,nb_attempts,flows_total,dat_path,sigproc_results_path):
         self.name = name
         self.status = status
         self.process = None
-        self.reentrant = False
         self.command = ""
         self.ret = 0
+        self.run = run
         self.run_name = run_name
         self.successful_processed = -1
         self.storage = storage
@@ -397,16 +520,16 @@ class Block:
 class App():
     def __init__(self):
 
-        self.nb_max_jobs = int(config.get('global','nb_max_jobs'))
+        self.nb_max_jobs = config.getint('global','nb_max_jobs')
         logger.info('nb_max_jobs %s' % self.nb_max_jobs)
 
-        self.nb_max_analysis_jobs = int(config.get('global','nb_max_analysis_jobs'))
+        self.nb_max_analysis_jobs = config.getint('global','nb_max_analysis_jobs')
         logger.info('nb_max_analysis_jobs %s' % self.nb_max_analysis_jobs)
 
-        self.nb_max_beadfind_jobs = int(config.get('global','nb_max_beadfind_jobs'))
+        self.nb_max_beadfind_jobs = config.getint('global','nb_max_beadfind_jobs')
         logger.info('nb_max_beadfind_jobs %s' % self.nb_max_beadfind_jobs)
 
-        self.flowblocks =  int(config.get('global','flowblocks'))
+        self.flowblocks = config.getint('global','flowblocks')
 
         # 1) Init a Thread pool with the desired number of threads
         self.pool = ThreadPool(self.nb_max_jobs,logger)
@@ -417,7 +540,6 @@ class App():
 
     def printStatus(self):
         logger.debug("\n***** STATUS: blocks to process: %d *****" % len(self.blocks_to_process))
-
 
     def get_run_dirs(self):
 
@@ -432,82 +554,98 @@ class App():
 
     def get_next_available_job(self,instr_busy,config):
 
-        logger.debug('get_next_available_job')
+        #logger.debug('get_next_available_job')
         # what kind of jobs are allowed to run?
         beadfind_request = True
         analysis_request = True
 
         if self.pool.beadfind_counter + self.pool.analysis_counter >= self.nb_max_jobs:
-            logger.debug('max jobs limit reached')
+            logger.debug('max jobs limit reached (total)')
             beadfind_request = False
             analysis_request = False
 
         if self.pool.beadfind_counter >= self.nb_max_beadfind_jobs:
-            logger.info('max beadfind jobs limit reached')
+            logger.debug('max jobs limit reached (beadfind)')
             beadfind_request = False
 
         if self.pool.analysis_counter >= self.nb_max_analysis_jobs:
-            logger.debug('max analysis jobs limit reached')
+            logger.debug('max jobs limit reached (analysis)')
             analysis_request = False
 
-
-
         anablock = None
+
+        if not beadfind_request and not analysis_request:
+            # full queues
+            return anablock
 
         # Separator
         for block in self.blocks_to_process:
 
             if block.status != 'idle':
+                #logger.debug('idle')
                 continue
 
-            if block.successful_processed == -1:
-                if beadfind_request:
-                    block.command = getSeparatorCommand(config,block)
-                    anablock=block
-                    break
+            if beadfind_request and block.successful_processed == -1:
+                block.command = getSeparatorCommand(config, block)
+                anablock=block
+                return anablock
 
         # Analysis
-        if not anablock:
-            for block in self.blocks_to_process:
+        for block in self.blocks_to_process:
 
-                if block.status != 'idle':
+            if block.status != 'idle':
+                #logger.debug('idle')
+                continue
+
+            if analysis_request and block.successful_processed != -1:
+
+                # how far can I go?
+                new_flow_end = -1
+                # check for last flow
+                if os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (block.flows_total-1) )):
+                    new_flow_end = block.flows_total-1
+                # check for first flowchunk
+                elif os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (self.flowblocks-1) )) and block.successful_processed == 0 and block.flows_total < 2*self.flowblocks:
+                    new_flow_end = self.flowblocks-1
+                else:
+                    test_flow_end = block.successful_processed-1
+                    while True:
+                        test_flow_end += self.flowblocks
+                        logger.debug('test new flowend ' + block.name + " " + str(test_flow_end))
+                        if not os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (test_flow_end) )):
+                            break
+                        new_flow_end = test_flow_end
+
+                # not enough flows for chunk
+                if new_flow_end <= block.successful_processed-1:
+                    logger.debug('new flowend for %s: (%s/%s/%s) filtered out' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
+                    continue
+                # support odd number of flows (e.g. 396)
+                elif new_flow_end < block.flows_total-1 and block.flows_total-1-new_flow_end < self.flowblocks:
+                    logger.debug('new flowend for %s: (%s/%s/%s) filtered out' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
+                    continue
+                else:
+                    logger.debug('new flowend for %s: (%s/%s/%s)' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
+                    pass
+
+                # allow first 20 flows
+                if new_flow_end == self.flowblocks-1:
+                    pass
+                elif block.successful_processed == 0 and new_flow_end > self.flowblocks-1 and instr_busy and block.storage == 'HD':
+                    new_flow_end = self.flowblocks-1
+                    pass
+                elif not instr_busy and block.storage == 'HD':
+                    pass
+                elif block.storage == 'SSD':
+                    pass
+                else:
                     continue
 
-                if block.successful_processed != -1:
-                    if analysis_request:
-                        if instr_busy and block.storage == 'HD' and block.successful_processed >= self.flowblocks:
-                            continue
-                        new_flow_end = -1
-                        # TODO test acquisition complete:        
-                        # check for last flow
-                        if os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (block.flows_total-1) )):
-                            new_flow_end = block.flows_total-1
-                        # check for first flowchuck
-                        elif os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (self.flowblocks-1) )) and block.successful_processed == 0:
-                            new_flow_end = self.flowblocks-1
-                        else:
-                            test_flow_end = block.successful_processed-1
-                            while True:
-                                test_flow_end += self.flowblocks
-                                logger.debug('test new flowend ' + block.name + " " + str(test_flow_end))
-                                if not os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (test_flow_end) )):
-                                    break
-                                new_flow_end = test_flow_end
-                            # not enough flows for chunk
-                            if new_flow_end <= block.successful_processed-1:
-                                continue
-                        # don't process HD blocks greater than self.flowblocks
-                        if instr_busy and block.storage == 'HD' and new_flow_end > self.flowblocks:
-                            continue
-
-                        # always reentrant because separator runs independently
-                        block.flow_start = block.successful_processed
-                        block.flow_end = new_flow_end
-                        block.command = getAnalysisCommand(config, block, reentrant=True)
-                        anablock=block
-                        break
-
-        return anablock
+                block.flow_start = block.successful_processed
+                block.flow_end = new_flow_end
+                block.command = getAnalysisCommand(config, block)
+                anablock=block
+                return anablock
 
 
     def run(self):
@@ -616,7 +754,7 @@ class App():
                     logger.error(traceback.format_exc())
                     continue
 
-                if not arun.exp_usesynchdats:
+                if arun.exp_oia_during_run:
                     wait_for_flow = 0
                 else:
                     # wait for last flow
@@ -642,9 +780,10 @@ class App():
                 if not arun.exp_oninstranalysis:
                     continue
 
+                # ignore autoanalyze option in explog.txt
                 logger.info('autoanalyze: %s' % arun.explogdict['autoanalyze'])
-                if not arun.explogdict['autoanalyze']: # contains True,False instead of yes, no
-                    continue
+                #if not arun.explogdict['autoanalyze']: # contains True,False instead of yes, no
+                #    continue
 
 
                 full_sigproc_results_path = os.path.join(config.get('global','analysisresults'), run_dir, "onboard_results/sigproc_results")
@@ -660,7 +799,11 @@ class App():
                 logger.info("ADD %s blocks" % arun.name)
                 for block in arun.blocks:
                     if block.status != 'done':
-                        self.blocks_to_process.append(block)
+                        if block.storage == "SSD":
+                            # process SSD blocks first, might want to use collections.deque
+                            self.blocks_to_process.insert(0,block)
+                        else:
+                            self.blocks_to_process.append(block)
 
             self.printStatus()
 
@@ -671,7 +814,7 @@ class App():
                 # wait a while before checking if queue is empty
                 time.sleep(3)
 
-                logger.debug('number blocks to process: %s %s %s' % ( len(self.blocks_to_process), self.pool.beadfind_counter, self.pool.analysis_counter ) )
+                logger.debug('number blocks to process: %s %s/%s %s/%s' % ( len(self.blocks_to_process), self.pool.beadfind_counter, self.nb_max_beadfind_jobs, self.pool.analysis_counter, self.nb_max_analysis_jobs ) )
 
                 # every 60 sec check for new run
                 if time.time()-timestamp > 60:
@@ -691,29 +834,42 @@ class App():
                         else:
                             logger.error('Block %s failed with return code %s' % (block.name, block.ret))
                             block.nb_attempts += 1
+                            block.sigproc_results_path_tmp = block.sigproc_results_path + "." + str(block.nb_attempts)
+                            block.successful_processed = -1
+                            block.flow_start = -1
+                            block.flow_end = -1
+                            block.status = "idle"
 
                     # processed blocks
                     if block.status == 'sigproc_done' or block.status == 'sigproc_failed':
-                        logger.info('rename block %s %s %s' % (block.name,block.sigproc_results_path_tmp,block.sigproc_results_path))
+
+                        # 1. rename block / last sigproc attempt
                         try:
-                            # rename block / last sigproc attempt
-                            shutil.move(block.sigproc_results_path_tmp, block.sigproc_results_path)
+                            if not os.path.exists(block.sigproc_results_path):
+                                logger.info('rename block %s %s %s' % (block.name,block.sigproc_results_path_tmp,block.sigproc_results_path))
+                                if block.nb_attempts >= config.getint('global','nb_retries'):
+                                    shutil.move(block.sigproc_results_path + "." + str(block.nb_attempts-1), block.sigproc_results_path)
+                                else:
+                                    shutil.move(block.sigproc_results_path_tmp, block.sigproc_results_path)
                         except:
                             logger.error('renaming failed %s' % block.name)
                             logger.error(traceback.format_exc())
                             pass
 
-                        # 1. write return code into file
-                        try:
-                            f = open(os.path.join(block.sigproc_results_path,'analysis_return_code.txt'), 'w')
-                            f.write(str(block.ret))
-                            f.close()
-                        except:
-                            logger.error('%s failed to write return code' % block.name)
-                            logger.error(traceback.format_exc())
-                            pass
+                        # 2. remove *.step files
+                        if block.status == 'sigproc_done':
+                            try:
+                                for filename in os.listdir(block.sigproc_results_path):
+                                    if fnmatch.fnmatch(filename, 'step.*'):
+                                        full_path_to_file = os.path.join(block.sigproc_results_path,filename)
+                                        logger.info('remove step file: %s' % full_path_to_file)
+                                        os.remove(full_path_to_file)
+                            except:
+                                logger.error('removing step file failed %s' % block.name)
+                                logger.error(traceback.format_exc())
+                                pass
 
-                        # 2. mark block as done
+                        # 3. generate MD5SUM for each output file
                         try:
                             md5sums = {}
                             for filename in os.listdir(block.sigproc_results_path):
@@ -738,11 +894,16 @@ class App():
                         ret = Transfer(block.run_name, directory_to_transfer, file_to_transfer)
                         if ret == 0:
                             block.status = "transferred"
+                            try:
+                                open(os.path.join(block.sigproc_results_path,'transfer_requested.txt'), 'w').close()
+                            except:
+                                logger.error(traceback.format_exc())
+                                pass
                         else:
                             logger.error("Transfer failed %s %s %s, is datacollect running?" % (block.run_name, directory_to_transfer, file_to_transfer))
 
                     if block.status == 'transferred':
-                        logger.debug("DONE: %s" % (block.name) )
+                        logger.debug("DONE: %s" % (block.name))
                         block.status = 'done'
                         self.blocks_to_process.remove(block)
 
@@ -754,7 +915,7 @@ class App():
                     logger.error(traceback.format_exc())
 
                 if ablock:
-                    if ablock.nb_attempts >= 5:#TODO, make it configurable
+                    if ablock.nb_attempts >= config.getint('global','nb_retries'):
                         ablock.status = 'sigproc_failed'
                     else:
                         ablock.status = 'queued'

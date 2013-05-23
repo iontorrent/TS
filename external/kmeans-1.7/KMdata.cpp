@@ -21,8 +21,6 @@
 #include "KMdata.h"
 #include "KMrand.h"			// provides kmRanInt()
 
-#include "dbgmem.h"
-
 					// standard constructor
 KMdata::KMdata(int d, int n) : dim(d), maxPts(n), nPts(n) {
     pts = kmAllocPts(n, d);

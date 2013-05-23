@@ -6,6 +6,7 @@ enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.dependencies.txt)
 
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/usr/local/lib/R/site-library" CACHE PATH "Ion Install Prefix")
@@ -47,18 +48,16 @@ include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/MathModel )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Bookkeeping )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Util )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Wells )
-include_directories( ${PROJECT_SOURCE_DIR}/../external/samtools-0.1.18 )
-include_directories( ${PROJECT_SOURCE_DIR}/../external/bamtools-2.1.1.20121022+git27d37964e1 )
 include_directories( /usr/local/lib/R/site-library/Rcpp/lib )
 
 
 add_custom_target(LIBTORRENTRCLEAN ALL
-           COMMAND "../../buildTools/cleanTorrentR.sh"
+           COMMAND "${PROJECT_SOURCE_DIR}/../buildTools/cleanTorrentR.sh" "${PROJECT_SOURCE_DIR}"
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_custom_target(LIBTORRENTR ALL
            COMMAND "mkdir" "-p" "rlib"
-           COMMAND "BUILD_ROOT=${PROJECT_SOURCE_DIR}" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
+           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_dependencies(LIBTORRENTR LIBTORRENTRCLEAN)
@@ -91,7 +90,6 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
     r-cran-rpart (>= 3.1.54-1lucid0),
     r-cran-spatial (>= 7.3-2-1lucid0),
     r-cran-survival (>= 2.36-14-1lucid0),
-    libcurl4-openssl-dev,
     libatlas3gf-base, 
     libblas3gf, 
     libc6,

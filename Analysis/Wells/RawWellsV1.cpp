@@ -18,7 +18,6 @@
 
 #include "LinuxCompat.h"
 #include "IonErr.h"
-#include "dbgmem.h"
 
 RawWellsV1::RawWellsV1(const char *_experimentPath, const char *_rawWellsName, int _rows, int _cols)
 {

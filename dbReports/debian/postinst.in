@@ -2,10 +2,19 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
 #set -x
-#echo "preinst $@"
+echo "postinst $@"
 
 case "$1" in
     configure)
+
+    #MegaCli64 library support
+    if [ -e /lib/libsysfs.so.2.0.1 ]; then
+        if [ -h /usr/lib64/libsysfs.so.2.0.2 ]; then
+            echo `ls -l /usr/lib64/libsysfs.so.2.0.2`
+        else
+            ln -s /lib/libsysfs.so.2.0.1 /usr/lib64/libsysfs.so.2.0.2 || true
+        fi
+    fi
 
     chmod ugo+x @ION_INSTALL_PREFIX@/iondb/bin/*
 
@@ -63,7 +72,7 @@ case "$1" in
     # Default Ubuntu file is empty. Config now in /etc/apache2/conf.d/
     touch /etc/apache2/httpd.conf
 
-    #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in  
+    #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in
     htpasswd -b -c /etc/apache2/users logout logout
 
     # Enable mod_wsgi, mod_rewrite, mod_expires
@@ -127,7 +136,6 @@ case "$1" in
     DAEMONS=(
         ionCrawler
         ionJobServer
-        ionArchive
         ionPlugin
         rabbitmq-server
         celeryd
@@ -142,7 +150,7 @@ case "$1" in
             $CMD
         fi
     done
-    
+
 
     # ------------------------------------------
     # Create directory for logging
@@ -155,7 +163,7 @@ case "$1" in
         chmod a+w /var/log/ion/ionPlugin.log || true
     fi
     # touchy code
-    for log_file in django.log iarchive.log crawl.log ionPlugin.log celery_plugins.log reportsLog.log
+    for log_file in django.log crawl.log ionPlugin.log celery_plugins.log data_management.log
     do
         touch /var/log/ion/$log_file
         chown :www-data /var/log/ion/$log_file
@@ -172,7 +180,7 @@ case "$1" in
     SUDOFILE=/etc/sudoers
     sed -i '/www-data/ d' ${SUDOFILE}
     echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py" >> ${SUDOFILE}
-    
+
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
     #--------------------------------------------------#
@@ -213,6 +221,8 @@ case "$1" in
         # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
         /usr/bin/python ./bin/install_script.py
 
+        # Loads DMFileSet entries into database
+        /usr/bin/python ./bin/install_dmfilesets.py
 
         # Collect static files (eg. admin pages css/js)
         /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --clear --link
@@ -220,23 +230,28 @@ case "$1" in
         cd -
     )
 
-    echo "NODENAME=rabbit@localhost" > /etc/rabbitmq/rabbitmq.conf
-    service rabbitmq-server restart
+    echo "NODENAME=rabbit@localhost" > /etc/rabbitmq/rabbitmq-env.conf
+    cat > /etc/rabbitmq/rabbitmq.config <<EOF
+[
+    {rabbit, [{disk_free_limit, 110000000}]}
+].
+EOF
+    if ! service rabbitmq-server restart; then
+        service rabbitmq-server stop
+        rm -rf /var/lib/rabbitmq/mnesia/rabbit@localhost || true
+        service rabbitmq-server start
+    fi
     invoke-rc.d apache2 restart
-    invoke-rc.d ionCrawler restart
-    invoke-rc.d ionJobServer restart
-    invoke-rc.d ionArchive restart
-    invoke-rc.d ionPlugin restart
     invoke-rc.d celeryd restart
 
     # -------------------------------------------------------------------------
     # Configure Celery's RabbitMQ user, vhost, and permission state
     # -------------------------------------------------------------------------
-    if [[ ! `rabbitmqctl list_users|grep ion` ]]; then
+    if [[ ! `rabbitmqctl list_users|grep ^ion` ]]; then
         echo "Adding RabbitMQ user 'ion'"
         rabbitmqctl add_user ion ionadmin
     fi
-    if [[ ! `rabbitmqctl list_vhosts|grep ion` ]]; then
+    if [[ ! `rabbitmqctl list_vhosts|grep ^ion` ]]; then
         echo "Adding RabbitMQ vhost 'ion' and setting permissions for user 'ion'"
         rabbitmqctl add_vhost ion
         rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
@@ -247,51 +262,31 @@ case "$1" in
         echo "Loading references failed."
 
     #load the config page to update plugins and publishers
-    #(wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
-    #    echo "Loading plugin config page failed."
-    # Schedule plugin rescan task to run after 30 seconds
-    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=30)'
+    (wget -q -O /dev/null http://localhost/configure/plugins/ > /dev/null) || \
+        echo "Loading plugin config page failed."
 
-    #TS-5486: Schedule task to rescan all Results/Reports to ensure reportStatus is set to Archived for archived reports
-    python -c 'import iondb.bin.djangoinit, iondb.backup.tasks as tasks; tasks.sync_filesystem_and_db_report_state.apply_async(countdown=30)'
-    
+    # Schedule plugin rescan task to run after various delays, catches plugins installed by other packages.
+    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=2)'
+    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=60)'
+
     #TS-5598: Schedule task to fill diskusage field for all Experiments
     python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_exp_diskusage.apply_async(countdown=40)'
-    #python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_rep_diskusage.apply_async(countdown=40)'
 
-    # command to execute
-    COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"
+    #TS-5908: Schedule task to fix value in Results.diskusage field
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_result_diskusage.apply_async(countdown=40)'
 
-    # generate two random names for temporary files.
-    FILE="/tmp/$(basename $0).$RANDOM.txt"
-    FILE2="/tmp/$(basename $0).$RANDOM.txt"
+    # Rescan size and inode count for PluginResults
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=40)'
 
-    # Entry we are adding to the crontab.
-    ENTRY="0 6 * * * $COMMAND"
-
-    # read in the users crontab entry into our random file
-    (crontab -u ionadmin -l > $FILE 2> /dev/null) || true
-
-    # Filter out our commands, & put the remaining lines in
-    # our second file
-    (cat $FILE | grep -v "$COMMAND" > $FILE2) || true
-
-    # add our commands to the second file
-    echo "$ENTRY" >> $FILE2
-
-    # reload our file into crontab
-    comm="crontab $FILE2"
-
-    #
-    # use su - username if we are adding to another users crontab.
-    su - ionadmin -c "$comm"
-
-    # remove our tmp files
-    rm $FILE $FILE2
-
+    #TS-6081: Create DMFileStat objs for existing Results objs without them.
+    echo "Migrating to new Data Management..."
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_management as dm; dm.backfill_create_dmfilestat()'
+    
+    # Now that prerequisite tasks have been run or scheduled, restart crawler.
+    invoke-rc.d ionJobServer restart
+    invoke-rc.d ionPlugin restart
+    invoke-rc.d ionCrawler restart
     ;;
 esac
 
 exit 0
-
-

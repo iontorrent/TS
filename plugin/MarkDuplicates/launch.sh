@@ -23,8 +23,8 @@ fi
 # create a dummy block
 if [ "true" == ${MARK_DUPLICATES} ]; then
   echo "INFO: Mark duplicates was on.";
-  #cat ${TSP_FILEPATH_BAM}.markduplictes.metrics.txt > ${TSP_FILEPATH_PLUGIN_DIR}/MarkDuplicates_block.html;
-  python ${DIRNAME}/mark_duplicates.py -m ${TSP_FILEPATH_BAM}.markduplictes.metrics.txt > ${TSP_FILEPATH_PLUGIN_DIR}/MarkDuplicates_block.html;
+  #cat ${TSP_FILEPATH_BAM}.markduplicates.metrics.txt > ${TSP_FILEPATH_PLUGIN_DIR}/MarkDuplicates_block.html;
+  python ${DIRNAME}/mark_duplicates.py -m ${TSP_FILEPATH_BAM}.markduplicates.metrics.txt > ${TSP_FILEPATH_PLUGIN_DIR}/MarkDuplicates_block.html;
 elif [ "false" == ${MARK_DUPLICATES} ]; then
   echo "INFO: Mark duplicates was off.";
 else 

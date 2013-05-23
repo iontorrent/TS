@@ -12,19 +12,19 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 
 	// Recast input arguments
 	// wellDir & wellFile
-	RcppStringVector  wellDir_temp(wellDir_in);
-	char *wellDir = strdup(wellDir_temp(0).c_str());
-	RcppStringVector  wellFile_temp(wellFile_in);
-	char *wellFile = strdup(wellFile_temp(0).c_str());
+	Rcpp::StringVector  wellDir_temp(wellDir_in);
+	char *wellDir = strdup(wellDir_temp(0));
+	Rcpp::StringVector  wellFile_temp(wellFile_in);
+	char *wellFile = strdup(wellFile_temp(0));
 	// nCol and nRow
-	RcppVector<int> nCol_temp(nCol_in);
+	Rcpp::IntegerVector nCol_temp(nCol_in);
 	uint64_t nCol = nCol_temp(0);
-	RcppVector<int> nRow_temp(nRow_in);
+	Rcpp::IntegerVector nRow_temp(nRow_in);
 	uint64_t nRow = nRow_temp(0);
 	// x
-	RcppVector<int> x_temp(x_in);
+	Rcpp::IntegerVector x_temp(x_in);
 	uint64_t nX = x_temp.size();
-	RcppVector<int> x(nX);
+	Rcpp::IntegerVector x(nX);
 	int xMin = INT_MAX;
 	int xMax = -1;
 	int newVal = 0;
@@ -37,9 +37,9 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 		xMax = newVal;
 	}
 	// y
-	RcppVector<int> y_temp(y_in);
+	Rcpp::IntegerVector y_temp(y_in);
 	uint64_t nY = y_temp.size();
-	RcppVector<int> y(nX);
+	Rcpp::IntegerVector y(nX);
 	int yMin = INT_MAX;
 	int yMax = -1;
 	for(uint64_t i=0; i<nY; i++) {
@@ -51,7 +51,7 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 		yMax = newVal;
 	}
 	// flow
-	RcppVector<int> flow(flow_in);
+	Rcpp::IntegerVector flow(flow_in);
 	uint64_t nFlowRequested = flow.size();
  
  
@@ -69,7 +69,7 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 	}
         std::string *flowOrder = NULL;
 	if(!inRange) {
-	    exceptionMesg = copyMessageToR("all requested flows must be in-range");
+	    exceptionMesg = strdup("all requested flows must be in-range");
 	} else {
           std::string fo = wells.FlowOrder();
           flowOrder = new std::string();
@@ -78,8 +78,8 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
           }
 
 	    // Pull out the data for requested wells
-	    RcppVector<int> rank(nX);
-            RcppMatrix<double> signal(nX,(nFlowRequested > 0) ? nFlowRequested : nFlow);
+	    Rcpp::IntegerVector rank(nX);
+        Rcpp::NumericMatrix signal(nX,(nFlowRequested > 0) ? nFlowRequested : nFlow);
 	    for(uint64_t i=0; i<nX; i++) {
               const WellData *w = wells.ReadXY(x(i), y(i));
               rank(i) = w->rank;
@@ -93,7 +93,7 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 	    }
 
 	    // Make vector holding the acquired flows
-	    RcppVector<int> flow_out((nFlowRequested > 0) ? nFlowRequested : nFlow);
+	    Rcpp::IntegerVector flow_out((nFlowRequested > 0) ? nFlowRequested : nFlow);
 	    if(nFlowRequested > 0) {
 		for(uint64_t j=0; j<nFlowRequested; j++)
 		    flow_out(j) = flow(j);
@@ -103,23 +103,20 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
 	    }
 
 	    // Build result set to be returned as a list to R.
-	    RcppResultSet rs;
-	    rs.add("nFlow",        (int)nFlow);
-	    rs.add("flowOrder",    *flowOrder);
-	    rs.add("flow",         flow);
-	    rs.add("rank",         rank);
-	    rs.add("signal",       signal);
+        rl = Rcpp::List::create(Rcpp::Named("nFlow")       = (int)nFlow,
+                                Rcpp::Named("flowOrder")   = *flowOrder,
+                                Rcpp::Named("flow")        = flow,
+                                Rcpp::Named("rank")        = rank,
+                                Rcpp::Named("signal")      = signal);
 
-	    // Get the list to be returned to R.
-	    rl = rs.getReturnList();
 	}
 
     if(flowOrder) delete flowOrder;
 
     } catch(std::exception& ex) {
-	exceptionMesg = copyMessageToR(ex.what());
+	forward_exception_to_r(ex);
     } catch(...) {
-	exceptionMesg = copyMessageToR("unknown reason");
+	::Rf_error("c++ exception (unknown reason)");
     }
     
     if(exceptionMesg != NULL)

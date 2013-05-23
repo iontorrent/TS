@@ -10,6 +10,7 @@ ChipIdEnum ChipIdDecoder::glob_chip_id = ChipIdUnknown;
 ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] = 
 {
   { "316", ChipId316    },
+  { "316v2",  ChipId316v2    },
   { "318", ChipId318    },
   { "314", ChipId314    },
   { "900", ChipId900    },

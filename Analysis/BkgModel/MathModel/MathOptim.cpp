@@ -131,7 +131,7 @@ MixtureMemo::MixtureMemo()
   max_dim_minus_one = 0;
   max_entry = 0;
   inv_scale = 20.0f;
-  _inv_scale = _mm_set_ss( inv_scale );
+  //_inv_scale = _mm_set_ss( inv_scale );
 
   scale = 0.05f;
   occ_r = 1.0f;
@@ -150,7 +150,7 @@ float MixtureMemo::Generate ( float _A, PoissonCDFApproxMemo *my_math )
   max_dim_minus_one = max_dim-1;
   max_entry = max_dim-1;
   inv_scale = 1/my_math->scale;
-  _inv_scale = _mm_set_ss( inv_scale );
+  //_inv_scale = _mm_set_ss( inv_scale );
   scale = my_math->scale;
 
   int ileft, iright;

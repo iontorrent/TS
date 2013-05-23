@@ -246,9 +246,9 @@ sub loadBedRegions
   open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
   while( <BEDFILE> )
   {
-    my ($chrid,$srt,$end) = split;
+    my ($chrid,$srt,$end) = split('\t',$_);
     next if( $chrid !~ /\S/ );
-    if( $chrid eq "track" )
+    if( $chrid =~ /^track / )
     {
       ++$numTracks;
       if( $numTracks > 1 )
@@ -288,18 +288,19 @@ sub loadBedRegions
       print STDERR "ERROR: Region $chrid:$srt-$end is out-of-order vs. previous region $chrid:$lastSrt-$lastEnd.\n";
       exit 1;
     }
+    $lastSrt = $srt;
     if( $srt <= $lastEnd )
     {
       ++$numWarn;
       if( $end <= $lastEnd )
       {
         print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
+        $lastEnd = $end;
         next;
       }
       print STDERR "Warning: Region $chrid:$srt-$end overlaps previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
       $srt = $lastEnd + 1;
     }
-    $lastSrt = $srt;
     $lastEnd = $end;
     ++$numTargets;
     push( @{$targSrts{$chrid}}, $srt );

@@ -32,7 +32,9 @@ RcppExport SEXP readDat(
 ) {
 
   SEXP ret = R_NilValue; 		// Use this when there is nothing to be returned.
+  std::map<std::string,SEXP> map;
   char *exceptionMesg = NULL;
+  Rcpp::IntegerVector* sigInt = NULL;
 
   try {
 
@@ -66,6 +68,7 @@ RcppExport SEXP readDat(
     vector< vector<double> > frameStart,frameEnd;
     vector< vector< vector<short> > > signal;
     vector< vector<short> > mean,sd,lag;
+    vector<int> colOutInt,rowOutInt;
 
     // Recast int to unsigned int because Rcpp has no unsigned int
     vector<unsigned int> col,row;
@@ -115,85 +118,81 @@ RcppExport SEXP readDat(
       lag
     )) {
       string exception = "Problem reading dat data\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
       int nDat = datFile.size();
       int nWell = colOut.size();
 
-      // Recast colOut and rowOut from int to unsigned int because Rcpp has no unsigned int
-      vector<int> colOutInt,rowOutInt;
-      colOutInt.resize(colOut.size());
-      for(unsigned int i=0; i<colOutInt.size(); i++)
-        colOutInt[i] = (int) colOut[i];
-      rowOutInt.resize(rowOut.size());
-      for(unsigned int i=0; i<rowOutInt.size(); i++)
-        rowOutInt[i] = (int) rowOut[i];
-  
-      // Recast vectors of vectors to arrays.
-      vector<int> sigInt;
-      vector<double> sigMean,sigSD;
-      vector<double> sigLag;
-      if(returnSignal) {
-        sigInt.reserve( ((size_t)nDat*(size_t)nWell*(size_t)nFrame));
-			}
-      if(returnWellMean) {
-        sigMean.reserve((size_t)nDat*(size_t)nWell); 
-			}
-      if(returnWellSD) {
-        sigSD.reserve((size_t)nDat*(size_t)nWell);
-			}
-      if (returnWellLag){
-        sigLag.reserve((size_t)nDat*(size_t)nWell);
+      sigInt = new Rcpp::IntegerVector(((size_t)nDat*(size_t)nWell*(size_t)nFrame));
+      Rcpp::NumericMatrix sigMean(nDat,nWell);
+      Rcpp::NumericMatrix sigSD(nDat,nWell);
+      Rcpp::NumericMatrix sigLag(nDat,nWell);
+      Rcpp::IntegerVector colOutInt(nWell);
+      Rcpp::IntegerVector rowOutInt(nWell);
+      Rcpp::NumericVector frameStartOut(nDat*nFrame);
+      Rcpp::NumericVector frameEndOut(nDat*nFrame);
+
+      for(int i=0; i<nWell; i++) {
+        colOutInt(i) = (int) colOut[i];
+        rowOutInt(i) = (int) rowOut[i];
       }
+
+      int cnt = 0;
       for(int iDat=0; iDat < nDat; iDat++) {
+        unsigned int frameOffset=iDat*nFrame;
+        for(unsigned int iFrame=0; iFrame<nFrame; iFrame++) {
+          frameStartOut(frameOffset+iFrame) = frameStart[iDat][iFrame];
+          frameEndOut(frameOffset+iFrame)   = frameEnd[iDat][iFrame];
+        }
         if(returnSignal) {
           for(unsigned int iFrame=0; iFrame < signal[iDat][0].size(); iFrame++) {
             for(unsigned int iWell=0; iWell < signal[iDat].size(); iWell++) {
-              sigInt.push_back(signal[iDat][iWell][iFrame]);
+              (*sigInt)[cnt++]=signal[iDat][iWell][iFrame];
             }
           }
         }
-        if(returnWellMean || returnWellSD) {
+        if(returnWellMean || returnWellSD || returnWellLag) {
           for(int iWell=0; iWell < nWell; iWell++) {
             if(returnWellMean)
-              sigMean.push_back(mean[iDat][iWell]);
+              sigMean(iDat,iWell) = mean[iDat][iWell];
             if(returnWellSD)
-              sigSD.push_back(sd[iDat][iWell]);
-          }
-        }
-        if (returnWellLag){
-          for(int iWell=0; iWell<nWell; iWell++){
-            sigLag.push_back(lag[iDat][iWell]);
+              sigSD(iDat,iWell) = sd[iDat][iWell];
+            if(returnWellLag)
+              sigLag(iDat,iWell) = lag[iDat][iWell];
           }
         }
       }
-      RcppResultSet rs;
-      rs.add("datFile",       datFile);
-      rs.add("nCol",          (int) nCol);
-      rs.add("nRow",          (int) nRow);
-      rs.add("nFrame",        (int) nFrame);
-      rs.add("nFlow",         nDat);
-      rs.add("col",           colOutInt);
-      rs.add("row",           rowOutInt);
-      rs.add("frameStart",    frameStart);
-      rs.add("frameEnd",      frameEnd);
+
+      map["datFile"]    = Rcpp::wrap( datFile );
+      map["nCol"]       = Rcpp::wrap( (int) nCol );
+      map["nRow"]       = Rcpp::wrap( (int) nRow );
+      map["nFrame"]     = Rcpp::wrap( (int) nFrame );
+      map["nFlow"]      = Rcpp::wrap( nDat );
+      map["col"]        = Rcpp::wrap( colOutInt );
+      map["row"]        = Rcpp::wrap( rowOutInt );
+      map["frameStart"] = Rcpp::wrap( frameStartOut );
+      map["frameEnd"]   = Rcpp::wrap( frameEndOut );
       if(returnSignal){
-        rs.add("signal",        sigInt);
-			}
+        map["signal"]   = *sigInt;
+      }
       if(returnWellMean)
-        rs.add("wellMean",      sigMean);
+        map["wellMean"] = Rcpp::wrap( sigMean );
       if(returnWellSD)
-        rs.add("wellSD",        sigSD);
+        map["wellSD"]   = Rcpp::wrap( sigSD );
       if(returnWellLag)
-        rs.add("wellLag",       sigLag);
-      ret = rs.getReturnList();
+        map["wellLag"]  =  Rcpp::wrap( sigLag );
+
+      ret = Rcpp::wrap( map );
+
     }
   } catch(exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
-    
+
+  delete sigInt;
+
   if(exceptionMesg != NULL)
     Rf_error(exceptionMesg);
 

@@ -8,6 +8,7 @@
 #include "CommandLineOpts.h"
 #include "RawWells.h"
 #include "ChipIdDecoder.h"
+#include "Utils.h"
 
 class Mask;
 
@@ -23,7 +24,7 @@ void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
                                 
 void IncrementalWriteWells (RawWells &rawWells,int flow, bool last_flow,int saveWellsFrequency,int num_fb, int numFlows);
 void OpenExistingWellsForOneChunk(RawWells &rawWells,  int start_of_chunk, int chunk_depth);
-void WriteOneChunkAndClose(RawWells &rawWells);
+void WriteOneChunkAndClose(RawWells &rawWells, SumTimer &timer);
 int FigureChunkDepth(int flow, int numFlows, int write_well_flow_interval);
 bool NeedToOpenWellChunk(int flow, int write_well_flow_interval);
 

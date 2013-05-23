@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block subnav %}
+<li><a href="/report/{{startplugin_json.runinfo.pk}}/">&larr; Go back to
+    {{startplugin_json.expmeta.results_name}} </a></li>
+{% endblock %}
+
+{% block content %}
+
+<style>
+    #reloadLog{
+        margin: 20px;
+        margin-left: 0px;
+    }
+
+
+</style>
+<div class="content clearfix tall">
+
+    <h1> {{run_name}} </h1>
+
+    <div>
+        <strong>{{message}}</strong>
+    </div>
+
+    <pre id="log" style="display: none"></pre>
+
+    <div id="reloadLog" class="btn btn-primary">Show Log</div>
+
+</div>
+
+
+<script>
+
+
+    $(function () {
+
+        function reloadLog() {
+            $("#reloadLog").html("Loading Log..");
+            var request = $.ajax({
+                type: 'GET',
+                url: 'drmaa_stdout.txt',
+                contentType: "text/plain",
+                dataType: "text/plain",
+                async: true
+            });
+
+            request.always(function (data) {
+                $("#reloadLog").html("Reload Log");
+                $("#log").show();
+                $("#log").html(data.responseText);
+            });
+
+        }
+
+        $("#reloadLog").click(reloadLog);
+    });
+
+</script>
+
+
+{% endblock content %}

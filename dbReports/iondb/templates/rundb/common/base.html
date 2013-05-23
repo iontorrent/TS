@@ -10,6 +10,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    {% if base_js_extra %}
+        {% include 'rundb/common/js_extra.html' %}
+    {% endif %}
+
     <script type="text/javascript">
     if (!window.console) {
         (function() {
@@ -36,7 +40,7 @@
     <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
     <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
 
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
+    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
     <script type="text/javascript" src="/site_media/resources/jquery/jquery.cookie.js"></script>
     <script type="text/javascript" src="/site_media/resources/scripts/tb.jquery.min.js"></script> 
     <script type="text/javascript" src="/site_media/js/json2.min.js"></script> <!-- include in cases browser doesn't natively support JSON.stringify -->
@@ -55,14 +59,6 @@
 
     {% block extra_head %}{% endblock extra_head %}
     <script type="text/javascript" src="/site_media/resources/scripts/tb-bootstrap-modal.min.js"></script> <!-- Must be last to override the bootstrap modal default behavior -->
-    <!--[if (gte IE 6)&(lte IE 8)]>
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/IE7.min.css" />
-    <script type="text/javascript" src="/site_media/resources/scripts/IE7.min.js"></script>   
-    <![endif]-->
-    <!--[if lte IE 8]>
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/browser-warning.css"/>
-    <script type="text/javascript" src="/site_media/resources/scripts/browser-warning.js"></script>   
-    <![endif]-->
 </head>
 <body>
 <div class="header">
@@ -81,7 +77,7 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li><a href="http://ioncommunity.iontorrent.com/">IonCommunity</a></li>
-                            <li><a href="http://iontorrent.com/support">Support</a></li>
+                            <li><a href="http://www.invitrogen.com/site/us/en/home/support/Contact-Us.html#tab-2">Support</a></li>
                             <li><a href="/ion-docs/Home.html">Local Documentation</a></li>
                             <li><a href="/configure/info">System Support Diagnostics</a></li>
                             <li><a href="/configure/chips">Instrument Diagnostics</a></li>
@@ -122,6 +118,13 @@
     <div class="container-fluid">
         <div id="global_messages"></div>
         <div id="user_messages"></div>
+        <script>
+            $(function(){
+                //dynanmically add the #error-messages container
+                $('.main > .container-fluid:first > .content:first ').prepend('<div id="error-messages" class="alert alert-error"></div>').alert();
+                $('#error-messages').hide();
+            });
+        </script>
         {% block content %}{% endblock content %}
     </div>
     <div class="main-push"></div>
@@ -133,7 +136,10 @@
                 <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
                 <div class="pull-right">
                     <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
-                    <p><span class="copyright">&copy; 2012 Life Technologies Corporation. All Rights Reserved.</span> <a href="http://iontorrent.com/support">Technical Support</a> | <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+                    <p><span class="copyright">&copy; 2013 Life Technologies Corporation. All Rights Reserved.</span>
+                    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+                    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a>
+                    </p>
                 </div>
             </div>
         </div>

@@ -39,7 +39,8 @@ void ReplayH5DataSet::Init(const char *datasetname, hid_t datatype,
 			    int rank)
 {
   mName = strdup(datasetname);
-  mDatatype = H5Tcopy(datatype);
+  mDatatype = H5Tcopy(datatype);  // set to EMPTY on Close()
+  assert (mDatatype >=0 );
   assert( rank <= 3 );
   mRank = rank;
 }
@@ -143,18 +144,30 @@ void ReplayH5DataSet::Open(hid_t hFile)
 {
   if (hFile >= 0) {
     mDataset = H5Dopen(hFile, mName, H5P_DEFAULT); // dataset handle
+    assert (mDataset>=0);  // fail ungracefully
+
     mDataspace = H5Dget_space (mDataset);
+    assert (mDataspace>=0);  // fail ungracefully
+
     mDatatype  = H5Dget_type(mDataset);                 // datatype handle
+    assert (mDatatype>=0);  // fail ungracefully
+
     // mClass = H5Tget_class(mDatatype);                    // class
     mSize = H5Tget_size(mDatatype);
-    mRank = H5Sget_simple_extent_ndims(mDataspace);
-    assert(mRank <= 3);                     // see comment in class definition
-    mStatus  = H5Sget_simple_extent_dims(mDataspace, mDims, NULL);
+    assert (mSize>0);         // fail ungracefully    
 
-    assert (mStatus>=0);  // fail ungracefully
+    mRank = H5Sget_simple_extent_ndims(mDataspace);
+    assert (mRank>=0);         // fail ungracefully;
+    assert(mRank <= 3);                     // see comment in class definition
+
+    mStatus  = H5Sget_simple_extent_dims(mDataspace, mDims, NULL);
+    assert (mStatus>=0);         // fail ungracefully;
 
     mPList = H5Dget_create_plist (mDataset);
+    assert (mPList>=0);  // fail ungracefully
+
     mLayout = H5Pget_layout (mPList);
+    assert (mLayout>=0);  // fail ungracefully
     if (H5D_CHUNKED == mLayout)
     {
       int rankChunk = H5Pget_chunk(mPList, mRank, mChunkDims);
@@ -162,6 +175,7 @@ void ReplayH5DataSet::Open(hid_t hFile)
     }
   }
 }
+
 
 bool ReplayH5DataSet::IsOpen()
 {
@@ -196,12 +210,17 @@ void ReplayH5DataSet::Extend(hsize_t *size)
 }
 
 
-// *********************************************************************
 // the core of the replay class
 pthread_mutex_t H5Replay::h5_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-H5Replay::H5Replay(CommandLineOpts& clo, char *datasetname) {
-  Init(clo, datasetname);
+H5Replay::H5Replay(std::string& h5File, const char *datasetname) {
+  Init(h5File, datasetname);
+}
+H5Replay::H5Replay(std::string& h5File, const char *datasetname, hid_t dsnType, unsigned int rank) {
+  // useful dsnTypes: H5T_NATIVE_INT, H5T_NATIVE_FLOAT, H5T_NATIVE_DOUBLE,
+  // H5T_NATIVE_CHAR
+  // assert ( rank <=3 );  // bigger ranks not supported
+  Init(h5File, datasetname, dsnType, rank);
 }
 
 H5Replay::~H5Replay() {
@@ -221,55 +240,71 @@ void H5Replay::Close()
   }
 
   if (locked){
-    //fprintf(stdout, "H5Replay: unlock on %u\n", (unsigned int)pthread_self());
+    // fprintf(stdout, "H5Replay::Close unlock on %u\n", (unsigned int)pthread_self());
+    // fflush(stdout);
     pthread_mutex_unlock(&h5_mutex);
   }
   locked = false;
 }
 
-void H5Replay::Init(CommandLineOpts &clo, char *datasetname)
+void H5Replay::Init(std::string& h5File, const char *datasetname)
 {
-  SetReplayBkgModelDataFile(clo);  // setup location of record/replay h5 file
+  SetReplayBkgModelDataFile(h5File);  // setup location of record/replay h5 file
   mHFile = ReplayH5DataSet::EMPTY;
 
   locked = false;
 
   if (datasetname != NULL)
   {
-    fileReplayDsn dsninfo;
-    std::string key = std::string(datasetname);
-    mInfo = dsninfo.GetDsn(key); // get predefined dataset info
-    
-    mRDataset.Init(mInfo.dataSetName, mInfo.dsnType, mInfo.rank);
+    mRDataset.mName=strdup(datasetname);
   }
 }
 
-
-void H5Replay::SetReplayBkgModelDataFile(CommandLineOpts &clo)
+void H5Replay::Init(std::string& h5File, const char *datasetname, hid_t dsnType, unsigned int rank)
 {
-  // set the file to record/replay hdf5 using CommandLineOpts
-  // right now hardcoded and placed in the analysis directory
-  if (ToStr(clo.sys_context.wells_output_directory)=="")
-    mFilePath = clo.sys_context.results_folder;
-  else
-    mFilePath = ToStr(clo.sys_context.wells_output_directory);
-  
-  if (mFilePath[mFilePath.length()-1] != '/')
-    mFilePath += '/';
-  mFilePath += "replayBkgModelData.h5";
+  SetReplayBkgModelDataFile(h5File);  // setup location of record/replay h5 file
+  mHFile = ReplayH5DataSet::EMPTY;
+
+  locked = false;
+
+  if (datasetname != NULL)
+  {
+    mRDataset.Init(datasetname, dsnType, rank);
+  }
 }
+
+void H5Replay::SetReplayBkgModelDataFile(std::string& file)
+{
+  if ( file.empty() ){
+    char buffer[2000];
+    char *out = getcwd(buffer, 2000);
+    assert( out != NULL);
+    mFilePath = ToStr(buffer);
+    if (mFilePath[mFilePath.length()-1] != '/')
+      mFilePath += '/';
+    std::stringstream ss;
+    ss << getpid();
+    mFilePath = mFilePath + "dumpfile_" + ss.str() + ".h5";
+  }
+  else
+    mFilePath = file;
+}
+
 
 // *********************************************************************
 // reader specific functions
 
-H5ReplayReader::H5ReplayReader(CommandLineOpts& clo)
-  : H5Replay(clo, NULL)
+H5ReplayReader::H5ReplayReader(std::string& h5file)
+  : H5Replay(h5file, NULL)
 {
   CheckValid();
 }
 
-H5ReplayReader::H5ReplayReader(CommandLineOpts& clo, char *datasetname)
-   : H5Replay(clo, datasetname)
+/**
+ * reader to an already existing dataset in an already existing file
+ */
+H5ReplayReader::H5ReplayReader(std::string& h5File, const char *datasetname)
+  : H5Replay(h5File, datasetname)
 {
   Open();         // test we can open the file
 
@@ -281,24 +316,30 @@ H5ReplayReader::H5ReplayReader(CommandLineOpts& clo, char *datasetname)
   Close();        // close it down
 }
 
-// open a file read only, leaves open
+/**
+ * open a file read only, leaves open
+ */
 void H5ReplayReader::Open()
 {
   pthread_mutex_lock(&h5_mutex);
   locked = true;
-  //fprintf(stdout, "H5Replay: lock on %u\n", (unsigned int)pthread_self());
+  // fprintf(stdout, "H5ReplayReader::Open lock on %u\n", (unsigned int)pthread_self());
+  // fflush(stdout);
   if (mHFile == ReplayH5DataSet::EMPTY) {
     // open file for reading with default property list
     mHFile = H5Fopen(mFilePath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   }
   if (mHFile < 0)  { ION_ABORT("Couldn't open file: " + mFilePath); }
-  // fprintf(stdout, "H5: Opened bkg data replay file: %s with dataset: %s\n", mFilePath.c_str(), mRDataset.mName);
+  // fprintf(stdout, "H5: opened file: %s with dataset: %s\n", mFilePath.c_str(), mRDataset.mName);
   if (( mHFile >= 0 ) & mRDataset.IsCreated(mHFile) ) {
     mRDataset.Open(mHFile);
   }
 }
 
-// check that the file exists and is valid
+/**
+ * check that the file exists and is valid, returns true if valid
+ * gives an HDF5 error if not
+ */
 bool H5ReplayReader::CheckValid()
 {
   // throws an error if not valid @TODO decide whether to return false instead
@@ -308,33 +349,101 @@ bool H5ReplayReader::CheckValid()
   return(true);
 }
 
+/**
+ * Return an immutable non-closable native datatype matching this datatype
+ */
+hid_t H5ReplayReader::GetType()
+{
+  Open();
+  hid_t retval;
+  hid_t dt = mRDataset.GetDatatype();
+  if ( H5Tequal(dt, H5T_NATIVE_CHAR) > 0)
+    retval = H5T_NATIVE_CHAR;
+  else if ( H5Tequal(dt, H5T_NATIVE_SCHAR) > 0)
+    retval = H5T_NATIVE_SCHAR;
+  else if ( H5Tequal(dt, H5T_NATIVE_UCHAR) > 0)
+    retval = H5T_NATIVE_UCHAR;
+  else if ( H5Tequal(dt, H5T_NATIVE_SHORT) > 0)
+    retval = H5T_NATIVE_SHORT;
+  else if ( H5Tequal(dt, H5T_NATIVE_USHORT) > 0)
+    retval = H5T_NATIVE_USHORT;
+  else if ( H5Tequal(dt, H5T_NATIVE_INT) > 0)
+    retval = H5T_NATIVE_INT;
+  else if ( H5Tequal(dt, H5T_NATIVE_UINT) > 0)
+    retval = H5T_NATIVE_UINT;
+  else if ( H5Tequal(dt, H5T_NATIVE_LONG) > 0)
+    retval = H5T_NATIVE_LONG;
+  else if ( H5Tequal(dt, H5T_NATIVE_ULONG) > 0)
+    retval = H5T_NATIVE_ULONG;
+  else if ( H5Tequal(dt, H5T_NATIVE_LLONG) > 0)
+    retval = H5T_NATIVE_LLONG;
+  else if ( H5Tequal(dt, H5T_NATIVE_ULLONG) > 0)
+    retval = H5T_NATIVE_ULLONG;
+  else if ( H5Tequal(dt, H5T_NATIVE_FLOAT) > 0)
+    retval = H5T_NATIVE_FLOAT;
+  else if ( H5Tequal(dt, H5T_NATIVE_DOUBLE) > 0)
+    retval = H5T_NATIVE_DOUBLE;
+  else if ( H5Tequal(dt, H5T_NATIVE_LDOUBLE) > 0)
+    retval = H5T_NATIVE_LDOUBLE;
+  else if ( H5Tequal(dt, H5T_NATIVE_B8) > 0)
+    retval = H5T_NATIVE_B8;
+  else if ( H5Tequal(dt, H5T_NATIVE_B16) > 0)
+    retval = H5T_NATIVE_B16;
+  else if ( H5Tequal(dt, H5T_NATIVE_B32) > 0)
+    retval = H5T_NATIVE_B32;
+  else if ( H5Tequal(dt, H5T_NATIVE_B64) > 0)
+    retval = H5T_NATIVE_B64;
+  else
+    retval = -1;  // don't know about this datatype
+  Close();
+  return(retval);
+}
+  
+    
+
 // *********************************************************************
 // recorder specific functions
 
-bool H5ReplayRecorder::fileNotCreated = true;
 
-H5ReplayRecorder::H5ReplayRecorder(CommandLineOpts& clo)
-  : H5Replay(clo, NULL) {}
+/**
+ * recorder in a file, create if necessary, dataset not specified
+ */
+H5ReplayRecorder::H5ReplayRecorder(std::string& h5File)
+  : H5Replay(h5File, NULL) {}
 
-H5ReplayRecorder::H5ReplayRecorder(CommandLineOpts& clo, char *datasetname)
-  : H5Replay(clo, datasetname) {}
+/**
+ * recorder to an already existing dataset
+ */
+H5ReplayRecorder::H5ReplayRecorder(std::string& h5File, char *datasetname)
+  : H5Replay(h5File, datasetname) {}
 
-// create a file for write, truncates; if the file is already created, just return
+/**
+ * recorder to a possibly new dataset in a possibly new file
+ * If it already exists type and rank will be ignored
+ */
+H5ReplayRecorder::H5ReplayRecorder(std::string& h5File, char *datasetname, hid_t dsnType, unsigned int rank)
+  : H5Replay(h5File, datasetname, dsnType, rank) {}
+
+/**
+ * create a file for write, truncates; if the file is already created, just return
+ */
 void H5ReplayRecorder::CreateFile()
 {
   pthread_mutex_lock(&h5_mutex);
   locked = true;
-  fprintf(stdout, "H5: Creating background data recorder file: %s\n", mFilePath.c_str());
-  if (fileNotCreated) {
-    fileNotCreated = false;  // @TODO not threadsafe
+  if (FileNotCreated(mFilePath)) {
     mHFile = H5Fcreate(mFilePath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+
+    fprintf(stdout, "H5: Created background data recorder file: %s\n", mFilePath.c_str());
   }
   
   if (mHFile < 0) { ION_ABORT("Couldn't create file: " + mFilePath); }
   Close();
 }
 
-// create a dataset if it is not already created, open & close file
+/**
+ * create a dataset if it is not already created, open & close file
+ */
 void H5ReplayRecorder::CreateDataset(vector<hsize_t>& chunk_dims)
 {
   Open();
@@ -344,11 +453,15 @@ void H5ReplayRecorder::CreateDataset(vector<hsize_t>& chunk_dims)
   Close();
 }
 
-// open a file for write, leaves open
+/**
+ * open a file for write, leave open
+ */
 void H5ReplayRecorder::Open()
 {
   pthread_mutex_lock(&h5_mutex);
   locked = true;
+  // fprintf(stdout, "H5ReplayRecorder::Open lock on %u\n", (unsigned int)pthread_self());
+  // fflush(stdout);
   if (mHFile == ReplayH5DataSet::EMPTY) {
     // open file for read/write with default property list
     mHFile = H5Fopen(mFilePath.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
@@ -361,7 +474,9 @@ void H5ReplayRecorder::Open()
   }
 }
 
-// extend a dataset, open & close file
+/**
+ * extend a dataset, open & close file
+ */
 void H5ReplayRecorder::ExtendDataSet(vector<hsize_t>& extension)
 {
   Open();
@@ -370,5 +485,13 @@ void H5ReplayRecorder::ExtendDataSet(vector<hsize_t>& extension)
   Close();
 }
 
-
-
+bool H5ReplayRecorder::FileNotCreated(std::string& h5File)
+{
+  FILE * pFile;
+  pFile = fopen(h5File.c_str(), "r+");
+  if (pFile != NULL) { // file must exist for read and update
+    fclose (pFile);
+    return (false);
+  }
+  return (true); // file may not exist, or may not be readable or writeable
+}

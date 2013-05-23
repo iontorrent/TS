@@ -319,13 +319,20 @@ char * GetChipId (const char *filepath)
     char *chip = (char *) malloc (10);
     int len = strlen (argument);
     int y = 0;
+    ToLower(argument);
     for (int i = 0; i<len;i++)
     {
       if (isdigit (argument[i]))
         chip[y++] = argument[i];
     }
+    // Now if a chip is  316v2 or 316DEM
+    if (((len>5)&& (strncmp ("316dem",argument,6) == 0))||((len>4)&&(strncmp ("316v2",argument,5) == 0))){
+        chip[3]='v';
+        chip[4]='2';y=5;
+    }
     chip[y] = '\0';
     free (argument);
+    fprintf(stderr,"Returned  ChipId %s from explog\n",chip);
     return (chip);
   } else {
     fprintf(stderr,"Failed to find ChipId in explog.txt\n");
@@ -347,6 +354,11 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
     {
       dims[0] = 1280;
       dims[1] = 1152;
+    }
+    else if ((strncmp ("316DEM",type,6) == 0)||(strncmp ("316v2",type,5) == 0))
+    {
+      dims[0]=3392; 
+      dims[1]=2120;
     }
     else if (strncmp ("316",type,3) == 0)
     {

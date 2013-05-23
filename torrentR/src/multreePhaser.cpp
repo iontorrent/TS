@@ -10,15 +10,15 @@ RcppExport SEXP multreePhaser(SEXP Rsignal, SEXP RflowLimits, SEXP RflowOrders, 
   char *exceptionMesg = NULL;
 
   try {
-    RcppMatrix<double>   signal(Rsignal);
-    RcppVector<int>      flowLimits(RflowLimits);
-    RcppVector<int>      numFlows(RnumFlows);
-	RcppStringVector     flowOrders(RflowOrders);
-	RcppMatrix<int>      keyFlowMatrix(RkeyFlowMat);
-	RcppVector<int>      numKeyFlows(RnumKeyFlows);
-	RcppMatrix<double>   PhaseParams(RphaseParameters);
-	string basecaller  = Rcpp::as<string>(Rbasecaller);
-	int verbose        = Rcpp::as<int>(Rverbose);
+    Rcpp::NumericMatrix   signal(Rsignal);
+    Rcpp::IntegerVector   flowLimits(RflowLimits);
+    Rcpp::IntegerVector   numFlows(RnumFlows);
+	Rcpp::StringVector    flowOrders(RflowOrders);
+	Rcpp::IntegerMatrix   keyFlowMatrix(RkeyFlowMat);
+	Rcpp::IntegerVector   numKeyFlows(RnumKeyFlows);
+	Rcpp::NumericMatrix   PhaseParams(RphaseParameters);
+	string basecaller   = Rcpp::as<string>(Rbasecaller);
+	int verbose         = Rcpp::as<int>(Rverbose);
 	
 	unsigned int maxNumFlows = signal.cols();
 	unsigned int nRead = signal.rows();
@@ -27,11 +27,11 @@ RcppExport SEXP multreePhaser(SEXP Rsignal, SEXP RflowLimits, SEXP RflowOrders, 
 	//unsigned int maxKeyFlows = keyFlowMatrix.cols();
 
 	// Prepare objects for holding and passing back results
-	//RcppMatrix<double>        predicted_out(nRead,nFlow);
-	//RcppMatrix<double>        residual_out(nRead,nFlow);
-	//RcppMatrix<int>           hpFlow_out(nRead,nFlow);
-	RcppVector<int>            num_bases_called(nSequences);
-	//RcppMatrix<double>         predicted_out(nRead, maxNumFlows);
+	//Rcpp::NumericMatrix      predicted_out(nRead,nFlow);
+	//Rcpp::NumericMatrix      residual_out(nRead,nFlow);
+	//Rcpp::IntegerMatrix      hpFlow_out(nRead,nFlow);
+	Rcpp::IntegerVector        num_bases_called(nSequences);
+	//Rcpp::NumericMatrix      predicted_out(nRead, maxNumFlows);
 
 	std::vector< std::string > seq_out(nSequences);
 
@@ -46,7 +46,7 @@ RcppExport SEXP multreePhaser(SEXP Rsignal, SEXP RflowLimits, SEXP RflowOrders, 
     dr.assign(nJointly, 0);
 
 	for (unsigned int i=0; i<nJointly; i++) {
-		flow_orders[i].SetFlowOrder(flowOrders(i), numFlows(i));
+		flow_orders[i].SetFlowOrder(Rcpp::as<std::string>(flowOrders(i)), numFlows(i));
 		keyFlows[i].resize(numKeyFlows(i));
 		cf[i] = PhaseParams(i, 0);
 		ie[i] = PhaseParams(i, 1);
@@ -111,17 +111,15 @@ RcppExport SEXP multreePhaser(SEXP Rsignal, SEXP RflowLimits, SEXP RflowOrders, 
 	}
 	// -----------------------------
 
-    // Prepeare return structure
-	RcppResultSet rs;
-	rs.add("seq",        seq_out);
-	rs.add("nBases",  num_bases_called);
-	ret = rs.getReturnList();
+	ret = Rcpp::List::create(Rcpp::Named("seq")    = seq_out,
+                             Rcpp::Named("nBases") = num_bases_called);
+
 
 
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

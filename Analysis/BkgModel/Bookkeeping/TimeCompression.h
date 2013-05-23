@@ -13,8 +13,9 @@
 #include "IonErr.h"
 #include "VectorMacros.h"
 #include "Image.h"
+
 #ifndef __CUDACC__   //cuda compiler is allergic to xmmintrin.h
-    #include <xmmintrin.h>
+    #include <x86intrin.h>
 #endif
 
 // avx
@@ -74,6 +75,7 @@ class TimeCompression
   void ExponentialFramesPerPoint(int imgFrames, float t_comp_start, int start_detailed_time, float geom_ratio);
   void HyperTime(int imgFrames, float t_comp_start, int start_detailed_time);
   void StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void ETFCompatible(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void HalfSpeedSampling(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep);
   void WriteLinearTransformation(int frameStep);
@@ -221,6 +223,7 @@ class TimeCompression
   template<typename T>
     static void Interpolate(float *delta1, T *v1, int n1, float *delta2, float *v2, int n2);
 
+  size_t SecondsToIndex(float seconds);
 
  private:
   size_t _npts;           // number of data points after time compression

@@ -48,9 +48,7 @@ RcppExport SEXP PurpleSolveTotalTraceR(SEXP R_blue_hydrogen, SEXP R_red_hydrogen
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("PurpleTrace",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("PurpleTrace") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -60,7 +58,7 @@ RcppExport SEXP PurpleSolveTotalTraceR(SEXP R_blue_hydrogen, SEXP R_red_hydrogen
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -104,9 +102,7 @@ RcppExport SEXP IntegrateRedFromTotalTraceR(SEXP R_purple_obs, SEXP R_blue_hydro
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("IntegratedRed",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("IntegratedRed") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -116,7 +112,7 @@ RcppExport SEXP IntegrateRedFromTotalTraceR(SEXP R_purple_obs, SEXP R_blue_hydro
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -157,9 +153,7 @@ RcppExport SEXP RedSolveHydrogenFlowInWellR( SEXP R_red_hydrogen, SEXP R_i_start
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("RedTrace",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("RedTrace") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -168,7 +162,7 @@ RcppExport SEXP RedSolveHydrogenFlowInWellR( SEXP R_red_hydrogen, SEXP R_i_start
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -209,9 +203,7 @@ RcppExport SEXP BlueSolveBackgroundTraceR( SEXP R_blue_hydrogen, SEXP R_delta_fr
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("BlueTrace",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("BlueTrace") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -220,7 +212,7 @@ RcppExport SEXP BlueSolveBackgroundTraceR( SEXP R_blue_hydrogen, SEXP R_delta_fr
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

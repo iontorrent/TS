@@ -35,9 +35,10 @@
 
 //#define MAX_VALS 1020
 #define MAX_VALS 2044
-#define STEP_SIZE 50
+//#define STEP_SIZE 38
 //#define MAX_STEPS 24
-#define MAX_STEPS 48
+// MAX_STEPS set large enough to handle minimum window size
+#define MAX_STEPS (1+(MAX_VALS/kMinWindowSize_))
 #define MAX_PATHS 8
 
 #define MAX_PATH_DELAY 40
@@ -58,33 +59,45 @@ struct PathRec {
   int  sequence_length;
   int last_hp;
   int nuc;
+  float calib_A[MAX_VALS];
+  float calib_B[MAX_VALS];
+  float state_inphase[MAX_VALS];
 };
 #pragma pack(pop)
 
 
 class TreephaserSSE {
 public:
-  TreephaserSSE(const ion::FlowOrder& flow_order);
+  TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
+
+  //! @brief  Set the normalization window size
+  //! @param[in]  windowSize  Size of the normalization window to use.
+  inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(kMinWindowSize_, min(windowSize, kMaxWindowSize_));}
 
   void SetModelParameters(double cf, double ie);
 
+
+
   void NormalizeAndSolve(BasecallerRead& read);
-    PathRec* parent;
-    int best;
+  PathRec* parent;
+  int best;
+
+  void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
+     As_ = As;
+     Bs_ = Bs;
+     pm_model_available_ =  pm_model_available;
+   }
+
+  //! @brief  Perform a more advanced simulation to generate QV predictors
+  void  ComputeQVmetrics(BasecallerRead& read);
 
 protected:
 
   bool  Solve(int begin_flow, int end_flow);
   void  WindowedNormalize(BasecallerRead& read, int step);
-
   void sumNormMeasures();
-
-
   void advanceState4(PathRec RESTRICT_PTR parent, int end);
   void nextState(PathRec RESTRICT_PTR path, int nuc, int end);
-
-
-
 
   // There was a small penalty in making these arrays class members, as opposed to static variables
   ALIGN(64) short ts_NextNuc[4][MAX_VALS];
@@ -114,6 +127,14 @@ protected:
   int ts_StepCnt;
   int ts_StepBeg[MAX_STEPS+1];
   int ts_StepEnd[MAX_STEPS+1];
+
+  int windowSize_;
+
+  vector< vector< vector<float> > > *As_;
+  vector< vector< vector<float> > > *Bs_;
+  bool pm_model_available_;
+  bool pm_model_enabled_;
+  bool state_inphase_enabled;
 
 };
 

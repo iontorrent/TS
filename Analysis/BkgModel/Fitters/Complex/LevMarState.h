@@ -91,7 +91,6 @@ class LevMarBeadAssistant{
     void IncreaseRegularizer(int ibd);
     void IncrementRegionGroup();
     bool ValidBeadGroup(int ibd) const;
-    bool InValidBeadItem(int ibd, const std::vector<bool>& quality);
     bool WellBehavedBead(int ibd);
     int CountHappyBeads();
     void ReAssignBeadsToRegionGroups(int num_beads_per_group);

@@ -95,8 +95,12 @@
                 </div>
 
                 <p style="line-height:100%; font-weight: bold;">Templating Kit: </p>
-                <p style="line-height:100%; margin:10px;" id="review_templateKit"></p>
-
+                {% if selectedApplProductData %}
+                	<p style="line-height:100%; margin:10px;" id="review_templateKit">{{selectedApplProductData.defaultOneTouchTemplateKit.name}}</p>
+                {% else %}
+            		<p style="line-height:100%; margin:10px;" id="review_templateKit">{{selectedPlanTemplate.templatingKitName}}</p>
+            	{% endif %}
+            	
                 {% if selectedApplProductData.isDefaultPairedEnd %}
                     <p style="line-height:100%; font-weight: bold;">Sequencing Kit:</p>
                     <p style="line-height:100%; margin:10px;" id="review_seqKit">{{selectedApplProductData.peSeqKit.name}}</p>
@@ -184,7 +188,7 @@
                 </div>
 
                 <p style="line-height:100%; font-weight: bold;">Templating Kit: </p>
-                <p style="line-height:100%; margin:10px;" id="review_templateKit">{{selectedPlantemplate.templatingKitName}}</p>
+                <p style="line-height:100%; margin:10px;" id="review_templateKit">{{selectedPlanTemplate.templatingKitName}}</p>
 
                 <p style="line-height:100%; font-weight: bold;">Sequencing Kit:</p>
                 <p style="line-height:100%; margin:10px;" id="review_seqKit">{{selectedPlanTemplate.sequencekitname}}</p>
@@ -282,7 +286,7 @@
             <p>
             <p style="line-height:50%; font-weight: bold;" >Selected plugin(s): </p>
     
-            <p style="line-height:100%; margin:10px" id="revi   ew_selectedPlugins">
+            <p style="line-height:100%; margin:10px" id="review_selectedPlugins">
             <!--20120717-TODO-need selected plugins for the persisted plan/template>
             {% if not selectedApplProductData %}
                 {% for plugin in planTemplateData.plugins %}
@@ -296,7 +300,7 @@
             <p>
             <p style="line-height:100%; margin:10px" id="review_projects">
             {% if not selectedApplProductData %}
-                {% with selectedPlanTempalte.projects.all as selectedPlanTemplateProjects %}
+                {% with selectedPlanTemplate.projects.all as selectedPlanTemplateProjects %}
                 {% for project in selectedPlanTemplateProjects %}
                     {{project.name}}&#44
                 {% endfor %}

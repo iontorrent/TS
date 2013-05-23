@@ -1,0 +1,173 @@
+<fieldset>
+		<div class="control-group">
+		    <label for="id_reference" class="control-label">Alignment Reference</label>
+        <div class="controls">
+          {{ eas_form.reference }}
+					<p class="help-block"> {{ eas_form.reference.errors }} </p>
+				</div>
+		</div>
+		<div class="control-group">
+		    <label for="id_targetRegionBedFile" class="control-label">Target Regions BED File</label>
+        <div class="controls">
+          {{ eas_form.targetRegionBedFile }}
+					<p class="help-block"> {{ eas_form.targetRegionBedFile.errors }} </p>
+				</div>
+		</div>
+		<div class="control-group">
+		    <label for="id_hotSpotRegionBedFile" class="control-label">Hotspot Regions BED File</label>
+        <div class="controls">
+          {{ eas_form.hotSpotRegionBedFile }}
+					<p class="help-block"> {{ eas_form.hotSpotRegionBedFile.errors }} </p>
+				</div>
+		</div>
+		<div class="control-group">
+				<label for="id_plugins" class="control-label">Plugins</label>
+				<div id="plugins" class="controls" style="border:1px solid #0981d2;overflow: auto;width:350px;height:175px;padding:5px;">
+				  {{ eas_form.plugins }}
+					<p class="help-block"> {{ eas_form.notes.errors }} </p>
+				</div>
+		</div>
+		
+		<div class="controls" id="plugin_config" align="center" style="display: none;">
+        <div align="right">
+            <a href="#" class="btn" id='plugin_config_save' style="border:1px solid #0981d2;"> Save Plugin Settings </a>
+            <a href="#" class="btn" id='plugin_config_cancel' style="border:1px solid #0981d2;"> Cancel </a>
+        </div>
+        <iframe id="plugin_iframe" src="" width="100%" height="300px" style="border:1px solid #0981d2;overflow: auto;padding:5px;"></iframe>
+    </div>
+    
+		<div class="control-group">
+				<label for="id_barcodeKitName" class="control-label">Barcode Set</label>
+				<div class="controls">
+					{{ eas_form.barcodeKitName }}
+					<p class="help-block"> {{ exp_form.barcodeKitName.errors }} </p>
+				</div>
+		</div>
+		<div class="control-group">
+		    <label for="id_threePrimeAdapter" class="control-label">3' Adapter</label>
+        <div class="controls">
+          {{ eas_form.threePrimeAdapter }}
+					<p class="help-block"> {{ eas_form.threePrimeAdapter.errors }} </p>
+				</div>
+		</div>
+		{{ eas_form.pluginsUserInput }}		
+</fieldset>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('input:checked[name=plugins]').each(function(){
+            $("#configure_plugin_"+this.value).show();
+        });
+        
+        $('#submitButton').bind('mousedown', function(e){
+            if ($("#plugin_iframe").attr("src"))
+                save_plugin_config();
+        });
+    });
+    
+    $('input:checkbox[name=plugins]').click(function() {
+        pluginId = this.value
+        if (this.checked){
+            $("#configure_plugin_"+pluginId).show();
+            $("#configure_plugin_"+pluginId).click();
+        } else {
+            $("#configure_plugin_"+pluginId).hide();
+            $("#plugin_config_cancel").click();
+        }
+    });
+    
+    $(".configure_plugin").click(function(){
+    // plugin configure button clicked, opens plugin's plan.html in an iframe
+        var pluginId = this.getAttribute('data-plugin_pk');
+        var iframe = document.getElementById('plugin_iframe');
+        
+        // first check whether an iframe for another plugin is already open and save data
+        if (iframe.getAttribute('src'))
+            save_plugin_config();
+
+        iframe.src = "/configure/plugins/plugin/XXX/configure/plan/".replace('XXX',pluginId);
+        iframe.setAttribute('data-plugin_pk',pluginId);
+        $(iframe).bind('load', function() {});
+        $("#plugin_config").show();
+
+        // restore saved configuration, if any
+        var pluginUserInput = JSON.parse($('#id_pluginsUserInput').val());
+        var plugin_json_obj = pluginUserInput[pluginId];
+        if (plugin_json_obj)
+            $(iframe).one("load", function(){
+              if (plugin_json_obj !== null){
+                  if ($.isFunction(iframe.contentWindow.restoreForm)){
+                      // use plugin's restoreForm function if exists
+                      iframe.contentWindow.restoreForm(plugin_json_obj);
+                  }
+                  else {
+                      // call generic form json restore                      
+                      $(iframe.contentDocument.forms).restoreJSON(plugin_json_obj);
+                      iframe.contentWindow.$(':input').trigger('change')
+                 }
+              }
+            });
+    });
+    
+    save_plugin_config = function(){
+        var iframe = document.getElementById('plugin_iframe');
+        var plugin_json_obj;
+    
+        // use plugin's serializeForm function if exists
+        if ($.isFunction(iframe.contentWindow.serializeForm)){
+            plugin_json_obj = iframe.contentWindow.serializeForm();
+        }else{
+            plugin_json_obj = $(iframe.contentDocument.forms).serializeJSON();
+        }
+
+        var pluginId = iframe.getAttribute('data-plugin_pk');
+        console.log('save plugin', pluginId + ' configuration', plugin_json_obj);
+        
+        var pluginUserInput = JSON.parse($('#id_pluginsUserInput').val());
+        pluginUserInput[pluginId] = plugin_json_obj;
+        $('#id_pluginsUserInput').val(JSON.stringify(pluginUserInput))        
+    }
+    
+    $("#plugin_config_save").click(function(){
+        save_plugin_config();
+        $("#plugin_config").hide();
+        $("#plugin_iframe").attr("src", "");
+    });
+    
+    $("#plugin_config_cancel").click(function(){
+        $("#plugin_config").hide();
+        $("#plugin_iframe").attr("src", "");
+    });
+    
+    // restore serialized form
+    $.fn.restoreJSON = function(data) {
+        var els = $(this).find(':input').get();
+        if(data && typeof data == 'object') {
+            $.each(els, function() {
+                if (this.name && data[this.name]) {
+                    if(this.type == 'checkbox' || this.type == 'radio') {
+                        $(this).attr("checked", (data[this.name] == $(this).val()));
+                    } else if(this.type == 'select-one' && this.options.length < 2){
+                        // add saved values if missing options
+                        $(this).append('<option value="' + data[this.name] + '">' + data[this.name] + '</option>');
+                        $(this).val(data[this.name]);
+                    } else {
+                        $(this).val(data[this.name]);
+                    }
+                    $(this).change();
+                } else if (this.type == 'checkbox') {
+                    $(this).attr("checked", false);
+                }
+            });
+        }
+        return $(this);
+    };
+    
+    // match available BED files to reference
+    $("#modal_experiment_edit_form #id_reference, #report_analyze_form #id_reference").change(function(){
+      var value = this.value;
+      var select = $("#id_targetRegionBedFile option, #id_hotSpotRegionBedFile option");
+      select.filter('[value != ""]').hide().filter("[class ~= "+value+"]").show();
+    }).change();
+    
+</script>

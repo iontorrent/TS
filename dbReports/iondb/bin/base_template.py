@@ -31,7 +31,7 @@ def make_22_legacy_report_template():
         "base_site_name":name
     }))
     with open(generate, 'w') as outfile:
-        outfile.write(html)
+        outfile.write(html.encode('utf8'))
     print("Wrote base template for the PHP default report, versions 2.2 and earlier: " + generate)
 
 
@@ -49,7 +49,7 @@ def make_30_report_template():
         "global_messages": "[]"
     }))
     with open(generate, 'w') as outfile:
-        outfile.write(html)
+        outfile.write(html.encode('utf8'))
     print("Wrote base template for the PHP default report, versions 3.0 and later: " + generate)
 
 
@@ -59,7 +59,7 @@ def make_plugin():
     c = template.Context({'tab':"reports"})
     html = tmpl.render(c)
     outfile = open('/opt/ion/iondb/templates/rundb/php_base_plugin.html', 'w')
-    outfile.write(html)
+    outfile.write(html.encode('utf8'))
     outfile.close()
     print "Wrote template for PHP for plugins"
 

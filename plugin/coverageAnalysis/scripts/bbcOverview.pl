@@ -91,7 +91,7 @@ if( $haveBed )
 {
   $binsize = $targetSize / $numbins;
   print STDERR "targetSize = $targetSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
-  my $lastChrom;
+  my $lastChrom = "";
   my $binnum = 0;
   for( my $cn = 0; $cn < $numChroms; ++$cn )
   {
@@ -100,9 +100,9 @@ if( $haveBed )
     my @targMap = @{$targMaps{$chrid}};
     my $lbin = $targMap[scalar(@targMap)-1] / $binsize;
     my $ibin = int($lbin);
-    if( $cn > 0 && $lbin != $ibin )
+    if( $lbin != $ibin && $lastChrom ne "" )
     {
-      $binid[$binnum++] = $lastChrom . '-' . $chrid;
+      $binid[$binnum++] = $lastChrom . '--' . $chrid;
     }
     while( $binnum <= $ibin )
     {
@@ -125,17 +125,19 @@ else
   print STDERR "genomeSize = $genomeSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
   my $chrn = 1;
   my $pos = 0;
-  for( my $i = 0; $i < $numbins; ++$i )
+  my $i = 0;
+  for( ; $i < $numbins; ++$i )
   {
     $binid[$i] = $chrid;
-    $pos = $i * $binsize;
+    $pos = int(($i+1) * $binsize);
     while( $pos > $chrsz )
     {
       $chrid = $chromName[$chrn];
-      $binid[$i] .= "-" . $chrid if( int($pos) > $chrsz );
+      #$binid[$i] .= "-" . $chrid if( int($pos) > $chrsz );
       ++$chrn;
-      $chrsz = $chrn < $numChroms ? $chromMaps{$chromName[$chrn]} : $genomeSize;
+	  $chrsz = ($chrn >= $numChroms) ? $genomeSize : $chromMaps{$chromName[$chrn]};
     }
+    $binid[$i] .= '--' . $chrid if( $binid[$i] ne $chrid );
   }
   open( BBCVIEW, "$Bin/bbcView.pl $bbcfile |" ) || die "Cannot read base coverage from $bbcfile.\n";
 }
@@ -149,7 +151,7 @@ my (@targSrtAry,@targEndAry,@targMapAry);
 
 while( <BBCVIEW> )
 {
-  my ($chrid,$pos,$ontarg,$fcov,$rcov) = split;
+  my ($chrid,$pos,$ontarg,$fcov,$rcov) = split('\t',$_);
   if( $haveBed )
   {
     next if( !defined($targMaps{$chrid}) );
@@ -213,9 +215,9 @@ sub loadBedRegions
   open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
   while( <BEDFILE> )
   {
-    my ($chrid,$srt,$end) = split;
+    my ($chrid,$srt,$end) = split('\t',$_);
     next if( $chrid !~ /\S/ );
-    if( $chrid eq "track" )
+    if( $chrid =~ /^track / )
     {
       ++$numTracks;
       if( $numTracks > 1 )
@@ -243,6 +245,8 @@ sub loadBedRegions
         print STDERR "\nERROR: BED file is not ordered ($chrid out of order vs. genome file).\n";
         exit 1;
       }
+      # add an extra value for the total target size to avoid having to look to next target start
+      push( @{$targMaps{$chromName[$lastChr-1]}}, $targetSize ) if( $lastChr );
       $lastChr = $chromNum{$chrid};
       $lastSrt = 0;
       $lastEnd = 0;
@@ -276,6 +280,8 @@ sub loadBedRegions
     push( @{$targMaps{$chrid}}, $targetSize );
     $targetSize += $end - $srt + 1;
   }
+  # add final target size
+  push( @{$targMaps{$chromName[$lastChr-1]}}, $targetSize ) if( $lastChr );
   close( BEDFILE );
   if( $numWarns )
   {

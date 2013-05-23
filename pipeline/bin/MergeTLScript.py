@@ -93,7 +93,21 @@ if __name__=="__main__":
         set_result_status('Merge Basecaller Results')
 
         try:
-            sigproc.mergeRawPeakSignals(dirs)
+            sigproc.mergeAvgNukeTraces(dirs, env['SIGPROC_RESULTS'], env['libraryKey'], 'Library Beads')
+        except:
+            printtime("Warning: mergeAvgNukeTraces '%s' 'Library Beads' failed" % env['libraryKey'])
+
+        try:
+            sigproc.mergeAvgNukeTraces(dirs, env['SIGPROC_RESULTS'], env['tfKey'], 'Test Fragment Beads')
+        except:
+            printtime("Warning: mergeAvgNukeTraces '%s' 'Test Fragment Beads' failed" % env['tfKey'])
+
+        try:
+            sigproc.generate_raw_data_traces(
+                env['libraryKey'],
+                env['tfKey'],
+                env['flowOrder'],
+                env['SIGPROC_RESULTS'])
         except:
             traceback.print_exc()
 
@@ -128,6 +142,15 @@ if __name__=="__main__":
             env['BASECALLER_RESULTS'],
             env['ALIGNMENT_RESULTS'],
             env['flows'])
+
+        try:
+            alignment.ionstats2alignstats(env['libraryName'],
+                os.path.join(env['ALIGNMENT_RESULTS'],'ionstats_alignment.json'),
+                os.path.join(env['ALIGNMENT_RESULTS'],'alignment.summary'))
+        except:
+            printtime("ERROR: Failed to create composite alignment.summary")
+            traceback.print_exc()
+
         ## Generate Alignment's composite "Big Data": mapped bam. Totally optional
         actually_merge_mapped_bams = True
         if actually_merge_mapped_bams:
@@ -203,7 +226,7 @@ if __name__=="__main__":
                         src = os.path.join(base_dir, prefix+'.'+extension)
                         if os.path.exists(src):
                             os.symlink(os.path.relpath(src,os.path.dirname(filename)),filename)
-                            make_zip(zipname, filename, arcname=filename)
+                            make_zip(zipname, filename, arcname=filename, compressed=False)
                     except:
                         printtime("ERROR: target: %s" % filename)
                         traceback.print_exc()

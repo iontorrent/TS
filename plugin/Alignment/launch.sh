@@ -6,9 +6,9 @@ ulimit -s 8192
 #normal plugin script
 
 
-VERSION="3.4.48996"
+VERSION="3.6.56201"
 
-$DIRNAME/alignment.py startplugin.json ${TSP_LIBRARY} ${TSP_FILEPATH_UNMAPPED_BAM} >> $TSP_FILEPATH_PLUGIN_DIR/launch_sh_output.txt
+$DIRNAME/alignment.py startplugin.json ${TSP_LIBRARY} ${TSP_FILEPATH_UNMAPPED_BAM} ${TSP_FILEPATH_BAM} >> $TSP_FILEPATH_PLUGIN_DIR/launch_sh_output.txt
 cp -r $DIRNAME/Alignment_block.php $TSP_FILEPATH_PLUGIN_DIR/
 cp -r $DIRNAME/library $TSP_FILEPATH_PLUGIN_DIR/
 

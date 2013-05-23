@@ -10,7 +10,6 @@ import json
 from ion.utils.blockprocessing import merge_bam_files
 from ion.utils.compress import make_zip
 os.environ['MPLCONFIGDIR'] = '/tmp'
-from ion.reports import  base_error_plot
 from ion.utils import ionstats, ionstats_plots
 
 if __name__=="__main__":
@@ -32,82 +31,29 @@ if __name__=="__main__":
        outputBAM = args.merge_out
        print "Merging bam files to %s, mark duplicates is %s" % (outputBAM, args.duplicates)
        merge_bam_files(args.files, outputBAM, outputBAM.replace('.bam','.bam.bai'), args.duplicates)
-
-
-    if args.align_stats:
-       # Call alignStats on merged bam file       
-       inputBAM = args.align_stats    
-       print "Running alignStats on %s" % inputBAM
+       # generate ionstats files from merged BAM
+       graph_max_x = 400
+       if outputBAM == 'rawlib.bam':
+          ionstats_file = 'ionstats_alignment.json'
+       else:
+          ionstats_file = outputBAM.split('.bam')[0] + '.ionstats_alignment.json'
+       ionstats.generate_ionstats_alignment(outputBAM, ionstats_file, graph_max_x)
        
-       cmd = "alignStats"
-       
-       if '_rawlib.bam' in inputBAM:
-          bcid = inputBAM.split('_rawlib.bam')[0]
-          cmd += " -o %s" % bcid
-          # make alignment_BC.summary links to BC.alignment.summary output of alignStats
-          os.symlink('%s.alignment.summary' % bcid, 'alignment_%s.summary' % bcid)  
-       
-       if args.genomeinfo:
-          cmd += " --genomeinfo %s" % args.genomeinfo
-       
-       cmd += " --infile %s" % inputBAM
-       cmd += " --qScores 7,10,17,20,30,47"
-       cmd += " --alignSummaryFilterLen 20"
-       cmd += " --alignSummaryMaxLen  400"
-       cmd += " --errTableMaxLen 400"
-       cmd += " --outputDir %s" % './'  
-       
-               
-       print("DEBUG: Calling '%s'" % cmd)
-       try:  
-         subprocess.call(cmd,shell=True)      
-       except:
-         traceback.print_exc() 
-    
-    if args.merge_plots and len(args.files) > 1:          
+    if args.merge_plots:          
         print "Generating plots for merged report"
+        ionstats_file = 'ionstats_alignment.json'
         
-        graph_max_x = 400
-        try:            
-            # Merge ionstats_basecaller files from individual barcodes/dataset
-            BASECALLER_RESULTS = 'basecaller_results'
-            ionstats_file = 'ionstats_basecaller.json'
-            file_list = []
-            for filepath in args.files:
-                ionstats_path = os.path.join(os.path.dirname(filepath), BASECALLER_RESULTS, ionstats_file)
-                ionstats_path_CA = os.path.join(os.path.dirname(filepath), ionstats_file)                
-                if os.path.exists(ionstats_path):
-                    file_list.append(ionstats_path)
-                elif os.path.exists(ionstats_path_CA):
-                    file_list.append(ionstats_path_CA)
-                else:
-                    raise Exception('')
-                    
-            ionstats.reduce_stats(file_list, ionstats_file)
-            
-            # Make alignment_rate_plot.png        
+        try:       
             stats = json.load(open(ionstats_file))
-            l = stats['full']['max_read_length']        
-            graph_max_x = int(round(l + 49, -2)) 
+            l = stats['full']['max_read_length']
+            graph_max_x = int(round(l + 49, -2))
             
-            ionstats_plots.alignment_rate_plot(
-                'alignStats_err.json',
-                'ionstats_basecaller.json',
-                'alignment_rate_plot.png', int(graph_max_x))
-            print("Ionstats plot created successfully")            
-        except:            
-            print("ERROR: Failed to generate alignment rate plot")
-      
-        try:
-            # Make base_error_plot.png
-            base_error_plot.generate_base_error_plot(
-                'alignStats_err.json',
-                'base_error_plot.png',int(graph_max_x))            
+            # Make alignment_rate_plot.png and base_error_plot.png
+            ionstats_plots.alignment_rate_plot2(ionstats_file, 'alignment_rate_plot.png', int(graph_max_x))
+            ionstats_plots.base_error_plot(ionstats_file, 'base_error_plot.png', int(graph_max_x))
         except:
-            print("ERROR: Failed to generate base error plot")
-            traceback.print_exc()        
-        
-         
+            traceback.print_exc()
+      
     if args.zip and len(args.files) > 1: 
        # zip barcoded files
        zipname = args.zip
@@ -119,7 +65,4 @@ if __name__=="__main__":
             except:
                 print("ERROR: zip target: %s" % filename)
                 traceback.print_exc()
-        
-        
-    
-         
+

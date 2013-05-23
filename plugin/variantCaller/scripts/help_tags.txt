@@ -8,7 +8,7 @@ Uniquely mapped reads sampled for one starting alignment to each reference base 
 Coverage summary for reads mapped to the enriched or whole reference.
 
 @Hotspot Regions
-Coverage summary for reads mapped over targeted loci in the referece.
+Coverage summary for reads mapped over targeted loci in the reference.
 
 @Number of mapped reads
 Total number of reads mapped to the reference.

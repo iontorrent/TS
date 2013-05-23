@@ -1,7 +1,7 @@
 <section id="tabs">
 	<ul class="nav nav-tabs inContentTabs" id="ReportDetailsTab">
 		<li class="active">
-			<a data-toggle="tab" href="#PluginOutput">Plugin Summary</a>
+			<a data-toggle="tab" dynamic-navbar-section="" href="#PluginOutput">Plugin Summary</a>
 		</li>
 		<li>
 			<a data-toggle="tab" href="#TestFragments">Test Fragments</a>
@@ -21,15 +21,86 @@
 		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
 			
 			<a id="pluginDialogButton" class="btn btn-tertiary">Select plugins to run</a>
-			<a id="pluginRefresh" class="btn btn-tertiary pull-right">Refresh plugin status</a>
 
+			<div class="pull-right">
+				<div class="btn-group">
+					<button class="btn" id="pluginExpandAll">+ Expand All</button>
+					<button class="btn" id="pluginCollapseAll">- Collapse All</button>
+				</div>
+				<a id="pluginRefresh" class="btn btn-tertiary">Refresh plugin status</a>
+			</div>
+
+<script type="text/javascript">
+// Copied from data_model.js - needs new home
+function precisionUnits(num, div) {
+    // console.log(num + ' ' + typeof(num));
+    if (typeof div === "undefined") div = 1000;
+    num = parseFloat(num);
+    var postfix = "";
+    var exponent = Math.floor(Math.log(num) / Math.log(div));
+    if (exponent >= 0) {
+        num = Math.round(100 * num / Math.pow(div, exponent)) / 100;
+    }
+    if (Math.round(num) >= div) {
+        num /= div;
+        exponent += 1;
+    }
+    if (exponent >= 1) {
+        postfix = "kMGTPEZY"[exponent - 1];
+    }
+    return num.toPrecision(3) + ' ' + postfix;
+}
+</script>
+
+<script type="text/x-kendo-template" id="pluginStatusTemplate">
+		<div class='pluginGroup'>
+				<div class='pluginGroupHead'>
+						<div class='pluginGroupHeadInner clearfix'>
+								<button class="btn plugin-collapse">-</button>
+								#= data.Name # &mdash; v#=data.Version#
+# if (!data.State.match("(Superseded|Missing)")) { #
+								<a class="pluginLog ui-icon ui-icon-script"
+										data-title="Log for #=data.Name#"
+										title="Log File for #=data.Name#"
+										href="#=data.URL#/drmaa_stdout.txt">log</a>
+# } #
+								<strong class='pluginState'> #= data.State # </strong>
+# if (data.State.match("^(Completed|Error)")) { #
+								<a class="pluginRemove ui-icon ui-icon-trash"
+										data-title="Remove Plugin Result #=data.Name#"
+										title="Remove Plugin Result #=data.Name#"
+										href="{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}/#=data.id#/">Remove</a>
+								<span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#" >
+										<span class='pluginState'>#= precisionUnits(data.Size, 1024) #B</span>
+							 </span>
+# } #
+						</div>
+				</div>
+
+				<div class="pluginGroupList" id="#= data.Name #">
+# if (data.Files) { #
+#   for (var j = 0; j < data.Files.length; j++) { #
+		#     if ( data.Files[j].endsWith("_block.html") || data.Files[j].endsWith("_block.php") ) {#
+		#         if (!data.Major) { #
+						<div class="pluginBlock"><iframe id="#= data.Name #" class="pluginBlock"
+										src="#= data.URL ##= data.Files[j] #"
+										width="95%" frameborder="0" height="0px" scolling="#= $.browser.msie ? "yes" : "no" #"></iframe></div>
+		#         } #
+		#     } else { #
+						<div class="pluginFile">&bull;<a href="#= data.URL ##= data.Files[j] #">#=data.Files[j]#</a></div>
+		#     } #
+		#   } #
+		# } else { #
+						<div>No Data</div>
+		# } #
+				</div>
+		</div>
+</script>
 
 			<div id="pluginStatus" >
 				<div>
 					<div id="pluginStatusLoad"></div>
-
-					<div id="pluginStatusTable">
-					</div>
+					<div id="pluginStatusTable"> </div>
 				</div><!--plugin status wrapper -->
 			</div>
 
@@ -64,16 +135,16 @@
 						{% spaceless %}
 						{% for project in report.projects.all %}
 							{% if not forloop.first %}, {% endif %}
-							<a href="{% url project_results project.id">{{project.name}}</a>
+							<a href="{% url project_results project.id %}">{{project.name}}</a>
 						{% endfor %}
 						{% endspaceless %}
 					</td>
 				</tr>
-				<tr><td>Sample</td><td>{{experiment.sample}}</td></tr>
-				<tr><td>Library</td><td>{{report.reference}}</td></tr>
-				<tr><td>PGM</td><td>{{experiment.pgmName}}</td></tr>
+				<tr><td>Sample</td><td>{{ experiment.samples.all|join:", " }}</td></tr>
+				<tr><td>Reference</td><td>{{report.eas.reference}}</td></tr>
+				<tr><td>Instrument</td><td>{{experiment.pgmName}}</td></tr>
 				<tr><td>Flow Order</td><td>{{experiment.flowsInOrder}}</td></tr>
-				<tr><td>Library Key</td><td>{{experiment.libraryKey}}</td></tr>
+				<tr><td>Library Key</td><td>{{report.eas.libraryKey}}</td></tr>
 				<tr><td>TF Key</td><td>ATCG</td></tr>
 				<tr>
 					<td>Chip Check</td>
@@ -87,7 +158,7 @@
 				</tr>
 				<tr><td>Chip Type</td><td>{{experiment.chipType}}</td></tr>
 				<tr><td>Chip Data</td><td>{{experiment.rawdatastyle}}</td></tr>
-				<tr><td>Barcode Set</td><td>{{experiment.barcodeId}}</td></tr>
+				<tr><td>Barcode Set</td><td>{{report.eas.barcodeKitName}}</td></tr>
 				<tr><td>Analysis Name</td><td>{{report.resultsName}}</td></tr>
 				<tr><td>Analysis Date</td><td>{{report.timeStamp}}</td></tr>
 				<tr><td>Analysis Flows</td><td>{{report.processedflows}}</td></tr>

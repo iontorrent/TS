@@ -114,6 +114,7 @@ bool H5DataSet::CreateDataSet()
   }
   mDataSet = H5Dcreate2 ( group, mName.c_str(), mDatatype, mDataspace,
                           H5P_DEFAULT, plist, dapl );
+  H5Pclose (plist);
   if ( mDataSet < 0 )
   {
     Init ( 0 );
@@ -626,7 +627,9 @@ void H5File::WriteStringVector ( const std::string &name, const char **values, i
   //  set.Close();
   H5Sclose ( set.mDataspace );
   H5Tclose ( set.mDatatype );
+  H5Tclose ( memType );
   H5Dclose ( set.mDataSet );
+  H5Pclose (plist);
 }
 
 void H5File::ReadStringVector ( const std::string &name, std::vector<std::string> &strings )

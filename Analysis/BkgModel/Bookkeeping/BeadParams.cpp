@@ -116,6 +116,11 @@ void params_SetBeadStandardValue (bead_params *cur)
   cur->x = -1;
   cur->y = -1;
 
+  for (int i=0;i < NUM_DM_PCA;i++)
+     cur->pca_vals[i] = 0.0f;
+
+  cur->tau_adj = 1.0f;
+
     state_Init ((cur->my_state));
 }
 
@@ -129,6 +134,11 @@ void params_SetBeadZeroValue(bead_params *cur)
   cur->x = -1;
   cur->y = -1;
   cur->my_state = NULL;
+
+  for (int i=0;i < NUM_DM_PCA;i++)
+     cur->pca_vals[i] = 0.0f;
+
+  cur->tau_adj = 1.0f;
 }
 
 void params_AccumulateBeadValue(bead_params *sink, bead_params *source)

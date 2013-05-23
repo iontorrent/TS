@@ -7,14 +7,29 @@
 
 using namespace std;
 
-class GpuMultiFlowFitControl
+class GpuMultiFlowFitControl   // Singleton class
 {
+
+private:
+
+  static GpuMultiFlowFitControl * _pInstance;
+  
+  GpuMultiFlowFitControl();
+  ~GpuMultiFlowFitControl();
+  //private copy/= constructors to prevent usage
+  GpuMultiFlowFitControl(GpuMultiFlowFitControl const&);  
+  GpuMultiFlowFitControl& operator=(GpuMultiFlowFitControl const&);
+
+  
   public:
-    GpuMultiFlowFitControl();
-    ~GpuMultiFlowFitControl();
+
+
+    static GpuMultiFlowFitControl * Instance();
+
+
     void clear();
 
-    GpuMultiFlowFitMatrixConfig* GetMatrixConfig(const char* name) { return _matrixConfig[name]; }
+    GpuMultiFlowFitMatrixConfig* GetMatrixConfig(std::string name) { return _matrixConfig[name]; }
     unsigned int GetMaxSteps() { return _maxSteps; }
     unsigned int GetMaxParamsToFit() { return _maxParams; }
 
@@ -33,7 +48,7 @@ class GpuMultiFlowFitControl
   public:
     const BkgFitStructures _fitParams;
   private:
-    map<const char*, GpuMultiFlowFitMatrixConfig*> _matrixConfig;
+    map<std::string, GpuMultiFlowFitMatrixConfig*> _matrixConfig;
     int _maxSteps;
     int _maxParams;
  

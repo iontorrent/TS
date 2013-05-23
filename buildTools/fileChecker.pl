@@ -17,6 +17,7 @@ sub checkDefines {
     $defineName =~ tr/a-z/A-Z/;
     $defineName =~ s/\./\_/g;
     $defineName =~ s/_IN$//;
+    $defineName =~ s/\-/\_/;
     my $fh = new FileHandle("<$file");
     if($fh) {
         my $foundIfNotDef = 0;

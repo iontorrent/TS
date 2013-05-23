@@ -26,6 +26,13 @@
 // Marco to determine size of static array on stack
 #define ArraySize(x) (sizeof(x)/sizeof((x)[0]))
 
+// Macro to prohibit auto generation of copy constructor and assignment operator
+#undef  ION_DISABLE_COPY_ASSIGN
+#define ION_DISABLE_COPY_ASSIGN(Class)			\
+  Class(const Class &);\
+  Class &operator=(const Class &);
+
+
 //void CreateResultsFolder(char *experimentName);
 void CreateResultsFolder(const char *experimentName);
 bool    isDir (const char *path);
@@ -190,6 +197,29 @@ class ClockTimer
     struct timeval st;
 };
 
+/** For timing repetitive jobs. */
+class SumTimer {
+
+public:
+  SumTimer() { StartTimer(); }
+  void StartTimer() { mUsecTotal = 0.0; mTimer.StartTimer(); mCalls=0; }
+  void StartInterval() { mTimer.StartTimer(); }
+  void EndInterval() { mUsecTotal += mTimer.GetMicroSec(); mCalls++;}
+  double GetTotalUsec() { return mUsecTotal; }
+  size_t GetCalls() { return mCalls; }
+  void PrintSeconds (std::ostream &out, const std::string &prefix) { 
+    out << prefix << " " << GetTotalUsec() / 1e6 << " seconds in " << mCalls << " intervals." << std::endl; 
+  }
+  void PrintMilliSeconds (std::ostream &out, const std::string &prefix) { 
+    out << prefix << " " << GetTotalUsec() / 1e3 << " milli seconds in " << mCalls << " intervals." << std::endl;
+  }
+  
+private:
+  size_t mCalls;
+  double mUsecTotal; // microseconds
+  ClockTimer mTimer;
+};
+
 /**
  * Utility class for storing key value pairs. 
  */ 
@@ -223,5 +253,21 @@ private:
   std::vector<std::string> mValues;
   std::map<std::string, size_t> mMap;
 };
+
+/** calculate median using partial sort which runs in N * log(N/2) time. */
+template <typename T>
+T fast_median(T* start, size_t num_elements) {
+  T *middle, *end;
+  end = start + num_elements;
+  middle = start + (num_elements >> 1);
+  partial_sort(start, middle, end);
+  // Odd elements
+  if (num_elements % 2 == 1) {
+    return (*middle);
+  }
+  // else even, average middle two values
+  return (*middle + *(middle -1)) /2.0f;
+}
+
 
 #endif // UTILS_H

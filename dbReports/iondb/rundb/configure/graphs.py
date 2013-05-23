@@ -9,6 +9,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from iondb.rundb import models
+from iondb.utils.files import disk_attributes
+from iondb.rundb.data import dmactions_types
 
 IONGREEN = [0.0, 0.8, 0.3]  # green
 IONYELLOW = [1.0, 0.85, 0.0]  # yellow
@@ -17,24 +19,16 @@ IONRED = [0.85, 0.1, 0.1]  # red
 IONBLUE = [0.0, 0.4375, .9375]  # blue
 
 
-def disk_attributes(directory):
-    '''returns disk attributes'''
-    resDir = os.statvfs(directory)
-    totalSpace = resDir.f_blocks
-    freeSpace = resDir.f_bavail
-    blocksize = resDir.f_bsize
-    return (directory, totalSpace, freeSpace, blocksize)
-
-
 def bargraph():
-    figwidth = 9
+    figwidth = 7
     figheight = 1.5
     matplotlib.rcParams['font.size'] = 10.0
     matplotlib.rcParams['axes.titlesize'] = 14.0
     matplotlib.rcParams['xtick.labelsize'] = 10.0
     matplotlib.rcParams['legend.fontsize'] = 10.0
     fig = Figure(figsize=(figwidth, figheight))
-    fig.subplots_adjust(bottom=0.3, top=0.75)
+    fig.subplots_adjust(bottom=0.3, top=0.75, left=0.01, right=0.95)
+    fig.patch.set_alpha(0)
     ax = fig.add_subplot(1, 1, 1)
     ax.set_yticks([])
     return fig, ax
@@ -49,13 +43,13 @@ def archive_graph_bar(request):
     runs = models.Experiment.objects.all()
     # Get only Experiments that are still on fileserver: not deleted or archived.
     runs = runs.exclude(expName__in=models.Backup.objects.all().values('backupName'))
-    num_arch = len(runs.filter(storage_options='A'))
-    num_del = len(runs.filter(storage_options='D'))
-    num_keep = len(runs.filter(storage_options='KI'))
+    num_arch = runs.filter(storage_options='A').count()
+    num_del = runs.filter(storage_options='D').count()
+    num_keep = runs.filter(storage_options='KI').count()
     total = sum([num_arch, num_del, num_keep])
-    frac_arch = (float(num_arch) / float(total)) * 100
-    frac_del = (float(num_del) / float(total)) * 100
-    frac_keep = (float(num_keep) / float(total)) * 100
+    frac_arch = 0 if num_arch == 0 else (float(num_arch) / float(total)) * 100
+    frac_del = 0 if num_del == 0 else (float(num_del) / float(total)) * 100
+    frac_keep = 0 if num_keep == 0 else (float(num_keep) / float(total)) * 100
     frac = [frac_arch, frac_del, frac_keep]
     if float(frac[0] + frac[1] + frac[2]) > 100.0:
         frac[2] = frac[2] - (float(frac[0] + frac[1] + frac[2]) - 100.0)
@@ -104,7 +98,12 @@ def fs_statusbar(request, percentFull):
     '''Creates graph of percent disk space used'''
 
     full = float(percentFull)
-    threshold = float(models.BackupConfig.get().backup_threshold)
+    #threshold = float(models.BackupConfig.get().backup_threshold)
+    try:
+        threshold = models.DMFileSet.objects.filter(type=dmactions_types.SIG).order_by('-pk')
+        threshold = float(threshold[0].auto_trigger_usage)
+    except:
+        threshold = 0
     if threshold == 0:
         threshold = float(0.01)
 
@@ -135,11 +134,13 @@ def fs_statusbar(request, percentFull):
     # up when its close to the bar graph right edge.
     if threshold >= 88:
         textHeight = 1.2
+        textHoriz = 0.90
     else:
         textHeight = 0.85
+        textHoriz = float(threshold) / 100 + 0.02
 
     ax.axvline(threshold, 0, 1, color='#000000', linewidth=3, marker='d', markersize=14)
-    ax.text(float(threshold) / 100 + 0.02,
+    ax.text(textHoriz,
             textHeight,
             'Threshold',
             transform=ax.transAxes,
@@ -170,11 +171,11 @@ def fs_statusbar(request, percentFull):
     return response
 
 
-def archive_drivespace_bar(request):
+def archive_drivespace_bar(request, pk):
     '''Displays as a horizontal bar chart, the free vs used space
     on the archive drive.  Will only display if it is mounted'''
     try:
-        bk = models.BackupConfig.get()
+        bk = models.DMFileSet.objects.get(pk=pk)
         # create figure
         fig, ax = bargraph()
 
@@ -185,11 +186,17 @@ def archive_drivespace_bar(request):
             title = "<Archive not Configured>"
             labels = ['', '']
         else:
-            path, totalSpace, freeSpace, blocksize = disk_attributes(bk.backup_directory)
-            used_frac = (float(totalSpace - freeSpace) / float(totalSpace))
-            free_frac = 1 - used_frac
-            title = 'Archive: %s' % bk.backup_directory
-            labels = ['Used', 'Free']
+            try:
+                totalSpace, availSpace, f, b = disk_attributes(bk.backup_directory)
+                used_frac = (float(totalSpace - availSpace) / float(totalSpace))
+                free_frac = 1 - used_frac
+                title = 'Archive: %s' % bk.backup_directory
+                labels = ['Used', 'Free']
+            except:
+                used_frac = 1
+                free_frac = 0
+                title = 'Archive: %s' % bk.backup_directory
+                labels = ["Error: Could not get drive statistics",""]
 
         frac = [used_frac * 100, free_frac * 100]
 
@@ -238,16 +245,18 @@ def residence_time(request):
     average time the last 20 were on the file server before being
     archived or deleted.  A simple difference in time is used. '''
     fileservers = models.FileServer.objects.all()
-    numGraphs = math.ceil(math.sqrt(len(fileservers)))
+    numGraphs = math.ceil(math.sqrt(fileservers.count()))
     # create figure
-    figwidth = 4   # inches
+    figwidth = 4 + (fileservers.count() - 1)   # inches
     figheight = 3   # inches
-    numGraphs = math.ceil(math.sqrt(len(fileservers)))
+    numGraphs = math.ceil(math.sqrt(fileservers.count()))
     matplotlib.rcParams['font.size'] = 10.0 - math.sqrt(float(numGraphs))
     matplotlib.rcParams['axes.titlesize'] = 14.0 - math.sqrt(float(numGraphs))
     matplotlib.rcParams['xtick.labelsize'] = 10.0 - math.sqrt(float(numGraphs))
     matplotlib.rcParams['legend.fontsize'] = 10.0 - math.sqrt(float(numGraphs))
     fig = Figure(figsize=(figwidth, figheight))
+    fig.patch.set_alpha(0)
+    fig.subplots_adjust(left=0.01, right=0.99)
     ax = fig.add_subplot(1, 1, 1)
     count = 0
     max_scale = 0

@@ -15,6 +15,10 @@
       background-color: #90ee90;
       padding: 8px;
     }
+    #download_running {
+      background-color: #90ee90;
+      padding: 8px;
+    }
     #version_info {
       float: left;
     }
@@ -85,6 +89,9 @@
           <div id="update_running" style="display: none;">
             <p>Your system is now upgrading, please wait a few minutes.</p>
           </div>
+          <div id="download_running" style="display: none;">
+            <p>Your system is now downloading updates, please wait a few minutes.</p>
+          </div>
           <div id="update_finished" style="display: none;">
             <p>The upgrade completed successfully.  Please refresh the page.</p>
           </div>
@@ -114,7 +121,7 @@
         </div>
       </div>
       <div id="release_memo">
-        <h3>Welcome to the Torrent Suite 3.4</h3>
+        <h3>Torrent Suite Release Notes</h3>
         <p>Here are some helpful videos explaining how to perform some common tasks using the new version.</p>
         <ul>
           <li><a href="http://ioncommunity.lifetechnologies.com/docs/DOC-3230">Overview</a> of the software</li>
@@ -166,6 +173,7 @@
           var status_text = this.config.get("ts_update_status");
           this.$("#update_status").html(status_text);
           var status = status_text.split(":", 1)[0];
+          if (status.indexOf("Downloading") > -1){ status = "Downloading"; }
           if (status != this.previous_status && status in this.handle_status) {
             this.$("#status_texts > div").hide();
             this.handle_status[status]();
@@ -192,10 +200,11 @@
           "Ready to install": function() {
             this.$("#confirm_update").removeAttr("disabled");
             this.$("#ready_install").slideDown();
+            this.$("#update_actions").slideDown();
           },
           "Downloading": function() {
             this.$("#update_actions").hide();
-            this.$("#update_running").slideDown('slow');
+            this.$("#download_running").slideDown('slow');
           },
           "Installing": function() {
             this.$("#update_actions").hide();

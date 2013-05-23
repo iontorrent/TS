@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-'''Print a list of Runs marked either Keep or Archive.'''
+'''Print a list of Runs filtered on storage designation'''
 
 import sys
 import os
@@ -9,11 +9,22 @@ from iondb.bin import djangoinit
 from iondb.rundb import models
 from django.db.models import Q
 
-def main():
+
+def main(list):
     '''main function'''
-    
-    #dbase query for list of Raw Data Experiments marked Keep or Archive
-    query = Q(storage_options="KI") | Q(storage_options="A")
+
+    # Convert list of lists into dictionary
+    storage = {}
+    for item in models.Experiment.STORAGE_CHOICES:
+        storage[item[0]] = item[1]
+
+    #dbase query
+    query = None
+    for item in list:
+        if query:
+            query |= Q(storage_options=item)
+        else:
+            query = Q(storage_options=item)
     runs = models.Experiment.objects.filter(query).order_by('date')
 
     #------------------
@@ -22,7 +33,7 @@ def main():
     for i, run in enumerate(runs, start=1):
         print ("(%d) RUN: %s" % (i, run.expName))
         print ("DATE: %s" % run.date.strftime("%B %d, %Y"))
-        print ("STORAGE: %s" % ("Keep" if run.storage_options == "KI" else "Archive"))
+        print ("STORAGE: %s" % storage[run.storage_options])
         print ("SIZE: %s mb" % run.diskusage)
         print ("NOTES: %s" % run.notes)
         try:
@@ -48,13 +59,12 @@ def main():
             projects = [project for project in projects if project is not None]
 
             fout.write("%s,%s,%s,%s,%s,%s,%s\n" %
-                    (run.date.strftime("%Y-%m-%d"),
-                     run.expName,
-                     "Keep" if run.storage_options == "KI" else "Archive",
-                     run.diskusage,
-                     run.notes.replace(',', ' '),
-                     ";".join(projects),
-                     os.path.dirname(run.expDir)))
+                       (run.date.strftime("%Y-%m-%d"),
+                        run.expName, storage[run.storage_options],
+                        run.diskusage,
+                        run.notes.replace(',', ' '),
+                        ";".join(projects),
+                        os.path.dirname(run.expDir)))
 
     #-----------------
     # Writes xls file
@@ -76,17 +86,16 @@ def main():
         sheet1.write(0, 4, "NOTE")
         sheet1.write(0, 5, "PROJECT")
         sheet1.write(0, 6, "DIRECTORY")
-    
+
         for i, run in enumerate(runs, start=1):
-    
+
             projects = run.results_set.values_list(
                 'projects__name', flat=True).distinct()
             projects = [project for project in projects if project is not None]
-    
+
             sheet1.write(i, 0, (run.date.strftime("%Y-%m-%d")))
             sheet1.write(i, 1, run.expName)
-            sheet1.write(
-                i, 2, "Keep" if run.storage_options == "KI" else "Archive")
+            sheet1.write(i, 2, storage[run.storage_options])
             sheet1.write(i, 3, run.diskusage)
             sheet1.write(i, 4, run.notes.replace(',', ' '))
             sheet1.write(i, 5, ";".join(projects))
@@ -95,4 +104,9 @@ def main():
         book.save("runlist.xls")
 
 if __name__ == '__main__':
-    sys.exit(main())
+    '''
+    Pass in a list of potential storage designation keywords.
+    The possible keywords are: 'KI', 'A', 'D' corresponding to
+    Keep Indefinitely, Archive Raw, Delete
+    '''
+    sys.exit(main(['KI', 'A']))

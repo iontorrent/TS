@@ -10,10 +10,10 @@ class Migration(SchemaMigration):
     def forwards(self, orm):
         
         # Adding field 'GlobalConfig.basecallerthumbnailargs'
-        db.add_column('rundb_globalconfig', 'basecallerthumbnailargs', self.gf('django.db.models.fields.CharField')(default='', max_length=5000, blank=True), keep_default=False)
+        db.add_column('rundb_globalconfig', 'basecallerthumbnailargs', self.gf('django.db.models.fields.CharField')(default='', max_length=5000, blank=True, null=True), keep_default=False)
 
         # Adding field 'GlobalConfig.analysisthumbnailargs'
-        db.add_column('rundb_globalconfig', 'analysisthumbnailargs', self.gf('django.db.models.fields.CharField')(default='', max_length=5000, blank=True), keep_default=False)
+        db.add_column('rundb_globalconfig', 'analysisthumbnailargs', self.gf('django.db.models.fields.CharField')(default='', max_length=5000, blank=True, null=True), keep_default=False)
 
 
     def backwards(self, orm):

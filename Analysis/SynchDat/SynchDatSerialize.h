@@ -5,13 +5,13 @@
 #include <semaphore.h>
 #include "SynchDat.h"
 
-/* shared mem sem.h */
-typedef struct sdat_read_semaphore {
-    pthread_mutex_t lock;
-    pthread_cond_t nonzero;
-    unsigned count;
-    pthread_t owner;
-} sdat_read_semaphore_t;
+/* /\* shared mem sem.h *\/ */
+/* typedef struct sdat_read_semaphore { */
+/*     pthread_mutex_t lock; */
+/*     pthread_cond_t nonzero; */
+/*     unsigned count; */
+/*     pthread_t owner; */
+/* } sdat_read_semaphore_t; */
 
 class H5File;
 /** 
@@ -165,7 +165,7 @@ public:
   bool Write(const char *filename, SynchDat &data);
   void ReadInfo(H5File &h5, SynchDat &sdat);
   int GetCompressionType() { return mCompressor->GetCompressionType(); }
-  void SetCompressor(TraceCompressor *compressor) {mCompressor = compressor; }
+  void SetCompressor(TraceCompressor *compressor);
   // If reckless then will die if file isn't there, otherwise will patiently wait for file to appear
   void SetRecklessAbandon(bool reckless) { mRecklessAbandon = reckless; }
   void SetTimeout ( int _total_timeout,int _retry_interval ) {
@@ -173,7 +173,6 @@ public:
     mTotalTimeout = _total_timeout;
   }
   void SetUseSemaphore(bool use) { mUseSemaphore = use; }
-  static sdat_read_semaphore_t *sdatSemPtr;
   bool mUseSemaphore;
   TraceCompressor *mCompressor;
   struct FlowChunk *mChunks;

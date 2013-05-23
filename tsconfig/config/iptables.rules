@@ -14,6 +14,7 @@
 -A POSTROUTING -s 192.168.202.0/24 -o eth0 -j MASQUERADE
 -A POSTROUTING -s 192.168.203.0/24 -o eth0 -j MASQUERADE
 -A POSTROUTING -s 192.168.204.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 192.168.205.0/24 -o eth0 -j MASQUERADE
 
 COMMIT
 *filter
@@ -29,13 +30,14 @@ COMMIT
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
 
 #Uncomment the line below to allow connections on port 443/HTTPS
-#-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
 
 #Allow all traffic from PGM subnet
 -A INPUT -s 192.168.201.0/24 -j ACCEPT
 -A INPUT -s 192.168.202.0/24 -j ACCEPT
 -A INPUT -s 192.168.203.0/24 -j ACCEPT
 -A INPUT -s 192.168.204.0/24 -j ACCEPT
+-A INPUT -s 192.168.205.0/24 -j ACCEPT
 COMMIT
 #
 

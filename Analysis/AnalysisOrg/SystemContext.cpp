@@ -183,7 +183,7 @@ void SystemContext::CopyFilesForReportGeneration (char *results_folder, SeqListC
   newpath = (char *) malloc (sz);
   snprintf (newpath, sz, "%s/%s", results_folder, "bfmask.stats");
   fprintf (stderr, "%s\n%s\n", oldpath, newpath);
-  CopyFile (oldpath, newpath);
+  if( CopyFile (oldpath, newpath) ) ExitCode::UpdateExitCode(EXIT_FAILURE);
   free (oldpath);
   free (newpath);
 //--- Copy avgNukeTrace_ATCG.txt and avgNukeTrace_TCAG.txt
@@ -203,7 +203,7 @@ void SystemContext::CopyFilesForReportGeneration (char *results_folder, SeqListC
     newpath = (char *) malloc (sz);
     snprintf (newpath, sz, "%s/%s",results_folder, filename);
 
-    CopyFile (oldpath, newpath);
+    if( CopyFile (oldpath, newpath) ) ExitCode::UpdateExitCode(EXIT_FAILURE);
     free (oldpath);
     free (newpath);
     free (filename);
@@ -324,7 +324,8 @@ void SystemContext::CopyTmpWellFileToPermanent ( char *results_folder)
   {
     char wellFileName[MAX_PATH_LENGTH];
     sprintf (wellFileName, "%s/%s.%s", results_folder, wellfileIndex, wellfileExt);
-    CopyFile (tmpWellsFile, wellFileName);
+    if( CopyFile (tmpWellsFile, wellFileName) )
+        ExitCode::UpdateExitCode(EXIT_FAILURE);
   }
 }
 

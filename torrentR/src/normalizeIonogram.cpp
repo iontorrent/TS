@@ -17,25 +17,25 @@ RcppExport SEXP normalizeIonogram(
 
 	// First do some annoying but necessary type casting on the input parameters.
 	// measured & nFlow
-	RcppMatrix<double> measured_temp(measured_in);
+	Rcpp::NumericMatrix measured_temp(measured_in);
 	int nWell = measured_temp.rows();
 	int nFlow = measured_temp.cols();
 	// keyFlow
-	RcppVector<int> keyFlow_temp(keyFlow_in);
+	Rcpp::IntegerVector keyFlow_temp(keyFlow_in);
 	int *keyFlow = new int[keyFlow_temp.size()];
 	for(int i=0; i<keyFlow_temp.size(); i++) {
 	  keyFlow[i] = keyFlow_temp(i);
 	}
 	// nKeyFlow
-	RcppVector<int> nKeyFlow_temp(nKeyFlow_in);
+	Rcpp::IntegerVector nKeyFlow_temp(nKeyFlow_in);
 	int nKeyFlow = nKeyFlow_temp(0);
 	// flowOrder
-	RcppStringVector  flowOrder_temp(flowOrder_in);
-	char *flowOrder = strdup(flowOrder_temp(0).c_str());
+	Rcpp::StringVector  flowOrder_temp(flowOrder_in);
+	char *flowOrder = strdup(flowOrder_temp(0));
  
 	// Do the normalization
 	double *measured = new double[nFlow];
-	RcppMatrix<double> normalized(nWell,nFlow);
+	Rcpp::NumericMatrix normalized(nWell,nFlow);
 	for(int well=0; well < nWell; well++) {
 	    // Set up the input signal for the well
 	    for(int flow=0; flow<nFlow; flow++) {
@@ -55,11 +55,7 @@ RcppExport SEXP normalizeIonogram(
 	}
 
 	// Build result set to be returned as a list to R.
-	RcppResultSet rs;
-	rs.add("normalized",  normalized);
-
-	// Set the list to be returned to R.
-	rl = rs.getReturnList();
+	rl = Rcpp::List::create(Rcpp::Named("normalized") = normalized);
 
 	// Clear allocated memory
 	delete [] measured;
@@ -67,9 +63,9 @@ RcppExport SEXP normalizeIonogram(
     free(flowOrder);
 
     } catch(std::exception& ex) {
-	exceptionMesg = copyMessageToR(ex.what());
+	forward_exception_to_r(ex);
     } catch(...) {
-	exceptionMesg = copyMessageToR("unknown reason");
+	::Rf_error("c++ exception (unknown reason)");
     }
     
     if(exceptionMesg != NULL)

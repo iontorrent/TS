@@ -31,12 +31,10 @@ RcppExport SEXP AdjustEmptyToBeadRatioForFlowR(SEXP R_etbR, SEXP R_NucModifyRati
     else
       out_val = xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR,NucModifyRatio,RatioDrift,flow);
 
-    RcppResultSet rs;
-    rs.add("etbR",      out_val);
-    ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("etbR") = out_val);
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -56,12 +54,10 @@ RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelR(SEXP R_etbR, SEXP R_
     
     float out_val = xComputeTauBfromEmptyUsingRegionLinearModel(tau_R_m, tau_R_o, etbR);
 
-      RcppResultSet rs;
-      rs.add("tauB",      out_val);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("tauB") = out_val);
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -81,12 +77,10 @@ RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelUsingTauER(SEXP R_etbR
     
     float out_val = xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR);
     
-    RcppResultSet rs;
-    rs.add("tauB",      out_val);
-    ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("tauB") = out_val);
     
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

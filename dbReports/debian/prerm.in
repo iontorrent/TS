@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
+echo "prerm $@"
 
 SETTINGS=@ION_INSTALL_PREFIX@/iondb/settings.py
 
@@ -12,14 +13,8 @@ case "$1" in
 	if [ -e	"/etc/init.d/ionJobServer" ]; then
 		invoke-rc.d ionJobServer stop
 	fi
-	if [ -e	"/etc/init.d/ionArchive" ]; then
-		invoke-rc.d ionArchive stop
-	fi
 	if [ -e	"/etc/init.d/ionPlugin" ]; then
 		invoke-rc.d ionPlugin stop
-	fi
-	if [ -e	"/etc/init.d/celeryd" ]; then
-		invoke-rc.d celeryd stop
 	fi
 
     if [ ! -e @ION_INSTALL_PREFIX@/.computenode ]; then
@@ -48,41 +43,12 @@ case "$1" in
 	/usr/sbin/a2ensite default
 	invoke-rc.d apache2 reload
 
-	#---	Remove crontab nightly email	---#
-	# command to remove
-	COMMAND="@ION_INSTALL_PREFIX@/iondb/bin/runnightly.sh"
-
-	# generate two random names for temporary files.
-	FILE="/tmp/$(basename $0).$RANDOM.txt"
-	FILE2="/tmp/$(basename $0).$RANDOM.txt"
-
-	# read in the users crontab entry into our random file
-	(crontab -u ionadmin -l > $FILE 2> /dev/null) || echo "No crontab for ionadmin" 1>&2
-
-	# Filter out our command
-	(cat $FILE | grep -v "$COMMAND" > $FILE2)  || echo "Filtering out our commands" 1>&2
-
-	# reload file into crontab or remove crontab if empty
-	if [ -s $FILE2 ]
-	then
-		comm="crontab $FILE2"
-	else
-		comm="crontab -r"
-	fi
-
-	#
-	# use su - username if we are adding to another users crontab. 
-	(su - ionadmin -c "$comm") || echo "Purging our entries" > /dev/null
-
-	# remove our tmp files
-	rm "$FILE" "$FILE2"
-
     #----------------------------------
     # Remove files created during package install
     #----------------------------------
     rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html"
     rm -f "@ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base_plugin.html"
-    
+
     ;;
 esac
 

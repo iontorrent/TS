@@ -3,9 +3,11 @@
 
 import os
 import json
+import traceback
 
 # BeadSummary section will be eventually obsoleted
 def merge_bead_summary(block_dirs):
+    print 'mergeBaseCallerJson.merge_bead_summary on %s blocks' % len(block_dirs)
     
     bs_lib = {'badKey':0,'highPPF':0,'highRes':0,'polyclonal':0,'short':0,'valid':0,'zero':0,'key':'TCAG'}
     bs_tf =  {'badKey':0,'highPPF':0,'highRes':0,'polyclonal':0,'short':0,'valid':0,'zero':0,'key':'ATCG'}
@@ -22,7 +24,7 @@ def merge_bead_summary(block_dirs):
             bs_lib['short']      += block_json['BeadSummary']['lib']['short']
             bs_lib['valid']      += block_json['BeadSummary']['lib']['valid']
             bs_lib['zero']       += block_json['BeadSummary']['lib']['zero']
-            bs_lib['key']         = block_json['BeadSummary']['lib']['key']
+            #bs_lib['key']         = block_json['BeadSummary']['lib']['key']
             
             bs_tf['badKey']      += block_json['BeadSummary']['tf']['badKey']
             bs_tf['highPPF']     += block_json['BeadSummary']['tf']['highPPF']
@@ -31,8 +33,9 @@ def merge_bead_summary(block_dirs):
             bs_tf['short']       += block_json['BeadSummary']['tf']['short']
             bs_tf['valid']       += block_json['BeadSummary']['tf']['valid']
             bs_tf['zero']        += block_json['BeadSummary']['tf']['zero']
-            bs_tf['key']          = block_json['BeadSummary']['tf']['key']
+            #bs_tf['key']          = block_json['BeadSummary']['tf']['key']
         except:
+            traceback.print_exc()
             print 'mergeBaseCallerJson.merge_bead_summary: skipping block ' + dir
     
     return {"lib":bs_lib,"tf":bs_tf}    
@@ -106,8 +109,8 @@ def merge_filtering(block_dirs):
             rd_tf['valid']               += block_json['Filtering'].get('ReadDetails',{}).get('tf',{}).get('valid',0)
             rd_tf['zero']                += block_json['Filtering'].get('ReadDetails',{}).get('tf',{}).get('zero',0)
 
-            rd_lib['key']                 = block_json['Filtering']['ReadDetails']['lib']['key']
-            rd_tf['key']                  = block_json['Filtering']['ReadDetails']['tf']['key']
+            rd_lib['key']                 = block_json['Filtering'].get('ReadDetails',{}).get('lib',{}).get('key',rd_lib['key'])
+            rd_tf['key']                  = block_json['Filtering'].get('ReadDetails',{}).get('tf',{}).get('key',rd_tf['key'])
             
             for idx in range(50):
                 qv_hist[idx] += block_json['Filtering']['qv_histogram'][idx]

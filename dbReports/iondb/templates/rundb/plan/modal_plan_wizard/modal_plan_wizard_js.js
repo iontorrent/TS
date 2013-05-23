@@ -21,12 +21,21 @@ selectedPlanTemplate.sampleDisplayedName = "{{selectedPlanTemplate.sampleDisplay
 selectedPlanTemplate.barcodedSamples = {{selectedPlanTemplate.barcodedSamples|safe}};
 selectedPlanTemplate.barcodeId = "{{selectedPlanTemplate.barcodeId}}";
 selectedPlanTemplate.notes = "{{selectedPlanTemplate.notes}}";
+selectedPlanTemplate.isIonChef = "{{selectedPlanTemplate.isIonChef}}";
+selectedPlanTemplate.reference = "{{selectedPlanTemplate.library}}";
+selectedPlanTemplate.runType = "{{selectedPlanTemplate.runType}}";
 {% endif %}
 
 var selectedApplProductData = null;
 {% if selectedApplProductData %}
 var selectedApplProductData = {};
 selectedApplProductData.isDefaultPairedEnd = "{{selectedApplProductData.isDefaultPairedEnd}}";
+selectedApplProductData.isHotspotRegionBEDFileSupported = "{{selectedApplProductData.isHotspotRegionBEDFileSupported}}";
+selectedApplProductData.isDefaultBarcoded = "{{selectedApplProductData.isDefaultBarcoded}}";
+selectedApplProductData.defaultBarcodeKitName = "{{selectedApplProductData.defaultBarcodeKitName}}";
+selectedApplProductData.defaultOneTouchTemplateKit = "{{selectedApplProductData.defaultOneTouchTemplateKit}}";
+selectedApplProductData.defaultIonChefKit = "{{selectedApplProductData.defaultIonChefKit}}";
+selectedApplProductData.reference = "{{selectedApplProductData.reference}}"
 {% endif %}
 
 
@@ -119,14 +128,20 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.GENS.libKitName = "{{planTemplateData.GENS.libKit.name}}";
     }
     applProduct.GENS.chipType = '{{planTemplateData.GENS.chipType}}';
-    if ("{{planTemplateData.GENS.templateKit}}") {
-        applProduct.GENS.templateKitName = "{{planTemplateData.GENS.templateKit.name}}";
+    if ("{{planTemplateData.GENS.defaultOneTouchTemplateKit}}") {
+        applProduct.GENS.defaultOneTouchTemplateKitName = "{{planTemplateData.GENS.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.GENS.defaultIonChefKit}}") {
+        applProduct.GENS.defaultIonChefKitName = "{{planTemplateData.GENS.defaultIonChefKit.name}}";
+    }
+    
     if ("{{planTemplateData.GENS.controlSeqKit}}") {
         applProduct.GENS.controlSeqName = "{{planTemplateData.GENS.controlSeqKit.name}}";
     }
     applProduct.GENS.flowCount = "{{planTemplateData.GENS.flowCount}}";
-
+    applProduct.GENS.isHotspotRegionBEDFileSupported = "{{planTemplateData.GENS.isHotspotRegionBEDFileSupported}}";
+    applProduct.GENS.reference = "{{planTemplateData.GENS.reference}}"
+    	
     applProduct.AMPS = {};
     applProduct.AMPS.runTypeDescription = '{{planTemplateData.AMPS.runType.description}}';
     applProduct.AMPS.variantFrequency = "{{planTemplateData.AMPS.defaultVariantFrequency}}";
@@ -142,14 +157,19 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.AMPS.seqKitName = "{{planTemplateData.AMPS.seqKit.name}}";
     }
     applProduct.AMPS.chipType = '{{planTemplateData.AMPS.chipType}}';
-    if ("{{planTemplateData.AMPS.templateKit}}") {
-        applProduct.AMPS.templateKitName = "{{planTemplateData.AMPS.templateKit.name}}";
+    if ("{{planTemplateData.AMPS.defaultOneTouchTemplateKit}}") {
+        applProduct.AMPS.defaultOneTouchTemplateKitName = "{{planTemplateData.AMPS.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.AMPS.defaultIonChefKit}}") {
+        applProduct.AMPS.defaultIonChefKitName = "{{planTemplateData.AMPS.defaultIonChefKit.name}}";
+    }    
     if ("{{planTemplateData.AMPS.controlSeqKit}}") {
         applProduct.AMPS.controlSeqName = "{{planTemplateData.AMPS.controlSeqKit.name}}";
     }
     applProduct.AMPS.flowCount = "{{planTemplateData.AMPS.flowCount}}";
-
+    applProduct.AMPS.isHotspotRegionBEDFileSupported = "{{planTemplateData.AMPS.isHotspotRegionBEDFileSupported}}";
+    applProduct.AMPS.reference = "{{planTemplateData.AMPS.reference}}"
+    	
     applProduct.TARS = {};
     applProduct.TARS.runTypeDescription = '{{planTemplateData.TARS.runType.description}}';
     applProduct.TARS.variantFrequency = "{{planTemplateData.TARS.defaultVariantFrequency}}";
@@ -165,14 +185,20 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.TARS.seqKitName = '{{planTemplateData.TARS.seqKit.name}}';
     }
     applProduct.TARS.chipType = '{{planTemplateData.TARS.chipType}}';
-    if ("{{planTemplateData.TARS.templateKit}}") {
-        applProduct.TARS.templateKitName = "{{planTemplateData.TARS.templateKit.name}}";
+    if ("{{planTemplateData.TARS.defaultOneTouchTemplateKit}}") {
+        applProduct.TARS.defaultOneTouchTemplateKitName = "{{planTemplateData.TARS.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.TARS.defaultIonChefKit}}") {
+        applProduct.TARS.defaultIonChefKitName = "{{planTemplateData.TARS.defaultIonChefKit.name}}";
+    }    
     if ("{{planTemplateData.TARS.controlSeqKit}}") {
         applProduct.TARS.controlSeqName = "{{planTemplateData.TARS.controlSeqKit.name}}";
     }
 
     applProduct.TARS.flowCount = "{{planTemplateData.TARS.flowCount}}";
+    applProduct.TARS.isHotspotRegionBEDFileSupported = "{{planTemplateData.TARS.isHotspotRegionBEDFileSupported}}";
+    applProduct.TARS.reference = "{{planTemplateData.TARS.reference}}"
+    	
     applProduct.WGNM = {};
     applProduct.WGNM.runTypeDescription = '{{planTemplateData.WGNM.runType.description}}';
     applProduct.WGNM.variantFrequency = "{{planTemplateData.WGNM.defaultVariantFrequency}}";
@@ -188,14 +214,19 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.WGNM.seqKitName = '{{planTemplateData.WGNM.seqKit.name}}';
     }
     applProduct.WGNM.chipType = '{{planTemplateData.WGNM.chipType}}';
-    if ("{{planTemplateData.WGNM.templateKit}}") {
-        applProduct.WGNM.templateKitName = "{{planTemplateData.WGNM.templateKit.name}}";
+    if ("{{planTemplateData.WGNM.defaultOneTouchTemplateKit}}") {
+        applProduct.WGNM.defaultOneTouchTemplateKitName = "{{planTemplateData.WGNM.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.WGNM.defaultIonChefKit}}") {
+        applProduct.WGNM.defaultIonChefKitName = "{{planTemplateData.WGNM.defaultIonChefKit.name}}";
+    }    
     if ("{{planTemplateData.WGNM.controlSeqKit}}") {
         applProduct.WGNM.controlSeqName = "{{planTemplateData.WGNM.controlSeqKit.name}}";
     }
     applProduct.WGNM.flowCount = "{{planTemplateData.WGNM.flowCount}}";
-
+    applProduct.WGNM.isHotspotRegionBEDFileSupported = "{{planTemplateData.WGNM.isHotspotRegionBEDFileSupported}}";
+    applProduct.WGNM.reference = "{{planTemplateData.WGNM.reference}}"
+    	
     applProduct.RNA = {};
     applProduct.RNA.runTypeDescription = '{{planTemplateData.RNA.runType.description}}';
     applProduct.RNA.variantFrequency = "{{planTemplateData.RNA.defaultVariantFrequency}}";
@@ -211,14 +242,19 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.RNA.seqKitName = '{{planTemplateData.RNA.seqKit.name}}';
     }
     applProduct.RNA.chipType = '{{planTemplateData.RNA.chipType}}';
-    if ("{{planTemplateData.RNA.templateKit}}") {
-        applProduct.RNA.templateKitName = "{{planTemplateData.RNA.templateKit.name}}";
+    if ("{{planTemplateData.RNA.defaultOneTouchTemplateKit}}") {
+        applProduct.RNA.defaultOneTouchTemplateKitName = "{{planTemplateData.RNA.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.RNA.defaultIonChefKit}}") {
+        applProduct.RNA.defaultIonChefKitName = "{{planTemplateData.RNA.defaultIonChefKit.name}}";
+    }    
     if ("{{planTemplateData.RNA.controlSeqKit}}") {
         applProduct.RNA.controlSeqName = "{{planTemplateData.RNA.controlSeqKit.name}}";
     }
     applProduct.RNA.flowCount = "{{planTemplateData.RNA.flowCount}}";
-
+    applProduct.RNA.isHotspotRegionBEDFileSupported = "{{planTemplateData.RNA.isHotspotRegionBEDFileSupported}}";
+    applProduct.RNA.reference = "{{planTemplateData.RNA.reference}}"
+    	
     applProduct.AMPS_RNA = {};
     applProduct.AMPS_RNA.runTypeDescription = '{{planTemplateData.AMPS_RNA.runType.description}}';
     applProduct.AMPS_RNA.variantFrequency = "{{planTemplateData.AMPS_RNA.defaultVariantFrequency}}";
@@ -234,13 +270,18 @@ TB.plan.wizard.getApplProduct = function(runType) {
         applProduct.AMPS_RNA.seqKitName = "{{planTemplateData.AMPS_RNA.seqKit.name}}";
     }
     applProduct.AMPS_RNA.chipType = '{{planTemplateData.AMPS_RNA.chipType}}';
-    if ("{{planTemplateData.AMPS_RNA.templateKit}}") {
-        applProduct.AMPS_RNA.templateKitName = "{{planTemplateData.AMPS_RNA.templateKit.name}}";
+    if ("{{planTemplateData.AMPS_RNA.defaultOneTouchTemplateKit}}") {
+        applProduct.AMPS_RNA.defaultOneTouchTemplateKitName = "{{planTemplateData.AMPS_RNA.defaultOneTouchTemplateKit.name}}";
     }
+    if ("{{planTemplateData.AMPS_RNA.defaultIonChefKit}}") {
+        applProduct.AMPS_RNA.defaultIonChefKitName = "{{planTemplateData.AMPS_RNA.defaultIonChefKit.name}}";
+    }    
     if ("{{planTemplateData.AMPS_RNA.controlSeqKit}}") {
         applProduct.AMPS_RNA.controlSeqName = "{{planTemplateData.AMPS_RNA.controlSeqKit.name}}";
     }
     applProduct.AMPS_RNA.flowCount = "{{planTemplateData.AMPS_RNA.flowCount}}";
-
+    applProduct.AMPS_RNA.isHotspotRegionBEDFileSupported = "{{planTemplateData.AMPS_RNA.isHotspotRegionBEDFileSupported}}";
+    applProduct.AMPS_RNA.reference = "{{planTemplateData.AMPS_RNA.reference}}"
+    	
     return runType && applProduct[runType] || null;
 };

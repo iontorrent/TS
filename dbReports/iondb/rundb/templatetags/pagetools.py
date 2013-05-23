@@ -37,7 +37,7 @@ class NearRangeNode(template.Node):
             last = ndx + halfw
         context["page_number_range"] = range(first,last)
         return ""
-        
+
 register.tag("near_range", do_near_range)
 
 def do_icon(parser,token):
@@ -75,10 +75,14 @@ def boxChecked(value):
 def fileName(value):
     return os.path.splitext(os.path.basename(value))[0]
 
+def basename(filepath):
+    return os.path.basename(filepath)
+
 register.tag("icon", do_icon)
 register.filter("blankIfNone", blankIfNone)
 register.filter("boxChecked", boxChecked)
 register.filter("fileName", fileName)
+register.filter("basename", basename)
 
 # raw tag parser function copyright 2009, EveryBlock
 # This code is released under the GPL.
@@ -113,7 +117,7 @@ def bracket(value, arg):
         return value[arg]
     except:
         return None
-    
+
 # settings value
 @register.tag
 def value_from_settings(parser, token):
@@ -141,4 +145,4 @@ class ValueFromSettings(Node):
             context[self.asvar] = ret_val
             return ''
         else:
-            return ret_val    
+            return ret_val

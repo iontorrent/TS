@@ -39,8 +39,6 @@
 #include <string>                       // STL strings
 #include <climits>			// numeric limits
 
-#include "dbgmem.h"
-
 //----------------------------------------------------------------------
 //  Basic Types:  KMcoord, KMdist, KMidx
 //	KMcoord and KMdist are the types used for representing

@@ -12,9 +12,23 @@ $(document).ready(function() {
 					console.log("Grid is scrollable");
 					console.log(_kendoGridObject)
 					// TS-5226: dropdown not visible if there are less than 3 entries in the scrollable table
-					var rowCount = $(_kendoGridObject.tbody).find('tr:visible').length;
-					if (rowCount > 2) {
-						$(_kendoGridObject.tbody).find('tr:last').prev('tr').andSelf().find('.btn-group').addClass('dropup');
+					var rowCount = $(_kendoGridObject.tbody).find('tr[role=row]:visible').length;
+					if (rowCount > 3) {
+						$(_kendoGridObject.tbody).find('tr[role=row]:last').prev('tr[role=row]').andSelf().find('.btn-group').addClass('dropup');
+						
+						// Set popovers to display below 
+						var popovers = $(_kendoGridObject.tbody).find('tr[role=row]:first').next('tr[role=row]').andSelf().find('span[rel="popover"]');
+						$.each(popovers, function(i, elem) {
+							if ($(elem).data('popover')) 
+								$(elem).data('popover').options.placement = 'bottom';
+						});
+						popovers = null;
+						// Set popovers to display above 
+						popovers = $(_kendoGridObject.tbody).find('tr[role=row]:last').prev('tr[role=row]').andSelf().find('span[rel="popover"]');
+						$.each(popovers, function(i, elem) {
+							if ($(elem).data('popover')) 
+								$(elem).data('popover').options.placement = 'top';
+						});
 					}
 					
 				}

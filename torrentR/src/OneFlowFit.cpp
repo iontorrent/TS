@@ -135,13 +135,11 @@ float *frameNumber = &tmp_delta_frame[0];
 
     }
 
-      RcppResultSet rs;
-      rs.add("RedTrace",      my_vb_out);
-      rs.add("Ampl", Ampl);
-      rs.add("x",amplitude);
-      rs.add("Kmult", Kmult);
-      rs.add("Iter", iter);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("RedTrace") = my_vb_out,
+                             Rcpp::Named("Ampl")     = Ampl,
+                             Rcpp::Named("x")        = amplitude,
+                             Rcpp::Named("Kmult")    = Kmult,
+                             Rcpp::Named("Iter")     = iter);
 
     delete[] old_vb_out;
 
@@ -153,7 +151,7 @@ float *frameNumber = &tmp_delta_frame[0];
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

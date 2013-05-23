@@ -52,16 +52,14 @@ RcppExport SEXP CalculateEmphasisVectorR(
     for (int i=0; i<my_frame_len; i++)
       my_vect_out.push_back(vect_out[i]);
 
-      RcppResultSet rs;
-      rs.add("Emphasis",      my_vect_out);
-      rs.add("EmphasisScale", my_pts);
-      ret = rs.getReturnList();
+      ret = Rcpp::List::create(Rcpp::Named("Emphasis")      = my_vect_out,
+                               Rcpp::Named("EmphasisScale") = my_pts);
 
     delete[] vect_out;
     delete[] old_emphasis_params;
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

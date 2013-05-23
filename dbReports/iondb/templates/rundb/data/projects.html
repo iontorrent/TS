@@ -199,10 +199,10 @@ $(document).ready(function(){
 			$('.project_log').click(function (e) {
 				e.preventDefault();
 				e.stopPropagation();
-				$('body #modal_project_log').remove();
+				$('body #modal_event_log').remove();
 				$.get($(this).attr('href'), function(data) {
 				  	$('body').append(data);
-				    $( "#modal_project_log" ).modal("show");								    
+				    $( "#modal_event_log" ).modal("show");								    
 				    return false;
 				}); 
 			});

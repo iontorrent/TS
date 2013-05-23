@@ -48,6 +48,7 @@ void TrackProgress::WriteProcessParameters (CommandLineOpts &inception_state)
   fprintf ( fpLog, "tfKey = %s\n", inception_state.key_context.tfKey );
   fprintf ( fpLog, "minNumKeyFlows = %d\n", inception_state.key_context.minNumKeyFlows );
   fprintf ( fpLog, "maxNumKeyFlows = %d\n", inception_state.key_context.maxNumKeyFlows );
+  fprintf ( fpLog, "nokey = %s\n", (inception_state.bkg_control.nokey ? "true":"false" ) );
   fprintf ( fpLog, "numFlows = %d\n", inception_state.flow_context.numTotalFlows );
   fprintf ( fpLog, "cyclesProcessed = %d\n", inception_state.flow_context.numTotalFlows/4 ); // @TODO: may conflict with PGM now
   fprintf ( fpLog, "framesProcessed = %d\n", inception_state.img_control.maxFrames );

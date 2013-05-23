@@ -73,6 +73,10 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step)
 
   SupplyMultiFlowSignal (block_signal_corrected, ibd);
 
+  if (bkg.global_defaults.signal_process_control.exp_tail_fit)
+     my_exp_tail_fit.CorrectTraces(block_signal_corrected,bkg.region_data->my_scratch.shifted_bkg,p,&bkg.region_data->my_regions.rp,
+                                   &bkg.region_data->my_flow,bkg.region_data->time_c);
+
   error_track err_t; // temporary store errors for this bead this flow
   for (int fnum=0;fnum < NUMFB;fnum++)
   {

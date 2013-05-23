@@ -121,12 +121,16 @@ float BeadScratchSpace::CalculateFitError (float *per_flow_output, int numfb)
       flow_err += (eval*eval);
     }
 
-    if (per_flow_output != NULL)
+    if (per_flow_output != NULL){
+      assert (npts > 0);
+      assert (flow_err >= 0);
       per_flow_output[nflow] = sqrt (flow_err/npts);   // scale by real data points?
-
+    }
     tot_err += flow_err;
     scale += custom_emphasis_scale[nflow];
   }
+  assert (scale > 0);
+  assert (tot_err >=0 );
   return (sqrt (tot_err/scale));
 }
 

@@ -6,14 +6,27 @@
 #include "BkgMagicDefines.h"
 #include "Serialization.h"
 
+#if (NUMNUC > NUM_DM_PCA)
+   #define NUMDM NUMNUC
+#else
+   #define NUMDM NUM_DM_PCA
+#endif
+
+typedef enum {
+   Unspecified = 0,
+   PerNucAverage = 1,
+   PCAVector = 2
+} DarkMatterType;
+
 class Halo{
   public:
     // this is a regional parameter, even if not obviously so
     int   npts;
     int   nuc_flow_t;  // a useful number
     std::vector<float> dark_matter_compensator;  // compensate for systematic errors in background hydrogen modeling, "dark matter"
-    float weight[NUMNUC];
-    float *dark_nuc_comp[NUMNUC];
+    float weight[NUMDM];
+    DarkMatterType mytype;
+    float *dark_nuc_comp[NUMDM];
 
     Halo();
     void Alloc(int npts);
@@ -37,7 +50,8 @@ class Halo{
 	  & npts
 	  & nuc_flow_t
 	  & dark_matter_compensator
-	  & weight;
+	  & weight
+          & mytype;
 	// & dark_nuc_comp
 
 	SetupDarkNumComp();
@@ -51,7 +65,8 @@ class Halo{
 	  & npts
 	  & nuc_flow_t
 	  & dark_matter_compensator
-	  & weight;
+	  & weight
+          & mytype;
 	// & dark_nuc_comp
 
 	// fprintf(stdout, "done Halo\n");

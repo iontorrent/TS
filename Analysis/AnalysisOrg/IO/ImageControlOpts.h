@@ -23,6 +23,7 @@ class ImageControlOpts{
   bool gain_debug_output;   // output text file with gain measurement for each pixel
   bool col_flicker_correct;
   bool col_flicker_correct_verbose;
+  bool aggressive_cnc;
   // do diagnostics?
   int outputPinnedWells;
   char tikSmoothingFile[512];  // file holding data smoothing coeffcients (APB)

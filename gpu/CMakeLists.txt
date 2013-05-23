@@ -32,31 +32,27 @@ configure_file (
 
 message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
 
-# wget http://developer.download.nvidia.com/compute/cuda/4_2/rel/toolkit/cudatoolkit_4.2.9_linux_64_ubuntu11.04.run
-# MYCUDASDK=cudatoolkit_4.2.9_linux_64_ubuntu11.04
-# bash $MYCUDASDK.run --nox11 --noexec --target $MYCUDASDK
-# GZIP=--best tar czf $MYCUDASDK.tar.gz $MYCUDASDK
-ExternalProject_add(${cuda_proj_name}
-    PREFIX ${ION_TS_EXTERNAL}/${cuda_proj_name_version}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_tar_file}"
-#    URL_MD5 ""
-    TIMEOUT "3600"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-)
+include(../buildTools/cmake/CMakeLists.dependencies.txt)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}/${cuda_devdriver_file} DESTINATION .)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
-    install(PROGRAMS devdriver_4.2_linux_64_295.41.run DESTINATION .)
-else()
-    install(PROGRAMS devdriver_4.2_linux_64_295.41.run DESTINATION .)
+        install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib DESTINATION /usr/local/cuda
+        	PATTERN .svn EXCLUDE)
+        install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64 DESTINATION /usr/local/cuda
+        	PATTERN .svn EXCLUDE)
+        install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc DESTINATION /usr/local/cuda/bin)
+
+if (0)
+    set (CMAKE_C_FLAGS_RELEASE "")
+    set (CMAKE_CXX_FLAGS_RELEASE "")
+    include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
+    SET( CUDA_NVCC_FLAGS "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math" 
+                         "-gencode=arch=compute_20,code=sm_20" 
+                         "-gencode=arch=compute_30,code=sm_30" 
+                         "-gencode=arch=compute_35,code=sm_35" 
+                         "-maxrregcount=48" )
+    CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
+    CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
 endif()
-
-        install(DIRECTORY ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(DIRECTORY ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/lib64 DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(PROGRAMS ${ION_TS_EXTERNAL}/${cuda_proj_name_version}/src/cudatoolkit/bin/nvcc DESTINATION /usr/local/cuda/bin)
 
 install(PROGRAMS deviceQuery DESTINATION .)
 install(PROGRAMS bandwidthTest DESTINATION .)

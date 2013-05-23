@@ -28,7 +28,7 @@ $(function(){
                 exp: this.model.toJSON(),
                 "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
                 "king_report": king_report && king_report.toJSON(),
-                "date_string": kendo.toString(this.model.get('date'), "yyyy/MM/dd hh:mm tt"),
+                "date_string": kendo.toString(this.model.get('date'), "MM/dd/yy hh:mm tt"),
                 "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
                 "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
                 "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
@@ -104,6 +104,7 @@ $(function(){
 
 	function review_plan(e) {
 		e.preventDefault();
+    	$('#error-messages').hide().empty();
 		url = $(e.target).attr('href');
 		
 		$('body #modal_review_plan').remove();
@@ -115,7 +116,7 @@ $(function(){
 	    	console.log("success:", url);
 		})
 	    .fail(function(data) {
-	    	$('#error-messages').empty();
+	    	$('#error-messages').empty().show();
 	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 	    	console.log("error:", data);
 	    	 
@@ -338,11 +339,11 @@ $(function(){
 				}, {
 					field : "date",
 					title : "Started",
-					template : '#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt") #'
+					template : '#= kendo.toString(new Date(Date._parse(date)),"MM/dd/yy hh:mm tt") #'
 				}, {
 					field : "resultDate",
 					title : "Result Date",
-					template : '#= kendo.toString(new Date(Date._parse(resultDate)),"yyyy/MM/dd hh:mm tt") #'
+					template : '#= kendo.toString(new Date(Date._parse(resultDate)),"MM/dd/yy hh:mm tt") #'
 				}, {
 					field : "chipDescription",
 					width : '5%',

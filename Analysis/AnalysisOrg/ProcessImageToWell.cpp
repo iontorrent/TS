@@ -20,6 +20,7 @@
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <fenv.h>
 
 using namespace std;
 
@@ -28,13 +29,13 @@ void MakeDecisionOnGpuMultiFlowFit(CommandLineOpts &inception_state)
   // shut off gpu multi flow fit if starting flow is not in first 20
   if (inception_state.flow_context.startingFlow >= NUMFB)
   {
-    inception_state.bkg_control.gpuMultiFlowFit = 0;
+    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
   }
 
   // shut off gpu multifit if regional sampling is not enabled
   if (!inception_state.bkg_control.regional_sampling)
   {
-    inception_state.bkg_control.gpuMultiFlowFit = 0;
+    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
   }
 }
 
@@ -241,6 +242,7 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
   // using actual flow values
   Timer flow_block_timer;
   Timer signal_proc_timer;
+  SumTimer wellsWriteTimer;
   for ( int flow = inception_state.flow_context.startingFlow; flow < (int)inception_state.flow_context.endingFlow; flow++ )
   {
     if ((flow % NUMFB) == 0)
@@ -276,22 +278,15 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     fprintf ( stdout, "SigProc: pure compute time for flow %d: %.1f sec.\n", flow, signal_proc_timer.elapsed());
     MemUsage ( "Memory_Flow: " + ToStr ( flow ) );
 
-    // capture the regional parameters every 20 flows, plus one bead per region at "random"
-    // @TODO replace with clean hdf5 interface for sampling beads and region parameters
-    GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow );
-    GlobalFitter.DumpBkgModelBeadInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow, inception_state.bkg_control.debug_bead_only>0 );
-    WriteSampleRegion(inception_state.sys_context.GetResultsFolder(), GlobalFitter, flow, inception_state.bkg_control.region_vfrc_debug);
-
-        
-    // variables should be >captured< at the end of fitting
-    //  and then the hdf5 dump happens across all threads as we synchronize
-    GlobalFitter.all_params_hdf.IncrementalWrite (  flow,  last_flow );
+    // hdf5 dump of bead and regional parameters in bkgmodel
+    if (inception_state.bkg_control.bkg_debug_files)
+      GlobalFitter.all_params_hdf.IncrementalWrite (  flow,  last_flow );
 
     // done capturing parameters, close out this flow
 
     // logic here: wells file knows when it needs to write something out
     if (flow==flow_to_write_wells)
-      WriteOneChunkAndClose(rawWells);
+      WriteOneChunkAndClose(rawWells, wellsWriteTimer);
 
     // Needed for 318 chips. Decide how many DATs to read ahead for every block of NUMFB flows
     // also report timing for block of 20 flows from reading dat to writing 1.wells for this block 
@@ -308,9 +303,9 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     // my_img_set knows what buffer is associated with the absolute flow
     my_img_set.FinishFlow ( flow );
 
-    // stop GPU thread computing doing fitting of first block of flows
+/*    // stop GPU thread computing doing fitting of first block of flows
     if (flow == (NUMFB - 1))
-      GlobalFitter.UnSpinMultiFlowFitGpuThreads();
+      GlobalFitter.UnSpinMultiFlowFitGpuThreads();*/
   }
   
   if ( not inception_state.bkg_control.restart_next.empty() ){
@@ -342,8 +337,9 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
 	      filePath.c_str(), difftime ( finish_save_time, begin_save_time ));
   }
   rawWells.Close();
+  wellsWriteTimer.PrintMilliSeconds(std::cout, "Timer: Wells total writing time:");
 
-  GlobalFitter.UnSpinSingleFlowFitGpuThreads ();
+  GlobalFitter.UnSpinGpuThreads ();
 
   TinyDestroyUglyStaticForSignalProcessing();
 
@@ -403,6 +399,8 @@ void IsolatedSignalProcessing (
   // clear out previous ones (can be bad with re-entrant processing!)
   ClearStaleWellsFile();
   inception_state.sys_context.MakeNewTmpWellsFile ( inception_state.sys_context.GetResultsFolder() );
+
+  // feenableexcept(FE_DIVBYZERO | FE_INVALID); // | FE_OVERFLOW);
 
   // we might use some other model here
   if ( true )

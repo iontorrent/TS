@@ -2,7 +2,7 @@
 {% load pagetools %}
 {% load ion_readable %}
 
-<div id="beadfind" class="span3 well centered">
+<div id="beadfind" class="span4 well centered">
     <div class="row-fluid number-chunk">
         <div rel='tooltip' title="Total base output for the run after filtering" class="span6">
             <h2>{{dbr.total_Q0_bases|ion_readable}}</h2>
@@ -24,7 +24,7 @@
     </a>
     <div class="modal hide" id="beadfindModal">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal">×</button>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
             <h3>ISP Density</h3>
         </div>
         <div class="modal-body" id="beadfind_body">
@@ -36,7 +36,7 @@
     </div>
     <div class="modal hide" id="keySignalModal">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal">×</button>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
             <h3>Key Incorporation Traces</h3>
         </div>
         <div class="modal-body" id="keysignal_body" style="max-height: 500px;">
@@ -52,6 +52,6 @@ $(function(){
     $("#bead-signal").strength('{{bead_loading}}',
                         '{{bead_loading_threshold}}',
                         '{{bead_loading}}',
-                        'Bead Loading');
+                        'ISP Loading');
 });
 </script>

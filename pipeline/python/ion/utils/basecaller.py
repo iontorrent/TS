@@ -3,8 +3,6 @@
 
 from ion.utils.blockprocessing import printtime
 
-import ConfigParser
-import StringIO
 import subprocess
 import os
 import sys
@@ -17,6 +15,7 @@ from shutil import move
 import glob
 import math
 import shlex
+import copy
 
 from ion.utils import TFPipeline
 from ion.utils.blockprocessing import isbadblock
@@ -28,6 +27,38 @@ from ion.utils import ionstats
 
 from ion.reports import wells_beadogram
 from ion.utils import ionstats_plots
+
+def basecaller_cmd(basecallerArgs,
+                   SIGPROC_RESULTS,
+                   libKey,
+                   tfKey,
+                   runID,
+                   BASECALLER_RESULTS,
+                   block_col_offset,
+                   block_row_offset,
+                   datasets_pipeline_path,
+                   adapter,
+                   barcodesplit_filter):
+    if basecallerArgs:
+        cmd = basecallerArgs
+    else:
+        cmd = "BaseCaller"
+        printtime("ERROR: BaseCaller command not specified, using default: 'BaseCaller'")
+    
+    cmd += " --input-dir=%s" % (SIGPROC_RESULTS)
+    cmd += " --librarykey=%s" % (libKey)
+    cmd += " --tfkey=%s" % (tfKey)
+    cmd += " --run-id=%s" % (runID)
+    cmd += " --output-dir=%s" % (BASECALLER_RESULTS)
+    cmd += " --block-col-offset %d" % (block_col_offset)
+    cmd += " --block-row-offset %d" % (block_row_offset)
+    cmd += " --datasets=%s" % (datasets_pipeline_path)
+    cmd += " --trim-adapter %s" % (adapter)
+    if barcodesplit_filter:
+        cmd += " --barcode-filter %s" % barcodesplit_filter
+
+    return cmd
+
 
 def basecalling(
       SIGPROC_RESULTS,
@@ -54,8 +85,6 @@ def basecalling(
       resultsName,
       pgmName
       ):
-
-
 
     if not os.path.exists(BASECALLER_RESULTS):
         os.mkdir(BASECALLER_RESULTS)
@@ -111,26 +140,21 @@ def basecalling(
         block_row_offset = 0
 
     try:
-        if basecallerArgs:
-            cmd = basecallerArgs
-        else:
-            cmd = "BaseCaller"
-            printtime("ERROR: BaseCaller command not specified, using default: 'BaseCaller'")
-        cmd += " --input-dir=%s" % (SIGPROC_RESULTS)
-        cmd += " --librarykey=%s" % (libKey)
-        cmd += " --tfkey=%s" % (tfKey)
-        cmd += " --run-id=%s" % (runID)
-        cmd += " --output-dir=%s" % (BASECALLER_RESULTS)
-        cmd += " --block-col-offset %d" % (block_col_offset)
-        cmd += " --block-row-offset %d" % (block_row_offset)
-        cmd += " --datasets=%s" % (datasets_pipeline_path)
-
         # 3' adapter details
         adapter = reverse_primer_dict['sequence']
-        cmd += " --trim-adapter %s" % (adapter)
-        # TODO: provide via datasets.json
-        if barcodesplit_filter:
-            cmd += " --barcode-filter %s" % barcodesplit_filter
+        # TODO: provide barcode_filter via datasets.json
+
+        cmd = basecaller_cmd(basecallerArgs,
+                             SIGPROC_RESULTS,
+                             libKey,
+                             tfKey,
+                             runID,
+                             BASECALLER_RESULTS,
+                             block_col_offset,
+                             block_row_offset,
+                             datasets_pipeline_path,
+                             adapter,
+                             barcodesplit_filter)
 
         printtime("DEBUG: Calling '%s':" % cmd)
         proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -179,7 +203,7 @@ def basecalling(
             
             keep_dataset = False
             for rg_name in dataset["read_groups"]:
-                if datasets_basecaller["read_groups"][rg_name].get('filtered',False) == False:
+                if not datasets_basecaller["read_groups"][rg_name].get('filtered',False):
                     keep_dataset = True
             if keep_dataset:
                 continue
@@ -213,8 +237,7 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
 
     if not os.path.exists(datasets_basecaller_path):
         printtime("ERROR: %s does not exist" % datasets_basecaller_path)
-        open('badblock.txt', 'w').close()
-        return
+        raise Exception("ERROR: %s does not exist" % datasets_basecaller_path)
     
     datasets_basecaller = {}
     try:
@@ -223,9 +246,7 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
         f.close()
     except:
         printtime("ERROR: problem parsing %s" % datasets_basecaller_path)
-        traceback.print_exc()
-        open('badblock.txt', 'w').close()
-        return
+        raise Exception("ERROR: problem parsing %s" % datasets_basecaller_path)
 
     try:
         graph_max_x = int(50 * math.ceil(0.014 * int(flows)))
@@ -276,20 +297,42 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
         os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
         os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
 
-
-    # Generate merged rawlib.basecaller.bam on barcoded runs, TODO, can this be removed?
-
-    composite_bam_filename = os.path.join(BASECALLER_RESULTS,'rawlib.basecaller.bam')
-    if not os.path.exists(composite_bam_filename):
-
-        bam_file_list = []
-        for dataset in datasets_basecaller["datasets"]:
-            if os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
-                bam_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']))
-
-        blockprocessing.merge_bam_files(bam_file_list,composite_bam_filename,composite_bam_filename+'.bai',False)
-
     printtime("Finished basecaller post processing")
+
+
+def merge_barcoded_basecaller_bams(BASECALLER_RESULTS):
+
+    datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
+
+    if not os.path.exists(datasets_basecaller_path):
+        printtime("ERROR: %s does not exist" % datasets_basecaller_path)
+        raise Exception("ERROR: %s does not exist" % datasets_basecaller_path)
+    
+    datasets_basecaller = {}
+    try:
+        f = open(datasets_basecaller_path,'r')
+        datasets_basecaller = json.load(f);
+        f.close()
+    except:
+        printtime("ERROR: problem parsing %s" % datasets_basecaller_path)
+        raise Exception("ERROR: problem parsing %s" % datasets_basecaller_path)
+
+    try:
+        composite_bam_filename = os.path.join(BASECALLER_RESULTS,'rawlib.basecaller.bam')
+        if not os.path.exists(composite_bam_filename):
+
+            bam_file_list = []
+            for dataset in datasets_basecaller["datasets"]:
+                print os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
+                if os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
+                    bam_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']))
+
+            blockprocessing.merge_bam_files(bam_file_list,composite_bam_filename,composite_bam_filename+'.bai',False)
+    except:
+        traceback.print_exc()
+        printtime("ERROR: Generate merged rawlib.basecaller.bam on barcoded runs failed")
+
+    printtime("Finished basecaller barcode merging")
 
 
 def tf_processing(
@@ -334,7 +377,7 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
         printtime("merge_basecaller_results: no block contained a valid datasets_basecaller.json, aborting")
         return
 
-    combined_datasets_json = dict(block_datasets_json[0])
+    combined_datasets_json = copy.deepcopy(block_datasets_json[0])
     
     for dataset_idx in range(len(combined_datasets_json['datasets'])):
         combined_datasets_json['datasets'][dataset_idx]['read_count'] = 0
@@ -586,7 +629,7 @@ def generate_datasets_json(
                     if len(bcsample) == 1:
                         bcsample = bcsample[0]
                     else:
-                        bcsample = sample
+                        bcsample = 'none'
                         
                     datasets["datasets"].append({
                         "dataset_name"      : bcsample + "/" + record[1],
@@ -714,7 +757,8 @@ if __name__=="__main__":
         os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
         env['tfKey'],
         env['flowOrder'],
-        env['BASECALLER_RESULTS'])
+        env['BASECALLER_RESULTS'],
+        '.')
 
     
     if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed')):

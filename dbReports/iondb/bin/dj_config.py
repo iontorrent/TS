@@ -12,12 +12,15 @@ a single authoritative source of such settings with a simple interface.
 the life of the Django process should not be defined here.  Put that elsewhere.
 """
 
-
+import os
 import subprocess
 
 
 def call(*cmd):
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Root user at boot requires this addition to its path variable to locate tmap
+    env=dict(os.environ)
+    env['PATH'] = '/usr/local/bin:'+env['PATH']
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     stdout, stderr = proc.communicate()
     if proc.returncode == 0:
         # the call returned successfully
@@ -29,4 +32,3 @@ def call(*cmd):
 
 def get_tmap_version():
     return call("tmap", "index", "--version")
-

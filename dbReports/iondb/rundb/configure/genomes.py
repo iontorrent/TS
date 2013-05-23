@@ -8,10 +8,12 @@ import glob
 import fileinput
 import logging
 import json
+import base64
+import httplib2
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
-from django.http import HttpResponse, HttpResponsePermanentRedirect
+from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect
 from django.template import RequestContext
 from django.conf import settings
 from django.core import urlresolvers
@@ -19,7 +21,8 @@ from django.core import urlresolvers
 from iondb.rundb.ajax import render_to_json
 from iondb.anaserve import client
 from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import ReferenceGenome, ContentUpload
+from iondb.rundb.models import ReferenceGenome, ContentUpload, DownloadMonitor
+from iondb.rundb import tasks
 from iondb.rundb.tasks import build_tmap_index
 from iondb.rundb.configure.util import plupload_file_upload
 
@@ -222,6 +225,8 @@ def edit_genome(request, pk):
         else:
             info["status"] = upload.status
             processingBedFiles.append(info)
+    bedFiles.sort(key=lambda x: x['path'].lower())
+    processingBedFiles.sort(key=lambda x: x['path'].lower())
 
     if request.method == "POST":
         rfd = EditReferenceGenome(request.POST)
@@ -419,6 +424,11 @@ def new_genome(request):
         #URL download
         url = request.POST.get('url', False)
 
+        error_status = ""
+        reference_path = REFERENCE_LIBRARY_TEMP_DIR + fasta
+
+        why_delete = ""
+
         #if any of those were false send back a failed message
         if not all((name, short_name, fasta, version)):
             return render_to_json({"status": "Form validation failed", "error": True})
@@ -432,22 +442,22 @@ def new_genome(request):
             reported_file_size = request.POST.get('reported_file_size', False)
 
             try:
-                uploaded_file_size = str(os.path.getsize(REFERENCE_LIBRARY_TEMP_DIR + fasta))
+                uploaded_file_size = str(os.path.getsize(reference_path))
             except OSError:
                 return render_to_json({"status": "The FASTA temporary files was not found", "error": True})
 
             if reported_file_size != uploaded_file_size:
+                why_delete = "The file you uploaded differs from the expected size. This is due to an error uploading."
+
+            if not (fasta.lower().endswith(".fasta") or fasta.lower().endswith(".zip")):
+                why_delete = "The file you uploaded does not have a .fasta or .zip extension.  It must be a plain text fasta file or a Zip compressed fasta."
+
+            if why_delete:
                 try:
-                    os.remove(REFERENCE_LIBRARY_TEMP_DIR + fasta)
+                    os.remove(reference_path)
                 except OSError:
-                    return render_to_json({"status": "The FASTA temporary did not match the expected size, and could not be deleted.", "error": True})
-                return render_to_json({"status":
-                                       "The file you uploaded differs from the expected size. This is due to an error uploading. \
-                                       The temporary file has been removed.",
-                                       "reported": reported_file_size,
-                                       "uploaded": uploaded_file_size,
-                                       "error": True
-                                       })
+                    why_delete += " The FASTA file could not be deleted."
+                return render_to_json({"status": why_delete, "error": True})
 
         #Make an genome ref object
         if ReferenceGenome.objects.filter(short_name=short_name, index_version=settings.TMAP_VERSION):
@@ -525,3 +535,53 @@ def start_index_rebuild(request, reference_id):
         data["references"].append({"id": reference.pk,
                                    "short_name": reference.short_name})
     return HttpResponse(json.dumps(data), mimetype="application/json")
+
+def get_references():
+    h = httplib2.Http()
+    response, content = h.request("http://ionupdates.com/reference_downloads/references_list.json")
+    if response['status'] == '200':
+        references = json.loads(content)
+        for ref in references:
+            ref["meta"] = base64.b64encode(json.dumps(ref["meta"]))
+        return references
+    else:
+        return None
+
+@login_required
+def download_genome(request):
+    if request.method == "POST":
+        url = request.POST.get("reference_url", None)
+        reference_meta = request.POST.get("reference_meta", None)
+        logger.debug("downloading {0} with meta {1}".format(url, reference_meta))
+        if url is not None:
+            reference_args = json.loads(base64.b64decode(reference_meta))
+            reference = ReferenceGenome(**reference_args)
+            reference.save()
+            start_reference_download(url, reference.id)
+        return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
+
+    references = get_references() or []
+    downloads = DownloadMonitor.objects.filter(tags__contains="reference").order_by('-created')
+    for download in downloads:
+        if download.size:
+            download.percent_progress = "{0:.2%}".format(float(download.progress) / download.size)
+        else:
+            download.percent_progress = "..."
+    ctx = {
+        'downloads': downloads,
+        'references': references
+    }
+    return render_to_response("rundb/configure/reference_download.html", ctx,
+        context_instance=RequestContext(request))
+
+def start_reference_download(url, reference_id):
+    url = url
+    monitor = DownloadMonitor(url=url, tags="reference")
+    monitor.save()
+    try:
+        t = tasks.download_something.apply_async(
+            (url, monitor.id),
+            link=tasks.install_reference.subtask((reference_id,)))
+    except Exception as err:
+        monitor.status = "System Error: " + str(err)
+        monitor.save()

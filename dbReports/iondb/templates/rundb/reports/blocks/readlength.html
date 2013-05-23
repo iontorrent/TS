@@ -1,7 +1,7 @@
 {% load pagetools %}
 {% load ion_readable %}
 
-<div id="readlength" class="span3 well centered read-length">
+<div id="readlength" class="span4 well centered read-length">
     <a data-toggle="modal" class="report-metric-visual showImg" href="#readLengthModal">
         <div class="number-chunk">
             <h2>{{quality|bracket:"Mean Read Length at Q0"|float2int}} bp</h2>
@@ -13,7 +13,7 @@
 
     <div class="modal hide" id="readLengthModal" style="width: 830px; margin-left: -415px;">
         <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal">×</button>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
             <h3>Read Length Details</h3>
         </div>
         <div class="modal-body" id="readlength_body" style="max-height: 500px;">

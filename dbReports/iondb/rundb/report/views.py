@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.template import RequestContext
 from iondb.rundb import models
 from iondb.rundb import forms
-from iondb.backup import makePDF
+from iondb.utils import makePDF
 from iondb.anaserve import client
 from ion.utils import makeCSA
 from django import http
@@ -13,11 +13,17 @@ import csv
 import re
 import socket
 import traceback
-
-from cStringIO import StringIO
-
+import fnmatch
+import glob
+import ast
+import file_browse
+import xmlrpclib
+import numpy
+import math
+import urllib
 import ConfigParser
 import logging
+from cStringIO import StringIO
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponse
 from django.core import serializers
@@ -27,16 +33,11 @@ from django.core.servers.basehttp import FileWrapper
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404, redirect, render_to_response
 from django.conf import settings
-import numpy
-import math
-import urllib
 from datetime import datetime, date
-import file_browse
-import xmlrpclib
-import iondb.backup.tasks
-import fnmatch
-from iondb.backup import ion_archiveResult
-import glob
+from iondb.rundb.data import tasks as dmtasks
+from iondb.rundb.data import dmactions_types
+from iondb.plugins.launch_utils import get_plugins_dict
+from iondb.rundb.data import dmactions_types
 
 logger = logging.getLogger(__name__)
 
@@ -55,39 +56,44 @@ def getCSA(request, pk):
         result = models.Results.objects.get(pk=pk)
         reportDir = result.get_report_dir()
         rawDataDir = result.experiment.expDir
-        
+
         # Generate report PDF file.
-        # This will create a file named backupPDF.pdf in results directory
+        # This will create a file named report.pdf in results directory
         makePDF.latex(pk, reportDir)
-        
+
         csaFullPath = makeCSA.makeCSA(reportDir,rawDataDir)
         csaFileName = os.path.basename(csaFullPath)
-        
+
         response = http.HttpResponse(FileWrapper (open(csaFullPath)), mimetype='application/zip')
         response['Content-Disposition'] = 'attachment; filename=%s' % csaFileName
-        
+
     except:
         logger.error(traceback.format_exc())
         response = http.HttpResponse(status=500)
-        
+
     return response
 
 
+@login_required
 def getPDF(request, pk):
     ret = get_object_or_404(models.Results, pk=pk)
     filename = "%s"%ret.resultsName
-    
+
     response = http.HttpResponse(makePDF.getPDF(pk), mimetype="application/pdf")
     response['Content-Disposition'] = 'attachment; filename=%s-full.pdf'%filename
     return response
 
+
+@login_required
 def getlatex(request, pk):
     ret = get_object_or_404(models.Results, pk=pk)
-    
+
     response = http.HttpResponse(makePDF.getlatex(pk), mimetype="application/pdf")
     response['Content-Disposition'] = 'attachment; filename=' + ret.resultsName + '.pdf'
     return response
 
+
+@login_required
 def getPlugins(request, pk):
     ret = get_object_or_404(models.Results, pk=pk)
     pluginPDF = makePDF.getPlugins(pk)
@@ -99,7 +105,7 @@ def getPlugins(request, pk):
         return HttpResponseRedirect(url_with_querystring(reverse('report', args=[pk]), noplugins="True"))
 
 def percent(q, d):
-    return "%04.1f%%" % (100 * float(q) / float(d)) 
+    return "%04.1f%%" % (100 * float(q) / float(d))
 
 
 def load_ini(report,subpath,filename,namespace="global"):
@@ -198,7 +204,7 @@ def load_json(report,subpath,filename):
         if subpath:
             f =  open(os.path.join(report.get_report_dir(), subpath , filename), mode='r')
         else:
-            f =  open(os.path.join(report.get_report_dir() , filename), mode='r')   
+            f =  open(os.path.join(report.get_report_dir() , filename), mode='r')
         return json.loads(f.read())
     except:
         return False
@@ -206,7 +212,7 @@ def load_json(report,subpath,filename):
 
 def datasets_read(report):
     datasets = load_json(report,"basecaller_results","datasets_basecaller.json")
-    if not datasets: 
+    if not datasets:
         return None
     else:
         return datasets
@@ -214,7 +220,7 @@ def datasets_read(report):
 
 def testfragments_read(report):
     testfragments = load_json(report,"basecaller_results","TFStats.json")
-    if not testfragments: 
+    if not testfragments:
         return None
 
     try:
@@ -227,7 +233,7 @@ def testfragments_read(report):
             testfragments[tf_name]["conversion_50AQ17"] = conversion_50AQ17
             testfragments[tf_name]["histogram_filename"] = "new_Q17_%s.png" % tf_name
             testfragments[tf_name]["num_reads"] = num_reads
-        
+
     except KeyError:
         pass
 
@@ -261,6 +267,22 @@ def barcodes_read(report):
         return False
 
 def csv_barcodes_read(report):
+    def convert_to_long_or_float(value):
+        try:
+            v = long(value)
+            return v
+        except:
+            try:
+                v = float(value)
+                return v
+            except:
+                return value
+    def convert_values_to_long_or_float(dict):
+        for row in d:
+            for k in row:
+                if k:
+                    #logger.info('"%s" "%s"' % (k, row[k]))
+                    row[k] = convert_to_long_or_float(row[k])
     filename = 'alignment_barcode_summary.csv'
     csv_barcodes = []
     try:
@@ -268,9 +290,10 @@ def csv_barcodes_read(report):
             reader = csv.DictReader(f)
             reader.fieldnames = [key.replace(' ','_') for key in reader.fieldnames]
             d = list(reader)
+        convert_values_to_long_or_float(d)
         return d
     except:
-        return False        
+        return {}
 
 def basecaller_read(report):
     basecaller = load_json(report,"basecaller_results","BaseCaller.json")
@@ -289,7 +312,7 @@ def basecaller_read(report):
     except KeyError, IOError:
         #"Error parsing BaseCaller.json, the version of BaseCaller used for this report is too old."
         return None
-    
+
 def dataset_basecaller_read(report):
     """Read datasets_basecaller.json for read count data"""
 
@@ -322,11 +345,22 @@ def alignStats_read(report):
     """read the alignStats json file"""
     #alignStats = load_json(report, "" ,"alignTable.json")
     alignStats = load_json(report, "" ,"alignStats_err.json")
-    if not alignStats: 
+    if not alignStats:
         return False
     else:
         return alignStats
-    
+
+
+
+def ionstats_alignment_read(report):
+    ionstats_alignment = load_json(report,"","ionstats_alignment.json")
+    if not ionstats_alignment:
+        return None
+    else:
+        return ionstats_alignment
+
+
+
 # From beadDensityPlot.py
 def getFormatForVal(value):
     if(numpy.isnan(value)): value = 0 #Value here doesn't really matter b/c printing nan will always result in -nan
@@ -335,7 +369,7 @@ def getFormatForVal(value):
     if(precision>4): precision=4;
     frmt = "%%0.%df" % precision
     return frmt
-    
+
 def report_status_read(report):
     if report.status == "Completed":
         return  False
@@ -406,7 +440,7 @@ def find_output_file_groups(report, datasets, barcodes):
     output_file_groups = []
 
     web_link = report.reportWebLink()
-    report_path = report.get_report_dir() 
+    report_path = report.get_report_dir()
     if os.path.exists(report_path + "/download_links"):
         download_dir = "/download_links"
     else:
@@ -414,7 +448,7 @@ def find_output_file_groups(report, datasets, barcodes):
 
     #Links
     prefix_tuple = (web_link, download_dir, report.experiment.expName, report.resultsName)
-    
+
     current_group = {"name":"Library"}
     current_group["basecaller_bam"] = "%s%s/%s_%s.basecaller.bam" % prefix_tuple
     current_group["sff"]            = "%s%s/%s_%s.sff" % prefix_tuple
@@ -424,7 +458,7 @@ def find_output_file_groups(report, datasets, barcodes):
     output_file_groups.append(current_group)
 
     #Barcodes
-    if report.resultsType != 'CombinedAlignments' and "barcode_config" in datasets:
+    if datasets and "barcode_config" in datasets:
         current_group = {"name":"Barcodes"}
         current_group["basecaller_bam"] = "%s%s/%s_%s.barcode.basecaller.bam.zip" % prefix_tuple
         current_group["sff"]            = "%s%s/%s_%s.barcode.sff.zip" % prefix_tuple
@@ -435,12 +469,12 @@ def find_output_file_groups(report, datasets, barcodes):
 
         # links for barcodes.html: mapped bam links if aligned to reference, unmapped otherwise
         for barcode in barcodes:
-            if report.reference != 'none':
+            if report.eas.reference != 'none':
                 barcode['bam_link'] = "%s%s/%s_%s_%s.bam" % (web_link, download_dir, barcode['file_prefix'].rstrip('_rawlib'), report.experiment.expName, report.resultsName)
                 barcode['bai_link'] = "%s%s/%s_%s_%s.bam.bai" % (web_link, download_dir, barcode['file_prefix'].rstrip('_rawlib'), report.experiment.expName, report.resultsName)
             else:
                 barcode['bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
-                barcode['bai_link'] = "%s/basecaller_results/%s.basecaller.bam.bai" % (web_link, barcode['file_prefix'])            
+                barcode['bai_link'] = "%s/basecaller_results/%s.basecaller.bam.bai" % (web_link, barcode['file_prefix'])
 
     #Dim buttons if files don't exist
     for output_group in output_file_groups:
@@ -455,21 +489,47 @@ def find_output_file_groups(report, datasets, barcodes):
 def report_display(request, report_pk):
     """Show the main report for an data analysis result.
     """
-    report = get_object_or_404(models.Results, pk=report_pk)
-    if report.reportStatus == ion_archiveResult.ARCHIVED:
-        error = "report_archived"
-        return HttpResponseRedirect(url_with_querystring(reverse('report_log', 
-                                        kwargs={'pk':report_pk}), error=error))
-    elif 'Error' in report.status:
-        error = report.status
-        return HttpResponseRedirect(url_with_querystring(reverse('report_log', 
-                                        kwargs={'pk':report_pk}), error=error))
+    # QUIRK
+    #
+    # Set the JSON Encoder FLOAT Formatter to avoid float misrepresentation. Our version of Python 2.6.5 , see http://stackoverflow.com/a/1447581
+    # >>> repr(float('3.88'))
+    # '3.8799999999999999'
+    # instead we want
+    # '3.88'
+    #
+    # QUIRK
+    from json import encoder
+    encoder.FLOAT_REPR = lambda o: format(o, '.15g')
 
-    version = report_version(report)
-    if report.status == 'Completed' and version < "3.0":
-        error = "old_report"
-        return HttpResponseRedirect(url_with_querystring(reverse('report_log', 
-                                        kwargs={'pk':report_pk}), error=error))
+    # Each of these is fetched later, listing here avoids extra query
+    report_extra_tables = [ 'experiment', 'experiment__plan', 'experiment__samples', 'eas', 'libmetrics']
+    qs = models.Results.objects.select_related(*report_extra_tables)
+    report = get_object_or_404(qs, pk=report_pk)
+
+    noheader = request.GET.get("no_header",False)
+    latex = request.GET.get("latex",False)
+    noplugins = request.GET.get("noplugins",False)
+
+    if not latex:
+        dmfilestat = report.get_filestat(dmactions_types.OUT)
+        if dmfilestat.isarchived():
+            error = "report_archived"
+            return HttpResponseRedirect(url_with_querystring(reverse('report_log',
+                                            kwargs={'pk':report_pk}), error=error))
+        elif dmfilestat.isdeleted():
+            error = "report_deleted"
+            return HttpResponseRedirect(url_with_querystring(reverse('report_log',
+                                            kwargs={'pk':report_pk}), error=error))
+        elif 'Error' in report.status:
+            error = report.status
+            return HttpResponseRedirect(url_with_querystring(reverse('report_log',
+                                            kwargs={'pk':report_pk}), error=error))
+
+        version = report_version(report)
+        if report.status == 'Completed' and version < "3.0":
+            error = "old_report"
+            return HttpResponseRedirect(url_with_querystring(reverse('report_log',
+                                            kwargs={'pk':report_pk}), error=error))
 
     experiment = report.experiment
     otherReports = report.experiment.results_set.exclude(pk=report_pk).order_by("-timeStamp")
@@ -479,27 +539,35 @@ def report_display(request, report_pk):
 
     plan = report_plan(report)
     try:
-        reference = models.ReferenceGenome.objects.filter(short_name = report.reference).order_by("-index_version")[0]
+        reference = models.ReferenceGenome.objects.filter(short_name = report.eas.reference).order_by("-index_version")[0]
     except IndexError, IOError:
         reference = False
 
     #find the major blocks from the important plugins
     major_plugins = {}
+    major_plugins_images = {}
     has_major_plugins = False
-    pluginList = models.PluginResult.objects.filter(result__pk=report_pk)
+    pluginList = report.pluginresult_set.all().select_related('result', 'result__reportstorage', 'plugin')
     for major_plugin in pluginList:
         if major_plugin.plugin.majorBlock:
             #list all of the _blocks for the major plugins, just use the first one
             try:
                 majorPluginFiles = glob.glob(os.path.join(major_plugin.path(),"*_block.html"))[0]
+                majorPluginImages = glob.glob(os.path.join(report.get_report_dir() , "pdf",
+                                    "slice_" + major_plugin.plugin.name + "*"))
                 has_major_plugins = True
             except IndexError:
                 majorPluginFiles = False
+                majorPluginImages = False
 
             major_plugins[major_plugin.plugin.name] = majorPluginFiles
-    
+            if majorPluginImages:
+                major_plugins_images[major_plugin.plugin.name] = sorted(majorPluginImages)
+            else:
+                major_plugins_images[major_plugin.plugin.name] = majorPluginImages
+
     #TODO: encapuslate all vars into their parent block to make it easy to build the API maybe put
-    #all of this in the model? 
+    #all of this in the model?
     basecaller = basecaller_read(report)
     barcodes = barcodes_read(report)
     datasets = datasets_read(report)
@@ -508,23 +576,41 @@ def report_display(request, report_pk):
     software_versions = report_version_display(report)
 
     # special case: combinedAlignments output doesn't have any basecaller results
-    if report.resultsType and report.resultsType == 'CombinedAlignments':            
-        report.experiment.expName = "CombineAlignments"            
-        CA_barcodes = csv_barcodes_read(report)
+    if report.resultsType and report.resultsType == 'CombinedAlignments':
+        report.experiment.expName = "CombineAlignments"
+
+        CA_barcodes_json = []
+        try:
+            CA_barcodes_json_path = os.path.join(report.get_report_dir(), 'CA_barcode_summary.json')
+            if os.path.exists(CA_barcodes_json_path):
+                CA_barcodes_json = json.load(open(CA_barcodes_json_path))
+            else:
+                # compatibility <TS3.6
+                CA_barcodes = csv_barcodes_read(report)
+                for CA_barcode in CA_barcodes:
+                    CA_barcodes_json.append({
+                        "barcode_name": CA_barcode["ID"],
+                        "AQ7_num_bases": CA_barcode["Filtered_Mapped_Bases_in_Q7_Alignments"],
+                        "full_num_reads": CA_barcode["Total_number_of_Reads"],
+                        "AQ7_mean_read_length": CA_barcode["Filtered_Q7_Mean_Alignment_Length"]
+                    })
+        except:
+            pass
+        CA_barcodes_json = json.dumps(CA_barcodes_json)
+
         try:
             paramsJson = load_json(report, "" ,"ion_params_00.json")
             parents = [(pk,name) for pk,name in zip(paramsJson["parentIDs"],paramsJson["parentNames"])]
             CA_warnings = paramsJson.get("warnings","")
         except:
-            logger.exception("Cannot read info from ion_params_00.json.")     
+            logger.exception("Cannot read info from ion_params_00.json.")
 
     beadfind = load_ini(report,"sigproc_results","analysis.bfmask.stats")
-    alignStats = alignStats_read(report)
     dbr = dataset_basecaller_read(report)
-    
+
     try:
-        qcTypes = dict((qc.qcType.qcName, qc.threshold) for qc in 
-                            report.experiment.plan.plannedexperimentqc_set.all())
+        qcTypes = dict(qc for qc in
+                       report.experiment.plan.plannedexperimentqc_set.all().values_list('qcType__qcName', 'threshold'))
     except:
         qcTypes = {}
 
@@ -556,46 +642,91 @@ def report_display(request, report_pk):
         beadsummary["library_beads"] = beadfind["Library Beads"]
         beadsummary["p_library_beads"] = percent(beadfind["Library Beads"], beadfind["Live Beads"])
     except:
-        logger.exception("Failed to build Beadfind report content.")
+        logger.warn("Failed to build Beadfind report content for %s." % report.resultsName)
 
     #Basecaller
     try:
-        usable_sequence = basecaller and int(round(100.0 * 
+        usable_sequence = basecaller and int(round(100.0 *
             float(basecaller["total_reads"]) / float(beadfind["Library Beads"])))
         usable_sequence_threshold = qcTypes.get("Usable Sequence (%)", 0)
         quality = load_ini(report,"basecaller_results","quality.summary")
-        
-        if float(dbr['total_Q0_bases']) > 0:
-            mappable_output = int(round( float(alignStats["total_mapped_target_bases"]) / float(dbr['total_Q0_bases'])  * 100))
-        else:
-            mappable_output = 0
-        
+
         basecaller["p_polyclonal"] = percent(basecaller["polyclonal"], beadfind["Library Beads"])
         basecaller["p_low_quality"] = percent(basecaller["low_quality"], beadfind["Library Beads"])
         basecaller["p_primer_dimer"] = percent(basecaller["primer_dimer"], beadfind["Library Beads"])
         basecaller["p_total_reads"] = percent(basecaller["total_reads"], beadfind["Library Beads"])
     except:
-        logger.exception("Failed to build Basecaller report content.")       
-    
+        logger.warn("Failed to build Basecaller report content for %s." % report.resultsName)
+
+
+    # Special alignment backward compatibility code
+    ionstats_alignment = ionstats_alignment_read(report)
+
+    if not ionstats_alignment:
+        ionstats_alignment = {}
+        alignStats = alignStats_read(report)
+        alignment_ini = load_ini(report,".","alignment.summary")
+        if alignStats and alignment_ini:
+            ionstats_alignment['aligned'] = {'num_bases' : alignStats["total_mapped_target_bases"] }
+            ionstats_alignment['error_by_position'] = [alignStats["accuracy_total_errors"],]
+            ionstats_alignment['AQ17'] = {'num_bases'           : alignment_ini["Filtered Mapped Bases in Q17 Alignments"],
+                                          'mean_read_length'    : alignment_ini["Filtered Q17 Mean Alignment Length"],
+                                          'max_read_length'     : alignment_ini["Filtered Q17 Longest Alignment"]}
+            ionstats_alignment['AQ20'] = {'num_bases'           : alignment_ini["Filtered Mapped Bases in Q20 Alignments"],
+                                          'mean_read_length'    : alignment_ini["Filtered Q20 Mean Alignment Length"],
+                                          'max_read_length'     : alignment_ini["Filtered Q20 Longest Alignment"]}
+            ionstats_alignment['AQ47'] = {'num_bases'           : alignment_ini["Filtered Mapped Bases in Q47 Alignments"],
+                                          'mean_read_length'    : alignment_ini["Filtered Q47 Mean Alignment Length"],
+                                          'max_read_length'     : alignment_ini["Filtered Q47 Longest Alignment"]}
+        del alignStats
+        del alignment_ini
+
     #Alignment
     try:
-        if report.reference != 'none':
+        if report.eas.reference != 'none':
             if reference:
-                avg_coverage_depth_of_target = round( float(alignStats["total_mapped_target_bases"]) / reference.genome_length(),1  )
+                avg_coverage_depth_of_target = round( float(ionstats_alignment['aligned']['num_bases']) / reference.genome_length(),1  )
                 avg_coverage_depth_of_target = str(avg_coverage_depth_of_target) + "X"
             else:
                 avg_coverage_depth_of_target = "N/A"
-        
-            if float(alignStats["accuracy_total_bases"]) > 0:
-                raw_accuracy = round( (1 - float(alignStats["accuracy_total_errors"]) / float(alignStats["accuracy_total_bases"])) * 100, 1)
+
+            if float(ionstats_alignment['aligned']['num_bases']) > 0:
+                raw_accuracy = round( (1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
             else:
                 raw_accuracy = 0.0
-            alignment_ini = load_ini(report,".","alignment.summary")
-            alignment = dict([(k.replace(' ','_'), v) for k, v in alignment_ini.items()])
+
+            try:
+                for c in ['AQ17', 'AQ20', 'AQ47']:
+                    ionstats_alignment[c]['mean_coverage'] = round( float(ionstats_alignment[c]['num_bases']) / reference.genome_length(),1  )
+            except:
+                logger.exception("Failed to compute mean_coverage values")
+
+            try:
+                for c in ['aligned']:
+                    ionstats_alignment[c]['p_num_reads'] = 100.0 * ionstats_alignment[c]['num_reads'] / float(ionstats_alignment['full']['num_reads'])
+                    ionstats_alignment[c]['p_num_bases'] = 100.0 * ionstats_alignment[c]['num_bases'] / float(ionstats_alignment['full']['num_reads'])
+
+                ionstats_alignment['unaligned'] = {}
+                ionstats_alignment['unaligned']['num_reads'] = int(ionstats_alignment['full']['num_reads']) - int(ionstats_alignment['aligned']['p_num_reads'])
+                # close enough, and ensures they sum to 100 despite rounding
+                ionstats_alignment['unaligned']['p_num_reads'] = 100.0 - ionstats_alignment['aligned']['p_num_reads']
+                #ionstats_alignment['unaligned']['p_num_reads'] = 100.0 * ionstats_alignment['unaligned']['num_reads']) / float(ionstats_alignment['full']['num_reads']
+            except:
+                logger.exception("Failed to compute percent alignment values")
         else:
             reference = 'none'
     except:
-        logger.exception("Failed to build Alignment report content.")       
+        logger.warn("Failed to build Alignment report content for %s." % report.resultsName)
+
+    duplicate_metrics = {}
+    if report.libmetrics and report.libmetrics.duplicate_reads is not None:
+        duplicate_metrics['duplicate_reads'] = report.libmetrics.duplicate_reads
+        if report.libmetrics.totalNumReads:
+            duplicate_metrics['duplicate_read_percentage'] = 100.0 * report.libmetrics.duplicate_reads / float(report.libmetrics.totalNumReads)
+        else:
+            # totalNumReads is None or 0
+            duplicate_metrics['duplicate_read_percentage'] = None
+
 
     class ProtonResultBlock:
         def __init__(self,directory,status_msg):
@@ -603,17 +734,14 @@ def report_display(request, report_pk):
             self.status_msg = status_msg
 
     try:
-        if os.path.exists("/opt/ion/.ion-internal-server"):
-            isInternalServer = True
-        else:
-            isInternalServer = False
+        isInternalServer = os.path.exists("/opt/ion/.ion-internal-server")
     except:
         logger.exception("Failed to create isInternalServer variable")
 
     try:
         # TODO
         isThumbnail = report.metaData.get("thumb", False)
-        if isInternalServer and report.experiment.log['blocks'] > 0 and not isThumbnail:
+        if isInternalServer and len(report.experiment.log.get('blocks','')) > 0 and not isThumbnail:
             proton_log_blocks = report.experiment.log['blocks']
             proton_block_tuples = []
             for b in proton_log_blocks:
@@ -632,24 +760,30 @@ def report_display(request, report_pk):
                 blockdir = "block_"+block
                 proton_blocks.append( ProtonResultBlock(blockdir, getBlockStatus(report,blockdir) ) )
     except:
-        logger.exception("Failed to create proton block content.")  
+        logger.exception("Failed to create proton block content for report [%s]." % report.get_report_dir())
 
-    output_file_groups = [] 
+    output_file_groups = []
     try:
         output_file_groups = find_output_file_groups(report, datasets, barcodes)
     except Exception as err:
         logger.exception("Could not generate output file links")
 
-    noheader = request.GET.get("no_header",False)
-    latex = request.GET.get("latex",False)
-    noplugins = request.GET.get("noplugins",False)
+
+    # Convert the barcodes back to JSON for use by Kendo UI Grid
+    if barcodes:
+        _barcodes = filter(None, [bc if not bc.has_key('filtered') else None for bc in barcodes])
+        _barcodes += filter(None, [bc if bc.has_key('filtered') and not bc['filtered'] else None for bc in barcodes])
+        barcodes_json = json.dumps(_barcodes)
+    else:
+        barcodes_json = json.dumps([])
+
     # This is both awesome and playing with fire.  Should be made explicit soon
     ctxd = locals()
     ctx = RequestContext(request, ctxd)
     if not latex:
         return render_to_response("rundb/reports/report.html", context_instance=ctx)
     else:
-        return render_to_response("rundb/reports/printreport.html", context_instance=ctx)
+        return render_to_response("rundb/reports/printreport.tex", context_instance=ctx)
 
 
 @login_required
@@ -669,12 +803,13 @@ def report_log(request, pk):
     ]
     report_link = report.reportWebLink()
     file_links = []
-    if report.reportStatus != ion_archiveResult.ARCHIVED:
-        file_links = [ (os.path.exists(os.path.join(root_path, p)), 
+    dmfilestat = report.get_filestat(dmactions_types.OUT)
+    if not dmfilestat.isdisposed():
+        file_links = [ (os.path.exists(os.path.join(root_path, p)),
                         "%s/%s" % (report_link, p), t) for p, t in (
             ("Default_Report.php", "Classic Report"),
         )]
-    file_links.extend( (os.path.exists(os.path.join(root_path, p)), 
+    file_links.extend( (os.path.exists(os.path.join(root_path, p)),
                        reverse('report_metal', args=[report.pk, p]) , t) for p, t in (
         ("drmaa_stdout.txt", "TLScript: drmaa_stdout.txt"),
         ("drmaa_stdout_block.txt", "BlockTLScript: drmaa_stdout_block.txt"),
@@ -690,8 +825,9 @@ def report_log(request, pk):
 
     for name, path in zip(log_names, log_paths):
         if os.path.exists(path):
-            file = file_browse.ellipsize_file(path)
-            log = (name, file.read())
+            #file = file_browse.ellipsize_file(path)
+            #instead of load the file and pushing it through Django, load it with jQuery
+            log = (name, name)
         else:
             log = (name, None)
         log_data.append(log)
@@ -704,7 +840,7 @@ def report_log(request, pk):
         "file_links": file_links,
     }
 
-    return render_to_response("rundb/reports/report_log.html", 
+    return render_to_response("rundb/reports/report_log.html",
         context, RequestContext(request))
 
 
@@ -729,24 +865,24 @@ def get_project_names(rpf, exp):
     try:
       names = rpf.cleaned_data['project_names']
     except:
-      pass  
+      pass
     if len(names) > 1: return names
     # get projects from previous report
-    if len(exp.sorted_results()) > 0: 
+    if len(exp.sorted_results()) > 0:
       names = exp.sorted_results()[0].projectNames()
-    if len(names) > 1: return names           
+    if len(names) > 1: return names
     # get projects from Plan
     if exp.plan:
         try:
-            names = [p.name for p in exp.plan.projects.all()]  
+            names = [p.name for p in exp.plan.projects.all()]
             names = ','.join(names)
         except:
             pass
-        
-    if len(names) > 1: return names    
-    # last try: get from explog  
+
+    if len(names) > 1: return names
+    # last try: get from explog
     try:
-      names = exp.log['project']  
+      names = exp.log['project']
     except:
       pass
     return names
@@ -781,107 +917,137 @@ def create_tf_conf(tfConfig):
         return (fname, "\n".join(lines))
 
 
-def get_plugins_dict(pg, plan={}, exclude_plugins = False):
-    """
-    Build a list containing dictionaries of plugin information.
-    will only put the plugins in the list that are selected in the 
-    interface
-    """
-    ret = []
-    if len(pg) > 0:
-        planPlugins = {}        
-        if plan and 'selectedPlugins' in plan.keys():
-          selectedPlugins = json.loads(plan['selectedPlugins'])
-          selected = selectedPlugins.get('planplugins',[]) + selectedPlugins.get('planuploaders',[])          
-          for pl in selected:
-              planPlugins[pl['name']] = pl.get('userInput','')
-
-        for p in pg:          
-          if exclude_plugins: 
-              #exclude plugins from launching automatically by pipeline
-              #plugins must be marked autorun or selected during planning, otherwise excluded
-              if not (p.autorun or p.name in planPlugins.keys()):
-                  continue            
-        
-          params = {'name':p.name,
-                'path':p.path,
-                'version':p.version,
-                'id':p.id,
-                'autorun':p.autorun,
-                'pluginconfig': json.dumps(p.config),
-                'userInput':  planPlugins.get(p.name, '')
-                } 
-                
-          for key in p.pluginsettings.keys():
-              params[key] = p.pluginsettings[key]
-          
-          ret.append(params)   
-    return ret
-
-
-def get_default_cmdline_args(chipType):
+def get_default_cmdline_args(chipType, plan=None):
     chips = models.Chip.objects.all()
-    for c in chips:
-        if chipType.startswith(c.name):
-            beadfindArgs    = c.beadfindargs
-            analysisArgs    = c.analysisargs
-            basecallerArgs  = c.basecallerargs
-            thumbnailBeadfindArgs   = c.thumbnailbeadfindargs
-            thumbnailAnalysisArgs   = c.thumbnailanalysisargs
-            thumbnailBasecallerArgs = c.thumbnailbasecallerargs
-            break
+    chipType = chipType.replace('"','')
+    chips_filtered = None
+
+    # scan for special run type/application type
+    if plan:
+        if plan.runType:
+            chips_filtered = [c for c in chips if c.name == chipType+plan.runType]
+
+    if not chips_filtered:
+        chips_filtered = [c for c in chips if chipType.startswith(c.name)]
+
+    if chips_filtered:
+        chip = chips_filtered[0]
+
+        beadfindArgs    = chip.beadfindargs
+        analysisArgs    = chip.analysisargs
+        basecallerArgs  = chip.basecallerargs
+        prebasecallerArgs  = chip.prebasecallerargs
+        thumbnailBeadfindArgs   = chip.thumbnailbeadfindargs
+        thumbnailAnalysisArgs   = chip.thumbnailanalysisargs
+        prethumbnailBasecallerArgs = chip.prethumbnailbasecallerargs
+        thumbnailBasecallerArgs = chip.thumbnailbasecallerargs
     # loop finished without finding chipType: provide basic defaults
     else:
         beadfindArgs = thumbnailBeadfindArgs = 'justBeadFind'
         analysisArgs = thumbnailAnalysisArgs = 'Analysis'
-        basecallerArgs = thumbnailBasecallerArgs = 'BaseCaller'        
-    
+        basecallerArgs = thumbnailBasecallerArgs = 'BaseCaller'
+        prebasecallerArgs = prethumbnailBasecallerArgs = 'BaseCaller'
+
     args = {
       'beadfindArgs':   beadfindArgs,
-      'analysisArgs':   analysisArgs,      
+      'analysisArgs':   analysisArgs,
       'basecallerArgs': basecallerArgs,
+      'prebasecallerArgs': prebasecallerArgs,
       'thumbnailBeadfindArgs':    thumbnailBeadfindArgs,
       'thumbnailAnalysisArgs':    thumbnailAnalysisArgs,
-      'thumbnailBasecallerArgs':  thumbnailBasecallerArgs
+      'thumbnailBasecallerArgs':  thumbnailBasecallerArgs,
+      'prethumbnailBasecallerArgs':  prethumbnailBasecallerArgs
     }
+
+    if plan:
+        try:
+            runtype = models.RunType.objects.get(runType=plan.runType)
+        except models.RunType.DoesNotExist:
+            return args
+
+        #if the runtype has meta data with a key of cmdline, use update the args dict to get those values
+        cmdline = runtype.meta.get("cmdline",False)
+        if cmdline:
+            args.update(cmdline)
+
     return args
 
 
-def makeParams(exp, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
+def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, align_full,
                                 url_path, aligner_opts_extra, mark_duplicates,
-                                runid, previousReport,tfKey,
-                                thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal):
+                                pathToData, previousReport,tfKey, plugins_list,
+                                thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal,
+                                prebasecallerArgs, prethumbnailBasecallerArgs, realign):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
-    will need to be run must be constructed here and included inside the return.  
+    will need to be run must be constructed here and included inside the return.
     This includes any special instructions for flow control in the top level script."""
-    gc = models.GlobalConfig.objects.all().order_by('id')[0]    
-    pathToData = os.path.join(exp.expDir)
-    if doThumbnail and exp.chipType == "900":
-        pathToData = os.path.join(pathToData,'thumbnail')
-    defaultLibKey = gc.default_library_key
 
-    ##logger.debug("...views.makeParams() gc.default_library_key=%s;" % defaultLibKey)
-    expName = exp.expName
+    # defaults from GlobalConfig
+    gc = models.GlobalConfig.objects.all().order_by('id')[0]
+    site_name = gc.site_name
+    barcode_args = gc.barcode_args
+    #get the hostname try to get the name from global config first
+    if gc.web_root:
+        net_location = gc.web_root
+    else:
+        #if a hostname was not found in globalconfig.webroot then use what the system reports
+        net_location = "http://" + str(socket.getfqdn())
+
+    # floworder field sometimes has whitespace appended (?)  So strip it off
+    flowOrder = exp.flowsInOrder.strip()
+    # Set the default flow order if its not stored in the dbase.  Legacy support
+    if flowOrder == '0' or flowOrder == None or flowOrder == '':
+        flowOrder = "TACG"
 
     #get the exp data for sam metadata
-    exp_filter = models.Experiment.objects.filter(pk=exp.pk)
-    exp_json = serializers.serialize("json", exp_filter)
+    exp_json = serializers.serialize("json", [exp])
     exp_json = json.loads(exp_json)
     exp_json = exp_json[0]["fields"]
 
-    #now get the plan and return that
+    # ExperimentAnalysisSettings
+    eas = result.eas
+    eas_json = serializers.serialize("json", [eas])
+    eas_json = json.loads(eas_json)
+    eas_json = eas_json[0]["fields"]
+
+    # Get the 3' adapter sequence
+    adapterSequence = eas.threePrimeAdapter
+    try:
+        adapter_primer_dict = models.ThreePrimeadapter.objects.filter(sequence=adapterSequence)[0]
+    except:
+        adapter_primer_dict = None
+
+    #the adapter_primer_dicts should not be empty or none
+    if not adapter_primer_dict:
+        try:
+            adapter_primer_dict = models.ThreePrimeadapter.objects.get(direction="Forward", isDefault=True)
+        except (models.ThreePrimeadapter.DoesNotExist,
+                models.ThreePrimeadapter.MultipleObjectsReturned):
+
+            #ok, there should be a default in db, but just in case... I'm keeping the previous logic for fail-safe
+            adapter_primer_dict = {'name':'Ion Kit',
+                                   'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC',
+                                   'direction': 'Forward'
+                                    }
+
+    barcodeId = eas.barcodeKitName if eas.barcodeKitName else ''
+    barcodeSamples = eas.barcodedSamples
+
+    # Plan
     try:
         if exp.plan:
             planObj = [exp.plan]
+            exp_plan = exp.plan
         else:
+            exp_plan = None
             # Fallback to explog data... crawler should be setting this up
 
             #check plan's GUId in explog first
             planGUId = exp.log.get("planned_run_guid", {})
             if planGUId:
                 planObj = models.PlannedExperiment.objects.filter(planGUID=planGUId)
-            else:                                    
+            else:
                 planId = exp.log.get("pending_run_short_id",exp.log.get("planned_run_short_id", {}))
                 if planId:
                     planObj = models.PlannedExperiment.objects.filter(planShortID=planId)
@@ -899,153 +1065,65 @@ def makeParams(exp, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThu
     else:
         plan = {}
 
-    try:
-        pg = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
-        plugins = get_plugins_dict(pg, plan, True)
-    except:
-        logger.exception("Failed to get list of active plugins")
-        plugins = ""
-
-    site_name = gc.site_name
-    barcode_args = gc.barcode_args
-
-    libraryName = result.reference
-
-    skipchecksum = False
-    fastqpath = result.fastqLink.strip().split('/')[-1]
-
-    #TODO: remove the libKey from the analysis args, assign this in the TLScript. To make this more fluid
-
-    #if the librayKey was set by createReport use that value. If not use the value from the PGM
-    if not libraryKey:
-        if exp.isReverseRun:
-            libraryKey = exp.reverselibrarykey
-        else:
-            libraryKey = exp.libraryKey
-
-    if libraryKey == None or len(libraryKey) < 1:
-        libraryKey = defaultLibKey
-
-    # floworder field sometimes has whitespace appended (?)  So strip it off
-    flowOrder = exp.flowsInOrder.strip()
-    # Set the default flow order if its not stored in the dbase.  Legacy support
-    if flowOrder == '0' or flowOrder == None or flowOrder == '':
-        flowOrder = "TACG"
-
-    # Set the barcodeId
-    if exp.barcodeId:
-        barcodeId = exp.barcodeId
-    else:
-        barcodeId = ''
-    project = ','.join(p.name for p in result.projects.all())
-    sample = exp.sample
-    
-    # get barcoded sample names from Plan
-    barcodeSamples = ''
-    if barcodeId and plan:
-        barcodeSamples = plan.get('barcodedSamples','')
-    
-    chipType = exp.chipType
-    #net_location = gc.web_root
-    #get the hostname try to get the name from global config first
-    if gc.web_root:
-        net_location = gc.web_root
-    else:
-        #if a hostname was not found in globalconfig.webroot then use what the system reports
-        net_location = "http://" + str(socket.getfqdn())
-    
-    # Get the 3' adapter sequence
-    adapterSequence = exp.forward3primeadapter
-    if exp.isReverseRun:
-        adapterSequence = exp.reverse3primeadapter
-        
-    try:
-        adapter_primer_dicts = models.ThreePrimeadapter.objects.filter(sequence=adapterSequence)
-    except:
-        adapter_primer_dicts = None
-        
-    #the adapter_primer_dicts should not be empty or none
-    if not adapter_primer_dicts or adapter_primer_dicts.count() == 0:
-        if exp.isReverseRun:
-            try:
-                adapter_primer_dict = models.ThreePrimeadapter.objects.get(direction="Reverse", isDefault=True)
-            except (models.ThreePrimeadapter.DoesNotExist,
-                    models.ThreePrimeadapter.MultipleObjectsReturned):
-                    
-                #ok, there should be a default in db, but just in case... I'm keeping the previous logic for fail-safe
-                adapter_primer_dict = {'name':'Reverse Ion Kit',
-                                       'sequence':'CTGAGTCGGAGACACGCAGGGATGAGATGG',
-                                       'direction': 'Reverse'
-                                        }                
-        else:     
-            try:         
-                adapter_primer_dict = models.ThreePrimeadapter.objects.get(direction="Forward", isDefault=True)
-            except (models.ThreePrimeadapter.DoesNotExist,
-                    models.ThreePrimeadapter.MultipleObjectsReturned):
-                
-                #ok, there should be a default in db, but just in case... I'm keeping the previous logic for fail-safe
-                adapter_primer_dict = {'name':'Ion Kit',
-                                       'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC',
-                                       'direction': 'Forward'
-                                        }
-    else:
-        adapter_primer_dict = adapter_primer_dicts[0]
-
-
-    rawdatastyle = exp.rawdatastyle
+    # Plugins
+    plugins = get_plugins_dict(plugins_list, eas.selectedPlugins)
 
     #if args are passed use them, if not use global defaults
-    default_args = get_default_cmdline_args(exp.chipType)
+    default_args = get_default_cmdline_args(exp.chipType,exp_plan)
     if doThumbnail:
         beadfindArgs = thumbnailBeadfindArgs if thumbnailBeadfindArgs else default_args['thumbnailBeadfindArgs']
         analysisArgs = thumbnailAnalysisArgs if thumbnailAnalysisArgs else default_args['thumbnailAnalysisArgs']
         basecallerArgs = thumbnailBasecallerArgs if thumbnailBasecallerArgs else default_args['thumbnailBasecallerArgs']
+        prebasecallerArgs = prethumbnailBasecallerArgs if prethumbnailBasecallerArgs else default_args['prethumbnailBasecallerArgs']
     else:
-        beadfindArgs = beadfindArgs if beadfindArgs else default_args['beadfindArgs'] 
+        beadfindArgs = beadfindArgs if beadfindArgs else default_args['beadfindArgs']
         analysisArgs = analysisArgs if analysisArgs else default_args['analysisArgs']
         basecallerArgs = basecallerArgs if basecallerArgs else default_args['basecallerArgs']
-    
+        prebasecallerArgs = prebasecallerArgs if prebasecallerArgs else default_args['prebasecallerArgs']
+
     ret = {'pathToData':pathToData,
            'beadfindArgs':beadfindArgs,
            'analysisArgs':analysisArgs,
+           'prebasecallerArgs' : prebasecallerArgs,
            'basecallerArgs' : basecallerArgs,
            'blockArgs':blockArgs,
-           'libraryName':libraryName,
-           'resultsName':resultsName,
-           'expName':expName,
-           'libraryKey':libraryKey,
+           'libraryName':eas.reference,
+           'resultsName':result.resultsName,
+           'expName': exp.expName,
+           'libraryKey':eas.libraryKey,
            'plugins':plugins,
-           'fastqpath':fastqpath,
-           'skipchecksum':skipchecksum,
+           'fastqpath': result.fastqLink.strip().split('/')[-1],
+           'skipchecksum': False,
            'flowOrder':flowOrder,
            'align_full' : align_full,
-           'project':project,
-           'sample':sample,
-           'chiptype':chipType,
-           'barcodeId':barcodeId,
-           'barcodeSamples': barcodeSamples,
+           'project': ','.join(p.name for p in result.projects.all()),
+           'sample': exp.get_sample(),
+           'chiptype':exp.chipType,
+           'barcodeId': barcodeId,
+           'barcodeSamples': json.dumps(barcodeSamples,cls=DjangoJSONEncoder),
            'net_location':net_location,
            'exp_json': json.dumps(exp_json,cls=DjangoJSONEncoder),
            'site_name': site_name,
            'url_path':url_path,
            'reverse_primer_dict':adapter_primer_dict,
-           'rawdatastyle':rawdatastyle,
+           'rawdatastyle':exp.rawdatastyle,
            'aligner_opts_extra':aligner_opts_extra,
            'mark_duplicates' : mark_duplicates,
            'plan': plan,
            'flows':exp.flows,
            'pgmName':exp.pgmName,
-           'isReverseRun':exp.isReverseRun,
            'barcode_args':json.dumps(barcode_args,cls=DjangoJSONEncoder),
            'tmap_version':settings.TMAP_VERSION,
-           'runid':runid,
+           'runid': result.runid,
            'previousReport':previousReport,
            'tfKey': tfKey,
            'doThumbnail' : doThumbnail,
            'sam_parsed' : True if os.path.isfile('/opt/ion/.ion-internal-server') else False,
            'doBaseRecal':doBaseRecal,
+           'realign':realign,
+           'experimentAnalysisSettings': eas_json
     }
-    
+
     return ret
 
 
@@ -1062,7 +1140,7 @@ def build_result(experiment, name, server, location):
     j = lambda l: os.path.join(link, l)
     storages = models.ReportStorage.objects.all()
     storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
-        
+
     kwargs = {
         "experiment":experiment,
         "resultsName":name,
@@ -1089,11 +1167,30 @@ def build_result(experiment, name, server, location):
     ret.save()
     return ret
 
+def update_experiment_analysis_settings(eas, **kwargs):
+    """
+    Check whether ExperimentAnalysisSettings need to be updated:
+    if settings were changed on re-analysis page save a new EAS with isOneTimeOverride = True
+    """
+    override = False
+    for key, value in kwargs.items():
+        if not value == getattr(eas,key):
+            override = True
+            setattr(eas,key,value)
+
+    if override:
+        eas.isOneTimeOverride = True
+        eas.isEditable = False
+        eas.date = datetime.now()
+        eas.pk = None # this will create a new instance
+        eas.save()
+
+    return eas
 
 def _createReport(request, pk, reportpk):
     """
     Send a report to the job server.
-    
+
     If ``createReport`` receives a `GET` request, it displays a form
     to the user.
 
@@ -1127,15 +1224,15 @@ def _createReport(request, pk, reportpk):
     def bail(result, err):
         result.status = err
         raise BailException(err)
-    
+
     def create_bc_conf(barcodeId,fname):
         """
         Creates a barcodeList file for use in barcodeSplit binary.
-        
+
         Danger here is if the database returns a blank, or no lines, then the
         file will be written with no entries.  The use of this empty file later
         will generate no fastq files, except for the nomatch.fastq file.
-        
+
         See C source code BarCode.h for list of valid keywords
         """
         # Retrieve the list of barcodes associated with the given barcodeId
@@ -1155,7 +1252,7 @@ def _createReport(request, pk, reportpk):
         """
         text = "ResultsPK = %d" % pk
         return ("primary.key", text)
-    
+
     class BailException(Exception):
         """
         Raised when an error is encountered with report creation. These errors
@@ -1171,7 +1268,7 @@ def _createReport(request, pk, reportpk):
         return string.replace("\n"," ").replace("\r"," ").strip()
 
     def create_meta(experiment, result):
-    
+
         """Build the contents of a report metadata file (``expMeta.dat``)."""
         def get_chipcheck_status(exp):
             """
@@ -1182,28 +1279,28 @@ def _createReport(request, pk, reportpk):
             if data.get('calibratepassed', 'Not Found'):
                 return 'Passed'
             else:
-                return 'Failed'    
+                return 'Failed'
         lines = ("Run Name = %s" % experiment.expName,
                  "Run Date = %s" % experiment.date,
-                 "Run Cycles = %s" % experiment.cycles,
                  "Run Flows = %s" % experiment.flows,
                  "Project = %s" % ','.join(p.name for p in result.projects.all()),
-                 "Sample = %s" % experiment.sample,
-                 "Library = %s" % result.reference,
-                 "PGM = %s" % experiment.pgmName,
+                 "Sample = %s" % experiment.get_sample(),
+                 "Library = %s" % result.eas.reference,
+                 "Instrument = %s" % experiment.pgmName,
                  "Flow Order = %s" % (experiment.flowsInOrder.strip() if experiment.flowsInOrder.strip() != '0' else 'TACG'),
-                 "Library Key = %s" % (experiment.libraryKey if experiment.libraryKey != "" else experiment.reverselibrarykey),
+                 "Library Key = %s" % result.eas.libraryKey,
                  "TF Key = %s" % "ATCG", # TODO, is it really unique?
                  "Chip Check = %s" % get_chipcheck_status(experiment),
                  "Chip Type = %s" % experiment.chipType,
                  "Chip Data = %s" % experiment.rawdatastyle,
                  "Notes = %s" % experiment.notes,
-                 "Barcode Set = %s" % experiment.barcodeId,
+                 "Barcode Set = %s" % result.eas.barcodeKitName,
                  "Analysis Name = %s" % result.resultsName,
                  "Analysis Date = %s" % date.today(),
                  "Analysis Flows = %s" % result.processedflows,
                  "runID = %s" % result.runid,
                  )
+
         return ('expMeta.dat', '\n'.join(lines))
 
     def create_runid(name):
@@ -1214,7 +1311,7 @@ def _createReport(request, pk, reportpk):
             for i in key:
                 hash = ((hash << 5) ^ (hash >> 27)) ^ ord(i)
             return (hash & 0x7FFFFFFF)
-    
+
         def base10to36(num):
             str = ''
             for i in range(5):
@@ -1225,12 +1322,12 @@ def _createReport(request, pk, reportpk):
                     str = chr(ord('0') + digit - 26) + str
                 num /= 36
             return str
-            
-        return base10to36(DEKHash(name))     
-       
+
+        return base10to36(DEKHash(name))
+
     exp = get_object_or_404(models.Experiment, pk=pk)
     try:
-        rig = models.Rig.objects.get(name=exp.pgmName)
+        rig = models.Rig.objects.select_related('location').get(name=exp.pgmName)
         loc = rig.location
     except ObjectDoesNotExist:
         #If there is a rig try to use the location set by it
@@ -1248,13 +1345,8 @@ def _createReport(request, pk, reportpk):
     storages = models.ReportStorage.objects.all()
     storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
     start_error = None
-    
+
     javascript = ""
-    
-    # alignment reference
-    references = [("none","none")]
-    for r in models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True):
-      references.append((r.short_name, r.short_name + " (" + r.name + ")"))        
 
     isProton = True if exp.chipType == "900" else False
 
@@ -1272,8 +1364,8 @@ def _createReport(request, pk, reportpk):
             #just fail to 2.2
             version = "2.2"
         isThumbnail = r.metaData.get("thumb", False)
-        result_choice = ( r.get_report_dir(), 
-                        r.resultsName + " [" + str(r.get_report_dir()) + "]", 
+        result_choice = ( r.get_report_dir(),
+                        r.resultsName + " [" + str(r.get_report_dir()) + "]",
                         version
         )
         if isThumbnail:
@@ -1281,12 +1373,33 @@ def _createReport(request, pk, reportpk):
         else:
             previousReports.append(result_choice)
 
+    # get latest reusable ExperimentAnalysisSettings to attach to new report
+    eas, eas_created = exp.get_or_create_EAS(reusable=True)
+
+    # get list of plugins to run, include plugins marked autorun or selected during planning
+    plugins = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')
+    selected_names = [pl['name'] for pl in eas.selectedPlugins.values()]
+    plugins_list = list(plugins.filter(name__in=selected_names) | plugins.filter(autorun=True))
+    pluginsUserInput = {}
+    for plugin in plugins_list:
+        pluginsUserInput[str(plugin.id)] = eas.selectedPlugins.get(plugin.name, {}).get('userInput','')
+
+    warnings = []
+    # warn if raw data is missing
+    if resultList:
+        dmfilestat = resultList[0].get_filestat(dmactions_types.SIG)
+        if dmfilestat.isdisposed():
+            warnings.append("Warning: Signal Processing Input data is %s" % dmfilestat.get_action_state_display() )
+    elif not os.path.exists(exp.expDir):
+        warnings.append("Warning: Signal Processing Input data is missing")
+
+
     if request.method == 'POST':
         rpf = forms.RunParamsForm(request.POST, request.FILES)
-        
+        eas_form = forms.AnalysisSettingsForm(request.POST)
+
         rpf.fields['previousReport'].widget.choices = previousReports
         rpf.fields['previousThumbReport'].widget.choices = previousThumbReports
-        rpf.fields['reference'].widget.choices = references
 
         #send some js to the page
         previousReportDir = get_initial_arg(reportpk)
@@ -1297,7 +1410,7 @@ def _createReport(request, pk, reportpk):
             """
 
         # validate the form
-        if rpf.is_valid():
+        if rpf.is_valid() and eas_form.is_valid():
             chiptype_arg = exp.chipType
             ufResultsName = rpf.cleaned_data['report_name']
             resultsName = ufResultsName.strip().replace(' ', '_')
@@ -1310,6 +1423,7 @@ def _createReport(request, pk, reportpk):
             blockArgs = rpf.cleaned_data['blockArgs']
             doThumbnail = rpf.cleaned_data['do_thumbnail']
             doBaseRecal = rpf.cleaned_data['do_base_recal']
+            realign= rpf.cleaned_data['realign']
             ts_job_type = ""
             if doThumbnail:
                 ts_job_type = 'thumbnail'
@@ -1320,86 +1434,142 @@ def _createReport(request, pk, reportpk):
 
             beadfindArgs = flattenString(rpf.cleaned_data['beadfindArgs'])
             analysisArgs = flattenString(rpf.cleaned_data['analysisArgs'])
+            prebasecallerArgs = flattenString(rpf.cleaned_data['prebasecallerArgs'])
             basecallerArgs = flattenString(rpf.cleaned_data['basecallerArgs'])
             thumbnailBeadfindArgs = flattenString(rpf.cleaned_data['thumbnailBeadfindArgs'])
             thumbnailAnalysisArgs = flattenString(rpf.cleaned_data['thumbnailAnalysisArgs'])
+            prethumbnailBasecallerArgs = flattenString(rpf.cleaned_data['prethumbnailBasecallerArgs'])
             thumbnailBasecallerArgs = flattenString(rpf.cleaned_data['thumbnailBasecallerArgs'])
 
             #do a full alignment?
             align_full = True
-            #If libraryKey was set, then override the value taken from the explog.txt on the PGM
-            libraryKey = rpf.cleaned_data['libraryKey']
             #ionCrawler may modify the path to raw data in the path variable passed thru URL
             exp.expDir = rpf.cleaned_data['path']
             aligner_opts_extra = rpf.cleaned_data['aligner_opts_extra']
             mark_duplicates = rpf.cleaned_data['mark_duplicates']
             result.runid = create_runid(resultsName + "_" + str(result.pk))
-            
-            if rpf.cleaned_data['reference']:
-              result.reference = rpf.cleaned_data['reference']
+
+            # don't allow libraryKey to be blank
+            libraryKey = rpf.cleaned_data['libraryKey']
+            if not libraryKey:
+                libraryKey = models.GlobalConfig.objects.all()[0].default_library_key
+
+            # override ExperimentAnalysisSettings with user inputs
+            if request.POST.get('re-analysis'):
+                # need to update selectedPlugins field if 1) plugins added/removed by user 2) changes in any plugin configuration
+                form_plugins_list = list(eas_form.cleaned_data['plugins'])
+                form_pluginsUserInput = json.loads(eas_form.cleaned_data['pluginsUserInput'])
+                if set(plugins_list) != set(form_plugins_list) or pluginsUserInput != form_pluginsUserInput:
+                    plugins_list = form_plugins_list
+                    selectedPlugins = {}
+                    for plugin in form_plugins_list:
+                        selectedPlugins[plugin.name] = {
+                             "id" : str(plugin.id),
+                             "name" : plugin.name,
+                             "version" : plugin.version,
+                             "features": plugin.pluginsettings.get('features',[]),
+                             "userInput": form_pluginsUserInput.get(str(plugin.id),'')
+                        }
+                else:
+                    selectedPlugins = eas.selectedPlugins
+                    # TODO: add plugin configuration (userInput) on page
+
+                eas_kwargs = {
+                    'libraryKey': libraryKey,
+                    'reference':  eas_form.cleaned_data['reference'],
+                    'targetRegionBedFile':  eas_form.cleaned_data['targetRegionBedFile'],
+                    'hotSpotRegionBedFile': eas_form.cleaned_data['hotSpotRegionBedFile'],
+                    'barcodeKitName': eas_form.cleaned_data['barcodeKitName'],
+                    'threePrimeAdapter': eas_form.cleaned_data['threePrimeAdapter'],
+                    'selectedPlugins': selectedPlugins
+                }
+                eas = update_experiment_analysis_settings(eas, **eas_kwargs)
             else:
-              result.reference = exp.library
-            
+                # this POST comes from crawler, which should update ExperimentAnalysisSettings directly
+                pass
+
+            # Don't allow EAS to be edited once analysis has started
+            if eas.isEditable:
+                eas.isEditable = False
+                eas.save()
+
+            result.eas = eas
+            result.reference = eas.reference
+
             #attach project(s)
-            projectNames = get_project_names(rpf, exp)                    
+            projectNames = get_project_names(rpf, exp)
             username = request.user.username
             for name in projectNames.split(','):
-              if name:                                  
+              if name:
                 try:
-                  p = models.Project.objects.get(name=name)            
-                except models.Project.DoesNotExist:              
+                  p = models.Project.objects.get(name=name)
+                except models.Project.DoesNotExist:
                   p = models.Project()
-                  p.name = name    
-                  p.creator = models.User.objects.get(username=username) 
+                  p.name = name
+                  p.creator = models.User.objects.get(username=username)
                   p.save()
-                  models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, request.user.username)  
+                  models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, request.user.username)
                 result.projects.add(p)
-                models.EventLog.objects.add_entry(p, "Add result (%s) during report creation." % result.pk, request.user.username)  
-            
+                models.EventLog.objects.add_entry(p, "Add result (%s) during report creation." % result.pk, request.user.username)
+
             result.save()
             try:
                 # Default control script definition
                 scriptname='TLScript.py'
-                
+
                 scriptpath=os.path.join('/usr/lib/python2.6/dist-packages/ion/reports',scriptname)
                 try:
                     with open(scriptpath,"r") as f:
                         script=f.read()
                 except Exception as error:
                     bail(result,"Error reading %s\n%s" % (scriptpath,error.args))
-                
-                # check if path to raw data is there
-                files = []
-                try:
-                    bk = models.Backup.objects.get(experiment=exp)
-                except:
-                    bk = False
+
+                pathToData = os.path.join(exp.expDir)
+                if doThumbnail and exp.chipType == "900":
+                    pathToData = os.path.join(pathToData,'thumbnail')
 
                 #------------------------------------------------
-                # Tests to determine if raw data still available:
+                # Determine if data has been archived or deleted:
                 #------------------------------------------------
-                # Data directory is located on this server
+                dmfilestat = None
+                if rpf.cleaned_data['blockArgs'] == "fromRaw":
+                    dmactions_type = dmactions_types.SIG
+                    dmfilestat = result.get_filestat(dmactions_type)
+                elif rpf.cleaned_data['blockArgs'] == "fromWells":
+                    dmactions_type = dmactions_types.BASE
+                    selected_previous_pk = None
+                    try:
+                        selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
+                    except:
+                        # TorrentSuiteCloud plugin 3.4.2 uses reportName for this value
+                        previous_obj = models.Results.objects.filter(resultsName = os.path.basename(previousReport))
+                        if previous_obj:
+                            selected_previous_pk = previous_obj[0].pk
+                    if selected_previous_pk:
+                        dmfilestat = models.Results.objects.get(pk=selected_previous_pk).get_filestat(dmactions_type)
+
+                if dmfilestat and dmfilestat.action_state in ['DG','DD']:
+                    bail(result, "The analysis cannot start because %s data has been deleted." % dmactions_type)
+                    logger.warn("The analysis cannot start because %s data has been deleted." % dmactions_type)
+                elif dmfilestat and dmfilestat.action_state in ['AG','AD']:
+                    # replace paths with archived locations
+                    try:
+                        datfiles = os.listdir(dmfilestat.archivepath)
+                        logger.debug("Got a list of files in %s" % dmfilestat.archivepath)
+                        if dmactions_type == dmactions_types.SIG:
+                            pathToData = dmfilestat.archivepath
+                            if doThumbnail and exp.chipType == "900":
+                                pathToData = os.path.join(pathToData,'thumbnail')
+                        if dmactions_type == dmactions_types.BASE:
+                            previousReport = dmfilestat.archivepath
+                    except:
+                        logger.debug(traceback.format_exc())
+                        bail(result,"Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
+                                % (dmactions_type, dmfilestat.archivepath) )
+
                 logger.debug("Start Analysis on %s" % exp.expDir)
-                if ts_job_type == "thumbnail":
-                    # thumbnail raw data is special in that despite there being a backup object for the dataset, thumbnail data is not deleted.
-                    if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not os.path.exists(os.path.join(exp.expDir,'thumbnail')):
-                        bail(result, "No path to raw data")
-                else:
-                    if bk and (rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF"):
-                        if str(bk.backupPath) == 'DELETED':
-                            bail(result, "The analysis cannot start because the raw data has been deleted.")
-                            logger.warn("The analysis cannot start because the raw data has been deleted.")
-                        else:
-                            try:
-                                datfiles = os.listdir(exp.expDir)
-                                logger.debug("Got a list of files")
-                            except:
-                                logger.debug(traceback.format_exc())
-                                bail(result,
-                                     "The analysis cannot start because the raw data has been archived to %s.  Please mount that drive to make the data available." % (str(bk.backupPath),))
-                    if rpf.cleaned_data['blockArgs'] != "fromWells" and rpf.cleaned_data['blockArgs'] != "fromSFF" and not os.path.exists(exp.expDir):
-                        bail(result, "No path to raw data")
-                
+                files = []
+
                 try:
                     host = "127.0.0.1"
                     conn = client.connect(host, settings.JOBSERVER_PORT)
@@ -1417,13 +1587,14 @@ def _createReport(request, pk, reportpk):
                 files.append(create_meta(exp, result))
                 files.append(create_pk_conf(result.pk))
                 # write barcodes file to folder
-                if exp.barcodeId and exp.barcodeId is not '':
-                    files.append(create_bc_conf(exp.barcodeId,"barcodeList.txt"))
+                if eas.barcodeKitName and eas.barcodeKitName is not '':
+                    files.append(create_bc_conf(eas.barcodeKitName,"barcodeList.txt"))
                 # tell the analysis server to start the job
-                params = makeParams(exp, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, resultsName, result, align_full, libraryKey,
+                params = makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, align_full,
                                                         os.path.join(storage.webServerPath, loc.name), aligner_opts_extra,
-                                                        mark_duplicates, result.runid, previousReport, tfKey,
-                                                        thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal)
+                                                        mark_duplicates, pathToData, previousReport, tfKey, plugins_list,
+                                                        thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal,
+                                                        prebasecallerArgs,prethumbnailBasecallerArgs,realign)
                 chip_dict = {}
                 try:
                     chips = models.Chip.objects.all()
@@ -1445,35 +1616,38 @@ def _createReport(request, pk, reportpk):
 
     if request.method == 'GET':
 
+        if exp.plan:
+            plan = exp.plan
+        else:
+            plan = None
         rpf = forms.RunParamsForm()
         rpf.fields['path'].initial = os.path.join(exp.expDir)
         rpf.fields['align_full'].initial = True
-        #rpf.fields['mark_duplicates'].initial = False
-
-        #if there is a library Key for the exp use that instead of the default
-        if exp.isReverseRun:
-            if exp.reverselibrarykey:
-                rpf.fields['libraryKey'].initial = exp.reverselibrarykey
-        else:
-            if exp.libraryKey:
-                rpf.fields['libraryKey'].initial = exp.libraryKey
 
         # initialize with default cmdline arguments for Analysis and BaseCaller
-        default_args = get_default_cmdline_args(exp.chipType)
+        default_args = get_default_cmdline_args(exp.chipType,plan)
         rpf.fields['beadfindArgs'].initial = default_args['beadfindArgs']
         rpf.fields['analysisArgs'].initial = default_args['analysisArgs']
+        rpf.fields['prebasecallerArgs'].initial = default_args['prebasecallerArgs']
         rpf.fields['basecallerArgs'].initial = default_args['basecallerArgs']
         rpf.fields['thumbnailBeadfindArgs'].initial = default_args['thumbnailBeadfindArgs']
         rpf.fields['thumbnailAnalysisArgs'].initial = default_args['thumbnailAnalysisArgs']
         rpf.fields['thumbnailBasecallerArgs'].initial = default_args['thumbnailBasecallerArgs']
+        rpf.fields['prethumbnailBasecallerArgs'].initial = default_args['prethumbnailBasecallerArgs']
 
         rpf.fields['previousReport'].widget.choices = previousReports
         rpf.fields['previousThumbReport'].widget.choices = previousThumbReports
-        rpf.fields['reference'].widget.choices = references        
-        rpf.fields['reference'].initial = exp.library        
         rpf.fields['project_names'].initial = get_project_names(rpf, exp)
         rpf.fields['do_base_recal'].initial = models.GlobalConfig.objects.all()[0].base_recalibrate
-        
+        rpf.fields['mark_duplicates'].initial = models.GlobalConfig.objects.all()[0].mark_duplicates
+        rpf.fields['realign'].initial = models.GlobalConfig.objects.all()[0].realign
+        rpf.fields['libraryKey'].initial = eas.libraryKey
+
+        # Analysis settings form
+        eas_form = forms.AnalysisSettingsForm(instance=eas)
+        eas_form.fields['plugins'].initial = [plugin.id for plugin in plugins_list]
+        eas_form.fields['pluginsUserInput'].initial = json.dumps(pluginsUserInput)
+
         #send some js to the page
         previousReportDir = get_initial_arg(reportpk)
         if previousReportDir:
@@ -1484,8 +1658,8 @@ def _createReport(request, pk, reportpk):
             javascript += '$("#id_previousReport").val("'+previousReportDir +'");'
 
 
-    ctx = {"rpf": rpf, "expName":exp.pretty_print_no_space, "start_error":start_error, "javascript" : javascript,
-           "isProton":isProton, "pk":pk, "reportpk":reportpk, "isexpDir": os.path.exists(exp.expDir)}
+    ctx = {"rpf": rpf, "eas_form": eas_form, "expName":exp.pretty_print_no_space, "start_error":start_error, "javascript" : javascript,
+           "isProton":isProton, "pk":pk, "reportpk":reportpk, "warnings": warnings}
     ctx = RequestContext(request, ctx)
     return ctx
 
@@ -1605,10 +1779,10 @@ FILE_HANDLERS = [ (re.compile(r), h) for r, h in (
     (r'\.h5$', show_binary),
     (r'\.sff$', show_binary),
     (r'\.wells$', show_binary),
-    
+
     (r'\.stats$', show_config),
     (r'\.summary$', show_config),
-    
+
     (r'\.png$', show_png_image),
     (r'\.csv$', show_csv),
     (r'\.json$', indent_json),
@@ -1623,6 +1797,7 @@ def show_file(report, pk, path, root, full_path):
                 return handle(full_path)
             except Exception as err:
                 raise err
+    raise OSError("File path matches no pattern, path = '%' full_path='%s'" % (path, full_path))
 
 
 def show_directory(report, pk, path, root, full_path):
@@ -1679,15 +1854,12 @@ def report_action(request, pk, action):
         ret.autoExempt = not ret.autoExempt
         ret.save()
     elif action == 'A':
-        async_task_result = iondb.backup.tasks.archive_report.delay(request.user, pk, comment)
+        async_task_result = dmtasks.archive_report.delay(request.user, pk, comment)
     elif action == 'E':
-        async_task_result = iondb.backup.tasks.export_report.delay(request.user, pk, comment)
+        async_task_result = dmtasks.export_report.delay(request.user, pk, comment)
     elif action == "P":
-        async_task_result = iondb.backup.tasks.prune_report.delay(request.user, pk, comment)
-    #elif action == "D":
-    #    proxy.delete_report(pk, comment)
-    #    async_task_result = delete_report.delay(request.user, pk, comment)
-    if async_task_result: 
+        async_task_result = dmtasks.prune_report.delay(request.user, pk, comment)
+    if async_task_result:
         logger.info(async_task_result)
 
     return http.HttpResponse()

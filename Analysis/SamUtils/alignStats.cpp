@@ -1349,6 +1349,10 @@ void AlignStats::write_error_table_json(string outFile) {
 	long total_deletion = 0;
 	std::vector<long> v_cum_err_at_position;
 	std::vector< std::vector<long> > v_err_count(1+opt.err_table_max_errors);
+	int accuracy_total_bases = 0;
+	int accuracy_total_errors = 0;
+	float raw_accuracy = 0.0;
+
 	for (std::vector<int>::iterator itr = error_table_read_lens.begin(); itr != error_table_read_lens.end(); ++itr) {
 		long cum_mapped_reads = 0;
 		for (error_to_length_map::const_iterator map_itr = error_table[*itr].begin(); map_itr != error_table[*itr].end(); ++map_itr) {
@@ -1463,8 +1467,15 @@ void AlignStats::write_error_table_json(string outFile) {
 	}
 	alignment_stats << "  }," << endl;
 
-	alignment_stats << "  \"accuracy_total_bases\" : "            << v_cum_aligned.back()         << "," << endl;
-	alignment_stats << "  \"accuracy_total_errors\" : "           << v_cum_err_at_position.back() << "," << endl;
+	accuracy_total_bases = v_cum_aligned.back();
+	accuracy_total_errors = v_cum_err_at_position.back();
+
+	if (accuracy_total_bases > 0)
+		raw_accuracy = (1.0 - float(accuracy_total_errors) / float(accuracy_total_bases));
+
+	alignment_stats << "  \"raw_accuracy\" : "                    << raw_accuracy                 << "," << endl;
+	alignment_stats << "  \"accuracy_total_bases\" : "            << accuracy_total_bases         << "," << endl;
+	alignment_stats << "  \"accuracy_total_errors\" : "           << accuracy_total_errors        << "," << endl;
 	alignment_stats << "  \"accuracy_total_errors_mismatch\" : "  << total_mismatch               << "," << endl;
 	alignment_stats << "  \"accuracy_total_errors_insertion\" : " << total_insertion              << "," << endl;
 	alignment_stats << "  \"accuracy_total_errors_deletion\" : "  << total_deletion               << "," << endl;

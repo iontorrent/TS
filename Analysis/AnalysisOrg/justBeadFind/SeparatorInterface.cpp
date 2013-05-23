@@ -15,6 +15,9 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.ignoreChecksumErrors = inception_state.img_control.ignoreChecksumErrors;
   opts.noduds = inception_state.bfd_control.noduds;
   opts.outputDebug = inception_state.bfd_control.bfOutputDebug;
+  if (opts.outputDebug == 0 && inception_state.bkg_control.bkg_debug_files) {
+    opts.outputDebug = 1;
+  }
   opts.minRatioLiveWell = inception_state.bfd_control.bfMinLiveRatio;
   opts.doRecoverSdFilter = inception_state.bfd_control.skipBeadfindSdRecover == 0;
   opts.nCores = inception_state.bfd_control.numThreads;
@@ -27,6 +30,10 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.sdAsBf = inception_state.bfd_control.sdAsBf;
   opts.bfMult = inception_state.bfd_control.bfMult;
   opts.flowOrder = inception_state.flow_context.flowOrder; // 5th duplicated code instance of translating flow order to nucs
+  opts.isThumbnail = inception_state.bfd_control.beadfindThumbnail == 1;
+  opts.doComparatorCorrect = inception_state.img_control.col_flicker_correct;
+  opts.aggressive_cnc = inception_state.img_control.aggressive_cnc;
+  opts.blobFilter = inception_state.bfd_control.blobFilter == 1;
   if (!opts.outData.empty())
   {
     string sep = "";
@@ -43,6 +50,14 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.mask = maskPtr;
   cout << "Out Data: " << opts.outData << endl;
   cout << "Analysis location: " << opts.analysisDir << endl;
+  if (inception_state.bfd_control.bfMinLiveTfSnr < 0) {
+    if ( ChipIdDecoder::GetGlobalChipId() == ChipId900 ) {
+      inception_state.bfd_control.bfMinLiveTfSnr = 4;
+    }
+    else {
+      inception_state.bfd_control.bfMinLiveTfSnr = 7;
+    }
+  }
   diffSeparator->SetKeys (seqList, numSeqListItems, inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr);
   if (inception_state.bfd_control.beadfindLagOneFilt > 0)
   {
@@ -50,13 +65,13 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   }
   if (inception_state.bfd_control.beadfindThumbnail == 1)
   {
-    opts.t0MeshStep = 50; // inception_state.loc_context.regionXSize;
-    opts.bfMeshStep = 50; // inception_state.loc_context.regionXSize;
+    opts.t0MeshStep = 100; // inception_state.loc_context.regionXSize;
+    opts.bfMeshStep = 100; // inception_state.loc_context.regionXSize;
     opts.clusterMeshStep = 100;
-    opts.tauEEstimateStep = inception_state.loc_context.regionXSize;
+    opts.tauEEstimateStep = 100; //inception_state.loc_context.regionXSize;
     opts.useMeshNeighbors = 0;
-    opts.regionXSize = 50; //inception_state.loc_context.regionXSize;
-    opts.regionYSize = 50; //inception_state.loc_context.regionYSize;
+    opts.regionXSize = 100; //inception_state.loc_context.regionXSize;
+    opts.regionYSize = 100; //inception_state.loc_context.regionYSize;
   }
   diffSeparator->Run (opts);
 }

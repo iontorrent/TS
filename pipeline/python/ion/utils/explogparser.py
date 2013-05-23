@@ -32,7 +32,7 @@ def getparameter(parameterfile=None):
     afile.close()
     for k,v in EXTERNAL_PARAMS.iteritems():
         if isinstance(v, unicode):
-            EXTERNAL_PARAMS[k] = str(v)
+            EXTERNAL_PARAMS[k] = str(v.encode('utf-8'))
 
     # Where the raw data lives (generally some path on the network)
     pathprefix = str(EXTERNAL_PARAMS['pathToData'])
@@ -62,6 +62,7 @@ def getparameter(parameterfile=None):
     env['beadfindArgs'] = EXTERNAL_PARAMS.get("beadfindArgs","")
     env['analysisArgs'] = EXTERNAL_PARAMS.get("analysisArgs","")
     env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs","")
+    env['prebasecallerArgs'] = EXTERNAL_PARAMS.get("prebasecallerArgs","")
     env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal",False)
     
     #previousReports
@@ -93,6 +94,8 @@ def getparameter(parameterfile=None):
     env['plugins'] = EXTERNAL_PARAMS.get("plugins")
     #plan
     env['plan'] = EXTERNAL_PARAMS.get('plan', {})
+    #eas
+    env['experimentAnalysisSettings'] = EXTERNAL_PARAMS.get('experimentAnalysisSettings', {})
     # skipChecksum?
     env['skipchecksum'] = EXTERNAL_PARAMS.get('skipchecksum',False)
     # Do Full Align?
@@ -126,6 +129,7 @@ def getparameter(parameterfile=None):
     # Aligner options
     env['aligner_opts_extra'] = EXTERNAL_PARAMS.get('aligner_opts_extra', '{}')
     env['mark_duplicates'] = EXTERNAL_PARAMS.get('mark_duplicates')
+    env['realign'] = EXTERNAL_PARAMS.get('realign')
 
     #get the name of the site
     env['site_name'] = EXTERNAL_PARAMS.get('site_name')

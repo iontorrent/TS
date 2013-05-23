@@ -16,8 +16,8 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 	try {
 
 		char* sffFile         = (char *)Rcpp::as<const char*>(RsffFile);
-		RcppVector<int> col(Rcol);
-		RcppVector<int> row(Rrow);
+		Rcpp::IntegerVector col(Rcol);
+		Rcpp::IntegerVector row(Rrow);
 		int maxBases          = Rcpp::as<int>(RmaxBases);
 		int nSample           = Rcpp::as<int>(RnSample);
 		int randomSeed        = Rcpp::as<int>(RrandomSeed);
@@ -33,7 +33,7 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 			filterByCoord = true;
 			// A subset of rows and columns is specified
 			if(col.size() != row.size()) {
-				exceptionMesg = copyMessageToR("col and row should have the same number of entries, ignoring\n");
+				exceptionMesg = strdup("col and row should have the same number of entries, ignoring\n");
 			} else {
 				for(int i=0; i<col.size(); i++) {
 					std::stringstream wellIdStream;
@@ -73,18 +73,18 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 
 		// Initialize things to return
 		std::vector< std::string > out_id(nReadOut);
-		RcppVector<int>    out_col(nReadOut);
-		RcppVector<int>    out_row(nReadOut);
-		RcppVector<int>    out_length(nReadOut);
-		RcppVector<int>    out_fullLength(nReadOut);
-		RcppVector<int>    out_clipQualLeft(nReadOut);
-		RcppVector<int>    out_clipQualRight(nReadOut);
-		RcppVector<int>    out_clipAdapterLeft(nReadOut);
-		RcppVector<int>    out_clipAdapterRight(nReadOut);
-		RcppMatrix<double> out_flow(nReadOut,nFlow);
+		Rcpp::IntegerVector    out_col(nReadOut);
+		Rcpp::IntegerVector    out_row(nReadOut);
+		Rcpp::IntegerVector    out_length(nReadOut);
+		Rcpp::IntegerVector    out_fullLength(nReadOut);
+		Rcpp::IntegerVector    out_clipQualLeft(nReadOut);
+		Rcpp::IntegerVector    out_clipQualRight(nReadOut);
+		Rcpp::IntegerVector    out_clipAdapterLeft(nReadOut);
+		Rcpp::IntegerVector    out_clipAdapterRight(nReadOut);
+		Rcpp::NumericMatrix out_flow(nReadOut,nFlow);
 		std::vector< std::string > out_base(nReadOut);
-		RcppMatrix<int>    out_qual(nReadOut,maxBases);
-		RcppMatrix<int>    out_flowIndex(nReadOut,maxBases);
+		Rcpp::IntegerMatrix    out_qual(nReadOut,maxBases);
+		Rcpp::IntegerMatrix    out_flowIndex(nReadOut,maxBases);
 
 		int nReadsFromSFF=0;
 		sff_t *sff = NULL;
@@ -154,25 +154,24 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 		}
 		sff_fclose(sff_file);
 
-		RcppResultSet rs;
 		if(nReadsFromSFF != nReadOut) {
 			// If we find fewer reads than expected then issue warning and trim back data structures
 			fprintf(stderr,"Expected to find %d reads but got %d in %s\n",nReadOut,nReadsFromSFF,sffFile);
 			if(filter)
 				fprintf(stderr,"Some of the requested reads are missing from the SFF.\n");
 			std::vector< std::string > out2_id(nReadsFromSFF);
-			RcppVector<int>    out2_col(nReadsFromSFF);
-			RcppVector<int>    out2_row(nReadsFromSFF);
-			RcppVector<int>    out2_length(nReadsFromSFF);
-			RcppVector<int>    out2_fullLength(nReadsFromSFF);
-			RcppVector<int>    out2_clipQualLeft(nReadsFromSFF);
-			RcppVector<int>    out2_clipQualRight(nReadsFromSFF);
-			RcppVector<int>    out2_clipAdapterLeft(nReadsFromSFF);
-			RcppVector<int>    out2_clipAdapterRight(nReadsFromSFF);
-			RcppMatrix<double> out2_flow(nReadsFromSFF,nFlow);
+			Rcpp::IntegerVector    out2_col(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_row(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_length(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_fullLength(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_clipQualLeft(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_clipQualRight(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_clipAdapterLeft(nReadsFromSFF);
+			Rcpp::IntegerVector    out2_clipAdapterRight(nReadsFromSFF);
+			Rcpp::NumericMatrix    out2_flow(nReadsFromSFF,nFlow);
 			std::vector< std::string >   out2_base(nReadsFromSFF);
-			RcppMatrix<int>    out2_qual(nReadsFromSFF,maxBases);
-			RcppMatrix<int>    out2_flowIndex(nReadsFromSFF,maxBases);
+			Rcpp::IntegerMatrix    out2_qual(nReadsFromSFF,maxBases);
+			Rcpp::IntegerMatrix    out2_flowIndex(nReadsFromSFF,maxBases);
 			for(int i=0; i<nReadsFromSFF; i++) {
 				out2_id[i]               = out_id[i];
 				out2_col(i)              = out_col(i);
@@ -191,40 +190,39 @@ RcppExport SEXP readSFF(SEXP RsffFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEX
 					out2_flowIndex(i,j)    = out_flowIndex(i,j);
 				}
 			}
-			rs.add("nFlow",            nFlow);
-			rs.add("id",               out2_id);
-			rs.add("col",              out2_col);
-			rs.add("row",              out2_row);
-			rs.add("length",           out2_length);
-			rs.add("fullLength",       out2_fullLength);
-			rs.add("clipQualLeft",     out2_clipQualLeft);
-			rs.add("clipQualRight",    out2_clipQualRight);
-			rs.add("clipAdapterLeft",  out2_clipAdapterLeft);
-			rs.add("clipAdapterRight", out2_clipAdapterRight);
-			rs.add("flow",             out2_flow);
-			rs.add("base",             out2_base);
-			rs.add("qual",             out2_qual);
+            ret = Rcpp::List::create(Rcpp::Named("nFlow")           = nFlow,
+                                     Rcpp::Named("id")              = out2_id,
+                                     Rcpp::Named("col")             = out2_col,
+                                     Rcpp::Named("row")             = out2_row,
+                                     Rcpp::Named("length")           = out2_length,
+                                     Rcpp::Named("fullLength")       = out2_fullLength,
+                                     Rcpp::Named("clipQualLeft")     = out2_clipQualLeft,
+                                     Rcpp::Named("clipQualRight")    = out2_clipQualRight,
+                                     Rcpp::Named("clipAdapterLeft")  = out2_clipAdapterLeft,
+                                     Rcpp::Named("clipAdapterRight") = out2_clipAdapterRight,
+                                     Rcpp::Named("flow")             = out2_flow,
+                                     Rcpp::Named("base")             = out2_base,
+                                     Rcpp::Named("qual")             = out2_qual);
 		} else {
-			rs.add("nFlow",            nFlow);
-			rs.add("id",               out_id);
-			rs.add("col",              out_col);
-			rs.add("row",              out_row);
-			rs.add("length",           out_length);
-			rs.add("fullLength",       out_fullLength);
-			rs.add("clipQualLeft",     out_clipQualLeft);
-			rs.add("clipQualRight",    out_clipQualRight);
-			rs.add("clipAdapterLeft",  out_clipAdapterLeft);
-			rs.add("clipAdapterRight", out_clipAdapterRight);
-			rs.add("flow",             out_flow);
-			rs.add("base",             out_base);
-			rs.add("qual",             out_qual);
-			rs.add("flowIndex",        out_flowIndex);
+            ret = Rcpp::List::create(Rcpp::Named("nFlow")            = nFlow,
+                                     Rcpp::Named("id")               = out_id,
+                                     Rcpp::Named("col")              = out_col,
+                                     Rcpp::Named("row")              = out_row,
+                                     Rcpp::Named("length")           = out_length,
+                                     Rcpp::Named("fullLength")       = out_fullLength,
+                                     Rcpp::Named("clipQualLeft")     = out_clipQualLeft,
+                                     Rcpp::Named("clipQualRight")    = out_clipQualRight,
+                                     Rcpp::Named("clipAdapterLeft")  = out_clipAdapterLeft,
+                                     Rcpp::Named("clipAdapterRight") = out_clipAdapterRight,
+                                     Rcpp::Named("flow")             = out_flow,
+                                     Rcpp::Named("base")             = out_base,
+                                     Rcpp::Named("qual")             = out_qual,
+                                     Rcpp::Named("flowIndex")        = out_flowIndex);
 		}
-		ret = rs.getReturnList();
 	} catch(std::exception& ex) {
-		exceptionMesg = copyMessageToR(ex.what());
+		forward_exception_to_r(ex);
 	} catch(...) {
-		exceptionMesg = copyMessageToR("unknown reason");
+		::Rf_error("c++ exception (unknown reason)");
 	}
 
 	if(exceptionMesg != NULL)

@@ -19,10 +19,11 @@ class Migration(SchemaMigration):
     def backwards(self, orm):
 
         # Changing field 'LibMetrics.total_mapped_target_bases'
-        db.alter_column('rundb_libmetrics', 'total_mapped_target_bases', self.gf('django.db.models.fields.IntegerField')())
+        #db.alter_column('rundb_libmetrics', 'total_mapped_target_bases', self.gf('django.db.models.fields.IntegerField')())
 
         # Changing field 'LibMetrics.total_mapped_reads'
-        db.alter_column('rundb_libmetrics', 'total_mapped_reads', self.gf('django.db.models.fields.IntegerField')())
+        #db.alter_column('rundb_libmetrics', 'total_mapped_reads', self.gf('django.db.models.fields.IntegerField')())
+        pass
 
     models = {
         'auth.group': {

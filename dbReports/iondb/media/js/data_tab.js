@@ -3,16 +3,6 @@ String.prototype.endsWith = function(suffix) {
 };
 
 var mainRuns = null;
-var storage_choices = {
-    "KI": "Keep",
-    "A": "Archive",
-    "D": "Delete"
-}
-var storage_classes = {
-    "KI": "",
-    "A": "btn-warning",
-    "D": "btn-danger"
-}
 
 $(function () {
     var time_start = new Date();
@@ -21,17 +11,12 @@ $(function () {
         tagName: 'tr',
 
         events: {
-            'click .export': 'export_report',
-            'click .prune': 'prune',
-            'click .archive': 'archive',
-            'click .delete': 'delete_report',
-            'click .exempt': 'exempt',
-            'click .icon-thumbs-up': 'toggle_representative'
+            'click .icon-thumbs-up': 'toggle_representative',
+			'click .dm-actions': 'dm_actions'
         },
 
         initialize: function () {
-            _.bindAll(this, 'render', 'export_report', 'prune', 'archive', 'delete_report', 'exempt',
-                'post_action', 'toggle_representative', 'destroy_view');
+            _.bindAll(this, 'render', 'post_action', 'toggle_representative', 'destroy_view', 'dm_actions');
 
             this.model.bind('change', this.render);
             this.model.bind('remove', this.destroy_view);
@@ -43,9 +28,6 @@ $(function () {
             console.log("Rendering report " + this.model.id);
             $(this.el).html(this.template.render({
                 "report": this.model.toJSON(),
-                "is_completed": function(){
-                    return this.status == "Completed";
-                },
                 "total_q20bp": function(){
                     return this.quality_metrics && precisionUnits(this.quality_metrics.q20_bases);
                 },
@@ -58,12 +40,7 @@ $(function () {
                 "read_length": function(){
                     return this.quality_metrics && Math.round(this.quality_metrics.q0_mean_read_length);
                 },
-                "date_string": kendo.toString(this.model.get("timeStamp"),"yyyy/MM/dd hh:mm tt"),
-                "isArchivable": function(){
-                    return this.status == "Completed" 
-                            && this.reportStatus != 'Archived' 
-                            && (this.reportStatus == 'Nothing' || !this.reportStatus.endsWith('ing'));
-                }
+                "date_string": kendo.toString(this.model.get("timeStamp"),"MM/dd/yy hh:mm tt"),
             }));
         },
 
@@ -77,36 +54,18 @@ $(function () {
             Backbone.View.prototype.remove.call(this);
         },
 
-        export_report: function(e) {
-        	e.preventDefault();
-        	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('E', 'Export', true);
-        },
-
-        prune: function(e) {
-        	e.preventDefault();
-        	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('P', 'Prune', true);
-        },
-
-        archive: function(e) {
-        	e.preventDefault();
-        	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('A', 'Archive', true);
-        },
-
-        delete_report: function(e) {
-        	e.preventDefault();
-        	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            return this.post_action('D', 'Delete', true);
-        },
-        
-        exempt: function(e) {
-        	e.preventDefault();
-        	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-        	return this.post_action('Z', 'Exempt', false);
-        },
-
+		dm_actions: function(e){
+			e.preventDefault();
+			$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
+			$('body #modal_dm_actions').remove();
+			var url = '/configure/services/dm_actions/' + this.model.id + '/';
+			$.get(url, function(data) {
+				$('body').append(data);
+				$( "#modal_dm_actions" ).modal("show");
+			});
+			return false;
+		},
+		
         post_action: function (setstr, message, showModal) {
         	console.log("Creating Dialog")
             var url = '/report/action/' + this.model.id + '/' + setstr;
@@ -248,20 +207,19 @@ $(function () {
             'click .reanalyze-run': 'reanalyze',
             'click .edit-run': 'edit',
             'click .completedrun-star': 'toggle_star',
-            'click .storage-keep': function(e){
-            	e.preventDefault();
-            	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            	this.set_storage('KI');
-        	},
-            'click .storage-archive': function(e){
-            	e.preventDefault();
-            	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            	this.set_storage('A');
-        	},
-            'click .storage-delete': function(e){
-            	e.preventDefault();
-            	$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
-            	this.set_storage('D');
+			      'click .storage-exempt': function(e){
+					    var checked = $(e.currentTarget).is(':checked');
+					    $.ajax({
+						    url: '/configure/services/preserve_data/',
+						    dataType: 'json',
+						    type: 'POST',
+						    async: false,
+						    contentType: "application/json; charset=utf-8",
+						    data: "exppk=" + this.model.id + "&keep=" + checked + "&type=sig",
+						    success: function (data) {
+							    console.log(data);
+						    }
+					    });
         	}
         },
 
@@ -284,13 +242,11 @@ $(function () {
             $(this.el).html(this.template.render({
                 "exp": this.model.toJSON(),
                 "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
-                "date_string": kendo.toString(this.model.get("date"),"yyyy/MM/dd hh:mm tt"),
+                "date_string": kendo.toString(this.model.get("date"),"MM/dd/yy hh:mm tt"),
                 "king_report": this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null,
                 "progress_flows": Math.round((status == "Complete" ? 1: status / 100.0) * this.model.get('flows')),
                 "progress_percent": status == "Complete" ? 100 : status,
                 "in_progress": !isNaN(parseInt(status)),
-                "storage_choice": storage_choices[this.model.get("storage_options")],
-                "storage_class": storage_classes[this.model.get("storage_options")],
                 "is_proton": this.model.get("chipType") == "900"
             }));
             this.reports.render();
@@ -305,6 +261,7 @@ $(function () {
             console.log("Edit run " + this.model.id);
             console.log("event " , e);
             e.preventDefault();
+	    	$('#error-messages').hide().empty();
 			url = $(e.currentTarget).attr('href');
 			$('body #modal_experiment_edit').remove();
 			$.get(url, function(data) {
@@ -316,13 +273,12 @@ $(function () {
 		    	console.log("success:",  url);
 			})
 		    .fail(function(data) {
-		    	$('#error-messages').empty();
+		    	$('#error-messages').empty().show();
 		    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 		    	console.log("error:", data);
 		    	 
-		    })
-		    .always(function(data) { /*console.log("complete:", data);*/ });
-			// return false;		                
+		    });
+			return false;		                
         },
 
         toggle_star: function () {
@@ -351,6 +307,7 @@ $(function () {
 	function edit_run(e) {
         console.log("event " , e);
         e.preventDefault();
+    	$('#error-messages').hide().empty();
 		url = $(e.currentTarget).attr('href');
 		$('body #modal_experiment_edit').remove();
 		$.get(url, function(data) {
@@ -362,7 +319,7 @@ $(function () {
 	    	console.log("success:",  url);
 		})
 	    .fail(function(data) {
-	    	$('#error-messages').empty();
+	    	$('#error-messages').empty().show();
 	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
 	    	console.log("error:", data);
 	    	 
@@ -401,6 +358,85 @@ $(function () {
         }
     });
 
+    DevRunView = Backbone.View.extend({
+        tagName: 'tr',
+
+        events: {
+            'click .completedrun-star': 'toggle_star',
+            'click .edit-run': 'edit'
+        },
+
+        initialize: function () {
+            _.bindAll(this, 'render', 'destroy_view', 'toggle_star', 'edit');
+            this.model.bind('change', this.render);
+            this.model.bind('remove', this.destroy_view);
+        },
+
+        template: Hogan.compile($("#experiment_table_template").html()),
+
+        render: function () {
+            console.log("Rendering DevRunView");
+            console.log(this.model);
+            var king_report = this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null;
+            var status = this.model.get("ftpStatus");
+            this.$el.html(this.template.render({
+                "exp": this.model.toJSON(),
+                "run_date_string": this.model.get('date').toString("MM/dd/yy"),
+                "result_date_string": this.model.get('resultDate').toString("MM/dd/yy"),
+                "king_report": king_report,
+                "progress_flows": Math.round((status == "Complete" ? 1: status / 100.0) * this.model.get('flows')),
+                "progress_percent": status == "Complete" ? 100 : status,
+                "in_progress": !isNaN(parseInt(status)),
+                "total_q20bp": function(){
+                    return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q20_bases);
+                },
+                "total_q0bp": function(){
+                    return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_bases);
+                },
+                "reads_q20": function(){
+                    return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_reads);
+                },
+                "read_length": function(){
+                    return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_mean_read_length);
+                }
+            }));
+        },
+
+        edit: function (e) {
+            e.preventDefault();
+            $('#error-messages').hide().empty();
+            url = '/data/experiment/' + this.model.id + '/';
+            $('body #modal_experiment_edit').remove();
+            $.get(url, function(data) {
+                $('body').append(data);
+                $( "#modal_experiment_edit" ).modal("show");
+            })
+            .fail(function(data) {
+                $('#error-messages').empty().show();
+                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+                console.log("error:", data);
+            });
+        },
+
+        toggle_star: function () {
+            if (this.model.get("star")) {
+                this.model.patch({star: false});
+            } else {
+                this.model.patch({star: true});
+            }
+        },
+
+        destroy_view: function() {
+            console.log("Destroying card run view");
+            //COMPLETELY UNBIND THE VIEW
+            this.undelegateEvents();
+            $(this.el).removeData().unbind(); 
+            //Remove view from DOM
+            this.remove();  
+            Backbone.View.prototype.remove.call(this);
+        }
+    });
+
     RunListView = RunView.extend({
         el: $("#data_view"),
 
@@ -410,27 +446,29 @@ $(function () {
             'click #clear_filters': 'clear_filters',
             'click #view_full': 'view_full',
             'click #view_table': 'view_table',
+            'click #view_old_table': 'view_old_table',
             'click #live_button': 'toggle_live_update',
-            'click #download_csv': 'csv_download'
+            'click #download_csv': 'csv_download',
+            'click .sort_link': 'sort'
         },
 
         initialize: function () {
             _.bindAll(this, 'render', 'addRun', 'search', 'setup_full_view', 
                 'view_full', 'setup_table_view', 'view_table', 'start_update',
                 'toggle_live_update', 'clear_update', 'poll_update', 
-                'csv_download', 'countdown_update', 'appendRun');
+                'csv_download', 'countdown_update', 'appendRun', 'view_old_table', 'setup_old_table_view');
             $(".chzn-select").chosen({no_results_text:"No results matched", "allow_single_deselect":true});
             $('.chzn-drop').css('width', $(".chzn-select").outerWidth()-2);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
             $('.chzn-search input').css('width', $(".chzn-select").outerWidth()*.815);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
-            $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
-            this.table_view = null;
-            this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
-            this.pager.render();
+            $('#rangeA').daterangepicker({dateFormat: 'mm/dd/yy'});
+            this.current_view = null;
             this.collection.bind('add', this.addRun);
             this.collection.bind('reset', this.render);
+            this.pager = null;
             this.router = this.options.router;
             this.router.on("route:full_view", this.view_full);
             this.router.on("route:table_view", this.view_table);
+            this.router.on("route:old_table", this.view_old_table);
             this.live_update = null;
             //this.countdown_update();
         },
@@ -439,6 +477,7 @@ $(function () {
             console.log("Rendering RunListView");
             console.log(this.collection);
             $("#main_list").empty();
+            console.log("Emptied");
             this.collection.each(this.appendRun);
             return this;
         },
@@ -451,35 +490,68 @@ $(function () {
             $("#main_list > div", this.el).eq(options.index).before(tmpView.el);
         },
 
-        appendRun: function (run) {
+        appendRun: function (run, index) {
+            console.log(run + ' ' + index);
             var tmpView = new this.RunView({model: run});
             tmpView.render();
             $("#main_list", this.el).append(tmpView.el);
         },
 
         setup_full_view: function () {
-            $("#data_panel").html('<div id="main_list"></div>');
+            if(this.pager !== null) {
+                this.pager.destroy_view();
+            }
+            $("#data_panel").html('<div id="main_list"></div><div id="pager" class="k-pager-wrap" style="text-align: left;"></div>');
             this.RunView = CardRunView;
             $("#view_table").removeClass('active');
+            $("#view_old_table").removeClass('active');
             $("#view_full").addClass('active');
+            this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
+            this.pager.render();
             $('#pager').show();
         },
 
         view_full: function() {
-            if(!(this.table_view === false)) {
-                this.table_view = false;
+            if(!(this.current_view === 'full')) {
+                this.current_view = 'full';
                 this.router.navigate("full");
                 this.setup_full_view();
                 this.render();
             }
         },
-		
-        setup_table_view: function () {
-            $("#data_panel").html('<div id="main_table" class="table-dense"></div>');
-            // $("#data_panel").html($("#experiment_list_table_template").html());
-            this.RunView = TableRunView;
-            $("#view_full").removeClass('active');
+
+        setup_table_view: function() {
+            console.log("setup_view_dev");
+            if(this.pager !== null) {
+                this.pager.destroy_view();
+            }
+            var template = $("#experiment_list_table_template").html();
+            $("#data_panel").html(template);
+            this.RunView = DevRunView;
+            $("#view_old_table").removeClass('active');
             $("#view_table").addClass('active');
+            $("#view_full").removeClass('active');
+            this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
+            this.pager.render();
+            $('#pager').show();
+        },
+
+        view_old_table: function() {
+            if(!(this.current_view === 'old_table')) {
+                this.current_view = 'old_table';
+                console.log("view_old_table");
+                this.router.navigate("old_table");
+                this.setup_old_table_view();
+                this.render();
+            }
+        },
+		
+        setup_old_table_view: function () {
+            $("#data_panel").html('<div id="main_table" class="table-dense"></div>');
+            this.RunView = TableRunView;
+            $("#view_old_table").addClass('active');
+            $("#view_table").removeClass('active');
+            $("#view_full").removeClass('active');
             $('#pager').hide();
 			$("#main_table").kendoGrid({
 				dataSource : {
@@ -552,11 +624,11 @@ $(function () {
 				columns : [{
 					field : "star",
 					title : " ",
-					width : '3%',
+					width : '26px',
 					template : kendo.template($("#favoriteColumnTemplate").html())
 				}, {
 					field : "expName",
-					width : '10%',
+					//width : '10%',
 					title : "Run Name",
 					template: '<span rel="tooltip" title="#= expName#">#=TB.prettyPrintRunName(expName) # </span>'
 				}, {
@@ -565,68 +637,72 @@ $(function () {
 					title : "Sample",
 					template : '<span rel="tooltip" title="#= TB.toString(sample)#">#= TB.toString(sample) #<span>'
 				}, {
-					title : "Application",
+					title : "App.",
+                    width : "32px",
 					sortable : false, 
             		template: '# if (plan) { # <span class="#=plan.runType#" rel="tooltip" title="#=TB.runTypeDescription(plan.runType)#"></span> # } #'
 				}, {
 					field : "date",
-					title : "Run Date",
-					template : '<span rel="tooltip" title="#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt")#">#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt") # </span>'
+					title : "Run",
+                    width : "60px",
+					template : '<span rel="tooltip" title="#= kendo.toString(new Date(Date._parse(date)),"MM/dd/yy hh:mm tt")#">#= kendo.toString(new Date(Date._parse(date)),"MM/dd/yy") # </span>'
 				}, {
 					field : "resultDate",
-					title : "Analysis Date",
-					template : '<span rel="tooltip" title="#= kendo.toString(new Date(Date._parse(resultDate)),"yyyy/MM/dd hh:mm tt")#">#= kendo.toString(new Date(Date._parse(resultDate)),"yyyy/MM/dd hh:mm tt") # </span>'
+                    width : "60px",
+					title : "Analysis",
+					template : '<span rel="tooltip" title="#= kendo.toString(new Date(Date._parse(resultDate)),"MM/dd/yy hh:mm tt")#">#= kendo.toString(new Date(Date._parse(resultDate)),"MM/dd/yy") # </span>'
 				}, {
 					field : "ftpStatus",
+                    width : "90px",
 					title : "Status",
 					template : kendo.template($("#statusColumnTemplate").html())
 				}, {
 					field : "chipDescription",
-					width : '5%',
+                    width : "40px",
 					title : "Chip"
 				}, {
 					field : "results",
-					title : "Rep Report Name",
+					title : "Report Name",
 					sortable : false,
-					width : '15%',
 					template : kendo.template($("#reportNameColumnTemplate").html())
 				}, {
 					field : "library",
-					title : "Ref Genome",
+					title : "Reference",
 					width : '5%',
 					template : '<span rel="tooltip" title="#= TB.toString(library)#">#= TB.toString(library) #</span>'
 				}, {
 					field : "barcodeId",
 					title : "Barcode",
+                    width : '10%',
 					template : '<span rel="tooltip" title="#= TB.toString(barcodeId)#">#= TB.toString(barcodeId) #</span>'
 				}, {
 					field : "flows",
-					width : '3%',
+                    width : '40px',
 					title : "Flows"
 				}, {
 					title : "Total Reads",
 					sortable : false,
-					width : '4%',
+                    width : '46px',
 					template : kendo.template($("#totalReadsColumnTemplate").html())
 				}, {
-					title : "Mean Read Length",
+					title : "Mean Read Len.",
 					sortable : false,
-					width : '4%',
+                    width : '36px',
 					template : kendo.template($("#meanReadLengthColumnTemplate").html())
 				}, {
 					title : "Q20 Bases",
+                    width : '46px',
 					sortable : false,
-					width : '4%',
 					template : kendo.template($("#q20BasesColumnTemplate").html())
 				}, {
 					title : "Output",
+                    width : '46px',
 					sortable : false,
-					width : '4%',
 					template : kendo.template($("#outputColumnTemplate").html())
 				}, {
 					title : " ",
 					sortable : false,
-					width : '4%',
+					width : '24px',
 					template : kendo.template($("#actionColumnTemplate").html())
 				}], 
 				dataBound: function(e){
@@ -662,12 +738,31 @@ $(function () {
 					
 				}
 			}); 
-
+            var headers = $('#main_table');
+            _.each({
+                'Run Name': 'Name of this run',
+                'Sample': 'Sample name for the run',
+                'App.': 'Application type',
+                'Run': 'Run start time',
+                'Analysis': 'Analysis start time',
+                'Status': 'Analysis status',
+                'Chip': 'Chip type',
+                'Report Name': 'Name of this run\'s selected report',
+                'Reference': 'Reference sequence',
+                'Barcode': 'Barcode kit used',
+                'Flows': 'Number of flows analyzed',
+                'Total Reads': 'Total number of all reads',
+                'Mean Read Len.': 'Mean length of all reads',
+                'Q20 Bases': 'Total number of Q20 quality bases',
+                'Output': 'Total number of all bases'
+            }, function(tip, title){
+                headers.find('th[data-title="' + title + '"] a').tooltip({title: tip});
+            });
         },
 
         view_table: function () {
-            if(!(this.table_view === true)) {
-                this.table_view = true;
+            if(!(this.current_view === 'table')) {
+                this.current_view = 'table';
                 this.router.navigate("table");
                 this.setup_table_view();
                 this.render();
@@ -694,7 +789,7 @@ $(function () {
 
         poll_update: function () {
             if (this.live_update) {
-            	if($('#main_table').exists())
+            	if(this.current_view === 'old_table')
             		refreshKendoGrid("#main_table");
                 this.collection.fetch({
                     update: true,
@@ -720,6 +815,26 @@ $(function () {
         clear_filters: function() {
 			window.location.reload(true);
         },
+
+        sort: function (e) {
+            var name = $(e.target).data('name');
+            var current_sort = $("#order_by").val();
+            console.log("Sorting " + name);
+            console.log("Current sort " + current_sort);
+            if (current_sort == name) {
+                console.log("negate");
+                $("#order_by").val('-' + name);
+            } else if (current_sort == '-' + name) {
+                console.log("default");
+                $("#order_by").val("-resultDate");
+            } else {
+                console.log("set");
+                $("#order_by").val(name);
+            }
+            console.log($("#order_by").val());
+            $("#order_by").trigger('liszt:updated');
+            this.search();
+        },
 		
 		_get_query: function() {
             //Date requires extra formatting
@@ -729,10 +844,10 @@ $(function () {
                 'result_status': $("#id_status").val(),
                 'star': $("#id_star:checked").exists(),
                 'results__projects__name': $("#id_project").val(),
-                'sample': $("#id_sample").val(),
+                'samples__name': $("#id_sample").val(),
                 'chipType': $("#id_chip").val(),
                 'pgmName': $("#id_pgm").val(),
-                'library': $("#id_reference").val(),
+                'results__eas__reference': $("#id_reference").val(),
                 'flows': $("#id_flows").val(),
                 'order_by': $("#order_by").val()
             };
@@ -784,7 +899,7 @@ $(function () {
 		},
 		
         search: function() {
-        	if ($('#main_table').exists()) {
+        	if (this.current_view === 'old_table') {
         		$('#main_table').data("kendoGrid").dataSource.filter(this._table_filter());
         	}
             this.collection.filtrate(this._get_query());

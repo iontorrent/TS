@@ -61,7 +61,9 @@ void KClass::ClassifyWellKnownTau(Mask &mask,
                                  int nFlows,
                                   //                                  std::vector<Traces> &traces,
                                   Col<double> &time,
-                                  Col<double> &incorp,
+                                  Mat<double> *darkMatter,
+                                  Mat<double> *onemers,
+                                  size_t frameEnd,
                                   vector<KeyReporter<double> *>&report,
                                   GridMesh<SampleQuantiles<double> > &emptyEstimates,
                                   double tauEEst,
@@ -76,18 +78,11 @@ void KClass::ClassifyWellKnownTau(Mask &mask,
   }
   FillInData(traceStore, nFlows, fit);
 
-  incRef.set_size(wellFlows.n_rows); 
-  if (incRef.n_rows > incorp.n_rows) {
-    incRef.set_size(incorp.n_rows);
-  }
-  fill(incRef.begin(), incRef.end(), 0.0);
-  copy(incorp.begin(), incorp.begin() + incRef.n_rows, incRef.begin());
-
   size_t row, col;
   traceStore.WellRowCol(fit.wellIdx, row, col);
   mKClass.ClassifyKnownTauE(keys, bg,
                             wellFlows, refFlows, time,
-                            incRef, minSnr, 
+                            darkMatter, onemers, frameEnd, minSnr, 
                             tauEEst,fit, traceStore, predicted);
   for (size_t rIx = 0; rIx < report.size(); rIx++) {
     report[rIx]->Report(fit, wellFlows, refFlows, predicted);

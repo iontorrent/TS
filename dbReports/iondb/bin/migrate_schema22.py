@@ -676,7 +676,6 @@ class LegacyMigration(SchemaMigration):
                 ('name', models.fields.CharField(max_length=512)),
                 ('selected', models.fields.BooleanField(default=False)),
                 ('plugin_folder', models.fields.CharField(max_length=512, blank=True)),
-                ('default_command_line', models.fields.CharField(max_length=512, blank=True)),
                 ('basecallerargs', models.fields.CharField(max_length=512, blank=True)),
                 ('fasta_path', models.fields.CharField(max_length=512, blank=True)),
                 ('reference_path', models.fields.CharField(max_length=1000, blank=True)),
@@ -1361,7 +1360,6 @@ class LegacyMigration(SchemaMigration):
             'auto_archive_ack': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'barcode_args': ('django.db.models.fields.TextField', [], {'default': "'{}'", 'blank': 'True'}),
             'basecallerargs': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'}),
-            'default_command_line': ('django.db.models.fields.CharField', [], {'max_length': '512', 'blank': 'True'}),
             'default_flow_order': ('django.db.models.fields.CharField', [], {'max_length': '100', 'blank': 'True'}),
             'default_library_key': ('django.db.models.fields.CharField', [], {'max_length': '50', 'blank': 'True'}),
             'default_plugin_script': ('django.db.models.fields.CharField', [], {'max_length': '500', 'blank': 'True'}),
@@ -1972,4 +1970,3 @@ def install_missing_tables():
 
 if __name__ == '__main__':
     install_missing_tables()
-

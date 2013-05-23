@@ -9,9 +9,9 @@ import traceback
 from ion.utils.blockprocessing import printtime
 
 
-''' Invoke ionstats quality to generate alignment-independent metrics for a single unmapped BAM '''
+''' Invoke ionstats basecaller to generate alignment-independent metrics for a single unmapped BAM '''
 
-def generate_ionstats_basecaller(unmapped_bam_filename,ionstats_basecaller_filename,histogram_length):
+def generate_ionstats_basecaller(unmapped_bam_filename, ionstats_basecaller_filename, histogram_length):
     
     try:
         com = "ionstats basecaller"
@@ -24,9 +24,25 @@ def generate_ionstats_basecaller(unmapped_bam_filename,ionstats_basecaller_filen
         printtime('Failed ionstats basecaller')
         traceback.print_exc()
 
-''' Invoke ionstats quality to generate alignment-independent metrics for a single unmapped BAM '''
 
-def generate_ionstats_tf(tf_bam_filename,tfref_fasta_filename,ionstats_tf_filename):
+''' Invoke ionstats alignment to generate alignment-based metrics for a single mapped BAM '''
+
+def generate_ionstats_alignment(bam_filename, ionstats_alignment_filename, histogram_length):
+    
+    try:
+        com = "ionstats alignment"
+        com += " -i %s" % (bam_filename)
+        com += " -o %s" % (ionstats_alignment_filename)
+        com += " -h %d" % (int(histogram_length))
+        printtime("DEBUG: Calling '%s'" % com)
+        subprocess.call(com,shell=True)
+    except:
+        printtime('Failed ionstats alignment')
+        traceback.print_exc()
+
+''' Invoke ionstats tf to generate test fragment statistics from a BAM mapped to TF reference '''
+
+def generate_ionstats_tf(tf_bam_filename, tfref_fasta_filename, ionstats_tf_filename):
     
     try:
         com = "ionstats tf"
@@ -169,9 +185,8 @@ def generate_legacy_tf_files (ionstats_tf_filename, tfstats_json_filename):
 if __name__=="__main__":
     
     #generate_legacy_basecaller_files ('ionstats_basecaller.json', '')
-    generate_legacy_tf_files ('ionstats_tf.json', 'TFStats2.json')
-
-    
+    #generate_legacy_tf_files ('ionstats_tf.json', 'TFStats2.json')
+    generate_ionstats_alignment('rawlib.bam', 'ionstats_alignment.json', 400)
 
 
 

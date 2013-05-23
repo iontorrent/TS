@@ -14,7 +14,8 @@ OPTIONS="OPTIONS:
   -a Customize output for Amplicon reads.
   -d Filter to remove Duplicate reads removed.
   -u Filter to Uniquely mapped reads (SAM MAPQ>0).
-  -r Customize output for AmpliSeq-RNA reads. (Overides -a.)
+  -r Customize output for AmpliSeq-RNA reads. (Overrides -a.)
+  -w Customize output for TargetSeq reads. Forces Warning if targets file (-B) is not provided.
   -t Filter BAM file to trimmed reads using TRIMP.
   -p <int>  Padding value for BED file padding. For reporting only. Default: 0.
   -A <file> Annotate coverage for (annotated) targets specified in this BED file
@@ -55,9 +56,10 @@ TRIMP=0
 PADVAL=0
 TRGSID=""
 RNABED=0
+CKTARGETSEQ=0
 TRACKINGBED=""
 
-while getopts "hladrtuxp:A:B:C:M:G:D:X:O:R:S:T:P:Q:" opt
+while getopts "hladrtuwxp:A:B:C:M:G:D:X:O:R:S:T:P:Q:" opt
 do
   case $opt in
     A) ANNOBED=$OPTARG;;
@@ -77,6 +79,7 @@ do
     r) RNABED=1;;
     t) TRIMP=1;;
     u) UNIQUE=1;;
+    w) CKTARGETSEQ=1;;
     x) MAKEHML=0;;
     l) SHOWLOG=1;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
@@ -249,10 +252,18 @@ if [ $MAKEHML -eq 1 ]; then
   GENOPT="-g"
   if [ -n "$BEDFILE" ]; then
     GENOPT=""
+    if [ -z "$AMPOPT" -a $TARGETCOVBYBASES -eq 1 ];then
+      AMPOPT="-b"
+    fi
+  elif [ -n "$AMPOPT" -o "$CKTARGETSEQ" -eq 1 ];then
+    AMPOPT="-w"
   fi
   SIDOPT=""
   if [ -n "$TRACKINGBED" ]; then
     SIDOPT="-i"
+  fi
+  if [ $NOTARGETANALYSIS -gt 0 ];then
+    AMPOPT=""
   fi
   COVERAGE_HTML="COVERAGE_html"
   PTITLE=`echo $BAMNAME | sed -e 's/\.trim$//'`

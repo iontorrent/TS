@@ -94,12 +94,6 @@
                 </div>
             </div><!-- run-summary -->
             <div class="clearfix clear"></div>
-            <div class="run-progress">
-                <h4>Flow Transfer: {{progress_flows}} of {{exp.flows}} flows</h4>
-                <div class="progress{{#in_progress}} progress-striped active{{/in_progress}}">
-                    <div class="bar" style="width: {{progress_percent}}%;"></div>
-                </div>
-            </div>
         </div>
         <div class="span2">
             <img onerror="this.style.display='none';" src="{{king_report.reportLink}}/sigproc_results/Bead_density_200.png" />
@@ -107,32 +101,38 @@
     </div><!-- row-fluid -->
 	<div class="row-fluid metrics-row">
         <div class="span2">
-            <a  rel="tooltip" title="Addressable wells on the chip which have detectable loading" href="#" class="run-metric-box bead-loading-link clearfix">
+            <a rel="tooltip" title="Addressable wells on the chip which have detectable loading" href="#" class="run-metric-box bead-loading-link clearfix">
             	<div class="bead-loading"></div>
             </a>
         </div>
         <div class="span2">
-            <a href="#" class="run-metric-box clearfix">
+            <a rel="tooltip" title="Loaded wells which have a live signal" href="#" class="run-metric-box clearfix">
                 <div class="bead-live"></div>
             </a>
         </div>
         <div class="span2">
-            <a href="#" class="run-metric-box clearfix">
+            <a rel="tooltip" title="Live wells with a library template" href="#" class="run-metric-box clearfix">
                 <div class="bead-lib"></div>
             </a>                           
         </div>
         <div class="span2">
-            <a href="#" class="run-metric-box key-signal-link clearfix">
+            <a rel="tooltip" title="Average 1-mer signal in the library key" href="#" class="run-metric-box key-signal-link clearfix">
                 <div class="key-signal"></div>
             </a>
         </div>
         <div class="span2">
-            <a rel="tooltip" title="Percentage of sequence available for analysis after filtering"
+            <a rel="tooltip" title="Percentage of the sequence available for analysis after filtering"
              href="#" class="run-metric-box usable-sequence-link clearfix">
                 <div class="usable-sequence"></div>
             </a>
         </div>
 	</div>
+    <div class="run-progress">
+        <h4>Flow Transfer: {{progress_flows}} of {{exp.flows}} flows</h4>
+        <div rel="tooltip" title="Progress is {{progress_flows}} of {{exp.flows}} flows" class="progress{{#in_progress}} progress-striped active{{/in_progress}}">
+            <div class="bar" style="width: {{progress_percent}}%;"></div>
+        </div>
+    </div>
 </script>
 <script type="text/template" id="experiment_list_table_template">
     <table class='table table-striped'>

@@ -155,17 +155,17 @@ class SynchDat : public AcqMovie {
     return mChunks.GetItem(mChunks.GetBin(wellIndex)).mDepth;
   }
 
-  inline short At(int chipRow, int chipCol, int chipFrame) const {
+  inline short AtWell(int chipRow, int chipCol, int chipFrame) const {
     return mChunks.GetItemByRowCol(chipRow, chipCol).At(chipRow, chipCol, chipFrame);
   }
 
-  inline short &At(int chipRow, int chipCol, int chipFrame) {
+  inline short &AtWell(int chipRow, int chipCol, int chipFrame) {
     return mChunks.GetItemByRowCol(chipRow, chipCol).At(chipRow, chipCol, chipFrame);
   }
 
 
   inline short At(int wellIx, int chipFrame) {
-    return At(wellIx / GetCols(), wellIx % GetCols(), chipFrame);
+    return AtWell(wellIx / GetCols(), wellIx % GetCols(), chipFrame);
   }
 
   inline void InterpolatedAt(int chipRow, int chipCol, std::vector<float>& newTime, std::vector<float>& interpolations){

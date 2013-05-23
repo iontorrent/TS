@@ -14,9 +14,11 @@ my $USAGE = "Usage:\n\t$CMD [options] <bam file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
   -a Customize to Amplicon reads coverage information (if a distinction is made)
+  -b Customize to target coverage by Base information (if a distinction is made)
   -g Expect 'Genome' rather than 'Target' as the tag used for base statistics summary (and use for output).
   -i Output sample Identification tracking reads in summary statistics.
   -r AmpliSeq RNA report. No output associated with base coverage and uniformity of coverage. (Overrides -a)
+  -w Indicates to put a warning banner for missing targets file.
   -O <file> Output file name (relative to output directory). Should have .html extension. Default: ./block.html
   -D <dirpath> Path to Directory where html page is written. Default: '' (=> use path given by Output file name)
   -S <file> Input Statistics file name. Default: '-' (no summary file)
@@ -34,53 +36,64 @@ my $tabhead = "All Reads";
 my $genome = 0;
 my $amplicons = 0;
 my $rnacoverage = 0;
+my $trgcoverage = 0;
 my $sampleid = 0;
+my $warnBanner = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
 {
-    last if($ARGV[0] !~ /^-/);
-    my $opt = shift;
-    if($opt eq '-O') {$outfile = shift;}
-    elsif($opt eq '-D') {$workdir = shift;}
-    elsif($opt eq '-S') {$statsfile = shift;}
-    elsif($opt eq '-A') {$helpfile = shift;}
-    elsif($opt eq '-a') {$amplicons = 1;}
-    elsif($opt eq '-g') {$genome = 1;}
-    elsif($opt eq '-i') {$sampleid = 1;}
-    elsif($opt eq '-r') {$rnacoverage = 1;}
-    elsif($opt eq '-s') {$tabhead = shift;}
-    elsif($opt eq '-t') {$title = shift;}
-    elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
-    else
-    {
-        print STDERR "$CMD: Invalid option argument: $opt\n";
-        print STDERR "$OPTIONS\n";
-        exit 1;
-    }
+  last if($ARGV[0] !~ /^-/);
+  my $opt = shift;
+  if($opt eq '-O') {$outfile = shift;}
+  elsif($opt eq '-D') {$workdir = shift;}
+  elsif($opt eq '-S') {$statsfile = shift;}
+  elsif($opt eq '-A') {$helpfile = shift;}
+  elsif($opt eq '-a') {$amplicons = 1;}
+  elsif($opt eq '-b') {$trgcoverage = 1;}
+  elsif($opt eq '-g') {$genome = 1;}
+  elsif($opt eq '-i') {$sampleid = 1;}
+  elsif($opt eq '-r') {$rnacoverage = 1;}
+  elsif($opt eq '-s') {$tabhead = shift;}
+  elsif($opt eq '-t') {$title = shift;}
+  elsif($opt eq '-w') {$warnBanner = 1;}
+  elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
+  else
+  {
+    print STDERR "$CMD: Invalid option argument: $opt\n";
+    print STDERR "$OPTIONS\n";
+    exit 1;
+  }
 }
 if( $help )
 {
-    print STDERR "$DESCR\n";
-    print STDERR "$USAGE\n";
-    print STDERR "$OPTIONS\n";
-    exit 1;
+  print STDERR "$DESCR\n";
+  print STDERR "$USAGE\n";
+  print STDERR "$OPTIONS\n";
+  exit 1;
 }
 elsif( scalar @ARGV != 1 )
 {
-    print STDERR "$CMD: Invalid number of arguments.";
-    print STDERR "$USAGE\n";
-    exit 1;
+  print STDERR "$CMD: Invalid number of arguments.";
+  print STDERR "$USAGE\n";
+  exit 1;
 }
 
 my $bamfile = shift;
 
 $statsfile = "" if( $statsfile eq "-" );
 
-# tied/derive options - in case futher customization is required
+# option dependencies and overrides
+
+if( $warnBanner ) {
+  $amplicons = 0;
+  $rnacoverage = 0;
+}
+
 $amplicons = 0 if( $rnacoverage );
 $ampcoverage  = ($amplicons || $rnacoverage );
 $basecoverage = ($genome || !$rnacoverage );
+$trgcoverage = 0 if( $ampcoverage );
 
 # extract root name for output files from bam file names
 my($runid,$folder,$ext) = fileparse($bamfile, qr/\.[^.]*$/);
@@ -105,22 +118,22 @@ print OUTFILE "<link rel=\"stylesheet\" type=\"text/css\" href=\"lifechart/lifeg
 print OUTFILE "</head>\n";
 print OUTFILE "<body>\n";
 print OUTFILE "<div style=\"margin-left:auto;margin-right:auto;\">\n";
-if( $title ne "" )
-{
+if( $title ne "" ) {
     # add simple formatting if no html tag indicated
     $title = "<h3><center>$title</center></h3>" if( $title !~ /^\s*</ );
     print OUTFILE "$title\n";
 }
+if( $warnBanner ) {
+  print OUTFILE "<h4 style='color:red'><center>Warning: No targets region specified as expected for Library Type.</center></h4>\n";
+}
+
 print OUTFILE "<table class=\"center\"><tr>\n";
 my $t2width = 350;
-if( $rnacoverage )
-{
+if( $rnacoverage ) {
   displayResults( "repoverview.png", "amplicon.cov.xls", "Representation Overview", 1, "height:100px" );
   print OUTFILE "</td>\n";
   $t2width = 320;
-}
-else
-{
+} else {
   displayResults( "covoverview.png", "covoverview.xls", "Coverage Overview", 1, "height:100px" );
   print OUTFILE "</td>\n";
   $t2width = 340;

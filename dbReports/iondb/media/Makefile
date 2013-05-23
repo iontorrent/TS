@@ -74,6 +74,7 @@ inspect:
 	@jshint resources/scripts/plan/*.js --config .jshintrc
 	@jshint resources/scripts/data/*.js --config .jshintrc
 	@jshint resources/scripts/monitor/*.js --config .jshintrc
+	@jshint resources/scripts/configure/configure/*.js --config .jshintrc
 	find iondb/media/ -type f \( -iname "*.js" ! -iname "*.min.js" ! -iname "*-min.js" \) | xargs jshint --config iondb/media/.jshintrc
 	@echo "\n${hr}"
 	@echo "Running JSHint on javascript...             ${CHECK} Done"

@@ -11,7 +11,7 @@ RcppExport SEXP fitBkgTrace(
   char *exceptionMesg = NULL;
 
   try {
-    RcppMatrix<double> sig(Rsig);
+    Rcpp::NumericMatrix sig(Rsig);
     int nWell = sig.rows();
     int nCol = sig.cols();
     int nFrame = Rcpp::as<int>(RnFrame);
@@ -19,12 +19,12 @@ RcppExport SEXP fitBkgTrace(
 
     if(nWell <= 0) {
       std::string exception = "Empty matrix supplied, nothing to fit\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else if(nFlow*nFrame != nCol) {
       std::string exception = "Number of columns in signal matrix should equal nFrame * nFlow\n";
-      exceptionMesg = copyMessageToR(exception.c_str());
+      exceptionMesg = strdup(exception.c_str());
     } else {
-      RcppMatrix<int> bkg(nFrame,nFlow);
+      Rcpp::IntegerMatrix bkg(nFrame,nFlow);
       for(int iFlow=0; iFlow<nFlow; iFlow++) {
         for(int iFrame=0, frameIndex=iFlow*nFrame; iFrame<nFrame; iFrame++, frameIndex++) {
           double sum=0;
@@ -36,18 +36,14 @@ RcppExport SEXP fitBkgTrace(
       }
    
       // Build result set to be returned as a list to R.
-      RcppResultSet rs;
-      rs.add("bkg", bkg);
-
-      // Set the list to be returned to R.
-      rl = rs.getReturnList();
+      rl = Rcpp::List::create(Rcpp::Named("bkg") = bkg);
 
       // Clear allocated memory
     }
   } catch(std::exception& ex) {
-    exceptionMesg = copyMessageToR(ex.what());
+    forward_exception_to_r(ex);
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

@@ -63,6 +63,7 @@ def register_bed_file(bedFName, meta):
     register(mdbed, meta)
 
 def plan_json(meta):
+    run_type = "AMPS_RNA" if meta["design"]["pipeline"] == "RNA" else "AMPS"
     primary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['primary_bed'])
     if meta['secondary_bed'] is not None:
         secondary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['secondary_bed'])
@@ -72,6 +73,7 @@ def plan_json(meta):
        "adapter": None,
        "autoAnalyze": True,
        "autoName": None,
+       # Set if isBarcoded 
        "barcodeId": "",
        "barcodedSamples": {},
        "bedfile": primary_path,
@@ -95,15 +97,16 @@ def plan_json(meta):
        "libkit": None,
        "library": meta["reference"],
        "libraryKey": "TCAG",
+       # Kit
        "librarykitname": "Ion AmpliSeq 2.0 Library Kit",
        "metaData": {},
        "notes": "",
        "pairedEndLibraryAdapterName": "",
        "parentPlan": None,
-       "planDisplayedName": meta["plan"]["design_name"],
+       "planDisplayedName": meta["design"]["design_name"],
        "planExecuted": False,
        "planExecutedDate": None,
-       "planName": meta["plan"]["design_name"],
+       "planName": meta["design"]["design_name"],
        "planPGM": None,
        "planStatus": "",
        "preAnalysis": True,
@@ -111,20 +114,22 @@ def plan_json(meta):
        "reverse_primer": None,
        "reverselibrarykey": None,
        "runMode": "single",
-       "runType": "AMPS",
+       "runType": run_type,
        "runname": None,
        "sample": "",
        "sampleDisplayedName": "",
        "samplePrepKitName": "",
+       "selectedPlugins": meta["design"]["plan"].get("selectedPlugins", {}),
        "seqKitBarcode": None,
+       # Kit
        "sequencekitname": "IonPGM200Kit",
        "storageHost": None,
        "storage_options": "A",
+       # Kit
        "templatingKitName": "Ion OneTouch 200 Template Kit v2 DL",
        "usePostBeadfind": True,
        "usePreBeadfind": True,
        "username": "ionadmin",
-       "variantfrequency": "Germ Line"
     }
     return plan_stub
 

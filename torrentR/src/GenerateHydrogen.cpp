@@ -67,9 +67,7 @@ RcppExport SEXP CalculateCumulativeIncorporationHydrogensR(
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("CumulativeRedHydrogens",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("CumulativeRedHydrogens") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -78,7 +76,7 @@ RcppExport SEXP CalculateCumulativeIncorporationHydrogensR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -140,9 +138,7 @@ RcppExport SEXP SimplifyCalculateCumulativeIncorporationHydrogensR(
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("CumulativeRedHydrogens",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("CumulativeRedHydrogens") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -151,7 +147,7 @@ RcppExport SEXP SimplifyCalculateCumulativeIncorporationHydrogensR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -216,9 +212,7 @@ RcppExport SEXP ComplexCalculateCumulativeIncorporationHydrogensR(
     for (int i=0; i<my_frame_len; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("CumulativeRedHydrogens",      my_vb_out);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("CumulativeRedHydrogens") = my_vb_out);
 
     delete[] old_vb_out;
 
@@ -227,7 +221,7 @@ RcppExport SEXP ComplexCalculateCumulativeIncorporationHydrogensR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -295,11 +289,9 @@ RcppExport SEXP CalculateNucRiseR(
       tlast = t;
     }
 
-      RcppResultSet rs;
-      rs.add("NucConc",      my_vb_out);
-      rs.add("Time", my_t_out);
-      rs.add("IndexStart",i_start);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("NucConc")    = my_vb_out,
+                             Rcpp::Named("Time")       = my_t_out,
+                             Rcpp::Named("IndexStart") = i_start);
 
     delete[] old_vb_out;
 
@@ -308,7 +300,7 @@ RcppExport SEXP CalculateNucRiseR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -364,11 +356,8 @@ RcppExport SEXP CalculateNucRiseSplineR(
     for (int i=0; i<my_frame_len*sub_steps; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("NucConc",      my_vb_out);
-      rs.add("IndexStart",i_start);
-      ret = rs.getReturnList();
-
+    ret = Rcpp::List::create(Rcpp::Named("NucConc")   = my_vb_out,
+                             Rcpp::Named("IndexStart") = i_start);
     delete[] old_vb_out;
 
 
@@ -376,7 +365,7 @@ RcppExport SEXP CalculateNucRiseSplineR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -425,10 +414,8 @@ RcppExport SEXP CalculateNucRiseSigmaR(
     for (int i=0; i<my_frame_len*sub_steps; i++)
       my_vb_out.push_back(old_vb_out[i]);
 
-      RcppResultSet rs;
-      rs.add("NucConc",      my_vb_out);
-      rs.add("IndexStart",i_start);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("NucConc")    = my_vb_out,
+                             Rcpp::Named("IndexStart") = i_start);
 
     delete[] old_vb_out;
 
@@ -437,7 +424,7 @@ RcppExport SEXP CalculateNucRiseSigmaR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)
@@ -501,11 +488,9 @@ RcppExport SEXP CalculateNucRiseMeasuredR(
       tlast = t;
     }
 
-      RcppResultSet rs;
-      rs.add("NucConc",      my_vb_out);
-      rs.add("Time", my_t_out);
-      rs.add("IndexStart",i_start);
-      ret = rs.getReturnList();
+    ret = Rcpp::List::create(Rcpp::Named("NucConc")    = my_vb_out,
+                             Rcpp::Named("Time")       = my_t_out,
+                             Rcpp::Named("IndexStart") = i_start);
 
     delete[] old_vb_out;
 
@@ -514,7 +499,7 @@ RcppExport SEXP CalculateNucRiseMeasuredR(
     
 
   } catch(...) {
-    exceptionMesg = copyMessageToR("unknown reason");
+    ::Rf_error("c++ exception (unknown reason)");
   }
     
   if(exceptionMesg != NULL)

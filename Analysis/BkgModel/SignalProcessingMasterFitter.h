@@ -86,7 +86,6 @@ class SignalProcessingMasterFitter
     friend class SpatialCorrelator;
     friend class RefineTime;
     friend class TraceCorrector;
-
     friend class debug_collection;
 
     // constructor used by Analysis pipeline
@@ -94,8 +93,9 @@ class SignalProcessingMasterFitter
     SignalProcessingMasterFitter (RegionalizedData *local_patch, GlobalDefaultsForBkgModel &_global_defaults, char *_results_folder, Mask *_mask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, Region *_region, std::set<int>& sample,
               std::vector<float>& sep_t0_est,bool debug_trace_enable,
               int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,  EmptyTraceTracker *emptyTraceTracker,
-              float sigma_guess=2.5,float t0_guess=35,
-	      SequenceItem* seqList=NULL,int numSeqListItems=2,
+                                  float sigma_guess,float t0_guess, float t0_frame_guess, 
+				  bool ignorekey=false,
+				  SequenceItem* seqList=NULL,int numSeqListItems=2,
                                   bool restart=false, int16_t *_washout_flow=NULL);
 
     // constructor used for testing outside of Analysis pipeline (doesn't require mask, region, or RawWells obects)
@@ -105,6 +105,7 @@ class SignalProcessingMasterFitter
 
     void SetComputeControlFlags (bool enable_xtalk_correction=true);
 
+    void writeDebugFiles (bool debug) { write_debug_files = debug; }
     void   UpdateBeadBufferingFromExternalEstimates (std::vector<float> *tauB, std::vector<float> *tauE);
 
     virtual ~SignalProcessingMasterFitter();
@@ -125,6 +126,10 @@ class SignalProcessingMasterFitter
     // break apart image processing and computation
     bool  ProcessImage (Image *img, int flow);
     bool ProcessImage (SynchDat &data, int flow);
+
+
+    // allow GPU code to trigger PCA Dark Matter Calculation on CPU
+    void CPU_DarkMatterPCA();
 
     // image process entry point for testing outside of Analysis pipeline
     // (doesn't require Image object, takes well data and background data separately)
@@ -257,6 +262,10 @@ class SignalProcessingMasterFitter
       return global_defaults;
     }
 
+    XtalkCurry& getXtalkExecute()
+    {
+      return xtalk_execute;
+    }
     extern_links &GetGlobalStage() { return global_state; }
       
 // making this public for temporary simplicity
@@ -283,7 +292,7 @@ class SignalProcessingMasterFitter
     void NothingInit();
 
     void  BkgModelInit (bool debug_trace_enable,float sigma_guess,
-                        float t0_guess,std::vector<float>& sep_t0_est,std::set<int>& sample,SequenceItem* _seqList,int _numSeqListItems, bool restart);
+                        float t0_guess, float t0_frame_guess, std::vector<float>& sep_t0_est,std::set<int>& sample,bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart);
 
 
     void NothingFitters();
@@ -319,11 +328,15 @@ class SignalProcessingMasterFitter
     void PostKeyFitAllWells(double &elapsed_time, Timer &fit_timer);
     void FitWellParametersConditionalOnRegion (double &elapsed_time, Timer &fit_timer);
     void BootUpModel (double &elapsed_time,Timer &fit_timer);
+    void FirstPassSampledRegionParamFit();
+    void FirstPassRegionParamFit();
     void PickRepresentativeHighQualityWells();
     void GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer);
     void FitTimeVaryingRegion (double &elapsed_time, Timer &fit_timer);
     void RegionalFittingForInitialFlowBlock();
     void RegionalFittingForLaterFlowBlock();
+
+    void ChooseSampledForRegionParamFit();
 
     // debugging functions
 
@@ -364,7 +377,10 @@ class SignalProcessingMasterFitter
 
     // specialized residual fitter
     Axion *axion_fit;
-    
+   
+    // flag controlling whether to write debug file pertaining to bead and region params
+    bool write_debug_files; 
+
  private:
     SignalProcessingMasterFitter();
     /*

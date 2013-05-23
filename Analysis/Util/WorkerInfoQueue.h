@@ -61,6 +61,8 @@ class WorkerInfoQueue
   /* Call when a worker has completed a task */
   void DecrementDone(void);
 
+  inline bool empty(){return (not_done_cnt == 0);}
+
   ~WorkerInfoQueue();
 
 private:
@@ -174,8 +176,6 @@ int foq_GetNum(struct FrameOutputQueue *q);
  
  #include "datacollect_global.h"
 #include "FrameOutputQueue.h"
-
-#include "dbgmem.h"
 
 // Creates a new output queue large enough to hold numFrames
 struct FrameOutputQueue *foq_Create(int numFrames)

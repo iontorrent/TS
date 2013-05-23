@@ -30,70 +30,6 @@
 			blockoldfromSFF();
 			$('#report_analyze_form').submit();
 		});
-		function submitHandler() {
-			oldsff = blockoldfromSFF();
-			if (!oldsff){
-				return false;
-			};
-
-			formData = $("#report_analyze_form").serialize();
-			URL = $("#report_analyze_form").attr('action')
-			METHOD = $("#report_analyze_form").attr('method')
-			$('#modal_report_analyze_started').remove();
-			$.ajax({
-				type : METHOD,
-				url : URL,
-				async : false,
-				dataType : "html",
-				data : formData,
-				success : function(data, textStatus, jqXHR) {
-					var found = $(data).find('#modal_report_analyze_started')
-					if (found.exists()) {
-						$('body').append(data);
-						$('#modal_report_analyze_started').modal("show");
-						$('#modal_report_analyze_started').on('hidden', function(){
-							$('body #modal_report_analyze_started').parent().remove();
-							window.location.reload(true);
-						});
-						$(".parentError").parent().parent().removeClass("error alert alert-error invalid");
-						$(".parentError").empty();
-						analysis_live_ready_cb();
-					} else {
-						var newForm = $(data).find('#report_analyze_form');
-						var parent = $("#report_analyze_form").parent().empty().append(newForm);
-						$(".parentError").parent().parent().addClass("error alert alert-error invalid");
-						$('#report_analyze_form').submit(submitHandler);
-						$("#advancedSec").slideDown();
-						
-						$(data).find('#start_error').prependTo('#report_analyze_form');
-					}
-					return true;
-				},
-				error : function(data) {
-					console.error(data);
-					$('#modal-error-messages').empty();
-			    	$('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
-			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data + '</p>'); 
-				}
-			});
-			//always return false because the POSTing is done to the API.
-			return false;
-		}
-		$('#report_analyze_form').submit(submitHandler);
-		$("#advanced").click(function() {
-			$("#advancedSec").slideToggle();
-			i = $(this).find('i')
-			if (i.hasClass('icon-plus')) {
-				i.removeClass('icon-plus').addClass('icon-minus');
-			} else {
-				i.removeClass('icon-minus').addClass('icon-plus');
-			}
-		});
-
-		//mark errors where they happen
-		$(".parentError").parent().parent().addClass("error alert alert-error invalid");
-
-		// $("#uploadMethod").buttonset();
 
 		change_pipetype = function () {
 			var type = $('input[name=pipetype]:checked').val(),
@@ -122,6 +58,8 @@
 			$("#id_analysisArgs").css("opacity", use_args? 1 : 0.2);
 			$("#id_basecallerArgs").attr("disabled", !use_base);
 			$("#id_basecallerArgs").css("opacity", use_base? 1 : 0.2);
+            $("#id_prebasecallerArgs").attr('disabled', !use_base);
+            $("#id_prebasecallerArgs").css("opacity", use_base? 1 : 0.2);
 			$("#id_previousReport").attr('disabled', !use_prev);
 			$("#id_previousReport").css("opacity", use_prev? 1 : 0.2);
 
@@ -129,12 +67,87 @@
 			$("#id_thumbnailBeadfindArgs").css("opacity", use_targs? 1 : 0.2);
 			$("#id_thumbnailAnalysisArgs").attr("disabled", !use_targs);
 			$("#id_thumbnailAnalysisArgs").css("opacity", use_targs? 1 : 0.2);
+            $("#id_prethumbnailBasecallerArgs").attr("disabled", !use_tbase);
+            $("#id_prethumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
 			$("#id_thumbnailBasecallerArgs").attr("disabled", !use_tbase);
 			$("#id_thumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
 			$("#id_previousThumbReport").attr('disabled', !use_tprev);
 			$("#id_previousThumbReport").css("opacity", use_tprev? 1 : 0.2);
 			blockoldfromSFF();
+		};
+
+		function submitHandler() {
+			oldsff = blockoldfromSFF();
+			if (!oldsff){
+				return false;
+			}
+
+			formData = $("#report_analyze_form").serialize();
+			formData += "&re-analysis=on" // a way to distinguish user input from crawler post
+			URL = $("#report_analyze_form").attr('action')
+			METHOD = $("#report_analyze_form").attr('method')
+			$('#modal_report_analyze_started').remove();
+			$.ajax({
+				type : METHOD,
+				url : URL,
+				async : false,
+				dataType : "html",
+				data : formData,
+				success : function(data, textStatus, jqXHR) {
+					var found = $(data).find('#modal_report_analyze_started')
+					if (found.exists()) {
+						$('body').append(data);
+						$('#modal_report_analyze_started').modal("show");
+						$('#modal_report_analyze_started').on('hidden', function(){
+							$('body #modal_report_analyze_started').parent().remove();
+							window.location.reload(true);
+						});
+						$(".parentError").parent().parent().removeClass("error alert alert-error invalid");
+						$(".parentError").empty();
+						analysis_live_ready_cb();
+					} else {
+						var newForm = $(data).find('#report_analyze_form');
+						var parent = $("#report_analyze_form").parent().empty().append(newForm);
+						$(".parentError").parent().parent().addClass("error alert alert-error invalid");
+						$('#report_analyze_form').submit(submitHandler);
+						$("input[name=pipetype]").click(change_pipetype);
+						$("#id_do_thumbnail").click(change_pipetype);
+						change_pipetype();
+						$("#advancedSec").slideDown();
+						
+						$(data).find('#start_error').prependTo('#report_analyze_form');
+					}
+					return true;
+				},
+				error : function(data) {
+					console.error(data);
+					$('#modal-error-messages').empty();
+			    	$('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
+			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data + '</p>'); 
+				}
+			});
+			//always return false because the POSTing is done to the API.
+			return false;
 		}
+		$('#report_analyze_form').submit(submitHandler);
+		$(".openPanel").click(function() {
+			if (this.id == 'advanced')
+				$("#advancedSec").slideToggle();
+			if (this.id == 'analysis') {
+				$("#analysis_reminder_panel").slideToggle();
+				$("#analysis_panel").slideToggle();	
+			}
+		
+			i = $(this).find('i')
+			if (i.hasClass('icon-plus')) {
+				i.removeClass('icon-plus').addClass('icon-minus');
+			} else {
+				i.removeClass('icon-minus').addClass('icon-plus');
+			}
+		});
+
+		//mark errors where they happen
+		$(".parentError").parent().parent().addClass("error alert alert-error invalid");
 
 		$("input[name=pipetype]").click(change_pipetype);
 		$("#id_do_thumbnail").click(change_pipetype);
@@ -146,12 +159,12 @@
 
 <div class="content group" id="analyzeDiv">
 	<h1>Run Name : {{ expName }}</h1>
-	{%if not isexpDir%}
+	{% for warning in warnings %}
 		<div class="alert alert-block">
-	    <button type="button" class="close" data-dismiss="alert">×</button>
-		    Warning Raw Data is missing
+	    <button type="button" class="close" data-dismiss="alert">&times;</button>
+		    {{ warning }}
 	    </div>
-	{%endif%}
+	{% endfor %}
 	{% if start_error %}
 	<div id="start_error" class="alert alert-block alert-error">
 	    <p><b>Error:</b> {{ start_error }}</p>
@@ -214,27 +227,59 @@
 				<label for="id_beadfindArgs" class="control-label">Beadfind args</label>
 				<div class="controls">
 					{{ rpf.beadfindArgs }}
-					<p class="help-block">
-						{{ rpf.beadfindArgs.errors }}
-					</p>
+
+					{% if rpf.beadfindArgs.errors %}
+						{% for error in rpf.beadfindArgs.errors %}
+							<p class="help-block parentError">
+								{{error|escape}}
+							</p>
+						{% endfor %}
+					{% endif %}
 				</div>
 			</div>
 			<div class="control-group">
 				<label for="id_analysisArgs" class="control-label">Analysis args</label>
 				<div class="controls">
 					{{ rpf.analysisArgs }}
-					<p class="help-block">
-						{{ rpf.analysisArgs.errors }}
-					</p>
+
+					{% if rpf.analysisArgs.errors  %}
+						{% for error in rpf.analysisArgs.errors  %}
+							<p class="help-block parentError">
+								{{error|escape}}
+							</p>
+						{% endfor %}
+					{% endif %}
+
 				</div>
 			</div>
+            <div class="control-group">
+                <label for="id_prebasecallerArgs" class="control-label">Pre Basecaller Args for calibration</label>
+                <div class="controls">
+                    {{ rpf.prebasecallerArgs }}
+
+                    {% if rpf.prebasecallerArgs.errors   %}
+                        {% for error in rpf.prebasecallerArgs.errors   %}
+                            <p class="help-block parentError">
+                                {{error|escape}}
+                            </p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
 			<div class="control-group">
 				<label for="id_basecallerArgs" class="control-label">Basecaller Args</label>
 				<div class="controls">
 					{{ rpf.basecallerArgs }}
-					<p class="help-block">
-						{{ rpf.basecallerArgs.errors }}
-					</p>
+
+					{% if rpf.basecallerArgs.errors   %}
+						{% for error in rpf.basecallerArgs.errors   %}
+							<p class="help-block parentError">
+								{{error|escape}}
+							</p>
+						{% endfor %}
+					{% endif %}
+
+
 				</div>
 			</div>
 
@@ -266,6 +311,15 @@
 					</p>
 				</div>
 			</div>
+            <div class="control-group">
+                <label for="id_prethumbnailBasecallerArgs" class="control-label">Thumbnail Pre Basecaller args for calibration</label>
+                <div class="controls">
+                    {{ rpf.prethumbnailBasecallerArgs }}
+                    <p class="help-block">
+                        {{ rpf.prethumbnailBasecallerArgs.errors }}
+                    </p>
+                </div>
+            </div>
 			<div class="control-group">
 				<label for="id_thumbnailBasecallerArgs" class="control-label">Thumbnail Basecaller args</label>
 				<div class="controls">
@@ -317,15 +371,6 @@
 				</div>
 			</div>
 			<div class="control-group">
-				<label for="id_reference" class="control-label">Alignment Reference</label>
-				<div class="controls">
-					{{ rpf.reference }}
-					<p class="help-block">
-						{{ rpf.reference.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
 				<label for="id_aligner_opts_extra" class="control-label">TMAP args</label>
 				<div class="controls">
 					{{ rpf.aligner_opts_extra }}
@@ -343,6 +388,15 @@
 					</p>
 				</div>
 			</div>
+            <div class="control-group">
+                <label for="id_realign" class="control-label">Realign</label>
+                <div class="controls">
+                    {{ rpf.realign}}
+                    <p class="help-block">
+                        {{ rpf.realign.errors }}
+                    </p>
+                </div>
+            </div>
 			<div class="control-group">
 				<label for="id_project_names" class="control-label">Project name(s) <br>(comma-separated)</label>
 				<div class="controls">
@@ -355,12 +409,22 @@
 				</div>
 			</div>
 		</div>
+		
+		<div id="analysis_panel" style="display: none;">
+			{% include "rundb/common/analysis_settings.html" %}
+		</div>
+
+		<div id="analysis_reminder_panel" style="display: none;">
+			<p>Note: Analysis settings entered here are effective for this reanalysis only. For permanent change to the analysis settings, please use Edit Run.</p> 
+		</div>
+		
 		</fieldset>
 		{{ rpf.path }}
 	</form>
 	</div>
 	<div class="clearfix">
-		<a id="advanced" href="#" class="btn pull-left">Advanced <i class="icon-plus"></i></a>
+		<a id="advanced" href="#" class="btn pull-left openPanel">Advanced <i class="icon-plus"></i></a>
+		<a id="analysis" href="#" class="btn pull-left openPanel">Analysis Settings <i class="icon-plus"></i></a>
 		<a id="submitButton" class="btn btn-primary pull-right">Start Analysis</a>
 	</div>
 </div>

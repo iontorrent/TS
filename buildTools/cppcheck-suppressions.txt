@@ -13,10 +13,6 @@ unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/inflate.c:9 (s
 unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/inftrees.c:21 (style) struct or union member 'internal_state::dummy' is never used
 unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/infutil.c:12 (style) struct or union member 'inflate_codes_state::dummy' is never used
 unusedStructMember:RSM/rsmagent/AgentEmbedded-5.3-252/Libsrc/zlib/zutil.c:10 (style) struct or union member 'internal_state::dummy' is never used
-arrayIndexOutOfBounds:buildTools/dbgmem.cpp:231 (error) Array 'str[5]' index 5 out of bounds
-arrayIndexOutOfBounds:buildTools/dbgmem.cpp:232 (error) Array 'str[5]' index -1 out of bounds
-deallocDealloc:buildTools/dbgmem.cpp:227 (error) Deallocating a deallocated pointer: ab
-uninitdata:buildTools/dbgmem.cpp:55 (error) Data is allocated but not initialized: item
 unusedStructMember:Analysis/crop/Archive.cpp:54 (style) struct or union member 'HDR::fileHdr' is never used
 unusedStructMember:Analysis/deInterlace.cpp:51 (style) struct or union member 'DeCompFile::mFile' is never used
 unusedStructMember:Analysis/BkgModel.cpp:35 (style) struct or union member 'mat_table_build_instr::comp_num' is never used
@@ -65,4 +61,10 @@ memleak:Analysis/SynchDat/SvdDatCompressPlus.cpp:387 (possible error) Memory lea
 #strandBiasExtractor a pointer to object is added to map and is deleted later when traversing thru the map
 memleak:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:872 (possible error) Memory leak: tempDist
 memleak:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:907 (possible error) Memory leak: tempDist
-
+#I don't believe this leak is real: we put these guys on a stack for later removal
+memleak:Analysis/VariantCaller/SpliceVariantsToReads.h:39 (possible error) Memory leak: TinyAlignCell::inAlleleString
+memleak:Analysis/VariantCaller/SpliceVariantsToReads.h:40 (possible error) Memory leak: TinyAlignCell::delAlleleString
+# temporary ignore tmap issues
+unusedStructMember:Analysis/TMAP/src/index/tmap_bwt_gen.c:85 (style) struct or union member 'tmap_bwt_gen_t::occMajorSizeInWord' is never used
+resourceLeak:Analysis/TMAP/src/index/tmap_bwt_gen.c:1578 (error) Resource leak: packedFile
+unusedStructMember:Analysis/TMAP/src/map/map3/tmap_map3.c:109 (style) struct or union member 'tmap_map3_thread_data_t::ptr' is never used

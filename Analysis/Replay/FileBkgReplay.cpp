@@ -45,6 +45,18 @@ fileReplayDsn::fileReplayDsn()
     dsn("/bead/bead_init_param",
 	"Bead-init-param per bead: chip x by chip y by [Copies, R, dH5Replmult, gain]",
 	H5T_NATIVE_FLOAT, 3);
+  mMap[RAWSIGNAL] =
+    dsn("/bead/rawsignal",
+	"signal per well, chip x by chip y by flow",
+	H5T_NATIVE_FLOAT, 3);
+  mMap[NORMSIGNAL] =
+    dsn("/bead/normsignal",
+	"signal per well, chip x by chip y by flow",
+	H5T_NATIVE_FLOAT, 3);
+  mMap[WELLS] =
+    dsn("/wells",
+	"signal per well, chip x by chip y by flow",
+	H5T_NATIVE_FLOAT, 3);
   mMap[std::string("compute_regions")] =
     dsn("/region/compute_regions",
 	"region by [index; chip offset x; y; width; height]",

@@ -19,6 +19,15 @@ void CaptureImageState::CleanUpOldFile()
 // capture gain correction
 void CaptureImageState::WriteImageGainCorrection(int rows, int cols)
 {
+  for (int row = 0;row < rows;row++)
+  {
+    for (int col = 0;col < cols;col++)
+    {
+      // no nans allowed!
+      assert ( !isnan(ImageTransformer::gain_correction[row*cols + col]) );
+    }
+  }
+
   std::string h5_name = h5file + ":/imgGain/gain_corr";
   assert(ImageTransformer::gain_correction != NULL);
   std::vector<float> gain(ImageTransformer::gain_correction, ImageTransformer::gain_correction + rows*cols);    
@@ -37,6 +46,17 @@ void CaptureImageState::LoadImageGainCorrection(int rows, int cols)
   }
   std::fill(ImageTransformer::gain_correction, ImageTransformer::gain_correction + rows * cols, 0);
   std::copy(gain.begin(), gain.end(), ImageTransformer::gain_correction);
+  for (int row = 0;row < rows;row++)
+  {
+    for (int col = 0;col < cols;col++)
+    {
+      // deal with legacy nan in h5 data generated in
+      // ImageTransformer::GainCalculationFromBeadfind
+      if ( isnan(ImageTransformer::gain_correction[row*cols + col]) )
+	ImageTransformer::gain_correction[row*cols + col] = 1.0f;
+    }
+  }
+
 }
 
 

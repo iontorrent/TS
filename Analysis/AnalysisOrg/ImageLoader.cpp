@@ -8,7 +8,8 @@ void ImageTracker::WaitForFlowToLoad ( int flow ) // absolute flow value
    int flow_buffer_for_flow = FlowBufferFromFlow(flow);  // temporary while we resolve the confusion of buffers and flows
  // disable compiler optimizing this loop away
   while ( ! ( ( int volatile * ) CurRead ) [flow_buffer_for_flow] ) {
-    sleep ( 1 ); // wait for the load worker to load the current image
+    //sleep ( 1 ); // wait for the load worker to load the current image
+    usleep(100);
   }
 }
 
@@ -34,7 +35,7 @@ void ImageTracker::AllocateImageBuffers(int ignoreChecksumErrors, int total_time
     img[n].SetNumAcqFiles ( flow_buffer_size );
     img[n].SetIgnoreChecksumErrors ( ignoreChecksumErrors );
     if (total_timeout > 0)
-      img[n].SetTimeout(img[n].GetRetryInterval(), total_timeout);
+      img[n].SetTimeout(total_timeout, img[n].GetRetryInterval());
   }
 }
 

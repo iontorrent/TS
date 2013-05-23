@@ -8,7 +8,8 @@
 
 void BkgModelControlOpts::DefaultBkgModelControl()
 {
-  bkgModelHdf5Debug = 0;
+    bkg_debug_files = 0;
+    bkgModelHdf5Debug = 1;
     bkg_model_emphasis_width = 32.0;
     bkg_model_emphasis_amplitude = 4.0;
     for (int i_nuc=0; i_nuc<4; i_nuc++) dntp_uM[i_nuc] = -1.0f;
@@ -52,19 +53,19 @@ void BkgModelControlOpts::DefaultBkgModelControl()
     krate_adj_threshold = 2.0;
 
     ssq_filter = 0.0f; // no filtering
-    // how to do computation
-    //@TODO: get the command line specification of vectorization to actually work
     
+    // how to do computation
     vectorize = 1;
-    //vectorize = 0;
-    gpuWorkLoad = 1.0;
-    gpuMultiFlowFit = 1;
-    gpuSingleFlowFit = 1;
+    gpuControl.DefaultGpuControl();
+
     numCpuThreads = 0;
     readaheadDat = 0;
     saveWellsFrequency = 3;
+    wellsCompression = 3;
     useProjectionSearchForSingleFlowFit = false;
     choose_time = 0; // default standard time compression
+    exp_tail_fit = false;
+    pca_dark_matter = false;
 
     use_dud_and_empty_wells_as_reference = false;
     proton_dot_wells_post_correction = false;
@@ -72,6 +73,8 @@ void BkgModelControlOpts::DefaultBkgModelControl()
     single_flow_fit_max_retry = 0;
     per_flow_t_mid_nuc_tracking = false;
     regional_sampling = false;
+    //regional_sampling_type = REGIONAL_SAMPLING_SYSTEMATIC;
+    regional_sampling_type = REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED;
     prefilter_beads = false;
 
     unfiltered_library_random_sample = 100000;
@@ -86,4 +89,5 @@ void BkgModelControlOpts::DefaultBkgModelControl()
     cutoff_quantile = .2;
 
     region_list = "";
+    nokey = false;
 }

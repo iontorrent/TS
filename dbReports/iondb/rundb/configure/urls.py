@@ -10,15 +10,19 @@ urlpatterns = patterns(
 
     url(r'^account/$', 'views.configure_account', name="configure_account"),
 
+    url(r'^ampliseq/$', 'views.configure_ampliseq', name='configure_ampliseq'),
+    url(r'^ampliseq/downloads/$', 'views.configure_ampliseq_download', name='configure_ampliseq_download'),
+
     url(r'^plugins/$', 'views.configure_plugins', name="configure_plugins"),
     url(r'^plugins/plugin/install/$', 'views.configure_plugins_plugin_install', name="configure_plugins_plugin_install"),
     url(r'^plugins/plugin/(?P<pk>\d+)/configure/(?P<action>\w+)/$', 'views.configure_plugins_plugin_configure', name="configure_plugins_plugin_configure"),
     url(r'^plugins/plugin/(?P<pk>\d+)/uninstall/$', 'views.configure_plugins_plugin_uninstall', name="configure_plugins_plugin_uninstall"),
     url(r'^plugins/plugin/(?P<pk>\d+)/refresh/$', 'views.configure_plugins_plugin_refresh', name="configure_plugins_plugin_refresh"),
+    url(r'^plugins/plugin/(?P<pk>\d+)/usage/$', 'views.configure_plugins_plugin_usage', name="configure_plugins_plugin_usage"),
     url(r'^plugins/plugin/upload/zip/$', 'views.configure_plugins_plugin_zip_upload', name="configure_plugins_plugin_zip_upload"),
     url(r'^plugins/plugin/enable/(\d+)/(\d)$', 'views.configure_plugins_plugin_enable', name='configure_plugins_plugin_enable'),
     url(r'^plugins/plugin/autorun/(\d+)$', 'views.configure_plugins_plugin_autorun', name='configure_plugins_plugin_autorun'),
-    
+
     url(r'^reportSettings/$', 'views.configure_report_data_mgmt', name="configure_report_data_mgmt"),
     url(r'^reportSettings/prunegroups/$', 'views.configure_report_data_mgmt_prunegroups', name="configure_report_data_mgmt_prunegroups"),
     url(r'^reportSettings/pruneoptions/$', 'views.configure_report_data_mgmt_pruneEdit', name="configure_report_data_mgmt_prune_detail"),
@@ -30,6 +34,7 @@ urlpatterns = patterns(
     url(r'^references/tf/(\d+)$', 'views.references_TF_edit', name='references_TF_edit'),
     url(r'^references/tf/(\d+)/delete/$', 'views.references_TF_delete', name='references_TF_delete'),
 
+    url(r'^references/genome/download/$', 'genomes.download_genome', name='references_genome_download'),
     url(r'^references/genome/add/$', 'genomes.new_genome', name='references_genome_add'),
     url(r'^references/genome/edit/(\d+)$', 'genomes.edit_genome', name='references_genome_edit'),
     url(r'^references/genome/delete/(\d+)$', 'genomes.delete_genome', name='references_genome_delete'),
@@ -45,18 +50,31 @@ urlpatterns = patterns(
     url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/barcode/(?P<pks>[\d,]+)/delete/$', 'views.references_barcode_delete', name="references_barcode_delete"),
 
     url(r'^services/$', 'views.configure_services', name="configure_services"),
+    url(r'^services/dm_actions/(?P<results_pks>[\d,]+)/$', 'views.dm_actions', name="dm_actions"),
+    url(r'^services/dm_actions/(?P<results_pks>[\d,]+)/(?P<action>\w+)/$', 'views.dm_action_selected', name="dm_action_selected"),
+    url(r'^services/preserve_data/$', 'views.preserve_data'),
+    url(r'^services/ack/$', 'views.delete_ack'),
+    url(r'^services/dm_configuration/$', 'views.dm_configuration', name='dm_configuration'),
+    url(r'^services/log/(\d+)/$', 'views.dm_log', name="dm_log"),
+    url(r'^services/dmconfig_log/$', 'views.dm_configuration_log', name="dm_configuration_log"),
+    url(r'^services/dm_history/$', 'views.dm_history', name="dm_history"),
+
+    # -- old services Data Management urls TODO: cleanup
+    url(r'^services2/$', 'views.configure_services2', name="configure_services2"),
+    (r'^services2/storage/(\d+)/([\w.,/_\-]+)$', 'views.change_storage'),
+    (r'^services2/enablearchive/(\d+)/(\d)$', 'views.enableArchive'),
+    (r'^services2/expack/$', 'views.exp_ack'),
+    url(r'^services2/editarchive/(\d+)$', 'views.edit_backup', name="edit_archive"),
+    # --
 
     url(r'^configure/$', 'views.configure_configure', name="configure_configure"),
     url(r'^configure/editemail/(\d+)?$', 'views.edit_email', name="edit_email"),
+    url(r'^configure/deleteemail/(\d+)?$', 'views.delete_email', name="delete_email"),
 
     (r'^services/arch_gone.png$', 'graphs.archive_graph_bar'),
     (r'^services/(.+)/file_server_status.png/$', 'graphs.fs_statusbar'),
-    (r'^services/archive_drivespace.png$', 'graphs.archive_drivespace_bar'),
+    (r'^services/(\d+)/archive_drivespace.png$', 'graphs.archive_drivespace_bar'),
     (r'^services/residence_time.png$', 'graphs.residence_time'),
-    url(r'^services/editarchive/(\d+)$', 'views.edit_backup', name="edit_archive"),
-    (r'^services/expack/$', 'views.exp_ack'),
-    (r'^services/storage/(\d+)/([\w.,/_\-]+)$', 'views.change_storage'),
-    (r'^services/enablearchive/(\d+)/(\d)$', 'views.enableArchive'),
     url(r'^services/controljob/(\d+)/((?:term)|(?:stop)|(?:cont))$', 'views.control_job', name='control_job'),
     (r'^chips/$', 'chips.showpage'),
     url(r'^info/$', 'views.configure_system_stats', name="configure_system_stats"),

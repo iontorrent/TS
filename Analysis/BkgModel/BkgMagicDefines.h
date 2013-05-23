@@ -9,6 +9,9 @@
 // chunk size of number of flows
 #define NUMFB                   20
 
+// Amount in frames forward from t0 to use for VFC compression in TimeCompression.h
+// @hack - Note this must be kept in synch with T0_LEFT_OFFSET in DifferentialSeparator.cpp
+#define VFC_T0_OFFSET 6
 
 // when handling >tables< use the table values
 // plus one for table size
@@ -50,6 +53,16 @@
 #define NUMBEADSPERGROUP 199
 
 #define MINAMPL 0.001f
+
+// In limited testing NUM_DM_PCA == 6 produced the best results, but
+// a value of 4 has the least impact on the rest of the software (it keeps
+// the memory needed for the dark matter compensator the same as before, and
+// possibly is less risky for plug-ins/debug
+#define NUM_DM_PCA   (4)
+#define TARGET_PCA_SET_SIZE   (2000)
+#define MIN_PCA_SET_SIZE      (250)
+#define MIN_AVG_DM_SET_SIZE   (50)
+
 // TODO: this is what I want for proton, but it breaks the GPU right now
 // #define MINAMPL -0.5f
 
@@ -112,6 +125,10 @@ typedef int16_t FG_BUFFER_TYPE;
 
 // time compression
 #define MAX_COMPRESSED_FRAMES 41
+// to accommodate exponential tail fit large number of frames in GPU code
+#define MAX_COMPRESSED_FRAMES_GPU 61
+#define MAX_PREALLOC_COMPRESSED_FRAMES_GPU 48
+
 
 // random values to keep people from iterating
 #define TIME_FOR_NEXT_BLOCK -1

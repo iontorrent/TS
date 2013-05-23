@@ -1,0 +1,486 @@
+<html>
+<form id="IonReporterUploader" name="IonReporterUploader" style="margin-left:auto;margin-right:auto">
+    <div id=IR_form style="border:none;overflow: auto;width:900px;height:auto;padding:5px">
+        <span class="option-group">
+            <h1>Ion Reporter Uploader Configuration</h1>                
+            <table id="nonBarcodedTable" class="nonBarcodedTable">
+                <thead>
+                <tr class="nonBarcodedSampleTableHeader">
+                    <th>Sample Name</th>
+                    <th>Gender</th>                    
+                    <th>Workflow</th>
+                    <th>Relation</th>
+                    <th>Relation Role</th>
+                    <th>Set ID</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td><input id="sample_irSample" type="text" name="sample" value="" style="width:200px;"></p></td>
+                    <td>
+                    	<select id="sample_irGender_select" name="Gender" class="irGender_select select-group" style="width:100px;">
+                    	<option value=""></option>
+                    	</select>
+                    </td>
+                    <td>
+                        <select id="sample_irWorkflow_select" name="Workflow" class="irWorkflow_select select-group" style="width:150px;">
+                        <option value=""></option>
+                        </select>
+                    </td>
+                    <td>
+                        <select id="sample_irRelation_select" name="Relation" class="irRelation_select select-group" style="width:120px;">
+                        <option value=""></option>
+                        </select>
+                    </td>
+                    <td>
+                        <select id="sample_irRelationRole_select" name="RelationRole" class="irRelationRole_select select-group" style="width:120px;">
+                        <option value=""></option>
+                        </select>
+                    </td>
+                    <td><input id="sample_irSetId_select" name="setid" class="irSetId_select" value=0 style="width:40px;"></td>
+                </tr>
+                </tbody>
+            </table>
+            
+            <table id="barcodedTable" class="barcodedTable">
+                <thead>
+                <tr class="barcodedSampleTableHeader">
+                    <th>BC #</th>
+                    <th>Sequence</th>                    
+                    <th>Sample Name</th>
+                    <th>Gender</th>
+                    <th>Workflow</th>
+                    <th>Relation</th>
+                    <th></th>
+                    <th>Relation Role</th>
+                    <th>Set ID</th>
+                </tr>
+                </thead>
+            </table>
+            
+        </span>
+    </div>        
+</form>
+
+<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+<script type="text/javascript">
+    $(document).ready(function() {
+        console.log('pluginObj', TB_plugin);
+        // load selection options from cached plugin data
+        $.irConfigSelection = TB_plugin.fields.userinputfields;
+
+        $.barcodeKit = parent.$('#id_barcodeKitName').val();
+        update_table_barcodeKit($.barcodeKit);
+ 
+        // reload the table if barcodeKit selection changes on re-Analyze page
+        parent.$('#id_barcodeKitName').bind('mouseup',function(){
+                $.barcodeKit = $(this).val();
+                update_table_barcodeKit($.barcodeKit);
+                restoreForm($.iru_restore_obj);
+        });
+        
+    });
+    
+    // clean up the extra function
+    $(window).unload(function(){ parent.$('#id_barcodeKitName').unbind('mouseup'); });
+    
+    // update table based on barcodeKitName on re-Analyze page
+    update_table_barcodeKit = function(barcodeKit){
+        if (barcodeKit==null || barcodeKit==''){
+            // Non-barcoded
+            $('#nonBarcodedTable').show();
+            $('#barcodedTable').hide();            
+        }
+        else{
+            // Barcoded
+            create_barcode_table(barcodeKit);                        
+            $('#nonBarcodedTable').hide();
+            $('#barcodedTable').show();
+        }
+        $.addIRFormFields();
+    }
+
+    // generate dynamic barcoded table
+    create_barcode_table = function(barcodeKit){
+        $.ajaxSetup({async: false});
+        $.get('/rundb/api/v1/dnabarcode/?format=json&limit=0&order_by=index&name='+barcodeKit, function(data){
+            barcodes = data.objects;
+            $('#barcodedTable tbody').remove();
+            var table = '<tbody>';            
+            $.each(barcodes, function(i, bc){
+                id = bc.id_str;
+                table+='<tr>';
+                table+='<td style="width:150px;" id="bcSample_index_'+i+'" name="bcId" value="'+bc.pk+'">'+id+'</td>'
+                table+='<td style="width:150px;">'+bc.sequence+'</td>'
+                table+='<td><input id="bcsample_'+id+'" type="text" name="sample" value="" style="width:200px;"></p></td>'
+                table+='<td><select id="bcGender_select_'+id+'" name="Gender" class="irGender_select select-group" style="width:100px;"> \
+                		<option value=""></option></select></td>'
+                
+                table+='<td><select id="bcWorkflow_select_'+id+'" name="Workflow" class="irWorkflow_select select-group" style="width:150px;"> \
+                            <option value=""></option></select></td>'
+                table+='<td><select id="bcRelation_select_'+id+'" name="Relation" class="irRelation_select select-group" style="width:120px;"> \
+                        <option value=""></option></select><td>'
+                table+='<td><select id="bcRelationRole_select_'+id+'" name="RelationRole" class="irRelationRole_select select-group" style="width:100px;"> \
+                        <option value=""></option></select></td>'
+                table+='<td><input id="bcSetId_select_'+id+'" name="setid" class="irSetId_select" value=0 style="width:40px;"></td>'
+                table+='</tr>';
+            });
+            table+='</tbody>';
+            
+            $('#barcodedTable').append(table);
+            $('body').append($('#barcodedTable'));
+        });
+    }    
+    
+    /***
+    * Functions to save and restore IR configuration
+    ***/    
+    
+    restoreForm = function(restore_obj){
+        // restore saved configuration
+        $.iru_restore_obj = restore_obj;
+        var restore_barcoded = 'barcodeId' in restore_obj[0];
+        console.log('restoreForm',restore_obj,' barcoded=', restore_barcoded);
+        
+        if($.barcodeKit && restore_barcoded){
+            $.each(restore_obj, function(i, obj){
+                id = obj.barcodeId;
+                $('input[id="bcsample_XXX"]'.replace('XXX',id)).val(obj.sample);
+                $.setIR_select('select[id="bcGender_select_XXX"]'.replace('XXX',id), obj.Gender);                
+                $.setIR_select('select[id="bcWorkflow_select_XXX"]'.replace('XXX',id), obj.Workflow);
+                $.setIR_select('select[id="bcRelation_select_XXX"]'.replace('XXX',id), obj.Relation);
+                $.setIR_select('select[id="bcRelationRole_select_XXX"]'.replace('XXX',id), obj.RelationRole);
+                $('input[id="bcSetId_select_XXX"]'.replace('XXX',id)).val(obj.setid.split('__')[0]);
+                $('input[id="bcSetId_select_XXX"]'.replace('XXX',id)).data('id_uuid', obj.setid);
+            });
+        } else {
+            obj = restore_obj[0];
+            $('input[id="sample_irSample"]').val(obj.sample);
+            $.setIR_select('select[id="sample_irGender_select"]', obj.Gender);            
+            $.setIR_select('select[id="sample_irWorkflow_select"]', obj.Workflow);
+            $.setIR_select('select[id="sample_irRelation_select"]', obj.Relation);
+            $.setIR_select('select[id="sample_irRelationRole_select"]', obj.RelationRole);
+            $('input[id="sample_irSetId_select"]').val(obj.setid.split('__')[0]);
+            $('input[id="sample_irSetId_select"]').data('id_uuid', obj.setid);
+        }
+    }
+    
+    serializeForm = function(){        
+        var ret = [];        
+        if ($.barcodeKit) {
+            // barcoded
+            $('input[id^="bcsample_"]').each(function(i, elem) {
+                if (elem.value) {
+                    var id = elem.id.replace('bcsample_','');
+                    
+                     // add unique ids to barcoded setid numbers
+                    setid = $('input[id="bcSetId_select_XXX"]'.replace('XXX',id));
+                    if (!setid.data('id_uuid') || (setid.val() != setid.data('id_uuid').split('__')[0]) ){
+                        var uuid_exists = $('input[id^="bcSetId_select_"]').map(function(){
+                                var uuid = $(this).data('id_uuid');
+                                if ( uuid && (setid[0] != this) && (setid.val() == this.value)){
+                                    return $(this).data('id_uuid');
+                                }
+                            });
+                        console.log(uuid_exists)
+                        if (uuid_exists.length > 0){
+                            setid.data('id_uuid', uuid_exists[0]);                            
+                        }
+                        else{
+                            setid.data('id_uuid', setid.val()+'__'+make_uuid());
+                        }
+                    }
+                    ret.push({
+                    'sample': elem.value,
+                    'Gender': $('select[id="bcGender_select_XXX"]'.replace('XXX',id)).val(),                    
+                    'Workflow': $('select[id="bcWorkflow_select_XXX"]'.replace('XXX',id)).val(),
+                    'Relation': $('select[id="bcRelation_select_XXX"]'.replace('XXX',id)).val(),
+                    'RelationRole': $('select[id="bcRelationRole_select_XXX"]'.replace('XXX',id)).val(),
+                    'setid': setid.data('id_uuid'),
+                    'barcodeId': id
+                    });
+                }
+            });
+        } else {
+            // non-barcoded
+            setid = $('input[id="sample_irSetId_select"]');
+            if (!setid.data('id_uuid') || (setid.val() != setid.data('id_uuid').split('__')[0]) )
+                setid.data('id_uuid', setid.val()+'__'+make_uuid());
+            
+            ret = [{
+                'sample': $('input[id="sample_irSample"]').val(),
+                'Gender': $('select[id="sample_irGender_select"]').val(),                
+                'Workflow': $('select[id="sample_irWorkflow_select"]').val(),
+                'Relation': $('select[id="sample_irRelation_select"]').val(),
+                'RelationRole': $('select[id="sample_irRelationRole_select"]').val(),
+                'setid': setid.data('id_uuid')
+            }];
+            
+        }        
+        console.log('serializeForm ', ret, 'barcodeKit=', $.barcodeKit);
+        return ret;
+    }
+    
+    $.setIR_select = function (element, value) {
+        if ($(element) !== null && $(element).length > 0 && value != null) {
+            if ($(element)[0].options.length > 1){
+                $(element).val(value);
+                $(element).change();
+            }
+            else{
+                // display saved IRconfig values even if workflows didn't load
+                $(element).append('<option value="' + value + '">' + value + '</option>');
+                $(element).val(value);
+            }
+        }
+    };
+    
+    make_uuid = function(){
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+            return v.toString(16);
+        });
+    };
+    
+    /***
+    * Functions when IR dropdown selections change
+    ***/
+    
+    //non-barcoded sample dropdown list selection change for ionReporter configuration
+    $(".irWorkflow_select").live('change', function() {        
+        var value = $(this).val();
+        //console.log('.irWorkflow_select change event handler called with', value);
+
+        $(this).parent().next().find('select').find('option').remove();
+        if (value === null || value === "") {
+            $(this).parent().next().find('select').attr('disabled', 'disabled');
+            $(this).parent().nextAll().find('select').find('option').remove();
+            $(this).parent().nextAll().find('select').find('option').attr('disabled', 'disabled');
+            $(this).parent().nextAll().find('input').val('');
+            $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        } else {
+            $(this).parent().next().find('select').removeAttr('disabled');
+
+            var option = '<option value=""></option>';
+            $(this).parent().next().find('select').append(option);
+            var _that = $(this);
+            var relationChoices = $.getIRConfigRelation(value);
+            $.each(relationChoices, function(i, relation){
+                var option = '<option value="' + relation + '">' + relation + '</option>';
+                _that.parent().next().find('select').append(option);
+            });
+        }
+    });
+
+    //non-barcoded sample dropdown list selection change for ionReporter configuration
+    $(".irRelation_select").live('change', function() {
+        var value = $(this).val();
+        //  console.log(value);
+        relationRoleChoices = $.getIRConfigRelationRole(value);
+        isToDisableRelationRole = $.isToDisableIRConfigRelationRole(value);
+        isToDisableSetId = $.isToDisableIRConfigSetId(value);
+
+        if (isToDisableSetId === true) {
+            $(this).parent().nextAll().find('input').val('');
+            $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        } else {
+            $(this).parent().next().nextAll().find('input').removeAttr('disabled');
+        }
+
+        $(this).parent().nextAll().find('select').find('option').remove();
+        if (isToDisableRelationRole === true) {
+            $(this).parent().nextAll().find('select').attr('disabled', 'disabled');
+        } else {
+            $(this).parent().nextAll().find('select').removeAttr('disabled');
+
+            var option = '<option value=""></option>';
+            $(this).parent().nextAll().find('select').append(option);
+            var _that = $(this);
+            $.each(relationRoleChoices, function(i, relation) {
+                var option = '<option value="' + relation + '">' + relation + '</option>';
+                _that.parent().nextAll().find('select').append(option);
+            });
+        }
+    });
+
+    //non-barcoded sample dropdown list selection change for ionReporter configuration
+    $(".irRelationRole_select").live('change', function() {
+        var value = $(this).val();
+        //  console.log(value);
+        isToDisable = $.isToDisableIRConfigSetId(value);
+
+        if (isToDisable === true) {
+            $(this).parent().nextAll().find('input').val('');
+            $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+        } else {
+            $(this).parent().nextAll().find('input').removeAttr('disabled');
+        }
+    });
+
+    
+    
+    /*** 
+    * Functions to populate IRconfig selection options 
+    ***/   
+         
+    $.addIRFormFields = function() {        
+        var obj = $.getIRConfigSelection();
+        // console.log('called addIRFormFields', obj);
+        var columnCounter = 0;
+        if (obj !== null && obj.columns != null) {
+            $.each(obj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "Workflow") {
+                    $("select[name='Workflow']").empty().append('<option value=""></option>');
+                    $("[name='bcIrWorkflow']").empty().append('<option value=""></option>');
+                    $.each(values, function(i, value){
+                        var option = '<option value="' + value + '">' + value + '</option>';                        
+                        $("select[name='Workflow']").append(option);
+                        $("[name='bcIrWorkflow']").append(option);
+                    });
+                }
+                if (field === "Gender") {
+                    $("select[name='Gender']").empty().append('<option value=""></option>');
+                    $("[name='bcIrGender']").empty().append('<option value=""></option>');
+                    $.each(values, function(i, value){
+                        var option = '<option value="' + value + '">' + value + '</option>';                        
+                        $("select[name='Gender']").append(option);
+                        $("[name='bcIrGender']").append(option);
+                    });
+                }                
+            });
+        }
+    };    
+    
+    $.getIRConfigSelection = function() {
+        return $.irConfigSelection;
+    };
+
+    $.getIRConfigApplication = function(theSelectedWorkflow) {
+        var selectedApplication = '';
+        if (theSelectedWorkflow === null || theSelectedWorkflow === '') {
+            return selectedApplication;
+        }
+        var obj = $.getIRConfigSelection();
+        if (obj !== null) {
+            $.each(obj["column-map"], function() {
+                //console.log(key + ' ' + value);
+                var application = this.ApplicationType || '';
+                var workflow = this.Workflow || '';
+                if (workflow == theSelectedWorkflow) {
+                    selectedApplication = application;
+                }
+            });
+        } else {
+            console.log("obj is null at getIRConfigApplication...");
+        }
+        return selectedApplication;
+    };
+
+    $.getIRConfigRelation = function(theSelectedWorkflow) {
+        var selectedApplication = $.getIRConfigApplication(theSelectedWorkflow);
+
+        var selectedValidValues = [];
+        if (selectedApplication === null || selectedApplication === '') {
+            return selectedValidValues;
+        }
+
+        var obj = $.getIRConfigSelection();
+        var validValues = [];
+
+        if (obj !== null) {
+            $.each(obj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "RelationshipType") {
+                    validValues = validValues.concat(values);
+                }
+            });
+            $.each(obj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _valid = this.Valid || null;
+                if (_for && _valid) {
+                    if (_for.Name === "ApplicationType" && _for.Value === selectedApplication) {
+                        var values = _valid.Values || [];
+                        validValues = [].concat(_valid.Values);
+                    }
+                }
+            });
+            selectedValidValues = validValues;
+        } else {
+            console.log("obj is null at getIRConfigRelation...");
+        }
+        return selectedValidValues;
+    };
+
+    $.getIRConfigRelationRole = function(theSelectedRelation) {
+        var selectedValidValues = [];
+        if (theSelectedRelation === null || theSelectedRelation === '') {
+            return selectedValidValues;
+        }
+
+        var obj = $.getIRConfigSelection();
+        var validValues = [];
+
+        if (obj !== null) {
+            $.each(obj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "Relation") {
+                    validValues = validValues.concat(values);
+                }
+            });
+            $.each(obj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _valid = this.Valid || null;
+                if (_for && _valid) {
+                    if (_for.Name === "RelationshipType" && _for.Value === theSelectedRelation) {
+                        var values = _valid.Values || [];
+                        validValues = [].concat(values);
+                    }
+                }
+            });
+            selectedValidValues = validValues;
+        } else {
+            //console.log("obj is null at getIRConfigRelationRole....");
+        }
+        return selectedValidValues;
+    };
+
+    $.isToDisableIRConfigRelationRole = function(theSelectedRelation) {
+        return $.isToDisableIRConfigAttribute(theSelectedRelation, 'Relation');
+    };
+
+    $.isToDisableIRConfigSetId = function(theSelectedRelation) {
+        return $.isToDisableIRConfigAttribute(theSelectedRelation, 'SetID');
+    };
+
+    $.isToDisableIRConfigAttribute = function(theSelectedRelation, theDisabledName) {
+        var isToDisable = false;
+        if (theSelectedRelation === null || theSelectedRelation === '' || theDisabledName === null || theDisabledName === '') {
+            isToDisable = true;
+            return isToDisable;
+        }
+
+        var obj = $.getIRConfigSelection();
+
+        var isToDisableName = '';
+        var forName = '';
+        var forValue = '';
+
+        if (obj !== null) {
+            $.each(obj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _disabled = this.Disabled || null;
+                if (_for && _disabled) {
+                    if (_disabled.Name === theDisabledName && _for.Value === theSelectedRelation) {
+                        isToDisable = true;
+                    }
+                }
+            });
+        }
+        return isToDisable;
+    };
+</script>
+</html>

@@ -16,9 +16,8 @@
 #include "PoissonCdf.h"
 
 
-#if defined( __SSE3__) && !defined( __CUDACC__ )
-    #include <xmmintrin.h>
-    #include <pmmintrin.h>
+#if !defined( __CUDACC__ )
+    #include <x86intrin.h>
 #else
     typedef float __m128 __attribute__ ((vector_size (16)));
 #endif
@@ -69,7 +68,7 @@ class MixtureMemo
 
     void ScaleMixture ( float SP );
 
-#if !defined( __SSE3__) || defined( __CUDACC__ )
+#if !defined( __SSE3__ ) || defined( __CUDACC__ )
     //slow version that is accelerated below
     inline float GetStep ( float x )
     {
@@ -125,7 +124,7 @@ class MixtureMemo
     void Delete();
 private:
     inline void load_occ_vec( const float& occ_r, const float& occ_l ){
-#if defined( __SSE3__) && !defined( __CUDACC__ )
+#if defined( __SSE3__ ) && !defined( __CUDACC__ )
         occ_vec = _mm_set_ps( occ_l, occ_r, occ_l, occ_r );
 #else
         (void) occ_l; (void) occ_r; //stub for cuda

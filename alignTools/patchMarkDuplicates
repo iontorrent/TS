@@ -1,0 +1,323 @@
+Index: src/java/net/sf/picard/sam/MarkDuplicates.java
+===================================================================
+--- src/java/net/sf/picard/sam/MarkDuplicates.java	(revision 1278)
++++ src/java/net/sf/picard/sam/MarkDuplicates.java	(working copy)
+@@ -91,10 +91,37 @@
+             "some of the sorting collections.  If you are running out of memory, try reducing this number.")
+     public double SORTING_COLLECTION_SIZE_RATIO = 0.25;
+ 
++    @Option(doc="Option to create a background thread to encode, " +
++            "compress and write to disk the output file. The threaded version uses about 20% more CPU and decreases " +
++            "runtime by ~20% when writing out a compressed BAM file.")
++    public boolean USE_THREADING = false;
++
++    @Option(doc="Aggressively remove duplicates", shortName="AG")
++    public boolean AGGRESSIVELY_REMOVE = false;
++    
++    @Option(doc="If a read with a ZG tag exists, mark those without a ZG tag as duplicates")
++    public boolean ZG_PRIORITIZE = true;
++
++    @Option(doc="Scoring of a read to break ties:\n" +
++            "0 - sum of base qualities for bases with Q >= 15 (via BASE_QUALITY_SUM_MINIMUM),\n" +
++            "1 - mean base quality for bases with Q >= 15 (via BASE_QUALITY_SUM_MINIMUM),\n" +
++            "2 - randomly from those with method 0 >= SCORING_THRESHOLD or best score if none are above the threshold,\n" +
++            "3 - randomly from those wth method 1 >= 15 or best score if none are bove the threshold,\n" + 
++            "4 - randomly,\n", shortName="SCM")
++    public int SCORING_METHOD = 0;
++    
++    @Option(doc="Minimum base quality to consider when computing the base quality sum.", shortName="B")
++    public int BASE_QUALITY_SUM_MINIMUM = 15;
++    
++    @Option(doc="Scoring threshold for breaking ties.", shortName="SCT")
++    public int SCORING_THRESHOLD = 0;
++
++
+     private SortingCollection<ReadEnds> pairSort;
+     private SortingCollection<ReadEnds> fragSort;
+     private SortingLongCollection duplicateIndexes;
+     private int numDuplicateIndices = 0;
++    private Random rand = new Random(13); 
+ 
+     final private Map<String,Short> libraryIds = new HashMap<String,Short>();
+     private short nextLibraryId = 1;
+@@ -134,7 +161,11 @@
+         final SAMFileHeader outputHeader = header.clone();
+         outputHeader.setSortOrder(SAMFileHeader.SortOrder.coordinate);
+         for (final String comment : COMMENT) outputHeader.addComment(comment);
+-        final SAMFileWriter out = new SAMFileWriterFactory().makeSAMOrBAMWriter(outputHeader,
++        final SAMFileWriterFactory samFileWriterFactory = new SAMFileWriterFactory();
++        if (USE_THREADING) {
++            samFileWriterFactory.setUseAsyncIo(true);
++        }
++        final SAMFileWriter out = samFileWriterFactory.makeSAMOrBAMWriter(outputHeader,
+                                                                                 true,
+                                                                                 OUTPUT);
+ 
+@@ -308,13 +339,13 @@
+ 
+         this.pairSort = SortingCollection.newInstance(ReadEnds.class,
+                                                       new ReadEndsCodec(),
+-                                                      new ReadEndsComparator(),
++                                                      (AGGRESSIVELY_REMOVE) ? new ReadEndsComparatorAggressive() : new ReadEndsComparatorPassive(),
+                                                       maxInMemory,
+                                                       TMP_DIR);
+ 
+         this.fragSort = SortingCollection.newInstance(ReadEnds.class,
+                                                       new ReadEndsCodec(),
+-                                                      new ReadEndsComparator(),
++                                                      (AGGRESSIVELY_REMOVE) ? new ReadEndsComparatorAggressive() : new ReadEndsComparatorPassive(),
+                                                       maxInMemory,
+                                                       TMP_DIR);
+ 
+@@ -350,12 +381,16 @@
+                     else {
+                         final int sequence = fragmentEnd.read1Sequence;
+                         final int coordinate = fragmentEnd.read1Coordinate;
++                        //final int ZA = fragmentEnd.read1ZA;
++                        final int ZG = fragmentEnd.read1ZG;
+ 
+                         // If the second read is actually later, just add the second read data, else flip the reads
+                         if (sequence > pairedEnds.read1Sequence ||
+                                 (sequence == pairedEnds.read1Sequence && coordinate >= pairedEnds.read1Coordinate)) {
+                             pairedEnds.read2Sequence    = sequence;
+                             pairedEnds.read2Coordinate  = coordinate;
++                            //pairedEnds.read2ZA          = ZA;
++                            pairedEnds.read2ZG          = ZG;
+                             pairedEnds.read2IndexInFile = index;
+                             pairedEnds.orientation = getOrientationByte(pairedEnds.orientation == ReadEnds.R,
+                                                                         rec.getReadNegativeStrandFlag());
+@@ -363,9 +398,13 @@
+                         else {
+                             pairedEnds.read2Sequence    = pairedEnds.read1Sequence;
+                             pairedEnds.read2Coordinate  = pairedEnds.read1Coordinate;
++                            //pairedEnds.read2ZA          = pairedEnds.read1ZA;
++                            pairedEnds.read2ZG          = pairedEnds.read1ZG;
+                             pairedEnds.read2IndexInFile = pairedEnds.read1IndexInFile;
+                             pairedEnds.read1Sequence    = sequence;
+                             pairedEnds.read1Coordinate  = coordinate;
++                            //pairedEnds.read1ZA          = ZA;
++                            pairedEnds.read1ZG          = ZG;
+                             pairedEnds.read1IndexInFile = index;
+                             pairedEnds.orientation = getOrientationByte(rec.getReadNegativeStrandFlag(),
+                                                                         pairedEnds.orientation == ReadEnds.R);
+@@ -392,11 +431,19 @@
+         this.fragSort.doneAdding();
+     }
+ 
++    private int getIntegerAttribute(final SAMRecord rec, String tag) {
++        Integer val = rec.getIntegerAttribute(tag);
++        if(val == null) return -1;
++        else return val.intValue();
++    }
++
+     /** Builds a read ends object that represents a single read. */
+     private ReadEnds buildReadEnds(final SAMFileHeader header, final long index, final SAMRecord rec) {
+         final ReadEnds ends = new ReadEnds();
+         ends.read1Sequence    = rec.getReferenceIndex();
+         ends.read1Coordinate  = rec.getReadNegativeStrandFlag() ? rec.getUnclippedEnd() : rec.getUnclippedStart();
++        //ends.read1ZA = getIntegerAttribute(rec, "ZA");
++        ends.read1ZG = getIntegerAttribute(rec, "ZG");
+         ends.orientation = rec.getReadNegativeStrandFlag() ? ReadEnds.R : ReadEnds.F;
+         ends.read1IndexInFile = index;
+         ends.score = getScore(rec);
+@@ -474,12 +521,17 @@
+ 
+ 
+ 
+-    /** Calculates a score for the read which is the sum of scores over Q20. */
++    /** Calculates a score for the read which is the sum of scores over Q15. */
+     private short getScore(final SAMRecord rec) {
+-        short score = 0;
++        short score = 0, n = 0;
++        if(4 == SCORING_METHOD) return 0;
+         for (final byte b : rec.getBaseQualities()) {
+-            if (b >= 15) score += b;
++            if (BASE_QUALITY_SUM_MINIMUM <= b) {
++                score += b;
++                n++;
++            }
+         }
++        if((1 == SCORING_METHOD || 3 == SCORING_METHOD) && 0 < n) score /= n;
+ 
+         return score;
+     }
+@@ -557,11 +609,15 @@
+         boolean retval =  lhs.libraryId       == rhs.libraryId &&
+                           lhs.read1Sequence   == rhs.read1Sequence &&
+                           lhs.read1Coordinate == rhs.read1Coordinate &&
+-                          lhs.orientation     == rhs.orientation;
++                          lhs.orientation     == rhs.orientation &&
++                          //(-1 == lhs.read1ZA || -1 == rhs.read1ZA || lhs.read1ZA == rhs.read1ZA) && 
++                          (-1 == lhs.read1ZG || -1 == rhs.read1ZG || lhs.read1ZG == rhs.read1ZG);
+ 
+         if (retval && compareRead2) {
+             retval = lhs.read2Sequence   == rhs.read2Sequence &&
+-                     lhs.read2Coordinate == rhs.read2Coordinate;
++                     lhs.read2Coordinate == rhs.read2Coordinate && 
++                     //(-1 == lhs.read2ZA || -1 == rhs.read2ZA || lhs.read2ZA == rhs.read2ZA) && 
++                     (-1 == lhs.read2ZG || -1 == rhs.read2ZG || lhs.read2ZG == rhs.read2ZG);
+         }
+ 
+         return retval;
+@@ -627,35 +683,106 @@
+         }
+         else {
+             short maxScore = 0;
++            int n = 0, m = 0, threshold = 0;
+             ReadEnds best = null;
++            boolean hasZG = false;
++
++            if(ZG_PRIORITIZE) { // NB: if a ZG exists, always use it
++                // check to see if a ZG tag exists
++                for (final ReadEnds end : list) {
++                    if(-1 != end.read1ZG) {
++                        hasZG = true;
++                        break;
++                    }
++                }
++            }
++
+             for (final ReadEnds end : list) {
++                if (hasZG && -1 == end.read1ZG) continue; // ignore those without a ZG
+                 if (end.score > maxScore || best == null) {
+                     maxScore = end.score;
+                     best = end;
++                    n = 1;
+                 }
++                else if (end.score == maxScore) n++;
++                // track the # that pass the threshold
++                if ((2 == SCORING_METHOD || 3 == SCORING_METHOD) && SCORING_THRESHOLD <= end.score) m++;
+             }
+ 
++            // choose the best score, breaking ties randomly
++            if ((0 == SCORING_METHOD || 1 == SCORING_METHOD)) { // by maximum score, breaking ties randomly
++                m = 0;
++                if (1 < n) m = rand.nextInt(n); // choose one randomly
++                threshold = maxScore;
++            }
++            else if ((2 == SCORING_METHOD || 3 == SCORING_METHOD)) { // those over a certain quality, and then by maximum score.
++                if (0 == m) { // none above the scoring threshold
++                    // default
++                    m = 0;
++                    if (1 < n) m = rand.nextInt(n); // choose one randomly
++                    threshold = maxScore;
++                }
++                else {
++                    if (1 < m) m = rand.nextInt(m); // choose one randomly from above the threshold
++                    else m = 0; // choose the first one
++                    threshold = SCORING_THRESHOLD;
++                }
++            }
++            // mark the duplicates
++            // n = the current index within those at or above the threshold
++            // m = the index of the read not to be a duplicate out of all with equal score (or all at or above the threshold) 
++            n = 0;
+             for (final ReadEnds end : list) {
+-                if (end != best) {
+-                    addIndexAsDuplicate(end.read1IndexInFile);
++                if (threshold <= end.score && !(hasZG && -1 == end.read1ZG)) { // NB: ignore those without a ZG if others have ZGs
++                    if (n != m) addIndexAsDuplicate(end.read1IndexInFile);
++                    n++;
+                 }
++                else addIndexAsDuplicate(end.read1IndexInFile);
+             }
+         }
+     }
+ 
+     /** Comparator for ReadEnds that orders by read1 position then pair orientation then read2 position. */
+-    static class ReadEndsComparator implements Comparator<ReadEnds> {
++    static class ReadEndsComparatorPassive implements Comparator<ReadEnds> {
+         public int compare(final ReadEnds lhs, final ReadEnds rhs) {
+             int retval = lhs.libraryId - rhs.libraryId;
+             if (retval == 0) retval = lhs.read1Sequence - rhs.read1Sequence;
+             if (retval == 0) retval = lhs.read1Coordinate - rhs.read1Coordinate;
+             if (retval == 0) retval = lhs.orientation - rhs.orientation;
++            //if (retval == 0) retval = lhs.read1ZA - rhs.read1ZA;
++            //if (retval == 0) retval = lhs.read1ZG - rhs.read1ZG;
++            if (retval == 0 && -1 != lhs.read1ZG && -1 != rhs.read1ZG) retval = lhs.read1ZG - rhs.read1ZG;
+             if (retval == 0) retval = lhs.read2Sequence   - rhs.read2Sequence;
+             if (retval == 0) retval = lhs.read2Coordinate - rhs.read2Coordinate;
++            //if (retval == 0) retval = lhs.read2ZA - rhs.read2ZA;
++            //if (retval == 0) retval = lhs.read2ZG - rhs.read2ZG;
++            if (retval == 0 && -1 != lhs.read2ZG && -1 != rhs.read2ZG) retval = lhs.read2ZG - rhs.read2ZG;
+             if (retval == 0) retval = (int) (lhs.read1IndexInFile - rhs.read1IndexInFile);
+             if (retval == 0) retval = (int) (lhs.read2IndexInFile - rhs.read2IndexInFile);
+ 
+             return retval;
+         }
+     }
++    
++    /** Comparator for ReadEnds that orders by read1 position then pair orientation then read2 position. */
++    static class ReadEndsComparatorAggressive implements Comparator<ReadEnds> {
++        public int compare(final ReadEnds lhs, final ReadEnds rhs) {
++            int retval = lhs.libraryId - rhs.libraryId;
++            if (retval == 0) retval = lhs.read1Sequence - rhs.read1Sequence;
++            if (retval == 0) retval = lhs.read1Coordinate - rhs.read1Coordinate;
++            if (retval == 0) retval = lhs.orientation - rhs.orientation;
++            //if (retval == 0 && -1 != lhs.read1ZA && -1 != rhs.readZA) retval = lhs.read1ZA - rhs.read1ZA;
++            if (retval == 0 && -1 != lhs.read1ZG && -1 != rhs.read1ZG) retval = lhs.read1ZG - rhs.read1ZG;
++            //if (retval == 0) retval = lhs.read1ZG - rhs.read1ZG;
++            if (retval == 0) retval = lhs.read2Sequence   - rhs.read2Sequence;
++            if (retval == 0) retval = lhs.read2Coordinate - rhs.read2Coordinate;
++            //if (retval == 0 && -1 != lhs.read2ZA && -1 != rhs.readZA) retval = lhs.read2ZA - rhs.read2ZA;
++            if (retval == 0 && -1 != lhs.read2ZG && -1 != rhs.read2ZG) retval = lhs.read2ZG - rhs.read2ZG;
++            //if (retval == 0) retval = lhs.read2ZG - rhs.read2ZG;
++            if (retval == 0) retval = (int) (lhs.read1IndexInFile - rhs.read1IndexInFile);
++            if (retval == 0) retval = (int) (lhs.read2IndexInFile - rhs.read2IndexInFile);
++
++            return retval;
++        }
++    }
+ }
+Index: src/java/net/sf/picard/sam/ReadEnds.java
+===================================================================
+--- src/java/net/sf/picard/sam/ReadEnds.java	(revision 1278)
++++ src/java/net/sf/picard/sam/ReadEnds.java	(working copy)
+@@ -46,6 +46,11 @@
+     byte tile = -1;
+     short x = -1, y = -1;
+ 
++    // Ion Torrent specific information
++    //int read1ZA = -1; // adapter base offset when present, -1 otherwise
++    //int read2ZA = -1; // adapter base offset when present, -1 otherwise
++    int read1ZG = -1; // adapter flow offset when present, -1 otherwise
++    int read2ZG = -1; // adapter flow offset when present, -1 otherwise
+ 
+     boolean isPaired() { return this.read2Sequence != -1; }
+ 
+Index: src/java/net/sf/picard/sam/ReadEndsCodec.java
+===================================================================
+--- src/java/net/sf/picard/sam/ReadEndsCodec.java	(revision 1278)
++++ src/java/net/sf/picard/sam/ReadEndsCodec.java	(working copy)
+@@ -55,11 +55,15 @@
+             this.out.writeByte(read.orientation);
+             this.out.writeInt(read.read1Sequence);
+             this.out.writeInt(read.read1Coordinate);
++            //this.out.writeInt(read.read1ZA);
++            this.out.writeInt(read.read1ZG);
+             this.out.writeLong(read.read1IndexInFile);
+             this.out.writeInt(read.read2Sequence);
+ 
+             if (read.orientation > ReadEnds.R) {
+                 this.out.writeInt(read.read2Coordinate);
++                //this.out.writeInt(read.read2ZA);
++                this.out.writeInt(read.read2ZG);
+                 this.out.writeLong(read.read2IndexInFile);
+             }
+ 
+@@ -84,11 +88,15 @@
+             read.orientation      = this.in.readByte();
+             read.read1Sequence    = this.in.readInt();
+             read.read1Coordinate  = this.in.readInt();
++            //read.read1ZA          = this.in.readInt();
++            read.read1ZG          = this.in.readInt();
+             read.read1IndexInFile = this.in.readLong();
+             read.read2Sequence    = this.in.readInt();
+ 
+             if (read.orientation > ReadEnds.R) {
+                 read.read2Coordinate  = this.in.readInt();
++                //read.read2ZA          = this.in.readInt();
++                read.read2ZG          = this.in.readInt();
+                 read.read2IndexInFile = this.in.readLong();
+             }
+ 

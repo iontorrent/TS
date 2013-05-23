@@ -57,12 +57,12 @@
                     {% if selectedApplProductData %}
                         {% for bedFile in planTemplateData.bedFiles %}
                             {% ifequal bedFile.path selectedApplProductData.targetBedFile %}
-                                <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                             {% else %}
                                 {% ifequal bedFile.file selectedPlanTemplate.bedfile %}
-                                    <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% endifequal %}
                             {% endifequal %}
                         {% endfor %}
@@ -76,19 +76,19 @@
                     {% else %}
                         {% for bedFile in planTemplateData.bedFiles %}
                             {% ifequal bedFile.path selectedPlanTemplate.bedfile %}
-                                <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                             {% else %}
                                 {% ifequal bedFile.file selectedPlanTemplate.bedfile %}
-                                    <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% endifequal %}
                             {% endifequal %}
                         {% endfor %}
 
                         {% if selectedPlanTemplate.bedfile %}
                             {% if selectedPlanTemplate.bedfile not in planTemplateData.bedFileFullPaths and selectedPlanTemplate.bedfile not in planTemplateData.bedFilePaths %}
-                                <option SELECTED value="{{selectedPlanTemplate.bedfile}}">(Not Found) {{selectedPlanTemplate.bedfile}}</option>
+                                <option SELECTED value="{{selectedPlanTemplate.bedfile}}" class="{{bedFile.meta.reference}}">(Not Found) {{selectedPlanTemplate.bedfile}}</option>
                             {% endif %}
                         {% endif %}
 
@@ -98,6 +98,7 @@
             </tr>
             <tr>
                 <td>
+                	<div class="hotspot_bed_file_section">
                     <p class="form-label">Hotspot Regions BED File:</p>
                     <select id="regionfile" name="regionfile" class="select-group">
                     <option value=""></option>
@@ -105,44 +106,45 @@
                     {% if selectedApplProductData %}
                         {% for bedFile in planTemplateData.hotspotFiles %}
                             {% ifequal bedFile.path selectedApplProductData.hotSpotBedFile %}
-                                <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                             {% else %}
                                 {% ifequal bedFile.file selectedPlanTemplate.regionfile %}
-                                    <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% endifequal %}
                             {% endifequal %}
                         {% endfor %}
 
                         {% if selectedApplProductData.hotSpotBedFile %}
                             {% if selectedApplProductData.hotSpotBedFile not in planTemplateData.hotspotFullPaths and selectedApplProductData.hotSpotBedFile not in planTemplateData.hotspotPaths%}
-                                <option SELECTED value="{{selectedApplProductData.hotSpotBedFile}}">(Not Found) {{selectedApplProductData.hotSpotBedFile}}</option>
+                                <option SELECTED value="{{selectedApplProductData.hotSpotBedFile}}" class="{{bedFile.meta.reference}}">(Not Found) {{selectedApplProductData.hotSpotBedFile}}</option>
                             {% endif %}
                         {% endif %}
 
                     {% else %}
                         {% for bedFile in planTemplateData.hotspotFiles %}
                             {% ifequal bedFile.path selectedPlanTemplate.regionfile %}
-                                <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                             {% else %}
                                 {% ifequal bedFile.file selectedPlanTemplate.regionfile %}
-                                    <option SELECTED value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}">{{bedFile.path}}</option>
+                                    <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                                 {% endifequal %}
                             {% endifequal %}
                         {% endfor %}
 
                         {% if selectedPlanTemplate.regionfile %}
                             {% if selectedPlanTemplate.regionfile not in planTemplateData.hotspotFullPaths and selectedPlanTemplate.regionfile not in planTemplateData.hotspotPaths%}
-                                <option SELECTED value="{{selectedPlanTemplate.regionfile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{selectedPlanTemplate.regionfile}}</option>
+                                <option SELECTED value="{{selectedPlanTemplate.regionfile}}" class="{{bedFile.meta.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{selectedPlanTemplate.regionfile}}</option>
                             {% endif %}
                         {% endif %}
 
                     {% endif %}
 
                     </select>
+                    </div>
                 </td>
             </tr>
         </table>

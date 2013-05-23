@@ -105,13 +105,13 @@ def host_is_master():
                     pass
         except IOError as err:
             logger.error(err.message)
-            
+
     if os.path.isfile("/opt/ion/.masternode") and not os.path.isfile("/opt/ion/.computenode"):
         logger.debug("Using flag files to determine masterhost status")
         return True
-        
+
     raise OSError("Host not configured as either master or compute node")
-    
+
 def is_proton_ts():
     '''Checks whether configuration hardware is for PGM or Proton
     This system command requires root privilege
@@ -132,8 +132,8 @@ def is_proton_ts():
     else:
         logger.error(stderr)
         return False
-    
-    
+
+
 # This tells apt-get not to expect access to standard in.
 os.environ['DEBIAN_FRONTEND'] = 'noninteractive'
 
@@ -169,18 +169,18 @@ class GetAcquireProgress(apt.progress.base.AcquireProgress):
 
     def start(self):
         self.tsconfig.logger.debug("[GetAcquireProgress] StartAcquire")
- 
+
     def stop(self):
         self.tsconfig.logger.debug("[GetAcquireProgress] StopAcquire")
 
     def pulse(self, acquire):
-        
+
         tsc = self.tsconfig
         tsc.pkgprogress = "%s %s/%s" % (tsc.upst[tsc.state],
                                         apt.SizeToStr(self.current_bytes), apt.SizeToStr(self.total_bytes),
                                         )
         tsc.update_progress(tsc.pkgprogress)
-        
+
         item_idx = self.current_items
         if item_idx == self.total_items:
             item_idx -= 1
@@ -188,12 +188,12 @@ class GetAcquireProgress(apt.progress.base.AcquireProgress):
         destfile = destfile.split('/')[-1]
         debug_string = "[GetAcquireProgress] %s; CPS: %s/s; Bytes: %s/%s; Item: %s/%s" % (
             destfile,
-            apt.SizeToStr(self.current_cps), 
-            apt.SizeToStr(self.current_bytes), apt.SizeToStr(self.total_bytes), 
+            apt.SizeToStr(self.current_cps),
+            apt.SizeToStr(self.current_bytes), apt.SizeToStr(self.total_bytes),
             item_idx+1, self.total_items
         )
         tsc.logger.debug(debug_string)
-                  
+
         return True
 
 class GetInstallProgress(apt.progress.base.InstallProgress):
@@ -213,11 +213,27 @@ class GetInstallProgress(apt.progress.base.InstallProgress):
 
     def status_change(self, pkg, percent, status):
         tsc = self.tsconfig
-        
+
         tsc.pkgprogress = "%s %d%%" % (status, percent)
         tsc.update_progress(tsc.pkgprogress)
-                
+
         self.tsconfig.logger.debug("[GetInstallProgress] %s [%s/100]" % (status, percent))
+
+    def error(self, pkg, errormsg):
+        tsc = self.tsconfig
+        tsc.update_progress(errormsg)
+
+        self.tsconfig.logger.error(errormsg)
+
+    def conffile(self,old,new):
+        self.tsconfig.logger.debug("conffile: %s to %s" % (old, new))
+
+    def processing(self, pkg, stage):
+        self.tsconfig.logger.debug("processing: %s -> %s" % (pkg, stage))
+
+    def dpkg_status_change(self, pkg, status):
+        self.tsconfig.logger.debug("status_change: %s %s" % (pkg, stage))
+
 
 ################################################################################
 #
@@ -225,16 +241,16 @@ class GetInstallProgress(apt.progress.base.InstallProgress):
 #
 ################################################################################
 class TSconfig (object):
-    
+
     def __init__(self):
-                
+
         # Lists of ubuntu packages required for Torrent Server.
         # See function updatePackageLists()
         self.SYS_PKG_LIST=[]
         self.SYS_PKG_LIST_MASTER_ONLY=[]
         self.ION_PKG_LIST=[]
         self.ION_PKG_LIST_MASTER_ONLY=[]
-        
+
         # Internal states
         self.upst = {
             'U':'Unknown',
@@ -249,7 +265,7 @@ class TSconfig (object):
             'IF':'Install failure',
             'F':'Finished installing',
         }
-    
+
         # User-facing status messages
         self.user_status_msgs = {
             '':'Updates available',
@@ -261,7 +277,7 @@ class TSconfig (object):
             '':'Error installing',
             '':'Error configuring',
         }
-        
+
         self.state = 'U'                    # Internal state of the object
         self.autodownloadenabled = False    # Auto-download flag
         self.userackdownload = False        # User acknowledged Download
@@ -274,9 +290,9 @@ class TSconfig (object):
         self.logger = logger
         self.packageListFile = os.path.join('/','usr','share','ion-tsconfig','torrentsuite-packagelist.json')
         self.updatePackageLists()
-                
-        self.apt_cache = None        
-        
+
+        self.apt_cache = None
+
         if not host_is_master():
             self.dbaccess = False
             self.logger.info("Dbase access disabled; not a head node")
@@ -288,9 +304,9 @@ class TSconfig (object):
             except:
                 self.dbaccess = False
                 self.logger.info("Dbase access disabled")
-        
+
         self.logger.info("TSconfig.__init__() executing")
-            
+
     #--- End of __init__ ---#
 
     def reload_logger(self):
@@ -299,13 +315,13 @@ class TSconfig (object):
 
     def set_testrun(self,flag):
         self.testrun = flag
-        
+
     def get_state(self):
         return self.state
-    
+
     def get_state_msg(self):
         return self.upst.get(self.state,'Developer Error')
-        
+
     def set_state(self, new_state):
         if new_state == self.state:
             return
@@ -325,7 +341,9 @@ class TSconfig (object):
     def update_progress(self, status):
         if self.dbaccess:
             try:
-                models.GlobalConfig.objects.update(ts_update_status=status)                
+                self.logger.debug("Before ts_update_status")
+                models.GlobalConfig.objects.update(ts_update_status=status)
+                self.logger.debug("After ts_update_status")
             except:
                 self.logger.exception("Unable to update database with progress")
 
@@ -334,28 +352,28 @@ class TSconfig (object):
         self.pkgprogress = "%s %d/%d" % (self.upst[self.state], self.progress_current, self.progress_total)
         self.logger.debug("Progress %s" % self.pkgprogress)
         self.update_progress(self.pkgprogress)
-                
+
     def get_pkgprogress(self,current,total):
         return self.pkgprogress
-            
+
     def set_autodownloadflag(self,flag):
         self.autodownloadenabled = flag
-            
+
     def get_autodownloadflag(self):
         return self.autodownloadenabled
-            
+
     def set_userackdownload(self,flag):
         self.userackdownload = flag
-            
+
     def get_userackdownload(self):
         return self.userackdownload
-            
+
     def set_userackinstall(self,flag):
         self.userackinstall = flag
-            
+
     def get_userackinstall(self):
         return self.userackinstall
-            
+
     def get_syspkglist(self):
         if host_is_master():
             list = self.SYS_PKG_LIST_MASTER_ONLY + self.SYS_PKG_LIST
@@ -369,7 +387,7 @@ class TSconfig (object):
         else:
             list = self.ION_PKG_LIST
         return list
-    
+
     ################################################################################
     #
     # Update internal list of packages to install
@@ -378,19 +396,19 @@ class TSconfig (object):
     def updatePackageLists(self):
 
         try:
-            
+
             self.logger.info("parsing %s" % self.packageListFile)
             with open(self.packageListFile,'r') as fp:
                 pkgObj = json.load(fp)
-        
+
             self.SYS_PKG_LIST               = pkgObj['packages']['system']['allservers']
-            
+
             self.SYS_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['system']['master']
-            
+
             self.ION_PKG_LIST               = pkgObj['packages']['torrentsuite']['allservers']
-            
+
             self.ION_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['torrentsuite']['master']
-            
+
             # ion-protonupdates is installed if T620 is determined, OR ion-pgmupdates is installed by default
             if is_proton_ts():
                 self.ION_PKG_LIST_MASTER_ONLY += pkgObj['packages']['torrentsuite']['proton']
@@ -398,22 +416,22 @@ class TSconfig (object):
             else:
                 self.ION_PKG_LIST_MASTER_ONLY += pkgObj['packages']['torrentsuite']['pgm']
                 logger.debug("Adding %s to master ion package list", ','.join(pkgObj['packages']['torrentsuite']['pgm']))
-                            
+
         except:
             self.logger.exception(traceback.format_exc())
             raise
-        
+
     ################################################################################
     #
     # Update apt repository database
     #
     ################################################################################
     def updatePkgDatabase(self):
-        '''Update apt cache '''        
+        '''Update apt cache '''
         try:
             self.apt_cache = apt.Cache()
             self.apt_cache.update()
-            self.apt_cache.open(None)                            
+            self.apt_cache.open(None)
             self.logger.debug("Successfully updated apt cache")
             return True
         except:
@@ -425,9 +443,9 @@ class TSconfig (object):
     #
     ################################################################################
     def buildPkgList(self,pkgnames):
-        pkglist = []        
+        pkglist = []
         apt_cache = self.apt_cache
-        
+
         # check for virtual packages
         virtual_pkgs = []
         for pkg_name in pkgnames:
@@ -438,28 +456,28 @@ class TSconfig (object):
                     self.logger.warn("package %s is not in apt cache" % pkg_name)
         pkgnames = [name for name in pkgnames if apt_cache.has_key(name)]
         pkgnames.extend(virtual_pkgs)
-        
+
         # count how many packages are upgradable or new
         numpkgs = len(pkgnames)
-        count = [0, 0]        
-        for pkg_name in pkgnames:        
-            pkg = apt_cache[pkg_name]            
-            if pkg.isUpgradable:                
+        count = [0, 0]
+        for pkg_name in pkgnames:
+            pkg = apt_cache[pkg_name]
+            if pkg.isUpgradable:
                 pkglist.append(pkg_name)
                 count[0] += 1
                 self.logger.debug("version %s available for %s" % (pkg.candidateVersion, pkg.name) )
-            elif not pkg.isInstalled:                
+            elif not pkg.isInstalled:
                 pkglist.append(pkg_name)
                 count[1] += 1
                 self.logger.debug("%s not found, will install version %s" % (pkg.name, pkg.candidateVersion) )
             #else:
-            #    self.logger.debug("%s does not require an update" % pkg.name)            
+            #    self.logger.debug("%s does not require an update" % pkg.name)
 
         self.logger.debug("Checked %s packages, found %s upgradable and %s new" % (numpkgs, count[0],count[1]))
-            
+
         return pkglist
-        
-    
+
+
     ################################################################################
     #
     # Finds out if there are updates to packages
@@ -484,16 +502,16 @@ class TSconfig (object):
                 available = self.freespace('/var')
                 syspkglist = self.buildPkgList(self.get_syspkglist())
                 required = self.required_download_space(ionpkglist+syspkglist)
-                self.logger.debug("%.1fMB required download space, %.1fMB available in /var." % (required, available))              
+                self.logger.debug("%.1fMB required download space, %.1fMB available in /var." % (required, available))
                 if available < required:
-                    msg = "WARNING: insufficient disk space for update"                
+                    msg = "WARNING: insufficient disk space for update"
                     self.update_progress(msg)
-                    self.logger.debug(msg)                
+                    self.logger.debug(msg)
             else:
                 self.set_state('N')
-            
-            return list
-    
+
+            return ionpkglist
+
     ################################################################################
     #
     # Purge package files
@@ -511,7 +529,7 @@ class TSconfig (object):
                 self.logger.info ("Error during autoclean: %s" % stderr)
         except:
             self.logger.exception(traceback.format_exc())
-    
+
     ################################################################################
     #
     # Download package files
@@ -522,16 +540,16 @@ class TSconfig (object):
         results = {}
         self.set_state('DL')
         apt_cache = self.apt_cache
-        apt_cache.open(None) 
-                
+        apt_cache.open(None)
+
         pm = apt_pkg.PackageManager(apt_cache._depcache)
         fetcher = apt_pkg.Acquire(GetAcquireProgress(self))
-        
+
         for pkg_name in pkglist:
             # mark packages for upgrade/install
             pkg = apt_cache[pkg_name]
             if pkg.isUpgradable:
-                pkg.markUpgrade() 
+                pkg.markUpgrade()
             elif not pkg.isInstalled:
                 pkg.markInstall()
 
@@ -551,27 +569,28 @@ class TSconfig (object):
         '''Users python-apt to install packages in list'''
         self.logger.debug("Inside TSinstall_pkgs")
         numpkgs = len(pkglist)
-       
+
         apt_cache = self.apt_cache
-        apt_cache.open(None) 
-                
+        apt_cache.open(None)
+
         for i,pkg_name in enumerate(pkglist):
             # mark packages for upgrade/install
             pkg = apt_cache[pkg_name]
             if pkg.isUpgradable:
-                pkg.markUpgrade() 
+                pkg.markUpgrade()
             elif not pkg.isInstalled:
-                pkg.markInstall()        
-        
+                pkg.markInstall()
+
             if self.testrun:
                 self.add_pkgprogress()
                 self.logger.info("FAKE! Installing %d of %d %s" % (i+1,numpkgs,pkg_name))
-        
+
         if self.testrun:
             return True
-            
+
         try:
-            apt_cache.commit(GetAcquireProgress(self),GetInstallProgress(self))
+            thisisinsane = apt_cache.commit(GetAcquireProgress(self),GetInstallProgress(self))
+            self.logger.error("Returned %s" % str(thisisinsane))
             return True
         except:
             self.logger.error(traceback.format_exc())
@@ -587,35 +606,35 @@ class TSconfig (object):
         '''Checks for any updates for packages in ION_PKG_LIST and ION_PKG_LIST_MASTER_ONLY'''
         self.set_state('C')
         status = False
-        pkglist = []        
+        pkglist = []
         pkgnames = self.ION_PKG_LIST
         pkgnames.extend(self.ION_PKG_LIST_MASTER_ONLY)
-        
-        pkglist = self.buildPkgList(pkgnames)                
-        
+
+        pkglist = self.buildPkgList(pkgnames)
+
         if len(pkglist) > 0:
             status = True
 
         return status, pkglist
-    
+
     ################################################################################
     #
     # Check required download space
     #
     ################################################################################
-    def required_download_space(self, pkglist):        
+    def required_download_space(self, pkglist):
         apt_cache = self.apt_cache
-        apt_cache.open(None) 
+        apt_cache.open(None)
         for pkg_name in pkglist:
             # mark packages for upgrade/install
             pkg = apt_cache[pkg_name]
             if pkg.isUpgradable:
-                pkg.markUpgrade() 
+                pkg.markUpgrade()
             elif not pkg.isInstalled:
                 pkg.markInstall()
-        
+
         return apt_cache.required_download / (1024 * 1024)
-    
+
     ################################################################################
     #
     # Available disk space in the /var partition
@@ -630,7 +649,7 @@ class TSconfig (object):
             mbytes = -1
         else:
             mbytes = (s.f_bsize * s.f_bavail) / (1024 * 1024)
-            
+
         return mbytes
 
 
@@ -640,8 +659,9 @@ class TSconfig (object):
     #
     ################################################################################
     def TSexec_download(self):
+        self.logger.debug("Inside TSexec_download")
         self.updatePackageLists()
-        self.updatePkgDatabase() 
+        self.updatePkgDatabase()
         syspkglist = self.buildPkgList(self.get_syspkglist())
         ionpkglist = self.buildPkgList(self.get_ionpkglist())
         self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
@@ -650,7 +670,7 @@ class TSconfig (object):
         # autoclean the apt cache
         #================================
         self.TSpurge_pkgs()
-        
+
         #================================
         # Download system packages
         #================================
@@ -664,7 +684,7 @@ class TSconfig (object):
         # Download Ion packages
         #================================
         self.logger.debug("Download ion packages")
-        ion_status = self.TSdownload_pkgs(ionpkglist)      
+        ion_status = self.TSdownload_pkgs(ionpkglist)
         if not ion_status:
             self.logger.error("Problem downloading ion packages!")
             models.Message.error("Ion packages failed to download!", 'updates')
@@ -673,84 +693,83 @@ class TSconfig (object):
         if sys_status and ion_status:
             self.set_state('RI')
         return syspkglist + ionpkglist
-    
+
     ################################################################################
     #
     # Wrappers to TSconfig configuration functions
     #
     ################################################################################
-    def TSpreinst_syspkg(self):
-        cmd = ["/usr/sbin/TSwrapper"
-               " preinst_system_packages"]
-        
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+    def TSupdated_mirror_check(self):
+        self.logger.debug("updated_mirror_check")
+        cmd = ["/usr/sbin/TSwrapper",
+               "updated_mirror_check"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
-        self.logger.debug("preinst_system_packages")
         self.logger.debug(stdout)
-        if p1.returncode == 0:
-            pass
-        else:
-            self.logger.error(stderr)
-        
-        
-        return
-    def TSpostinst_syspkg(self):
-        cmd = ["/usr/sbin/TSwrapper"
-               " config_system_packages"]
-        
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-        stdout, stderr = p1.communicate()
-        self.logger.debug("config_system_packages")
-        self.logger.debug(stdout)
-        if p1.returncode == 0:
-            pass
-        else:
-            self.logger.error(stderr)
-        
-        return
-    def TSpreinst_ionpkg(self):
-        #================================
-        #Nothing to do at the moment
-        #================================
-        self.logger.debug("TSpreinst_ionpkg")
-        pass
+        self.logger.error(stderr)
 
-        return
-    def TSpostinst_ionpkg(self):
-        cmd = ["/usr/sbin/TSwrapper"
-               " config_ion_packages"]
-        
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+    def TSpreinst_syspkg(self):
+        self.logger.debug("preinst_system_packages")
+        cmd = ["/usr/sbin/TSwrapper",
+               "preinst_system_packages"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
-        self.logger.debug("config_ion_packages")
         self.logger.debug(stdout)
-        if p1.returncode == 0:
-            pass
-        else:
-            self.logger.error(stderr)
-        
-        return
-    
+        self.logger.error(stderr)
+
+    def TSpostinst_syspkg(self):
+        self.logger.debug("config_system_packages")
+        cmd = ["/usr/sbin/TSwrapper",
+               "config_system_packages"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p1.communicate()
+        self.logger.debug(stdout)
+        self.logger.error(stderr)
+
+    def TSpreinst_ionpkg(self):
+        self.logger.debug("preinst_ionpkg")
+        cmd = ["/usr/sbin/TSwrapper",
+            "preinst_ion_packages"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p1.communicate()
+        self.logger.debug(stdout)
+        self.logger.error(stderr)
+
+    def TSpostinst_ionpkg(self):
+        self.logger.debug("config_ion_packages")
+        cmd = ["/usr/sbin/TSwrapper",
+               "config_ion_packages"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p1.communicate()
+        self.logger.debug(stdout)
+        self.logger.error(stderr)
+
+
     ################################################################################
     #
     # Install sytem and Ion debian package files and run config commands
     #
     ################################################################################
     def TSexec_update(self):
-        
+
         try:
             self.set_state('I')
             self.logger.debug("Inside TSexec_update")
             self.logger.debug("%d and %d" % (len(self.get_syspkglist()),len(self.get_ionpkglist())))
-           
+
             #================================
             # Get latest package lists
             #================================
             self.updatePackageLists()
-            self.updatePkgDatabase() 
+            self.updatePkgDatabase()
             syspkglist = self.buildPkgList(self.get_syspkglist())
             ionpkglist = self.buildPkgList(self.get_ionpkglist())
-            
+
             #================================
             # Install TSconfig first so that it's code, executed through TSwrapper
             # is upgraded Before execution below.
@@ -760,7 +779,7 @@ class TSconfig (object):
             if not tsconfig_result:
                 self.logger.warning("Could not install ion-tsconfig!")
                 return False
-            
+
             # update the package list after tsconfig is installed
             self.updatePackageLists()
             syspkglist = self.buildPkgList(self.get_syspkglist())
@@ -768,40 +787,45 @@ class TSconfig (object):
 
             ionpkglist = [pkg for pkg in ionpkglist if not pkg == "ion-tsconfig"]
             self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
-    
+
+            #================================
+            # Execute sources.list file update
+            #================================
+            self.TSupdated_mirror_check()
+
             #================================
             # Execute pre-System package install
             #================================
             self.TSpreinst_syspkg()
-            
+
             #================================
             # Install System packages
             #================================
             sys_result = self.TSinstall_pkgs(syspkglist)
-            
+
             #================================
             # Execute System configuration
             #================================
             self.TSpostinst_syspkg()
-            
+
             #================================
             # Execute pre-Ion package install
             #================================
             self.TSpreinst_ionpkg()
-            
+
             #================================
             # Install Ion packages
-            #================================    
+            #================================
             ion_result = self.TSinstall_pkgs(ionpkglist)
-            
+
             #================================
             # Execute Ion configuration
             #================================
             self.TSpostinst_ionpkg()
-            
+
         except:
             self.logger.exception(traceback.format_exc())
-            
+
         success = sys_result and ion_result
         if success:
             self.logger.info("Successfully TSconfigured !")

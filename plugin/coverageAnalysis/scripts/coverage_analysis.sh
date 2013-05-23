@@ -16,7 +16,7 @@ OPTIONS="OPTIONS:
   -p <number> Padding value used (for report). Default: 0.
   -r Customize output for AmpliSeq-RNA reads. (Overides -a.): Assume transcript BED; no base coverage output
   -s <text> Single line of text reflecting user options selected. Default: 'All Reads'.
-  -A <file> Annotated (non-merged) targets BED file for per-target coverage analysis.
+  -A <file> Annotated (non-merged) targets BED file for per-target coverage analysis. (As produced by gcAnnoBed.pl.)
   -B <file> General BED file specifying (merged) target regions for on-target base coverage analysis.
   -C <name> Original name for BED targets selected for reporting (pre-padding, etc.)
   -D <dirpath> Path to Directory where results are written.
@@ -91,6 +91,10 @@ if [ "$OUTFILE" == "-" ]; then
   OUTFILE=""
 fi
 
+# Grab global option in local option (for override)
+TRGCOVBYBASE=$TARGETCOVBYBASES
+
+# set up some dependent options and tags
 BASECOVERAGE=1
 PROPPLOTS=1
 AMPCOVOPTS=''
@@ -101,6 +105,11 @@ if [ $RNABED -eq 1 ]; then
   PROPPLOTS=0
   AMPSTSOPTS='-r'
   #AMPCOVOPTS='-C 70';  # to create passing coverage stats
+fi
+
+TARGETMSG='target base'
+if [ $AMPLICONS -gt 0 ];then
+  TARGETMSG='amplicon read'
 fi
 
 #--------- End command arg parsing ---------
@@ -194,8 +203,14 @@ if [ -n "$ANNOBED" ]; then
     BEDOPT=$ANNOBEDOPT
   fi
 else
-  ANNOBED=$BEDFILE
-  ANNOBEDOPT=$BEDOPT
+  # called scripts fail w/o specific annotation format
+  ANNOBEDOPT=''
+  TRGCOVBYBASE=0
+fi
+
+if [ $AMPLICONS -gt 0 -a -z "$BEDOPT" ];then
+  echo "WARNING: AmpliSeq run requested without targets file. Report defaulting to Whole Genome analysis."
+  AMPLICONS=0
 fi
 
 REPLENPLOT=$AMPLICONS
@@ -299,9 +314,9 @@ fi
 if [ -n "$BEDOPT" ]; then
   # switch to flagstat if total #reads wanted (has exact same performance as view -c)
   TREADS=`samtools view -c $SAMVIEWOPT -L "$BEDFILE" "$BAMFILE"`
-  FREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+  PCTREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
   #echo "Number of reads on target:      $TREADS" >> "$OUTFILE"
-  echo "Percent reads on target:        $FREADS%" >> "$OUTFILE"
+  echo "Percent reads on target:        $PCTREADS%" >> "$OUTFILE"
   if [ -n "$TRACKINGBED" ]; then
     echo "Percent sample tracking reads:  $TRACKING_READS%" >> "$OUTFILE"
   fi
@@ -315,16 +330,16 @@ elif [ -n "$TRACKINGBED" ]; then
 fi
 echo "" >> "$OUTFILE"
 
-if [ -n "$ANNOBEDOPT" ]; then
-
+if [ $NOTARGETANALYSIS -ne 0 ]; then
+  echo "(`date`) Skipping fine coverage analysis..." >&2
+elif [ -n "$ANNOBEDOPT" ]; then
   if [ $AMPLICONS -eq 0 ]; then
     TARGETCOVFILE="$ROOTNAME.target.cov.xls"
     COVCMD="$RUNDIR/bbcTargetAnno.pl \"$BBCFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
-    TARGETMSG='target base'
   else
+    TRGCOVBYBASE=0
     TARGETCOVFILE="$ROOTNAME.amplicon.cov.xls"
     COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS $AMPCOVOPTS \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
-    TARGETMSG='amplicon read'
   fi
   if [ $TRACK -eq 1 ]; then
     echo "(`date`) Analyzing $TARGETMSG coverage..." >&2
@@ -420,19 +435,28 @@ fi
 
 ########### Depth of Read Coverage Analysis #########
 
-if [ $AMPLICONS -ne 0 ]; then
+if [ $NOTARGETANALYSIS -ne 0 ]; then
+  echo "(`date`) Skipping analysis of depth of $TARGETMSG coverage..." >&2
+elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASE -eq 1 ]; then
   if [ $TRACK -eq 1 ]; then
     echo "(`date`) Analyzing depth of $TARGETMSG coverage..." >&2
   fi
   # For now there is no point in creating the DOC distribution file since this is useless for
   # Depth of Coverage plots with few amplicons (targets). Most read depths are only covered once
   # and this information is given in the fine coverage file.
-  COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPSTSOPTS -M $MAPPED_READS \"$TARGETCOVFILE\" >> \"$OUTFILE\""
+  if [ $AMPLICONS -ne 0 ]; then
+    COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPSTSOPTS -M $MAPPED_READS \"$TARGETCOVFILE\""
+  else
+    COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -b -P $PCTREADS \"$TARGETCOVFILE\""
+  fi
   eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: targetReadStats.pl failed." >&2
     echo "\$ $COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
     exit 1;
+  fi
+  if [ $BASECOVERAGE -eq 1 ]; then
+    echo "" >> "$OUTFILE"
   fi
 fi
 
@@ -451,9 +475,6 @@ if [ -n "$BEDFILE" ]; then
   TRGOPTS="-C $basereads -T $trgsize"
 fi
 COVERAGE_ANALYSIS="$RUNDIR/bbcStats.pl $TRGOPTS -D \"$DOCFILE\" \"$BBCFILE\""
-if [ $AMPLICONS -ne 0 ]; then
-  echo "" >> "$OUTFILE"
-fi
 eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: bbcStats.pl failed." >&2
@@ -500,7 +521,10 @@ if [ $BASECOVERAGE -eq 1 ]; then
 fi
 REFGEN="genome"
 COLLAPSERCC=""; # RCC will be expanded unless no targets are defined (=> Whole Genome but not necessarily!)
-if [ -n "$BEDFILE" ]; then
+
+if [ $NOTARGETANALYSIS -ne 0 ]; then
+  echo "(`date`) Skipping output for $TARGETMSG representation and coverage chart..." >&2
+elif [ -n "$BEDFILE" ]; then
   COLLAPSEPFP="collapse"
   if [ $PROPPLOTS -eq 1 ]; then
     TARGETCOV_GC_PNG=`echo $TARGETCOV_GC_PNG | sed -e 's/^.*\///'`
@@ -528,19 +552,22 @@ echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' styl
 echo "<br/>" >> "$EXTRAHTML"
 
 # create local igv session file
-TRACKOPT=''
-if [ -n "$ANNOBEDOPT" ]; then
-  ANNOBED=`echo $ANNOBED | sed -e 's/^.*\///'`
-  TRACKOPT="-a \"$ANNOBED\""
-fi
-BAMFILE=`echo $BAMFILE | sed -e 's/^.*\///'`
-COVCMD="$RUNDIR/create_igv_link.py -r ${WORKDIR} -b ${BAMFILE} $TRACKOPT -g ${TSP_LIBRARY} -s igv_session.xml"
-eval "$COVCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nWARNING: create_igv_link.py failed." >&2
-  echo "\$ $COVCMD" >&2
-elif [ $SHOWLOG -eq 1 ]; then
-  echo "> igv_session.xml" >&2
+# TODO: This is an environment variable that should be here.
+if [ -n "$TSP_LIBRARY" ]; then
+  TRACKOPT=''
+  if [ -n "$ANNOBEDOPT" ]; then
+    ANNOBED=`echo $ANNOBED | sed -e 's/^.*\///'`
+    TRACKOPT="-a \"$ANNOBED\""
+  fi
+  BAMFILE=`echo $BAMFILE | sed -e 's/^.*\///'`
+  COVCMD="$RUNDIR/create_igv_link.py -r ${WORKDIR} -b ${BAMFILE} $TRACKOPT -g ${TSP_LIBRARY} -s igv_session.xml"
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nWARNING: create_igv_link.py failed." >&2
+    echo "\$ $COVCMD" >&2
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> igv_session.xml" >&2
+  fi
 fi
 
 ########### Finished #########

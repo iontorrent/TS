@@ -463,6 +463,7 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
 
   assert ( nRef >= 0 );
 
+  int iWell = 0;
   int ix_t0 = 0, ix_t1 = 0, ix_t2 = 0;
   std::vector<float>valsAtT0, valsAtT1, valsAtT2, samplingTimes;
   if ( do_ref_trace_trim )
@@ -475,6 +476,8 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
       ix_t2 = sampleIndex[2];   //  nuc flow end
     }
   TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region->row, region->col);
+  assert(chunk.mRowStart == (size_t)region->row && chunk.mColStart == (size_t)region->col && 
+	 chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w);
   for ( int ay=region->row;ay<region->row+region->h;ay++ )
     {
       for ( int ax=region->col;ax<region->col+region->w;ax++ )
@@ -485,13 +488,23 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
           if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
             {
               float w=1.0f;
+              size_t idx = (ay - region->row) * chunk.mWidth + (ax - region->col);
 #ifdef LIVE_WELL_WEIGHT_BG
               w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
 #endif
               total_weight += w;
               for ( size_t f = 0; f < ( size_t ) chunk.mDepth; f++ ) {
-                tmp[f] += w * sdat.At ( ay, ax, f );
+                //tmp[f] += w * sdat.At ( ay, ax, f );
+                tmp[f] += w * chunk.mData[idx];
+                idx += chunk.mFrameStep;
               }
+	      if ( do_ref_trace_trim )
+		{
+		  valsAtT0[iWell] = sdat.AtWell ( ay, ax, ix_t0);
+		  valsAtT1[iWell] = sdat.AtWell ( ay, ax, ix_t1);
+		  valsAtT2[iWell] = sdat.AtWell ( ay, ax, ix_t2);
+		  iWell++;
+		}
             }
         }
     }
@@ -762,7 +775,7 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
             //        if ( regionAndTimingMatchesSdat )
             if(true) {
               for ( size_t f = 0; f < ( size_t ) imgFrames; f++ ) {
-                tmp_shifted[f] = sdat->At ( ay, ax, f );
+                tmp_shifted[f] = sdat->AtWell ( ay, ax, f );
               }
             }
             else {

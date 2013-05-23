@@ -1,5 +1,4 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from iondb.rundb.models import Project, PlannedExperiment
 from django.contrib.auth.models import User
 
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
@@ -7,18 +6,65 @@ from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC
 
-from iondb.rundb.plan.views_helper import dict_bed_hotspot
+from iondb.rundb.plan.views_helper import dict_bed_hotspot, is_valid_chars, is_invalid_leading_chars, is_valid_length
 
 from traceback import format_exc
 
 import plan_csv_writer
+import iondb.rundb.plan.views
 
 import copy
-import re
 
 import logging
 logger = logging.getLogger(__name__)
 
+import simplejson
+
+
+class MyPlan:
+    def __init__(self, selectedTemplate):        
+        if not selectedTemplate:
+            self.planObj = None
+            self.expObj = None
+            self.easObj = None
+            self.sampleList = []
+        else:                    
+            self.planObj = copy.copy(selectedTemplate)
+            self.planObj.pk = None
+            self.planObj.planGUID = None
+            self.planObj.planShortID = None
+            self.planObj.isReusable = False
+            self.planObj.isSystem = False
+            self.planObj.isSystemDefault = False
+            self.planObj.expName = ""
+            self.planObj.planName = ""
+            self.planObj.planExecuted = False                
+
+            self.expObj = copy.copy(selectedTemplate.experiment)
+            self.expObj.pk = None
+            self.expObj.unique = None
+            self.expObj.plan = None
+
+            self.easObj = copy.copy(selectedTemplate.experiment.get_EAS())
+            self.easObj.pk = None
+            self.easObj.experiment = None
+            self.easObj.isEditable = True
+            
+            self.sampleList = []
+        
+       
+    def get_planObj(self):
+        return self.planObj
+    
+    def get_expObj(self):
+        return self.expObj
+    
+    def get_easObj(self):
+        return self.easObj
+    
+    def get_sampleList(self):
+        return self.sampleList
+    
 
 def validate_csv_plan(csvPlanDict):
     """ validate csv contents and convert user input to raw data to prepare for plan persistence
@@ -30,6 +76,8 @@ def validate_csv_plan(csvPlanDict):
     rawPlanDict = {}
     planObj = None
     
+    planDict = {}
+
     isToSkipRow = False
     
     #skip this row if no values found (will not prohibit the rest of the files from upload
@@ -42,7 +90,7 @@ def validate_csv_plan(csvPlanDict):
                 isToSkipRow = True
             
     if isToSkipRow:
-        return failed, planObj, rawPlanDict, isToSkipRow
+        return failed, planDict, rawPlanDict, isToSkipRow
     
     #check if mandatory fields are present
     requiredList = [plan_csv_writer.COLUMN_TEMPLATE_NAME, plan_csv_writer.COLUMN_PLAN_NAME]
@@ -55,17 +103,17 @@ def validate_csv_plan(csvPlanDict):
             failed.append((required, "Required column is missing"))
 
     templateName = csvPlanDict.get(plan_csv_writer.COLUMN_TEMPLATE_NAME)
-    
+
     if templateName:
         selectedTemplate, errorMsg = _get_template(templateName)
         if errorMsg:  
             failed.append((plan_csv_writer.COLUMN_TEMPLATE_NAME, errorMsg))  
-            return failed, planObj, rawPlanDict, isToSkipRow
-        
+            return failed, planDict, rawPlanDict, isToSkipRow
+
         planObj = _init_plan(selectedTemplate)
     else:
-        return failed, planObj, rawPlanDict, isToSkipRow
-        
+        return failed, planDict, rawPlanDict, isToSkipRow
+
     errorMsg = _validate_sample_prep_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)  
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_SAMPLE_PREP_KIT, errorMsg))
@@ -85,7 +133,7 @@ def validate_csv_plan(csvPlanDict):
     errorMsg = _validate_seq_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SEQ_KIT), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_SEQ_KIT, errorMsg))
-        
+    
     errorMsg = _validate_chip_type(csvPlanDict.get(plan_csv_writer.COLUMN_CHIP_TYPE), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_CHIP_TYPE, errorMsg))
@@ -123,7 +171,7 @@ def validate_csv_plan(csvPlanDict):
     errorMsg = _validate_hotspot_bed(csvPlanDict.get(plan_csv_writer.COLUMN_HOTSPOT_BED), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_HOTSPOT_BED, errorMsg))                        
-        
+    
     errorMsg,plugins = _validate_plugins(csvPlanDict.get(plan_csv_writer.COLUMN_PLUGINS), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_PLUGINS, errorMsg))
@@ -145,39 +193,39 @@ def validate_csv_plan(csvPlanDict):
     errorMsg = _validate_notes(csvPlanDict.get(plan_csv_writer.COLUMN_NOTES), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_NOTES, errorMsg))                        
-    
+
     try:
         if uploaders and has_ir_v1_0:
             errorMsg = _validate_IR_workflow_v1_0(csvPlanDict.get(plan_csv_writer.COLUMN_IR_V1_0_WORKFLOW), selectedTemplate, planObj, uploaders)
             if errorMsg:
                 failed.append((plan_csv_writer.COLUMN_IR_V1_0_WORKFLOW, errorMsg))                        
 
-        selectedPlugins = {
-                           'planplugins' : plugins,
-                           'planuploaders' : uploaders
-                            }
+        selectedPlugins = dict(plugins)
+        selectedPlugins.update(uploaders)
 
         rawPlanDict["selectedPlugins"] = selectedPlugins
 
-        planObj.selectedPlugins = selectedPlugins
+        planObj.get_easObj().selectedPlugins = selectedPlugins
     
     except:
         logger.exception(format_exc())
         errorMsg = "Internal error while processing selected plugins info. " 
         failed.append(("selectedPlugins", errorMsg))        
 
-        
-    #todo: validate barcoded plan
-    if selectedTemplate.barcodeId:
-        errorMsg, barcodedSampleJson = _validate_barcodedSamples(csvPlanDict, selectedTemplate, planObj)
+    barcodeKitName = selectedTemplate.experiment.get_EAS().barcodeKitName
+    if barcodeKitName:
+        errorMsg, barcodedSampleJson = _validate_barcodedSamples(csvPlanDict, selectedTemplate, barcodeKitName, planObj)
         if errorMsg:
             failed.append(("barcodedSample", errorMsg))
-                            
-    else:
-        errorMsg = _validate_sample(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE), selectedTemplate, planObj)
-
+        else:            
+            planObj.get_sampleList().extend(barcodedSampleJson.keys())
+    else:    
+        errorMsg, sampleDisplayedName = _validate_sample(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE), selectedTemplate, planObj)
         if errorMsg:
             failed.append((plan_csv_writer.COLUMN_SAMPLE, errorMsg))                        
+        else:
+            if sampleDisplayedName:
+                planObj.get_sampleList().append(sampleDisplayedName)
 
     #if uploaderJson:
     #   errorMsg = _validate_IR_workflow_v1_x(csvPlanDict.get(plan_csv_writer.COLUMN_IR_V1_X_WORKFLOW), selectedTemplate, planObj, uploaderJson)
@@ -187,7 +235,14 @@ def validate_csv_plan(csvPlanDict):
     
     logger.debug("EXIT plan_csv_validator.validate_csv_plan() rawPlanDict=%s; " %(rawPlanDict))
     
-    return failed, planObj, rawPlanDict, isToSkipRow
+    planDict = {
+                "plan" : planObj.get_planObj(),
+                "exp" : planObj.get_expObj(),
+                "eas" : planObj.get_easObj(),
+                "samples" : planObj.get_sampleList()
+                }
+    
+    return failed, planDict, rawPlanDict, isToSkipRow
 
 
 def _get_template(templateName):
@@ -201,29 +256,7 @@ def _get_template(templateName):
 
 
 def _init_plan(selectedTemplate):
-    if not selectedTemplate:
-        return None
-    
-    planObj = copy.copy(selectedTemplate)
-    planObj.pk = None
-    planObj.planGUID = None
-    planObj.planShortID = None
-    planObj.isReusable = False
-    planObj.isSystem = False
-    planObj.isSystemDefault = False
-    planObj.expName = ""
-    planObj.planName = ""
-    planObj.planExecuted = False
-    
-    #PDD
-    #planObj.planStatus = "planned"
-
-    return planObj
-
-
-def isValidChars(value, validChars=r'^[a-zA-Z0-9-_\.\s\,]+$'):
-    ''' Determines if value is valid: letters, numbers, spaces, dashes, underscores only '''
-    return bool(re.compile(validChars).match(value))
+    return MyPlan(selectedTemplate)
 
 
 def _validate_sample_prep_kit(input, selectedTemplate, planObj):
@@ -231,11 +264,11 @@ def _validate_sample_prep_kit(input, selectedTemplate, planObj):
     if input:
         try:
             selectedKit = KitInfo.objects.filter(kitType = "SamplePrepKit", description = input.strip())[0]
-            planObj.samplePrepKitName = selectedKit.name
+            planObj.get_planObj().samplePrepKitName = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
-        planObj.samplePrepKtName = ""
+        planObj.get_planObj().samplePrepKtName = ""
         
     return errorMsg
 
@@ -244,11 +277,11 @@ def _validate_lib_kit(input, selectedTemplate, planObj):
     if input:
         try:
             selectedKit = KitInfo.objects.filter(kitType = "LibraryKit", description = input.strip())[0]
-            planObj.librarykitname = selectedKit.name
+            planObj.get_easObj().libraryKitName = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
-        planObj.librarykitname = ""
+        planObj.get_easObj().libraryKitName = ""
           
     return errorMsg
     
@@ -258,11 +291,11 @@ def _validate_template_kit(input, selectedTemplate, planObj):
     if input:
         try:
             selectedKit = KitInfo.objects.filter(kitType = "TemplatingKit", description = input.strip())[0]
-            planObj.templatingKitName = selectedKit.name
+            planObj.get_planObj().templatingKitName = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
-        planObj.templatingKitName = ""
+        planObj.get_planObj().templatingKitName = ""
           
     return errorMsg
 
@@ -271,11 +304,11 @@ def _validate_control_seq_kit(input, selectedTemplate, planObj):
     if input:
         try:
             selectedKit = KitInfo.objects.filter(kitType = "ControlSequenceKit", description = input.strip())[0]
-            planObj.controlSequencekitname = selectedKit.name
+            planObj.get_planObj().controlSequencekitname = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
-        planObj.controlSequencekitname = ""
+        planObj.get_planObj().controlSequencekitname = ""
 
     return errorMsg
     
@@ -284,11 +317,11 @@ def _validate_seq_kit(input, selectedTemplate, planObj):
     if input:
         try:
             selectedKit = KitInfo.objects.filter(kitType = "SequencingKit", description = input.strip())[0]
-            planObj.sequencekitname = selectedKit.name
+            planObj.get_expObj().sequencekitname = selectedKit.name
         except:
             errorMsg = input + " not found."
     else:
-        planObj.sequencekitname = ""
+        planObj.get_expObj().sequencekitname = ""
         
     return errorMsg
 
@@ -297,12 +330,12 @@ def _validate_chip_type(input, selectedTemplate, planObj):
     if input:
         try:
             selectedChip = Chip.objects.filter(description = input.strip())[0]
-            planObj.chipType = selectedChip.name
+            planObj.get_expObj().chipType = selectedChip.name
         except:
             logger.exception(format_exc())
             errorMsg = input + " not found."
     else:
-        planObj.chipType = ""
+        planObj.get_expObj().chipType = ""
         
     return errorMsg
 
@@ -314,7 +347,7 @@ def _validate_flows(input, selectedTemplate, planObj):
             if (flowCount <= 0 or flowCount > 1000):
                 errorMsg = flowCount + " should be a positive whole number within range [1, 1000)."
             else:
-                planObj.flows = flowCount
+                planObj.get_expObj().flows = flowCount
         except:
             logger.exception(format_exc())
             errorMsg = input + " should be a positive whole number."
@@ -344,16 +377,16 @@ def _validate_ref(input, selectedTemplate, planObj):
     if input:
         try:
             selectedRef= ReferenceGenome.objects.filter(name = input.strip())[0]
-            planObj.library = selectedRef.short_name 
+            planObj.get_easObj().reference = selectedRef.short_name 
         except:
             try:
                 selectedRef= ReferenceGenome.objects.filter(short_name = input.strip())[0]
-                planObj.library = selectedRef.short_name 
+                planObj.get_easObj().reference = selectedRef.short_name 
             except:
                 logger.exception(format_exc())      
                 errorMsg = input + " not found."
     else:
-        planObj.library = ""
+        planObj.get_easObj().reference = ""
          
     return errorMsg
 
@@ -367,12 +400,12 @@ def _validate_target_bed(input, selectedTemplate, planObj):
         if value in bedFileDict.get("bedFilePaths") or value in bedFileDict.get("bedFileFullPaths"):        
             for bedFile in bedFileDict.get("bedFiles"):
                 if value == bedFile.file or value == bedFile.path:
-                    planObj.bedfile = bedFile.file
+                    planObj.get_easObj().targetRegionBedFile = bedFile.file
         else:
             logger.exception(format_exc())
             errorMsg = input + " not found."
     else:
-        planObj.bedfile = ""
+        planObj.get_easObj().targetRegionBedFile = ""
         
     return errorMsg
     
@@ -385,51 +418,65 @@ def _validate_hotspot_bed(input, selectedTemplate, planObj):
         if value in bedFileDict.get("hotspotPaths") or value in bedFileDict.get("hotspotFullPaths"):        
             for bedFile in bedFileDict.get("hotspotFiles"):
                 if value == bedFile.file or value == bedFile.path:
-                    planObj.regionfile = bedFile.file
+                    planObj.get_easObj().hotSpotRegionBedFile = bedFile.file
         else: 
             logger.exception(format_exc())            
             errorMsg = input + " not found. "
     else:
-        planObj.regionfile = ""
+        planObj.get_easObj().hotSpotRegionBedFile = ""
     return errorMsg
 
 def _validate_plugins(input, selectedTemplate, planObj):
     errorMsg = ""
-    plugins = []
+    plugins = {}
 
     if input:
         for plugin in input.split(";"):
             if plugin:
                 try:
                     selectedPlugin = Plugin.objects.filter(name = plugin.strip(), selected = True, active = True)[0]
-                    
+
+                    pluginUserInput = {}
+                    template_selectedPlugins = selectedTemplate.get_selectedPlugins()
+
+                    if plugin.strip() in template_selectedPlugins:
+                        #logger.info("_validate_plugins() FOUND plugin in selectedTemplate....=%s" %(template_selectedPlugins[plugin.strip()]))
+                        pluginUserInput = template_selectedPlugins[plugin.strip()]["userInput"]
+
                     pluginDict = {
                                   "id" : selectedPlugin.id,
                                   "name" : selectedPlugin.name,
-                                  "version" : selectedPlugin.version
+                                  "version" : selectedPlugin.version,
+                                  "userInput" : pluginUserInput,
+                                  "features": []
                                   }
                     
-                    plugins.append(pluginDict)
+                    plugins[selectedPlugin.name] = pluginDict
                 except:
                     logger.exception(format_exc())            
                     errorMsg += plugin + " not found. "
     else:
-        planObj.selectedPlugins = ""
+        planObj.get_easObj().selectedPlugins = ""
         
     return errorMsg, plugins
-        
-    
+
+
 def _validate_projects(input, selectedTemplate, planObj):
     errorMsg = None
     projects = ''
     
     if input:
         for project in input.split(";"):
-            if not isValidChars(project.strip()):
+            if not is_valid_chars(project.strip()):
                 errorMsg = "Project should contain only numbers, letters, spaces, and the following: . - _"
             else:
-                projects += project.strip()
-                projects += ','
+                value = input.strip()
+                if value:
+                    if not is_valid_length(value, iondb.rundb.plan.views.MAX_LENGTH_PROJECT_NAME):
+                        errorMsg = "Project name length should be " + str(iondb.rundb.plan.views.MAX_LENGTH_PROJECT_NAME) + " characters maximum."
+                    else:                                
+                        projects += project.strip()
+                        projects += ','
 
     return errorMsg, projects
 
@@ -437,7 +484,7 @@ def _validate_projects(input, selectedTemplate, planObj):
 def _validate_export(input, selectedTemplate, planObj):
     errorMsg = ""
     
-    plugins = []
+    plugins = {}
     has_ir_v1_0 = False
     
     if input:
@@ -453,7 +500,8 @@ def _validate_export(input, selectedTemplate, planObj):
                     pluginDict = {
                                   "id" : selectedPlugin.id,
                                   "name" : selectedPlugin.name,
-                                  "version" : selectedPlugin.version
+                                  "version" : selectedPlugin.version,
+                                  "features": ['export']
                                   }
 
                     workflowDict = {
@@ -464,100 +512,132 @@ def _validate_export(input, selectedTemplate, planObj):
                     userInputList.append(workflowDict)
                     pluginDict["userInput"] = userInputList
         
-                    plugins.append(pluginDict)
+                    plugins[selectedPlugin.name] = pluginDict
                 except:
                     logger.exception(format_exc())            
                     errorMsg += plugin + " not found. "
     else:
-        planObj.selectedPlugins = ""
+        planObj.get_easObj().selectedPlugins = ""
 
     return errorMsg, plugins, has_ir_v1_0
 
 def _validate_plan_name(input, selectedTemplate, planObj):
     errorMsg = None
-    if not isValidChars(input.strip()):
+    if not is_valid_chars(input.strip()):
         errorMsg = "Plan name should contain only numbers, letters, spaces, and the following: . - _"
     else:
-        planObj.planDisplayedName = input.strip()
-        planObj.planName = input.strip().replace(' ', '_')
+        value = input.strip()
+        if value:
+            if not is_valid_length(value, iondb.rundb.plan.views.MAX_LENGTH_PLAN_NAME):
+                errorMsg = "Plan name" + iondb.rundb.plan.views.ERROR_MSG_INVALID_LENGTH  %(str(iondb.rundb.plan.views.MAX_LENGTH_PLAN_NAME))
+            else:
+                planObj.get_planObj().planDisplayedName = value
+                planObj.get_planObj().planName = value.replace(' ', '_')
     return errorMsg
     
 def _validate_notes(input, selectedTemplate, planObj):
     errorMsg = None
     if input:
-        if not isValidChars(input):
-            errorMsg = "Notes should contain only numbers, letters, spaces, and the following: . - _"
+        if not is_valid_chars(input):
+            errorMsg = "Notes"  + iondb.rundb.plan.views.ERROR_MSG_INVALID_CHARS
         else:
-            planObj.notes = input.strip()
+            value = input.strip()
+            if value:
+                if not is_valid_length(value, iondb.rundb.plan.views.MAX_LENGTH_NOTES):
+                    errorMsg = "Notes" + iondb.rundb.plan.views.ERROR_MSG_INVALID_LENGTH  %(str(iondb.rundb.plan.views.MAX_LENGTH_NOTES))
+                else:                
+                    planObj.get_expObj().notes = value
     else:
-        planObj.notes = ""
+        planObj.get_expObj().notes = ""
         
     return errorMsg
-    
+
+
 def _validate_sample(input, selectedTemplate, planObj):
     errorMsg = None
+    sampleDisplayedName = ""
+    
     if not input:
         errorMsg = "Required column is empty"
     else:
-        if not isValidChars(input):
-            errorMsg = "Sample should contain only numbers, letters, spaces, and the following: . - _"
+        if not is_valid_chars(input):
+            errorMsg = "Sample name" + iondb.rundb.plan.views.ERROR_MSG_INVALID_CHARS        
+        elif is_invalid_leading_chars(input):
+            errorMsg = "Sample name" + iondb.rundb.plan.views.ERROR_MSG_INVALID_LEADING_CHARS                       
         else:
-            planObj.sampleDisplayedName = input.strip()
-            planObj.sample = input.strip().replace(' ', '_')
+            value = input.strip()
+            if value:
+                if not is_valid_length(value, iondb.rundb.plan.views.MAX_LENGTH_SAMPLE_NAME):
+                    errorMsg = "Sample name" +  iondb.rundb.plan.views.ERROR_MSG_INVALID_LENGTH  %(str(iondb.rundb.plan.views.MAX_LENGTH_SAMPLE_NAME))
+                else:                            
+                    sampleDisplayedName = value
+                    sample = value.replace(' ', '_')
                     
-    return errorMsg
+    return errorMsg, sampleDisplayedName
 
 
-def _validate_barcodedSamples(input, selectedTemplate, planObj):
+def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
     errorMsg = None
     barcodedSampleJson = {}
-
+    
     #{"bc10_noPE_sample3":{"26":"IonXpress_010"},"bc04_noPE_sample1":{"20":"IonXpress_004"},"bc08_noPE_sample2":{"24":"IonXpress_008"}}
     #20121122-new JSON format
     #{"bcSample1":{"barcodes":["IonXpress_001","IonXpress_002"]},"bcSample2":{"barcodes":["IonXpress_003"]}}
-    
-    barcodes = list(dnaBarcode.objects.filter(name = selectedTemplate.barcodeId).values('id', 'id_str').order_by('id_str'))
+        
+    barcodes = list(dnaBarcode.objects.filter(name = barcodeKitName).values('id', 'id_str').order_by('id_str'))
     
     if len(barcodes) == 0:
-        errorMsg = "Barcode "+ selectedTemplate.bardcodeId + " cannot be found. " 
+        errorMsg = "Barcode "+ barcodeKitName + " cannot be found. " 
         return errorMsg, barcodedSampleJson
     
     errorMsgDict = {}
     try:
-        for barcode in barcodes:
+        for barcode in barcodes:            
             key = barcode["id_str"] + plan_csv_writer.COLUMN_BC_SAMPLE_KEY
             sample = input.get(key, "")        
 
             if sample:           
-                if not isValidChars(sample):
-                    errorMsgDict[key] = "Sample should contain only numbers, letters, spaces, and the following: . - _"
+                if not is_valid_chars(sample):
+                    errorMsgDict[key] = "Sample name" + iondb.rundb.plan.views.ERROR_MSG_INVALID_CHARS
+                elif is_invalid_leading_chars(sample):
+                    errorMsgDict[key] = "Sample name" + iondb.rundb.plan.views.ERROR_MSG_INVALID_LEADING_CHARS        
                 else:
-                    barcodedSample = barcodedSampleJson.get(sample.strip(), {})
-                    if barcodedSample:
-                        barcodeList = barcodedSample.get("barcodes", [])
-                        if barcodeList:
-                            barcodeList.append(barcode["id_str"])
-                        else:
-                            barcodeDict = {
-                                           "barcodes" : [barcode["id_str"]]
-                                           }
+                    value = sample.strip()
 
-                            barcodedSampleJson[sample.strip()] = barcodeDict                                          
-                    else:              
-                        barcodeDict = {
-                                    "barcodes" : [barcode["id_str"]]
-                                    }
+                    if value:
+                        if not is_valid_length(value, iondb.rundb.plan.views.MAX_LENGTH_SAMPLE_NAME):
+                            errorMsgDict[key] = "Sample name" +  iondb.rundb.plan.views.ERROR_MSG_INVALID_LENGTH  %(str(iondb.rundb.plan.views.MAX_LENGTH_SAMPLE_NAME))                           
+                        else:     
+                            barcodedSample = barcodedSampleJson.get(value, {})
+                    
+                            if barcodedSample:
+                                barcodeList = barcodedSample.get("barcodes", [])
+                                if barcodeList:
+                                    barcodeList.append(barcode["id_str"])
+                                else:
+                                    barcodeDict = {
+                                                   "barcodes" : [barcode["id_str"]]
+                                                   }
 
-                        barcodedSampleJson[sample.strip()] = barcodeDict
+                                barcodedSampleJson[sample.strip()] = barcodeDict                                          
+                            else:              
+                                barcodeDict = {
+                                               "barcodes" : [barcode["id_str"]]
+                                               }
+
+                                barcodedSampleJson[sample.strip()] = barcodeDict
     except:
         logger.exception(format_exc())  
         errorMsg = "Internal error during barcoded sample processing"
     
+    if errorMsgDict:
+        return simplejson.dumps(errorMsgDict), barcodedSampleJson
+    
     if not barcodedSampleJson:
         errorMsg = "Required column is empty. At least one barcoded sample is required. "
     else:
-        planObj.barcodedSamples = barcodedSampleJson
-       
+        planObj.get_easObj().barcodedSamples = barcodedSampleJson
+
     return errorMsg, barcodedSampleJson
                 
 

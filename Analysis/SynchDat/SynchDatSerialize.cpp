@@ -11,12 +11,14 @@
 #include "DeltaComp.h" 
 #include "DeltaCompFst.h" 
 #include "DeltaCompFstSmX.h" 
+#include "IonImageSem.h"
 #define INFO_KEYS "info_keys"
 #define INFO_VALUES "info_values"
 #define SYNCHDATSERIALIZE_VERSION_KEY "sdat_version"
 #define SYNCHDATSERIALIZE_VERSION_VALUE "2.0"
 
 //#include "SvdDatCompressPlusPlus.h"
+ion_semaphore_t *sdatSemPtr;
 
 using namespace std;
 
@@ -82,6 +84,14 @@ void TraceChunkSerializer::DecompressFromReading(const struct FlowChunk *chunks,
   }
 }
   
+void TraceChunkSerializer::SetCompressor(TraceCompressor *compressor) {
+  if (mCompressor != NULL) {
+    delete mCompressor;
+    mCompressor = NULL;
+  }
+  mCompressor = compressor; 
+}
+
 void TraceChunkSerializer::ArrangeDataForWriting(GridMesh<TraceChunk> &dataMesh, struct FlowChunk *chunks) {
 
   if (dataMesh.GetNumBin() == 0) {
@@ -131,9 +141,18 @@ void TraceChunkSerializer::ArrangeDataForWriting(GridMesh<TraceChunk> &dataMesh,
   delete [] compressed;
 }
 
+
+void InitSdatReadSem(void) {
+  sdatSemPtr = NULL;
+}
+
+
 bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   hid_t dataset = H5Dopen2(h5.GetFileId(), "FlowChunk", H5P_DEFAULT);
   //    hid_t datatype  = H5Dget_type(dataset);     /* datatype handle */
+  static pthread_once_t onceControl = PTHREAD_ONCE_INIT;
+  int err = pthread_once(&onceControl, InitSdatReadSem);
+  if (err != 0) { cout << "Error with pthread once." << endl; }               
   hid_t dataspace = H5Dget_space(dataset);
   int rank = H5Sget_simple_extent_ndims(dataspace);
   std::vector<hsize_t> dims;
@@ -170,7 +189,9 @@ bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
   H5Tinsert(fcType, "DeltaFrame", HOFFSET(struct FlowChunk, DeltaFrame), charArrayType2);
   H5Tinsert(fcType, "Data", HOFFSET(struct FlowChunk, Data), charArrayType);
   ClockTimer timer;
+  IonImageSem::Take();
   status = H5Dread(dataset, fcType, H5S_ALL, H5S_ALL, H5P_DEFAULT, mChunks);
+  IonImageSem::Give();
   ioMicroSec = timer.GetMicroSec();
   ION_ASSERT(status == 0, "Couldn' read dataset");
   timer.StartTimer();
@@ -194,7 +215,7 @@ bool TraceChunkSerializer::Read(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
 bool TraceChunkSerializer::Write(H5File &h5, GridMesh<TraceChunk> &dataMesh) {
 
   mNumChunks = dataMesh.GetNumBin();
-    ClockTimer timer;
+  ClockTimer timer;
   mChunks = (struct FlowChunk *) malloc(sizeof(struct FlowChunk) * mNumChunks);
   ArrangeDataForWriting(dataMesh, mChunks);
   computeMicroSec = timer.GetMicroSec();
@@ -321,6 +342,7 @@ bool TraceChunkSerializer::Write(const char *filename, SynchDat &data) {
   ok =  Write(h5, data.GetMesh());
   timer.StartTimer();
   h5.Close();
+  H5garbage_collect();
   ioMicroSec += timer.GetMicroSec();
   return ok;
 }

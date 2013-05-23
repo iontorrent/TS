@@ -20,8 +20,6 @@
 
 #include "KMrand.h"			// random generator declarations
 
-#include "dbgmem.h"
-
 #ifdef WIN32				// Visual C++ (no srandom/random)
 void srandom(unsigned int seed) { srand(seed); }
 long random(void) { return long(rand()); }

@@ -1,0 +1,111 @@
+<div id="modal_event_log" title="" class="modal modal-800 hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">x</button>
+
+    <h3>{{ title }}</h3>
+    </div>
+    <div class="modal-body">
+        <form id="modal_event_log_form">
+            <div id="hide_log">
+            <table id="log_grid">
+                <thead>
+                    <th data-field="date">Date</th>
+                    <th data-field="user">User</th>
+                    <th data-field="text">Comment</th>
+                </thead>
+            </table>
+            </div>
+            <div id="no_log_msg" style="display:none;">
+                <h2> No logs found for {{ title }}.</h2>
+            </div>
+        </form>
+    </div>
+
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
+    </div>
+
+<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script src="/site_media/js/date.min.js"></script>
+<script type="text/javascript">
+$('#modal_event_log').on('hidden', function() {
+    $('body #modal_event_log').remove();
+});
+$(document).ready(function(){
+
+    // make this work for MessageBox: html is inserted inside modal_report_log.html
+    if($('#modal_event_log').parent().attr('class') == 'modal-body'){
+        var formHtml = $('#modal_event_log_form').html();
+        $('#modal_event_log').parent().html(formHtml);
+        $('#modal_report_log .modal-header').find('h2').html('{{title}}');
+    }
+
+    var grid = $("#log_grid").kendoGrid({
+        dataSource: {
+            type: "json",
+            transport: {
+                read: {
+                    url: '{% url api_dispatch_list resource_name="eventlog" api_name="v1" %}?object_pk={{pk}}&content_type_id={{cttype}}',
+                    contentType: 'application/json; charset=utf-8',
+                    type: 'GET',
+                    dataType: 'json'
+                },
+                parameterMap: function(options) {
+                    return buildParameterMap(options)
+                }
+
+            },
+            schema: {
+                data: "objects",
+                total: "meta.total_count",
+                model: {
+                    fields: {
+                        id: { type: "number" },
+                        object_pk: { type: "number" },
+                        created: { type: "string" },
+                        username: { type: "string" },
+                        text: { type: "string" }
+                    }
+                }
+            },
+            serverSorting: true,
+            serverFiltering: true,
+            serverPaging: true,
+     				sort: { field: "created", dir: "desc" },
+            pageSize: 50
+        },
+        height: '270',
+        groupable: false,
+        scrollable: {
+				    virtual: true
+			  },
+        selectable: false,
+        sortable: true,
+        pageable: false,
+        columns: [ {
+                field: "created",
+                title: "Date",
+                width: '18%',
+                template: '#= kendo.toString(new Date(Date._parse(created)),"yyyy/MM/dd hh:mm tt") #'
+            } , {
+                field: "username",
+                title: "User",
+                width: '12%'
+            } , {
+                field: "text",
+                title: "Comment",
+                width: '70%',
+                template: "#= text #"
+            }
+        ],
+        dataBound: function(e) {            
+            if (grid.data('kendoGrid').dataSource.total() == 0){
+                console.log('no records found');
+                $("#hide_log").hide();
+                $("#no_log_msg").show();
+            }        
+        }
+    });
+});
+</script>
+</div>

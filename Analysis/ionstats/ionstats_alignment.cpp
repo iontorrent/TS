@@ -33,6 +33,7 @@ void IonstatsAlignmentHelp()
   printf ("  -i,--input                 FILE       input BAM (mapped) [required option]\n");
   printf ("  -o,--output                FILE       output json file [ionstats_alignment.json]\n");
   printf ("  -h,--histogram-length      INT        read length histogram cutoff [400]\n");
+  printf ("  -m,--minimum-aq-length     INT        minimum AQ read length [21]\n");
   printf ("\n");
 }
 
@@ -54,6 +55,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   string input_bam_filename   = opts.GetFirstString('i', "input", "");
   string output_json_filename = opts.GetFirstString('o', "output", "ionstats_alignment.json");
   int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
+  int minimum_aq_length       = opts.GetFirstInt   ('m', "minimum-aq-length", 21);
 
   if(argc < 2 or input_bam_filename.empty()) {
     IonstatsAlignmentHelp();
@@ -76,6 +78,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   ReadLengthHistogram AQ10_histogram;
   ReadLengthHistogram AQ17_histogram;
   ReadLengthHistogram AQ20_histogram;
+  ReadLengthHistogram AQ30_histogram;
   ReadLengthHistogram AQ47_histogram;
   SimpleHistogram error_by_position;
 
@@ -85,6 +88,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   AQ10_histogram.Initialize(histogram_length);
   AQ17_histogram.Initialize(histogram_length);
   AQ20_histogram.Initialize(histogram_length);
+  AQ30_histogram.Initialize(histogram_length);
   AQ47_histogram.Initialize(histogram_length);
   error_by_position.Initialize(histogram_length);
 
@@ -145,6 +149,7 @@ int IonstatsAlignment(int argc, const char *argv[])
     int AQ10_bases = 0;
     int AQ17_bases = 0;
     int AQ20_bases = 0;
+    int AQ30_bases = 0;
     int AQ47_bases = 0;
     int num_bases = 0;
     int num_errors = 0;
@@ -208,6 +213,7 @@ int IonstatsAlignment(int argc, const char *argv[])
       if (num_errors*10 <= num_bases)   AQ10_bases = num_bases;
       if (num_errors*50 <= num_bases)   AQ17_bases = num_bases;
       if (num_errors*100 <= num_bases)  AQ20_bases = num_bases;
+      if (num_errors*1000 <= num_bases) AQ30_bases = num_bases;
       if (num_errors == 0)              AQ47_bases = num_bases;
     }
 
@@ -215,12 +221,13 @@ int IonstatsAlignment(int argc, const char *argv[])
     // Step 3. Profit
     //
 
-    if (num_bases >= 20)    aligned_histogram.Add(num_bases);
-    if (AQ7_bases >= 20)    AQ7_histogram.Add(AQ7_bases);
-    if (AQ10_bases >= 20)   AQ10_histogram.Add(AQ10_bases);
-    if (AQ17_bases >= 20)   AQ17_histogram.Add(AQ17_bases);
-    if (AQ20_bases >= 20)   AQ20_histogram.Add(AQ20_bases);
-    if (AQ47_bases >= 20)   AQ47_histogram.Add(AQ47_bases);
+    aligned_histogram.Add(num_bases);
+    if (AQ7_bases >= minimum_aq_length)     AQ7_histogram.Add(AQ7_bases);
+    if (AQ10_bases >= minimum_aq_length)    AQ10_histogram.Add(AQ10_bases);
+    if (AQ17_bases >= minimum_aq_length)    AQ17_histogram.Add(AQ17_bases);
+    if (AQ20_bases >= minimum_aq_length)    AQ20_histogram.Add(AQ20_bases);
+    if (AQ30_bases >= minimum_aq_length)    AQ30_histogram.Add(AQ30_bases);
+    if (AQ47_bases >= minimum_aq_length)    AQ47_histogram.Add(AQ47_bases);
   }
 
   input_bam.Close();
@@ -241,6 +248,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   AQ10_histogram.SaveToJson(output_json["AQ10"]);
   AQ17_histogram.SaveToJson(output_json["AQ17"]);
   AQ20_histogram.SaveToJson(output_json["AQ20"]);
+  AQ30_histogram.SaveToJson(output_json["AQ30"]);
   AQ47_histogram.SaveToJson(output_json["AQ47"]);
   error_by_position.SaveToJson(output_json["error_by_position"]);
 
@@ -255,5 +263,100 @@ int IonstatsAlignment(int argc, const char *argv[])
 
   return 0;
 }
+
+
+
+
+
+
+
+int IonstatsAlignmentReduce(const string& output_json_filename, const vector<string>& input_jsons)
+{
+
+  ReadLengthHistogram called_histogram;
+  ReadLengthHistogram aligned_histogram;
+  ReadLengthHistogram AQ7_histogram;
+  ReadLengthHistogram AQ10_histogram;
+  ReadLengthHistogram AQ17_histogram;
+  ReadLengthHistogram AQ20_histogram;
+  ReadLengthHistogram AQ30_histogram;
+  ReadLengthHistogram AQ47_histogram;
+  SimpleHistogram error_by_position;
+
+  for (unsigned int input_idx = 0; input_idx < input_jsons.size(); ++input_idx) {
+
+    ifstream in(input_jsons[input_idx].c_str(), ifstream::in);
+    if (!in.good()) {
+      fprintf(stderr, "[ionstats] ERROR: cannot open %s\n", input_jsons[0].c_str());
+      return 1;
+    }
+    Json::Value current_input_json;
+    in >> current_input_json;
+    in.close();
+
+    ReadLengthHistogram current_called_histogram;
+    current_called_histogram.LoadFromJson(current_input_json["full"]);
+    called_histogram.MergeFrom(current_called_histogram);
+
+    ReadLengthHistogram current_aligned_histogram;
+    current_aligned_histogram.LoadFromJson(current_input_json["aligned"]);
+    aligned_histogram.MergeFrom(current_aligned_histogram);
+
+    ReadLengthHistogram current_AQ7_histogram;
+    current_AQ7_histogram.LoadFromJson(current_input_json["AQ7"]);
+    AQ7_histogram.MergeFrom(current_AQ7_histogram);
+
+    ReadLengthHistogram current_AQ10_histogram;
+    current_AQ10_histogram.LoadFromJson(current_input_json["AQ10"]);
+    AQ10_histogram.MergeFrom(current_AQ10_histogram);
+
+    ReadLengthHistogram current_AQ17_histogram;
+    current_AQ17_histogram.LoadFromJson(current_input_json["AQ17"]);
+    AQ17_histogram.MergeFrom(current_AQ17_histogram);
+
+    ReadLengthHistogram current_AQ20_histogram;
+    current_AQ20_histogram.LoadFromJson(current_input_json["AQ20"]);
+    AQ20_histogram.MergeFrom(current_AQ20_histogram);
+
+    ReadLengthHistogram current_AQ30_histogram;
+    current_AQ30_histogram.LoadFromJson(current_input_json["AQ30"]);
+    AQ30_histogram.MergeFrom(current_AQ30_histogram);
+
+    ReadLengthHistogram current_AQ47_histogram;
+    current_AQ47_histogram.LoadFromJson(current_input_json["AQ47"]);
+    AQ47_histogram.MergeFrom(current_AQ47_histogram);
+
+    SimpleHistogram current_error_by_position;
+    current_error_by_position.LoadFromJson(current_input_json["error_by_position"]);
+    error_by_position.MergeFrom(current_error_by_position);
+
+  }
+
+  Json::Value output_json(Json::objectValue);
+  output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+  output_json["meta"]["format_name"] = "ionstats_alignment";
+  output_json["meta"]["format_version"] = "1.0";
+
+  called_histogram.SaveToJson(output_json["full"]);
+  aligned_histogram.SaveToJson(output_json["aligned"]);
+  AQ7_histogram.SaveToJson(output_json["AQ7"]);
+  AQ10_histogram.SaveToJson(output_json["AQ10"]);
+  AQ17_histogram.SaveToJson(output_json["AQ17"]);
+  AQ20_histogram.SaveToJson(output_json["AQ20"]);
+  AQ30_histogram.SaveToJson(output_json["AQ30"]);
+  AQ47_histogram.SaveToJson(output_json["AQ47"]);
+  error_by_position.SaveToJson(output_json["error_by_position"]);
+
+  ofstream out(output_json_filename.c_str(), ios::out);
+  if (out.good()) {
+    out << output_json.toStyledString();
+    return 0;
+  } else {
+    fprintf(stderr, "ERROR: unable to write to '%s'\n", output_json_filename.c_str());
+    return 1;
+  }
+}
+
+
 
 

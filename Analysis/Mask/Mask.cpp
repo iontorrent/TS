@@ -8,8 +8,6 @@
 #include "LinuxCompat.h"
 #include <inttypes.h>
 
-#include "dbgmem.h"
-
 
 Mask::Mask ( int _w, int _h )
 {

@@ -16,39 +16,47 @@ struct ProcessorQueue
 
   enum QueueType {
     CPU_QUEUE,
-    MULTIFIT_GPU_QUEUE,
-    SINGLEFIT_GPU_QUEUE
+    GPU_QUEUE,
   };
 
   // our one item instance
   WorkerInfoQueueItem item;
 
   ProcessorQueue() {
-    fitting_queues.resize(3);
+    fitting_queues.resize(2);
     for (unsigned int i=0; i<fitting_queues.size(); ++i) {
       fitting_queues[i] = NULL;
     }
+    heterogeneous_computing = true;
+    gpuMultiFlowFitting = true;
+    gpuSingleFlowFitting = true;
   }
   void SetCpuQueue(WorkerInfoQueue* q) { fitting_queues[CPU_QUEUE] = q;}
-  void SetSingleFitGpuQueue(WorkerInfoQueue* q) { fitting_queues[SINGLEFIT_GPU_QUEUE] = q;}
-  void SetMultiFitGpuQueue(WorkerInfoQueue* q) { fitting_queues[MULTIFIT_GPU_QUEUE] = q;}
-  void AllocateMultiFitGpuInfo(int n) { gpu_info_multifit.resize(n); }
-  void AllocateSingleFitGpuInfo(int n) { gpu_info_singlefit.resize(n); }
+  void SetGpuQueue(WorkerInfoQueue* q) { fitting_queues[GPU_QUEUE] = q;}
+  void AllocateGpuInfo(int n) { gpu_info.resize(n); }
+  void turnOffHeterogeneousComputing() { heterogeneous_computing = false; }
+  void turnOnHeterogeneousComputing() { heterogeneous_computing = true; }
+  void turnOnGpuMultiFlowFitting() { gpuMultiFlowFitting = true; }
+  void turnOffGpuMultiFlowFitting() { gpuMultiFlowFitting = false; }
+  void turnOnGpuSingleFlowFitting() { gpuSingleFlowFitting = true; }
+  void turnOffGpuSingleFlowFitting() { gpuSingleFlowFitting = false; }
   
-  
+  bool useHeterogenousCompute() { return heterogeneous_computing; }
+  bool performGpuMultiFlowFitting() { return gpuMultiFlowFitting; }
+  bool performGpuSingleFlowFitting() { return gpuSingleFlowFitting; }
   int GetNumQueues() { return fitting_queues.size();}
   std::vector<WorkerInfoQueue*>& GetQueues() { return fitting_queues; }
-  std::vector<BkgFitWorkerGpuInfo>& GetMultiFitGpuInfo() { return gpu_info_multifit; }
-  std::vector<BkgFitWorkerGpuInfo>& GetSingleFitGpuInfo() { return gpu_info_singlefit; }
+  std::vector<BkgFitWorkerGpuInfo>& GetGpuInfo() { return gpu_info; }
   WorkerInfoQueue* GetCpuQueue() { return fitting_queues[CPU_QUEUE]; }
-  WorkerInfoQueue* GetSingleFitGpuQueue() { return fitting_queues[SINGLEFIT_GPU_QUEUE]; }
-  WorkerInfoQueue* GetMultiFitGpuQueue() { return fitting_queues[MULTIFIT_GPU_QUEUE]; }
+  WorkerInfoQueue* GetGpuQueue() { return fitting_queues[GPU_QUEUE]; }
 
 private:
   // Create array to hold gpu_info
-  std::vector<BkgFitWorkerGpuInfo> gpu_info_singlefit;
-  std::vector<BkgFitWorkerGpuInfo> gpu_info_multifit;
+  std::vector<BkgFitWorkerGpuInfo> gpu_info;
   std::vector<WorkerInfoQueue*> fitting_queues;
+  bool heterogeneous_computing; // use both gpu and cpu
+  bool gpuMultiFlowFitting;
+  bool gpuSingleFlowFitting;
 };
 
 
@@ -72,6 +80,7 @@ struct ImageInitBkgWorkInfo
   // possible replacement for kic
   float t_mid_nuc;
   float t_sigma;
+  float t0_frame;
   int numRegions;
   Region *regions;
   int r;
@@ -92,7 +101,8 @@ struct ImageInitBkgWorkInfo
   int *timestamps;
   
   CommandLineOpts *inception_state;
-  
+
+  bool nokey;
   SequenceItem *seqList;
   int numSeqListItems;
   
@@ -110,8 +120,7 @@ struct ImageInitBkgWorkInfo
 };
 
 void* BkgFitWorkerCpu (void *arg);
-void* SingleFlowFitGPUWorker(void* arg);
-void* MultiFlowFitGPUWorker(void* arg);
+void* SimpleBkgFitWorkerGpu (void *arg); //SingleFlowFitGPUWorker(void* arg);
 bool CheckBkgDbgRegion (Region *r,BkgModelControlOpts &bkg_control);
 
 
@@ -120,8 +129,7 @@ struct ComputationPlanner
 {
   int numBkgWorkers;
   int numBkgWorkers_gpu;
-  int numSingleFlowFitGpuWorkers;
-  int numMultiFlowFitGpuWorkers;
+  int numGpuWorkers;
   bool use_gpu_acceleration;
   float gpu_work_load;
   bool use_all_gpus;
@@ -129,17 +137,22 @@ struct ComputationPlanner
   regionProcessOrderVector region_order;
   // dummy
   int lastRegionToProcess;
+  bool use_gpu_only_fitting;
+  bool gpu_multiflow_fit;
+  bool gpu_singleflow_fit;
 
   ComputationPlanner() 
   {
     numBkgWorkers = 0;
     numBkgWorkers_gpu = 0;
-    numSingleFlowFitGpuWorkers = 0;
-    numMultiFlowFitGpuWorkers = 0;
+    numGpuWorkers = 0;
     use_gpu_acceleration = false;
     gpu_work_load = 0;
     use_all_gpus = false;
     lastRegionToProcess = 0;
+    use_gpu_only_fitting = true;
+    gpu_multiflow_fit = true;
+    gpu_singleflow_fit = true;
   }
 };
 
@@ -170,7 +183,7 @@ void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, Computati
 void SpinUpGPUThreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
 void CreateGpuThreadsForFitType(
     std::vector<BkgFitWorkerGpuInfo> &gpuInfo,
-    GpuFitType fitType,
+ //   GpuFitType fitType,
     int numWorkers, 
     WorkerInfoQueue* q,
     std::vector<int> &gpus); 

@@ -58,8 +58,8 @@ public:
   void SetUpTraceTracking ( SlicedPrequel &my_prequel_setup, CommandLineOpts &inception_state, ImageSpecClass &my_image_spec, ComplexMask &cmask );
   void PlanComputation ( BkgModelControlOpts &bkg_control );
   void SpinUp();
-  void UnSpinSingleFlowFitGpuThreads();
-  void UnSpinMultiFlowFitGpuThreads();
+  void UnSpinGpuThreads();
+//  void UnSpinMultiFlowFitGpuThreads();
   void SetRegionProcessOrder();
   BkgFitterTracker ( int numRegions );
   void AllocateRegionData(std::size_t numRegions);

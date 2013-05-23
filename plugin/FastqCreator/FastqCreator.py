@@ -6,11 +6,22 @@ import glob
 import json
 import traceback
 import pysam
+import subprocess
+from ion.utils import blockprocessing
 from ion.plugin import *
 
+# DNA base complements
+COMPLEMENT = {'A': 'T',
+              'T': 'A',
+              'C': 'G',
+              'G': 'C',
+              'N': 'N'}
+
+def reverse_complement(sequence):
+    return ''.join(COMPLEMENT[b] for b in sequence[::-1])
 
 class FastqCreator(IonPlugin):
-    version = "3.4.49884"
+    version = "3.6.0-r%s" % filter(str.isdigit,"$Revision: 57238 $")
     runtypes = [ RunType.COMPOSITE, RunType.THUMB, RunType.FULLCHIP ]
 
     def bam2fastq(self, bam_filename_list, fastq_filename):
@@ -22,10 +33,23 @@ class FastqCreator(IonPlugin):
                         try:
                             samfile = pysam.Samfile(bam_file, mode="rb",check_header=False,check_sq=False)
                             for x in samfile.fetch(until_eof=True):
-                                fastq_file.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
+                                if x.is_reverse:
+                                    qual = x.qual[::-1]
+                                    seq = reverse_complement(x.seq)
+                                else:
+                                    qual = x.qual
+                                    seq = x.seq
+                                fastq_file.write("@%s\n%s\n+\n%s\n" % (x.qname,seq,qual))
                             samfile.close()
                         except:
                             traceback.print_exc()
+        except:
+            traceback.print_exc()
+
+    def bam2fastq_picard(self, bam_filename_list, fastq_filename):
+        try:
+            com = blockprocessing.bam2fastq_command(bam_filename_list[0],fastq_filename)
+            ret = subprocess.call(com,shell=True)
         except:
             traceback.print_exc()
 
@@ -55,6 +79,7 @@ class FastqCreator(IonPlugin):
             # input
             bam_list = []
             if reference_path != '':
+                # don't use aligned bam files (TS-6279) or reverse-complemented it
                 bam = os.path.join(alignment_dir, dataset['file_prefix']+'.bam')
             else:
                 bam = os.path.join(basecaller_dir, dataset['file_prefix']+'.basecaller.bam')
@@ -73,7 +98,9 @@ class FastqCreator(IonPlugin):
                 continue
 
             try:
-                self.bam2fastq(bam_list,dataset['fastq'])
+                #use pysam only for unmapped bam files
+                #self.bam2fastq_pysam(bam_list,dataset['fastq'])
+                self.bam2fastq_picard(bam_list,dataset['fastq'])
             except:
                 traceback.print_exc()
 

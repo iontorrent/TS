@@ -187,7 +187,7 @@ def launch_plugin(result, plugin, params={}):
         'analysis_dir': sigproc_results,
         'basecaller_dir': basecaller_results,
         'alignment_dir': alignment_results,
-        'libraryKey':result.experiment.libraryKey,
+        'libraryKey':result.eas.libraryKey,
         'results_dir' : plugin_output_dir,
         'net_location' : hostname,
         'testfrag_key':'ATCG',

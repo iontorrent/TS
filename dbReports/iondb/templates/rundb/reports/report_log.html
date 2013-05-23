@@ -1,7 +1,25 @@
 {% extends "rundb/reports/base.html" %}
-
+{% load pagetools %}
 {% block content %}
+<script>
+$(function() {
+	$(".log").each(function () {
+		var log = $(this);
+		var logfile = $(log).data("logfile");
+		var request = $.ajax({
+		    type: 'GET',
+		    url: logfile ,
+		    contentType: "text/plain",
+		    dataType: "text/plain",
+		    async: true
+		});
+		request.always( function (data) {
+			$(log).html(data.responseText);
+		});
+	});
+});
 
+</script>
 <div id="data_view" class="content group">
     <h1>Status: {{report.status}}</h1>
     {% if error == "old_report" %}
@@ -21,44 +39,52 @@
             <li>
                 <a href="{% url report report.pk %}log" id="log-btn">View this report Log</a>
             </li>
-        </ul>    
+        </ul>
     {% else %}
-        {% if error == "report_archived" %}
-            <h2>Report was archived and cannot be viewed</h2>
-        {% endif %}
-        <ul>
-            <li><a href="{% url report_csa report.pk %}">Customer Support Archive</a></li>
-            {% if error == "report_archived" %}
+		{% if error == "report_archived" or error == "report_deleted"%}
+			{% if error == "report_archived" %}
+				<h2>Report was archived and cannot be viewed</h2>
+			{% elif error == "report_deleted" %}
+				<h2>Report was deleted and cannot be viewed</h2>
+			{% endif %}
+			<ul>
+				<li><a href="{{report_link}}/{{report_link|basename}}.support.zip">Customer Support Archive</a></li>
                 <li><a href="{{report_link}}/backupPDF.pdf">View Backup Report PDF</a></li>
-            {% else %}
+			</ul>
+		{% else %}
+			<ul>
+				<li><a href="{% url report_csa report.pk %}">Customer Support Archive</a></li>
                 <li><a href="{% url report report.pk %}">Report</a></li>
-            {% endif %}
-        </ul>
-        <ul>
-            {% for exists, path, text in file_links %}
-            <li>
-                {% if exists %}
-                    <a href="{{path}}">{{text}}</a>
-                {% else %}
-                    {{text}} (Does not exist)
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
-    {%endif%}
+			</ul>
+			<ul>
+				{% for exists, path, text in file_links %}
+				<li>
+					{% if exists %}
+						<a href="{{path}}">{{text}}</a>
+					{% else %}
+						{{text}} (Does not exist)
+					{% endif %}
+				</li>
+				{% endfor %}
+			</ul>
 
-    {% if log_data %}
-            <h1>Report Error Log <small>Refresh the page to see updates</small></h1>
-            {% for name, contents in log_data %}
-            <div class="clearfix">
-                <h2 class="pull-left">{{name}}</h2>&nbsp;
-                <a href="{{report_link}}/{{name}}" class="btn btn-small"><i class="icon-download"></i> Download</a>
-            </div>
-            <pre class="log">{{contents}}</pre>
-            {% endfor %}
-    {% else %}
-        <h2>There is no log to view.</h2>
-    {% endif %}
+
+			{% if log_data %}
+					<h1>Report Error Log <small>Refresh the page to see updates</small></h1>
+					{% for name, logfile in log_data %}
+						{% if logfile %}
+							<div class="clearfix">
+								<h2 class="pull-left">{{name}}</h2>&nbsp;
+								<a href="{{report_link}}/{{name}}" class="btn btn-small"><i class="icon-download"></i> Download</a>
+							</div>
+							<pre data-logfile="{{report_link}}/{{logfile}}" class="log">Loading <img src='/site_media/jquery/colorbox/images/loading.gif'></img> </pre>
+						{% endif %}
+					{% endfor %}
+			{% else %}
+				<h2>There is no log to view.</h2>
+			{% endif %}
+		{% endif %}
+	{% endif %}
 
 </div>
 {% endblock content %}

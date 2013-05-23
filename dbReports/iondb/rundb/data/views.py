@@ -19,10 +19,11 @@ from iondb.rundb.models import (
     Project,
     Location,
     ReportStorage,
-    EventLog, GlobalConfig, ReferenceGenome, RunType, dnaBarcode, Content, KitInfo,
-    VariantFrequencies, Plugin, LibraryKey, ThreePrimeadapter)
+    EventLog, GlobalConfig, ReferenceGenome, RunType, dnaBarcode, Content, KitInfo, ContentType,
+    VariantFrequencies, Plugin, LibraryKey, ThreePrimeadapter, ExperimentAnalysisSettings, Sample)
 from iondb.rundb.api import CompositeExperimentResource, ProjectResource
 from iondb.rundb.report.views import build_result, _report_started
+from iondb.rundb import forms
 from iondb.anaserve import client
 
 from django.http import HttpResponse, HttpResponseServerError
@@ -36,18 +37,23 @@ logger = logging.getLogger(__name__)
 
 def get_search_parameters():
     experiment_params = {
-        'sample': [],
-        'library': [],
         'flows': [],
         'chipType': [],
         'pgmName': [],
     }
     report_params = {
-        'status': [],
         'processedflows': [],
     }
+
+    eas_keys = [('library','reference')]
+    
     for key in experiment_params.keys():
         experiment_params[key] = list(Experiment.objects.values_list(key, flat=True).distinct(key).order_by(key))
+
+    experiment_params['sample'] = list(Sample.objects.filter(status = "run").values_list('name', flat= True).order_by('name'))
+
+    for expkey,key in eas_keys:
+        experiment_params[expkey] = list(ExperimentAnalysisSettings.objects.values_list(key, flat=True).distinct(key).order_by(key))        
     for key in report_params.keys():
         report_params[key] = list(Results.objects.values_list(key, flat=True).distinct(key).order_by(key))
     combined_params = {
@@ -133,14 +139,14 @@ def getCSV(request):
             .exclude(experiment__expName__exact="NONE_ReportOnly_NONE")
         if qDict.get('results__projects__name', None) is not None:
             base_object_list = base_object_list.filter(projects__name__exact=qDict.get('results__projects__name', None))
-        if qDict.get('sample', None) is not None:
-            base_object_list = base_object_list.filter(experiment__sample__exact=qDict.get('sample', None))
+        if qDict.get('samples__name', None) is not None:
+            base_object_list = base_object_list.filter(experiment__samples__name__exact=qDict.get('samples__name', None))
         if qDict.get('chipType', None) is not None:
             base_object_list = base_object_list.filter(experiment__chipType__exact=qDict.get('chipType', None))
         if qDict.get('pgmName', None) is not None:
             base_object_list = base_object_list.filter(experiment__pgmName__exact=qDict.get('pgmName', None))
-        if qDict.get('library', None) is not None:
-            base_object_list = base_object_list.filter(experiment__library__exact=qDict.get('library', None))
+        if qDict.get('results__eas__reference', None) is not None:
+            base_object_list = base_object_list.filter(eas__reference__exact=qDict.get('results__eas__reference', None))
         if qDict.get('flows', None) is not None:
             base_object_list = base_object_list.filter(experiment__flows__exact=qDict.get('flows', None))
         if qDict.get('star', None) is not None:
@@ -267,9 +273,10 @@ def project_edit(request, pk=None):
 def project_log(request, pk=None):
     if request.method == 'GET':
         selected = get_object_or_404(Project, pk=pk)
-        log = EventLog.objects.for_model(Project).filter(object_pk=pk)
-        ctx = template.RequestContext(request, {"project": selected, "event_log": log})
-        return render_to_response("rundb/data/modal_project_log.html", context_instance=ctx)
+        ct = ContentType.objects.get_for_model(selected)
+        title = "Project History for %s (%s):" % (selected.name, pk)
+        ctx = template.RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
+        return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
     if request.method == 'POST':
         try:
             pk = int(pk)
@@ -292,7 +299,8 @@ def project_log(request, pk=None):
 
 def project_results(request, pk):
     selected = get_object_or_404(Project, pk=pk)
-    ctx = template.RequestContext(request, {"project": selected})
+    thumbs_exist = Results.objects.filter(metaData__contains='thumb').exists()
+    ctx = template.RequestContext(request, {"project": selected, 'filter_thumbnails': thumbs_exist})
     return render_to_response("rundb/data/project_results.html", context_instance=ctx)
 
 
@@ -354,7 +362,7 @@ def validate_results_to_combine(selected_results):
             version[name] = next((v.split(':')[1].strip() for v in result.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
             setattr(result, name + "_version", version[name])
         result.floworder = result.experiment.flowsInOrder
-        result.barcodeId = result.experiment.barcodeId
+        result.barcodeId = result.eas.barcodeKitName
 
     if len(set([getattr(r, 'tmap_version') for r in selected_results])) > 1:
         warnings.append("Selected results have different TMAP versions.")
@@ -402,24 +410,41 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         if pk == ids_to_merge[0]:
             reference = result.reference
             floworder = result.experiment.flowsInOrder
-            barcodeId = result.experiment.barcodeId
+            barcodeId = result.eas.barcodeKitName
         else:
             if not reference == result.reference:
                 raise Exception("Selected results do not have the same Alignment Reference.")
             if not floworder == result.experiment.flowsInOrder:
                 floworder = ''
-            if not barcodeId == result.experiment.barcodeId:
+            if not barcodeId == result.eas.barcodeKitName:
                 barcodeId = ''
 
     # create new entry in DB for combined Result
     delim = ':'
     filePrefix = "CombineAlignments"  # this would normally be Experiment name that's prefixed to all filenames
-    result = create_combined_result('CA_%s_%s' % (name, projectName))
+    result, exp = create_combined_result('CA_%s_%s' % (name, projectName))
     result.projects.add(project)
     result.resultsType = 'CombinedAlignments'
     result.parentIDs = delim + delim.join(ids_to_merge) + delim
     result.reference = reference
     result.sffLink = path.join(result.reportLink, "%s_%s.sff" % (filePrefix, result.resultsName))
+
+    # add ExperimentAnalysisSettings
+    eas_kwargs = {
+            'date' : datetime.now(),
+            'experiment' : exp,
+            'isEditable' : False,
+            'isOneTimeOverride' : True,
+            'status' : 'run',
+            'reference': reference,
+            'barcodeKitName': barcodeId,
+            'targetRegionBedFile': '',
+            'hotSpotRegionBedFile': ''
+    }
+    eas = ExperimentAnalysisSettings(**eas_kwargs)
+    eas.save()    
+    result.eas = eas
+    
     result.save()
 
     # gather parameters to pass to merging script
@@ -525,7 +550,7 @@ def create_combined_result(resultsName):
     storage = storages[len(storages) - 1]
 
     result = build_result(exp, resultsName, storage, _location())
-    return result
+    return result, exp
 
 
 def _location():
@@ -561,100 +586,115 @@ def _blank_Exp(blankName):
                 logging.debug(field.name, field.get_internal_type())
         kwargs['cycles'] = 1
         kwargs['flows'] = 1
-        kwargs['barcodeId'] = ''
+        kwargs['ftpStatus'] = 'Complete'
         ret = Experiment(**kwargs)
         ret.save()
     return ret
 
 
-def _get_plan_data():
-
-    _data = {}
-    _data["runTypes"] = RunType.objects.all().order_by("id")
-    _data["barcodes"] = dnaBarcode.objects.values('name').distinct().order_by('name')
-    _data["references"] = ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION)
-
-    allFiles = Content.objects.filter(publisher__name="BED", path__contains="/unmerged/detail/")
-    bedFiles, hotspotFiles = [], []
-    for _file in allFiles:
-        if _file.meta.get("hotspot", False):
-            hotspotFiles.append(_file)
-        else:
-            bedFiles.append(_file)
-
-    _data["bedFiles"] = bedFiles
-    _data["hotspotFiles"] = hotspotFiles
-
-    _data["seqKits"] = KitInfo.objects.filter(kitType='SequencingKit')
-    _data["libKits"] = KitInfo.objects.filter(kitType='LibraryKit')
-
-    _data["variantfrequencies"] = VariantFrequencies.objects.all().order_by("name")
-
-    #is the ion reporter upload plugin installed?
-    try:
-        IRupload = Plugin.objects.get(name="IonReporterUploader", selected=True, active=True, autorun=True)
-    ##    status, IRworkflows = tasks.IonReporterWorkflows()
-    except Plugin.DoesNotExist:
-        IRupload = False
-        ##   status = False
-        ##   IRworkflows = "Plugin Does Not Exist"
-    except MultipleObjectsReturned:
-        IRupload = False
-        ##  status = False
-        ##  IRworkflows = "Multiple active versions of IonReporterUploader installed. Please uninstall all but one."
-
-    _data["IRupload"] = IRupload
-    ##_data["status"] = status
-    ##_data["IRworkflows"] = IRworkflows
-
-    #the entry marked as the default will be on top of the list
-    _data["forwardLibKeys"] = LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
-    _data["forward3Adapters"] = ThreePrimeadapter.objects.filter(direction='Forward').order_by('-isDefault', 'name')
-
-    return _data
-
-
-def _edit_experiment(request, pk):
-
-    #get the info to populate the page
-    _data = _get_plan_data()
-
-    #get the existing plan
-    exp = get_object_or_404(Experiment, pk=pk)
-
-    selectedReference = exp.library
-
-    #for paired-end reverse run, separate library key and 3' adapter needed
-    selectedForwardLibKey = exp.libraryKey
-    selectedForward3PrimeAdapter = exp.forward3primeadapter
-
-    #the entry marked as the default will be on top of the list
-    forwardLibKeys = LibraryKey.objects.filter(direction='Forward').order_by('-isDefault', 'name')
-    forward3Adapters = ThreePrimeadapter.objects.filter(direction='Forward').order_by('-isDefault', 'name')
-
-    ctxd = {
-        "bedFiles": _data["bedFiles"],
-        "hotspotFiles": _data["hotspotFiles"],
-        "libKits": _data["libKits"],
-        "seqKits": _data["seqKits"],
-        "variantfrequencies": _data["variantfrequencies"],
-        "runTypes": _data["runTypes"],
-        "barcodes": _data["barcodes"],
-        "references": _data["references"],
-
-        "exp": exp,
-        "selectedReference": selectedReference,
-        "selectedForwardLibKey": selectedForwardLibKey,
-        "selectedForward3PrimeAdapter": selectedForward3PrimeAdapter,
-        "forwardLibKeys": forwardLibKeys,
-        "forward3Adapters": forward3Adapters
-    }
-
-    context = template.RequestContext(request, ctxd)
-    return context
-
-
 @login_required
 def experiment_edit(request, pk):
-    context = _edit_experiment(request, pk)
-    return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=context)
+    exp = get_object_or_404(Experiment, pk=pk)    
+    eas, eas_created = exp.get_or_create_EAS(editable=True)
+    plan = exp.plan
+    
+    barcodes = {}
+    for bc in dnaBarcode.objects.order_by('name', 'index').values('name', 'id_str','sequence'):
+        barcodes.setdefault(bc['name'],[]).append(bc)
+    
+    # get list of plugins to run
+    plugins = Plugin.objects.filter(selected=True,active=True).exclude(path='')
+    selected_names = [pl['name'] for pl in eas.selectedPlugins.values()]
+    plugins_list = list(plugins.filter(name__in=selected_names))
+    
+    if request.method == 'GET':
+        exp_form = forms.ExperimentSettingsForm(instance=exp)
+        eas_form = forms.AnalysisSettingsForm(instance=eas)
+        
+        # Application, i.e. runType
+        if plan:
+            exp_form.fields['runtype'].initial = plan.runType
+            
+        # Library Kit name - can get directly or from kit barcode    
+        libraryKitName = ''
+        if eas.libraryKitName:
+             libraryKitName = eas.libraryKitName
+        elif eas.libraryKitBarcode:
+             libkitset = KitInfo.objects.filter(kitType='LibraryKit',kitpart__barcode = eas.libraryKitBarcode)
+             if len(libkitset) == 1:
+                libraryKitName = libkitset[0].name
+        exp_form.fields['libraryKitname'].initial = libraryKitName
+        
+        # Sequencing Kit name - can get directly or from kit barcode
+        if not exp.sequencekitname and exp.sequencekitbarcode:
+            seqkitset = KitInfo.objects.filter(kitType='SequencingKit',kitpart__barcode = exp.sequencekitbarcode)
+            if len(seqkitset) == 1:
+                exp_form.fields['sequencekitname'] = seqkitset[0].name
+        
+        exp_form.fields['libraryKey'].initial = eas.libraryKey
+        if len(exp.samples.all()) > 0:
+            exp_form.fields['sample'].initial = exp.samples.all()[0].id
+        exp_form.fields['barcodedSamples'].initial = eas.barcodedSamples
+        
+        # plugins with optional userInput
+        eas_form.fields['plugins'].initial = [plugin.id for plugin in plugins_list]
+        pluginsUserInput = {}
+        for plugin in plugins_list:
+            pluginsUserInput[str(plugin.id)] = eas.selectedPlugins.get(plugin.name, {}).get('userInput','')
+        eas_form.fields['pluginsUserInput'].initial = json.dumps(pluginsUserInput)
+    
+    if request.method == 'POST':
+        exp_form = forms.ExperimentSettingsForm(request.POST, instance=exp)
+        eas_form = forms.AnalysisSettingsForm(request.POST, instance=eas)
+
+        if exp_form.is_valid() and eas_form.is_valid():
+            # save Plan
+            if plan:
+                plan.runType = exp_form.cleaned_data['runtype']
+                plan.save()
+                
+            # save Experiment
+            exp_form.save()
+            
+            # save ExperimentAnalysisSettings
+            eas = eas_form.save(commit=False)
+            eas.libraryKey = exp_form.cleaned_data['libraryKey']
+            eas.libraryKitName = exp_form.cleaned_data['libraryKitname']
+            eas.barcodedSamples = exp_form.cleaned_data['barcodedSamples']
+            
+            # plugins
+            form_plugins_list = list(eas_form.cleaned_data['plugins'])
+            pluginsUserInput = json.loads(eas_form.cleaned_data['pluginsUserInput'])
+            selectedPlugins = {}
+            for plugin in form_plugins_list:
+                selectedPlugins[plugin.name] = {
+                     "id" : str(plugin.id),
+                     "name" : plugin.name,
+                     "version" : plugin.version,
+                     "features": plugin.pluginsettings.get('features',[]),
+                     "userInput": pluginsUserInput.get(str(plugin.id),'')
+                }
+            eas.selectedPlugins = selectedPlugins
+            
+            eas.save()
+            
+            # save single non-barcoded sample or barcoded samples
+            if not eas.barcodeKitName:
+                sampleId = exp_form.cleaned_data['sample']
+                if sampleId:
+                    sample = Sample.objects.get(pk=sampleId)
+                    exp.samples.clear()
+                    exp.samples.add(sample)
+            elif eas.barcodedSamples:
+                exp.samples.clear()
+                for value in eas.barcodedSamples.values():
+                    sampleId = value['id']
+                    sample = Sample.objects.get(pk=sampleId)
+                    exp.samples.add(sample)
+
+        else:
+            return HttpResponseServerError('%s %s' % (exp_form.errors, eas_form.errors))
+        
+    ctxd = {"exp_form": exp_form, "eas_form": eas_form, "pk":pk, "name": exp.expName, "barcodes":json.dumps(barcodes)}
+    return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=template.RequestContext(request, ctxd))
+    

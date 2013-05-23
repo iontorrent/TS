@@ -18,10 +18,10 @@ import socket
 import xmlrpclib
 import subprocess
 import time
+import os.path
 from collections import deque
 
-from ion.utils.plugin_json import *
-from ion.plugin.remote import runPlugin
+from ion.plugin.remote import call_launchPluginsXMLRPC
 
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
@@ -148,7 +148,7 @@ def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULT
         file_in.close()
 
         # update path to data
-        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['id_str'])
+        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['datasubdir'])
         TMP_PARAMS["mark_duplicates"] = False
 
         #write block specific ion_params_00.json
@@ -180,9 +180,8 @@ def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULT
     return resultDir
 
 def isbadblock(blockdir, message):
-    if os.path.exists(os.path.join(blockdir,'badblock.txt')):
-        printtime("WARNING: %s: skipped %s" % (message,blockdir))
-        return True
+    # process blockstatus.txt
+    # printtime("WARNING: %s: skipped %s" % (message,blockdir))
     return False
 
 def printheader():
@@ -212,98 +211,119 @@ def printheader():
     sys.stderr.flush()
 
 def get_plugins_to_run(plugins, report_type):
-  """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
-  printtime("Gettings plugins to run, report type = %s" % report_type)
-  plugin_list=[]
-  for plugin in sorted(plugins, key=lambda plugin: plugin["name"],reverse=True):  
-    # check if this plugin was selected to run for this run type
-    # default is run on wholechip and thumbnail, but not composite
-    if report_type == 'wholechip' or report_type == 'thumbnail':
-      selected = True
-    else:
-      selected = False  
-      
-    if ('runtype' in plugin.keys()) and plugin['runtype']:
-      selected = (report_type in plugin['runtype'])
-
-    # TODO hardcoded specials
-    if (report_type == 'composite') and (plugin['name'] in ['torrentscout','contourPlots','seq_dependent_errors']):
-      selected = True
-    if (report_type == 'thumbnail') and (plugin['name'] in ['rawPlots', 'separator', 'chipNoise']):
-      plugin['runlevel'] = 'separator, default'          
+    """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
+    blocklevel = False
+    plugins_to_run = {}
+    printtime("Gettings plugins to run, report type = %s" % report_type)    
+    for name in plugins.keys():
+        plugin = plugins[name]
+        
+        # default is run on wholechip and thumbnail, but not composite
+        selected = report_type in ['wholechip', 'thumbnail']          
+        if plugin.get('runtype',''):
+            selected = (report_type in plugin['runtype'])
     
-    if selected:                  
-      printtime("Plugin %s is enabled" % plugin['name'])
-      if not ( ('runlevel' in plugin.keys()) and plugin['runlevel'] ):
-      # fill in default value if runlevel is missing 
-        plugin['runlevel'] = 'default'      
-      plugin['hold_jid'] = []
-      plugin_list.append(plugin)
-
-  return plugin_list
+        # TODO hardcoded specials
+        if (report_type == 'composite') and (plugin['name'] in ['torrentscout','contourPlots','seq_dependent_errors']):
+            selected = True
+        if (report_type == 'thumbnail') and (plugin['name'] in ['rawPlots', 'separator', 'chipNoise']):
+            plugin['runlevel'] = ['separator', 'default']
+        
+        if selected:            
+            plugin['runlevel'] = plugin.get('runlevel') if plugin.get('runlevel') else ['default']
+            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'],','.join(plugin['runlevel'])))
+            plugins_to_run[name] = plugin
+  
+            # check if have any blocklevel plugins        
+            if report_type == 'composite' and 'block' in plugin['runlevel']:
+                blocklevel = True
+  
+    return plugins_to_run, blocklevel
 
 
 def runplugins(plugins, env, basefolder, url_root, level = 'default'): 
+    printtime("Starting plugins runlevel=%s in basefolder= %s" % (level,basefolder) )
     try:
         pluginserver = xmlrpclib.ServerProxy("http://%s:%d" % (PLUGINSERVER_HOST, PLUGINSERVER_PORT), allow_none=True)
-    except (socket.error, xmlrpclib.Fault):
-        traceback.print_exc()
+        env['runlevel'] = level
+
+        # 'last' plugin level waits for ALL previously launched plugins
+        hold_last = []
+        if level == 'last':
+            hold_last = [p.get('jid','') for p in plugins.values() if p.get('jid','')]
+    
+        # gather plugins to run for this level
+        run_plugins = {}
+        for name in plugins.keys():
+            if level in plugins[name]['runlevel'] and name != '':
+                if level == 'last':
+                    plugins[name]['hold_jid'] = hold_last
+                run_plugins[name] = plugins[name]
         
-    env['runlevel'] = level
-    
-    # 'last' plugin level waits for ALL previously launched plugins
-    hold_last = []
-    if 'last' in level:
-      for plugin in plugins:
-          hold_last+= plugin['hold_jid']
-    
-    retries = 1 # pipeline doesn't retry plugins: retries = 1    
-    once = True
-    nrun = 0
-    for i,plugin in enumerate(plugins):      
-      if level in plugin['runlevel'] and plugin['name'] != '':                    
-          if once:
-              printtime("Starting plugins runlevel=%s in basefolder= %s" % (level,basefolder) )
-              once = False
-          if 'last' in level:
-              plugin['hold_jid'] = hold_last          
-          
-          start_json = make_plugin_json(env,plugin,env['primary_key'],basefolder,url_root) 
-                   
-          plugin, msg = runPlugin(plugin, start_json, level, pluginserver, retries)
-          printtime(msg)           
-          # save needed info for multilevel plugins
-          plugins[i] = plugin          
-          nrun += 1              
-                  
-    if nrun > 0:      
-      printtime('Launched %i Plugins runlevel = %s' % (nrun,level))
-      
+        if len(run_plugins) > 0:        
+            run_plugins, msg = call_launchPluginsXMLRPC(env, run_plugins, basefolder, url_root, pluginserver)
+            print msg        
+            # save needed info for multilevel plugins
+            for name in run_plugins.keys():
+                plugins[name] = run_plugins[name]
+
+    except:
+        traceback.print_exc()
+
     return plugins  
 
 
-def run_selective_plugins(plugin_set,env,basefolder,url_root):
-    try:
-        pluginserver = xmlrpclib.ServerProxy("http://%s:%d" % (PLUGINSERVER_HOST, PLUGINSERVER_PORT), allow_none=True)
-    except (socket.error, xmlrpclib.Fault):
-        traceback.print_exc()
-
-    for plugin in sorted(env['plugins'], key=lambda plugin: plugin["name"],reverse=True):
-        if plugin['name'] in plugin_set:
-            printtime("Plugin %s is enabled" % plugin['name'])
-
-            try:
-                env['report_root_dir'] = os.getcwd()
-                start_json = make_plugin_json(env,plugin,env['primary_key'],basefolder,url_root)
-                pluginserver.pluginStart(start_json)
-                printtime('plugin %s started ...' % plugin['name'])
-            except:
-                printtime('plugin %s failed...' % plugin['name'])
-                traceback.print_exc()
-
-
-
 def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
+    if mark_duplicates:
+        merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates)
+    else:
+        merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates)
+
+
+def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
+
+    try:
+        for bamfile in bamfilelist:
+            cmd = 'samtools view -H %s > %s.header.sam' % (bamfile,bamfile,)
+            printtime("DEBUG: Calling '%s'" % cmd)
+            subprocess.call(cmd,shell=True)
+
+        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+        for bamfile in bamfilelist:
+            cmd = cmd + ' I=%s.header.sam' % bamfile
+        cmd = cmd + ' O=%s.header.sam' % (composite_bam_filepath)
+        cmd = cmd + ' VERBOSITY=WARNING' # suppress INFO on stderr
+        cmd = cmd + ' QUIET=true' # suppress job-summary on stderr
+        cmd = cmd + ' VALIDATION_STRINGENCY=SILENT'
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+
+        cmd = 'samtools merge -l1 -p8'
+        if mark_duplicates:
+            cmd += ' - '
+        else:
+            cmd += ' %s' % (composite_bam_filepath)
+        
+        for bamfile in bamfilelist:
+            cmd += ' %s' % bamfile
+        cmd += ' -h %s.header.sam' % composite_bam_filepath
+        
+        if mark_duplicates:
+            json_name = ('BamDuplicates.%s.json')%(os.path.normpath(composite_bam_filepath)) if os.path.normpath(composite_bam_filepath)!='rawlib.bam' else 'BamDuplicates.json'
+            cmd += ' | BamDuplicates -i stdin -o %s -j %s' % (composite_bam_filepath, json_name)
+        
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+
+        cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+    except:
+        printtime("bam file merge failed")
+        traceback.print_exc()
+        return 1
+
+def merge_bam_files_picard(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates):
 
     try:
 #        cmd = 'picard-tools MergeSamFiles'
@@ -329,12 +349,13 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,ma
         return 1
 
     try:
-        # picard is using .bai , we want .bam.bai
-        srcbaifilepath = composite_bam_filepath.replace(".bam",".bai")
-        if os.path.exists(srcbaifilepath):
-            os.rename(srcbaifilepath, composite_bai_filepath)
-        else:
-            printtime("ERROR: %s doesn't exists" % srcbaifilepath)
+        if not os.path.exists(composite_bai_filepath):
+            # picard is using .bai , we want .bam.bai
+            srcbaifilepath = composite_bam_filepath.replace(".bam",".bai")
+            if os.path.exists(srcbaifilepath):
+                os.rename(srcbaifilepath, composite_bai_filepath)
+            else:
+                printtime("ERROR: %s doesn't exists" % srcbaifilepath)
     except:
         traceback.print_exc()
         return 1
@@ -343,7 +364,7 @@ def remove_unneeded_block_files(blockdirs):
     return
     for blockdir in blockdirs:
         try:
-            bamfile = os.path.join(blockdir,'rawlib.bam')
+            bamfile = os.path.join(blockdir,'basecaller_results','rawlib.basecaller.bam')
             if os.path.exists(bamfile):
                 os.remove(bamfile)
 

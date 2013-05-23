@@ -23,6 +23,8 @@ class ProgramState {
     std::string outFile;
     Json::Value state_json;
     // CommandLineOpts:
+    void AddBkgControl(Json::Value &json, BkgModelControlOpts &bgk_control);
+    void SetBkgControl(Json::Value &json, BkgModelControlOpts &bgk_control);
     void AddModControl(Json::Value &json, ModuleControlOpts &mod_control);
     void SetModControl(Json::Value &json, ModuleControlOpts &mod_control);
     void AddKeyContext(Json::Value &json, KeyContext &key_context);
@@ -57,6 +59,7 @@ class ProgramState {
     std::string flow_context_name;
     std::string sys_context_name;
     std::string bfd_control_name;
+    std::string bkg_control_name;
     std::string loc_context_name;
     std::string img_control_name;
     std::string seq_list_name;

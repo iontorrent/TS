@@ -43,30 +43,38 @@ public:
     float                   my_mean_copy_count;
     std::vector<bool>       high_quality;
     std::vector<bead_state> all_status;
+    bool doAllBeads;
+    bool ignoreQuality;
+    void IgnoreQuality ();
 
     // track beads sampled for use in regional parameter fitting
     std::vector<bool>  sampled;
     bool isSampled;
+    int ntarget;
 
     int regionindex; // for debugging
     
     BeadTracker();
 
-    void  InitBeadList(Mask *bfMask, Region *region, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit);
+    void  InitBeadList(Mask *bfMask, Region *region, bool ignorekey, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit);
     void  InitBeadParams(float AmplLowerLimit);
     void  InitBeadParamR(Mask *bfMask, Region *region, std::vector<float> *tauB,std::vector<float> *tauE);
     void  InitRandomSample(Mask& bf, Region& region, const std::set<int>& sample);
     // Two use cases in the code when sampling is set
-    // use only beads that are marked as Sampled
-    // use only beads that are marked as StillSampled
-    // which use in the same code is determined by skip_beads
-    void  SetSampled();
-    void  SystematicSampling();
-    void  UpdateSampled( bool *well_completed);  
-    void  ExcludeFromSampled( int ibd );
-    bool  StillSampled(int ibd) { return( sampled[ibd] && high_quality[ibd] ); }
-    bool  Sampled(int ibd) { return( sampled[ibd] ); }
-    bool  BeadIncluded (int ibd, bool skip_beads) { return ( high_quality[ibd] || !skip_beads );} // if not skipping beads, ignore the high_quality flag
+    int  SetSampled();
+    int  SetSampled(std::vector<float>& penalty, int sampling_rate);
+    int  SystematicSampling(int sampling_rate, std::vector<size_t>::iterator first, std::vector<size_t>::iterator last);
+
+    // Sampled beads used for first pass region & well params
+    // high_quality flag initially true for all beads
+    // so all sampled beads used first pass
+    // high_quality flag set to false for bad beads seen during first pass
+    // and remaining sampled beads used for final region params
+    bool  Sampled(int ibd) { return( sampled[ibd] && high_quality[ibd] ); }
+    int   NumberSampled();
+
+    // Ignore the high_quality flag, rolling regional groups enabled
+    bool  BeadIncluded (int ibd, bool skip_beads) { return ( high_quality[ibd] || !skip_beads );}
 
     void  InitModelBeadParams();
 
@@ -94,8 +102,8 @@ public:
     float FindMeanDmult(bool skip_beads);
     void  RescaleDmult(float scale);
     float CenterDmult(bool skip_beads);
-    float FindMeanDmultFromSample(bool skip_beads);
-    float CenterDmultFromSample(bool skip_beads);
+    float FindMeanDmultFromSample();
+    float CenterDmultFromSample();
 
     void  RescaleRatio(float scale);
 
@@ -135,20 +143,22 @@ private:
 	ar & params_low;
 	ar & all_status; // serialize all_status before params_nn
 	ar & params_nn;  // params_nn points at bead_state objects in all_status
+	ar & doAllBeads;
+	ar & ignoreQuality;
 	ar & seqList;
 	ar & numSeqListItems;
 	ar & DEBUG_BEAD;
 	ar & max_emphasis;
 	ar & ndx_map;
 	ar & key_id;
+	ar & my_mean_copy_count;
 	ar & high_quality;
 	ar & sampled;
 	ar & isSampled;
-	ar & my_mean_copy_count;
+	ar & ntarget;
 	ar & regionindex;
 	// fprintf(stdout, "done with BeadTracker\n");
       }
-
 };
 
 

@@ -19,38 +19,38 @@ RcppExport SEXP correctCafie(
     try {
 	// First do some annoying but necessary type casting on the input parameters.
 	// measured & nFlow
-	RcppMatrix<double> measured_temp(measured_in);
+	Rcpp::NumericMatrix measured_temp(measured_in);
 	int nWell = measured_temp.rows();
 	int nFlow = measured_temp.cols();
 	// flowOrder
-	RcppStringVector  flowOrder_temp(flowOrder_in);
-	char *flowOrder = strdup(flowOrder_temp(0).c_str());
+	Rcpp::StringVector  flowOrder_temp(flowOrder_in);
+	char *flowOrder = strdup(flowOrder_temp(0));
 	int flowOrderLen = strlen(flowOrder);
 	// keyFlow
-	RcppVector<int> keyFlow_temp(keyFlow_in);
+	Rcpp::IntegerVector keyFlow_temp(keyFlow_in);
 	int *keyFlow = new int[keyFlow_temp.size()];
 	for(int i=0; i<keyFlow_temp.size(); i++) {
 	  keyFlow[i] = keyFlow_temp(i);
 	}
 	// nKeyFlow
-	RcppVector<int> nKeyFlow_temp(nKeyFlow_in);
+	Rcpp::IntegerVector nKeyFlow_temp(nKeyFlow_in);
 	int nKeyFlow = nKeyFlow_temp(0);
 	// cafEst, ieEst, droopEst
-	RcppVector<double> cafEst_temp(cafEst_in);
+	Rcpp::NumericVector cafEst_temp(cafEst_in);
 	double cafEst = cafEst_temp(0);
-	RcppVector<double> ieEst_temp(ieEst_in);
+	Rcpp::NumericVector ieEst_temp(ieEst_in);
 	double ieEst = ieEst_temp(0);
-	RcppVector<double> droopEst_temp(droopEst_in);
+	Rcpp::NumericVector droopEst_temp(droopEst_in);
 	double droopEst = droopEst_temp(0);
  
 	if(flowOrderLen != nFlow) {
-	    exceptionMesg = copyMessageToR("Flow order and signal should be of same length");
+	    exceptionMesg = strdup("Flow order and signal should be of same length");
 	} else if(nKeyFlow <= 0) {
-	    exceptionMesg = copyMessageToR("keyFlow must have length > 0");
+	    exceptionMesg = strdup("keyFlow must have length > 0");
 	} else {
 	    double *measured = new double[nFlow];
-	    RcppMatrix<double> predicted(nWell,nFlow);
-	    RcppMatrix<double> corrected(nWell,nFlow);
+	    Rcpp::NumericMatrix predicted(nWell,nFlow);
+	    Rcpp::NumericMatrix corrected(nWell,nFlow);
 	    CafieSolver solver;
 	    solver.SetFlowOrder(flowOrder);
 	    solver.SetCAFIE(cafEst, ieEst);
@@ -77,12 +77,8 @@ RcppExport SEXP correctCafie(
 	    }
 
 	    // Build result set to be returned as a list to R.
-	    RcppResultSet rs;
-	    rs.add("predicted",  predicted);
-	    rs.add("corrected",  corrected);
-
-	    // Get the list to be returned to R.
-	    rl = rs.getReturnList();
+        rl = Rcpp::List::create(Rcpp::Named("predicted") = predicted,
+                                Rcpp::Named("corrected") = corrected);
 
 	    delete [] measured;
 	}
@@ -91,9 +87,9 @@ RcppExport SEXP correctCafie(
 	delete [] keyFlow;
 
     } catch(std::exception& ex) {
-	exceptionMesg = copyMessageToR(ex.what());
+	forward_exception_to_r(ex);
     } catch(...) {
-	exceptionMesg = copyMessageToR("unknown reason");
+	::Rf_error("c++ exception (unknown reason)");
     }
     
     if(exceptionMesg != NULL)

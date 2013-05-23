@@ -28,7 +28,6 @@
 #include "ChipIdDecoder.h"
 #include "LSRowImageProcessor.h"
 
-#include "dbgmem.h"
 #include "IonErr.h"
 
 #include "TikhonovSmoother.h"

@@ -63,8 +63,8 @@ class Separator : public AvgKeyIncorporation
     float  *GetAvgKeySig (int region_num, int rStart, int rEnd, int cStart, int cEnd) {if (region_num < num_regions) return (&avgRegionKeySignal[region_num* (end-start) ]); else return NULL;}
     double  GetAvgKeySigLen () { return (end-start); }
     void    SetRegions (int _num_regions,Region *_region_list) { num_regions = _num_regions; region_list = _region_list; }
-    int     GetStart (void) {return uncomp_start;}
-    int     GetStart (int region_num, int rStart, int rEnd, int cStart, int cEnd) {return GetStart();}
+    float     GetStart (void) {return uncomp_start;}
+    float     GetStart (int region_num, int rStart, int rEnd, int cStart, int cEnd) {return GetStart();}
     int     GetEnd (void) {return end;}
     void SetFracEmpty (float _multiplier) {emptyFraction = _multiplier;}
     const std::vector<SepModel> & GetRegionModels() { return mModels; }

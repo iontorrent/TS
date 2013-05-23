@@ -67,6 +67,10 @@ public:
     }
   }
 
+  double GetSD(int flowIx, int frameIx) {
+    return mGlobalTraces[flowIx][frameIx].GetIqrSd();
+  }
+
   std::vector<SampleStats<T> > &GetFlowTrace(int flowIx) {
     return mGlobalAvg[flowIx];
   }
@@ -133,13 +137,19 @@ public:
       string file = mPrefix + "/avgNukeTrace_" + name + ".txt"; 
       ofstream avgTrace;
       avgTrace.open(file.c_str());
+      ofstream sdTrace;
+      file = mPrefix + "/sdNukeTrace_" + name + ".txt"; 
+      sdTrace.open(file.c_str());
       for (size_t flowIx = 0; flowIx < mKeys[keyIx].usableKeyFlows; flowIx++) {
         avgTrace << flowIx;
+        sdTrace << flowIx;
         std::vector<SampleStats<double> > &flowTrace = mKeyRegions[keyIx].GetFlowTrace(flowIx);
         for (size_t frameIx = 0; frameIx < flowTrace.size(); frameIx++) {
           avgTrace << " " << flowTrace[frameIx].GetMean();
+          sdTrace << " " << mKeyRegions[keyIx].GetSD(flowIx, frameIx);
         }
         avgTrace << endl;
+        sdTrace << endl;
       }
       vector<int> seen(mKeys[keyIx].flows.size(), 0);
       for (size_t flowIx = 0; flowIx < mKeys[keyIx].flows.size(); flowIx++) {

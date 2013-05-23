@@ -39,18 +39,21 @@ add_custom_target(compileall ALL
 
 install(FILES "${PROJECT_SOURCE_DIR}/oia/oia.config" DESTINATION /usr/share/ion/oia)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oiad.py" DESTINATION /usr/share/ion/oia)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/ecc.py" DESTINATION /usr/share/ion/oia)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/oia/oia" DESTINATION /etc/init.d)
 
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion-plugin-status" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_netinfo" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/remote_host.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_sysinfo" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_raidinfo" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_gpuinfo" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_timeout.sh" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/ion_versionCheck.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/BlockTLScript.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/MergeTLScript.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/pluginReporting.py" DESTINATION bin)
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/alignmentQC.py" DESTINATION bin)
 install(PROGRAMS  "${PROJECT_SOURCE_DIR}/java/FlowspaceCalibration.jar" DESTINATION local/lib/java)
 
 install(DIRECTORY web DESTINATION share/ion

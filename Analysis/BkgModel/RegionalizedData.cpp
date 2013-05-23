@@ -80,6 +80,7 @@ void RegionalizedData::NoData()
   // timing start
   sigma_start = 0.0f;
   t_mid_nuc_start = 0.0f;
+  t0_frame = -1.0;
   // job holder flag
   fitters_applied = -1; // ready to add data
 }
@@ -90,29 +91,58 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
   time_c.choose_time = global_defaults.signal_process_control.choose_time;
   time_c.SetUpTime (my_trace.imgFrames,t0_offset,global_defaults.data_control.time_start_detail, global_defaults.data_control.time_stop_detail, global_defaults.data_control.time_left_avg);
   time_c.t0 = t0_offset;
-  // check the points that we need
-  if (CENSOR_ZERO_EMPHASIS>0)
+
+  // if fitting the exponential decay at the tail-end of the incorporation trace, we
+  // need to keep more data points.
+  if (global_defaults.signal_process_control.exp_tail_fit)
   {
-    EmphasisClass trial_emphasis;
+     // primarily for thumbnail processing...we might need to ignore some of the long-time-history data points in the file
+     // This is an annoying consequence of the software-derived thumbnail..where independent VFC data from each region
+     // is combined into a single unified image all with a common time-domain.  As a result...most tiles in the thumbnail
+     // have invalid data points, and it is harmful to include these in the processing.  Unfortunately...there is no simple
+     // way to know from the image data which data points are valid, and which are not.
+     // we make a blanket assumption here that data points beyond t0+60 frames are not useful.....this is probably 
+     // mostly accurate.
+     // The FPGA-based thumbnail does not have this issue
+     float tend = t0_offset + 60.0f;
+     int iend = 0;
+     for (int i=0;i < time_c.npts();i++)
+     {
+        iend = i;
+        if (time_c.frameNumber[i] >= tend)
+           break;
+     }
 
-    // assuming that our t_mid_nuc estimation is decent
-    // see what the emphasis functions needed for "detailed" results are
-    // and assume the "coarse" blank emphasis function will work out fine.
-    trial_emphasis.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
-    trial_emphasis.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
-    trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
-    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
-//    int old_pts = time_c.npts;
-    time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
-
-    // don't bother monitoring this now
-    //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
-    // now give the emphasis data structure (and everything else) using the "used" number of points
+     if (iend < time_c.npts())
+        time_c.npts(iend);
   }
+  else
+     // check the points that we need
+     if (CENSOR_ZERO_EMPHASIS>0)
+     {
+       EmphasisClass trial_emphasis;
+
+       // assuming that our t_mid_nuc estimation is decent
+       // see what the emphasis functions needed for "detailed" results are
+       // and assume the "coarse" blank emphasis function will work out fine.
+       trial_emphasis.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
+       trial_emphasis.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
+       trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
+       //    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+       trial_emphasis.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
+   //    int old_pts = time_c.npts;
+       time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
+
+       // don't bother monitoring this now
+       //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
+       // now give the emphasis data structure (and everything else) using the "used" number of points
+     }
+
   emphasis_data.SetDefaultValues (global_defaults.data_control.emp,global_defaults.data_control.emphasis_ampl_default, global_defaults.data_control.emphasis_width_default);
   emphasis_data.SetupEmphasisTiming (time_c.npts(), &time_c.frames_per_point[0],&time_c.frameNumber[0]);
   emphasis_data.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
-  emphasis_data.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+  //  emphasis_data.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
+  emphasis_data.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
 }
 
 
@@ -122,6 +152,7 @@ void RegionalizedData::SetupTimeAndBuffers (GlobalDefaultsForBkgModel &global_de
 {
   sigma_start = sigma_guess;
   t_mid_nuc_start = t_mid_nuc_guess;
+  t0_frame = t0_offset;
   my_regions.InitRegionParams (t_mid_nuc_start,sigma_start, global_defaults);
 
   SetTimeAndEmphasis (global_defaults, t_mid_nuc_guess, t0_offset);
@@ -267,6 +298,150 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter)
   my_beads.LowCopyBeadsAreLowQuality (my_beads.my_mean_copy_count);
   my_beads.KeyNormalizeReads (true); // force all beads to read the "true key" in the key flows
 }
+
+/** Given uninitialized vectors key_zeromer, key_onemer, keyLen
+ *  inputs to compute per bead signal: sc, t0_ix, t_end_ix
+ *  modify key_zeromer to contain estimates of zeromer signal per bead
+ *  and    key_onemer  to contain estimates of onemer signal per bead
+ *  and    key_len     to contain the length of the key per bead
+ *  (both of length numLBeads).
+ */
+void RegionalizedData::ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, std::vector<int>& keyLen)
+{
+  for (int ibd=0; ibd < my_beads.numLBeads; ibd++) {
+
+    // find key for this bead
+    keyLen[ibd] = 0;
+    int key_id = my_beads.key_id[ibd];
+    std::vector<int> key(NUMFB,-1);
+    if (key_id >= 0)  // library or TF bead assumed to have key, go get it
+      my_beads.SelectKeyFlowValuesFromBeadIdentity (&key[0], NULL, key_id, keyLen[ibd]);
+
+    // find signal for this bead in its key flows
+    std::vector<float> signal(keyLen[ibd], 0);
+    for (int fnum=0; fnum < keyLen[ibd]; fnum++)
+    {
+      // approximate measure related to signal computed from trace
+      // trace is assumed zero'd
+      vector<float> trace(time_c.npts(), 0);
+      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts());
+      // signal[fnum] = sc.Incorporation(t0_ix, t_end_ix, trace);
+      signal[fnum] = sc.Incorporation(t0_ix, t_end_ix, trace, fnum);
+    }
+    // estimate key_zeromer & key_onemer for this bead
+    ZeromerAndOnemerOneBead(key, keyLen[ibd], signal, key_zeromer[ibd], key_onemer[ibd]);
+  }
+}
+
+/** Given inputs key, keyLen and signal in the key flows,
+ * return estimates of onemer & zeromer across the key flows
+ * algorithm is "mean"
+ */
+void RegionalizedData::ZeromerAndOnemerOneBead(std::vector<int> const& key, int const keyLen, std::vector<float> const& signal, float& key_zeromer, float& key_onemer)
+{
+  double zeromer_sum = 0;
+  int zero_count = 0;
+  double onemer_sum = 0;
+  int one_count = 0;
+
+  if (keyLen == 0) {   // default if keyLen = 0
+    key_zeromer = 0;
+    key_onemer = 0;
+    return;
+  }
+
+  for (int fnum=0; fnum < keyLen; fnum++)
+  {
+    // add this measure for any zeromer or a onemer for this bead
+    if (key[fnum] == 0) {
+      zero_count++;
+      zeromer_sum += signal[fnum];
+    }
+    if (key[fnum] == 1) {
+      one_count++;
+      onemer_sum  += signal[fnum];
+    }
+    // check to see for presence of both 1-mer and 0-mer key flows
+    if ( (zero_count > 0) && (one_count > 0) ){
+      key_zeromer = zeromer_sum/zero_count;
+      key_onemer = onemer_sum/one_count;
+    }
+  }
+}
+
+void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type)
+{
+  if (my_beads.ntarget >= my_beads.numLBeads) {
+    // all beads will be sampled anyway
+    penalty.assign(my_beads.numLBeads, numeric_limits<float>::infinity());
+    fprintf(stdout, "region=%d ... valid = 0 out of %d\n", region->index, my_beads.numLBeads);
+    return;
+  }
+
+  // MonoClonal Sampling scheme
+  Clonality *sc = new Clonality();
+  {
+    std::vector<float> shifted_bkg(NUMFB*time_c.npts(), 0);
+    (emptyTraceTracker->GetEmptyTrace (*region))->GetShiftedBkg(my_regions.rp.tshift, time_c, &shifted_bkg[0]);
+    sc->SetShiftedBkg(shifted_bkg);
+  }
+
+  std::vector<int> flowCount(my_beads.numLBeads, 0);
+  
+  // start of the nuc rise in units of frames in time_c.t0;
+  // ballpark end of the nuc rise in units of frames
+  float t_end = time_c.t0 + nuc_flow_frame_width * 2/3;
+
+  // index into part of trace that is important
+  size_t t0_ix = time_c.SecondsToIndex(time_c.t0/time_c.frames_per_second);
+  size_t t_end_ix = time_c.SecondsToIndex(t_end/time_c.frames_per_second);
+
+  std::vector<float> key_onemer(my_beads.numLBeads, 0);
+  std::vector<float> key_zeromer(my_beads.numLBeads, 0);
+  std::vector<int> keyLen(my_beads.numLBeads, 0);
+
+  ZeromerAndOnemerAllBeads(*sc, t0_ix, t_end_ix, key_zeromer, key_onemer, keyLen);
+
+  for (int fnum=0; fnum < NUMFB; fnum++)
+  {
+    std::vector<float> signalInFlow(my_beads.numLBeads, 0);
+
+    for (int ibd=0; ibd < my_beads.numLBeads; ibd++)
+    {
+      // approximate measure related to signal computed from trace
+      // trace is assumed zero'd
+      vector<float> trace(time_c.npts(), 0);
+      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts());
+      // signalInFlow[ibd] = sc->Incorporation(t0_ix, t_end_ix, trace);
+      signalInFlow[ibd] = sc->Incorporation(t0_ix, t_end_ix, trace, fnum);
+    }
+    scprint(sc, "region=%d ; flow=%d ;\n", region->index, fnum);
+
+    sc->NormalizeSignal(signalInFlow, key_zeromer, key_onemer);
+
+    // increments penalty with penalties in this flow
+    sc->AddClonalPenalty(signalInFlow, keyLen, fnum, flowCount, penalty);
+
+    sc->flush();
+  } // end flow iteration
+
+  int valid = 0;
+  for  (int ibd=0; ibd < my_beads.numLBeads; ibd++) {
+    if ((flowCount[ibd] > 0) &&  std::isfinite(penalty[ibd]) )
+    {
+      penalty[ibd] /= flowCount[ibd];
+      valid++;
+    }
+    else {
+      // a bead has to have at least one working flow to be used
+      penalty[ibd] = numeric_limits<float>::infinity();
+    }
+  }
+  fprintf(stdout, "region=%d ... valid = %d out of %d\n", region->index, valid, my_beads.numLBeads);
+
+  delete sc;
+}
+
 
 RegionalizedData::RegionalizedData()
 {

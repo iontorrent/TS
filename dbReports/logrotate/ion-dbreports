@@ -30,3 +30,22 @@
     copytruncate
     create 664 ionian www-data
 }
+/var/log/ion/celery_periodic.log {
+    size 5M
+    missingok
+    rotate 10
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionadmin www-data
+}
+/var/log/ion/data_management.log {
+    size 10M
+    missingok
+    rotate 10
+    compress
+    nodelaycompress
+    copytruncate
+    create 664 ionadmin www-data
+}

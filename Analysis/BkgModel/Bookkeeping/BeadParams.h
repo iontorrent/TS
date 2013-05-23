@@ -93,6 +93,10 @@ struct bead_params
   float Ampl[NUMFB]; // homopolymer length mixture
   float kmult[NUMFB];  // individual flow multiplier to rate of enzyme action
 
+  // these parameters are not fit in the main lev mar fitter, but are bead-specific parameters
+  float pca_vals[NUM_DM_PCA]; // dark matter compensator coefficients
+  float tau_adj;              // exp-tail-fitting adjustment to tau
+
   // DO NOT CHANGE THE ORDER OF DATA FIELDS WITHIN  
   // IN THE SECTION ABOVE!!!! 
   // DOING SO WILL KILL GPU DATA ACCESS
@@ -117,6 +121,8 @@ struct bead_params
     ar & gain;
     ar & Ampl;
     ar & kmult;
+    ar & pca_vals;
+    ar & tau_adj;
     ar & trace_ndx;
     ar & my_state;
     ar & x & y;

@@ -23,7 +23,7 @@ pluginName = ""
 plugin_dir = ""
 
 class IonReporterUploader_V1_2(IonPlugin):
-	version = "3.2.0-r%s" % filter(str.isdigit,"$Revision: 50766 $")
+	version = "3.2.0-r%s" % filter(str.isdigit,"$Revision: 51281 $")
 	runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
 	features = [ Feature.EXPORT ]
@@ -220,17 +220,19 @@ class IonReporterUploader_V1_2(IonPlugin):
 		sampleRelationshipDict["column-map"] = columnsMapList
 		sampleRelationshipDict["columns"] = []
 
-		relationshipTypeDict = {"Name":"RelationshipType", "Order":"2", "Type":"list","ValueType": "String", "Values":["Self","Tumor_Normal","Trio"]}
-		setIDDict = {"Name":"SetID", "Order":"3", "Type":"input", "ValueType":"Integer"}
-		relationDict = {"Name": "Relation", "Order":"4","Type":"list","ValueType":"String","Values":["Tumor","Normal","Father","Mother","Self"]}
+		relationshipTypeDict = {"Name":"RelationshipType", "Order":"3", "Type":"list","ValueType": "String", "Values":["Self","Tumor_Normal","Trio"]}
+		setIDDict = {"Name":"SetID", "Order":"4", "Type":"input", "ValueType":"Integer"}
+		relationDict = {"Name": "Relation", "Order":"5","Type":"list","ValueType":"String","Values":["Tumor","Normal","Father","Mother","Self"]}
 
-		workflowDict = {"Name":"Workflow", "order":"1", "Type":"list", "ValueType":"String"}
+		workflowDict = {"Name":"Workflow", "order":"2", "Type":"list", "ValueType":"String"}
+		genderDict = {"Name":"Gender", "order":"1", "Type":"list", "ValueType":"String","Values":["Male","Female","Unknown"]}
 		workflowDictValues = []
 		for entry in columnsMapList:
 			workflowName = entry["Workflow"]
 			workflowDictValues.append(workflowName)
 		workflowDict["Values"] = workflowDictValues
 
+		sampleRelationshipDict["columns"].append(genderDict)
 		sampleRelationshipDict["columns"].append(workflowDict)
 		sampleRelationshipDict["columns"].append(relationshipTypeDict)
 		sampleRelationshipDict["columns"].append(setIDDict)

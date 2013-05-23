@@ -48,7 +48,7 @@ class ImageCropping{
 class ImageTransformer{
 public:
   // void    XTChannelCorrect(Mask *mask);
-  static void    XTChannelCorrect(RawImage *raw, char *experimentName);
+  static void    XTChannelCorrect(RawImage *raw, const char *experimentName);
 
   static  void    CalibrateChannelXTCorrection(const char *exp_dir,const char *filename, bool wait_for_prerun=true);
 
@@ -82,7 +82,7 @@ public:
   }	
 };
 
-  float CalculatePixelGain(float *my_trc,float *reference_trc,int min_val_frame, int raw_frames);
+  inline float CalculatePixelGain(float *my_trc,float *reference_trc,int min_val_frame, int raw_frames);
 
 
 #endif // IMAGETRANSFORMER_H

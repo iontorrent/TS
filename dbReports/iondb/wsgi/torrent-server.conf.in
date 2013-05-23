@@ -5,7 +5,7 @@ WSGIProcessGroup iontorrent
 WSGIApplicationGroup iontorrent
 WSGIPassAuthorization On
 
-WSGIDaemonProcess iontorrent threads=32 processes=4
+WSGIDaemonProcess iontorrent threads=15 processes=8 maximum-requests=512
 # User and group can be set here. user=ionadmin group=ionadmin
 # Virtualenv - python-path=@ION_INSTALL_PREFIX@/ve/lib/python2.6/site-packages
 
@@ -165,6 +165,9 @@ Alias /auth/ /var/www/
         ExpiresByType text/plain M0
         ExpiresByType text/html M0
     </IfModule>
+
+    # Some files get detected as text, but we want to transmit them as binary.
+    AddType application/octet-stream .sam .fastq .bam .bai
 </Directory>
 
 <Directory "/var/www/output*/*/*">
@@ -227,4 +230,10 @@ Alias /auth/ /var/www/
 #    ErrorDocument 404 /docsnotfound.html
 #</Location>
 
-
+# Chrome frame activation
+<IfModule mod_setenvif.c>
+  <IfModule mod_headers.c>
+    BrowserMatch chromeframe gcf
+    Header append X-UA-Compatible "chrome=1" env=gcf
+  </IfModule>
+</IfModule>

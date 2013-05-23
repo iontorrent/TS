@@ -25,7 +25,7 @@ ION_SORT_INIT(sff_sort, sff_sort_t, __sff_sort_lt)
 void
 sff_sort(sff_file_t *fp_in, sff_file_t *fp_out)
 {
-  int32_t i, row, col, prev_row, prev_col;
+  int32_t i, row, col;
   sff_t *sff;
   int32_t requires_sort = 0;
   sff_sort_t *sffs = NULL;
@@ -36,7 +36,6 @@ sff_sort(sff_file_t *fp_in, sff_file_t *fp_out)
   sffs = ion_malloc(sizeof(sff_sort_t) * sffs_mem, __func__, "sffs");
 
   // go through the input file
-  prev_row = prev_col = 0;
   while(NULL != (sff = sff_read(fp_in))) {
       // get the row/col co-ordinates
       if(0 == ion_readname_to_rowcol(sff->rheader->name->s, &row, &col)) {

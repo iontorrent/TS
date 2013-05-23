@@ -16,21 +16,22 @@ import ast
 import shutil
 from ion.plugin import *
 
-
+ 
 ####### 
 ###  global variables 
 pluginName = ""
 plugin_dir = ""
-
+ 
 class IonReporterUploader(IonPlugin):
-	version = "3.0.1-r%s" % filter(str.isdigit,"$Revision: 43259 $")
-	#runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
-	#runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
+	version = "3.6.0-r%s" % filter(str.isdigit,"$Revision: 58488 $")
+	runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
+	runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
 	features = [ Feature.EXPORT ]
 
-	global pluginName , plugin_dir
+	global pluginName , plugin_dir, launchOption, commonScratchDir
 	pluginName = "IonReporterUploader"
 	plugin_dir = os.getenv("RUNINFO__PLUGIN_DIR") or os.path.dirname(__file__)
+	launchOption = "upload_and_launch"
 
 	#print "plugin dir is " + os.getenv("RUNINFO__PLUGIN_DIR") 
 	#print "plugin name is " + os.getenv("RUNINFO__PLUGIN_NAME") 
@@ -41,13 +42,20 @@ class IonReporterUploader(IonPlugin):
 	
 	#Launches script with parameter jsonfilename. Assumes data is a dict
 	def launch(self,data=None):
+		global launchOption, commonScratchDir
 		print pluginName + ".py launch()"
 		data = open(os.getenv("RESULTS_DIR") + "/startplugin.json").read()
+		commonScratchDir = self.get_commonScratchDir(data)
 		runtype = self.get_runinfo("run_type", data)
 		runlevel = self.get_runinfo("runlevel", data)
 		print "RUN TYPE " + runtype
 		print "RUN LEVEL " + runlevel
+		dt = json.loads(data)
+		pluginconfig = dt["pluginconfig"]
+		if 'launchoption' in pluginconfig:
+			launchOption = pluginconfig["launchoption"]
 		self.write_classpath()
+
 		if runtype == "composite" and runlevel == "pre":
 			self.pre(data)
 		elif runtype == "composite" and runlevel == "block":
@@ -60,37 +68,46 @@ class IonReporterUploader(IonPlugin):
 		elif runtype == "wholechip" and runlevel == "post": #PGM
 			self.default(data)
 		else:
-			print "ignoring runtype and runlevel .. "
+			print "IonReporterUploader : ignoring the above combination of runtype and runlevel .. exit .."
 		return True
 
 	#Run Mode: Pre - clear old JSON, set initial run timestamp, log version and start time	
 	def pre(self, data):
-		global pluginName
+		global pluginName, launchOption
 		self.clear_JSON()
 		self.set_serial_number()
 
 		timestamp = self.get_timestamp()
-		file = open(os.getenv("RESULTS_DIR") + "/timestamp.txt", "w+")
+		file = open(commonScratchDir + "/timestamp.txt", "w+")
 		file.write(timestamp)	
 		file.close()
+		self.inc_submissionCounts()
 		self.write_log("VERSION=1.2", data)
 		self.write_log(timestamp + " " + pluginName, data)
 		self.write_classpath()
 		self.get_plugin_parameters(data)
 		log_text = self.get_timestamp() + pluginName + " : executing the IonReporter Uploader Client -- - pre"
-		os.system("java -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
+		print "LAUNCH OPTION " + launchOption
+		if launchOption == "upload_and_launch":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
+		elif launchOption == "upload_only":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o pre ||true")
 		os.system("sleep 2")
 		return True
 
 	#Run Mode: Block (Proton) - copy status_block.html, test report exists, log, initialize classpath and objects.json, run java code
 	def block(self, data):
-		global pluginName
+		global pluginName, launchOption
 		self.copy_status_block()
 		#self.test_report(data)
 		log_text = self.get_timestamp() + pluginName + " : executing the IonReporter Uploader Client -- block"
 		self.write_classpath()
 		self.get_plugin_parameters(data)
-		os.system("java -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
+		print "LAUNCH OPTION " + launchOption
+		if launchOption == "upload_and_launch":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
+		elif launchOption == "upload_only":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o block ||true")
 		os.system("sleep 2")
 		self.write_log(pluginName + " : executed the IonReporter Client ... Exit Code = " + `os.getenv("LAUNCHERCLIENTEXITCODE")`, data)
 		print "Returning from Block"
@@ -98,32 +115,41 @@ class IonReporterUploader(IonPlugin):
 
 	#Run Mode: Default (PGM)- copy status_block.html, test report exists, log, initialize classpath and objects.json, run java code
 	def default(self, data):
-								global pluginName
+								global pluginName, launchOption
 								self.clear_JSON()
 								self.set_serial_number()
 								timestamp = self.get_timestamp()
-								file = open(os.getenv("RESULTS_DIR") + "/timestamp.txt", "w+")
+								file = open(commonScratchDir + "/timestamp.txt", "w+")
 								file.write(timestamp)
 								file.close()
+								self.inc_submissionCounts()
 								self.write_log("VERSION=1.2", data)
 								self.write_log(timestamp + " IonReporterUploader", data)
 								self.copy_status_block()
 								self.test_report(data)
 								log_text = self.get_timestamp() + pluginName + " : executing the IonReporter Uploader Client -- default"
-								print "before calling classpath"
+								#print "before calling classpath"
 								self.write_classpath()
 								self.get_plugin_parameters(data)
-								os.system("java -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
+								print "LAUNCH OPTION " + launchOption
+								if launchOption == "upload_and_launch":
+									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
+								elif launchOption == "upload_only":
+									os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o default")
 								os.system("sleep 2")
 								return True
 
 	# Run Mode: Post
 	def post(self, data):
-		global pluginName
+		global pluginName, launchOption
 		self.write_classpath()
 		log_text = self.get_timestamp() + pluginName + ": executing the IonReporter Uploader Client -- post"
 		self.get_plugin_parameters(data)
-		os.system("java -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.torrent.plugin.lifescope.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
+		print "LAUNCH OPTION " + launchOption
+		if launchOption == "upload_and_launch":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.Launcher -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
+		elif launchOption == "upload_only":
+			os.system("java -Xms3g -Xmx3g -XX:MaxPermSize=256m -Dlog.home=${RESULTS_DIR} com.lifetechnologies.ionreporter.clients.irutorrentplugin.LauncherForUploadOnly -j ${RESULTS_DIR}/startplugin.json -l " + self.write_log(log_text, data) + " -o post  ||true")
 		os.system("sleep 2")
 		return True 
 
@@ -132,7 +158,7 @@ class IonReporterUploader(IonPlugin):
 		global pluginName
 		self.write_classpath()
 		api_url = os.getenv('RUNINFO__API_URL', 'http://localhost/rundb/api/') + "/v1/plugin/?format=json&name=" + pluginName + "&active=true"
-		f = urllib.urlopen(api_url)
+		f = urllib2.urlopen(api_url)
 		d = json.loads(f.read())
 		objects = d["objects"]
 		config = objects[0]["config"]
@@ -160,7 +186,7 @@ class IonReporterUploader(IonPlugin):
 		global pluginName
 		self.write_classpath()
 		api_url = os.getenv('RUNINFO__API_URL', 'http://localhost/rundb/api/') + "/v1/plugin/?format=json&name=" + pluginName + "&active=true"
-		f = urllib.urlopen(api_url)
+		f = urllib2.urlopen(api_url)
 		d = json.loads(f.read())
 		objects = d["objects"]
 		if not objects : 
@@ -194,31 +220,60 @@ class IonReporterUploader(IonPlugin):
 		sampleRelationshipDict["column-map"] = columnsMapList
 		sampleRelationshipDict["columns"] = []
 
-		relationshipTypeDict = {"Name":"RelationshipType", "Order":"2", "Type":"list","ValueType": "String", "Values":["Self","TumorNormal","Trio"]}
-		setIDDict = {"Name":"SetID", "Order":"3", "Type":"input", "ValueType":"Integer"}
-		relationDict = {"Name": "Relation", "Order":"4","Type":"list","ValueType":"String","Values":["Tumor","Normal","Father","Mother","Child"]}
+		genderDict = {"Name":"Gender", "order":"1", "Type":"list", "ValueType":"String","Values":["Male","Female","Unknown"]}
+		workflowDict = {"Name":"Workflow", "order":"2", "Type":"list", "ValueType":"String"}
+		relationshipTypeDict = {"Name":"RelationshipType", "Order":"3", "Type":"list","ValueType": "String", "Values":["Self","Tumor_Normal","Sample_Control","Trio"]}
+		setIDDict = {"Name":"SetID", "Order":"4", "Type":"input", "ValueType":"Integer"}
+		relationDict = {"Name": "Relation", "Order":"5","Type":"list","ValueType":"String","Values":["Sample", "Control","Tumor","Normal","Father","Mother","Self"]}
 
-		workflowDict = {"Name":"Workflow", "order":"1", "Type":"list", "ValueType":"String"}
 		workflowDictValues = []
 		for entry in columnsMapList:
 			workflowName = entry["Workflow"]
 			workflowDictValues.append(workflowName)
 		workflowDict["Values"] = workflowDictValues
 
+		sampleRelationshipDict["columns"].append(genderDict)
 		sampleRelationshipDict["columns"].append(workflowDict)
 		sampleRelationshipDict["columns"].append(relationshipTypeDict)
 		sampleRelationshipDict["columns"].append(setIDDict)
 		sampleRelationshipDict["columns"].append(relationDict)
 
 		restrictionRulesList = []
-		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"TumorNormal"}, "Valid":{"Name":"RelationshipType", "Values":["TumorNormal"]}})
-		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"TumorNormal"}, "Valid":{"Name":"Relation", "Values":["Tumor", "Normal"]}})
-		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Trio"}, "Valid":{"Name":"Relation", "Values":["Father", "Mother", "Child"]}})
-		restrictionRulesList.append({"For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"SetID"}})
+		#restrictionRulesList.append({"For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"SetID"}})
 		restrictionRulesList.append({"For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"Relation"}})
+		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Tumor_Normal"}, "Valid":{"Name":"Relation", "Values":["Tumor", "Normal"]}})
+		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Sample_Control"}, "Valid":{"Name":"Relation", "Values":["Sample", "Control"]}})
+		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Trio"}, "Valid":{"Name":"Relation", "Values":["Father", "Mother", "Self"]}})
+
+		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Tumor Normal Sequencing"}, "Valid":{"Name":"RelationshipType", "Values":["Tumor_Normal"]}})
+		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Paired Sample Ampliseq Sequencing"}, "Valid":{"Name":"RelationshipType", "Values":["Sample_Control"]}})
+		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Genetic Disease Screening"}, "Valid":{"Name":"RelationshipType", "Values":["Trio"]}})
 		sampleRelationshipDict["restrictionRules"] = restrictionRulesList
 		#print sampleRelationshipDict
 		return sampleRelationshipDict
+
+
+	def get_commonScratchDir(self,data):
+		d =json.loads(data)
+		runinfo = d["runinfo"]
+		runinfoPlugin = runinfo["plugin"]
+		return runinfoPlugin["results_dir"]
+
+	# increment the submission counts   # not thread safe, TBD.
+	def inc_submissionCounts(self):
+		newCount = 1
+		line=""
+		#if os.path.exists(os.getenv("RESULTS_DIR") + "/submissionCount.txt"):
+		if os.path.exists(commonScratchDir + "/submissionCount.txt"):
+			submissionfile = open(commonScratchDir + "/submissionCount.txt")
+                	line = submissionfile.readline()
+                	submissionfile.close()
+		if line != "":
+			newCount = newCount + int(line)
+		submissionfileWriter = open(commonScratchDir + "/submissionCount.txt","w")
+		submissionfileWriter.write(str(newCount))
+		submissionfileWriter.close()
+                return newCount
 		
 	# Returns timestamp from system
 	def get_timestamp(self):
@@ -245,8 +300,8 @@ class IonReporterUploader(IonPlugin):
 	def write_classpath(self):
 		global pluginName
 		# do not print anything to the standard out here .. the api calls use this, and gets messed up.
-		sub1 = subprocess.Popen("find /results/plugins/" + pluginName + "/ |grep \"\.jar$\" |xargs |sed 's/ /:/g'", shell=True, stdout=subprocess.PIPE)
-		#sub1 = subprocess.Popen("find " + plugin_dir + "/ |grep \"\.jar$\" |xargs |sed 's/ /:/g'", shell=True, stdout=subprocess.PIPE)
+		#sub1 = subprocess.Popen("find /results/plugins/" + pluginName + "/ |grep \"\.jar$\" |xargs |sed 's/ /:/g'", shell=True, stdout=subprocess.PIPE)
+		sub1 = subprocess.Popen("find " + plugin_dir + "/ |grep \"\.jar$\" |xargs |sed 's/ /:/g'", shell=True, stdout=subprocess.PIPE)
 		#classpath_str = os.getenv("RUNINFO__PLUGIN_DIR") + "/lib/java/shared:" + sub1.stdout.read().strip()
 		classpath_str = plugin_dir + "/lib/java/shared:" + sub1.stdout.read().strip()
 		os.environ["CLASSPATH"] = classpath_str
@@ -267,10 +322,10 @@ class IonReporterUploader(IonPlugin):
 		try2 = net + url + report
 	
 		try:
-			urllib.urlopen(try1)
-		except URLError, e:
-			self.write_log("Report test failed", data) 
-		#urllib.urlopen(try2) #This query asks for a system username/password... so skip it
+			urllib2.urlopen(try1)
+		except urllib2.URLError, e:
+			self.write_log("Report Generation (report.pdf) failed", data) 
+		#urllib2.urlopen(try2) #This query asks for a system username/password... so skip it
 
 
 	# Create objects.json file (plugin parameters) thru RESTful
@@ -292,8 +347,8 @@ class IonReporterUploader(IonPlugin):
 	def write_log(self, text, data):
 		log_file = self.get_runinfo("results_dir", data) + "/log.txt"
 		file = open(log_file, "a")
-		file.write("\n")
 		file.write(text)
+		file.write("\n")
 		return log_file
 	
 	#Clear JSON file to initial state (0%)
@@ -310,11 +365,12 @@ class IonReporterUploader(IonPlugin):
                 word2 = word[first_index:]
                 end_index = word2.find("\\") 
                 serial_number = word2[:end_index]
-		block = open(os.getenv("RESULTS_DIR") + "/serial.txt", "w")
+		#block = open(os.getenv("RESULTS_DIR") + "/serial.txt", "w")
+		block = open(commonScratchDir + "/serial.txt", "w")
 		block.write(serial_number)
 		
 	def copy_status_block(self):
-		shutil.copyfile(os.getenv("RUNINFO__PLUGIN_DIR") + "/status_block.html", os.getenv("RESULTS_DIR") + "/status_block.html" )
+		shutil.copyfile(os.getenv("RUNINFO__PLUGIN_DIR") + "/status_block.html", os.getenv("RESULTS_DIR") + "/progress.html" )
 
 if __name__ == "__main__": PluginCLI()
 '''
@@ -329,6 +385,10 @@ if __name__=="__main__":
 	print ""
 	print "getUserInput output = " 
 	print iru.getUserInput()
+	print ""
+	print ""
+	print "inc_submissionCount output = " 
+	print iru.inc_submissionCounts()
 	print ""
 	print ""
 '''

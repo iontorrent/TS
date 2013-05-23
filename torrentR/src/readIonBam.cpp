@@ -8,138 +8,60 @@
 #include <string>
 #include <algorithm>
 #include <iterator>
+#include "BamHelper.h"
 
 using namespace std;
 
-std::string getQuickStats(const std::string &bamFile, std::map< std::string, int > &keyLen, unsigned int &nFlowFZ, unsigned int &nFlowZM);
-bool getNextAlignment(BamTools::BamAlignment &alignment, BamTools::BamReader &bamReader, const std::map<std::string, int> &groupID, std::vector< BamTools::BamAlignment > &alignmentSample, std::map<std::string, int> &wellIndex, unsigned int nSample);
-bool getTagParanoid(BamTools::BamAlignment &alignment, const std::string &tag, int64_t &value);
-
-
-void dna(string &qDNA, const vector<BamTools::CigarOp>& cig, const string& md, string& tDNA);
-void padded_alignment(const vector<BamTools::CigarOp>& cig, string& qDNA, string& tDNA, string& pad_query, string& pad_target, string& pad_match, bool isReversed);
-void reverse_comp(std::string& c_dna);
-std::vector<int> score_alignments(string& pad_source, string& pad_target, string& pad_match );
 
 RcppExport SEXP readBamReadGroup(SEXP RbamFile) {
 	char* bamFile         = (char *)Rcpp::as<const char*>(RbamFile);
 
-	std::vector< std::string > ID;
-	std::vector< std::string > FlowOrder;
-	std::vector< std::string > KeySequence;
-	std::vector< std::string > Description;
-	std::vector< std::string > Library;
-	std::vector< std::string > PlatformUnit;
-	std::vector< std::string > PredictedInsertSize;
-	std::vector< std::string > ProductionDate;
-	std::vector< std::string > Program;
-	std::vector< std::string > Sample;
-	std::vector< std::string > SequencingCenter;
-	std::vector< std::string > SequencingTechnology;
+// isolate c++ from Rcpp
+  MyBamGroup my_bam_group;
 
-	BamTools::BamReader bamReader;
-	if(!bamReader.Open(std::string(bamFile))) {
-		std::string errMsg = "Failed to open bam " + std::string(bamFile) + "\n";
-		Rf_error(copyMessageToR(errMsg.c_str()));
-	} else {
-		BamTools::SamHeader samHeader = bamReader.GetHeader();
-		for (BamTools::SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr ) {
-			if(itr->HasID()) {
-				ID.push_back(itr->ID);
-			} else {
-				ID.push_back("");
-			}
-			if(itr->HasFlowOrder()) {
-				FlowOrder.push_back(itr->FlowOrder);
-			} else {
-				FlowOrder.push_back("");
-			}
-			if(itr->HasKeySequence()) {
-				KeySequence.push_back(itr->KeySequence);
-			} else {
-				KeySequence.push_back("");
-			}
-			if(itr->HasDescription()) {
-				Description.push_back(itr->Description);
-			} else {
-				Description.push_back("");
-			}
-			if(itr->HasLibrary()) {
-				Library.push_back(itr->Library);
-			} else {
-				Library.push_back("");
-			}
-			if(itr->HasPlatformUnit()) {
-				PlatformUnit.push_back(itr->PlatformUnit);
-			} else {
-				PlatformUnit.push_back("");
-			}
-			if(itr->HasPredictedInsertSize()) {
-				PredictedInsertSize.push_back(itr->PredictedInsertSize);
-			} else {
-				PredictedInsertSize.push_back("");
-			}
-			if(itr->HasProductionDate()) {
-				ProductionDate.push_back(itr->ProductionDate);
-			} else {
-				ProductionDate.push_back("");
-			}
-			if(itr->HasProgram()) {
-				Program.push_back(itr->Program);
-			} else {
-				Program.push_back("");
-			}
-			if(itr->HasSample()) {
-				Sample.push_back(itr->Sample);
-			} else {
-				Sample.push_back("");
-			}
-			if(itr->HasSequencingCenter()) {
-				SequencingCenter.push_back(itr->SequencingCenter);
-			} else {
-				SequencingCenter.push_back("");
-			}
-			if(itr->HasSequencingTechnology()) {
-				SequencingTechnology.push_back(itr->SequencingTechnology);
-			} else {
-				SequencingTechnology.push_back("");
-			}
-		}
-		bamReader.Close();
-	}
+  my_bam_group.ReadGroup(bamFile);
 
-	RcppResultSet rs;
-	if(ID.size() > 0) {
-		rs.add("ID",                   ID);
-		rs.add("FlowOrder",            FlowOrder);
-		rs.add("KeySequence",          KeySequence);
-		rs.add("Description",          Description);
-		rs.add("Library",              Library);
-		rs.add("PlatformUnit",         PlatformUnit);
-		rs.add("PredictedInsertSize",  PredictedInsertSize);
-		rs.add("ProductionDate",       ProductionDate);
-		rs.add("Program",              Program);
-		rs.add("Sample",               Sample);
-		rs.add("SequencingCenter",     SequencingCenter);
-		rs.add("SequencingTechnology", SequencingTechnology);
+// Rcpp
+  if (my_bam_group.errMsg.size()>0)
+		Rf_error(strdup(my_bam_group.errMsg.c_str()));
+
+
+    SEXP ret = R_NilValue;
+	if(my_bam_group.ID.size() > 0) {
+       ret = Rcpp::List::create(Rcpp::Named("ID")                   = my_bam_group.ID,
+                                Rcpp::Named("FlowOrder")            = my_bam_group.FlowOrder,
+                                Rcpp::Named("KeySequence")          = my_bam_group.KeySequence,
+                                Rcpp::Named("Description")          = my_bam_group.Description,
+                                Rcpp::Named("Library")              = my_bam_group.Library,
+                                Rcpp::Named("PlatformUnit")         = my_bam_group.PlatformUnit,
+                                Rcpp::Named("PredictedInsertSize")  = my_bam_group.PredictedInsertSize,
+                                Rcpp::Named("ProductionDate")       = my_bam_group.ProductionDate,
+                                Rcpp::Named("Program")              = my_bam_group.Program,
+                                Rcpp::Named("Sample")               = my_bam_group.Sample,
+                                Rcpp::Named("SequencingCenter")     = my_bam_group.SequencingCenter,
+                                Rcpp::Named("SequencingTechnology") = my_bam_group.SequencingTechnology);
 	}
-	return(rs.getReturnList());
+    return ret;
 }
 
-RcppExport SEXP readBamSequence(SEXP RbamFile) {
-	char* bamFile         = (char *)Rcpp::as<const char*>(RbamFile);
-
-	std::vector< std::string > AssemblyID;
+class MyBamSequence{
+public:
+  	std::vector< std::string > AssemblyID;
 	std::vector< std::string > Checksum;
 	std::vector< std::string > Length;
 	std::vector< std::string > Name;
 	std::vector< std::string > Species;
 	std::vector< std::string > URI;
 
+  std::string errMsg;
+
+  void ReadBamSequence(char *bamFile);
+};
+
+void MyBamSequence::ReadBamSequence(char *bamFile){
 	BamTools::BamReader bamReader;
 	if(!bamReader.Open(std::string(bamFile))) {
-		std::string errMsg = "Failed to open bam " + std::string(bamFile) + "\n";
-		Rf_error(copyMessageToR(errMsg.c_str()));
+		 errMsg = "Failed to open bam " + std::string(bamFile) + "\n";
 	} else {
 		BamTools::SamHeader samHeader = bamReader.GetHeader();
 		for (BamTools::SamSequenceIterator itr = samHeader.Sequences.Begin(); itr != samHeader.Sequences.End(); ++itr ) {
@@ -177,16 +99,26 @@ RcppExport SEXP readBamSequence(SEXP RbamFile) {
 		bamReader.Close();
 	}
 
-	RcppResultSet rs;
-	if(AssemblyID.size() > 0) {
-		rs.add("AssemblyID",  AssemblyID);
-		rs.add("Checksum",    Checksum);
-		rs.add("Length",      Length);
-		rs.add("Name",        Name);
-		rs.add("Species",     Species);
-		rs.add("URI",         URI);
-	}
-	return(rs.getReturnList());
+};
+
+RcppExport SEXP readBamSequence(SEXP RbamFile) {
+	char* bamFile         = (char *)Rcpp::as<const char*>(RbamFile);
+
+  MyBamSequence my_bam_sequence;
+  my_bam_sequence.ReadBamSequence(bamFile);
+  if (my_bam_sequence.errMsg.size()>0)
+		Rf_error(strdup(my_bam_sequence.errMsg.c_str()));
+
+    SEXP ret = R_NilValue;
+	if(my_bam_sequence.AssemblyID.size() > 0) {
+      ret = Rcpp::List::create(Rcpp::Named("AssemblyID") = my_bam_sequence.AssemblyID,
+                               Rcpp::Named("Checksum")   = my_bam_sequence.Checksum,
+                               Rcpp::Named("Length")     = my_bam_sequence.Length,
+                               Rcpp::Named("Name")       = my_bam_sequence.Name,
+                               Rcpp::Named("Species")    = my_bam_sequence.Species,
+                               Rcpp::Named("URI")        = my_bam_sequence.URI);
+    }
+    return ret;
 }
 
 RcppExport SEXP readBamHeader(SEXP RbamFile) {
@@ -199,7 +131,7 @@ RcppExport SEXP readBamHeader(SEXP RbamFile) {
 	BamTools::BamReader bamReader;
 	if(!bamReader.Open(std::string(bamFile))) {
 		std::string errMsg = "Failed to open bam " + std::string(bamFile) + "\n";
-		Rf_error(copyMessageToR(errMsg.c_str()));
+		Rf_error(strdup(errMsg.c_str()));
 	} else {
 		BamTools::SamHeader samHeader = bamReader.GetHeader();
 		if(samHeader.HasVersion())
@@ -217,12 +149,24 @@ RcppExport SEXP readBamHeader(SEXP RbamFile) {
 		bamReader.Close();
 	}
 
-	RcppResultSet rs;
-	rs.add("Version",    Version);
-	rs.add("SortOrder",  SortOrder);
-	rs.add("GroupOrder", GroupOrder);
-	return(rs.getReturnList());
+    return Rcpp::List::create(Rcpp::Named("Version")    = Version,
+                              Rcpp::Named("SortOrder")  = SortOrder,
+                              Rcpp::Named("GroupOrder") = GroupOrder);
 }
+
+class UsefulBamData{
+public:
+		std::map< std::string, int > keyLen;
+		unsigned int nFlowFZ;
+		unsigned int nFlowZM;
+		unsigned int nPhase;
+    std::map<std::string, int> groupID;
+    UsefulBamData(){
+      nFlowFZ = 0;
+      nFlowZM = 0;
+      nPhase  = 3;
+    }
+};
 
 RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, SEXP RnSample, SEXP RrandomSeed, SEXP RwantedGroupID, SEXP RhaveWantedGroups, SEXP RwantMappingData, SEXP RmaxCigarLength) {
 
@@ -232,8 +176,8 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 	try {
 
 		char* bamFile         = (char *)Rcpp::as<const char*>(RbamFile);
-		RcppVector<int> col(Rcol);
-		RcppVector<int> row(Rrow);
+		Rcpp::IntegerVector              col(Rcol);
+		Rcpp::IntegerVector              row(Rrow);
 		unsigned int maxBases          = Rcpp::as<int>(RmaxBases);
 		unsigned int nSample           = Rcpp::as<int>(RnSample);
 		int randomSeed                 = Rcpp::as<int>(RrandomSeed);
@@ -242,25 +186,22 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		unsigned int maxCigarLength    = Rcpp::as<int>(RmaxCigarLength);
 
 		// Quick first pass through bam file to determine read group ID and nFlow
-		std::map< std::string, int > keyLen;
-		unsigned int nFlowFZ=0;
-		unsigned int nFlowZM=0;
-		unsigned int nPhase = 3;
-		std::string errMsg = getQuickStats(std::string(bamFile), keyLen, nFlowFZ, nFlowZM);
+    UsefulBamData my_cache;
+
+		std::string errMsg = getQuickStats(std::string(bamFile), my_cache.keyLen, my_cache.nFlowFZ, my_cache.nFlowZM);
 		if(errMsg != "") {
-			exceptionMesg = copyMessageToR(errMsg.c_str());
+			exceptionMesg = strdup(errMsg.c_str());
 		}
-		std::map<std::string, int> groupID;
 
 		if(haveWantedGroups) {
-			RcppStringVector wantedGroupID(RwantedGroupID);
+			Rcpp::StringVector wantedGroupID(RwantedGroupID);
 			if(wantedGroupID.size() > 0)
 				for(int i=0; i<wantedGroupID.size(); i++)
-					if(keyLen.find(wantedGroupID(i)) != keyLen.end())
-						groupID[wantedGroupID(i)] = 1;
-			if(groupID.size() == 0) {
+					if(my_cache.keyLen.find(Rcpp::as<std::string>(wantedGroupID(i))) != my_cache.keyLen.end())
+						my_cache.groupID[Rcpp::as<std::string>(wantedGroupID(i))] = 1;
+			if(my_cache.groupID.size() == 0) {
 				std::string errMsg = std::string("None of the wanted read group IDs found in ") + bamFile + std::string("\n");
-				exceptionMesg = copyMessageToR(errMsg.c_str());
+				exceptionMesg = strdup(errMsg.c_str());
 			}
 		}
 
@@ -274,7 +215,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			// A subset of rows and columns is specified
 			filterByCoord = true;
 			if(col.size() != row.size()) {
-				exceptionMesg = copyMessageToR("col and row should have the same number of entries, ignoring\n");
+				exceptionMesg = strdup("col and row should have the same number of entries, ignoring\n");
 			} else {
 				for(int i=0; i<col.size(); i++) {
 					std::stringstream wellIdStream;
@@ -297,7 +238,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					std::string thisReadGroupID = "";
 					alignment.BuildCharData();
 					alignment.GetTag("RG", thisReadGroupID);
-					if( !alignment.GetTag("RG", thisReadGroupID) || (groupID.find(thisReadGroupID)==groupID.end()) )
+					if( !alignment.GetTag("RG", thisReadGroupID) || (my_cache.groupID.find(thisReadGroupID)==my_cache.groupID.end()) )
 						continue;
 				}
 				nRead++;
@@ -318,43 +259,44 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			nReadOut = wellIndex.size();
 
 		// Initialize things to return
-		std::vector< std::string > out_id(nReadOut);
-		std::vector< std::string > out_readGroup(nReadOut);
-		RcppVector<int>    out_col(nReadOut);
-		RcppVector<int>    out_row(nReadOut);
-		RcppVector<int>    out_length(nReadOut);
-		RcppVector<int>    out_fullLength(nReadOut);
-		RcppVector<int>    out_clipQualLeft(nReadOut);
-		RcppVector<int>    out_clipQualRight(nReadOut);
-		RcppVector<int>    out_clipAdapterLeft(nReadOut);
-		RcppVector<int>    out_clipAdapterRight(nReadOut);
-		RcppVector<int>    out_flowClipLeft(nReadOut);
-		RcppVector<int>    out_flowClipRight(nReadOut);
-		RcppMatrix<double> out_flow(nReadOut,nFlowFZ);
-		RcppMatrix<double> out_meas(nReadOut,nFlowZM);
-		RcppMatrix<double> out_phase(nReadOut, nPhase);
-		std::vector< std::string > out_base(nReadOut);
-		RcppMatrix<int>    out_qual(nReadOut,maxBases);
-		RcppMatrix<int>    out_flowIndex(nReadOut,maxBases);
+		Rcpp::StringVector     out_id(nReadOut);
+		Rcpp::StringVector     out_readGroup(nReadOut);
+		Rcpp::IntegerVector    out_col(nReadOut);
+		Rcpp::IntegerVector    out_row(nReadOut);
+		Rcpp::IntegerVector    out_length(nReadOut);
+		Rcpp::IntegerVector    out_fullLength(nReadOut);
+		Rcpp::IntegerVector    out_clipQualLeft(nReadOut);
+		Rcpp::IntegerVector    out_clipQualRight(nReadOut);
+		Rcpp::IntegerVector    out_clipAdapterLeft(nReadOut);
+		Rcpp::IntegerVector    out_clipAdapterRight(nReadOut);
+		Rcpp::IntegerVector    out_adapterOverlap(nReadOut);
+		Rcpp::IntegerVector    out_flowClipLeft(nReadOut);
+		Rcpp::IntegerVector    out_flowClipRight(nReadOut);
+		Rcpp::NumericMatrix    out_flow(nReadOut,my_cache.nFlowFZ);
+		Rcpp::NumericMatrix    out_meas(nReadOut,my_cache.nFlowZM);
+		Rcpp::NumericMatrix    out_phase(nReadOut, my_cache.nPhase);
+		Rcpp::StringVector     out_base(nReadOut);
+		Rcpp::IntegerMatrix    out_qual(nReadOut,maxBases);
+		Rcpp::IntegerMatrix    out_flowIndex(nReadOut,maxBases);
 		// Alignment-related data
-		RcppVector<int>    out_aligned_flag(nReadOut);
-		std::vector< std::string > out_aligned_base(nReadOut);
-		RcppVector<int>    out_aligned_refid(nReadOut);
-		RcppVector<int>    out_aligned_pos(nReadOut);
-		RcppVector<int>    out_aligned_mapq(nReadOut);
-		RcppVector<int>    out_aligned_bin(nReadOut);
-		std::vector< std::string > out_aligned_cigar_type(nReadOut);
-		RcppMatrix<double> out_aligned_cigar_len(nReadOut,maxCigarLength);
+		Rcpp::IntegerVector    out_aligned_flag(nReadOut);
+		Rcpp::StringVector     out_aligned_base(nReadOut);
+		Rcpp::IntegerVector    out_aligned_refid(nReadOut);
+		Rcpp::IntegerVector    out_aligned_pos(nReadOut);
+		Rcpp::IntegerVector    out_aligned_mapq(nReadOut);
+		Rcpp::IntegerVector    out_aligned_bin(nReadOut);
+		Rcpp::StringVector     out_aligned_cigar_type(nReadOut);
+		Rcpp::NumericMatrix out_aligned_cigar_len(nReadOut,maxCigarLength);
 
-		std::vector< std::string > out_qDNA(nReadOut);
-		std::vector< std::string > out_match(nReadOut);
-		std::vector< std::string > out_tDNA(nReadOut);
+		Rcpp::StringVector     out_qDNA(nReadOut);
+		Rcpp::StringVector     out_match(nReadOut);
+		Rcpp::StringVector     out_tDNA(nReadOut);
 
-		RcppVector<int>    out_q7Len(nReadOut);
-		RcppVector<int>    out_q10Len(nReadOut);
-		RcppVector<int>    out_q17Len(nReadOut);
-		RcppVector<int>    out_q20Len(nReadOut);
-		RcppVector<int>    out_q47Len(nReadOut);
+		Rcpp::IntegerVector    out_q7Len(nReadOut);
+		Rcpp::IntegerVector    out_q10Len(nReadOut);
+		Rcpp::IntegerVector    out_q17Len(nReadOut);
+		Rcpp::IntegerVector    out_q20Len(nReadOut);
+		Rcpp::IntegerVector    out_q47Len(nReadOut);
 
 		// Reopen the BAM, unless we already sampled the reads
 		BamTools::BamReader bamReader;
@@ -363,7 +305,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		unsigned int nReadsFromBam=0;
 		BamTools::BamAlignment alignment;
 		bool haveMappingData=false;
-		while(getNextAlignment(alignment,bamReader,groupID,alignmentSample,wellIndex,nSample)) {
+		while(getNextAlignment(alignment,bamReader,my_cache.groupID,alignmentSample,wellIndex,nSample)) {
 			int thisCol = 0;
 			int thisRow = 0;
 			if(1 != ion_readname_to_rowcol(alignment.Name.c_str(), &thisRow, &thisCol))
@@ -372,20 +314,24 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			alignment.GetTag("RG", readGroup);
 
 			// Store values that will be returned
-			out_id[nReadsFromBam]               = alignment.Name;
-			out_readGroup[nReadsFromBam]        = readGroup;
+			out_id(nReadsFromBam)               = alignment.Name;
+			out_readGroup(nReadsFromBam)        = readGroup;
 			out_col(nReadsFromBam)              = thisCol;
 			out_row(nReadsFromBam)              = thisRow;
 			out_clipQualLeft(nReadsFromBam)     = 0;
 			out_clipQualRight(nReadsFromBam)    = 0;
 
 			std::map<std::string, int>::iterator keyLenIter;
-			keyLenIter = keyLen.find(readGroup);
-			out_clipAdapterLeft(nReadsFromBam) = (keyLenIter != keyLen.end()) ? keyLenIter->second : 0;
+			keyLenIter = my_cache.keyLen.find(readGroup);
+			out_clipAdapterLeft(nReadsFromBam) = (keyLenIter != my_cache.keyLen.end()) ? keyLenIter->second : 0;
 
 			int64_t clipAdapterRight = 0;
 			getTagParanoid(alignment,"ZA",clipAdapterRight);
 			out_clipAdapterRight(nReadsFromBam) = clipAdapterRight;
+
+            int64_t adapterOverlap = 0;
+            getTagParanoid(alignment,"ZB",adapterOverlap);
+            out_adapterOverlap(nReadsFromBam) = adapterOverlap;
 
 			int64_t flowClipLeft = 0;
 			getTagParanoid(alignment,"ZF",flowClipLeft);
@@ -398,9 +344,9 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			std::vector<uint16_t> flowInt;
 			if(alignment.GetTag("FZ", flowInt)){
 				unsigned int i=0;
-				for(; i<std::min(nFlowFZ,(unsigned int)flowInt.size()); i++)
+				for(; i<std::min(my_cache.nFlowFZ,(unsigned int)flowInt.size()); i++)
 					out_flow(nReadsFromBam,i) = flowInt[i] / 100.0;
-				while(i<nFlowFZ)
+				while(i<my_cache.nFlowFZ)
 					out_flow(nReadsFromBam,i++) = 0;
 			}
 
@@ -408,9 +354,9 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			std::vector<int16_t> flowMeasured; // round(256*val), signed
 			if(alignment.GetTag("ZM", flowMeasured)){
 				unsigned int i=0;
-				for(; i<std::min(nFlowZM,(unsigned int)flowMeasured.size()); i++)
+				for(; i<std::min(my_cache.nFlowZM,(unsigned int)flowMeasured.size()); i++)
 					out_meas(nReadsFromBam,i) = flowMeasured[i]/256.0;
-				while(i<nFlowZM)
+				while(i<my_cache.nFlowZM)
 					out_meas(nReadsFromBam,i++) = 0; // which is bad because will lead to biases in extrapolation
 			} 
 
@@ -418,9 +364,9 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			std::vector<float> flowPhase;
 			if(alignment.GetTag("ZP", flowPhase)){
 				unsigned int i=0;
-				for(; i<std::min(nPhase,(unsigned int)flowPhase.size()); i++)
+				for(; i<std::min(my_cache.nPhase,(unsigned int)flowPhase.size()); i++)
 					out_phase(nReadsFromBam,i) = flowPhase[i];
-				while(i<nPhase)
+				while(i<my_cache.nPhase)
 					out_phase(nReadsFromBam,i++) = 0;
 			}
 
@@ -431,7 +377,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 				unsigned int trimLength = std::min(maxBases, nBases);
 				out_fullLength(nReadsFromBam) = nBases;
 				out_length(nReadsFromBam)     = trimLength;
-				out_base[nReadsFromBam]       = alignment.QueryBases;
+				out_base(nReadsFromBam)       = alignment.QueryBases;
 				unsigned int i=0;
 				for(; i<trimLength; i++) {
 					out_qual(nReadsFromBam,i) = ((int) alignment.Qualities[i]) - 33;
@@ -449,18 +395,19 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 				if(!haveMappingData)
 					haveMappingData=true;
 				out_aligned_flag(nReadsFromBam)  = alignment.AlignmentFlag;
-				out_aligned_base[nReadsFromBam]  = alignment.AlignedBases;
+				out_aligned_base(nReadsFromBam)  = alignment.AlignedBases;
 				out_aligned_refid(nReadsFromBam) = alignment.RefID;
 				out_aligned_pos(nReadsFromBam)   = alignment.Position;
 				out_aligned_mapq(nReadsFromBam)  = alignment.MapQuality;
 				out_aligned_bin(nReadsFromBam)   = alignment.Bin;
 				unsigned int cigarLength = std::min(maxCigarLength, (unsigned int) alignment.CigarData.size());
-				out_aligned_cigar_type[nReadsFromBam].resize(cigarLength);
 				unsigned int iCig=0;
+				std::string temp;
 				for(; iCig < cigarLength; iCig++) {
-					out_aligned_cigar_type[nReadsFromBam][iCig] = alignment.CigarData[iCig].Type;
+					temp[iCig] = alignment.CigarData[iCig].Type;
 					out_aligned_cigar_len(nReadsFromBam,iCig)   = alignment.CigarData[iCig].Length;
 				}
+				out_aligned_cigar_type(nReadsFromBam) = temp;
 				for(; iCig < maxCigarLength; iCig++)
 					out_aligned_cigar_len(nReadsFromBam,iCig) = 0;
 
@@ -479,9 +426,9 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					reverse_comp(pad_query);
 					std::reverse( pad_match.begin(), pad_match.end() );
 				}
-				out_qDNA[nReadsFromBam]  = pad_query;
-				out_tDNA[nReadsFromBam]  = pad_target;
-				out_match[nReadsFromBam] = pad_match;
+				out_qDNA(nReadsFromBam)  = pad_query;
+				out_tDNA(nReadsFromBam)  = pad_target;
+				out_match(nReadsFromBam) = pad_match;
 
 				out_q7Len(nReadsFromBam)  = qlen[0];
 				out_q10Len(nReadsFromBam) = qlen[1];
@@ -495,7 +442,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			bamReader.Close();
 
 		// Organize and return results
-		RcppResultSet rs;
+        std::map<std::string,SEXP> map;
 		if(nReadsFromBam == 0) {
 			std::cerr << "WARNING: No matching reads found in " << bamFile << "\n";
 		} else if(nReadsFromBam != nReadOut) {
@@ -503,63 +450,65 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			std::cerr << "WARNING: Expected to find " << nReadOut << " reads but got " << nReadsFromBam << " in " << bamFile << "\n";
 			if(filterByCoord)
 				std::cerr << "Some of the requested reads are missing from the SFF.\n";
-			std::vector< std::string > out2_id(nReadsFromBam);
-			std::vector< std::string > out2_groupID(nReadsFromBam);
-			RcppVector<int>    out2_col(nReadsFromBam);
-			RcppVector<int>    out2_row(nReadsFromBam);
-			RcppVector<int>    out2_length(nReadsFromBam);
-			RcppVector<int>    out2_fullLength(nReadsFromBam);
-			RcppVector<int>    out2_clipQualLeft(nReadsFromBam);
-			RcppVector<int>    out2_clipQualRight(nReadsFromBam);
-			RcppVector<int>    out2_clipAdapterLeft(nReadsFromBam);
-			RcppVector<int>    out2_clipAdapterRight(nReadsFromBam);
-			RcppVector<int>    out2_flowClipLeft(nReadsFromBam);
-			RcppVector<int>    out2_flowClipRight(nReadsFromBam);
-			RcppMatrix<double> out2_flow(nReadsFromBam,nFlowFZ);
+			Rcpp::StringVector     out2_id(nReadsFromBam);
+			Rcpp::StringVector     out2_groupID(nReadsFromBam);
+			Rcpp::IntegerVector    out2_col(nReadsFromBam);
+			Rcpp::IntegerVector    out2_row(nReadsFromBam);
+			Rcpp::IntegerVector    out2_length(nReadsFromBam);
+			Rcpp::IntegerVector    out2_fullLength(nReadsFromBam);
+			Rcpp::IntegerVector    out2_clipQualLeft(nReadsFromBam);
+			Rcpp::IntegerVector    out2_clipQualRight(nReadsFromBam);
+			Rcpp::IntegerVector    out2_clipAdapterLeft(nReadsFromBam);
+			Rcpp::IntegerVector    out2_clipAdapterRight(nReadsFromBam);
+            Rcpp::IntegerVector    out2_adapterOverlap(nReadsFromBam);
+			Rcpp::IntegerVector    out2_flowClipLeft(nReadsFromBam);
+			Rcpp::IntegerVector    out2_flowClipRight(nReadsFromBam);
+			Rcpp::NumericMatrix    out2_flow(nReadsFromBam,my_cache.nFlowFZ);
 			//razor
-			RcppMatrix<double> out2_meas(nReadsFromBam,nFlowZM);
-			RcppMatrix<double> out2_phase(nReadsFromBam,nPhase);
+			Rcpp::NumericMatrix    out2_meas(nReadsFromBam,my_cache.nFlowZM);
+			Rcpp::NumericMatrix    out2_phase(nReadsFromBam,my_cache.nPhase);
 			// end
-			std::vector< std::string >   out2_base(nReadsFromBam);
-			RcppMatrix<int>    out2_qual(nReadsFromBam,maxBases);
-			RcppMatrix<int>    out2_flowIndex(nReadsFromBam,maxBases);
-			RcppVector<int>    out2_aligned_flag(nReadsFromBam);
-			std::vector< std::string > out2_aligned_base(nReadsFromBam);
-			RcppVector<int>    out2_aligned_refid(nReadsFromBam);
-			RcppVector<int>    out2_aligned_pos(nReadsFromBam);
-			RcppVector<int>    out2_aligned_mapq(nReadsFromBam);
-			RcppVector<int>    out2_aligned_bin(nReadsFromBam);
-			std::vector< std::string > out2_aligned_cigar_type(nReadsFromBam);
-			RcppMatrix<double> out2_aligned_cigar_len(nReadsFromBam,maxCigarLength);
-			std::vector< std::string > out2_qDNA(nReadsFromBam);
-			std::vector< std::string > out2_match(nReadsFromBam);
-			std::vector< std::string > out2_tDNA(nReadsFromBam);
+			Rcpp::StringVector     out2_base(nReadsFromBam);
+			Rcpp::IntegerMatrix    out2_qual(nReadsFromBam,maxBases);
+			Rcpp::IntegerMatrix    out2_flowIndex(nReadsFromBam,maxBases);
+			Rcpp::IntegerVector    out2_aligned_flag(nReadsFromBam);
+			Rcpp::StringVector     out2_aligned_base(nReadsFromBam);
+			Rcpp::IntegerVector    out2_aligned_refid(nReadsFromBam);
+			Rcpp::IntegerVector    out2_aligned_pos(nReadsFromBam);
+			Rcpp::IntegerVector    out2_aligned_mapq(nReadsFromBam);
+			Rcpp::IntegerVector    out2_aligned_bin(nReadsFromBam);
+			Rcpp::StringVector     out2_aligned_cigar_type(nReadsFromBam);
+			Rcpp::NumericMatrix    out2_aligned_cigar_len(nReadsFromBam,maxCigarLength);
+			Rcpp::StringVector     out2_qDNA(nReadsFromBam);
+			Rcpp::StringVector     out2_match(nReadsFromBam);
+			Rcpp::StringVector     out2_tDNA(nReadsFromBam);
 
-			RcppVector<int>    out2_q7Len(nReadsFromBam);
-			RcppVector<int>    out2_q10Len(nReadsFromBam);
-			RcppVector<int>    out2_q17Len(nReadsFromBam);
-			RcppVector<int>    out2_q20Len(nReadsFromBam);
-			RcppVector<int>    out2_q47Len(nReadsFromBam);
+			Rcpp::IntegerVector    out2_q7Len(nReadsFromBam);
+			Rcpp::IntegerVector    out2_q10Len(nReadsFromBam);
+			Rcpp::IntegerVector    out2_q17Len(nReadsFromBam);
+			Rcpp::IntegerVector    out2_q20Len(nReadsFromBam);
+			Rcpp::IntegerVector    out2_q47Len(nReadsFromBam);
 
 			for(unsigned int i=0; i<nReadsFromBam; i++) {
-				out2_id[i]               = out_id[i];
-				out2_groupID[i]          = out_readGroup[i];
+				out2_id(i)               = out_id(i);
+				out2_groupID(i)          = out_readGroup(i);
 				out2_col(i)              = out_col(i);
 				out2_row(i)              = out_row(i);
 				out2_clipQualLeft(i)     = out_clipQualLeft(i);
 				out2_clipQualRight(i)    = out_clipQualRight(i);
 				out2_clipAdapterLeft(i)  = out_clipAdapterLeft(i);
 				out2_clipAdapterRight(i) = out_clipAdapterRight(i);
+                		out2_adapterOverlap(i)   = out_adapterOverlap(i);
 				out2_flowClipLeft(i)     = out_flowClipLeft(i);
 				out2_flowClipRight(i)    = out_flowClipRight(i);
 				out2_length(i)           = out_length(i);
 				out2_fullLength(i)       = out_fullLength(i);
-				out2_base[i]             = out_base[i];
-				for(unsigned int j=0; j<nFlowFZ; j++)
+				out2_base(i)             = out_base(i);
+				for(unsigned int j=0; j<my_cache.nFlowFZ; j++)
 					out2_flow(i,j) = out_flow(i,j);
-				for(unsigned int j=0; j<nFlowZM; j++)
+				for(unsigned int j=0; j<my_cache.nFlowZM; j++)
 					out2_meas(i,j) = out_meas(i,j);
-				for(unsigned int j=0; j<3; j++)
+				for(unsigned int j=0; j<my_cache.nPhase; j++)
 					out2_phase(i,j) = out_phase(i,j);
 				for(int j=0; j<out2_length(i); j++) {
 					out2_qual(i,j)         = out_qual(i,j);
@@ -567,18 +516,18 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 				}
 				if(haveMappingData) {
 					out2_aligned_flag(i)       = out_aligned_flag(i);
-					out2_aligned_base[i]       = out_aligned_base[i];
+					out2_aligned_base(i)       = out_aligned_base(i);
 					out2_aligned_refid(i)      = out_aligned_refid(i);
 					out2_aligned_pos(i)        = out_aligned_pos(i);
 					out2_aligned_mapq(i)       = out_aligned_mapq(i);
 					out2_aligned_bin(i)        = out_aligned_bin(i);
-					out2_aligned_cigar_type[i] = out_aligned_cigar_type[i];
+					out2_aligned_cigar_type(i) = out_aligned_cigar_type(i);
 					for(unsigned int j=0; j<maxCigarLength; j++)
 						out2_aligned_cigar_len(i,j) = out_aligned_cigar_len(i,j);
 
-					out2_qDNA[i] = out_qDNA[i];
-					out2_tDNA[i] = out_tDNA[i];
-					out2_match[i] = out_match[i];
+					out2_qDNA(i) = out_qDNA(i);
+					out2_tDNA(i) = out_tDNA(i);
+					out2_match(i) = out_match(i);
 					out2_q7Len(i) = out_q7Len(i);
 					out2_q10Len(i) = out_q10Len(i);
 					out2_q17Len(i) = out_q17Len(i);
@@ -586,86 +535,87 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					out2_q47Len(i) = out_q47Len(i);
 				}
 			}
-			rs.add("nFlow",            (int) std::max(nFlowFZ,nFlowZM));
-			rs.add("id",               out2_id);
-			rs.add("col",              out2_col);
-			rs.add("row",              out2_row);
-			rs.add("length",           out2_length);
-			rs.add("fullLength",       out2_fullLength);
-			rs.add("clipQualLeft",     out2_clipQualLeft);
-			rs.add("clipQualRight",    out2_clipQualRight);
-			rs.add("clipAdapterLeft",  out2_clipAdapterLeft);
-			rs.add("clipAdapterRight", out2_clipAdapterRight);
-			rs.add("flowClipLeft",     out2_flowClipLeft);
-			rs.add("flowClipRight",    out2_flowClipRight);
-			rs.add("flow",             out2_flow);
-			rs.add("measured",         out2_meas);
-			rs.add("phase",            out2_phase);
-			rs.add("base",             out2_base);
-			rs.add("qual",             out2_qual);
+            map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM));
+            map["id"]               = Rcpp::wrap( out2_id );
+	        map["col"]              = Rcpp::wrap( out2_col );
+	        map["row"]              = Rcpp::wrap( out2_row );
+		    map["length"]           = Rcpp::wrap( out2_length );
+            map["fullLength"]       = Rcpp::wrap( out2_fullLength );
+	        map["clipQualLeft"]     = Rcpp::wrap( out2_clipQualLeft );
+	        map["clipQualRight"]    = Rcpp::wrap( out2_clipQualRight );
+	        map["clipAdapterLeft"]  = Rcpp::wrap( out2_clipAdapterLeft );
+	        map["clipAdapterRight"] = Rcpp::wrap( out2_clipAdapterRight );
+	        map["flowClipLeft"]     = Rcpp::wrap( out2_flowClipLeft );
+	        map["flowClipRight"]    = Rcpp::wrap( out2_flowClipRight );
+	        map["flow"]             = Rcpp::wrap( out2_flow );
+	        map["measured"]         = Rcpp::wrap( out2_meas );
+	        map["phase"]            = Rcpp::wrap( out2_phase );
+	        map["base"]             = Rcpp::wrap( out2_base );
+	        map["qual"]             = Rcpp::wrap( out2_qual );
 			if(haveMappingData) {
-				rs.add("alignFlag",       out2_aligned_flag);
-				rs.add("alignBase",       out2_aligned_base);
-				rs.add("alignRefID",      out2_aligned_refid);
-				rs.add("alignPos",        out2_aligned_pos);
-				rs.add("alignMapq",       out2_aligned_mapq);
-				rs.add("alignBin",        out2_aligned_bin);
-				rs.add("alignCigarType",  out2_aligned_cigar_type);
-				rs.add("alignCigarLen",   out2_aligned_cigar_len);
-				rs.add("qDNA", out2_qDNA);
-				rs.add("tDNA", out2_tDNA);
-				rs.add("match", out2_match);
-				rs.add("q7Len",out2_q7Len);
-				rs.add("q10Len",out2_q10Len);
-				rs.add("q17Len",out2_q17Len);
-				rs.add("q20Len",out2_q20Len);
-				rs.add("q47Len",out2_q47Len);
+              map["alignFlag"]       = Rcpp::wrap( out2_aligned_flag );
+              map["alignBase"]       = Rcpp::wrap( out2_aligned_base );
+              map["alignRefID"]      = Rcpp::wrap( out2_aligned_refid );
+              map["alignPos"]        = Rcpp::wrap( out2_aligned_pos );
+              map["alignMapq"]       = Rcpp::wrap( out2_aligned_mapq );
+              map["alignBin"]        = Rcpp::wrap( out2_aligned_bin );
+              map["alignCigarType"]  = Rcpp::wrap( out2_aligned_cigar_type );
+              map["alignCigarLen"]   = Rcpp::wrap( out2_aligned_cigar_len );
+              map["qDNA"]            = Rcpp::wrap( out2_qDNA );
+              map["tDNA"]            = Rcpp::wrap( out2_tDNA );
+              map["match"]           = Rcpp::wrap( out2_match );
+              map["q7Len"]           = Rcpp::wrap( out2_q7Len );
+              map["q10Len"]          = Rcpp::wrap( out2_q10Len );
+              map["q17Len"]          = Rcpp::wrap( out2_q17Len );
+              map["q20Len"]          = Rcpp::wrap( out2_q20Len );
+              map["q47Len"]          = Rcpp::wrap( out2_q47Len );
 			}
 		} else {
-			rs.add("nFlow",            (int) std::max(nFlowFZ,nFlowZM));
-			rs.add("id",               out_id);
-			rs.add("readGroup",        out_readGroup);
-			rs.add("col",              out_col);
-			rs.add("row",              out_row);
-			rs.add("length",           out_length);
-			rs.add("fullLength",       out_fullLength);
-			rs.add("clipQualLeft",     out_clipQualLeft);
-			rs.add("clipQualRight",    out_clipQualRight);
-			rs.add("clipAdapterLeft",  out_clipAdapterLeft);
-			rs.add("clipAdapterRight", out_clipAdapterRight);
-			rs.add("flowClipLeft",     out_flowClipLeft);
-			rs.add("flowClipRight",    out_flowClipRight);
-			rs.add("flow",             out_flow);
-			rs.add("measured",         out_meas);
-			rs.add("phase",            out_phase);
-			rs.add("base",             out_base);
-			rs.add("qual",             out_qual);
-			rs.add("flowIndex",        out_flowIndex);
+             map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM) );
+             map["id"]               = Rcpp::wrap( out_id );
+             map["readGroup"]        = Rcpp::wrap( out_readGroup );
+             map["col"]              = Rcpp::wrap( out_col );
+             map["row"]              = Rcpp::wrap( out_row );
+             map["length"]           = Rcpp::wrap( out_length );
+             map["fullLength"]       = Rcpp::wrap( out_fullLength );
+             map["clipQualLeft"]     = Rcpp::wrap( out_clipQualLeft );
+             map["clipQualRight"]    = Rcpp::wrap( out_clipQualRight );
+             map["adapterOverlap"]   = Rcpp::wrap( out_adapterOverlap );
+             map["clipAdapterLeft"]  = Rcpp::wrap( out_clipAdapterLeft );
+             map["clipAdapterRight"] = Rcpp::wrap( out_clipAdapterRight );
+             map["flowClipLeft"]     = Rcpp::wrap( out_flowClipLeft );
+             map["flowClipRight"]    = Rcpp::wrap( out_flowClipRight );
+             map["flow"]             = Rcpp::wrap( out_flow );
+             map["measured"]         = Rcpp::wrap( out_meas );
+             map["phase"]            = Rcpp::wrap( out_phase );
+             map["base"]             = Rcpp::wrap( out_base );
+             map["qual"]             = Rcpp::wrap( out_qual );
+             map["flowIndex"]        = Rcpp::wrap( out_flowIndex );
 			if(haveMappingData) {
-				rs.add("alignFlag",       out_aligned_flag);
-				rs.add("alignBase",       out_aligned_base);
-				rs.add("alignRefID",      out_aligned_refid);
-				rs.add("alignPos",        out_aligned_pos);
-				rs.add("alignMapq",       out_aligned_mapq);
-				rs.add("alignBin",        out_aligned_bin);
-				rs.add("alignCigarType",  out_aligned_cigar_type);
-				rs.add("alignCigarLen",   out_aligned_cigar_len);
-				rs.add("qDNA", out_qDNA);
-				rs.add("tDNA", out_tDNA);
-				rs.add("match", out_match);
-				rs.add("q7Len",out_q7Len);
-				rs.add("q10Len",out_q10Len);
-				rs.add("q17Len",out_q17Len);
-				rs.add("q20Len",out_q20Len);
-				rs.add("q47Len",out_q47Len);
+              map["alignFlag"]         = Rcpp::wrap( out_aligned_flag );
+              map["alignBase"]         = Rcpp::wrap( out_aligned_base );
+              map["alignRefID"]        = Rcpp::wrap( out_aligned_refid );
+              map["alignPos"]          = Rcpp::wrap( out_aligned_pos );
+              map["alignMapq"]         = Rcpp::wrap( out_aligned_mapq );
+              map["alignBin"]          = Rcpp::wrap( out_aligned_bin );
+              map["alignCigarType"]    = Rcpp::wrap( out_aligned_cigar_type );
+              map["alignCigarLen"]     = Rcpp::wrap( out_aligned_cigar_len );
+              map["qDNA"]              = Rcpp::wrap( out_qDNA );
+              map["tDNA"]              = Rcpp::wrap( out_tDNA );
+              map["match"]             = Rcpp::wrap( out_match );
+              map["q7Len"]             = Rcpp::wrap( out_q7Len );
+              map["q10Len"]            = Rcpp::wrap( out_q10Len );
+              map["q17Len"]            = Rcpp::wrap( out_q17Len );
+              map["q20Len"]            = Rcpp::wrap( out_q20Len );
+              map["q47Len"]            = Rcpp::wrap( out_q47Len );
 			}
 		}
-		ret = rs.getReturnList();
+        ret = Rcpp::wrap( map );
 
 	} catch(std::exception& ex) {
-		exceptionMesg = copyMessageToR(ex.what());
+		forward_exception_to_r(ex);
 	} catch(...) {
-		exceptionMesg = copyMessageToR("unknown reason");
+		::Rf_error("c++ exception (unknown reason)");
 	}
 
 	if(exceptionMesg != NULL)
@@ -674,474 +624,3 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 	return ret;
 }
 
-std::string getQuickStats(const std::string &bamFile, std::map< std::string, int > &keyLen, unsigned int &nFlowFZ, unsigned int &nFlowZM) {
-	std::string errMsg = "";
-	BamTools::BamReader bamReader;
-	if(!bamReader.Open(bamFile)) {
-		errMsg += "Failed to open bam " + bamFile + "\n";
-		return(errMsg);
-	}
-	BamTools::SamHeader samHeader = bamReader.GetHeader();
-	for (BamTools::SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr ) {
-		if(itr->HasID())
-			keyLen[itr->ID] = itr->HasKeySequence() ? itr->KeySequence.length() : 0;
-		if(itr->HasFlowOrder())
-			nFlowZM = std::max(nFlowZM,(unsigned int) itr->FlowOrder.length());
-	}
-	BamTools::BamAlignment alignment;
-	std::vector<uint16_t> flowIntFZ;
-	while(bamReader.GetNextAlignment(alignment)) {
-		if(alignment.GetTag("FZ", flowIntFZ))
-			nFlowFZ = flowIntFZ.size();
-		break;
-	}
-	bamReader.Close();
-	if(nFlowFZ==0)
-		std::cout << "NOTE: bam file has no flow signals in FZ tag: " + bamFile + "\n";
-	if(nFlowZM==0)
-		std::cout << "NOTE: bam file has no flow signals in ZM tag: " + bamFile + "\n";
-	return(errMsg);
-}
-
-bool getNextAlignment(BamTools::BamAlignment &alignment, BamTools::BamReader &bamReader, const std::map<std::string, int> &groupID, std::vector< BamTools::BamAlignment > &alignmentSample, std::map<std::string, int> &wellIndex, unsigned int nSample) {
-	if(nSample > 0) {
-		// We are randomly sampling, so next read should come from the sample that was already taken from the bam file
-		if(alignmentSample.size() > 0) {
-			alignment = alignmentSample.back();
-			alignmentSample.pop_back();
-			alignment.BuildCharData();
-			return(true);
-		} else {
-			return(false);
-		}
-	} else {
-		// No random sampling, so we're either returning everything or we're looking for specific read names
-		bool storeRead = false;
-		while(bamReader.GetNextAlignment(alignment)) {
-			if(groupID.size() > 0) {
-				std::string thisReadGroupID = "";
-				if( !alignment.GetTag("RG", thisReadGroupID) || (groupID.find(thisReadGroupID)==groupID.end()) );
-					continue;
-			}
-			storeRead=true;
-			if(wellIndex.size() > 0) {
-				// We are filtering by position, so check if we should skip or keep the read
-				int thisCol,thisRow;
-				if(1 != ion_readname_to_rowcol(alignment.Name.c_str(), &thisRow, &thisCol))
-					std::cerr << "Error parsing read name: " << alignment.Name << "\n";
-				std::stringstream wellIdStream;
-				wellIdStream << thisCol << ":" << thisRow;
-				std::map<std::string, int>::iterator wellIndexIter;
-				wellIndexIter = wellIndex.find(wellIdStream.str());
-				if(wellIndexIter != wellIndex.end()) {
-					// If the read ID matches we should keep, unless its a duplicate
-					if(wellIndexIter->second >= 0) {
-						storeRead=true;
-						wellIndexIter->second=-1;
-					} else {
-						storeRead=false;
-						std::cerr << "WARNING: found extra instance of readID " << wellIdStream.str() << ", keeping only first\n";
-					}
-				} else {
-					// read ID is not one we should keep
-					storeRead=false;
-				}
-			}
-			if(storeRead)
-				break;
-		}
-		return(storeRead);
-	}
-}
-
-bool getTagParanoid(BamTools::BamAlignment &alignment, const std::string &tag, int64_t &value) {
-	char tagType = ' ';
-	if(alignment.GetTagType(tag, tagType)) {
-		switch(tagType) {
-			case BamTools::Constants::BAM_TAG_TYPE_INT8: {
-				int8_t value_int8 = 0;
-				alignment.GetTag(tag, value_int8);
-				value = value_int8;
-			} break;
-			case BamTools::Constants::BAM_TAG_TYPE_UINT8: {
-				uint8_t value_uint8 = 0;
-				alignment.GetTag(tag, value_uint8);
-				value = value_uint8;
-			} break;
-			case BamTools::Constants::BAM_TAG_TYPE_INT16: {
-				int16_t value_int16 = 0;
-				alignment.GetTag(tag, value_int16);
-				value = value_int16;
-			} break;
-			case BamTools::Constants::BAM_TAG_TYPE_UINT16: {
-				uint16_t value_uint16 = 0;
-				alignment.GetTag(tag, value_uint16);
-				value = value_uint16;
-			} break;
-			case BamTools::Constants::BAM_TAG_TYPE_INT32: {
-				int32_t value_int32 = 0;
-				alignment.GetTag(tag, value_int32);
-				value = value_int32;
-			} break;
-			case BamTools::Constants::BAM_TAG_TYPE_UINT32: {
-				uint32_t value_uint32 = 0;
-				alignment.GetTag(tag, value_uint32);
-				value = value_uint32;
-			} break;
-			default: {
-				alignment.GetTag(tag, value);
-			} break;
-		}
-		return(true);
-	} else {
-		return(false);
-	}
-}
-
-
-
-//Ported from BamUtils
-
-//this could probably be faster -- maybe with an std::transform
-void reverse_comp(std::string& c_dna) {
-    for (unsigned int i = 0; i<c_dna.length(); i++) {
-        switch (c_dna[i]) {
-            case 'A':
-                c_dna[i] = 'T';
-                break;
-            case 'T':
-                c_dna[i] = 'A';
-                break;
-            case 'C':
-                c_dna[i] = 'G';
-                break;
-            case 'G':
-                c_dna[i] = 'C';
-                break;
-            case '-':
-                c_dna[i] = '-';
-                break;
-
-            default:
-                break;
-        }
-    }
-    std::reverse(c_dna.begin(), c_dna.end());
-
-}
-
-void dna( string& qDNA, const vector<BamTools::CigarOp>& cig, const string& md, string& tDNA) {
-
-    int position = 0;
-    string seq;
-    string::const_iterator qDNA_itr = qDNA.begin();
-
-    for (vector<BamTools::CigarOp>::const_iterator i = cig.begin(); i != cig.end(); ++i) {
-        if ( i->Type == 'M') {
-            unsigned int count = 0;
-            while (qDNA_itr != qDNA.end()) {
-
-                if (count >= i->Length) {
-                    break;
-                } else {
-                    seq += *qDNA_itr;
-                    ++qDNA_itr;
-                    ++count;
-                }
-            }
-        } else if ((i->Type == 'I') || (i->Type == 'S')) {
-            unsigned int count = 0;
-            while (qDNA_itr != qDNA.end()) {
-                if (count >= i->Length) {
-                    break;
-                }
-                ++qDNA_itr;
-                ++count;
-            }
-            //bool is_error = false;
-
-//            if (i->Type == 'S') {
-//                soft_clipped_bases += i->Length;
-//                //is_error = true;
-//            }
-        }
-        position++;
-    }
-
-    tDNA.reserve(seq.length());
-    int start = 0;
-    string::const_iterator md_itr = md.begin();
-    std::string num;
-    int md_len = 0;
-    char cur;
-
-    while (md_itr != md.end()) {
-
-        cur = *md_itr;
-
-        if (std::isdigit(cur)) {
-            num+=cur;
-            //md_itr.next();
-        }
-        else {
-            if (num.length() > 0) {
-                md_len = strtol(num.c_str(),NULL, 10);
-                num.clear();
-
-                tDNA += seq.substr(start, md_len);
-                start += md_len;
-            }
-        }
-
-        if (cur == '^') {
-            //get nuc
-            ++md_itr;
-            char nuc = *md_itr;
-            while (std::isalpha(nuc)) {
-                tDNA += nuc;
-                ++md_itr;
-                nuc = *md_itr;
-            }
-            num += nuc; //it's a number now will
-                        //lose this value if i don't do it here
-            //cur = nuc;
-
-        } else if (std::isalpha(cur)) {
-            tDNA += cur;
-            start++;
-
-        }
-        ++md_itr;
-    }
-
-    //clean up residual num if there is any
-    if (num.length() > 0) {
-        md_len = strtol(num.c_str(),NULL, 10);
-        num.clear();
-        tDNA += seq.substr(start, md_len);
-        start += md_len;
-    }
-}
-
-
-void padded_alignment(const vector<BamTools::CigarOp>& cig, string& qDNA, string& tDNA,  string& pad_query, string& pad_target, string& pad_match, bool isReversed) {
-
-    int sdna_pos = 0;
-    unsigned int tdna_pos = 0;
-    pad_target.reserve(tDNA.length());
-    pad_query.reserve(tDNA.length());
-    pad_match.reserve(tDNA.length());
-    string::iterator tdna_itr = tDNA.begin();
-    unsigned int tot = 0;
-    //find out if the first cigar op could be soft clipped or not
-    bool is_three_prime_soft_clipped = false;
-
-
-    for (vector<BamTools::CigarOp>::const_iterator i = cig.begin(); i!=cig.end(); ++i) {
-        //i.op();		i.len();
-        if (isReversed) {
-            if (tot > ( cig.size() - 3) ){
-                if (i->Type == 'S')
-                    is_three_prime_soft_clipped = true;
-                else
-                    is_three_prime_soft_clipped = false;
-
-            }
-        } else {
-            if (tot < 2) {
-                if (i->Type == 'S')
-                    is_three_prime_soft_clipped = true;
-                else
-                    is_three_prime_soft_clipped = false;
-
-            }
-        }
-
-        if (i->Type == 'I' ) {
-            pad_target.append(i->Length, '-');
-
-            unsigned int count = 0;
-
-            tdna_itr = qDNA.begin();
-            advance(tdna_itr, sdna_pos);
-
-            while (tdna_itr != tDNA.end() ) {
-                if (count >= i->Length) {
-                    break;
-                } else {
-                    pad_query += *tdna_itr;
-                    ++tdna_itr;
-                    //++tdna_pos;
-                    ++sdna_pos;
-                    ++count;
-                }
-            }
-            pad_match.append(i->Length, '+');
-        }
-        else if(i->Type == 'D' || i->Type == 'N') {
-            pad_target.append( tDNA.substr(tdna_pos, i->Length));
-            sdna_pos += i->Length;
-            tdna_pos += i->Length;
-            pad_query.append(i->Length, '-');
-            pad_match.append(i->Length, '-');
-        }
-        else if(i->Type == 'P') {
-            pad_target.append(i->Length, '*');
-            pad_query.append(i->Length, '*');
-            pad_match.append(i->Length, ' ');
-        } else if (i->Type == 'S') {
-
-//            if (!truncate_soft_clipped) {
-
-//                    pad_source.append(i->Length, '-');
-//                    pad_match.append(i->Length, '+');
-//                    pad_target.append(i->Length, '+');
-
-//            }
-//            int count = 0;
-//            while (tdna_itr != tDNA.end()) {
-//                if (count >= i->Length) {
-//                    break;
-//                }
-//                ++tdna_pos;
-//                ++tdna_itr;
-//                ++count;
-//            }
-        }
-
-        else if (i->Type == 'H') {
-            //nothing for clipped bases
-        }else {
-            std::string ps, pt, pm;
-            ps.reserve(i->Length);
-            pm.reserve(i->Length);
-
-            ps = qDNA.substr(sdna_pos,i->Length); //tdna is really qdna
-
-            tdna_itr = tDNA.begin();
-            advance(tdna_itr, tdna_pos);
-
-            unsigned int count = 0;
-
-            while (tdna_itr != tDNA.end()) {
-                if (count < i->Length) {
-                    pt += *tdna_itr;
-                } else {
-                    break;
-                }
-
-                ++tdna_itr;
-                ++count;
-
-            }
-            for (unsigned int z = 0; z < ps.length(); z++) {
-                if (ps[z] == pt[z]) {
-                    pad_match += '|';
-                } else {
-                    pad_match += ' ';
-                }
-            }//end for loop
-            pad_target += pt;
-            pad_query += ps;
-
-            sdna_pos += i->Length;
-            tdna_pos += i->Length;
-            if( tdna_pos >= tDNA.size() )
-                break;
-        }
-        tot++;
-    }
-    /*
-    std::cerr << "pad_source: " << pad_source << std::endl;
-    std::cerr << "pad_target: " << pad_target << std::endl;
-    std::cerr << "pad_match : " << pad_match << std::endl;
-    */
-}
-
-std::vector<int> score_alignments(string& pad_source, string& pad_target, string& pad_match ){
-
-    int n_qlen = 0;
-    int t_len = 0;
-    int t_diff = 0;
-    int match_base = 0;
-    int num_slop = 0;
-
-    int consecutive_error = 0;
-
-    //using namespace std;
-    for (int i = 0; (unsigned int)i < pad_source.length(); i++) {
-        //std::cerr << " i: " << i << " n_qlen: " << n_qlen << " t_len: " << t_len << " t_diff: " << t_diff << std::endl;
-        if (pad_source[i] != '-') {
-            t_len = t_len + 1;
-        }
-
-        if (pad_match[i] != '|') {
-            t_diff = t_diff + 1;
-
-            if (i > 0 && pad_match[i-1] != '|' && ( ( pad_target[i] == pad_target[i - 1] ) || pad_match[i] == '-' ) ) {
-                consecutive_error = consecutive_error + 1;
-            } else {
-                consecutive_error = 1;
-            }
-        } else {
-            consecutive_error = 0;
-            match_base = match_base + 1;
-        }
-        if (pad_target[i] != '-') {
-            n_qlen = n_qlen + 1;
-        }
-    }
-
-
-    //get qual vals from  bam_record
-    std::vector<double> Q;
-
-    //setting acceptable error rates for each q score, defaults are
-    //7,10,17,20,47
-    //phred_val == 7
-    Q.push_back(0.2);
-    //phred_val == 10
-    Q.push_back(0.1);
-    //phred_val == 17
-    Q.push_back(0.02);
-    //phred_val == 20
-    Q.push_back(0.01);
-    //phred_val == 47
-    Q.push_back(0.00002);
-
-    std::vector<int> q_len_vec(Q.size(), 0);
-
-    int prev_t_diff = 0;
-    int prev_loc_len = 0;
-    int i = pad_source.length() - 1;
-
-    for (std::vector<std::string>::size_type k =0; k < Q.size(); k++) {
-        int loc_len = n_qlen;
-        int loc_err = t_diff;
-        if (k > 0) {
-            loc_len = prev_loc_len;
-            loc_err = prev_t_diff;
-        }
-
-        while ((loc_len > 0) && (static_cast<int>(i) >= num_slop) && i > 0) {
-
-            if (q_len_vec[k] == 0 && (((loc_err / static_cast<double>(loc_len))) <= Q[k]) /*&& (equivalent_length(loc_len) != 0)*/) {
-
-                q_len_vec[k] = loc_len;
-
-                prev_t_diff = loc_err;
-                prev_loc_len = loc_len;
-                break;
-            }
-            if (pad_match[i] != '|') {
-                loc_err--;
-            }
-            if (pad_target[i] != '-') {
-
-                loc_len--;
-            }
-            i--;
-        }
-    }
-    return q_len_vec;
-}

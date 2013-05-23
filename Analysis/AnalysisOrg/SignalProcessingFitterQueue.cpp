@@ -4,8 +4,6 @@
 #include <iostream>
 #include <fstream>
 
-//#define NO_HETEROGENEOUS 
-
 using namespace std;
 
 void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item);
@@ -72,23 +70,13 @@ void *BkgFitWorkerCpu(void *arg)
   return (NULL);
 }
 
-void *SingleFlowFitGPUWorker(void *arg)
+void *SimpleBkgFitWorkerGpu(void *arg)
 {
   WorkerInfoQueue *q = static_cast<WorkerInfoQueue *> (arg);
   assert (q);
-  
-  SingleFlowStreamExecutionOnGpu(q);
- 
-  return (NULL);
-}
 
-void *MultiFlowFitGPUWorker(void *arg)
-{
-  WorkerInfoQueue *q = static_cast<WorkerInfoQueue *> (arg);
-  assert (q);
-  
-  MultiFlowStreamExecutionOnGpu(q);
- 
+  SimpleFitStreamExecutionOnGpu(q);
+
   return (NULL);
 }
 
@@ -111,16 +99,16 @@ void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item) {
     if (info->flow < info->bkgObj->region_data->my_flow.numfb)
     {
       info->type = INITIAL_FLOW_BLOCK_ALLBEAD_FIT; 
-      if (info->pq->GetMultiFitGpuQueue())
-        info->pq->GetMultiFitGpuQueue()->PutItem(item);
+      if (info->pq->GetGpuQueue() && info->pq->performGpuMultiFlowFitting())
+        info->pq->GetGpuQueue()->PutItem(item);
       else
         info->pq->GetCpuQueue()->PutItem(item);
     }
     else
     {
       info->type = SINGLE_FLOW_FIT;
-      if (info->pq->GetSingleFitGpuQueue())
-        info->pq->GetSingleFitGpuQueue()->PutItem(item);
+      if (info->pq->GetGpuQueue() && info->pq->performGpuSingleFlowFitting())
+        info->pq->GetGpuQueue()->PutItem(item);
       else
         info->pq->GetCpuQueue()->PutItem(item);
     }
@@ -142,8 +130,8 @@ void DoInitialBlockOfFlowsRemainingRegionalFit(WorkerInfoQueueItem &item)
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   info->bkgObj->RemainingFitStepsForInitialFlowBlock();
   info->type = SINGLE_FLOW_FIT; 
-  if (info->pq->GetSingleFitGpuQueue())
-    info->pq->GetSingleFitGpuQueue()->PutItem(item);
+  if (info->pq->GetGpuQueue() && info->pq->performGpuSingleFlowFitting())
+    info->pq->GetGpuQueue()->PutItem(item);
   else
     info->pq->GetCpuQueue()->PutItem(item);
 }
@@ -175,13 +163,27 @@ void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item)
   reg_debug_enable = CheckBkgDbgRegion (&info->regions[r],info->inception_state->bkg_control);
 //@TODO: get rid of >control< options on initializer that don't affect allocation or initial computation
 // Sweep all of those into a flag-setting operation across all the fitters, or send some of then to global-defaults
-  SignalProcessingMasterFitter *local_fitter = new SignalProcessingMasterFitter (info->sliced_chip[r], *info->global_defaults, info->results_folder, info->maskPtr,
-                                                                                 info->pinnedInFlow, info->rawWells, &info->regions[r], *info->sample, *info->sep_t0_estimate,
-                                                                                 reg_debug_enable, info->inception_state->loc_context.rows, info->inception_state->loc_context.cols,
-                                                                                 info->maxFrames,info->uncompFrames,info->timestamps, info->emptyTraceTracker,
+  SignalProcessingMasterFitter *local_fitter = new SignalProcessingMasterFitter (info->sliced_chip[r], 
+                                                                                 *info->global_defaults, 
+                                                                                 info->results_folder, 
+                                                                                 info->maskPtr,
+                                                                                 info->pinnedInFlow, 
+                                                                                 info->rawWells, 
+                                                                                 &info->regions[r], 
+                                                                                 *info->sample, 
+                                                                                 *info->sep_t0_estimate,
+                                                                                 reg_debug_enable, 
+                                                                                 info->inception_state->loc_context.rows, 
+                                                                                 info->inception_state->loc_context.cols,
+                                                                                 info->maxFrames,
+                                                                                 info->uncompFrames,
+                                                                                 info->timestamps, 
+                                                                                 info->emptyTraceTracker,
                                                                                  info->t_sigma,
                                                                                  info->t_mid_nuc,
-                                                                                 info->seqList,
+                                                                                 info->t0_frame,
+										 info->nokey,
+										 info->seqList,
                                                                                  info->numSeqListItems,
                                                                                  info->restart,
                                                                                  info->washout_flow);
@@ -189,6 +191,7 @@ void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item)
   local_fitter->SetPoissonCache (info->math_poiss);
   local_fitter->SetComputeControlFlags (info->inception_state->bkg_control.enableXtalkCorrection);
   local_fitter->SetPointers (info->ptrs);
+  local_fitter->writeDebugFiles(info->inception_state->bkg_control.bkg_debug_files);
 
 
   // now allocate fitters within the bkgmodel object
@@ -223,8 +226,8 @@ void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts
   // -- Tuning parameters --
 
   // This will override gpuWorkLoad=1 and will only use GPU for chips which are allowed in the following function
-  my_compute_plan.use_gpu_acceleration = UseGpuAcceleration(bkg_control.gpuWorkLoad);
-  my_compute_plan.gpu_work_load = bkg_control.gpuWorkLoad;
+  my_compute_plan.use_gpu_acceleration = UseGpuAcceleration(bkg_control.gpuControl.gpuWorkLoad);
+  my_compute_plan.gpu_work_load = bkg_control.gpuControl.gpuWorkLoad;
   my_compute_plan.lastRegionToProcess = 0;
   // Option to use all GPUs in system (including display devices). If set to true, will only use the
   // devices with the highest computer version. For example, if you have a system with 4 Fermi compute
@@ -234,10 +237,13 @@ void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts
   if (configureGpu (my_compute_plan.use_gpu_acceleration, my_compute_plan.valid_devices, my_compute_plan.use_all_gpus,
                     my_compute_plan.numBkgWorkers_gpu))
   {
-    my_compute_plan.numSingleFlowFitGpuWorkers = bkg_control.gpuSingleFlowFit * my_compute_plan.numBkgWorkers_gpu; 
-    my_compute_plan.numMultiFlowFitGpuWorkers = bkg_control.gpuMultiFlowFit * my_compute_plan.numBkgWorkers_gpu; 
-    my_compute_plan.numBkgWorkers_gpu = my_compute_plan.numMultiFlowFitGpuWorkers + my_compute_plan.numSingleFlowFitGpuWorkers;
+    my_compute_plan.use_gpu_only_fitting = bkg_control.gpuControl.doGpuOnlyFitting;
+    my_compute_plan.gpu_multiflow_fit = bkg_control.gpuControl.gpuMultiFlowFit;
+    my_compute_plan.gpu_singleflow_fit = bkg_control.gpuControl.gpuSingleFlowFit;
     printf ("use_gpu_acceleration: %d\n", my_compute_plan.use_gpu_acceleration);
+
+    //pass command line params for Kernel configuration
+    configureKernelExecution(bkg_control.gpuControl);
   }
   else
   {
@@ -264,17 +270,27 @@ void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts
 void AllocateProcessorQueue (ProcessorQueue &my_queue,ComputationPlanner &analysis_compute_plan, int numRegions)
 {
   //create queue for passing work to thread pool
-  
+ 
+
   my_queue.SetCpuQueue(new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers+1));
   if (analysis_compute_plan.use_gpu_acceleration) {
-    if(analysis_compute_plan.numMultiFlowFitGpuWorkers) {
-      my_queue.AllocateMultiFitGpuInfo(analysis_compute_plan.numMultiFlowFitGpuWorkers);
-      my_queue.SetMultiFitGpuQueue(new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers_gpu+1));
+    if(analysis_compute_plan.numBkgWorkers_gpu) {
+      my_queue.AllocateGpuInfo(analysis_compute_plan.numBkgWorkers_gpu);
+      my_queue.SetGpuQueue(new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers_gpu+1));
     }
-    if(analysis_compute_plan.numSingleFlowFitGpuWorkers) {
-      my_queue.AllocateSingleFitGpuInfo(analysis_compute_plan.numSingleFlowFitGpuWorkers);
-      my_queue.SetSingleFitGpuQueue(new WorkerInfoQueue (numRegions*analysis_compute_plan.numBkgWorkers_gpu+1));
-    }
+  }
+  
+  // decide on whether to use both CPU and GPU for bkg model fitting jobs
+  if (analysis_compute_plan.use_gpu_only_fitting) {
+    my_queue.turnOffHeterogeneousComputing();
+  }
+
+  if (!analysis_compute_plan.gpu_multiflow_fit) {
+    my_queue.turnOffGpuMultiFlowFitting();
+  }
+
+  if (!analysis_compute_plan.gpu_singleflow_fit) {
+    my_queue.turnOffGpuSingleFlowFitting();
   }
 
   {
@@ -306,11 +322,13 @@ void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, Computati
   // image
   // Need better logic...This is just following the different steps involved in signal processing
   analysis_queue.GetCpuQueue()->WaitTillDone();
-  if (analysis_queue.GetMultiFitGpuQueue())
-    analysis_queue.GetMultiFitGpuQueue()->WaitTillDone();
+  if (analysis_queue.GetGpuQueue())
+    analysis_queue.GetGpuQueue()->WaitTillDone();
   analysis_queue.GetCpuQueue()->WaitTillDone();
-  if (analysis_queue.GetSingleFitGpuQueue())
-    analysis_queue.GetSingleFitGpuQueue()->WaitTillDone();
+  if (analysis_queue.GetGpuQueue())
+    analysis_queue.GetGpuQueue()->WaitTillDone();
+//  if (analysis_queue.GetSingleFitGpuQueue())
+//    analysis_queue.GetSingleFitGpuQueue()->WaitTillDone();
   if (analysis_compute_plan.use_gpu_acceleration)
     analysis_queue.GetCpuQueue()->WaitTillDone();
 }
@@ -319,19 +337,19 @@ void SpinUpGPUThreads(ProcessorQueue &analysis_queue, ComputationPlanner &analys
 {
   if (analysis_compute_plan.use_gpu_acceleration) {
     // create gpu thread for multi flow fit
-    CreateGpuThreadsForFitType(analysis_queue.GetMultiFitGpuInfo(), GPU_MULTI_FLOW_FIT, 
-        analysis_compute_plan.numMultiFlowFitGpuWorkers, analysis_queue.GetMultiFitGpuQueue(),
+    CreateGpuThreadsForFitType(analysis_queue.GetGpuInfo(),  
+        analysis_compute_plan.numBkgWorkers_gpu, analysis_queue.GetGpuQueue(),
         analysis_compute_plan.valid_devices);
     // create gpu thread for single flow fit
-    CreateGpuThreadsForFitType(analysis_queue.GetSingleFitGpuInfo(), GPU_SINGLE_FLOW_FIT, 
+/*    CreateGpuThreadsForFitType(analysis_queue.GetSingleFitGpuInfo(), GPU_SINGLE_FLOW_FIT, 
         analysis_compute_plan.numSingleFlowFitGpuWorkers, analysis_queue.GetSingleFitGpuQueue(),
-        analysis_compute_plan.valid_devices);
+        analysis_compute_plan.valid_devices);*/
   }
 }
 
 void CreateGpuThreadsForFitType(
     std::vector<BkgFitWorkerGpuInfo> &gpuInfo, 
-    GpuFitType fittype, 
+  //  GpuFitType fittype, 
     int numWorkers, 
     WorkerInfoQueue* q,
     std::vector<int> &gpus)
@@ -343,7 +361,7 @@ void CreateGpuThreadsForFitType(
 
     int deviceId = i / threadsPerDevice;
 
-    gpuInfo[i].type = fittype;
+//    gpuInfo[i].type = fittype;
     gpuInfo[i].gpu_index = gpus[deviceId];
     gpuInfo[i].queue = (void*) q;
 
@@ -358,6 +376,7 @@ void CreateGpuThreadsForFitType(
 
 void AssignQueueForItem (ProcessorQueue &analysis_queue,ComputationPlanner &analysis_compute_plan)
 {
+  (void) analysis_compute_plan;
   analysis_queue.GetCpuQueue()->PutItem(analysis_queue.item);
 }
 
@@ -370,6 +389,7 @@ bool UseGpuAcceleration(float useGpuFlag) {
         return true;
       case ChipId314:
       case ChipId316:
+      case ChipId316v2:    
       default:
       {
         printf("GPU acceleration turned off\n");
@@ -383,20 +403,20 @@ bool UseGpuAcceleration(float useGpuFlag) {
 WorkerInfoQueueItem TryGettingFittingJobForCpuFromQueue(ProcessorQueue* pq, WorkerInfoQueue** curQ)
 {
   WorkerInfoQueueItem item;
-#ifndef NO_HETEROGENEOUS
-  std::vector<WorkerInfoQueue*>& queues = pq->GetQueues();
-  for (unsigned int i=0; i<queues.size(); ++i) {
-   if (queues[i]) {
-      item = queues[i]->TryGetItem();
-      if (item.private_data != NULL) 
-      {
-        *curQ = queues[i];
-        return item;
+  if (pq->useHeterogenousCompute()) {
+    std::vector<WorkerInfoQueue*>& queues = pq->GetQueues();
+    for (unsigned int i=0; i<queues.size(); ++i) {
+      if (queues[i]) {
+        item = queues[i]->TryGetItem();
+        if (item.private_data != NULL) 
+        {
+          *curQ = queues[i];
+          return item;
+        }
       }
     }
   }
-#endif // NO_HETEROGENEOUS
- item = pq->GetCpuQueue()->GetItem();
+  item = pq->GetCpuQueue()->GetItem();
   *curQ = pq->GetCpuQueue();
   return item;
 }

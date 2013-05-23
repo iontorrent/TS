@@ -140,6 +140,16 @@ public:
   void TrimAdapter                  (int read_index, int read_class, ProcessedRead& processed_read, const vector<float>& scaled_residual,
                                      const vector<int>& base_to_flow, DPTreephaser& treephaser, const BasecallerRead& read);
 
+  //! @brief    setup Avalanche trimmer parameters
+  //! @param    maxflows            max num flows
+  void TrimAvalanche_setup          (int maxflows);
+
+  //! @brief    Apply Avalanche trimmer to a valid read.
+  //! @param    read_index          Read index
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  //! @param    sff_entry           Basecalling results for this read
+  void TrimAvalanche                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+
   //! @brief    Check if a read is marked as valid.
   //! @param    read_index          Read index
   bool IsValid(int read_index) const;
@@ -183,6 +193,30 @@ protected:
   int                 trim_qual_window_size_;             //!< Size of averaging window used by quality trimmer
   double              trim_qual_cutoff_;                  //!< Quality cutoff used by quality trimmer
   int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
+  string              trim_adapter_tf_;                   //!< Test Fragment adapter sequence. If empty, do not perform adapter trimming on TFs.
+
+  // Avalanche filter (sort readlength filter, higher QV on shorter reads, and lower QV for longer reads)
+  bool                filter_avalanche_enabled_;          //!< Is Avalanche filter enabled?
+  int                 avalanche_max_pos_;                 //!< max QV threshold pos
+  int                 avalanche_mid_pos_;                 //!< mid QV threshold pos
+  int                 avalanche_min_pos_;                 //!< min QV threshold pos
+  int                 avalanche_win_;                     //!< Avalanche window used by avalanche trimmer
+  double              trim_qual_avalanche_max_;           //!< Quality cutoff used by avalanche trimmer
+  double              trim_qual_avalanche_hi_;            //!< Quality cutoff used by avalanche trimmer
+  double              trim_qual_avalanche_lo_;            //!< Quality cutoff used by avalanche trimmer
+  double              avalanche_sum_delta_;              //!<delta subtracted from minimum_sum before avalanche_mid_pos_
+  double              avalanche_ava_delta_;              //!<delta subtracted from minimum_ava after avalanche_mid_pos_
+  double              avalanche_min_delta_;              //!<delta subtracted from minimum_min after avalanche_min_pos_
+  double              delta_ava_;                        //!<delta between avalanche_ava_delta_ & avalanche_sum_delta_
+  double              delta_min_;                        //!<delta between avalanche_min_delta_ & avalanche_ava_delta_
+  int                 trim_min_read_len_avalanch_;       //!< diff from trim_min_read_len_
+  int                 qv_sum_thresh_max;                 //!< threshold on the sum of QV for pos < trim_qual_avalanche_max_
+  int                 qv_sum_thresh_min;                 //!< threshold on the sum of QV for pos >= trim_qual_avalanche_lo_
+  int                 min_bases_passed_test;            //!< min number of bases that the reads have to pass the qv test
+  vector<double>      qv_sum_thresh;                     //!< threshold on the sum of QV
+  //long                count_filtered;                    //!<counter mainly for debugging
+  //long                count_trimmed;                     //!<counter mainly for debugging
+  //long                count_passed;                      //!<counter mainly for debugging
 
 };
 

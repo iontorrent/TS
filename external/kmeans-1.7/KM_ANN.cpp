@@ -21,8 +21,6 @@
 #include "KM_ANN.h"			// KM-ANN includes
 #include "KMrand.h"			// random number includes
 
-#include "dbgmem.h"
-
 //----------------------------------------------------------------------
 //  Point methods
 //----------------------------------------------------------------------

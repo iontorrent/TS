@@ -11,9 +11,10 @@
 #include <algorithm>
 #include "DPTreephaser.h"
 
-DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order)
+DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order, const int windowSize)
   : flow_order_(flow_order)
 {
+  SetNormalizationWindowSize(windowSize);
   for (int i = 0; i < 8; i++) {
     transition_base_[i].resize(flow_order_.num_flows());
     transition_flow_[i].resize(flow_order_.num_flows());
@@ -23,7 +24,11 @@ DPTreephaser::DPTreephaser(const ion::FlowOrder& flow_order)
     path_[p].state.resize(flow_order_.num_flows());
     path_[p].prediction.resize(flow_order_.num_flows());
     path_[p].sequence.reserve(2*flow_order_.num_flows());
+    path_[p].flow2base_pos.resize(flow_order_.num_flows());
+    path_[p].base_pos = 0;
   }
+  pm_model_available_ = false;
+  pm_model_enabled_ = false;
 }
 
 //-------------------------------------------------------------------------
@@ -43,6 +48,23 @@ void DPTreephaser::SetModelParameters(double carry_forward_rate, double incomple
 
 }
 
+//-------------------------------------------------------------------------
+
+void DPTreephaser::SetModelParameters(double carry_forward_rate, double incomplete_extension_rate)
+{
+
+  double nuc_avaliability[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+  for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
+    nuc_avaliability[flow_order_[flow]&7] = 1;
+    for (int nuc = 0; nuc < 8; nuc++) {
+      transition_base_[nuc][flow] = nuc_avaliability[nuc] * (1-incomplete_extension_rate);
+      transition_flow_[nuc][flow] = 1 - transition_base_[nuc][flow];
+      nuc_avaliability[nuc] *= carry_forward_rate;
+    }
+  }
+
+}
+
 
 //-------------------------------------------------------------------------
 
@@ -51,22 +73,23 @@ void BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_f
   raw_measurements.resize(num_flows);
   normalized_measurements.resize(num_flows);
   prediction.assign(num_flows, 0);
+  state_inphase.assign(num_flows, 1.0);
   additive_correction.assign(num_flows, 0);
   multiplicative_correction.assign(num_flows, 1.0);
   sequence.reserve(2*num_flows);
 
-  float onemer_sum = 0.0;
-  float onemer_count = 0.0;
+  float onemer_sum = 0.0f;
+  int onemer_count = 0;
   for (int flow = 0; flow < num_key_flows; ++flow) {
     if (key_flows[flow] == 1) {
       onemer_sum += measurements[flow];
-      onemer_count += 1.0;
+      ++onemer_count;
     }
   }
 
-  key_normalizer = 1;
+  key_normalizer = 1.0f;
   if (onemer_sum and onemer_count)
-    key_normalizer = onemer_count / onemer_sum;
+    key_normalizer = static_cast<float>(onemer_count) / onemer_sum;
 
   for (int flow = 0; flow < num_flows; ++flow) {
     raw_measurements[flow] = measurements[flow] * key_normalizer;
@@ -74,6 +97,113 @@ void BasecallerRead::SetDataAndKeyNormalize(const float *measurements, int num_f
   }
 }
 
+void BasecallerRead::SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased)
+{
+    raw_measurements.resize(num_flows);
+    normalized_measurements.resize(num_flows);
+    prediction.assign(num_flows, 0.0f);
+    state_inphase.assign(num_flows, 1.0f);
+    additive_correction.assign(num_flows, 0.0f);
+    multiplicative_correction.assign(num_flows, 1.0f);
+    sequence.reserve(2*num_flows);
+
+    // New key normalization
+    float zeromer_sum   = 0.0f;
+    int   zeromer_count = 0;
+    float onemer_sum    = 0.0f;
+    int   onemer_count  = 0;
+    int   flow          = 0;
+    for (; flow < num_key_flows; ++flow)
+    {
+        if (key_flows[flow] == 0)
+        {
+            zeromer_sum += measurements[flow];
+            ++zeromer_count;
+        }
+        if (key_flows[flow] == 1)
+        {
+            onemer_sum += measurements[flow];
+            ++onemer_count;
+        }
+    }
+
+    float zeromerMean = (zeromer_count ? zeromer_sum / static_cast<float>(zeromer_count) : 0.0f);
+    float onemerMean  = (onemer_count ? onemer_sum / static_cast<float>(onemer_count) : 1.0f);
+    key_normalizer = (onemerMean - zeromerMean) > 0.25f ? 1.0f / (onemerMean - zeromerMean) : 1.0f;  // Guard against silly values
+
+    // Key-normalize entire flow using global averages
+    for (flow = 0; flow < num_flows; ++flow)
+    {
+        raw_measurements[flow] = (measurements[flow] - zeromerMean) * key_normalizer;
+        normalized_measurements[flow] = raw_measurements[flow];
+    }
+
+    if (phased)
+    {
+        // Calculate statistics for flow zeromers and onemers from first 32 flows post key
+        int maxIdx = min(num_flows, num_key_flows + 32);
+        int zeromerIdxs[32];
+        int onemerIdxs[32];
+        int zeromerCount = 0;
+        int onemerCount  = 0;
+        for (flow = num_key_flows; flow < maxIdx; ++flow)
+        {
+            if ((raw_measurements[flow] > kZeromerMin) && (raw_measurements[flow] < kZeromerMax))
+            {
+                zeromerIdxs[zeromerCount] = flow;
+                ++zeromerCount;
+            }
+            if ((raw_measurements[flow] > kOnemerMin) && (raw_measurements[flow] < kOnemerMax))
+            {
+                onemerIdxs[onemerCount] = flow;
+                ++onemerCount;
+            }
+        }
+        // Calculate means
+        zeromer_sum = 0.0f;
+        for (flow = 0; flow < zeromerCount; ++flow)
+        {
+            zeromer_sum += raw_measurements[zeromerIdxs[flow]];
+        }
+        zeromerMean = (zeromerCount ? zeromer_sum / static_cast<float>(zeromerCount) : kZeromerMean);
+        onemer_sum = 0.0f;
+        for (flow = 0; flow < onemerCount; ++flow)
+        {
+            onemer_sum += raw_measurements[onemerIdxs[flow]];
+        }
+        onemerMean = (onemerCount ? onemer_sum / static_cast<float>(onemerCount) : kOnemerMean);
+        // Calculate sigma squareds
+        float zeromerSigSq = kRunZeroSigSq;
+        float onemerSigSq  = kRunOneSigSq;
+        register float delta;
+        for (flow = 0; flow < zeromerCount; ++flow)
+        {
+            delta = raw_measurements[zeromerIdxs[flow]] - zeromerMean;
+            zeromerSigSq += delta * delta;
+        }
+        if (zeromerCount)
+            zeromerSigSq /= static_cast<float>(zeromerCount);
+        for (flow = 0; flow < onemerCount; ++flow)
+        {
+            delta = raw_measurements[onemerIdxs[flow]] - onemerMean;
+            onemerSigSq += delta * delta;
+        }
+        if (onemerCount)
+            onemerSigSq /= static_cast<float>(onemerCount);
+        // Correct zeromer and onemer estimates
+        register float oneOnSigSq = (zeromerSigSq > 0.0001f ? 1.0f / zeromerSigSq : 0.0f);
+        zeromerMean = ((kZeromerMean * kInvZeroSigSq) + (zeromerMean * oneOnSigSq)) / (kInvZeroSigSq + oneOnSigSq);
+        oneOnSigSq  = (onemerSigSq > 0.0001f ? 1.0f / onemerSigSq : 0.0f);
+        onemerMean  = ((kOnemerMean * kInvOneSigSq) + (onemerMean * oneOnSigSq)) / (kInvOneSigSq + oneOnSigSq);
+        // Normalize all non-key flows
+        register float flowGain = (onemerMean > 0.3f ? 1.0f / onemerMean : 1.0f);
+        for (flow = num_key_flows; flow < num_flows; ++flow)
+        {
+            raw_measurements[flow] = (raw_measurements[flow] - kZeromerMean) * flowGain;
+            normalized_measurements[flow] = raw_measurements[flow];
+        }
+    }
+}
 
 // ----------------------------------------------------------------------
 // New normalization strategy
@@ -167,10 +297,72 @@ void DPTreephaser::WindowedNormalize(BasecallerRead& read, int num_steps, int wi
 }
 
 //-------------------------------------------------------------------------
+// PID loop based normalization
+void DPTreephaser::PIDNormalize(BasecallerRead& read, const int num_samples)
+{
+    int   num_flows = read.raw_measurements.size();
+    int   idx       = 0;
+    register float rawVal, preVal, filtVal, normVal;
+
+    pidOffset_.Initialize(0.0f);
+    pidGain_.Initialize(1.0f);
+
+    // Cacluate and apply offset and gain corrections
+    for (idx = 0; idx < num_samples; ++idx)
+    {
+        rawVal = read.raw_measurements[idx];
+        preVal = read.prediction[idx];
+        // Offset correction
+        filtVal = (preVal < 0.3f ? pidOffset_.Step(rawVal - preVal) : pidOffset_.Step());
+        normVal = rawVal - filtVal;
+        read.additive_correction[idx] = filtVal;
+        // Gain correction
+        filtVal = (preVal > 0.5f && preVal <= 4.0f && normVal > 0.0f ? pidGain_.Step(normVal / preVal) : pidGain_.Step());
+        read.normalized_measurements[idx]   = normVal / filtVal;
+        read.multiplicative_correction[idx] = filtVal;
+    }
+
+    // Copy any un-corrected samples
+    for (; idx < num_flows; ++idx)
+    {
+        read.normalized_measurements[idx]   = read.raw_measurements[idx];
+        read.additive_correction[idx]       = 0.0f;
+        read.multiplicative_correction[idx] = 1.0f;
+    }
+}
+
+// PID loop based normalization used during phase estimation (gain only)
+float DPTreephaser::PIDNormalize(BasecallerRead& read, const int start_flow, const int end_flow)
+{
+    int   num_flows = end_flow - start_flow;
+    int   idx       = start_flow;
+    register float rawVal, preVal, filtVal;
+    float sumGain = 0.0f;
+
+    // Find the first "good" flow before the target window and use to initialize gain PID
+    pidGain_.Initialize(1.0f);
+
+    // Cacluate mean gain correction for window and gain correct data
+    for (idx = 0; idx < (int)read.raw_measurements.size(); ++idx)
+    {
+        rawVal   = read.raw_measurements[idx];
+        preVal   = read.prediction[idx];
+        filtVal  = (preVal > 0.5f && preVal <= 4.0f && rawVal > 0.0f ? pidGain_.Step(rawVal / preVal) : pidGain_.Step());
+        if (idx >= start_flow && idx < end_flow)
+            sumGain += filtVal;
+        read.additive_correction[idx]       = 0.0f;
+        read.normalized_measurements[idx]   = rawVal / filtVal;
+        read.multiplicative_correction[idx] = filtVal;
+    }
+
+    return (num_flows ? sumGain / static_cast<float>(num_flows) : 1.0f);
+}
+
+//-------------------------------------------------------------------------
 // New improved normalization strategy
 void DPTreephaser::NormalizeAndSolve3(BasecallerRead& well, int max_flows)
 {
-  int window_size = 50;
+  int window_size = windowSize_;
   int solve_flows = 0;
 
   for (int num_steps = 1; solve_flows < max_flows; ++num_steps) {
@@ -201,7 +393,7 @@ void DPTreephaser::NormalizeAndSolve4(BasecallerRead& well, int max_flows)
 // Sliding window adaptive normalization
 void DPTreephaser::NormalizeAndSolve5(BasecallerRead& well, int max_flows)
 {
-  int window_size = 50;
+  int window_size = windowSize_;
   int solve_flows = 0;
 
   for (int num_steps = 1; solve_flows < max_flows; ++num_steps) {
@@ -212,7 +404,11 @@ void DPTreephaser::NormalizeAndSolve5(BasecallerRead& well, int max_flows)
     WindowedNormalize(well, num_steps, window_size);
   }
 
+
+  if(pm_model_available_) pm_model_enabled_ = true;
   Solve(well, max_flows);
+  pm_model_enabled_ = false;
+
 }
 
 
@@ -258,6 +454,8 @@ void DPTreephaser::InitializeState(TreephaserPath *state) const
   state->sequence.clear();
   state->sequence.reserve(2*flow_order_.num_flows());
   state->last_hp = 0;
+  state->base_pos = 0;
+  state->flow2base_pos.assign(flow_order_.num_flows(), 0);
 }
 
 
@@ -271,6 +469,7 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
   child->flow = parent->flow;
   while (child->flow < max_flow and flow_order_[child->flow] != nuc)
     child->flow++;
+
   if (child->flow == parent->flow)
     child->last_hp = parent->last_hp + 1;
   else
@@ -324,6 +523,9 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
   int old_window_end = state->window_end;
   while (state->flow < max_flow and flow_order_[state->flow] != nuc)
     state->flow++;
+  if (state->flow == max_flow)
+    return;
+
   if (old_flow == state->flow)
     state->last_hp++;
   else
@@ -401,6 +603,33 @@ void DPTreephaser::QueryState(BasecallerRead& data, vector<float>& query_state, 
 }
 
 
+void DPTreephaser::QueryAllStates(BasecallerRead& data, vector< vector<float> >& query_states, vector<int>& hp_lengths, int max_flows)
+{
+  max_flows = min(max_flows,flow_order_.num_flows());
+  InitializeState(&path_[0]);
+  max_flows = min(max_flows, flow_order_.num_flows());
+  query_states.reserve(data.sequence.size());
+  query_states.resize(0);
+  hp_lengths.assign(data.sequence.size(), 0);
+  char last_nuc = 'N';
+  int hp_count = 0;
+
+  for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end() and path_[0].flow < max_flows; ++nuc) {
+    if (last_nuc != *nuc and last_nuc != 'N') {
+      hp_lengths[hp_count] = path_[0].last_hp;
+      query_states.push_back(path_[0].state);
+      hp_count++;
+    }
+    AdvanceStateInPlace(&path_[0], *nuc, max_flows);
+    last_nuc = *nuc;
+  }
+  hp_lengths[hp_count] = path_[0].last_hp;
+  query_states.push_back(path_[0].state);
+  hp_lengths.resize(query_states.size());
+  data.prediction.swap(path_[0].prediction);
+}
+
+
 //-------------------------------------------------------------------------
 
 void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
@@ -432,8 +661,18 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
     restart_flows = min(restart_flows, flow_order_.num_flows());
 
     for (vector<char>::iterator nuc = read.sequence.begin(); nuc != read.sequence.end() and path_[0].flow < restart_flows; ++nuc) {
+      int flow_s = path_[0].flow;
       AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
-      path_[0].sequence.push_back(*nuc);
+
+      if (path_[0].flow < flow_order_.num_flows()) {
+        path_[0].sequence.push_back(*nuc);
+
+        //update flow2base_pos
+        path_[0].base_pos++;
+        path_[0].flow2base_pos[path_[0].flow] = path_[0].base_pos;
+        for(int flow_inter = flow_s+1; flow_inter < path_[0].flow; flow_inter++)
+          path_[0].flow2base_pos[flow_inter] = path_[0].flow2base_pos[flow_s];
+      }
     }
 
     if (path_[0].flow < restart_flows-10) { // This read ended before restart_flows. No point resolving it.
@@ -442,7 +681,17 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
     }
 
     for (int flow = 0; flow < path_[0].window_start; ++flow) {
-      float residual = read.normalized_measurements[flow] - path_[0].prediction[flow];
+        float residual = 0;
+        if(pm_model_enabled_==false){
+            residual = read.normalized_measurements[flow] - path_[0].prediction[flow];
+        }
+        else{
+            int hp_length = 0;
+            if(flow==0) hp_length = path_[0].flow2base_pos[0];
+            else hp_length =path_[0].flow2base_pos[flow] - path_[0].flow2base_pos[flow-1];
+            if(hp_length<0) hp_length = 0;
+            residual = read.normalized_measurements[flow] - (path_[0].prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+        }
       path_[0].residual_left_of_window += residual * residual;
     }
   }
@@ -563,7 +812,21 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 
       for (int flow = parent->window_start; flow < child->window_end; ++flow) {
 
-        float residual = read.normalized_measurements[flow] - child->prediction[flow];
+        float residual = 0;
+
+        if(pm_model_enabled_==false){
+            residual = read.normalized_measurements[flow] - child->prediction[flow];
+        }
+        else{
+            int hp_length = 0;
+            if(flow==0)
+              hp_length = parent->flow2base_pos[0];
+            else
+              hp_length = parent->flow2base_pos[flow] - parent->flow2base_pos[flow-1];
+            if(hp_length<0) hp_length = 0;
+              residual = read.normalized_measurements[flow] - (child->prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+        }
+
         float residual_squared = residual * residual;
 
         // Metric calculation
@@ -617,7 +880,18 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
       if (penalty[nuc] - penalty[best_nuc] >= kExtendThreshold)
         continue;
 
-      float dot_signal = (read.normalized_measurements[child->flow] - parent->prediction[child->flow]) / child->state[child->flow];
+      float dot_signal = 0;
+      if(pm_model_enabled_==false){
+          dot_signal = (read.normalized_measurements[child->flow] - parent->prediction[child->flow]) / child->state[child->flow];
+      }
+      else{
+          int hp_length = 0;
+          if(child->flow==0) hp_length = parent->flow2base_pos[0];
+          else hp_length = parent->flow2base_pos[child->flow] - parent->flow2base_pos[child->flow-1];
+            if(hp_length<0) hp_length = 0;
+          dot_signal = (read.normalized_measurements[child->flow] - (parent->prediction[child->flow]*As_[child->flow][flow_order_.int_at(child->flow)][hp_length] + Bs_[child->flow][flow_order_.int_at(child->flow)][hp_length])) / child->state[child->flow];
+      }
+
       child->dot_counter = (dot_signal < kDotThreshold) ? (parent->dot_counter + 1) : 0;
       if (child->dot_counter > 1)
         continue;
@@ -635,6 +909,16 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
       // Fill out the solution
       child->sequence = parent->sequence;
       child->sequence.push_back(nuc_int_to_char[nuc]);
+
+      //calculate starting base position for each flow
+      child->base_pos = parent->base_pos;
+      child->base_pos++;
+      child->flow2base_pos = parent->flow2base_pos;
+      for(int flow_inter = parent->flow+1; flow_inter < child->flow; flow_inter++){
+        child->flow2base_pos[flow_inter] = child->flow2base_pos[parent->flow];
+      }
+      child->flow2base_pos[child->flow] = child->base_pos;      
+
     }
 
     // ------------------------------------------
@@ -642,8 +926,20 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
 
     // Computing sequence squared distance
     float sum_of_squares = parent->residual_left_of_window;
-    for (int flow = parent->window_start; flow < max_flows; flow++) {
-      float residual = read.normalized_measurements[flow] - parent->prediction[flow];
+    for (int flow = parent->window_start; flow < max_flows; flow++) {        
+
+      float residual = 0;
+
+      if(pm_model_enabled_==false){
+          residual = read.normalized_measurements[flow] - parent->prediction[flow];
+      }
+      else{
+          int hp_length = 0;
+          if(flow==0) hp_length = parent->flow2base_pos[0];
+          else hp_length = parent->flow2base_pos[flow] - parent->flow2base_pos[flow-1];
+          if(hp_length<0) hp_length = 0;
+          residual = read.normalized_measurements[flow] - (parent->prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+      }
       sum_of_squares += residual * residual;
     }
 
@@ -668,7 +964,9 @@ void  DPTreephaser::ComputeQVmetrics(BasecallerRead& read)
 {
   static const char nuc_int_to_char[5] = "ACGT";
 
+  //TODO: remove this assignment as it has been moved underSetDataAndKeyNormalize or SetDataAndKeyNormalizeNew
   read.state_inphase.assign(flow_order_.num_flows(), 1);
+
   read.state_total.assign(flow_order_.num_flows(), 1);
 
   if (read.sequence.empty())

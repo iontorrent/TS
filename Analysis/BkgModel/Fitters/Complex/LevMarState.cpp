@@ -109,22 +109,22 @@ void LevMarBeadAssistant::FinalComputeAndSetAverageResidual(BeadTracker& my_bead
     float beads_counted = 0.0001;
     for (int ibd=0; ibd < numLBeads; ibd++){
       // if this iteration is a region-wide parameter fit, then only process beads
-      // in the selection sub-group
+      // in the sampled sub-group
       if ( my_beads.isSampled ) {
 	// regional sampling enabled
-	if (!my_beads.Sampled (ibd) )
-	  continue;
+	if (my_beads.Sampled(ibd) ) {// && my_beads.BeadIncluded(ibd,skip_beads) ) {
+	  avg_resid += residual[ibd];
+	  beads_counted += 1.0f;
+	}
       }
       else {
 	// rolling regional groups enabled
-	if (!ValidBeadGroup (ibd))
-	  continue;
-      }
-
-      if (my_beads.BeadIncluded(ibd,skip_beads))
-      {
-	avg_resid += residual[ibd];
-	beads_counted += 1.0f;
+	if (ValidBeadGroup (ibd)) {
+	  if (my_beads.BeadIncluded(ibd,skip_beads)) {
+	    avg_resid += residual[ibd];
+	    beads_counted += 1.0f;
+	  }
+	}
       }
     }
     avg_resid /= beads_counted;
@@ -171,11 +171,11 @@ void LevMarBeadAssistant::InitializeLevMarFit (BkgFitMatrixPacker *well_fit, Bkg
 
 void LevMarBeadAssistant::Delete()
 {
-  delete [] residual;
-  delete [] well_completed;
-  delete [] lambda;
-  delete [] regularizer;
-  delete [] region_group;
+  delete [] residual; residual = NULL;
+  delete [] well_completed; well_completed = NULL;
+  delete [] lambda; lambda = NULL;
+  delete [] regularizer; regularizer = NULL;
+  delete [] region_group; region_group = NULL;
 }
 
 LevMarBeadAssistant::~LevMarBeadAssistant()
@@ -287,9 +287,3 @@ bool LevMarBeadAssistant::ValidBeadGroup (int ibd) const
 {
   return (region_group[ibd] == current_bead_region_group) ;
 }
-
-bool LevMarBeadAssistant::InValidBeadItem(int ibd, const vector<bool>& quality){
- return(!ValidBeadGroup ( ibd ) || ( quality[ibd]==false ) || well_completed[ibd]);
-}
-
-

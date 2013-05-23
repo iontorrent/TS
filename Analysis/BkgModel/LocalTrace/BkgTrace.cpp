@@ -6,6 +6,7 @@
 #include <fstream>
 #include "IonErr.h"
 using namespace std;
+//#define DEBUG_BKTRC 1
 
 BkgTrace::BkgTrace()
 {
@@ -194,12 +195,18 @@ void BkgTrace::RezeroBeadsAllFlows (float t_start, float t_end)
 
 void TraceHelper::BuildT0Map (Region *region, std::vector<float>& sep_t0_est, float reg_t0_avg, int img_cols, std::vector<float>& output)
 {
-    for (int y=0;y<region->h;y++)
+	float op;
+	for (int y=0;y<region->h;y++)
     {
         for (int x=0;x<region->w;x++)
         {
             // keep track of the offset for all wells so that we can shift empty well data while loading
-	  output[y*region->w+x] = sep_t0_est[x+region->col+ (y+region->row) * img_cols] - reg_t0_avg;
+		   op = sep_t0_est[x+region->col+ (y+region->row) * img_cols] - reg_t0_avg;
+		   if(op < 0)
+			   op = 0.0f;
+		   if(op > 50)
+			   op = 50.0f;
+		  output[y*region->w+x] = op;
         }
     }
 }
@@ -267,7 +274,7 @@ void TraceHelper::ShiftTrace (float *trc,float *trc_out,int pts,float frame_offs
 // time runs from 0:(pts-1)
 // frame_offset never changes during this procedure
 // so we can just update the left integer and keep the fraction identical
-void TraceHelper::SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset)
+void TraceHelper::SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset/*, int print*/)
 {
     int pts_max = pts-1;
 
@@ -278,7 +285,10 @@ void TraceHelper::SpecialShiftTrace (float *trc, float *trc_out, int pts, float 
     float afrac = 1-frac;
     int c_left;
     int c_right;
-
+#ifdef DEBUG_BKTRC
+    if(print)
+    	printf("OLD: (%.2f %.2f/%.2f)",frame_offset,frac,afrac);
+#endif
     for (int i=0;i < pts;i++)
     {
         c_left = left;
@@ -289,6 +299,10 @@ void TraceHelper::SpecialShiftTrace (float *trc, float *trc_out, int pts, float 
         if (c_right > pts_max) c_right = pts_max;
 
         trc_out[i] = trc[c_left]*frac+trc[c_right]* afrac;
+#ifdef DEBUG_BKTRC
+        if(print)
+        	printf(" %.2f(%.2f %.2f %.2f)",trc_out[i],trc[c_left],trc[c_right],frac);
+#endif
         left++;
         right++;
     }
@@ -368,23 +382,43 @@ void TraceHelper::GetUncompressedTrace (float *tmp, Image *img, int absolute_x, 
       img->GetUncompressedTrace(tmp,img_frames, absolute_x,absolute_y);
 }
 
-void BkgTrace::RecompressTrace (FG_BUFFER_TYPE *fgPtr, float *tmp_shifted)
+void BkgTrace::RecompressTrace (FG_BUFFER_TYPE *fgPtr, float *tmp_shifted/*, int print*/)
 {
+    int i;
     int frame = 0;
+    int npt,nptsu,nptsc=time_cp->npts();
+    float avg;
+
     // do not shift real bead wells at all
     // compress them from the frames_per_point structure in time-compression
-    for (int npt=0;npt < time_cp->npts();npt++)   // real data
+#ifdef DEBUG_BKTRC
+	if(print)
+		printf("OLD: 0(%d)= ",frame);
+#endif
+	for (npt=0;npt < nptsc;npt++)   // real data
     {
-        float avg;
         avg=0.0;
-        for (int i=0;i<time_cp->frames_per_point[npt];i++)
+        nptsu = time_cp->frames_per_point[npt];
+        for (i=0;i<nptsu;i++)
         {
             avg += tmp_shifted[frame+i];
+#ifdef DEBUG_BKTRC
+            if(print)
+            	printf(" %.2f",tmp_shifted[frame+i]);
+#endif
         }
 
-        fgPtr[npt] = (FG_BUFFER_TYPE) (avg/time_cp->frames_per_point[npt]);
+        fgPtr[npt] = (FG_BUFFER_TYPE) (avg/nptsu);
         frame+=time_cp->frames_per_point[npt];
-    }
+#ifdef DEBUG_BKTRC
+        if(print)
+        	printf(" = (%u)\nOLD: %d(%d)= ",fgPtr[npt],npt+1,frame);
+#endif
+        }
+#ifdef DEBUG_BKTRC
+    if(print)
+    	printf("\n");
+#endif
 }
 
 // Keep empty scale associated with trace/image data - not a per bead data object
@@ -426,66 +460,298 @@ void BkgTrace::KeepEmptyScale(Region *region, BeadTracker &my_beads, SynchDat &c
 }
 
 
+typedef float vecf_t __attribute__ ((vector_size (BKTRC_VEC_SIZE_B)));
+typedef union{
+	vecf_t V;
+	float A[BKTRC_VEC_SIZE];
+}vecf_u;
+
+void BkgTrace::LoadImgWOffset(const RawImage *raw, int16_t *out[BKTRC_VEC_SIZE], std::vector<int> &compFrms, int nfrms, int l_coord[BKTRC_VEC_SIZE], float t0Shift/*, int print*/)
+{
+	int i;
+	int t0ShiftWhole;
+	float multT;
+	float t0ShiftFrac;
+	int my_frame = 0,compFrm,curFrms,curCompFrms;
+	vecf_u prev;
+	vecf_u next;
+	vecf_u tmpAdder;
+	vecf_u mult;
+	vecf_u curCompFrmsV;
+
+	int interf,lastInterf=-1;
+	int16_t lastVal[BKTRC_VEC_SIZE];
+	int f_coord[BKTRC_VEC_SIZE];
+
+	if(t0Shift < 0)
+		t0Shift = 0;
+	if(t0Shift > (raw->uncompFrames-2))
+		t0Shift = (raw->uncompFrames-2);
+	t0ShiftWhole=(int)t0Shift;
+	t0ShiftFrac = t0Shift - (float)t0ShiftWhole;
+	// first, skip t0ShiftWhole input frames
+	my_frame = raw->interpolatedFrames[t0ShiftWhole]-1;
+	compFrm = 0;
+	tmpAdder.V=(vecf_t){0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
+	curFrms=0;
+	curCompFrms=compFrms[compFrm];
+
+#ifdef DEBUG_BKTRC
+	if(print)
+		printf("NEW: T0=%.2f %d(%d)= ",t0Shift,compFrm,my_frame);
+#endif
+
+	while ((my_frame < raw->uncompFrames) && (compFrm < nfrms))
+	{
+	  interf= raw->interpolatedFrames[my_frame];
+
+	  if(interf != lastInterf)
+	  {
+		  for(i=0;i<BKTRC_VEC_SIZE;i++)
+		  {
+			  f_coord[i] = l_coord[i]+raw->frameStride*interf;
+			  next.A[i] = raw->image[f_coord[i]];
+		  }
+		  if(interf > 0)
+		  {
+			  for(i=0;i<BKTRC_VEC_SIZE;i++)
+				  prev.A[i] = raw->image[f_coord[i]-raw->frameStride];
+		  }
+		  else
+		  {
+			  prev.V = next.V;
+		  }
+	  }
+
+	  // interpolate
+	  multT=raw->interpolatedMult[my_frame] - (t0ShiftFrac/raw->interpolatedDiv[my_frame]);
+	  mult.V = (vecf_t){multT,multT,multT,multT,multT,multT,multT,multT,};
+	  tmpAdder.V += ( (prev.V)-(next.V) ) * (mult.V) + (next.V);
+#ifdef DEBUG_BKTRC
+	  if(print)
+		  printf(" %.2f",( (prev.A[0])-(next.A[0]) ) * (mult.A[0]) + (next.A[0]));
+//		  printf(" %.2f(%.2f %.2f %.2f)",( (prev.A[0])-(next.A[0]) ) * (mult.A[0]) + (next.A[0]),prev.A[0],next.A[0],mult.A[0]);
+#endif
+
+
+	  if(++curFrms >= curCompFrms)
+	  {
+		  curCompFrmsV.V = (vecf_t){curCompFrms,curCompFrms,curCompFrms,curCompFrms,curCompFrms,curCompFrms,curCompFrms,curCompFrms,};
+		  tmpAdder.V /= curCompFrmsV.V;
+		  for(i=0;i<BKTRC_VEC_SIZE;i++)
+			  out[i][compFrm] = (int16_t)(tmpAdder.A[i]);
+		  compFrm++;
+		  curCompFrms = compFrms[compFrm];
+		  curFrms=0;
+#ifdef DEBUG_BKTRC
+          if(print)
+        	  printf(" = (%f)\nNEW: %d(%d)= ",tmpAdder.A[0],compFrm,my_frame+1);
+#endif
+          tmpAdder.V = (vecf_t){0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f,0.0f};
+	  }
+	  my_frame++;
+	}
+	if(compFrm > 0 && compFrm < nfrms)
+	{
+		for(i=0;i<BKTRC_VEC_SIZE;i++)
+			lastVal[i] = out[i][compFrm-1];
+		for(;compFrm < nfrms;compFrm++)
+		{
+			for(i=0;i<BKTRC_VEC_SIZE;i++)
+				out[i][compFrm] = lastVal[i];
+		}
+	}
+#ifdef DEBUG_BKTRC
+	if(print)
+		printf("\n");
+#endif
+}
+
 // Given a region, image and flow, read trace data for beads in my_beads
 // for this region using the timing in t0_map from Image img
 // trace data is stored in fg_buffers
 void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer)
 {
     // these are used by both the background and live-bead
-    float tmp[imgFrames];         // scratch space used to hold un-frame-compressed data before shifting it
-    float tmp_shifted[imgFrames]; // scratch space used to time-shift data before averaging/re-compressing
+	int i;
+	int nbdx;
+	int l_coord[BKTRC_VEC_SIZE];
+    int rx[BKTRC_VEC_SIZE],rxh[BKTRC_VEC_SIZE],ry[BKTRC_VEC_SIZE],ryh[BKTRC_VEC_SIZE];
+    int npts=time_cp->npts();
+    FG_BUFFER_TYPE *fgPtr[BKTRC_VEC_SIZE];
+    float localT0;
+    const RawImage *raw = img->GetImage();
 
-    for (int nbd = 0;nbd < my_beads.numLBeads;nbd++) // is this the right iterator here?
+#ifdef DEBUG_BKTRC
+    FG_BUFFER_TYPE *fgPtrCopy[BKTRC_VEC_SIZE];
+    FG_BUFFER_TYPE *fg_buffers_copy  = new FG_BUFFER_TYPE [bead_flow_t*numLBeads];
+    memcpy(fg_buffers_copy,fg_buffers,bead_flow_t*numLBeads*sizeof(FG_BUFFER_TYPE));
+#endif
+
+    for (int nbd = 0;nbd < my_beads.numLBeads;nbd+=BKTRC_VEC_SIZE) // is this the right iterator here?
     {
-        int rx = my_beads.params_nn[nbd].x;  // should x,y be stored with traces instead?
-        int ry = my_beads.params_nn[nbd].y;
+    	localT0=0.0f;
+    	for(i=0;i<BKTRC_VEC_SIZE;i++)
+    	{
+    		if ((nbd+i) < my_beads.numLBeads)
+    			nbdx = nbd+i;
+    		else
+    			nbdx = my_beads.numLBeads-1;
 
-        TraceHelper::GetUncompressedTrace (tmp,img, rx+region->col, ry+region->row, imgFrames);
+    		rx[i] = my_beads.params_nn[nbdx].x;  // should x,y be stored with traces instead?
+            rxh[i] = rx[i] + region->col;
+            ry[i] = my_beads.params_nn[nbdx].y;
+            ryh[i] = ry[i] + region->row;
+            l_coord[i] = ryh[i]*raw->cols+rxh[i];
+            fgPtr[i] = &fg_buffers[bead_flow_t*nbdx+npts*iFlowBuffer];
+#ifdef DEBUG_BKTRC
+            fgPtrCopy[i] = &fg_buffers_copy[bead_flow_t*nbdx+npts*iFlowBuffer];
+#endif
+            localT0 += t0_map[rx[i]+ry[i]*region->w];
+    	}
+    	localT0 /= BKTRC_VEC_SIZE;
 
-        // shift it by relative timing at this location
-        // in this case x and y are local coordinates to the region, so they don't need to be offset
-        // by the region location for indexing into t0_map
-        if (t0_map.size() > 0)
-            TraceHelper::SpecialShiftTrace (tmp,tmp_shifted,imgFrames,t0_map[rx+ry*region->w]);
-        else
-            printf ("Alert in BkgTrace: t0_map nonexistent\n");
+#ifdef DEBUG_BKTRC
+		for (i = 0; i < BKTRC_VEC_SIZE; i++)
+		{
+			float tmp[imgFrames]; // scratch space used to hold un-frame-compressed data before shifting it
+			float tmp_shifted[imgFrames]; // scratch space used to time-shift data before averaging/re-compressing
+			//    			int16_t tmp_fg_buffers[npts];
 
-        // enter trace into fg_buffers at coordinates bead = nbd and flow = iFlowBuffer
-        RecompressTrace (&fg_buffers[bead_flow_t*nbd+time_cp->npts()*iFlowBuffer],tmp_shifted);
+
+			img->GetUncompressedTrace(tmp, imgFrames, rxh[i], ryh[i]);
+			TraceHelper::SpecialShiftTrace(tmp, tmp_shifted, imgFrames,
+					localT0/*t0_map[rx[i] + ry[i] * region->w]*/);
+			RecompressTrace(fgPtrCopy[i], tmp_shifted);
+		}
+#endif
+
+
+#if 1
+    	LoadImgWOffset(raw, fgPtr, time_cp->frames_per_point, npts, l_coord, localT0);
+#endif
+
+#ifdef DEBUG_BKTRC
+#if 1
+        for(i=0;i<BKTRC_VEC_SIZE;i++)
+        {
+			float tmp[imgFrames];         // scratch space used to hold un-frame-compressed data before shifting it
+			float tmp_shifted[imgFrames]; // scratch space used to time-shift data before averaging/re-compressing
+			int16_t tmp_fg_buffers[npts];
+
+			img->GetUncompressedTrace(tmp,imgFrames, rxh[i],ryh[i]);
+			// shift it by relative timing at this location
+			// in this case x and y are local coordinates to the region, so they don't need to be offset
+			// by the region location for indexing into t0_map
+			if (t0_map.size() > 0)
+				TraceHelper::SpecialShiftTrace (tmp,tmp_shifted,imgFrames,localT0);
+			else
+				printf ("Alert in BkgTrace: t0_map nonexistent\n");
+			// enter trace into fg_buffers at coordinates bead = nbd and flow = iFlowBuffer
+			RecompressTrace (tmp_fg_buffers,tmp_shifted);
+
+			int different=0;
+			for(int j=0;j<npts;j++)
+			{
+				if(fgPtr[i][j] > (tmp_fg_buffers[j]+1) ||
+				   fgPtr[i][j] < (tmp_fg_buffers[j]-1))
+				{
+					different=j;
+					break;
+				}
+			}
+			if(i == 0 && different != 0)
+			{
+
+				int len = different+1;
+				if(len < 30)
+					len = 30;
+				if(len > npts)
+					len = npts;
+				printf("Not the Same %d len=%d x=%d(%d) y=%d(%d)\n",different,npts,rx[i],rxh[i],ry[i],ryh[i]);
+				printf("  old: ");
+				for(int j=0;j<len;j++)
+					printf(" %d",tmp_fg_buffers[j]);
+				printf("\n  new: ");
+				for(int j=0;j<len;j++)
+					printf(" %d",fgPtr[i][j]);
+				printf("\n");
+
+				printf("Image Compression mult: ");
+				for(int j=0;j<raw->frames;j++)
+					printf(" %f",raw->interpolatedDiv[j]);
+				printf("\n");
+				printf("Image Compression div: ");
+				for(int j=0;j<raw->frames;j++)
+					printf(" %f",raw->interpolatedMult[j]);
+				printf("\n");
+				printf("Image Compression interpolation: ");
+				for(int j=0;j<raw->frames;j++)
+					printf(" %d",raw->interpolatedFrames[j]);
+				printf("\n");
+				printf("Bkg Compression: ");
+				for(int j=0;j<time_cp->npts();j++)
+					printf(" %f",(float)time_cp->frames_per_point[j]);
+				printf("\n");
+		    	LoadImgWOffset(raw, fgPtr, time_cp->frames_per_point, npts, l_coord, localT0,1);
+//				TraceHelper::SpecialShiftTrace (tmp,tmp_shifted,imgFrames,t0_map[rx[0]+ry[0]*region->w],1);
+				RecompressTrace (tmp_fg_buffers,tmp_shifted,1);
+
+			}
+        }
+#else
+        for(int j=0;j<bead_flow_t*numLBeads;j++)
+        {
+        	if(fg_buffers[j] > (fg_buffers_copy[j]+1) ||
+        		fg_buffers[j] < (fg_buffers_copy[j]-1))
+        		printf("fg_buffers[%d] != %d %d\n",j,fg_buffers[j],fg_buffers_copy[j]);
+        }
+#endif
+#endif
     }
 
+#ifdef DEBUG_BKTRC
+    delete [] fg_buffers_copy;
+#endif
     KeepEmptyScale(region, my_beads,img, iFlowBuffer);
 
 }
 
-void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer, bool matchSdat)
+void BkgTrace::GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &sdat, int iFlowBuffer, bool matchSdat)
 {
   //  ION_ASSERT(chunk.NumFrames(my_beads.params_nn[0].x,my_beads.params_nn[0].y) >= (size_t)time_cp->npts(), "Wrong data points.");
-  ION_ASSERT(chunk.NumFrames(region->row, region->col) >= (size_t)time_cp->npts(), "Wrong data points.");
+  //  ION_ASSERT(chunk.NumFrames(region->row, region->col) >= (size_t)time_cp->npts(), "Wrong data points.");
+  assert(matchSdat);
+  TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region->row, region->col);
+  assert(chunk.mRowStart == (size_t)region->row && chunk.mColStart == (size_t)region->col && 
+	 chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w);
     for (int nbd = 0;nbd < my_beads.numLBeads;nbd++) // is this the right iterator here?
       {
         int rx = my_beads.params_nn[nbd].x;  // should x,y be stored with traces instead?
         int ry = my_beads.params_nn[nbd].y;
 
         FG_BUFFER_TYPE *fg = &fg_buffers[bead_flow_t*nbd+time_cp->npts()*iFlowBuffer];
+        FG_BUFFER_TYPE *current = fg;
         if (matchSdat) {
+	  int16_t *p = &chunk.mData[0] + ry * chunk.mWidth + rx;
 	  for (int i = 0; i < time_cp->npts(); i++) {
-	    fg[i] = chunk.At(ry + region->row, rx + region->col, i);
+	    *current++ = *p;
+	    p += chunk.mFrameStep;
 	  }
 	}
 	else {
 	  std::vector<float> tmp(time_cp->npts(), 0);
-	  chunk.InterpolatedAt(ry + region->row, rx + region->col, time_cp->mTimePoints, tmp);
+	  sdat.InterpolatedAt(ry + region->row, rx + region->col, time_cp->mTimePoints, tmp);
 	  for (int i = 0; i < time_cp->npts(); i++) {
 	    fg[i] = tmp[i];
 	  }
 	}
-        float offset = BkgTrace::ComputeDcOffset(fg, *time_cp, 0.0f, time_cp->t0-2);
-        for (int i = 0; i < time_cp->npts(); i++) {
-          fg[i] = round(fg[i] - offset);
-        }
-    }
-    KeepEmptyScale(region, my_beads,chunk, iFlowBuffer);
+        // float offset = BkgTrace::ComputeDcOffset(fg, *time_cp, 0.0f, time_cp->t0-2);
+        // for (int i = 0; i < time_cp->npts(); i++) {
+        //   fg[i] = round(fg[i] - offset);
+        // }
+      }
+    KeepEmptyScale(region, my_beads, sdat, iFlowBuffer);
 }
 
 

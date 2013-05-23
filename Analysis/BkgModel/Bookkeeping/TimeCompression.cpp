@@ -119,10 +119,13 @@ void TimeCompression::SetUpStandardTime(int imgFrames, float t_comp_start, int s
   Allocate(imgFrames);
   switch(choose_time){
     case 1:
-      HalfSpeedSampling(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
-      break;
-   default:
-      StandardAgain(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       HalfSpeedSampling(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       break;
+    case 2:
+       ETFCompatible(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       break;
+    default:
+       StandardAgain(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
   }
   CompressionFromFramesPerPoint();
 }
@@ -165,6 +168,43 @@ void TimeCompression::StandardAgain(int imgFrames, float t_comp_start, int start
     cur_pt++;
     try_step += 4;
     //try_step *=2;
+  }
+ npts(cur_pt);
+}
+
+void TimeCompression::ETFCompatible(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
+{
+  int i_start = (int) t_comp_start+start_detailed_time;
+  int i_done = (int)(t_comp_start+stop_detailed_time);
+  // go to i_start compressing aggressively
+  int cur_pt =0;
+  int cur_sum=i_start;
+  int i=0;
+  for (; (i<imgFrames) & (cur_sum>0); i++)
+  {
+    frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
+    cur_pt++;
+  }
+  // now do the middle time when we are at full detail
+  cur_sum = i_done-i_start;
+  for (; (i<imgFrames) & (cur_sum>0); i++)
+  {
+    frames_per_point[cur_pt] = CompressOneStep(cur_sum,1);
+    cur_pt++;
+  }
+  // finally compress the tail very heavily indeed
+  int try_step = 1;
+  float try_step_float = 1.0f;
+  float try_step_inc = 0.20f;
+  cur_sum = imgFrames-i_done;
+ for (; (i<imgFrames) & (cur_sum>0); i++)
+  {
+    frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
+    cur_pt++;
+    try_step_float += try_step_inc;
+    try_step = (int)(try_step_float+0.5f);
+    if (try_step > 8)
+       try_step = 8;
   }
  npts(cur_pt);
 }
@@ -479,5 +519,19 @@ int TimeCompression::npts(int npt){
   mTimePoints.resize(_npts);
   return (_npts);
 }
+
+size_t TimeCompression::SecondsToIndex(float seconds){
+  // given input time "seconds," return an index into time compressed trace
+  // nearest the time point of those with a lesser value,
+  // or 0 if it is less than all time points
+  {
+    if ( seconds < mTimePoints[0] )
+      return 0;
+    std::vector<float>::iterator f = std::upper_bound ( mTimePoints.begin(), mTimePoints.end(), seconds );
+    return ( f-mTimePoints.begin() -1 );
+  }
+}
+
+
 
 

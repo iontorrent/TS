@@ -7,7 +7,7 @@ $(document).ready(function() {
             type : "json",
             transport : {
                 read : {
-                    url : "/rundb/api/v1/plannedexperiment/?isReusable=False&parentPlan=None&planExecuted=False",
+                    url : "/rundb/api/v1/plannedexperiment/?isReusable=False&planExecuted=False",
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
@@ -153,7 +153,7 @@ $(document).ready(function() {
             $(source + ' .review-plan').click(function(e) {
                 $('body').css("cursor", "wait");
                 e.preventDefault();
-
+                $('#error-messages').hide().empty();
                 var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
                 $('body').prepend(busyDiv);
 
@@ -172,7 +172,7 @@ $(document).ready(function() {
                     $('.myBusyDiv').empty();
                     $('body').remove('.myBusyDiv');
 
-                    $('#error-messages').empty();
+                    $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
 
@@ -186,7 +186,7 @@ $(document).ready(function() {
             $(source + " .edit-or-copy-plan").click(function(e) {
                 $('body').css("cursor", "wait");
                 e.preventDefault();
-
+                $('#error-messages').hide().empty();
                 var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
                 $('body').prepend(busyDiv);
 
@@ -209,7 +209,7 @@ $(document).ready(function() {
                     $('.myBusyDiv').empty();
                     $('body').remove('.myBusyDiv');
 
-                    $('#error-messages').empty();
+                    $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
 
@@ -222,6 +222,7 @@ $(document).ready(function() {
             });
             $(source + " .delete-plan").click(function(e) {
                 e.preventDefault();
+                $('#error-messages').hide().empty();
                 url = $(this).attr('href');
                 $('body #modal_confirm_delete').remove();
                 $('modal_confirm_delete_done');
@@ -233,7 +234,7 @@ $(document).ready(function() {
                 }).done(function(data) {
                     console.log("success:", url);
                 }).fail(function(data) {
-                    $('#error-messages').empty();
+                    $('#error-messages').empty().show();
                     $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                     console.log("error:", data);
 
@@ -246,6 +247,7 @@ $(document).ready(function() {
     $('.delete_selected').click(function(e) {
         e.preventDefault();
         e.stopPropagation();
+        $('#error-messages').hide().empty();
         var checked_ids = $("#grid input:checked").map(function() {
             return $(this).attr("id");
         }).get();
@@ -261,7 +263,7 @@ $(document).ready(function() {
                 $('body').append(data);
                 $('#modal_confirm_delete').modal("show");
             }).fail(function(data) {
-                $('#error-messages').empty();
+                $('#error-messages').empty().show();
                 $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
                 console.log("error:", data);
 

@@ -1,0 +1,252 @@
+{% extends "rundb/configure/base.html" %}
+{% block current_tab %}about{% endblock %}
+{% block sub-nav %}
+  <li><a href="{% url configure_about %}">About</a></li>
+  <li><a href="{% url configure_references %}">References</a></li>
+  <li><a href="{% url configure_services %}">Services</a></li>
+  <li><a href="{% url configure_plugins %}">Plugins</a></li>
+  <li><a href="{% url configure_configure %}">Configure</a></li>
+  <li class="active"><a href="{% url configure_account %}">Accounts</a></li>
+{% endblock sub-nav %}
+
+{% block content %}
+<div class="content">
+    <h1>AmpliSeq</h1>
+    {% if form %}
+    <div class="row-fluid">
+        <div class="span6">
+            {% if http_error %}
+                <p class="alert alert-error">
+                    {{http_error}}
+                </p>
+            {% endif %}
+            <h3>Log in to AmpliSeq.com to view your designs</h3>
+            <form action="{% url configure_ampliseq %}" method="post">
+                {% csrf_token %}
+                <fieldset>
+                    <div style="min-height: 150px;">
+                        {{ form }}
+                    </div>
+                    <div class="form-actions">
+                        <input class="btn btn-primary" type="submit" value="Log-in" />
+                    </div>
+                </fieldset>
+            </form>
+        </div>
+        <div class="span6">
+            <h3>Manual Upload <small> AmpliSeq.com export zip</small></h3>
+            <div style="margin: 10px 0; min-height: 150px">
+                <div id="bedPublish">
+                    <div>
+                        <span id="file_info">No file selected.</span>
+                        <span id="file_progress"></span>
+                    </div>
+                    <button class="btn" id="pickfiles">Select File</button>
+                    <p>Upload a design or panel's zip archive exported from AmpliSeq.com</p>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" id="upload_button">Upload</button>
+            </div>
+            <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+            <script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
+            <script type="text/javascript">
+            $(function() {
+              uploader = new plupload.Uploader({
+                container : 'bedPublish',
+                max_file_size : '1000mb',
+                runtimes: 'html5,flash,silverlight',
+                browse_button: 'pickfiles',
+                url: '/rundb/publish/plupload/BED/',
+                chunk_size: '10mb',
+                unique_names: false,
+                multi_selection: false,
+                multiple_queues: false,
+                multipart_params: {meta: '{}'},
+                silverlight_xap_url: '/site_media/jquery/js/plupload/plupload.silverlight.xap',
+                flash_swf_url: '/site_media/jquery/js/plupload/plupload.flash.swf'
+              });
+
+              uploader.bind('Init', function(up, params) {
+                // Don't do anyting special on init.
+              });
+
+              $('#upload_button').click(function() {
+                uploader.settings.multipart_params.meta = JSON.stringify({
+                  hotspot: false,
+                  reference: "{{name}}"
+                });
+                uploader.start();
+                return false;
+              });
+
+              uploader.init();
+
+              uploader.bind('FilesAdded', function(up, files) {
+                var file = files[0];
+                if (up.files.length > 1) {
+                  up.removeFile(up.files[0]);
+                }
+                console.log(up.files);
+                $('#file_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
+                $('#file_progress').html('');
+                up.refresh(); // Reposition Flash/Silverlight
+              });
+
+              uploader.bind('UploadProgress', function(up, file) {
+                $('#file_progress').html(file.percent + "%");
+              });
+
+              uploader.bind('Error', function(up, err) {
+                $('#file_info').append("<div>There was an error during your upload.  Please refresh the page and try again.</div>");
+              });
+
+              uploader.bind('FileUploaded', function(up, file) {
+                $('#file_progress').html("100%");
+                refresh_uploads();
+              });
+              $('#hotspot_help_text').hide();
+              $('#hotspot_help_button').click(function(){
+                $('#hotspot_help_text').slideToggle(300);
+                return false;
+              });
+            });
+            </script>
+        </div>
+    </div>
+    {% else %}
+        <form action="{% url configure_ampliseq_download %}" method="post">
+        <div class="row-fluid">
+            <div class="span12">
+                {% if ordered_solutions %}
+                    <h3>Your solutions:</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Design</th>
+                                <th>View on AmpliSeq.com</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for design, solution in ordered_solutions %}
+                                <tr>
+                                    <td>
+                                       <label>
+                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}},{{solution.plan.genome}}" />
+                                            {{design.designName}} {{solution.solutionId}}
+                                            <small>(design id {{design.id}} solution id {{solution.id}})</small>
+                                        </label>
+                                    </td>
+                                    <td>
+                                        <a href="https://www.ampliseq.com/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <h5>You haven't ordered any AmpliSeq designs</h5>
+                {% endif %}
+            </div>
+        </div>
+        <div class="row-fluid">
+            <div class="span12">
+                {% if fixed_solutions %}
+                    <h3>Fixed and Community Panels:</h3>
+                                        <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Design</th>
+                                <th>View on AmpliSeq.com</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for design in fixed_solutions %}
+                                <tr>
+                                    <td>
+                                       <label>
+                                            <input type="checkbox" name="fixed_solutions" value="{{design.id}},{{design.genome}}" />
+                                            {{design.name}}
+                                        </label>
+                                    </td>
+                                    <td>
+                                        {% if design.type == "COMMUNITY_PANEL" %}
+                                            <a href="https://www.ampliseq.com/protected/tmpl/dashboard.action?tmplDesignType=COMMUNITY_PANEL" target="_blank">
+                                                View
+                                            </a>
+                                        {% elif design.type == "FIXED_PANEL" %}
+                                            <a href="https://www.ampliseq.com/protected/tmpl/dashboard.action" target="_blank">
+                                                View
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <h5>You haven't ordered any AmpliSeq designs</h5>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if unordered_solutions %}
+        <div class="row-fluid">
+            <div class="span12">
+                <a href="#" id="not_ordered_btn">Show solutions which were not ordered?</a>
+                <div id="not_ordered" style="display: none;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Design</th>
+                                <th>View on AmpliSeq.com</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for design, solution in unordered_solutions %}
+                                <tr>
+                                    <td>
+                                       <label>
+                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}},{{solution.plan.genome}}" />
+                                            {{design.designName}} {{solution.solutionId}}
+                                            <small>(design id {{design.id}} solution id {{solution.id}})</small>
+                                        </label>
+                                    </td>
+                                    <td>
+                                        <a href="https://www.ampliseq.com/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="form-actions">
+            <input class="btn btn-primary" type="submit" value="Import Selected" />
+            <a href="{% url plans %}" class="btn">Cancel</a>
+        </div>
+        </form>
+        <div id="api" style="display:none;">
+        <h3>Full API response</h3>
+        <strong>Fixed</strong>
+        <pre>{{fixed_designs_pretty}}</pre>
+        <strong>Custom</strong>
+        <pre>{{designs_pretty}}</pre>
+        </div>
+    {% endif %}
+</div>
+<script>
+$(function (){
+    $("#not_ordered_btn").click(function(){
+        $("#not_ordered").slideToggle();
+        return false;
+    });
+});
+</script>
+{% endblock content %}

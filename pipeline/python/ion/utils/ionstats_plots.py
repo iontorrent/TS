@@ -8,7 +8,32 @@ use("Agg",warn=False)
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as font_manager
 import traceback
+import math
 from ion.utils.blockprocessing import printtime
+
+def group(n):
+
+    SYMBOLS = ('K', 'M', 'G', 'T', 'P',)
+    PREFIX = {'G': 1000000000, 'K': 1000, 'M': 1000000, 'P': 1000000000000000, 'T': 1000000000000, }
+
+    for s in reversed(SYMBOLS):
+        if n >= PREFIX[s]:
+            value = float(n)  / PREFIX[s]
+            return '%.1f%s' % (value, s)
+            
+    return commas(int(n))
+       
+def commas(number):
+    s = '%d' % number
+    groups = []
+    while s and s[-1].isdigit():
+        groups.append(s[-3:])
+        s = s[:-3]
+    val = s + ','.join(reversed(groups))
+    return val
+    
+
+
 
 ''' Generate a small 300x30 read length histogram "sparkline" for display in barcode table '''
 
@@ -83,7 +108,7 @@ def read_length_histogram(ionstats_basecaller_filename, output_png_filename, max
     
         ax.set_ylim(0,1.2*max_y)
         ax.set_xlim(-5,max_length+15)
-        plt.xlabel("Read Length")
+        ax.set_xlabel("Read Length")
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
 
@@ -128,7 +153,7 @@ def old_read_length_histogram(ionstats_basecaller_filename, output_png_filename,
 
 ''' Generate cumulative read length plot of called vs aligned read length '''
 
-def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_filename,graph_max_x):
+def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_filename,graph_max_x,y_ticks=None):
     
     if not os.path.exists(alignStats):
         printtime("ERROR: %s does not exist" % alignStats)
@@ -185,21 +210,41 @@ def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_fil
     
     nread = histogram_y[1:]
 
-    fig = plt.figure(figsize=(4,3),dpi=100)
-    ax = fig.add_subplot(111,frame_on=False,yticks=[], position=[0.1,0.15,0.8,0.89])
-
+    if not y_ticks:
+        fig = plt.figure(figsize=(4,3),dpi=100)
+    else:
+        fig = plt.figure(figsize=(7,5),dpi=100)
+    
     max_x = 1
     if len(read_length) > 0:
         max_x = max(read_length)
     max_x = min(max_x,graph_max_x)
 
     max_y = max(nread)
+    
+    if not y_ticks:
+        ax = fig.add_subplot(111,frame_on=False,yticks=[], position=[0.1,0.15,0.8,0.89])
+    else:
 
-    plt.fill_between(histogram_x[1:], nread, color="#808080", zorder=1)
-    plt.fill_between(read_length, aligned, color="#2D4782", zorder=2)
+        import matplotlib.ticker as mticker
+        
+        def square_braces(tick_val, tick_pos):
+            """Put square braces around the given tick_val """
+            return group(tick_val)
 
-    plt.xlabel('Position in Read')
-    plt.ylabel('Reads')
+        d  = len(str(max_y)) - 1
+        yticks=range(10**d,max_y,10**d)
+        yticks.append(max_y)
+        
+        ax = fig.add_subplot(111,frame_on=False,yticks=yticks, position=[0.14,0.15,0.8,0.89])
+        ax.yaxis.set_major_formatter(mticker.FuncFormatter(square_braces))
+
+
+    ax.fill_between(histogram_x[1:], nread, color="#808080", zorder=1)
+    ax.fill_between(read_length, aligned, color="#2D4782", zorder=2)
+
+    ax.set_xlabel('Position in Read')
+    ax.set_ylabel('Reads')
 
     if sum(nread) > 0:
         map_percent = int(round(100.0 * float(alignStats_json["total_mapped_target_bases"]) 
@@ -220,14 +265,213 @@ def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_fil
     ax.text(0.8*max_x,0.7*max_y,'Unaligned',horizontalalignment='center',verticalalignment='center',
             fontsize=fontsize_small, zorder=4, color=color_gray,weight='bold',stretch='condensed')
     ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_gray,weight='bold',stretch='condensed')
-
-    ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
+    if not y_ticks:
+        
+        ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
        
     ax.set_xlim(0,max_x)
     ax.set_ylim(0,1.2*max_y)
-    #plt.subplots_adjust(left=0.2, right=0.9, top=0.9, bottom=0.1)
     fig.patch.set_alpha(0.0)
     fig.savefig(output_png_filename)
+    
+    if not y_ticks:
+        alignment_rate_plot(alignStats, ionstats_basecaller_filename, "large_" + output_png_filename,graph_max_x,y_ticks=True)
+
+
+def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph_max_x,y_ticks=None):
+    """ Generate cumulative read length plot of called vs aligned read length """
+
+    try:
+        printtime("DEBUG: Generating plot %s" % output_png_filename)
+    
+        def intWithCommas(x):
+            if type(x) not in [type(0), type(0L)]:
+                raise TypeError("Parameter must be an integer.")
+            if x < 0:
+                return '-' + intWithCommas(-x)
+            result = ''
+            while x >= 1000:
+                x, r = divmod(x, 1000)
+                result = ",%03d%s" % (r, result)
+            return "%d%s" % (x, result)
+
+        
+        f = open(ionstats_alignment_filename,'r')
+        ionstats_alignment = json.load(f);
+        f.close()
+    
+        histogram_range = range(graph_max_x)
+        histogram_full = [0] * graph_max_x
+        histogram_aligned = [0] * graph_max_x
+        
+        for read_length_bin,frequency in enumerate(ionstats_alignment['full']['read_length_histogram']):
+            current_bin = min(read_length_bin,graph_max_x-1)
+            histogram_full[current_bin] += frequency
+    
+        for read_length_bin,frequency in enumerate(ionstats_alignment['aligned']['read_length_histogram']):
+            current_bin = min(read_length_bin,graph_max_x-1)
+            histogram_aligned[current_bin] += frequency
+    
+        for idx in range(graph_max_x-1,1,-1):
+            histogram_full[idx-1] += histogram_full[idx]
+            histogram_aligned[idx-1] += histogram_aligned[idx]
+
+        if not y_ticks:
+            fig = plt.figure(figsize=(4,3),dpi=100)
+        else:
+            fig = plt.figure(figsize=(7,5),dpi=100)
+
+        max_x = min(graph_max_x, len(ionstats_alignment['full']['read_length_histogram']))
+        max_y = max(histogram_full)
+
+        if not y_ticks:
+            ax = fig.add_subplot(111,frame_on=False,yticks=[], position=[0.1,0.15,0.8,0.89])
+        else:
+            import matplotlib.ticker as mticker
+
+            def square_braces(tick_val, tick_pos):
+                """Put square braces around the given tick_val """
+                return group(tick_val)
+
+            d  = len(str(max_y)) - 1
+            yticks=range(10**d,max_y,10**d)
+            yticks.pop()
+            yticks.append(max_y)
+
+            ax = fig.add_subplot(111,frame_on=False,yticks=yticks, position=[0.14,0.15,0.8,0.89])
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(square_braces))
+
+
+        ax.fill_between(histogram_range, histogram_full, color="#808080", zorder=1)
+        ax.fill_between(histogram_range, histogram_aligned, color="#2D4782", zorder=2)
+    
+        ax.set_xlabel('Position in Read')
+        ax.set_ylabel('Reads')
+    
+        if sum(histogram_full) > 0:
+            map_percent = int(round(100.0 * float(ionstats_alignment['aligned']['num_bases']) 
+                                          / float(ionstats_alignment['full']['num_bases'])))
+            unmap_percent = 100 - map_percent
+        else:
+            map_percent = 0.0
+            unmap_percent = 0.0
+    
+        color_blue = "#2D4782"
+        color_gray = "#808080"
+        fontsize_big = 15
+        fontsize_small = 10
+        fontsize_medium = 8
+    
+        ax.text(0.8*max_x,0.95*max_y,'Aligned Bases',horizontalalignment='center',verticalalignment='center', fontsize=fontsize_small, zorder=4, color=color_blue,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,1.05*max_y,' %d%%'%map_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_blue,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,0.7*max_y,'Unaligned',horizontalalignment='center',verticalalignment='center',
+                fontsize=fontsize_small, zorder=4, color=color_gray,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_gray,weight='bold',stretch='condensed')
+        if not y_ticks:
+            ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
+           
+        ax.set_xlim(0,max_x)
+        ax.set_ylim(0,1.2*max_y)
+        fig.patch.set_alpha(0.0)
+        fig.savefig(output_png_filename)
+
+        if not y_ticks:
+            alignment_rate_plot2(ionstats_alignment_filename, "large_" + output_png_filename, graph_max_x,y_ticks=True)
+
+
+    except:
+        printtime('Unable to generate plot %s' % output_png_filename)
+        traceback.print_exc()
+
+
+
+''' Generate plot with error rate vs base position '''
+
+def base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_x):
+    
+    try:
+        printtime("DEBUG: Generating plot %s" % output_png_filename)
+    
+        f = open(ionstats_alignment_filename,'r')
+        ionstats_alignment = json.load(f);
+        f.close()
+    
+        histogram_range = range(graph_max_x)
+        histogram_aligned = [0] * graph_max_x
+        
+        for read_length_bin,frequency in enumerate(ionstats_alignment['aligned']['read_length_histogram']):
+            current_bin = min(read_length_bin,graph_max_x-1)
+            histogram_aligned[current_bin] += frequency
+    
+        for idx in range(graph_max_x-1,1,-1):
+            histogram_aligned[idx-1] += histogram_aligned[idx]
+    
+        n_err_at_position = ionstats_alignment["error_by_position"]
+    
+        accuracy = []
+        reads = []
+    
+        for i in range(graph_max_x):
+            if histogram_aligned[i] > 1000:
+                accuracy.append(100 * (1 - float(n_err_at_position[i]) / float(histogram_aligned[i])))
+                reads.append(i+1)
+    
+        fig = plt.figure(figsize=(4,4),dpi=100)
+        ax = fig.add_subplot(111,frame_on=False, position=[0.2,0.1,0.7,0.8])
+    
+        max_x = min(graph_max_x, len(ionstats_alignment['aligned']['read_length_histogram']))
+    
+        ax.plot(reads, accuracy, linewidth=3.0, color="#2D4782")
+        ax.set_xlim(0, max_x)
+        ax.set_ylim(90 , 100.9)
+        ax.set_xlabel('Position in Read')
+        ax.set_ylabel("Accuracy at Position")
+        
+        #ax.subplots_adjust(left=0.2, right=0.9, top=0.9, bottom=0.1)
+        fig.patch.set_alpha(0.0)
+        fig.savefig(output_png_filename)
+        
+    except:
+        printtime('Unable to generate plot %s' % output_png_filename)
+        traceback.print_exc()
+
+
+
+''' Generate old AQ-x read length histogram '''
+
+def old_aq_length_histogram(ionstats_alignment_filename, output_png_filename, aq_string, color):
+    
+    try:
+        printtime("DEBUG: Generating plot %s" % output_png_filename)
+    
+        f = open(ionstats_alignment_filename,'r')
+        ionstats_alignment = json.load(f);
+        f.close()
+
+        data = ionstats_alignment[aq_string]['read_length_histogram']
+
+        xaxis = range(len(data))
+        ymax = max(data) + 10
+        xlen = len(data) + 10
+        xmax = len(data) - 1
+        if xmax < 400:
+            xmax = 400
+            
+        fig = plt.figure(figsize=(8,4),dpi=100)
+        ax = fig.add_subplot(111)
+        
+        ax.bar(xaxis, data, facecolor = color, align = 'center', linewidth=0, alpha=1.0, width = 1.0)
+        ax.set_xlabel('Filtered %s Read Length' % aq_string)
+        ax.set_ylabel('Count')
+        ax.set_title('Filtered %s Read Length' % aq_string)
+        ax.set_xlim(0,xmax)
+        ax.set_ylim(0,ymax)
+        fig.savefig(output_png_filename)
+        
+    except:
+        printtime('Unable to generate plot %s' % output_png_filename)
+        traceback.print_exc()
+
 
 
 def quality_histogram(ionstats_basecaller_filename,output_png_filename):
@@ -275,7 +519,7 @@ def quality_histogram(ionstats_basecaller_filename,output_png_filename):
             ax.text(idx*5 + 2.5,max_y*0.06+graph_y[idx],label_top,horizontalalignment='center',verticalalignment='bottom',
                     fontsize=12)
         
-        plt.xlabel("Base Quality")
+        ax.set_xlabel("Base Quality")
         
         ax.set_xlim(0,34.8)
         ax.set_ylim(-0.1*max_y,1.2*max_y)
@@ -362,12 +606,20 @@ def tf_length_histograms(ionstats_tf_filename, output_dir):
 
 if __name__=="__main__":
     
-    #read_length_histogram('basecaller_results/ionstats_basecaller.json','readLenHisto2.png',400)
-    #alignment_rate_plot('alignStats_err.json','basecaller_results/ionstats_basecaller.json','alignment_rate_plot.png',300)
+    
+    import os
+    
+    ionstats_file = os.path.join('basecaller_results','ionstats_basecaller.json')
 
-    #old_read_length_histogram('readLen.txt','readLenHisto.png', 400)
-    #old_read_length_histogram('ionstats_basecaller.json','readLenHisto.png', 400)
-    #generate_quality_histogram('ionstats_basecaller.json','quality_histogram.png')
+    # Make alignment_rate_plot.png        
+    stats = json.load(open(ionstats_file))
+    l = stats['full']['max_read_length']        
+    graph_max_x = int(round(l + 49, -2)) 
+    
+    a = alignment_rate_plot(
+        'alignStats_err.json',
+        'basecaller_results/ionstats_basecaller.json',
+        'alignment_rate_plot.png', int(graph_max_x))
 
-    tf_length_histograms('ionstats_tf.json', '.')
-
+    print "made graph"
+    print a

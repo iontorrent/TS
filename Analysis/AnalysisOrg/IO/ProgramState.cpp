@@ -18,6 +18,7 @@ ProgramState::ProgramState(std::string &path)
   key_context_name = "KeyContext";
   flow_context_name = "FlowContext";
   sys_context_name = "SystemContext"; 
+  bkg_control_name = "BkgControlOpts"; 
   bfd_control_name = "BeadfindControlOpts"; 
   loc_context_name = "SpatialContext";
   img_control_name = "ImageControlOpts";
@@ -57,6 +58,7 @@ void ProgramState::WriteState()
 
 void ProgramState::Save(CommandLineOpts &clo, SeqListClass &seq, ImageSpecClass &my_image_spec)
 { 
+  AddBkgControl(state_json[clo_name][bkg_control_name], clo.bkg_control);
   AddModControl(state_json[clo_name][mod_control_name], clo.mod_control); 
   AddSysContext(state_json[clo_name][sys_context_name], clo.sys_context); 
   AddKeyContext(state_json[clo_name][key_context_name], clo.key_context); 
@@ -67,6 +69,12 @@ void ProgramState::Save(CommandLineOpts &clo, SeqListClass &seq, ImageSpecClass 
   AddSeqList(state_json[seq_list_name], seq);
   AddImgSpec(state_json[img_spec_name], my_image_spec);
   AddChipID(state_json[chip_id_name]);
+}
+
+
+void ProgramState::AddBkgControl(Json::Value &json,BkgModelControlOpts &bkg_control) 
+{
+  json["wellsCompression"] = bkg_control.wellsCompression;
 }
 
 void ProgramState::AddModControl(Json::Value &json, ModuleControlOpts &mod_control)
@@ -231,9 +239,12 @@ void ProgramState::LoadState(CommandLineOpts &clo, SeqListClass &seq, ImageSpecC
 {
   std::cout << "[ProgramState] Loading program state from: " << outFile << std::endl;  
   LoadJson(state_json, outFile);
-  SetSysContext(state_json[clo_name][sys_context_name], clo.sys_context);
+
+  //SetSysContext(state_json[clo_name][sys_context_name], clo.sys_context);
+  clo.SetSysContextLocations();
+  //SetBkgControl(state_json[clo_name][bkg_control_name], clo.bkg_control);
   SetModControl(state_json[clo_name][mod_control_name], clo.mod_control);
-  SetKeyContext(state_json[clo_name][key_context_name], clo.key_context);
+  //SetKeyContext(state_json[clo_name][key_context_name], clo.key_context);
   // beadfind should not be setting this
   // SetFlowContext(state_json[clo_name][flow_context_name], clo.flow_context);
   clo.SetFlowContext(clo.sys_context.explog_path);
@@ -242,6 +253,11 @@ void ProgramState::LoadState(CommandLineOpts &clo, SeqListClass &seq, ImageSpecC
   SetSeqList(state_json[seq_list_name], seq);
   SetImgSpec(state_json[img_spec_name], my_image_spec);
   SetChipID(state_json[chip_id_name]);
+}
+
+void ProgramState::SetBkgControl(Json::Value &json, BkgModelControlOpts &bkg_control) 
+{
+  bkg_control.wellsCompression = json["wellsCompression"].asUInt();
 }
 
 void ProgramState::SetModControl(Json::Value &json, ModuleControlOpts &mod_control)
@@ -358,7 +374,7 @@ void ProgramState::SetImgControl(Json::Value &json, ImageControlOpts &img_contro
   strcpy(img_control.tikSmoothingFile, json["tikSmoothingFile"].asString().c_str());
   strcpy(img_control.tikSmoothingInternal, json["tikSmoothingInternal"].asString().c_str());
   img_control.doSdat = json["doSdat"].asBool(); 
-  img_control.total_timeout = json["total_timeout"].asBool(); 
+  img_control.total_timeout = json["total_timeout"].asInt(); 
   img_control.sdatSuffix = json["sdatSuffix"].asString();
   img_control.has_wash_flow = json["has_wash_flow"].asInt();
 }  

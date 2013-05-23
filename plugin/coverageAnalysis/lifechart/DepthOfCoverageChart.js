@@ -32,7 +32,7 @@ document.write('\
     <td class="nwrap DOC-hideFilter"><span class="flyhelp" id="DOC-include0xLabel">Include 0x Coverage</span>:\
       <input type="checkbox" id="DOC-include0x" checked="checked"></td>\
     <td class="nwrap DOC-hideFilter"><span class="flyhelp" id="DOC-binSizeLabel">Bin Size</span>:\
-      <input type="text" class="numSearch" id="DOC-binSize" value=10 size=4>\
+      <input type="text" class="numSearch" id="DOC-binSize" value=10 size=4>&nbsp;<span id="DOC-binSizeUsed"></span>\
    </tr></table>\
 </div>\
 <div id="DOC-tooltip" style="display:none">\
@@ -40,7 +40,7 @@ document.write('\
   <div id="DOC-tooltip-body"></div>\
 </div>\
 <div id="DOC-helptext" class="helpblock" style="display:none">\
-This chart shows the distribution of (targeted) base coverage.<br/><br/>\
+This chart shows the distribution of targeted base coverage.<br/><br/>\
 The plot area may be re-sized by dragging the borders of the chart or hidden using<br/>\
 the Collapse View button in the upper right corner.<br/><br/>\
 Moving the mouse over data bar or point in the graph area will show some minimal<br/>\
@@ -95,6 +95,7 @@ $(function () {
   var cursorCoords = $('#DOC-cursorCoords');
   var placeholder = $("#DOC-placeholder");
 
+  var maxLoadFields = 3;  // to reduce amount fo data loaded for plot
   var dblclickUnzoomFac = 10;
 
   var resiz_def = {
@@ -181,6 +182,7 @@ $(function () {
     numFields : 0,
     numPlots : 0,
     numPoints : 0,
+    binSizeDef : 1,
     zoom: false,
     minX : 0,
     maxX : 0,
@@ -211,8 +213,8 @@ $(function () {
 
   var LegendLabels = {
     readDepth : "Base Read Depth",
-    covCount : "Reads",
-    cumCover : "Cumulative Reads"
+    covCount : "Bases",
+    cumCover : "Cumulative Bases"
   };
 
   function customizeChart() {
@@ -222,18 +224,15 @@ $(function () {
       "'Maximum Read Depth' specifies to plot coverage out to the maximum depth. This is the default "+
       "setting if the there is a significant coverage out at the largest read depths.\n"+
       "'99.9% of All Reads' specifies to plot up to 99.9% of the total reads from 0x, i.e. up to where the "+
-      "Cumulative Reads curve cuts the right y-axis at 0.01%. This view is useful to avoid outlier read "+
+      "Cumulative Bases curve cuts the right y-axis at 0.01%. This view is useful to avoid outlier read "+
       "depths that add would otherwise make the majority of distribution squeezed up against the y-axis.\n"+
       "This is the default plot if 99.9% of the reads fall in the first half of the full range of read depths.\n"+
       "'Normalized Coverage' uses a depth axis that is normalized (divided) by the average read depth "+
       "and plotted to twice the average coverage depth. This plot is useful for generalized analysis of the "+
-      "coverage when comparing different experiments or reading off coverage at some fraction of the mean value. "+
-      "Note that culmulative coverage values may be more accurately estimated from this plot as values given "+
-      "in the statistics table are rounded down to value for integer read depth measured that is closest to the "+
-      "statistic read depth." );
+      "coverage when comparing different experiments or reading off coverage at some fraction of the mean value." );
     $("#DOC-unzoomToggle").attr( "title",
-      "Click this button to 'zoom out' the view to show coverage over the whole read depth range in the view specified by the Plot selector.\n"+
-      "This button only has an effect if the view was previously zoomed-in to show a subset of the read depth." );
+      "Click this button to 'zoom out' the view to show coverage over the whole read depth range in the view "+
+      "specified by the Plot selector. (Has no effect if the view was not previously zoomed-in.)" );
     $("#DOC-autoZoomLabel").attr( "title",
       "Select how the y-axis zoom works when selecting a set of read depths (x-axis data) to zoom in to view. " +
       "When checked the y-axis range will be automatically set to the largest read count "+
@@ -243,13 +242,12 @@ $(function () {
     $("#DOC-showLegendLabel").attr( "title", "Select whether the legend is displayed over the plot area." );
     $("#DOC-binSizeLabel").attr( "title",
       "Sets the size (width) of the data bins for counting read depth. Using larger bins typically allows the "+
-      "distribution of read counts for ranges of read depths to be more easily visualized, especially where there "+
-      "are smaller numbers of targets and/or coverage is measured over a large range of read depths. "+
-      "Adjusting the bin size is also useful for interactively assessing broader distributions of target coverage. "+
-      "For example, the percentage of reads up to a 100 and between 100-200, etc., is easily charted by setting "+
-      "the Bin Size to 100. An appropriate default value for Bin Size is determined based on the maximum read depth "+
-      "when the data is first plotted and Bin Size is reset to this default value whenever the value for 'Plot' is "+
-      "changed. You may also set the Bin Size to 0 to see read depth plotted as a line rather than bars." );
+      "distribution of read counts for ranges of read depths to be more easily visualized or interactively "+
+      "assessing finer or broader distributions of target coverage. An appropriate default value for Bin Size "+
+      "is determined based on the maximum read depth and this value is reset whenever the value for 'Plot' is "+
+      "changed or by attempting to set the value for Bin Size empty. Additionally the value set may be temporarily "+
+      "ignored if binning size is too small relative to the amount of data in view. (The value employed will then "+
+      "be shown in parentheses.) You may also set the Bin Size to 0 to see base coverage plotted as a line rather than bars." );
     $("#DOC-include0xLabel").attr( "title",
       "Uncheck this value to have the 0x coverage ignorred in the plotted data. This will cause the 0x read depth data, e.g. "+
       "the number of target bases that had no reads, to be ignorred in the display. The read depth will be binned starting "+
@@ -289,8 +287,9 @@ $(function () {
     plotParams.barAxis = 1;  // %
     plotParams.plotType = 1; // line
     plotParams.plotAxis = 1; // %
-    plotParams.binSize = plotStats.binSize; // auto
+    plotParams.binSize = plotStats.binSizeDef; // auto
     plotParams.include0x = true;
+    plotParams.showLegend = true;
     if( type == "Full" ) {
       plotParams.readAxis = 0; // full
       $('.DOC-hideFilter').show();
@@ -299,6 +298,7 @@ $(function () {
       plotParams.readAxis = 2; // mean normalized
       plotParams.barType = 0;  // hidden
       plotParams.binSize = 1;  // use 0 to turn on density plot
+      plotParams.showLegend = false;
     } else if( type == "View" ) {
       $('.DOC-hideFilter').show();
       if( 2 * plotStats.cov999x <= plotStats.maxX ) {
@@ -306,6 +306,7 @@ $(function () {
         if( plotParams.binSize < 1 ) plotParams.binSize = 1;
       }
     }
+    updateBinSizeUsed(plotParams.binSize);
     updateGUIPlotParams();
     updatePlotTitles();
     updatePlot(true);
@@ -326,7 +327,7 @@ $(function () {
   $('#DOC-binSize').change(function() {
     var val = $.trim(this.value);
     if( val == '' ) {
-      this.value = plotStats.binSize;  // reset to auto
+      this.value = plotParams.binSize = plotStats.binSizeDef;  // reset to auto
     } else if( isNaN(val) || val < 0 ) {
       this.value = plotParams.binSize; // reset to current value
     } else {
@@ -373,8 +374,9 @@ $(function () {
     $.ajaxSetup( {dataType:"text",async:false} );
     $.get(tsvFile, function(mem) {
       var lines = mem.split("\n");
+      var lastDepth = -1;
       $.each(lines, function(n,row) {
-        var fields = $.trim(row).split('\t');
+        var fields = $.trim(row).split('\t').slice(0,maxLoadFields);
         if( n == 0 ) {
           fieldIds = fields;
         } else if( fields[0] != "" ) {
@@ -395,26 +397,34 @@ $(function () {
     fieldIds[0] = LegendLabels.readDepth;
     if( plotParams.readAxis == 2 ) fieldIds[0] = "Normalized " + fieldIds[0];
     if( plotParams.readAxis == 3 ) fieldIds[0] = "100x Normalized " + fieldIds[0];
-    fieldIds[1] = LegendLabels.covCount; // + " (" + (plotParams.barAxis ? "% Reads" : "Count") + ")";
-    fieldIds[2] = LegendLabels.cumCover; // + " (" + (plotParams.plotAxis ? "% Reads" : "Count") + ")";
+    fieldIds[1] = LegendLabels.covCount; // + " (" + (plotParams.barAxis ? "% Bases" : "Count") + ")";
+    fieldIds[2] = LegendLabels.cumCover; // + " (" + (plotParams.plotAxis ? "% Bases" : "Count") + ")";
+  }
+
+  function roundBinSize(numPoints) {
+    var binSize = 5*Math.floor(0.2+numPoints/500);
+    if( binSize >= 5000 ) binSize = 5000*Math.floor(0.25+0.0002*binSize);
+    else if( binSize >= 1000 ) binSize = 1000*Math.floor(0.25+0.001*binSize);
+    else if( binSize >= 500 ) binSize = 500*Math.floor(0.25+0.002*binSize);
+    else if( binSize >= 100 ) binSize = 100*Math.floor(0.25+0.01*binSize);
+    else if( binSize >= 50 ) binSize = 50*Math.floor(0.25+0.02*binSize);
+    else if( binSize >= 25 ) binSize = 25*Math.floor(0.25+0.04*binSize);
+    else if( binSize >= 10 ) binSize = 10*Math.floor(0.25+0.1*binSize);
+    else if( binSize < 1 ) binSize = numPoints > 200 ? 2 : 1;
+    return binSize;
   }
 
   function updatePlotStats() {
-    plotStats.numPoints = dataTable.length;
+    plotStats.numPoints = 0;
     plotStats.numFields = dataTable.length > 0 ? fieldIds.length : 0;
     if( plotStats.numFields <= 1 ) return;
-    updatePlotTitles();
 
-    // default bar sizes assuming plot space is at least 500 points - Flot ticks by multiples of 100,50,10,5,1, etc.
-    plotStats.minX = dataTable[0][0];
-    plotStats.maxX = dataTable[dataTable.length-1][0];
-    plotStats.rangeX = plotStats.maxX - plotStats.minX;
-    plotStats.binSize = 5*Math.floor(0.2+plotStats.rangeX/500);
-    if( plotStats.binSize >= 100 ) plotStats.binSize = 100*Math.floor(0.25+0.01*plotStats.binSize);
-    else if( plotStats.binSize >= 50 ) plotStats.binSize = 50*Math.floor(0.25+0.02*plotStats.binSize);
-    else if( plotStats.binSize >= 25 ) plotStats.binSize = 25*Math.floor(0.25+0.04*plotStats.binSize);
-    else if( plotStats.binSize >= 10 ) plotStats.binSize = 10*Math.floor(0.25+0.1*plotStats.binSize);
-    else if( plotStats.binSize < 1 ) plotStats.binSize = plotStats.rangeX > 200 ? 2 : 1;
+    // plot range anticipates sparse file (no zero coverage rows)
+    plotStats.numPoints = dataTable[dataTable.length-1][0]+1;
+    plotStats.minX = 0;
+    plotStats.maxX = plotStats.numPoints;
+    plotStats.binSizeDef = roundBinSize(plotStats.numPoints);
+    updatePlotTitles();
 
     // mean for normalized x-axis and scaling for % y-axes
     var sumc = 0, sumd = 0, cd = 0;
@@ -434,11 +444,11 @@ $(function () {
     plotStats.maxY = maxBar;
 
     // 99.9% coverage read depth limit for view
-    plotStats.cov999x = dataTable.length-1;
+    plotStats.cov999x = plotStats.numPoints;
     if( plotStats.numFields > 2 ) {
-      for( var i = plotStats.cov999x; i >= 0; --i ) {
+      for( var i = dataTable.length-1; i >= 0; --i ) {
         if( dataTable[i][2] * plotStats.plotScale >= 0.1 ) {
-          plotStats.cov999x = i;
+          plotStats.cov999x = dataTable[i][0];
           break;
         }
       }
@@ -462,8 +472,19 @@ $(function () {
 
   placeholder.bind("plotselected", function (event, ranges) {
     plotStats.zoom = true;
-    plotStats.minX = options.xaxis.min = ranges.xaxis.from;
-    plotStats.maxX = options.xaxis.max = ranges.xaxis.to;
+    if( plotParams.readAxis == 2 ) {
+      plotStats.minX = options.xaxis.min = ranges.xaxis.from;
+      plotStats.maxX = options.xaxis.max = ranges.xaxis.to;
+      options.xaxis.tickDecimals = null;
+    } else {
+      plotStats.minX = options.xaxis.min = Math.floor(ranges.xaxis.from);
+      plotStats.maxX = options.xaxis.max = Math.ceil(ranges.xaxis.to);
+      options.xaxis.tickDecimals = 0;
+    }
+    if( plotStats.maxX > plotStats.numPoints ) {
+      // avoid round up errors 
+      plotStats.maxX = options.xaxis.max = plotStats.numPoints;
+    }
     if( plotParams.zoomMode == 2 ) {
       //plotStats.minY = options.yaxes[0].min = ranges.yaxis.from;
       plotStats.maxY = options.yaxes[0].max = ranges.yaxis.to;
@@ -472,9 +493,46 @@ $(function () {
         options.yaxes[1].max = options.yaxes[0].max * plotStats.axisRatio;
       }
     }
-    options.xaxis.tickDecimals = plotParams.readAxis == 2 ? null : 0;
     updatePlot(false);
   });
+
+  function updateBinSizeUsed(binSize) {
+    plotStats.binSize = binSize;
+    if( binSize != plotParams.binSize ) {
+      $('#DOC-binSizeUsed').text('('+binSize+')');
+    } else {
+      $('#DOC-binSizeUsed').text('');
+    }
+  }
+
+  var covAtLastMap = 0;
+  function coverageAt(x,d) {
+    // Return the coverage given data in sparse array
+    // Not intended for random access - must start with a reset (x <= 0) and ask for increasing (or same) x positions
+    if( x <= 0 ) {
+      covAtLastMap = x = 0;
+    }
+    // search for next >= depth data record
+    while( dataTable[covAtLastMap][0] < x ) {
+      if( ++covAtLastMap >= dataTable.length ) {
+        covAtLastMap = dataTable.length - 1;
+        break;
+      }
+    }
+    // the actual position is what was requested, not in the data
+    if( d < 1 ) return x;
+    if( d == 1 ) {
+      // assumes first data row is number of reads at this depth
+      return x < dataTable[covAtLastMap][0] ? 0 : dataTable[covAtLastMap][1];
+    }
+    // assumes all other values are cumulative
+    return dataTable[covAtLastMap][d];
+  }
+
+  function coverageLast(d) {
+    // Return data for last item
+    return dataTable[dataTable.length-1][d];
+  }
 
   // Creates and renders a new Plot() given the current plot parameters
   // if reset == false then plot is updated at current zoom, else rest to full view
@@ -492,8 +550,8 @@ $(function () {
          plotStats.minX = 0;
          plotStats.maxX = 200;
        } else {
-         plotStats.minX = dataTable[0][0];
-         plotStats.maxX = dataTable[dataTable.length-1][0];
+         plotStats.minX = 0;
+         plotStats.maxX = plotStats.numPoints;
        }
        plotStats.zoom = false;
     }
@@ -524,6 +582,12 @@ $(function () {
     var barType = plotParams.binSize > 0 || plotParams.readAxis >= 2 ? plotParams.barType : 3;
     var binSize = plotParams.binSize > 0 && plotParams.readAxis < 2 ? plotParams.binSize : 1;
     if( plotParams.readAxis == 3 ) xscale *= 100;
+    var minXrange = plotStats.minX - xscale * binSize;
+    var maxXrange = plotStats.maxX + xscale * binSize;
+    // this approximates to 1000 points displayed (vs. default of ~100 bins for full range)
+    var minBinSize = roundBinSize( 0.1 * (maxXrange - minXrange) / xscale );
+    if( binSize < minBinSize ) binSize = minBinSize;
+    updateBinSizeUsed(binSize);
     var fullLYaxis = (plotParams.readAxis < 2 || plotParams.zoomMode == 0 || !plotStats.zoom);
     var nplot = 0;
     var barMax = 0, axisRatio = 1;
@@ -535,8 +599,6 @@ $(function () {
       var ytform = '%s';
       var barBin = false;
       if( sn == 1 ) {
-        // to allow zoom to work when bar axis is hidden it has to be calculated then hidden
-        if( barType == 2 ) xstep = 1;
         barBin = (xstep > 1);
         if( plotParams.barAxis > 0 ) {
           ytform = percentFormat;
@@ -544,39 +606,39 @@ $(function () {
         }
       } else {
         if( plotParams.plotType == 0 ) continue;
-        if( plotParams.plotType == 1 ) xstep = 1;
+        //if( plotParams.plotType == 1 ) xstep = 1;
         if( plotParams.plotAxis > 0 ) {
           ytform = percentFormat;
           yscale = plotStats.plotScale;
         }
       }
-      var minXrange = plotStats.minX-xscale;
-      var maxXrange = plotStats.maxX+xscale;
       var series = { label: fieldIds[sn], yaxis: ++nplot, data: [], shadowSize: 0 };
       var ymin = -1, ymax = 0, yval = 0;
       var i = skip0x ? 1 : 0;
-      for( ; i < dataTable.length; i += xstep ) {
+      coverageAt(0,0); // reset tracker
+      for( ; i < plotStats.numPoints; i += xstep ) {
         if( barBin ) {
           var sum = 0;
           var srt = barType == 2 ? i-Math.floor(xstep/2) : i;
           var lmt = srt+xstep;
-          if( lmt > dataTable.length ) { lmt = dataTable.length; }
+          if( lmt > plotStats.numPoints ) { lmt = plotStats.numPoints; }
           for( var j = srt < 0 ? 0 : srt; j < lmt; ++j ) {
-            sum += dataTable[j][sn];
+            sum += coverageAt(j,sn);
           }
           yval = yscale * sum;
         } else {
-          yval = yscale * dataTable[i][sn];
+          yval = yscale * coverageAt(i,sn);
         }
         // need local max. for automatic mode
-        var x = xscale * dataTable[i][0];
+        var x = xscale * coverageAt(i,0);
         if( plotParams.zoomMode == 0 || (x > minXrange && x < maxXrange) ) {
           if( yval > ymax ) ymax = yval;
           if( yval < ymin || ymin < 0 ) ymin = yval;
+          series.data.push( [ x, yval ] );
         }
-        series.data.push( [ x, yval ] );
       }
       if( sn == 1 ) {
+         if( ymax == 0 ) ymax = 0.000001;
         barMax = ymax = roundAxis(ymax);
         if( plotStats.zoom && !plotParams.resetYScale ) {
           // always adjust zoom if max/min increase due to re-binning
@@ -608,9 +670,8 @@ $(function () {
         if( plotParams.plotType & 1 ) series.lines = { show:true };
         if( plotParams.plotType & 2 ) series.points = { show: true };
         // add in the last point when skipped due to bin size
-        var lastp = dataTable.length-1;
-        if( i-xstep < lastp ) {
-          series.data.push( [ xscale * dataTable[lastp][0], yscale * dataTable[lastp][sn] ] );
+        if( i-xstep < coverageLast(0) ) {
+          series.data.push( [ xscale * coverageLast(0), yscale * coverageLast(sn) ] );
         }
       }
       plotData.push( series );
@@ -626,7 +687,8 @@ $(function () {
     if( barType == 0 ) --nplot;
     options.legend.show = plotParams.showLegend;
     options.xaxis.min = plotStats.minX;
-    options.xaxis.max = plotStats.maxX;
+    // adjust x axis to account for binning
+    options.xaxis.max = (binSize == 1 || plotParams.readAxis == 2) ? plotStats.maxX : binSize * Math.floor(1+plotStats.maxX/binSize);
     plotStats.numPlots = nplot;
     plotStats.axisRatio = axisRatio;
     plotStats.tooltipZero = 0.01*(plotStats.maxY-plotStats.minY);
@@ -739,15 +801,26 @@ $(function () {
     return (id === LegendLabels.covCount);
   }
 
+  function sigfig(val) {
+    val = parseFloat(val);
+    var av = Math.abs(val);
+    if( av == 0 ) return "0";
+    if( av >= 100 ) return val.toFixed(0);
+    if( av >= 10 ) return val.toFixed(2);
+    if( av >= 1 ) return val.toFixed(2);
+    if( av >= 0.01 ) return val.toFixed(3);
+    return val.toFixed(4);
+  }
+
   // this would need an update if user axis scaling is re-enabled
   function tooltipHint(item,bin) {
     $('#DOC-tooltip-close').hide();
     var id = item.series.label;
     if( dataBar(id) ) {
-      return item.datapoint[1].toFixed(2)+'%';
+      return sigfig(item.datapoint[1])+'%';
     }
     if( id === LegendLabels.cumCover ) {
-      return item.datapoint[1].toFixed(2)+'%';
+      return sigfig(item.datapoint[1])+'%';
     }
     return '?';
   }
@@ -761,14 +834,14 @@ $(function () {
     var br = "<br/>";
 
     var skip0x = !plotParams.include0x;
-    var binSize = plotParams.binSize > 0 ? plotParams.binSize : 1;
+    var binSize = plotStats.binSize;
     var depth;
     if( plotParams.readAxis == 2 ) {
       depth = ((skip0x+bin)/plotStats.meanX).toFixed(3);
     } else if( plotParams.readAxis == 3 ) {
       depth = (100*(skip0x+bin)/plotStats.meanX).toFixed(1);
     } else if( label == LegendLabels.cumCover ) {
-      depth = skip0x + bin;
+      depth = skip0x + bin * binSize;
     } else {
       depth = skip0x + bin * binSize;
       if( binSize > 1 ) depth += (binSize == 2 ? "," : "-")+(depth+binSize-1);
@@ -787,8 +860,8 @@ $(function () {
       if( plotParams.plotAxis == 1 ) { y /= plotStats.barScale; }
       else { ypc *= plotStats.barScale };
     }
-    msg += "Number of target base reads: "+commify(y.toFixed(0))+br;
-    msg += "Fraction of all target base reads: "+ypc.toFixed(2)+"%"+br;
+    msg += "Number of target bases read: "+commify(y.toFixed(0))+br;
+    msg += "Fraction of all target bases read: "+sigfig(ypc)+"%"+br;
     $('#DOC-tooltip-close').show();
     return msg;
   }

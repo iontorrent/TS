@@ -78,7 +78,7 @@ if( $numrec <= 0 )
   <TSVFILE>;
   while( <TSVFILE> )
   {
-    my @fields = split;
+    my @fields = split('\t',$_);
     if( $chrret && !defined($chrid{$fields[0]}) )
     {
       $chrList .= $fields[0] . ':';
@@ -128,6 +128,10 @@ my $cliprows = int(0.5 + $numHits * 0.01 * ($clipright - $clipleft));
 my $skipStart = 1+int(0.01 * $clipleft * $numHits);
 my $binsize = $cliprows / $maxrows;
 
+# reduce number of rows returned if range is smaller
+my $skipEndRow = 1+int(0.01 * $clipright * $numHits) - $skipStart;
+$maxrows = $skipEndRow if( $skipEndRow < $maxrows );
+
 my $bin = 0;
 my $bincnt = 0;
 my $sumLen = 0;
@@ -143,7 +147,7 @@ $" = "\t";
 
 while( <TSVFILE> )
 {
-  @fields = split;
+  @fields = split('\t',$_);
   next if( $chrom ne "" && $chrom ne $fields[0] );
   next if( $gene ne "" && $gene ne uc($fields[4]) );
   next if( $covmin > $fields[9] );
