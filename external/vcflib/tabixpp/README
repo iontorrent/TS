@@ -1,0 +1,6 @@
+This is a fork of the tabix project [1] which includes a C++ class wrapper for
+reading tabix-indexed files.
+
+Author: Erik Garrison <erik.garrison@bc.edu>
+
+[1] http://samtools.sourceforge.net/tabix.shtml

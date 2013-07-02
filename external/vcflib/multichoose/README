@@ -1,0 +1,40 @@
+Multiset combinations, n multichoose k
+
+Erik Garrison <erik.garrison@bc.edu>
+
+multichoose.cpp --
+
+This is a small C++ library/program which contains a generic function to
+generate multisets for vectors of any type of object.  You can test out the
+program using strings input from the command line by typing:
+
+    % make
+
+Running:
+
+    % ./multichoose
+
+Prints usage information:
+
+    usage: 
+    ./multichoose <k> <item1> <item2> ... <itemN>  ~ n multichoose k
+
+Example usage:
+
+    % ./multichoose 2 a t g c
+    a a 
+    a t 
+    a g 
+    a c 
+    t t 
+    t g 
+    t c 
+    g g 
+    g c 
+    c c 
+
+This example lists all the possible *unordered' genotypes at a given genetic
+loci of which there are two copies (e.g. chromosomes).  'k' (2 in this case)
+could be understood as the expected ploidy of the given locus.  Applying
+multiset permutations to each of the results would generate all possible
+ordered multisets.
