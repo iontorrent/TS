@@ -119,4 +119,9 @@ void getBaseName(const char *path, char *basename) {
   }
 }
 
+void stringToUpper(string &s) {
+  for (unsigned int idx=0; idx<s.length(); idx++)
+    s[idx] = toupper(s[idx]);
+}
+
 

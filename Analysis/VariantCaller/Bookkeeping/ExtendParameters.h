@@ -31,17 +31,21 @@ class EnsembleEvalTuningParameters {
 
     float min_delta_for_flow; // select flows to test based on this minimum level
     int max_flows_to_test;  // select how many flows to test
+     bool use_unification_for_multialleles; // unify test flows across multialleles to avoid damaged SNPs
 
     float pseudo_sigma_base; // general likelihood penalty for shifting locations
 
     float magic_sigma_base; // weak prior on predicting variance by intensity
     float magic_sigma_slope;
     float sigma_prior_weight;
+    float k_zero;  // weight for cluster shifts in adding to variance
 
     // filter parameters specialized to ensemble eval
     float filter_unusual_predictions;
     float filter_deletion_bias;
     float filter_insertion_bias;
+    
+    float million_monkeys_level; // don't bother phred scores outside this range: by popular request
 
     EnsembleEvalTuningParameters() {
       outlier_prob = 0.01f;
@@ -52,6 +56,7 @@ class EnsembleEvalTuningParameters {
       magic_sigma_base = 0.085f;
       magic_sigma_slope = 0.0084f;
       sigma_prior_weight = 1.0f;
+      k_zero = 0.0f;
 
       min_delta_for_flow = 0.1f;
       max_flows_to_test = 10;
@@ -59,6 +64,10 @@ class EnsembleEvalTuningParameters {
       filter_unusual_predictions = 0.3f;
       filter_deletion_bias = 10.0f;
       filter_insertion_bias = 10.0f;
+      
+      million_monkeys_level = 100.0f; // 10^-10 should be good enough for most purposes
+      
+      use_unification_for_multialleles = false;
     };
     float DataReliability() {
       return(1.0f -outlier_prob);
@@ -170,6 +179,8 @@ class ClassifyFilters {
     // how to handle SSE issues
     float sseProbThreshold;
     float minRatioReadsOnNonErrorStrand;
+    // don't worry about small relative SSE events
+    float sse_relative_safety_level; 
 
     ClassifyFilters() {
       min_hp_for_overcall = 5;
@@ -179,6 +190,7 @@ class ClassifyFilters {
 
       sseProbThreshold = 0.2;
       minRatioReadsOnNonErrorStrand = 0.2; // min ratio of reads supporting variant on non-sse strand for variant to be called
+      sse_relative_safety_level = 0.03f; // scale SSE we worry about by read depth - don't worry about anything less than a 5% problem
     };
     void SetOpts(OptArgs &opts, Json::Value & tvc_params);
 };
@@ -200,6 +212,10 @@ class ControlCallAndFilters {
 
     ClassifyFilters filter_variant;
     PeakControl control_peak;
+    
+    // tuning parameter for xbias 
+    float xbias_tune;
+    float sbias_tune; 
 
     BasicFilters filter_snps;
     BasicFilters filter_hp_indel;
@@ -217,9 +233,13 @@ class ProgramControlSettings {
     int DEBUG;
 
     bool rich_json_diagnostic;
-    string json_plot_dir;
+     string json_plot_dir;
 
     bool do_ensemble_eval;
+    bool use_SSE_basecaller;
+    bool suppress_recalibration;
+    bool do_snp_realignment;
+
     bool inputPositionsOnly;
     bool skipCandidateGeneration;
 
@@ -230,6 +250,7 @@ class ProgramControlSettings {
 
 class ExtendParameters : public Parameters {
   public:
+	OptArgs opts;
     ControlCallAndFilters my_controls;
     EnsembleEvalTuningParameters my_eval_control;
     ProgramControlSettings program_flow;
@@ -251,6 +272,9 @@ class ExtendParameters : public Parameters {
     string referenceSampleName;
     vector<string> ReadGroupIDVector;
     string candidateVCFFileName;
+
+    string recal_model_file_name;
+    int recalModelHPThres;
 
 
     // functions

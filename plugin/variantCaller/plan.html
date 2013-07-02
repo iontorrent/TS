@@ -309,31 +309,45 @@
             <!-- variationtype Somatic Germ_Line-->
 
             <label class="radio">
-                <input type="radio" name="variationtype" value="germline_high_stringency" id="germline_high_stringency">
+                <input type="radio" name="variationtype" id="germline_high_stringency" value="germline_high_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false positives and high frequency variants">
-                      Germ Line - High Stringency</span>
+                      title="Parameter settings optimized for minimum false positives and high frequency variants on PGM chips">
+                      Germ Line - High Stringency (PGM)</span>
             </label>
 
             <label class="radio">
                 <input type="radio" name="variationtype" value="germline_low_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false negatives and high frequency variants">
-                      Germ Line - Low Stringency</span>
+                      title="Parameter settings optimized for minimum false negatives and high frequency variants on PGM chips">
+                      Germ Line - Low Stringency (PGM)</span>
             </label>
 
             <label class="radio">
                 <input type="radio" name="variationtype" value="somatic_high_stringency">
-                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false positives and low frequency variants">
-                      Somatic - High Stringency</span>
-           </label>
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and low frequency variants on PGM chips">
+                      Somatic - High Stringency (PGM)</span>
+            </label>
 
             <label class="radio">
                 <input type="radio" name="variationtype" value="somatic_low_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false negatives and low frequency variants">
-                      Somatic - Low Stringency</span>
+                      title="Parameter settings optimized for minimum false negatives and low frequency variants on PGM chips">
+                      Somatic - Low Stringency (PGM)</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_high_stringency_proton">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false positives and high frequency variants on Proton chips">
+                      Germ Line - High Stringency (Proton)</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_low_stringency_proton">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for minimum false negatives and high frequency variants on Proton chips">
+                      Germ Line - Low Stringency (Proton)</span>
             </label>
 
             <label class="radio" style="display: none;">

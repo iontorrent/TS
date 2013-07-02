@@ -6,7 +6,8 @@ import call_api as api
 import sys
 import json
 import os.path
-
+from iondb.bin.djangoinit import *
+from iondb.rundb import models
 
 # This is the API UID for this publisher
 pub_uid = "/rundb/api/v1/publisher/BED/"
@@ -63,18 +64,19 @@ def register_bed_file(bedFName, meta):
     register(mdbed, meta)
 
 def plan_json(meta):
-    run_type = "AMPS_RNA" if meta["design"]["pipeline"] == "RNA" else "AMPS"
     primary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['primary_bed'])
     if meta['secondary_bed'] is not None:
         secondary_path = os.path.join(directory, ref+"/unmerged/detail/"+meta['secondary_bed'])
     else:
         secondary_path = None
+    run_type = meta['design']['plan'].get('runType', None)
+    app = models.ApplProduct.objects.get(applType__runType=run_type)
     plan_stub = {
        "adapter": None,
        "autoAnalyze": True,
        "autoName": None,
        # Set if isBarcoded 
-       "barcodeId": "",
+       "barcodeId": app.defaultBarcodeKitName,
        "barcodedSamples": {},
        "bedfile": primary_path,
        "regionfile": secondary_path,
@@ -84,7 +86,7 @@ def plan_json(meta):
        "cycles": None,
        "date": "2012-11-21T04:59:11.000877+00:00",
        "expName": "",
-       "flows": 500,
+       "flows": app.defaultFlowCount,
        "flowsInOrder": None,
        "forward3primeadapter": "ATCACCGACTGCCCATAGAGAGGCTGAGAC",
        "irworkflow": "",
@@ -98,7 +100,7 @@ def plan_json(meta):
        "library": meta["reference"],
        "libraryKey": "TCAG",
        # Kit
-       "librarykitname": "Ion AmpliSeq 2.0 Library Kit",
+       "librarykitname":  app.defaultLibraryKit and app.defaultLibraryKit.name,
        "metaData": {},
        "notes": "",
        "pairedEndLibraryAdapterName": "",
@@ -114,19 +116,19 @@ def plan_json(meta):
        "reverse_primer": None,
        "reverselibrarykey": None,
        "runMode": "single",
-       "runType": run_type,
+       "runType": meta['design']['plan']['runType'],
        "runname": None,
        "sample": "",
        "sampleDisplayedName": "",
-       "samplePrepKitName": "",
+       "samplePrepKitName": app.defaultSamplePrepKit and app.defaultSamplePrepKit.name,
        "selectedPlugins": meta["design"]["plan"].get("selectedPlugins", {}),
        "seqKitBarcode": None,
        # Kit
-       "sequencekitname": "IonPGM200Kit",
+       "sequencekitname": app.defaultSequencingKit and app.defaultSequencingKit.name,
        "storageHost": None,
        "storage_options": "A",
        # Kit
-       "templatingKitName": "Ion OneTouch 200 Template Kit v2 DL",
+       "templatingKitName":  app.defaultTemplateKit and app.defaultTemplateKit.name,
        "usePostBeadfind": True,
        "usePreBeadfind": True,
        "username": "ionadmin",
@@ -142,9 +144,16 @@ if meta['is_ampliseq']:
     if meta['secondary_bed'] is not None:
         meta["hotspot"] = True
         register_bed_file(meta['secondary_bed'], json.dumps(meta))
-    plan_prototype = plan_json(meta)
-    api.post("plannedexperiment", **plan_prototype)
+    try:
+      plan_prototype = plan_json(meta)
+      api.post("plannedexperiment", **plan_prototype)
+    except Exception as err:
+      print("Could not create plan from this zip: %s" % err)
     sys.exit()
+elif bedFile.endswith('.vcf'):
+    # Get bed file name without directory path
+    bed_file_name = bedFile.split("/").pop()
+    register_bed_file(bed_file_name+'.bed', line)
 else:
     # Get bed file name without directory path
     bed_file_name = bedFile.split("/").pop()

@@ -28,7 +28,7 @@ class ShortStack{
   vector<int> valid_indexes;
   void FindValidIndexes(); // only loop over reads where we successfully filled in variants
   
-  void FillInPredictions(StackPlus &my_data); 
+  void FillInPredictions(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context);
   void ResetQualities();
   void InitTestFlow();
   float PosteriorFrequencyLogLikelihood(float my_freq, float my_reliability, int strand_key);

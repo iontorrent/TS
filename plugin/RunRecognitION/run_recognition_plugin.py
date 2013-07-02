@@ -25,22 +25,27 @@ def gather_and_send_data(rr_config, ts_conn, lb_conn):
         ts_client = TorrentServerApiClient(ts_conn)
         ts_data = _gather_ts_data(rr_config.results_id, ts_client)
         lb_client = RunRecognitionApiClient(lb_conn)
+        print 'gather_and_send_data initialized'
         if rr_config.generate_file:
+            print 'generating file'
             generate_export_file(ts_data, rr_config.site_name, rr_config.reference_genome, rr_config.application_type,
                                  sys.argv[2])
             generate_export_report(sys.argv[1], sys.argv[2], rr_config.guru_api_url)
         elif (lb_client.submit_data(ts_data, rr_config.site_name, rr_config.reference_genome,
                                     rr_config.application_type,
                   rr_config.guru_api_username, rr_config.guru_api_password)):
+            print 'sent run to tg, about to generate upload report'
             generate_upload_report(sys.argv[1], sys.argv[2], 'Your data has been saved to the leaderboard.',
                                  ts_data['experiment']['chipType'])
         else:
+            print 'failed to upload run to tg'
             message = '''
                 There was an error saving your data, check to
                 make sure you provided the correct username and password.
             '''
             generate_error_report(message, ts_data)
     except TsConnectionError:
+        print 'caught a TsConnectionError'
         message = '''
             There was a problem connecting to Torrent Server, so we could not retrieve run data from it.
             Please verify your Run RecognitION plugin <a href="/configure/plugins/" target="_blank">configuration</a>
@@ -59,6 +64,7 @@ def generate_error_report(message, ts_data=None):
 
 def _gather_ts_data(result_id, ts_client):
     '''connect to the ts client and gather the needed data'''
+    print 'in _gather_ts_data'
     results_data = ts_client.get_results_data(result_id)
     ts_data = {'results': results_data,
         'experiment': ts_client.get_experiment_data(results_data),
@@ -75,6 +81,7 @@ def _gather_ts_data(result_id, ts_client):
 
 def generate_export_file(ts_data, site_name, reference_genome, application_type, out_file_path):
     '''generate the data extract file'''
+    print 'in generate_export_file'
     data = {}
     populate_dict_with_core_fields(data, ts_data, site_name, reference_genome, application_type, None)
 
@@ -107,6 +114,7 @@ def generate_export_file(ts_data, site_name, reference_genome, application_type,
 
 
 def _purge_empties(target_dict):
+    print 'in _purge_empties, removing keys with empty values from dict.'
     to_remove = []
     for key, value in target_dict.items():
         if value is None or len(str(value)) == 0:
@@ -361,10 +369,14 @@ class TorrentServerApiClient:
     def _ts_json_get(self, resource):
         ''' do a rest get, throw a TsConnectionError if a 200 is not returned or anything else goes wrong '''
         try:
+            print 'in _ts_json_get'
             response = self.connection.request_get(resource)
             if str(response['headers']['status']) != str(200):
                 raise TsConnectionError()
-            return json.loads('[%s]' % response[u'body'])[0]
+            json_obj = json.loads('[%s]' % response[u'body'])[0]
+            print "resource is: %s, got back json:\n%s" % \
+                    (resource, str(json.dumps(json_obj, sort_keys=True, indent=4, separators=(',', ': '))))
+            return json_obj
         except:
             raise TsConnectionError()
 

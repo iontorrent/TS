@@ -1617,6 +1617,18 @@ tr.new_plan td {
   background-size: 100% 100%;
 }
 
+.AMPS_EXOME {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  *margin-right: .3em;
+  text-indent: 28px;
+  vertical-align: text-top;
+  background: url('../../resources/img/appl_ampliSeqExome.png') no-repeat center center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
 /* =============================================================================
    Ion plugin report
    ========================================================================== */

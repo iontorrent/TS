@@ -27,7 +27,7 @@ CELERY_MULTI="$CELERYD_CHDIR/manage.py celery multi"
 # * %h -> host name
 # Extra arguments to celeryd
 CELERYD_OPTS="--events "
-CELERYD_OPTS="$CELERYD_OPTS --loglevel=DEBUG"
+CELERYD_OPTS="$CELERYD_OPTS --loglevel=INFO"
 
 CELERYD_REQ="--pidfile=/var/run/celery/celery_%n.pid"
 CELERYD_REQ="$CELERYD_REQ --logfile=/var/log/ion/celery_%n.log"

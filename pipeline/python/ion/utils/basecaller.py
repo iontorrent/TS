@@ -591,8 +591,8 @@ def generate_datasets_json(
         pgmName
         ):
 
-    if not sample:
-        sample = "NOSM"
+    if not sample or barcodeId:
+        sample = "None"
     if not libraryName:
         libraryName = ""
     if not site_name:
@@ -629,7 +629,7 @@ def generate_datasets_json(
                     if len(bcsample) == 1:
                         bcsample = bcsample[0]
                     else:
-                        bcsample = 'none'
+                        bcsample = 'None'
                         
                     datasets["datasets"].append({
                         "dataset_name"      : bcsample + "/" + record[1],

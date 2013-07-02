@@ -20,7 +20,7 @@
  
     <h2>ISP Density</h2>
     <a data-toggle="modal" href="#beadfindModal" class="report-metric-visual bead-loading-link">
-        <img src="{{report.reportWebLink}}/sigproc_results/Bead_density_1000.png" class="show" style="max-height: 350px;">    
+        <img src="{{source_files|bracket:'Bead_density_1000.png'}}" class="show" style="max-height: 350px;">    
     </a>
     <div class="modal hide" id="beadfindModal">
         <div class="modal-header">
@@ -28,7 +28,7 @@
             <h3>ISP Density</h3>
         </div>
         <div class="modal-body" id="beadfind_body">
-            <img src="{{report.reportWebLink}}/sigproc_results/Bead_density_contour.png" style="height: 400px;">
+            <img src="{{source_files|bracket:'Bead_density_contour.png'}}" style="height: 400px;">
         </div>
         <div class="modal-footer">
             <a href="#" class="btn" data-dismiss="modal">Close</a>

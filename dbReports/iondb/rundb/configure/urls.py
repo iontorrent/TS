@@ -10,8 +10,9 @@ urlpatterns = patterns(
 
     url(r'^account/$', 'views.configure_account', name="configure_account"),
 
-    url(r'^ampliseq/$', 'views.configure_ampliseq', name='configure_ampliseq'),
     url(r'^ampliseq/downloads/$', 'views.configure_ampliseq_download', name='configure_ampliseq_download'),
+    url(r'^ampliseq/(?P<pipeline>\w*)/$', 'views.configure_ampliseq', name='configure_ampliseq'),
+    url(r'^ampliseq/$', 'views.configure_ampliseq', name='configure_ampliseq'),
 
     url(r'^plugins/$', 'views.configure_plugins', name="configure_plugins"),
     url(r'^plugins/plugin/install/$', 'views.configure_plugins_plugin_install', name="configure_plugins_plugin_install"),
@@ -36,7 +37,7 @@ urlpatterns = patterns(
 
     url(r'^references/genome/download/$', 'genomes.download_genome', name='references_genome_download'),
     url(r'^references/genome/add/$', 'genomes.new_genome', name='references_genome_add'),
-    url(r'^references/genome/edit/(\d+)$', 'genomes.edit_genome', name='references_genome_edit'),
+    url(r'^references/genome/edit/(\w+)$', 'genomes.edit_genome', name='references_genome_edit'),
     url(r'^references/genome/delete/(\d+)$', 'genomes.delete_genome', name='references_genome_delete'),
     url(r'^references/genome/rebuild/(?P<reference_id>\w+)$', 'genomes.start_index_rebuild', name='references_genome_start_index_rebuild'),
     url(r'^references/genome/status/(\d+)$', 'genomes.genome_status', name='references_genome_status'),
@@ -58,14 +59,7 @@ urlpatterns = patterns(
     url(r'^services/log/(\d+)/$', 'views.dm_log', name="dm_log"),
     url(r'^services/dmconfig_log/$', 'views.dm_configuration_log', name="dm_configuration_log"),
     url(r'^services/dm_history/$', 'views.dm_history', name="dm_history"),
-
-    # -- old services Data Management urls TODO: cleanup
-    url(r'^services2/$', 'views.configure_services2', name="configure_services2"),
-    (r'^services2/storage/(\d+)/([\w.,/_\-]+)$', 'views.change_storage'),
-    (r'^services2/enablearchive/(\d+)/(\d)$', 'views.enableArchive'),
-    (r'^services2/expack/$', 'views.exp_ack'),
-    url(r'^services2/editarchive/(\d+)$', 'views.edit_backup', name="edit_archive"),
-    # --
+    url(r'^services/cache/$', 'views.cache_status', name='cache_status'),
 
     url(r'^configure/$', 'views.configure_configure', name="configure_configure"),
     url(r'^configure/editemail/(\d+)?$', 'views.edit_email', name="edit_email"),
@@ -80,6 +74,7 @@ urlpatterns = patterns(
     url(r'^info/$', 'views.configure_system_stats', name="configure_system_stats"),
     url(r'^info/data$', 'views.configure_system_stats_data', name="configure_system_stats_data"),
     url(r'^info/SSA.zip', 'views.system_support_archive', name='configure_support_archive'),
+    url(r'^raid_info/$', 'views.raid_info'),
     url(r'^services/queueStat/$', 'views.queueStatus'),
     url(r'^services/jobStat/(\d+)/$', 'views.jobStatus'),
     url(r'^services/sgejob/(\d+)/$', 'views.jobDetails'),

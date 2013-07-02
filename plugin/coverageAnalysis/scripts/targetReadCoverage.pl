@@ -26,7 +26,15 @@ my $OPTIONS = "Options:
   -D <int> Downstream limit for matching read start to target end (appropriate for +/- strand mapping).
      This assignment parameter is only employed if the -a option is provided. Default: 5.
   -U <int> Upstream limit for matching read start to target end (appropriate for +/- strand mapping).
-     This assignment parameter is only employed if the -a option is provided. Default: 30.";
+     This assignment parameter is only employed if the -a option is provided. Default: 30.
+  -N <int> (Algorithm) Minimum Number of merged targets to use per samtools command. Default: 50.
+     Forces more regions to be grouped than pysically overlapped within the -O option distance. The combination
+     of -N, -O and -S option values affect run-time performance, depending mainly on the distribution of targets.
+  -O <int> (Algorithm) Minimum merged region separation (Overhang). Default 10000.
+     The minimum base distance between one merged group and the next. Because reads can overlap the ends of
+     multiple (merged) target regions, this value should be at least 1000 to prevent a read being counted twice.
+  -S <int> (Algorithm) Maximum merged region Separation. Default 1000000. (Ineffective if -N option is < 2.)
+     Limits the spacing between grouped merged target regions to reduce number of off-target reads sampled.";
 
 my $logopt = 0;
 my $bedout = 0;
@@ -38,6 +46,10 @@ my $tcovLimit = 0;
 my $nondupreads = 0;
 my $uniquereads = 0;
 my $normreads = 0;
+
+my $minNumMerge = 50;
+my $endOvlp = 10000;
+my $maxMrgSep = 1000000;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -54,6 +66,9 @@ while( scalar(@ARGV) > 0 )
   elsif($opt eq '-D') {$dsLimit = int(shift);}
   elsif($opt eq '-E') {$e2eLimit = int(shift);}
   elsif($opt eq '-U') {$usLimit = int(shift);}
+  elsif($opt eq '-N') {$minNumMerge = int(shift);}
+  elsif($opt eq '-O') {$endOvlp = int(shift);}
+  elsif($opt eq '-S') {$maxMrgSep = int(shift);}
   elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
   else
   {
@@ -85,299 +100,207 @@ $usLimit *= -1;  # more convenient for testing
 
 my $usePcCov = ($tcovLimit > 0);
 $tcovLimit *= 0.01;  # % to fraction
+$maxMrgSep -= $endOvlp;
 
 #--------- End command arg parsing ---------
 
 my $samopt= ($nondupreads ? "-F 0x404" : "-F 0x704").($uniquereads ? " -q 1" : "");
 
-# create hash arrays of target starts and ends from reading the BED file
-print STDERR "Reading and validating BED file...\n" if( $logopt );
-my (%targSrts,%targEnds,%chromNum);
-my (%targFwdReads,%targRevReads,%targFwdE2E,%targRevE2E,%targOvpReads);
-loadBedRegions();
+open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
 
-my $lastChrid = "";
-my $numTracks = 0;
-my ($nTrgs,$tSrts,$tEnds);
-my ($tFwdRds,$tRevRds,$tFwdE2E,$tRevE2E,$tOvpRds);
-
-print STDERR "Reading BAM file using BED filter...\n" if( $logopt );
-$| = 1;  # autoflush
-
-open( MAPPINGS, "samtools view $samopt -L \"$bedfile\" \"$bamfile\" |" )
-  || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
-while( <MAPPINGS> )
-{
-  next if(/^@/);
-  my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
-  my $end = $srt-1;
-  my $rev = $flag & 16;
-  # set up arrays for new contig (to avoid repeated hash-lookups)
-  if( $chrid ne $lastChrid )
-  {
-    $lastChrid = $chrid;
-    $tSrts = \@{$targSrts{$chrid}};
-    $tEnds = \@{$targEnds{$chrid}};
-    $tFwdRds = \@{$targFwdReads{$chrid}};
-    $tRevRds = \@{$targRevReads{$chrid}};
-    $tFwdE2E = \@{$targFwdE2E{$chrid}};
-    $tRevE2E = \@{$targRevE2E{$chrid}};
-    $tOvpRds = \@{$targOvpReads{$chrid}};
-    $nTrgs = scalar(@{$tSrts});
-  }
-  while( $cig =~ s/^(\d+)(.)// )
-  {
-    $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
-  }
-  # Here reads are expected to be bigger than targets so cannot rely on start position
-  # being >= a particular region start (hence no binary search on ordered start locations).
-  # But can find the last region start that is <= than read end and scan backwards.
-  my $tn = floor_bsearch($end,$tSrts);
-  if( $tn < 0 )
-  {
-    # filter reads should overlap at least one region !
-    print STDERR "$CMD: Warning: Filtered read $chrid:$srt-$end did not overlap any target region!\n";
-    next;
-  }
-  my $maxOvlp = -1;
-  my $bestTn = $tn;
-  my $maxEndDist, $bestTrgLen;
-  for( ; $tn >= 0; --$tn )
-  {
-    # test for no overlap with this region (but possibly previous regions since ends not ordered)
-    # Note: Unfortunately no early ending if any large, overlapping amplicons allowed (e.g. if region[0] is whole chromosome!)
-    next if( $tEnds->[$tn] < $srt );
-    my $rSrt = $tSrts->[$tn];
-    my $rEnd = $tEnds->[$tn];
-    my $trgLen = $rEnd - $rSrt;
-    # record a hit for any read overlap
-    ++$tOvpRds->[$tn];
-    $dSrt = $srt - $rSrt;
-    $dEnd = $rEnd - $end;
-    # test if this can be assigned to an amplicon
-    if( $ampreads )
-    {
-      my $aSrt = $rev ? $dEnd : $dSrt;
-      next if( $aSrt < $usLimit || $aSrt > $dsLimit );
-    }
-    # save region number for max overlap
-    $dSrt = 0 if( $dSrt < 0 );
-    $dEnd = 0 if( $dEnd < 0 );
-    $rSrt = $rEnd - $rSrt - $dSrt - $dEnd; # actually 1 less than overlap
-    if( $rSrt > $maxOvlp )
-    {
-      $maxOvlp = $rSrt;
-      $bestTn = $tn;
-      $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
-      $bestTrgLen = $trgLen;
-    }
-  }
-  if( $maxOvlp >= 0 )
-  {
-    if( $rev )
-    {
-      ++$tRevRds->[$bestTn];
-      if( $usePcCov )
-      {
-        ++$tRevE2E->[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
-      }
-      else
-      {
-        ++$tRevE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
-      }
-    }
-    else
-    {
-      ++$tFwdRds->[$bestTn];
-      if( $usePcCov )
-      {
-        ++$tFwdE2E->[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
-      }
-      else
-      {
-        ++$tFwdE2E->[$bestTn] if( $maxEndDist <= $e2eLimit );
-      }
-    }
-  }
-}
-close( MAPPINGS );
-
-print STDERR "Creating output...\n" if( $logopt );
+# Try to open output file and add header line according to options
 my $headerLine = "track type=bedDetail";
-if( !$bedout )
-{
-  # replace default bed track line assumed field titles (by position)
-  $headerLine = "";
-  my @titles = ("contig_id","contig_srt","contig_end","region_id","gene_id","gc");
-  for( my $i = 0; $i < scalar(@titles); ++$i )
-  {
-    if( defined($titles[$i]) ) { $headerLine .= "$titles[$i]\t"; }
-    else { $headerLine .= sprintf("field%d\t", $i+1); }
-  }
-  # these are the added 6 base coverage fields
-  printf "%soverlaps\t%s\t%s\tfwd_reads\trev_reads\n", $headerLine,
+if( !$bedout ) {
+  $headerLine = sprintf "%s\t%s\t%s\t%s\t%s\t%s\toverlaps\t%s\t%s\tfwd_reads\trev_reads",
+    "contig_id", "contig_srt", "contig_end", "region_id", "gene_id", "gc",
     ($usePcCov ? "fwd_cov\trev_cov" : "fwd_e2e\trev_e2e"), ($normreads ? "norm_reads" : "total_reads");
 }
 
-$lastChrid = "";
-$numTracks = 0;
-my $targNum;
-open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
-while( <BEDFILE> )
-{
+my ($bchr,$bend,$bname,$bgene,$bgc,$mrgSrt,$mrgEnd,$padend);
+my @targSrts = ();
+my @targEnds = ();
+my @targNames = ();
+my @targGenes = ();
+my @targGCs = ();
+my $bsrt = 0;
+my $lastChr = "";
+
+$| = 1;  # autoflush
+
+# read the bedfile for header and the first region to avoid extra tests in main loop
+while(<BEDFILE>) {
   chomp;
-  my @fields = split('\t',$_);
-  my $chrid = $fields[0];
-  next if( $chrid !~ /\S/ );
-  # silently ignore extra tracks and duplicate amplicons this time
-  if( $chrid =~ /^track / )
-  {
-    last if( ++$numTracks > 1 );
-    print "$_\n" if( $bedout );
+  ($bchr,$bsrt,$bend,$bname,$bgene,$bgc) = split('\t',$_);
+  next if( $bchr !~ /\S/ );
+  if( $bchr =~ /^track / ) {
+    if( $bedout ) {
+      print "$_\n";
+      $headerLine = "";
+    }
     next;
   }
-  if( $chrid ne $lastChrid )
-  {
-    $lastChrid = $chrid;
-    $lastSrt = 0;
-    $lastEnd = 0;
-    $targNum = 0;
-    $tSrts = \@{$targSrts{$chrid}};
-    $tEnds = \@{$targEnds{$chrid}};
-    $tFwdRds = \@{$targFwdReads{$chrid}};
-    $tRevRds = \@{$targRevReads{$chrid}};
-    $tFwdE2E = \@{$targFwdE2E{$chrid}};
-    $tRevE2E = \@{$targRevE2E{$chrid}};
-    $tOvpRds = \@{$targOvpReads{$chrid}};
-  }
-  my $srt = $fields[1]+1;
-  my $end = $fields[2]+0;
-  next if( $srt == $lastSrt && $end == $lastEnd );
-  $lastSrt = $srt;
-  $lastEnd = $end;
-  if( $tSrts->[$targNum] != $srt || $tEnds->[$targNum] != $end )
-  {
-     print STDERR "$CMD: ERROR: BED file region $chrid:$srt-$end does not match expected region $chrid:$tSrts->[$targNum]-$tEnds->[$targNum] at index $targNum\n";
-     exit 1;
-  }
-  --$srt if( $bedout );
-  print "$chrid\t$srt\t";
-  for( my $i = 2; $i < scalar(@fields); ++$i ) { print "$fields[$i]\t"; }
-  print "$tOvpRds->[$targNum]\t$tFwdE2E->[$targNum]\t$tRevE2E->[$targNum]\t";
-  my $tLen = $fields[2] - $fields[1];
-  my $nreads = $tFwdRds->[$targNum] + $tRevRds->[$targNum];
-  if( $normreads )
-  {
-    $nreads = $tLen > 0 ? $nreads / $tLen : 0;
-    printf "%.3f\t", $nreads;
-  }
-  else
-  {
-    printf "%.0f\t", $nreads;
-  }
-  print "$tFwdRds->[$targNum]\t$tRevRds->[$targNum]\n";
-  ++$targNum;
+  ++$bsrt;
+  $padend = $bend+$endOvlp;
+  $lastChr = $bchr;
+  @targSrts = ($bsrt);
+  @targEnds = ($bend+0);
+  @targNames = ($bname);
+  @targGenes = ($bgene);
+  @targGCs = ($bgc);
+  $mrgSrt = $bsrt;
+  $mrgEnd = $padend;
+  last;
 }
-close( BEDFILE );
+unless( $bsrt ) {
+  print STDERR "Warning: targets file $bedfile had no effective targets.\n";
+  exit 0;
+}
+# output header if not done so already
+if( $headerLine ne "" ) {
+  print "$headerLine\n";
+  $headerLine = "";
+}
 
-# ----------------END-------------------
-
-# Load all BED file regions in to memory and validate BED file.
-# This functions is for code organization only and not intended to be general function.
-# This method does not expect a load of the genome so cannot tell if chromsomes are out of order>
-sub loadBedRegions
-{
-  my ($lastChr,$lastSrt,$lastEnd,$numTracks,$numTargets,$numTargReads,$numWarns) = (0,0,0,0,0,0,0);
-  open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
-  while( <BEDFILE> )
-  {
-    my ($chrid,$srt,$end) = split('\t',$_);
-    next if( $chrid !~ /\S/ );
-    if( $chrid =~ /^track / )
-    {
-      ++$numTracks;
-      if( $numTracks > 1 )
-      {
-        print STDERR "\nWARNING: Bed file has multiple tracks. Ignoring tracks after the first.\n";
-        ++$numWarns;
-        last;
-      }
-      if( $numTargets > 0 )
-      {
-        print STDERR "\nERROR: Bed file incorrectly formatted: Contains targets before first track statement.\n";
-        exit 1;
-      }
-      next;
+# Outer loop is to allow the last line read to be used as the next merged region and to group mutiple merged regions
+while(1) {
+  # For performance, the BAM file will be read for individual targets
+  # The BED file is assumed to well ordered, etc., and have overlapping targets
+  # To assign reads to more specific targets, the merged target must be used and the unmerged targets collated
+  while(<BEDFILE>) {
+    chomp;
+    ($bchr,$bsrt,$bend,$bname,$bgene,$bgc) = split('\t',$_);
+    next if( $bchr !~ /\S/ );
+    if( $bchr =~ /^track / ) {
+      print STDERR "\nWARNING: Bed file has multiple tracks. Ignoring tracks after the first.\n";
+      last;
     }
-    unless( defined($chromNum{$chrid}) )
-    {
-      $chromNum{$chrid} = ++$lastChr;
-      $lastSrt = 0;
-      $lastEnd = 0;
+    ++$bsrt;
+    $padend = $bend+$endOvlp;
+    last if( $bchr ne $lastChr || $bsrt > $mrgEnd );
+    $mrgEnd = $padend if( $padend > $mrgEnd );
+    push( @targSrts, $bsrt );
+    push( @targEnds, $bend+0 );
+    push( @targNames, $bname );
+    push( @targGenes, $bgene );
+    push( @targGCs, $bgc );
+    $bsrt = 0;	# indicates last read already in list
+  }
+  # expand the number of targets if too few
+  my $nTrgs = scalar(@targSrts);
+  if( $bsrt && $nTrgs < $minNumMerge && $lastChr eq $bchr && $bsrt-$mrgEnd < $maxMrgSep ) {
+    $mrgEnd = $padend;
+    push( @targSrts, $bsrt );
+    push( @targEnds, $bend+0 );
+    push( @targNames, $bname );
+    push( @targGenes, $bgene );
+    push( @targGCs, $bgc );
+    $bsrt = 0;
+    next;
+  }
+  if( $logopt && $nTrgs > 3 ) {
+    print STDERR "Merged $nTrgs targets to region $lastChr:$mrgSrt-$mrgEnd:\n";
+    for( my $i = 0; $i < $nTrgs; ++$i ) {
+      print STDERR "  $targSrts[$i]-$targEnds[$i]";
     }
-    ++$numTargReads;
-    ++$srt;
-    $end += 0;
-    if( $srt < $lastSrt )
-    {
-      print STDERR "ERROR: Region $chrid:$srt-$end is out-of-order vs. previous region $chrid:$lastSrt-$lastEnd.\n";
-      exit 1;
+    print STDERR "\n";
+  }
+  # process BAM reads covering these merged targets
+  open( MAPPINGS, "samtools view $samopt \"$bamfile\" $lastChr:$mrgSrt-$mrgEnd |" )
+    || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
+  my (@targFwdReads,@targRevReads,@targFwdE2E,@targRevE2E,@targOvpReads);
+  my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
+  while( <MAPPINGS> ) {
+    next if(/^@/);
+    my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
+    $srt += 0;
+    last if( $srt > $lastEnd );  # skip remaining off-target reads in merge buffer
+    my $end = $srt-1;
+    my $rev = $flag & 16;
+    while( $cig =~ s/^(\d+)(.)// ) {
+      $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
     }
-    # Anticipate overlapping regions here and only warn for obscured regions
-    $lastSrt = $srt;
-    if( $srt <= $lastEnd )
-    {
-      if( $srt == $lastSrt && $end == $lastEnd )
-      {
-        ++$numWarn;
-        print STDERR "Warning: Region $chrid:$srt-$end is a repeat - skipping.\n" if( $bedwarn );
-        $lastEnd = $end;
+    my $maxOvlp = -1;
+    my $bestTn = $0;
+    my ($maxEndDist,$bestTrgLen);
+    for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
+      # safe to looking when read end is prior to start of target
+      my $tSrt = $targSrts[$tn];
+      last if( $end < $tSrt );
+      # no match if read start is after target end, but ends can overlap therefore need to carry on searching
+      my $tEnd = $targEnds[$tn];
+      if( $srt > $tEnd ) {
+        # adjust start of list for further reads if no earlier target end found
+        $firstRegion = $tn+1 if( $maxOvlp < 0 );
         next;
       }
-      if( $end <= $lastEnd )
-      {
-        ++$numWarn;
-        print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
+      my $trgLen = $tEnd - $tSrt;
+      # record a hit for any read overlap
+      ++$targOvpReads[$tn];
+      $dSrt = $srt - $tSrt;
+      $dEnd = $tEnd - $end;
+      # test if this can be assigned to an amplicon
+      if( $ampreads ) {
+        my $aSrt = $rev ? $dEnd : $dSrt;
+        next if( $aSrt < $usLimit || $aSrt > $dsLimit );
+      }
+      # save region number for max overlap
+      $dSrt = 0 if( $dSrt < 0 );
+      $dEnd = 0 if( $dEnd < 0 );
+      $tSrt = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
+      # in case of a tie, keep the most 3' match for backwards-compatibility to old 3.6 version
+      if( $tSrt >= $maxOvlp ) {
+        $maxOvlp = $tSrt;
+        $bestTn = $tn;
+        $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
+        $bestTrgLen = $trgLen;
       }
     }
-    $lastEnd = $end;
-    ++$numTargets;
-    push( @{$targSrts{$chrid}}, $srt );
-    push( @{$targEnds{$chrid}}, $end );
-    push( @{$targFwdReads{$chrid}}, 0 );
-    push( @{$targRevReads{$chrid}}, 0 );
-    push( @{$targFwdE2E{$chrid}}, 0 );
-    push( @{$targRevE2E{$chrid}}, 0 );
-    push( @{$targOvpReads{$chrid}}, 0 );
+    if( $maxOvlp >= 0 ) {
+      if( $rev ) {
+        ++$targRevReads[$bestTn];
+        if( $usePcCov ) {
+          ++$targRevE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+        } else {
+          ++$targRevE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+        }
+      } else {
+        ++$targFwdReads[$bestTn];
+        if( $usePcCov ) {
+          ++$targFwdE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+        } else {
+          ++$targFwdE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+        }
+      }
+    }
   }
-  close( BEDFILE );
-  if( $numWarns )
-  {
-    print STDERR "$CMD: $numWarns BED file warnings were detected!\n";
-    print STDERR " - Re-run with the -w option to see individual warning messages.\n" if( !$bedwarn );
+  close( MAPPINGS );
+  # output assigned coverage for this group of targets
+  for( my $i = 0; $i < $nTrgs; ++$i ) {
+    my $tLen = $targEnds[$i]-$targSrts[$i]+1;
+    --$targSrts[$i] if( $bedout );
+    print "$lastChr\t$targSrts[$i]\t$targEnds[$i]\t$targNames[$i]\t$targGenes[$i]\t$targGCs[$i]\t";
+    printf "%d\t%d\t%d\t", $targOvpReads[$i], $targFwdE2E[$i], $targRevE2E[$i];
+    my $nreads = $targFwdReads[$i]+$targRevReads[$i];
+    if( $normreads ) {
+      $nreads = $tLen > 0 ? $nreads / $tLen : 0;
+      printf "%.3f\t", $nreads;
+    } else {
+      printf "%.0f\t", $nreads;
+    }
+    printf "%d\t%d\n", $targFwdReads[$i], $targRevReads[$i];
   }
-  print STDERR "Read $numTargets of $numTargReads target regions from $bedfile\n" if( $logopt || $numWarns );
+  # make last region start of new merged set
+  last unless( $bsrt );
+  $lastChr = $bchr;
+  @targSrts = ($bsrt);
+  @targEnds = ($bend+0);
+  @targNames = ($bname);
+  @targGenes = ($bgene);
+  @targGCs = ($bgc);
+  $mrgSrt = $bsrt;
+  $mrgEnd = $padend;
+  $bsrt = 0;  # indicate no pending reads
 }
+close(BEDFILE);
 
-sub floor_bsearch
-{
-  # Return highest index for which lims[index] <= val (< lims[index+1])
-  # given value $_[0] (val) and assending-order values array $_[1] (lims).
-  # If val >= all values in lims[] then the last index (size-1) is returned.
-  # If val  < all values in lims[] then -1 is returned.
-  my ($val,$lims) = @_;
-  # NOTE: return -1 if value is less than the first value in the array
-  if( $lims->[0] > $val ) { return -1; }
-  my ($l,$u) = (0, scalar(@{$lims})-1);
-  # return last index if value is >= the last value in the array
-  if( $lims->[$u] <= $val ) { return $u; }
-  # value must be within ranges
-  while(1)
-  {
-    my $m = int( ($l + $u)/2 );
-    if( $val < $lims->[$m] ) { $u = $m; }
-    elsif( $val < $lims->[$m+1] ) { return $m; }
-    else { $l = $m+1; }
-  }
-}
-
+# ----------------END-------------------

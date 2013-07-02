@@ -26,9 +26,9 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 	    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
 	  {% endif %}
 	  <tr><td>Configuration:</td>         <td>{{options.configuration}}</td></tr>
+    <tr><td>Download all barcodes:</td> <td><a href="{{options.run_name}}.vcf.zip">[VCF.ZIP]</a>
+                                            <a href="{{options.run_name}}.xls.zip">[XLS.ZIP]</a></td></tr>
 	</table>
-
-
 
   <table class="noheading" style="table-layout:fixed">
       
@@ -58,11 +58,11 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
           {% endif %}
           
           <td><a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">[VCF.GZ]</a>
-              <a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">[VCF.GZ.TBI]</a></td>
+              <a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">[VCF.GZ.TBI]</a>
+              <a href="{{barcode.name}}/variants_{{barcode.name}}.xls">[XLS]</a></td>
         </tr>      
       {% endif %}
     {% endfor %}
-    
  
   </table>
 </body>

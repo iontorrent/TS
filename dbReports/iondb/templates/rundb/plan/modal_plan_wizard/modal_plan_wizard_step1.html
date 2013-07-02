@@ -21,6 +21,22 @@
                                 {% endifequal %}
                             {% endif %}
                         {% endfor %}
+                        
+                        {% for applType in planTemplateData.secondaryRunTypes %}
+                        	{% if selectedApplProductData %}
+                            	{% ifequal applType.runType selectedApplProductData.runType.runType %}
+                                	<p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% else %}
+                                	<p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% endifequal %}                          
+                            {% else %}
+                            	{% ifequal applType.runType selectedPlanTemplate.runType %}
+                                	<p><input checked="checked" type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% else %}
+                                	<p><input type="radio" id="runType" name="runType" value="{{applType.runType}}"> {{applType.description}}</p>
+                                {% endifequal %}
+                            {% endif %}
+                       {% endfor %}                        
                     </span>
                 </td>
                 <td width="50%">

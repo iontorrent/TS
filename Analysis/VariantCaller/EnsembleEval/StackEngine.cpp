@@ -17,6 +17,7 @@ void LatentSlate::PropagateTuningParameters(EnsembleEvalTuningParameters &my_par
   sigma_generator.prior_sigma_regression[0] = my_params.magic_sigma_base;
   sigma_generator.prior_sigma_regression[1] = my_params.magic_sigma_slope;
   sigma_generator.prior_weight = my_params.sigma_prior_weight;
+  sigma_generator.k_zero = my_params.k_zero;
 
   // not actually used at this point
   skew_generator.dampened_skew = my_params.prediction_precision;
@@ -88,6 +89,7 @@ void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_fre
   // start us out estimating frequency
   cur_posterior.StartAtHardClassify(total_theory, update_frequency, start_frequency);
   FastStep(total_theory, false, false);
+//  FastStep(total_theory, false, true); // see if variance is what stops us from executing
 
   float old_ll = cur_posterior.max_ll; // always try at least one step
   iter_done = 0;
@@ -139,12 +141,12 @@ float HypothesisStack::ReturnMaxLL() {
   return(cur_state.cur_posterior.ReturnMaxLL());
 }
 
-void HypothesisStack::InitForInference(StackPlus &my_data) {
+void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context) {
   PropagateTuningParameters(); // sub-objects need to know
 
   total_theory.FindValidIndexes();
   // predict given hypotheses per read
-  total_theory.FillInPredictions(my_data);
+  total_theory.FillInPredictions(thread_objects, my_data, global_context);
   total_theory.InitTestFlow();
 };
 
@@ -330,6 +332,10 @@ bool HypothesisStack::CallGermline(float hom_safety, int &genotype_call, float &
     cout << "Warning: reject ref score NAN " << variant_contig << "." << variant_position << endl;
     reject_status_quality_score = 0.0f;
   }
+  
+  // by apparent popular request, threshold the phred score somewhere
+ reject_status_quality_score = std::min(reject_status_quality_score, my_params.million_monkeys_level);
+ quasi_phred_quality_score = std::min(quasi_phred_quality_score, my_params.million_monkeys_level);
 
   return(safety_active_flag);
 };
@@ -366,7 +372,9 @@ void HypothesisStack::CallByMAP(int &genotype_call, float &quasi_phred_quality_s
 }
 
 
+
 void EnsembleEval::SetupHypothesisChecks(ExtendParameters *parameters) {
+  use_unification = parameters->my_eval_control.use_unification_for_multialleles;
   for (unsigned int i_allele = 0; i_allele < allele_eval.size(); i_allele++) {
 
     allele_eval[i_allele].my_params = parameters->my_eval_control;
@@ -374,25 +382,18 @@ void EnsembleEval::SetupHypothesisChecks(ExtendParameters *parameters) {
   }
 }
 
-void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta, float &mean_supporting_flows, float &mean_max_discrimination, float threshold, int i_allele) {
-  mean_supporting_flows = 0.0f;
-  mean_max_discrimination = 0.0f;
+void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
+
   mean_ll_delta = 0.0f;
   int count = 0;
   for (unsigned int i_read = 0; i_read < allele_eval[i_allele].total_theory.my_hypotheses.size(); i_read++) {
     if (allele_eval[i_allele].total_theory.my_hypotheses[i_read].success) {
       // measure disruption
-      float max_fld;
-      int support_flows;
-      allele_eval[i_allele].total_theory.my_hypotheses[i_read].ComputeLocalDiscriminationStrength(threshold, max_fld, support_flows);
-      mean_max_discrimination += max_fld;
-      mean_supporting_flows += support_flows;
+
       mean_ll_delta += allele_eval[i_allele].total_theory.my_hypotheses[i_read].ComputeLLDifference();
       count++;
     }
   }
-  mean_max_discrimination /= (count + 0.01f);
-  mean_supporting_flows /= (count + 0.01f);
   mean_ll_delta /= (count + 0.01f);
   mean_ll_delta = 10.0f * mean_ll_delta / log(10.0f); // phred-scaled
 }
@@ -456,7 +457,7 @@ void EnsembleEval::ApproximateHardClassifierForReads(vector<int> &read_allele_id
 
 void EnsembleEval::UnifyTestFlows() {
   // don't bother if we only have one alternate
-  if (allele_eval.size() > 1) {
+  if ((allele_eval.size() > 1) & use_unification ) {
     // make sure we evaluate log-likelihood over a unified set of test flows for each read for each alternate hypothesis
     for (unsigned int i_read = 0; i_read < my_data.read_stack.size(); i_read++) {
       // accumulate test flows across all alternate alleles

@@ -40,5 +40,6 @@ void NullInfoFields(vcf::Variant *var);
 void SetUpFormatString(vcf::Variant *var);
 int CalculateWeightOfVariant(vcf::Variant *current_variant);
 void ClearVal(vcf::Variant *var, const char *clear_me);
+float RetrieveQualityTagValue(vcf::Variant *current_variant, const string &tag_wanted, int _allele_index);
 
 #endif //VCFFORMAT_H

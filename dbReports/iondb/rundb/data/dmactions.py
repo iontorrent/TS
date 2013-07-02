@@ -14,11 +14,14 @@ from iondb.utils.files import getSpaceMB, getSpaceKB
 from iondb.utils import makePDF
 from ion.utils import makeCSA
 from iondb.rundb.models import EventLog, DMFileStat
+from iondb.utils.TaskLock import TaskLock
+from celery.task import task
 from celery.utils.log import get_task_logger
 from iondb.rundb.data import dmactions_types
 from iondb.rundb.models import DMFileStat, Results
-from iondb.rundb.tasks import getdiskusage
+from iondb.utils.files import getdiskusage
 from iondb.rundb.data import exceptions as DMExceptions
+from iondb.rundb.data.project_msg_banner import project_msg_banner
 
 #Send logging to data_management log file
 logger = get_task_logger('data_management')
@@ -26,34 +29,32 @@ logger = get_task_logger('data_management')
 ARCHIVE='archive'
 EXPORT='export'
 DELETE='delete'
-TEST='donothingjustlog'
+TEST='test'
 
 
-def delete(user, user_comment, dmfilestat):
+def delete(user, user_comment, dmfilestat, lockfile, msg_banner, confirmed=False):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     msg = "Deleting %s - %s Using v.%s" % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName,dmfilestat.dmfileset.version)
     logger.info(msg)
     _update_related_objects(user, user_comment, dmfilestat, DELETE, msg)
     try:
-        action_validation(dmfilestat, DELETE)
+        action_validation(dmfilestat, DELETE, confirmed)
     except:
         raise
     try:
         if dmfilestat.dmfileset.type == dmactions_types.SIG:
-            _process_fileset(dmfilestat, DELETE)
+            _process_fileset_task(dmfilestat, DELETE, user, user_comment, lockfile, msg_banner)
         else:
             if dmfilestat.dmfileset.type == dmactions_types.OUT:
                 _create_archival_files(dmfilestat)
-            _process_fileset(dmfilestat, DELETE)
+            _process_fileset_task(dmfilestat, DELETE, user, user_comment, lockfile, msg_banner)
 
-        _emptydir_delete(dmfilestat)
-        _action_complete_update(user, user_comment, dmfilestat, DELETE)
     except:
         dmfilestat.setactionstate('E')
         raise
 
 
-def export(user, user_comment, dmfilestat, backup_directory=None):
+def export(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory=None):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     msg = "Exporting %s - %s Using v.%s" % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName,dmfilestat.dmfileset.version)
     logger.info(msg)
@@ -65,20 +66,19 @@ def export(user, user_comment, dmfilestat, backup_directory=None):
     except:
         raise
     try:
-        _process_fileset(dmfilestat, EXPORT)
-        _action_complete_update(user, user_comment, dmfilestat, EXPORT)
+        _process_fileset_task(dmfilestat, EXPORT, user, user_comment, lockfile, msg_banner)
     except:
         dmfilestat.setactionstate('E')
         raise
 
 
-def archive(user, user_comment, dmfilestat, backup_directory=None):
+def archive(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory=None, confirmed=False):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     msg = "Archiving %s - %s Using v.%s" % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName,dmfilestat.dmfileset.version)
     logger.info(msg)
     _update_related_objects(user, user_comment, dmfilestat, ARCHIVE, msg)
     try:
-        action_validation(dmfilestat, ARCHIVE)
+        action_validation(dmfilestat, ARCHIVE, confirmed)
         destination_validation(dmfilestat, backup_directory)
         _create_destination(dmfilestat, ARCHIVE, dmfilestat.dmfileset.type, backup_directory)
     except:
@@ -86,18 +86,24 @@ def archive(user, user_comment, dmfilestat, backup_directory=None):
 
     try:
         if dmfilestat.dmfileset.type == dmactions_types.SIG:
-            _process_fileset(dmfilestat, ARCHIVE)
-            #no longer need symlink from raw data to backup location to re-analyze
-            #_create_symlink(dmfilestat)
+            _process_fileset_task(dmfilestat, ARCHIVE, user, user_comment, lockfile, msg_banner)
         else:
             if dmfilestat.dmfileset.type == dmactions_types.OUT:
                 _create_archival_files(dmfilestat)
-            _process_fileset(dmfilestat, ARCHIVE)
+            _process_fileset_task(dmfilestat, ARCHIVE, user, user_comment, lockfile, msg_banner)
 
-        _emptydir_delete(dmfilestat)
-        _action_complete_update(user, user_comment, dmfilestat, ARCHIVE)
     except:
         dmfilestat.setactionstate('E')
+        raise
+
+
+def test(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory=None):
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    msg = "Testing %s - %s Using v.%s" % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName,dmfilestat.dmfileset.version)
+    logger.info(msg)
+    try:
+        _process_fileset_task(dmfilestat, TEST, user, user_comment, lockfile, msg_banner)
+    except:
         raise
 
 
@@ -215,11 +221,13 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
     # thru the setup.  This shows inconsistency between dmfilestat action_status and filesystem.
     if dmfilestat.dmfileset.type == dmactions_types.SIG:
         src_dir = dmfilestat.result.experiment.expDir
-        if not os.path.exists(src_dir):
-            raise DMExceptions.SrcDirDoesNotExist(src_dir)
+    else:
+        src_dir = dmfilestat.result.get_report_dir()
+    if not os.path.exists(src_dir):
+        raise DMExceptions.SrcDirDoesNotExist(src_dir)
 
 
-def action_validation(dmfilestat, action):
+def action_validation(dmfilestat, action, confirmed=False):
     '''
     Tests to validate that this fileset can be acted upon.
     One test is to ensure that fileset files are not currently in use.
@@ -240,6 +248,45 @@ def action_validation(dmfilestat, action):
         logger.warn(errmsg)
         raise DMExceptions.FilesMarkedKeep(errmsg)
 
+    # Fail delete basecaller input if the files are being linked by any from-wells results
+    # Manual action is allowed to proceed after user confirms it
+    if action == DELETE and dmfilestat.dmfileset.type==dmactions_types.BASE and not confirmed:
+        related = get_related_dmfilestats(dmfilestat)
+        #make sure to exclude current dmfilestat in case itself is linked
+        if related is not None: related = related.exclude(pk=dmfilestat.pk)
+        if related is not None and related.count() > 0:
+            errmsg = "Basecalling Input files are used by reanalysis started from BaseCalling: %s" % \
+                ', '.join(related.values_list('result__resultsName',flat=True))
+            logger.error(errmsg)
+            raise DMExceptions.BaseInputLinked(errmsg)
+
+def get_related_dmfilestats(dmfilestat):
+    # returns queryset containing related dmfilestats or None
+    related = None
+    if dmfilestat.dmfileset.type == dmactions_types.SIG:
+        related = DMFileStat.objects.filter(
+            dmfileset__type=dmactions_types.SIG,
+            result__experiment=dmfilestat.result.experiment
+        )
+    elif dmfilestat.dmfileset.type == dmactions_types.BASE:
+        # find any newer results that have linked Basecaller Input (sigproc_results folder)
+        related_results = Results.objects.filter(experiment=dmfilestat.result.experiment)
+        sigproc_path = os.path.join(dmfilestat.result.get_report_dir(), 'sigproc_results')
+        if related_results and os.path.exists(sigproc_path):
+            linked = []
+            for result in related_results:
+                testpath = os.path.join(result.get_report_dir(), 'sigproc_results')
+                try:
+                    if os.path.islink(testpath) and os.path.samefile(sigproc_path, testpath):
+                        linked.append(result.pk)
+                except:
+                    pass
+            if len(linked) > 0:
+                related = DMFileStat.objects.filter(
+                    dmfileset__type=dmactions_types.BASE,
+                    result__pk__in=linked
+                )
+    return related
 
 def _create_archival_files(dmfilestat):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
@@ -294,7 +341,7 @@ def _create_destination(dmfilestat, action, filesettype, backup_directory=None):
         raise
 
 
-def _file_selector(start_dir, ipatterns, epatterns, kpatterns):
+def _file_selector(start_dir, ipatterns, epatterns, kpatterns, add_linked_sigproc=False):
     '''Returns list of files found in directory which match the list of
     patterns to include and which do not match any patterns in the list
     of patterns to exclude.  Also returns files matching keep patterns in
@@ -320,8 +367,6 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns):
                 if match:
                     to_include.append(remfile)
 
-    #find files matching keepwith filters from start_dir
-    for root, dirs, files in os.walk(start_dir,topdown=True):
         #find files matching keep filters from start_dir
         for pattern in kpatterns:
             filter = re.compile(r'(%s/)(%s)' % (start_dir,pattern))
@@ -330,6 +375,22 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns):
                 match = filter.match(kfile)
                 if match:
                     to_keep.append(kfile)
+
+        #export Basecalling Input: include linked sigproc_results of from-wells reports
+        if add_linked_sigproc:
+            sigproc_path = os.path.join(root, 'sigproc_results')
+            real_start_dir = ''
+            if 'sigproc_results' in dirs and os.path.islink(sigproc_path) and ('onboard_results' not in os.path.realpath(sigproc_path)):
+                for sigproc_root, sigproc_dirs, sigproc_files in os.walk(os.path.realpath(sigproc_path),topdown=True):
+                    if not real_start_dir: real_start_dir = os.path.dirname(sigproc_root)
+                    for pattern in ipatterns:
+                        filter = re.compile(r'(%s/)(%s)' % (real_start_dir,pattern))
+                        for filename in sigproc_files:
+                            testfile = os.path.join(sigproc_root, filename)
+                            match = filter.match(testfile)
+                            if match:
+                                to_include.append(testfile.replace(real_start_dir, start_dir))
+                                to_keep.append(testfile.replace(real_start_dir, start_dir))
 
     #find files matching exclude filters from include list
     for pattern in epatterns:
@@ -394,6 +455,7 @@ def _copy_to_dir(filepath,_start_dir,_destination):
                 logger.warn("%s" % e)
         except:
             raise
+    return True
 
 
 
@@ -408,32 +470,32 @@ def _process(filepath, action, destination, _start_dir, to_keep):
 
     if action == DELETE:
         try:
-            _file_removal(filepath, to_keep)
+            return _file_removal(filepath, to_keep)
         except:
             raise
     elif action == EXPORT:
         try:
-            _copy_to_dir(filepath,_start_dir, destination)
+            return _copy_to_dir(filepath,_start_dir, destination)
         except:
             raise
     elif action == ARCHIVE:
         try:
             _copy_to_dir(filepath,_start_dir, destination)
-            _file_removal(filepath, to_keep)
+            return _file_removal(filepath, to_keep)
         except:
             raise
     elif action == TEST:
         try:
-            _print_selected(filepath, to_keep)
+            return _print_selected(filepath, to_keep)
         except:
             raise
 
 
-def _process_fileset(dmfilestat, action):
-    '''All exceptions need to be handled here.  action_status needs to be
-    updated correctly.
-    To run in TEST mode - do nothing but print the selected files,
-    python -c "import sys; import iondb.bin.djangoinit; from iondb.rundb import models; from iondb.rundb.data import dmactions; sys.stdout = open('stdout.txt', 'w');dmactions._process_fileset(models.DMFileStat.objects.get(id=5264),dmactions.TEST);"
+def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_banner):
+    '''
+    This function generates a list of files to process, then hands the list to a recursive
+    celery task function.  The recursion continues until the list is empty.  The calling
+    function exits immediately.
     '''
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
 
@@ -452,72 +514,175 @@ def _process_fileset(dmfilestat, action):
     # search both results directory and raw data directory
     search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
 
-    total_size = 0
-    num_files_processed = 0
-
     #Determine if this file type is eligible to use a keep list
     kpatterns = _get_keeper_list(dmfilestat, action)
 
     #Create a list of files eligible to process
+    list_of_file_dict = []
+    add_linked_sigproc=False if (action==DELETE or dmfilestat.dmfileset.type==dmactions_types.INTR) else True
     for start_dir in search_dirs:
         logger.debug("Searching: %s" % start_dir)
-        to_process = []
         if os.path.isdir(start_dir):
             to_process, to_keep = _file_selector(start_dir,
                                         dmfilestat.dmfileset.include,
                                         dmfilestat.dmfileset.exclude,
-                                        kpatterns)
-            logger.debug("%d files to process" % len(to_process))
-            #process files in list
-            for j, path in enumerate(to_process, start=1):
+                                        kpatterns,
+                                        add_linked_sigproc)
+            logger.info("%d files to process at %s" % (len(list(set(to_process) - set(to_keep))),start_dir))
+            list_of_file_dict.append(
+                {
+                    'pk':dmfilestat.id,
+                    'action':action,
+                    'archivepath':dmfilestat.archivepath,
+                    'start_dir':start_dir,
+                    'to_process':to_process,
+                    'to_keep':to_keep,
+                    'total_cnt':len(list(set(to_process) - set(to_keep))),
+                    'processed_cnt':0,
+                    'total_size':0,
+                    'user':user,
+                    'user_comment':user_comment,
+                    'lockfile':lockfile,
+                    'msg_banner':msg_banner,
+                }
+            )
 
-                try:
-                    if not os.path.islink(path):
-                        total_size += os.lstat(path)[6]
+    pfilename = set_action_param_file(list_of_file_dict)
 
-                    _process(path, action, dmfilestat.archivepath, start_dir, to_keep)
-                    logger.debug("%04d %s %10d %s" % (j, action, total_size, path))
-                    num_files_processed += 1
+    # Call the recursive celery task function to process the list
+    celery_result = _process_task.delay(pfilename)
 
-                except IOError as e:
-                    #IOError: [Errno 28] No space left on device:
-                    if e.errno == errno.ENOSPC:
-                        raise
-                    elif e.errno == errno.ENOENT:
-                        logger.warn("%04d No longer exists %s" % (j,path))
-                        continue
-                except:
-                    errmsg = "%04d %s %10d %s" % (j, action, total_size, path)
-                    logger.error(errmsg)
-                    logger.error(traceback.format_exc())
+    return
 
-                if not action in [EXPORT,TEST] and dmfilestat.dmfileset.del_empty_dir:
-                    dir = os.path.dirname(path)
+@task(queue='periodic')
+def _process_task(pfilename):
+    '''
+    Recursive celery task
+    '''
+    from datetime import datetime
+    from datetime import timedelta
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.debug("Task ID: %s" % _process_task.request.id)
+
+
+    #catch all unhandled exceptions and clean up
+    try:
+        list_of_file_dict = get_action_param_file(pfilename)
+        os.unlink(pfilename)
+
+        dmfilestat = DMFileStat.objects.get(id=list_of_file_dict[0]['pk'])
+        terminate = True   # flag to indicate recursion termination
+        total_processed = 0
+
+        start_time = datetime.now()
+        max_time_delta = timedelta(seconds=10)
+
+        # list_of_file_dict contains zero, one, or two dictionary variables to iterate over.
+        for q,dict in enumerate(list_of_file_dict):
+            # The dictionary contains an element named 'to_process' which is a list variable to iterate over
+            logger.debug("%d, start_dir: %s" % (q,dict['start_dir']))
+
+            while (datetime.now() - start_time) < max_time_delta:
+                # If there are no files left to process, (all to_process lists are empty), the recursion ends
+                if len(dict['to_process']) > 0:
+                    terminate = False
+
                     try:
-                        if len(os.listdir(dir)) == 0:
-                            if not "plugin_out" in dir:
-                                try:
-                                    os.rmdir(dir)
-                                    logger.debug("Removed empty directory: %s" % dir)
-                                except Exception as e:
-                                    logger.warn("rmdir [%d] %s: %s" % (e.errno,e.strerror,dir))
-                    except OSError as e:
-                        if e.errno == errno.ENOENT:
-                            logger.warn("del_empty_dir Does not exist %s" % (path))
+                        # process one file and remove entry from the list
+                        path = dict['to_process'].pop(0)
+
+                        j = dict['processed_cnt'] + 1
+
+                        this_file_size = 0
+                        if not os.path.islink(path):
+                            this_file_size = os.lstat(path)[6]
+
+                        if _process(path, dict['action'], dict['archivepath'], dict['start_dir'], dict['to_keep']):
+                            dict['processed_cnt'] = j
+                            dict['total_size'] += this_file_size
+                            logger.info("%04d/%04d %s %10d %s" % (j, dict['total_cnt'], dict['action'], dict['total_size'], path))
+
+                    except (OSError,IOError) as e:
+                        #IOError: [Errno 28] No space left on device:
+                        if e.errno == errno.ENOSPC:
+                            raise
+                        elif e.errno == errno.ENOENT:
+                            logger.warn("%04d No longer exists %s" % (j,path))
                             continue
-                        else:
-                            raise e
+                    except:
+                        errmsg = "%04d/%04d %s %10d %s" % (j, dict['total_cnt'], dict['action'], dict['total_size'], path)
+                        logger.error(errmsg)
+                        logger.error(traceback.format_exc())
 
-            # Delete start_dir if it is empty: this is targeted towards raw data dirs
-            if os.path.isdir(start_dir):
-                if len(os.listdir(start_dir)) == 0:
-                    os.rmdir(start_dir)
-        else:
-            logger.warn( "Directory '%s' does not exist" % start_dir)
+                    if not dict['action'] in [EXPORT,TEST] and dmfilestat.dmfileset.del_empty_dir:
+                        dir = os.path.dirname(path)
+                        try:
+                            if len(os.listdir(dir)) == 0:
+                                if not "plugin_out" in dir:
+                                    try:
+                                        os.rmdir(dir)
+                                        logger.debug("Removed empty directory: %s" % dir)
+                                    except Exception as e:
+                                        logger.warn("rmdir [%d] %s: %s" % (e.errno,e.strerror,dir))
+                        except OSError as e:
+                            if e.errno == errno.ENOENT:
+                                logger.warn("del_empty_dir Does not exist %s" % (path))
+                                continue
+                            else:
+                                raise e
+                else:
+                    break
 
-    dmfilestat.diskspace = float(total_size)/(1024*1024)
+            # only expect to execute this line when no files to process
+            total_processed += dict['total_size']
+    except:
+        dmfilestat.setactionstate('E')
+        logger.error("DM Action failure on %s for %s report." % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName))
+        logger.error("This %s action will need to be manually completed." % (dict['action']))
+        logger.error("The following is the exception error:\n"+traceback.format_exc())
+        EventLog.objects.add_entry(dmfilestat.result,"%s - %s" % (dmfilestat.dmfileset.type, msg),username='dm_agent')
+        if dict['lockfile']:
+            applock = TaskLock(dict['lockfile'])
+            applock.unlock()
+        return
 
-    logger.info("%0.1f MB %s processed" % (dmfilestat.diskspace, dmfilestat.dmfileset.type))
+    #logger.debug("Sleep for 1")
+    #import time
+    #time.sleep(1)
+    if terminate:
+        try:
+            # No more files to process.  Do the clean up.
+            dmfilestat.diskspace = float(total_processed)/(1024*1024)
+            dmfilestat.save()
+            logger.info("%0.1f MB %s processed" % (dmfilestat.diskspace, dmfilestat.dmfileset.type))
+            if dict['action'] in [ARCHIVE, DELETE]:
+                _emptydir_delete(dmfilestat)
+
+            _action_complete_update(dict['user'], dict['user_comment'], dmfilestat, dict['action'])
+
+            # pop up a message banner
+            if dict['msg_banner']:
+                dmfileset = dmfilestat.dmfileset
+                project_msg = {}
+                msg_dict = {}
+                msg_dict[dmfileset.type] = "Success"
+                project_msg[dmfilestat.result_id] = msg_dict
+                project_msg_banner('', project_msg, dict['action'])
+
+            if dict['lockfile']:
+                applock = TaskLock(dict['lockfile'])
+                applock.unlock()
+        except:
+            logger.exception(traceback.format_exc())
+    else:
+        # Launch next task
+        try:
+            pfilename = set_action_param_file(list_of_file_dict)
+            celery_result = _process_task.delay(pfilename)
+        except:
+            logger.error(traceback.format_exc())
+
+    return
 
 
 def _get_keeper_list(dmfilestat, action):
@@ -555,14 +720,16 @@ def _file_removal(filepath, to_keep):
                 raise e
     else:
         logger.debug("NOT REMOVING: %s" % filepath)
-    return
+        return False
+    return True
 
 
 def _print_selected(filepath, to_keep):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     if filepath not in to_keep:
-        logger.info("Selected: %s" % filepath)
-    return
+        logger.debug("Selected: %s" % filepath)
+        return True
+    return False
 
 
 def _emptydir_delete(dmfilestat):
@@ -576,7 +743,11 @@ def _emptydir_delete(dmfilestat):
         for root, dirs, files in os.walk(start_dir,topdown=True):
             for name in dirs:
                 filepath = os.path.join(root,name)
-                if len(os.listdir(filepath)) == 0:
+                try:
+                    emptyDir = True if len(os.listdir(filepath)) == 0 else False
+                except:
+                    continue
+                if emptyDir:
                     logger.debug("Removing Directory: %s" % filepath)
                     #this fancy bit is to not trip on a soft link (TS-6600)
                     try:
@@ -587,6 +758,8 @@ def _emptydir_delete(dmfilestat):
                                 os.unlink(filepath)
                             except:
                                 pass
+                        elif e.errno == errno.ENOENT:   # no such file or directory
+                            pass
                         else:
                             raise e
 
@@ -607,7 +780,7 @@ def _update_diskusage(dmfilestat):
 
 def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state=None):
     '''When category is signal processing, make sure that all related results must be updated'''
-    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
 
     if action_state is None: action_state = dmfilestat.action_state
 
@@ -615,17 +788,18 @@ def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_
         diskspace = update_diskspace(dmfilestat)
 
     if dmfilestat.dmfileset.type == dmactions_types.SIG:
-        exp_id = dmfilestat.result.experiment_id
-
-        DMFileStat.objects.filter(dmfileset__type=dmactions_types.SIG, result__experiment__id=exp_id) \
-            .update(action_state = action_state, archivepath=dmfilestat.archivepath, diskspace=dmfilestat.diskspace)
-
         # check that experiment.ftpStatus field is now set to complete.
         dmfilestat.result.experiment.ftpStatus = "Complete"
         dmfilestat.result.experiment.save()
     else:
         dmfilestat.action_state = action_state
         dmfilestat.save()
+
+    related = get_related_dmfilestats(dmfilestat)
+    if related is not None:
+        related.update(action_state = action_state, archivepath=dmfilestat.archivepath)
+        if dmfilestat.dmfileset.type == dmactions_types.SIG:
+            related.update(diskspace=dmfilestat.diskspace)
 
     # add log entry
     msg = msg+"<br>User Comment: %s" % (user_comment)
@@ -637,7 +811,7 @@ def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_
 
 
 def _action_complete_update(user, user_comment, dmfilestat, action):
-    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
 
     if action == ARCHIVE:
         action_state = 'AD'
@@ -650,6 +824,8 @@ def _action_complete_update(user, user_comment, dmfilestat, action):
         msg = "%0.1f MB %s exported to %s." % (dmfilestat.diskspace, dmfilestat.dmfileset.type, dmfilestat.archivepath)
         dmfilestat.archivepath = None
         dmfilestat.save()
+    elif action == TEST:
+        return
 
     _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state)
 
@@ -714,3 +890,30 @@ def _create_symlink(dmfilestat):
 def slugify(something):
     '''convert whitespace to hyphen and lower case everything'''
     return re.sub(r'\W+','-',something.lower())
+
+
+def set_action_param_file(list_of_dict_files):
+    '''
+    Argument is dictionary to be pickled.  Return value is name of file.
+    '''
+    from cPickle import Pickler
+    import tempfile
+    action = list_of_dict_files[0].get('action','unk')
+    fileh = tempfile.NamedTemporaryFile(dir='/tmp',delete=False,mode='w+b',prefix=action)
+    #fileh = open(fileh.name,'wb')
+    pickle = Pickler(fileh)
+    pickle.dump(list_of_dict_files)
+    fileh.close()
+    return fileh.name
+
+
+def get_action_param_file(pfilename):
+    '''
+    Argument is name of file to unpickle.  Return value is dictionary value.
+    '''
+    from cPickle import Unpickler
+    fileh = open(pfilename,'rb')
+    pickle = Unpickler(fileh)
+    list_of_dict_files = pickle.load()
+    fileh.close()
+    return list_of_dict_files

@@ -124,6 +124,11 @@ float ExpTailFitter::generic_exp_tail_fit(float *trc, float *bkg_trace, TimeComp
       if ((i3 == -1) && (ftimes[i] >= (fi_end + 60.0f))) i3 = i;
    }
 
+   // not enough frames warranting an exponenetial tail fit
+   if (i2 == -1) {
+     return (0.0f);
+   }
+
    if (i3 == -1)
       i3 = npts;
 
@@ -162,7 +167,7 @@ float ExpTailFitter::generic_exp_tail_fit(float *trc, float *bkg_trace, TimeComp
    return (dc_offset/bkg_ampl);
 }
 
-float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> ftimes, float tau, float *exp_amp, float *mse_err, bool debug)
+float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau, float *exp_amp, float *mse_err, bool debug)
 {
    // initialize matricies
    lhs(0, 0) = 0.0;
@@ -184,7 +189,6 @@ float ExpTailFitter::fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, 
       rhs(1) += trc[i] * expval;
    }
    lhs(1, 0) = lhs(0, 1);
-
    // I'm not sure if the solve method leaves the original matricies intact or not, some I'm saving rhs(0)
    // for later use just in case
    double old_rhs_0 = rhs(0);

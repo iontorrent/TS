@@ -17,7 +17,7 @@ void BasicSigmaGenerator::GenerateSigmaByRegression(vector<float> &prediction, v
 
 void BasicSigmaGenerator::GenerateSigma(CrossHypotheses &my_cross){
    for (unsigned int i_hyp=0; i_hyp<my_cross.residuals.size(); i_hyp++){
-      GenerateSigmaByRegression(my_cross.predictions[i_hyp], my_cross.test_flow, my_cross.sigma_estimate[i_hyp]);
+      GenerateSigmaByRegression(my_cross.mod_predictions[i_hyp], my_cross.test_flow, my_cross.sigma_estimate[i_hyp]);
    }
 }
 
@@ -45,7 +45,7 @@ void BasicSigmaGenerator::SimplePrior(){
       // approximate quadratic increase in sigma- should be linear, but empirically we see more than expected
       float sigma_square =  prior_sigma_regression[0]+prior_sigma_regression[1]*square_level;
       sigma_square *=sigma_square; // push squared value
-      PushLatent(basic_weight, (float) i_level, sigma_square);
+      PushLatent(basic_weight, (float) i_level, sigma_square, true);
    }
    DoLatentUpdate();  // the trivial model for sigma by intensity done
 }
@@ -62,10 +62,19 @@ float BasicSigmaGenerator::InterpolateSigma(float x_val){
     if (hi_level>max_level) hi_level = max_level;
     float delta_low = t_val - low_level;
     float delta_hi = 1.0f-delta_low;
+    // very sensitive to log-likelihood at margins
+    // weight by available data as well
+    // with a little safety factor in case something unusual has happened
+    delta_low *= (accumulated_weight[hi_level]+0.001f);
+    delta_hi  *= (accumulated_weight[low_level]+0.001f);
+    float total_weight = delta_low+delta_hi;
+    delta_low /= total_weight;
+    delta_hi /= total_weight;
+    
     return(latent_sigma[low_level]*delta_hi + latent_sigma[hi_level]*delta_low);
 }
 
-void BasicSigmaGenerator::PushLatent(float responsibility, float x_val, float y_val){
+void BasicSigmaGenerator::PushLatent(float responsibility, float x_val, float y_val, bool do_weight){
     // interpolation and add
     float t_val = max(x_val, 0.0f);
     int low_level = (int) t_val; // floor cast because x_val non-negative
@@ -78,9 +87,11 @@ void BasicSigmaGenerator::PushLatent(float responsibility, float x_val, float y_
     float delta_low = t_val - low_level;
     float delta_hi = 1.0f-delta_low;
     accumulated_sigma[low_level] += responsibility*delta_hi*y_val;
-    accumulated_weight[low_level] += responsibility*delta_hi;
+    if (do_weight)
+      accumulated_weight[low_level] += responsibility*delta_hi;
     accumulated_sigma[hi_level] += responsibility*delta_low*y_val;
-    accumulated_weight[hi_level] += responsibility*delta_low;
+    if (do_weight)
+      accumulated_weight[hi_level] += responsibility*delta_low;
 }
 
 void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals){
@@ -95,13 +106,34 @@ void BasicSigmaGenerator::AddOneUpdateForHypothesis(vector<float> &prediction, f
        y_val = y_val * skew_estimate*skew_estimate;
      
      float x_val = prediction[j_flow];
-     PushLatent(responsibility,x_val,y_val);
+     PushLatent(responsibility,x_val,y_val, true);
   }
 }
 
+// additional variation from shifting clusters
+void BasicSigmaGenerator::AddShiftUpdateForHypothesis(vector<float> &prediction, vector<float> &mod_prediction, 
+                                                      float discount, float responsibility, float skew_estimate, vector<int> &test_flow){
+  for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
+     int j_flow = test_flow[t_flow];
+     float y_val =prediction[j_flow]-mod_prediction[j_flow]; 
+     y_val = y_val * y_val;
+     y_val *= discount;
+     
+     float x_val = mod_prediction[j_flow];
+     PushLatent(responsibility,x_val,y_val, false);
+  }
+}
+
+void BasicSigmaGenerator::AddShiftCrossUpdate(CrossHypotheses &my_cross, float discount){
+   for (unsigned int i_hyp=1; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
+      AddShiftUpdateForHypothesis(my_cross.predictions[i_hyp], my_cross.mod_predictions[i_hyp], discount, my_cross.responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow);
+   }
+}
+
+
 void BasicSigmaGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
    for (unsigned int i_hyp=1; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
-      AddOneUpdateForHypothesis(my_cross.predictions[i_hyp], my_cross.responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow, my_cross.residuals[i_hyp]);
+      AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], my_cross.responsibility[i_hyp], my_cross.skew_estimate, my_cross.test_flow, my_cross.residuals[i_hyp]);
    }
 }
 
@@ -112,7 +144,7 @@ void BasicSigmaGenerator::AddNullUpdate(CrossHypotheses &my_cross){
   all_flows.assign(my_cross.delta.size(), 0.0f);
   for (unsigned int i_flow=0; i_flow<all_flows.size(); i_flow++)
     all_flows[i_flow] = i_flow;
-  AddOneUpdateForHypothesis(my_cross.predictions[i_hyp], 1.0f, 1.0f, my_cross.test_flow, my_cross.residuals[i_hyp]);
+  AddOneUpdateForHypothesis(my_cross.mod_predictions[i_hyp], 1.0f, 1.0f, my_cross.test_flow, my_cross.residuals[i_hyp]);
 
 }
 
@@ -155,11 +187,19 @@ void BasicSigmaGenerator::UpdateSigmaGenerator(ShortStack &total_theory) {
 // put everything to null
   ResetUpdate();
 
-  //for (unsigned int i_read=0; i_read<total_theory.my_hypotheses.size(); i_read++){
+//  float k_zero = 1.0f;
+  
+  float discount = k_zero/(k_zero+total_theory.valid_indexes.size());
+  
   for (unsigned int i_ndx = 0; i_ndx < total_theory.valid_indexes.size(); i_ndx++) {
     unsigned int i_read = total_theory.valid_indexes[i_ndx];
     AddCrossUpdate(total_theory.my_hypotheses[i_read]);
+    // additional variability from cluster shifting
+    // bayesian multidimensional normal
+    // @TODO: turn off for now while fixing bugs
+    AddShiftCrossUpdate(total_theory.my_hypotheses[i_read], discount);
   }
+  
   DoLatentUpdate();  // new latent predictors for sigma
 }
 

@@ -3,14 +3,13 @@
 // (c) 2011 Life Technologies, Ion Torrent
 //
 
-
 #include <stdio.h>
 #include <math.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
 #include <sys/vfs.h>
-
+#include <stdlib.h>
 #include <openssl/opensslv.h>
 
 #include "AeOSLocal.h"
@@ -64,6 +63,15 @@ struct _AeDemoUpload
     AeChar           pBuffer[BUFSIZ];
 };
 
+#define LINE_LENGTH 64
+typedef struct webProxy_s {
+	int useProxy;
+	AeChar pHost[LINE_LENGTH];
+	AeUInt16 iPort;
+	AeChar pUser[LINE_LENGTH];
+	AeChar pPass[LINE_LENGTH];
+} webProxy_t;
+
 // -- File system list management --
 typedef struct {
 	char	mountedName[256];
@@ -72,7 +80,6 @@ typedef struct {
 } FileSystemList;
 int numFileSystems = 0;
 FileSystemList *fileSystemList = NULL;
-
 
 // globals
 AgentInfo agentInfo;
@@ -98,12 +105,15 @@ UpdateItem updateItem[] = {
 	{STATUS_HARDWARE, 3600, 0},
 };
 int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
+webProxy_t proxyInfo;
 
 int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem);
 void SendVersionInfo(AeDRMDataItem *dataItem);
 void SendServersStatus(AeDRMDataItem *dataItem);
 void GenerateVersionInfo();
 void SendFileServerStatus(AeDRMDataItem *dataItem);
+void checkEnvironmentForWebProxy (webProxy_t *proxyInfo);
+char *getTextUpToDelim(char *start, char delim, char *output, int outputSize);
 
 // file upload callbacks
 static AeBool OnFileUploadBegin(AeInt32 iDeviceId, AeFileUploadSpec **ppUploads, AePointer *ppUserData);
@@ -181,7 +191,6 @@ static void SendContactInfo(AeDRMDataItem *dataItem, const char* contactInfoFile
 		}
 		fclose(fp);
 	}
-
 }
 
 static void SendNetworkStatus(AeDRMDataItem *dataItem, const char* networkInfoFile)
@@ -261,6 +270,7 @@ static void SendHardwareName(AeDRMDataItem *dataItem, const char* nameFile)
 		AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	}
 }
+
 static void SendBiosVersion(AeDRMDataItem *dataItem, const char* nameFile)
 {
 	char buf[256];
@@ -306,6 +316,8 @@ void RSMInit()
 	agentInfo.pgmSerialNumberList = 0;
 
 	time(&curTime); // gets time in seconds since 1970
+
+	checkEnvironmentForWebProxy(&proxyInfo);
 }
 
 void RSMClose()
@@ -392,6 +404,15 @@ int main(int argc, char *argv[])
 	// Axeda debug output on
 	if (verbose > 1)
 		AeDRMSetLogLevel(AeLogDebug);
+
+	if (proxyInfo.useProxy) {
+		printf("Using web proxy: host:%s port:%d\n", proxyInfo.pHost, proxyInfo.iPort);
+		rc = AeWebSetProxy(AeWebProxyProtoHTTP, proxyInfo.pHost, proxyInfo.iPort, proxyInfo.pUser, proxyInfo.pPass);
+		if (rc == AeEOK)
+			printf("Web proxy was set successfully.\n");
+		else
+			fprintf(stderr, "Failed to set proxy, connecting directly: %s\n", AeGetErrorString(rc));
+	}
 
 	// set up a few options
 	rc = AeWebSetSSL(AeWebCryptoMedium, AeFalse, NULL);
@@ -851,7 +872,60 @@ void SendVersionInfo(AeDRMDataItem *dataItem)
 	GetSoftwareVersion("Postal-Code", "Location", dataItem, LOC_FILE);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 }
- 
+
+void checkEnvironmentForWebProxy (webProxy_t *proxyInfo)
+{
+	FILE *fp;
+	char line[LINE_LENGTH];
+
+	// initialize web proxy struct
+	proxyInfo->useProxy =   0;
+	proxyInfo->pHost[0] = '\0';
+	proxyInfo->iPort    =   0;
+	proxyInfo->pUser[0] = '\0';
+	proxyInfo->pPass[0] = '\0';
+
+	fp = fopen("/etc/environment", "r");
+	if (!fp)
+		return;
+
+	while (fgets(line, LINE_LENGTH, fp)) {
+		// sample http_proxy line:
+		// http_proxy=http://user:pass@1.2.3.4:5
+		const char *token = "http_proxy=http://";
+		const int tlen = strlen(token);
+		if (strstr(line, token)) {
+			char buf[LINE_LENGTH];
+			char *pos = line + tlen;
+
+			pos = getTextUpToDelim(pos, ':', proxyInfo->pUser, LINE_LENGTH);
+			pos = getTextUpToDelim(pos, '@', proxyInfo->pPass, LINE_LENGTH);
+			pos = getTextUpToDelim(pos, ':', proxyInfo->pHost, LINE_LENGTH);
+			pos = getTextUpToDelim(pos, '\0', buf, LINE_LENGTH);
+
+			proxyInfo->iPort = atoi(buf);
+			proxyInfo->useProxy = 1;
+			break;
+		}
+	}
+	fclose(fp);
+}
+
+char *getTextUpToDelim(char *start, char delim, char *output, int outputSize)
+{
+	char *pos;
+	int   ii = 0;
+	char *end = strchr(start, delim);
+	if (!end)
+		end = output + strlen(output);
+
+	for (pos = start; pos < end && *pos != '\n' && ii < outputSize; ++pos)
+		output[ii++] = *pos;
+	output[ii] = '\0';
+
+	return end + 1; // so next search can pick up where this one left off
+}
+
 /******************************************************************************
  * Callbacks
  ******************************************************************************/

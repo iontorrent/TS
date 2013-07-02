@@ -870,7 +870,7 @@ class PlannedExperiment(models.Model):
                           'flowsInOrder' : '',
                           'ftpStatus' : 'Complete',
                           'displayName' : '',
-
+                          'storageHost' : ''
             }
 
             logger.debug("PDD models.save_plannedExperiment_association() self_id=%d exp_kwargs=..." %(self.id))
@@ -3648,6 +3648,7 @@ class DMFileStat (models.Model):
         ('A', 'Acknowledged'),      # user acknowledges to proceed with action
         ('SA', 'Archive Pending'),  # Selected for archive manual action
         ('SE', 'Export Pending'),   # Selected for export manual action
+        ('SD', 'Delete Pending'),   # Selected for delete (after suspended)
         ('AG', 'Archiving'),
         ('DG', 'Deleting'),
         ('EG', 'Exporting'),
@@ -3720,7 +3721,7 @@ class DMFileStat (models.Model):
         return bool(self.action_state in ['DG','DD'])
 
     def in_process(self):
-        return bool(self.action_state in ['AG','DG','EG','SA','SE'])
+        return bool(self.action_state in ['AG','DG','EG','SA','SE','SD'])
 
 
 class DownloadMonitor(models.Model):

@@ -31,7 +31,7 @@ public:
    float generic_exp_tail_fit(float *trc, float *bkg_trace, TimeCompression& time_c, float tau, float mer_guess, float t_mid_nuc, bool debug = false);
 
    // fits the specified points to an exponential-decay + dc offset and returns the dc-offset term
-   float fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> ftimes, float tau, float *exp_amp = NULL, float *mse_err = NULL, bool debug = false);
+   float fit_exp_tail_to_data(float *trc, int start_pt, int end_pt, std::vector<float> &ftimes, float tau, float *exp_amp = NULL, float *mse_err = NULL, bool debug = false);
 
    // convolves the kernel (normalized) with the input data
    void smooth_kern(float *out, float *in, float *kern, int dist, int npts);

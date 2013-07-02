@@ -51,6 +51,12 @@ void StoreGenotypeForOneSample(vcf::Variant ** candidate_variant, bool isNoCall,
     string& sampleName = *its;
     //cout << "VariantAssist: SampleName = " << sampleName << " my_sample = " << my_sample_name << endl;
     map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
+  map<string, vector<string> >::iterator it;
+  it = sampleOutput.find("GT");
+  if (it != sampleOutput.end())    sampleOutput["GT"].clear();
+  it = sampleOutput.find("GQ");
+   if (it != sampleOutput.end())     sampleOutput["GQ"].clear();
+   
     if (sampleName.compare(my_sample_name) == 0) { //sample of interest
       //cout << "isNocall " << isNoCall << " genotype = " << my_genotype << endl;
       if (isNoCall) {
@@ -88,7 +94,7 @@ void SetFilteredStatus(vcf::Variant ** candidate_variant, bool isNoCall, bool is
 
 bool PrefilterSummaryStats(VariantBook &summary_stats, ControlCallAndFilters &my_controls, bool *isFiltered, string *filterReason, stringstream &infoss) {
   stringstream filterReasonStr;
-  if (summary_stats.getStrandBias() > my_controls.filter_hp_indel.strand_bias_threshold) {
+  if (summary_stats.getStrandBias(my_controls.sbias_tune) > my_controls.filter_hp_indel.strand_bias_threshold) {
     *isFiltered = true;
     filterReasonStr << "STDBIAS>";
     filterReasonStr << my_controls.filter_hp_indel.strand_bias_threshold;
@@ -258,6 +264,20 @@ float ComputeXBias(long int plus_var, long int plus_depth, long int neg_var, lon
   return((mean_plus-mean_minus)*(mean_plus-mean_minus)/(var_plus+var_minus+var_zero));
 }
 
+float ComputeTunedXBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float proportion_zero){
+  float mean_plus = (plus_var+0.5f)/(plus_depth+1.0f);
+  float mean_minus = (neg_var+0.5f)/(neg_depth+1.0f);
+  float var_plus = (plus_var+0.5f)*(plus_depth-plus_var+0.5f)/((plus_depth+1.0f)*(plus_depth+1.0f)*(plus_depth+2.0f));
+  float var_minus = (neg_var+0.5f)*(neg_depth-neg_var+0.5f)/((neg_depth+1.0f)*(neg_depth+1.0f)*(neg_depth+2.0f));
+  
+  float mean_zero = (plus_var+neg_var+0.5f)/(plus_depth+neg_depth+1.0f);
+  float var_zero = proportion_zero*mean_zero*proportion_zero*(1.0f-mean_zero); // variance proportional to frequency to handle near-somatic cases
+  
+  // squared difference in mean frequency, divided by variance of quantity, inflated by potential minimal variance
+  return((mean_plus-mean_minus)*(mean_plus-mean_minus)/(var_plus+var_minus+var_zero));
+}
+
+
 float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth){
   float strand_bias;
     long int num = max((long int)plus_var*neg_depth, (long int)neg_var*plus_depth);
@@ -270,61 +290,70 @@ float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var
   return(strand_bias);
 }
 
+float ComputeTransformStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish){
+  // trying to compute f_plus/f_neg
+  //  transform to (1-x)/(1+x) to bring range between -1,1
+  // take absolute value for filtering
+  // tune_fish shoudl be something like 0.5 on standard grounds
+  if (tune_fish<0.001f)
+    tune_fish = 0.001f;
+  
+  // need to handle safety factor properly
+  // "if we had tune_fish extra alleles of both reference and alternate for each strand, how would we distribute them across the strands preserving the depth ratio we see"
+  // because constant values get hit by depth ratio when looking at 0/0
+  // to give tune_fish expected alleles on each strand, given constant depth
+  float relative_tune_fish = 1.0f- (plus_depth+neg_depth+2.0f*tune_fish)/(plus_depth+neg_depth+4.0f*tune_fish);
+  
+  // expected extra alleles to see on positive and negative strand
+  float expected_positive = relative_tune_fish * plus_depth; 
+  float expected_negative = relative_tune_fish * neg_depth;  
+  
+  // bias calculation based on observed counts plus expected safety level
+  float pos_val = (plus_var + expected_positive) * (neg_depth + 2.0f*expected_negative);
+  float neg_val = (neg_var + expected_negative) * (plus_depth + 2.0f*expected_positive);
+  float strand_bias = (pos_val - neg_val)/(pos_val + neg_val+0.001f);  // what if depth on one strand is 0, then of course we can't detect any bias
+  
+//  cout << plus_var << "\t" << plus_depth << "\t" << neg_var << "\t" << neg_depth << "\t" << tune_fish << "\t" << strand_bias << endl;
+  
+  return(strand_bias);
+}
 
-float VariantBook::getStrandBias() {
+
+// revised strand bias
+// runs from 0 = unbiased
+// to 1 = total bias to one strand or the other
+// with a safety value this time to prevent "1 allele" from causing enormous strand bias
+float VariantBook::getStrandBias(float tune_bias){
+  float full_strand_bias = fabs(ComputeTransformStrandBias(plusVariant, getPlusDepth(), negVariant, getNegDepth(), tune_bias));
+  //@TODO: revert to full range parameters
+  // this ugly transformation makes the range 0.5-1, just like the old strand bias
+  // so we don't have to change parameter files
+  float old_style_strand_bias = (full_strand_bias+1.0f)/2.0f;
+  return(old_style_strand_bias);
+}
+
+
+/*float VariantBook::getStrandBias() {
   strandBias = ComputeStrandBias(plusVariant,getPlusDepth(),negVariant,getNegDepth());
   
-/*  long int num = max((long int)plusVariant*getNegDepth(), (long int)negVariant*getPlusDepth());
-  long int denum = (long int)plusVariant*getNegDepth() + (long int)negVariant*getPlusDepth();
-  if (denum == 0)
-    strandBias = 1.0;
-  else {
-    strandBias = (float)num/denum;
-  }
-  if (DEBUG) {
-    cout << "STDBIAS Calculation : RefPosition = " << "refPosition" << " PlusVariant = " << plusVariant << " NegVariant = " << negVariant << "Depth = " << getDepth() << " Plus Depth = " << getPlusDepth() << " Neg Depth = " << getNegDepth() ;
-    cout << " Numerator = " << num << " denominator = " << denum << " stdbias = " << strandBias << " PlusMean = " << getPlusMean() << " NegMean = " << getNegMean() << endl;
-  }*/
   return strandBias;
-}
+}*/
 
 float VariantBook::getBaseStrandBias() {
   float stdBias = ComputeStrandBias(plusBaseVariant,getPlusBaseDepth(),negBaseVariant,getNegBaseDepth());
-/*  float stdBias = 0;
-  long int num =  max((long int)plusBaseVariant*getNegBaseDepth(), (long int)negBaseVariant*getPlusBaseDepth());
-  long int denum = (long int)(plusBaseVariant)*getNegBaseDepth() + (long int)(negBaseVariant)*getPlusBaseDepth();
-  if (denum == 0)
-    stdBias = 1.0;
-  else {
-    stdBias = (float)num/denum;
-  }
-  if (DEBUG) {
-    cout << "Basespace STDBIAS Calculation : RefPosition = " << "refPosition" << " PlusBaseVariant = " << plusBaseVariant << " NegBaseVariant = " << negBaseVariant << "Depth = " << getDepth() << " Plus Depth = " << getPlusBaseDepth() << " Neg Depth = " << getNegBaseDepth() ;
-    cout << " Numerator = " << num << " denominator = " << denum << " stdbias = " << stdBias << " PlusMean = " << getPlusMean() << " NegMean = " << getNegMean() << endl;
-  }*/
+
   return stdBias;
 }
 
 float VariantBook::getRefStrandBias() {
   float refBias = ComputeStrandBias(getPlusDepth()-plusVariant,getPlusDepth(),getNegDepth()-negVariant,getNegDepth());
-/*  float refBias = 0;
-  long int num = max((long int)(getPlusDepth()-plusVariant)*getNegDepth(), (long int)(getNegDepth()-negVariant)*getPlusDepth());
-  long int denum = (long int)(getPlusDepth()-plusVariant)*getNegDepth() + (long int)(getNegDepth()-negVariant)*getPlusDepth();
-  if (denum == 0)
-    refBias = 1.0;
-  else {
-    refBias = (float)num/denum;
-  }
-  if (DEBUG) {
-    cout << "REF STDBIAS Calculation : RefPosition = " << "refPosition" << " PlusVariant = " << plusVariant << " NegVariant = " << negVariant << "Depth = " << getDepth() << " Plus Depth = " << getPlusDepth() << " Neg Depth = " << getNegDepth() ;
-    cout << " Numerator = " << num << " denominator = " << denum << " stdbias = " << refBias << " PlusMean = " << getPlusMean() << " NegMean = " << getNegMean() << endl;
-  }*/
+
   return refBias;
 
 }
 
-float VariantBook::GetXBias(float var_zero){
-  return(ComputeXBias(plusVariant,getPlusDepth(),negVariant,getNegDepth(), var_zero));
+float VariantBook::GetXBias(float tune_xbias){
+  return(ComputeTunedXBias(plusVariant,getPlusDepth(),negVariant,getNegDepth(), tune_xbias));
 }
 
 void VariantBook::setAltAlleleFreq(float altFreq) {

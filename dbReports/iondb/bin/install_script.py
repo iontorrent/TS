@@ -230,7 +230,7 @@ def add_global_config():
         print 'GlobalConfig added'
 
 
-def runtype_add(type,description):
+def runtype_add_obsolete(type,description):
     """Helper function to add runtype if it does not exist """
 
     rt = models.RunType.objects.filter(runType=type)
@@ -920,17 +920,18 @@ if __name__=="__main__":
         print traceback.format_exc()
         sys.exit(1)
 
-    #try to add runTypes
-    try:
-        runtype_add("GENS","Generic Sequencing")
-        runtype_add("AMPS","AmpliSeq DNA")
-        runtype_add("TARS","TargetSeq")
-        runtype_add("WGNM","Whole Genome")
-        runtype_add("AMPS_RNA", "AmpliSeq RNA")
-    except:
-        print 'Adding runType failed'
-        print traceback.format_exc()
-        sys.exit(1)
+
+#    #try to add runTypes
+#    try:
+#        runtype_add("GENS","Generic Sequencing")
+#        runtype_add("AMPS","AmpliSeq DNA")
+#        runtype_add("TARS","TargetSeq")
+#        runtype_add("WGNM","Whole Genome")
+#        runtype_add("AMPS_RNA", "AmpliSeq RNA")
+#    except:
+#        print 'Adding runType failed'
+#        print traceback.format_exc()
+#        sys.exit(1)
 
     #try to add variant frequencies
     try:

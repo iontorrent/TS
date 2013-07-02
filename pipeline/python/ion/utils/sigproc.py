@@ -107,7 +107,7 @@ def generate_raw_data_traces(libKey, tfKey, floworder, SIGPROC_RESULTS):
         printtime("ERROR: %s is missing" % libRawPath)
 
 
-def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
+def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
 
     bfmaskPath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.bin')
     bfmaskstatspath = os.path.join(SIGPROC_RESULTS,'analysis.bfmask.stats')
@@ -141,13 +141,16 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
     except:
         traceback.print_exc()
 
-    #################################################
-    # Merge individual block bead metrics files     #
-    #################################################
+    ######################################################################
+    # Merge individual block bead metrics files and generate bead stats  #
+    ######################################################################
     printtime("Merging individual block bead metrics files")
 
     try:
         cmd = 'BeadmaskMerge -i analysis.bfmask.bin -o ' + bfmaskPath
+        if exclusionMask:
+            cmd += ' -e %s' % exclusionMask
+        
         for subdir in dirs:
             subdir = os.path.join(SIGPROC_RESULTS,subdir)
             if isbadblock(subdir, "Merging individual block bead metrics files"):
@@ -163,7 +166,8 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
         printtime("BeadmaskMerge failed")
 
 
-
+    ''' Not needed: BeadmaskMerge will generate analysis.bfmask.stats with exclusion mask applied
+    
     ###############################################
     # Merge individual block bead stats files     #
     ###############################################
@@ -185,7 +189,7 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title):
     except:
         printtime("ERROR: No analysis.bfmask.stats files were found to merge")
         traceback.print_exc()
-
+    '''
 
     ########################################################
     #Make Bead Density Plots                               #

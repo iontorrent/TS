@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 57236 $")
+__version__ = filter(str.isdigit, "$Revision: 60453 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -347,6 +347,17 @@ if __name__=="__main__":
                 os.mkdir(env['BASECALLER_RESULTS'])
             except:
                 traceback.print_exc()
+        
+        # copy files used in displaying report
+        report_files = ['analysis.bfmask.stats','Bead_density_raw.png','Bead_density_contour.png','Bead_density_20.png',
+            'Bead_density_70.png','Bead_density_200.png','Bead_density_1000.png']
+        for filepath in report_files:
+            try:
+                if os.path.exists(os.path.join(sigproc_target,filepath)):
+                    shutil.copy(os.path.join(sigproc_target,filepath), ".")
+            except:
+                printtime(traceback.format_exc())
+
     else:
         printtime("WARNING: start point not defined, create new report from raw data")
         runFromDC = True

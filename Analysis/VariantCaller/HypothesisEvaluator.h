@@ -15,8 +15,6 @@
 #include <assert.h>
 #include "stdlib.h"
 #include "ctype.h"
-#include "TreephaserSSE.h"
-#include "DPTreephaser.h"
 #include "SpliceVariantsToReads.h"
 
 
@@ -79,16 +77,14 @@ class HypothesisEvaluator {
 
 };
 
-//@TODO: rationalize all these calls to treephaser to be coherent
-// copypaste to get the code booted up - refactor away
-int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
-          const vector<float>& PhaseParameters,
-          const ion::FlowOrder& flow_order,
-          const vector<string>& Hypotheses,
-          const int& startFlow,
-          vector<vector<float> >& predictions,
-          vector<vector<float> >& normalizedMeasurements,
-          int applyNormalization,
-          int verbose);
+
+// Function to calculate predictions
+int CalculateHypPredictions(
+		PersistingThreadObjects  &thread_objects,
+        ExtendedReadInfo         &my_read,
+        InputStructures          &global_context,
+        const vector<string>     &Hypotheses,
+        vector<vector<float> >   &predictions,
+        vector<vector<float> >   &normalizedMeasurements);
 
 #endif // HYPOTHESISEVALUATOR_H

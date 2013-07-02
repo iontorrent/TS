@@ -10,9 +10,10 @@ from django.core import urlresolvers
 from django import shortcuts
 from iondb.rundb.models import Message, Results, EventLog
 from iondb.rundb.data import dmactions
-from iondb.rundb.data.dmactions import slugify
+from iondb.rundb.data.project_msg_banner import project_msg_banner
 
 logger = get_task_logger('data_management')
+
 
 def _store_message(user, pk, status, action):
     url = urlresolvers.reverse('dm_log', args=(pk,))
@@ -35,47 +36,13 @@ def _store_messages(user, pk, status_list, action):
     return func(msg, route=user)
 
 
-def project_msg_banner(user, project_msg, action):
-    try:
-        msg = ''
-        thistag = ''
-        logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
-        for pk,status_list in project_msg.iteritems():
-            url = urlresolvers.reverse('dm_log', args=(pk,))
-            report = Results.objects.get(id=pk)
-            msg += "(%s) %s " % (report.resultsName, action.title())
-            for category,status in status_list.iteritems():
-                msg += " %s, " % str(category)
-                msg += status
-                grpstatus = status
-                thistag = "%s_%s_%s" % (str(pk),action,slugify(category))
-            msg += " <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>View Report Log</a></br>" % (url)
-            logger.debug("MESSAGE: %s" % msg)
-
-        #If message already exists (ie, scheduled task) delete it.
-        Message.objects.filter(tags=thistag).delete()
-
-        if len(project_msg) > 1:
-            thistag = "%s_%s_%s" % ('project',action,slugify(category))
-
-        if grpstatus == 'scheduled':
-            func = Message.info
-        elif grpstatus == 'success':
-            func = Message.success
-        else:
-            func = Message.error
-    except:
-        func = Message.error
-        logger.exception(traceback.format_exc())
-    return func(msg, route=user, tags=thistag)
-
-
-@task
-def action_group(user, categories, action, dmfilestat_dict, user_comment, backup_directory=None):
+@task(queue="periodic")
+def action_group(user, categories, action, dmfilestat_dict, user_comment, backup_directory=None, confirmed=False):
     '''Single task to group multiple results' actions status.
     Cycle through the dmfilestat objects per result_id, then per category.
     DELETE action is performed immediately
     ARCHIVE/EXPORT change action state to Pending, actual action will be launched by data_management.py periodic task.
+    TEST action prints selected files to log.
     '''
     project_msg = {}
     for result_pk, DMFileStats in dmfilestat_dict.iteritems():
@@ -88,8 +55,11 @@ def action_group(user, categories, action, dmfilestat_dict, user_comment, backup
 
             for dmfilestat in DMFileStats.filter(dmfileset__type=selection_id):
                 try:
-                    if action == dmactions.DELETE:
-                        delete_action(user, user_comment, dmfilestat)
+                    if action == dmactions.TEST:
+                        test_action(user, user_comment, dmfilestat)
+                        status = "success"
+                    elif action == dmactions.DELETE:
+                        delete_action(user, user_comment, dmfilestat, confirmed=confirmed)
                         status = "success"
                     elif action == dmactions.ARCHIVE or action == dmactions.EXPORT:
                         status = dmactions.set_action_pending(user, user_comment, action, dmfilestat, backup_directory)
@@ -113,35 +83,45 @@ def action_group(user, categories, action, dmfilestat_dict, user_comment, backup
     #Generate a status message per group of results?
     project_msg_banner(user, project_msg, action)
 
-@task
-def delete_action(user, user_comment, dmfilestat):
+@task(queue="periodic")
+def delete_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False, confirmed=False):
     ''' Delete Action by wrapping invocation with celery task for sync / async execution'''
     try:
-        dmactions.delete(user, user_comment, dmfilestat)
+        dmactions.delete(user, user_comment, dmfilestat, lockfile, msg_banner, confirmed)
     except:
         raise
 
 
-@task
-def archive_action(user, user_comment, dmfilestat):
+@task(queue="periodic")
+def archive_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
     ''' Archive Action by wrapping invocation with celery task for sync / async execution'''
     try:
         backup_directory = dmfilestat.archivepath if dmfilestat.action_state == 'SA' else None
-        dmactions.archive(user, user_comment, dmfilestat, backup_directory)
+        dmactions.archive(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory)
     except:
         raise
 
 
-@task
-def export_action(user, user_comment, dmfilestat):
+@task(queue="periodic")
+def export_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
     ''' Export Action by wrapping invocation with celery task for sync / async execution'''
     try:
         backup_directory = dmfilestat.archivepath if dmfilestat.action_state == 'SE' else None
-        dmactions.export(user, user_comment, dmfilestat, backup_directory)
+        dmactions.export(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory)
     except:
         raise
 
-@task
+
+@task(queue="periodic")
+def test_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = False):
+    ''' Test Action by wrapping invocation with celery task for sync / async execution'''
+    try:
+        backup_directory = dmfilestat.archivepath
+        dmactions.test(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory)
+    except:
+        raise
+
+@task(queue="periodic")
 def update_dmfilestats_diskspace(dmfilestat):
     ''' Task to update DMFileStat.diskspace '''
     dmactions.update_diskspace(dmfilestat)

@@ -126,7 +126,16 @@
 
         "min_ratio_reads_non_sse_strand":["If there is a predicted error, and the opposite strand may be fine, tentatively evaluate.",
                                 "Allowed values: ",
-                                "Recommended values "]
+                                "Recommended values "],
+                                
+        "do_snp_realignment":["Realign reads in the vicinity of SNP candidates.",
+                              "Allowed values: 0 = do not realign, 1 = realign",
+                              "Recommended value: (germline) 0, (somatic) 1"],
+                                
+        "suppress_recalibration": ["Recalibration values from pipeline used or not (experimental)",
+                                   "No related fields, changes basecalling behavior",
+                                   "Allowed values: 0 = allow recalibration, 1 = don't allow recalibration",
+                                   "Recommended value: (non-proton), 1, proton=0"]
 
     },
 

@@ -34,7 +34,7 @@
         <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
             <tr>
                 <td> #= (barcode_name) ? barcode_name : "No barcode" #</td>
-                <td> ${sample} </td>
+                <td> #= (barcode_name) ? sample : "None" #</td>
                 <td> #=numberWithCommas(total_bases)# </td>
                 <td> #=numberWithCommas(Q20_bases)# </td>
                 <td> #=numberWithCommas(read_count)# </td>

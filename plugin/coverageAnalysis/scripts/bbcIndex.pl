@@ -142,7 +142,9 @@ while(1)
     $bciCoordCheck = 1;
     next;
   }
-  while( $pos >= $bciCoordCheck )
+  # add in region length in case region spans boundary
+  $pos += $cd >> 3;
+  while( $pos > $bciCoordCheck )
   {
     #print "Recorded offset $bciChromIndex @ $seekDepthChrom for $pos >= $bciBlocksize\n" if( $logopt );
     $bciChromOffsets[$bciChromIndex++] = $seekDepthChrom;

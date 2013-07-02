@@ -14,6 +14,47 @@
 #include "Mask.h"
 #include "LinuxCompat.h"
 #include "Utils.h"
+#include "Region.h"
+
+bool ReadExclusionMask(int excludeMask[][2], const char *excludeFileName, int wt, int ht)
+{
+  // read exclusion mask, stored as [start end] values
+  FILE *excludefp = NULL;
+  char* path = GetIonConfigFile(excludeFileName);
+  if ( path ){
+    
+    fopen_s ( &excludefp, path, "rt" );
+    if ( excludefp ){
+      fprintf( stdout, "Reading Exclusion mask from file: %s\n", path);
+      int nChar = 64;
+      char *line;
+      line = new char[nChar];
+
+      // first line is chip size
+      int maskSize[2];
+      int bytes_read = getline(&line,(size_t *)&nChar,excludefp);
+      sscanf ( line,"%d\t%d",&maskSize[0], &maskSize[1] );
+      if ( (maskSize[0] != wt) || (maskSize[1] != ht) ){
+          fprintf( stdout, "Error: Incorrect exclusion mask size.\n" );
+          return(false);
+      }
+
+      for ( int y = 0; y < ht; y++ )
+      {
+        bytes_read = getline(&line,(size_t *)&nChar,excludefp);
+        if ( bytes_read > 0 ){
+          sscanf ( line,"%d\t%d",&excludeMask[y][0], &excludeMask[y][1] );
+        }
+      }
+      delete [] line;
+      fclose(excludefp);
+      return(true);
+    } 
+  } else {
+    fprintf( stdout, "Unable to find exclusion mask file %s\n", excludeFileName);
+  }
+  return(false);
+}
 
 int main ( int argc, char *argv[] )
 {
@@ -22,7 +63,8 @@ int main ( int argc, char *argv[] )
   char* outputFileName = NULL;
   std::vector<std::string> folders;
   int c;
-  while ( ( c = getopt ( argc, argv, "i:o:ehm:v" ) ) != -1 ) {
+  char* excludeFileName = NULL;
+  while ( ( c = getopt ( argc, argv, "i:o:e:hm:v" ) ) != -1 ) {
     switch ( c ) {
     case 'i':
       beadfindFileName = strdup ( optarg );
@@ -37,6 +79,9 @@ int main ( int argc, char *argv[] )
     case 'v':   //version
       fprintf ( stdout, "%s", IonVersion::GetFullVersion ( "BeadmaskMerge" ).c_str() );
       return ( 0 );
+      break;
+    case 'e':
+      excludeFileName = strdup ( optarg );
       break;
     default:
       fprintf ( stdout, "whatever" );
@@ -81,6 +126,12 @@ int main ( int argc, char *argv[] )
   //  mask value
   uint16_t mask = 0;
 
+  // read exclusion mask from file
+  bool applyExclusionMask = false;
+  int excludeMask[ht][2];
+  if (excludeFileName){
+    applyExclusionMask = ReadExclusionMask(excludeMask, excludeFileName, wt, ht);
+  }
 
   for ( unsigned int f=0;f<folders.size();f++ ) {
 
@@ -120,11 +171,24 @@ int main ( int argc, char *argv[] )
 
         //fullmask.SetBarcodeId(x+xoffset,y+yoffset,mask); // same as next line
         fullmask[wt* ( yoffset+y ) +xoffset+x] = mask;
+
+        // apply exclusion mask
+        if ( applyExclusionMask  && ( excludeMask[yoffset+y][0] != excludeMask[yoffset+y][1] ) ) {
+          if ( (xoffset+x < excludeMask[yoffset+y][0]) || (xoffset+x > excludeMask[yoffset+y][1]) ) 
+            fullmask[wt* ( yoffset+y ) +xoffset+x] = MaskExclude;
+        }
       }
     }
     fclose ( fp );
   }
-  fullmask.WriteRaw ( outputFileName );
-
+  
+  // write mask and stats files
+  Region wholeChip(0, 0, wt, ht);
+  std::string outputStatsFile = outputFileName;
+  outputStatsFile = outputStatsFile.substr(0,outputStatsFile.size()-3) + "stats";
+  
+  fullmask.UpdateBeadFindOutcomes ( wholeChip, outputFileName, 0, 0, outputStatsFile.c_str() );
+  //fullmask.WriteRaw ( outputFileName );
+    
   exit ( 0 );
 }

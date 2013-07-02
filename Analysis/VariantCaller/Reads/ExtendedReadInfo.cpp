@@ -5,7 +5,7 @@
 //! @brief    HP Indel detection
 
 #include "ExtendedReadInfo.h"
-
+#include "ion_util.h"
 
 void ExtendedReadInfo::GetUsefulTags(int DEBUG) {
 
@@ -25,10 +25,20 @@ void ExtendedReadInfo::GetUsefulTags(int DEBUG) {
     is_happy_read = false;
     exit(-1);
   }
+  if (!alignment.Name.empty()) {
+    well_rowcol.resize(2);
+    ion_readname_to_rowcol(&alignment.Name[0], &well_rowcol[0], &well_rowcol[1]);
+    // extract runid while we are at it
+       
+    int end_runid = alignment.Name.find(":");
+    runid =alignment.Name.substr(0,end_runid);
+  }
+
+  map_quality = alignment.MapQuality;
 
   if (is_happy_read) {
     for (size_t counter = 0; counter < quantizedMeasures.size(); counter++) {
-      measurementValue[counter] = ((float)quantizedMeasures.at(counter)/256);
+      measurementValue.at(counter) = ((float)quantizedMeasures.at(counter)/256);
     }
   }
   // ad-hoc corrector
@@ -110,7 +120,7 @@ void ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, 
         break;
     }
   }
-  // Update start flow to flow of first non-soft-clipped base <- spicing only takes mapped bases
+  // Update start flow to flow of first non-soft-clipped base <- splicing only takes mapped bases
   if (is_forward_strand)
     start_flow = flowIndex.at(startSC);
   else
@@ -131,6 +141,7 @@ bool ExtendedReadInfo::UnpackThisRead(InputStructures &global_context, const str
 
   GetUsefulTags(DEBUG);
   if (is_happy_read) {
+    measurementValue.resize(global_context.flowOrder.length(), 0.0);
     CreateFlowIndex(global_context.flowOrder);
     UnpackAlignmentInfo(local_contig_sequence, alignment.Position);
   }

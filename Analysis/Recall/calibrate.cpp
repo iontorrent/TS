@@ -1354,6 +1354,8 @@ int main (int argc, const char *argv[])
 
   bool performMerge   = opts.GetFirstBoolean('-', "performMerge", false);
 
+  bool hpmodelMerge = opts.GetFirstBoolean('-', "hpmodelMerge", false);
+
   bool skipDroop = opts.GetFirstBoolean('-', "skipDroop", false);
 
 
@@ -1417,7 +1419,96 @@ int main (int argc, const char *argv[])
 
     delete mergedHPTable;
 
-  } else {
+  } else if(hpmodelMerge){
+      //load HPTables and merge it into one HPTable to produce fuse.hpmodel.txt
+      string mergeParentDir = opts.GetFirstString ('-', "mergeParentDir", "./");
+      vector<string> blockFolders=vector<string>();
+      DIR *dp;
+      struct dirent *dirp;
+      if((dp  = opendir(mergeParentDir.c_str())) == NULL) {
+          cout << "Error(" << errno << ") opening " << mergeParentDir << endl;
+          return errno;
+      }
+
+      while ((dirp = readdir(dp)) != NULL) {
+          if(dirp->d_type == 0x4 and dirp->d_name[0] != '.' and strcmp(dirp->d_name, "sigproc_results") != 0 and strcmp(dirp->d_name, "basecaller_results") != 0)
+           blockFolders.push_back(string(dirp->d_name));
+      }
+      closedir(dp);
+
+      string header = "";
+      int xMin = 1000000;
+      int xMax = 0;
+      int yMin = 1000000;
+      int yMax = 0;
+      int xSpan = -1;
+      int ySpan = -1;
+      int flowStart = 1000000;
+      int flowEnd = 0;
+      int flowSpan = -1;
+      int maxHPLength = -1;
+
+      list<string> modelEntries = list<string>(); //no sorting operation, mainly serve as container
+
+      for(int ind = 0; ind < (int)blockFolders.size(); ++ind){
+        //open a file
+        string hpModelFileName = mergeParentDir+"/"+blockFolders[ind]+"/basecaller_results/recalibration/hpModel.txt";
+        ifstream model_file;
+        model_file.open(hpModelFileName.c_str());
+        //getHeader, append all model entries and update the ranges
+        if (!model_file.fail()) {
+            getline(model_file, header); //always overwrite the header, which is same across all hpModel files
+            int flowStartLocal, flowEndLocal, flowSpanLocal, xMinLocal, xMaxLocal, xSpanLocal, yMinLocal, yMaxLocal, ySpanLocal, max_hp_calibratedLocal;
+            model_file >> flowStartLocal >> flowEndLocal >> flowSpanLocal >> xMinLocal >> xMaxLocal >> xSpanLocal >> yMinLocal >> yMaxLocal >> ySpanLocal >>  max_hp_calibratedLocal;
+            if(flowStart > flowStartLocal)
+                flowStart = flowStartLocal;
+            if(flowEnd < flowEndLocal)
+                flowEnd = flowEndLocal;
+            if(flowSpan == - 1)
+                flowSpan = flowSpanLocal; //assuming flowSpanLocal would be same across blocks
+            if(xMin > xMinLocal)
+                xMin = xMinLocal;
+            if(xMax < xMaxLocal)
+                xMax = xMaxLocal;
+            if(xSpan == - 1)
+                xSpan = xSpanLocal;
+            if(yMin > yMinLocal)
+                yMin = yMinLocal;
+            if(yMax < yMaxLocal)
+                yMax = yMaxLocal;
+            if(ySpan == - 1)
+                ySpan = ySpanLocal;
+            if(maxHPLength == -1)
+                maxHPLength = max_hp_calibratedLocal;
+            //add rest of lines to modelEntries; it is fine to store all lines into memory before final writeout
+            while(model_file.good()){
+              string line;
+              getline(model_file, line);
+              if(!line.empty())
+                  modelEntries.push_back(line);
+            }
+        }
+        model_file.close();
+      }
+
+      //only proceed if modelEntries is not empty
+      if(modelEntries.size() == 0)
+          return 0;
+
+      //produce fuse.hpModel.txt
+      string fuseModelFileName = mergeParentDir+"/basecaller_results/recalibration/hpModel.txt";;
+      FILE * hpTableFile = fopen(fuseModelFileName.c_str(),"w");
+      if(hpTableFile == 0){
+          printf("%s does not exist", fuseModelFileName.c_str());
+          return 1;
+      }
+      //print header
+      fprintf(hpTableFile, "%s\n", header.c_str());
+      fprintf(hpTableFile, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, maxHPLength);
+      for (std::list<string>::iterator it = modelEntries.begin(); it != modelEntries.end(); it++)
+          fprintf(hpTableFile, "%s\n", it->c_str());
+      fclose(hpTableFile);
+  } else{
       string input_bam  = opts.GetFirstString ('i', "input", "");
       int xMin          = opts.GetFirstInt    ('-', "xMin", 0);
       int xMax          = opts.GetFirstInt    ('-', "xMax", 4000);

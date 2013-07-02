@@ -39,10 +39,10 @@
 
 #include <Variant.h>
 
-
 #include "InputStructures.h"
 #include "ExtendedReadInfo.h"
 #include "ExtendParameters.h"
+
 
 using namespace std;
 using namespace BamTools;
@@ -62,7 +62,8 @@ public:
   int                      num_map_qv_filtered;  //!< Gives the number of reads that where filtered due to mapping qv.
 
   //! @brief  Creates a stack of reads that provide evidence in the case of our candidate variant
-  void StackUpOneVariant(BamMultiReader * bamReader, const string & local_contig_sequence,
+  //void StackUpOneVariant(BamMultiReader * bamReader, const string & local_contig_sequence,
+  void StackUpOneVariant(PersistingThreadObjects &thread_objects,
                          int variant_start_pos, int variant_end_pos, vcf::Variant ** candidate_variant,
                          ExtendParameters * parameters, InputStructures &global_context);
 
@@ -84,7 +85,7 @@ public:
   //! @brief  Performing reservoir sampling on reads
   //! @param[in] current_read         ExtendedReadInfo of current read alignment
   //! @param[in] downsample_coverage  Desired maximum coverage
-  void ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned int max_coverage);
+  void ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned int max_coverage, int DEBUG);
 
   StackPlus(){
     no_coverage = false;

@@ -16,7 +16,7 @@
 		<div class="modal-body">
 			<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
 			<form class="form-horizontal" id="modal_dm_actions_form">
-			<table class="data-table result_edit" cellpadding="5px">
+			<table id="dm_actions_table" class="data-table" cellpadding="5px">
 				<thead>
 					<th></th>
 					<th><input id="select_all" type="checkbox"/></th>
@@ -51,23 +51,25 @@
 					<td>
 						<small>{{entry.description}}</small>
 					</td>
-					{% if entry.diskspace == -1 %}
-					<td> updating... </td>
+					{% if entry.diskspace == "*" %}
+					<td>{{entry.diskspace}}</td>
 					{% else %}
-					<td> {{entry.diskspace|floatformat}} </td>
+					<td class="diskspace">{{entry.diskspace|floatformat|default:"updating..."}}</td>
 					{% endif %}
 					<td> {{entry.action_state}} </td>
 				</tr>
 				{% endfor %}
 				</tbody>
 			</table>
-
 			</form>
 		</div>
 		<div class="modal-footer">
+			{% if isDMDebug %}
+				<a href="{% url dm_action_selected results_pks 'test' %}" name="Test" class="btn dm_action_btn" title="Show files in the log file">Print Selected</a>
+			{% endif %}
 			<a href="{% url dm_action_selected results_pks 'delete' %}" name="Delete" class="btn dm_action_btn" title="Delete all files in selected categories">Delete Selected</a>
 			<a href="{% url dm_action_selected results_pks 'archive' %}" name="Archive" class="btn dm_action_btn" title="Move all files in selected categories off local filesystem">Archive Selected</a>
-			<a href="{% url dm_action_selected results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Delete all files in selected categories">Export Selected</a>
+			<a href="{% url dm_action_selected results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Copies all files in selected categories">Export Selected</a>
 			<a class="btn" href="#" data-dismiss="modal">Cancel</a>
 		</div>
 		<div id="confirm_action" style="text-align:center; display: none;">
@@ -108,7 +110,6 @@
 		return false;
 	});
 
-
 	$('#select_all').click(function(){
 		var checked = $(this).is(":checked");
         $("#modal_dm_actions :checkbox").each(function(){
@@ -133,7 +134,6 @@
 		} else {
 			$('#modal_dm_actions #backup_directory').hide();
 		}
-
 		// handle warnings
 		$('#modal_dm_actions #confirm_warning').hide();
 		$('#modal_dm_actions #confirm_warning_btn').click(function(e){
@@ -149,7 +149,6 @@
 				$('#modal_dm_actions #error-messages').empty().append('<p class="error"> Please select one or more File Categories. </p>').show();
 				return;
 			}
-
 			var json = {
 				"categories": categories,
 				"comment": $('#modal_dm_actions #dm_comment').val(),
@@ -183,8 +182,38 @@
 				$('#modal_dm_actions #error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
 			});
 		});
-
 	});
 
+	$(function() {
+		var update_timer = setInterval(update_diskspace, 10000);
+		function update_diskspace(){
+			if($("#dm_actions_table td:contains('updating...')").length){
+				$.get("/rundb/api/v1/compositedatamanagement/?format=json&id__in={{results_pks}}", function(data){
+					console.log('update_diskspace: get', data);
+					var diskspace = [0,0,0,0];
+					$.each(data.objects, function(){
+						diskspace[0]=_add_numeric(this.sigproc_diskspace, diskspace[0]);
+						diskspace[1]=_add_numeric(this.basecall_diskspace, diskspace[1]);
+						diskspace[2]=_add_numeric(this.output_diskspace, diskspace[2]);
+						diskspace[3]=_add_numeric(this.misc_diskspace, diskspace[3]);
+					});
+					// update displayed values
+					$("#dm_actions_table .diskspace").each(function(i){
+						if($.isNumeric(diskspace[i]))
+							$(this).text(diskspace[i].toFixed(1));
+					});
+				}).fail(function(){
+					clearInterval(update_timer);
+				});
+			}else{
+				clearInterval(update_timer);
+			}
+		}
+	});
+
+	function _add_numeric(value1, value2){
+		return ($.isNumeric(value1) && $.isNumeric(value2)) ? value1+value2 : NaN;
+	}
+	
 </script>
 </div>

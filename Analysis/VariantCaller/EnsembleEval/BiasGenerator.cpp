@@ -6,10 +6,11 @@
 
 // bias generator handles latent variables representing sources of bias in measurement
 // the trivial example is by strand
-void BasicBiasGenerator::GenerateBiasByStrand(vector<float> &delta, vector<int> &test_flow, int strand_key, vector<float> &new_residuals){
+void BasicBiasGenerator::GenerateBiasByStrand(vector<float> &delta, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions){
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
      int j_flow = test_flow[t_flow];
      new_residuals[j_flow] -= delta[j_flow]*latent_bias[strand_key];
+     new_predictions[j_flow] -=delta[j_flow]*latent_bias[strand_key];
   }
 }
 
@@ -17,7 +18,7 @@ void BasicBiasGenerator::UpdateResiduals(CrossHypotheses &my_cross){
   // move all residuals in direction of bias
    // in theory might have a hypothesis/bias interaction
    for (unsigned int i_hyp=0; i_hyp<my_cross.residuals.size(); i_hyp++){
-      GenerateBiasByStrand(my_cross.delta, my_cross.test_flow, my_cross.strand_key, my_cross.residuals[i_hyp]);
+      GenerateBiasByStrand(my_cross.delta, my_cross.test_flow, my_cross.strand_key, my_cross.residuals[i_hyp], my_cross.mod_predictions[i_hyp]);
    }
 }
 

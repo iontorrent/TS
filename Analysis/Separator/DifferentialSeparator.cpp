@@ -1421,8 +1421,6 @@ void DifferentialSeparator::LoadKeySDats(PJobQueue &jQueue, TraceStore<double> &
   }
   cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
   cout.flush();
-  string sepFile = opts.outData + ".trace.txt";
-  ofstream out (sepFile.c_str());
   vector<int> rowStarts;
   vector<int> colStarts;
   size_t nRow = traceStore.GetNumRows();
@@ -1715,8 +1713,6 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreMatrix<doub
   if (keys.empty()) {  DifferentialSeparator::MakeStadardKeys (keys); }
   cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
   cout.flush();
-  string sepFile = opts.outData + ".trace.txt";
-  ofstream out (sepFile.c_str());
   vector<int> rowStarts;
   vector<int> colStarts;
   size_t nRow = traceStore.GetNumRows();

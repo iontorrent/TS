@@ -82,7 +82,7 @@ class VariantBook {
     float getAltAlleleFreq();
     void setAltAlleleFreq(float altFreq);
     float getRefStrandBias();
-    float getStrandBias();
+    float getStrandBias(float tune_bias);
     uint16_t getNegVariant();
     void incrementNegVariant();
     uint16_t getPlusVariant();
@@ -147,5 +147,10 @@ void InsertGenericInfoTag(vcf::Variant ** candidate_variant, bool nocall, string
 void SetFilteredStatus(vcf::Variant ** candidate_variant, bool isNoCall, bool isFiltered, bool suppress_no_calls);
 void StoreGenotypeForOneSample(vcf::Variant ** candidate_variant, bool isNoCall, string &my_sample_name, string &my_genotype, float genotype_quality);
 void NullGenotypeAllSamples(vcf::Variant ** candidate_variant);
+
+float ComputeXBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float var_zero);
+float ComputeTunedXBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float proportion_zero);
+float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth);
+float ComputeTransformStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish);
 
 #endif //VARIANTASSIST_H

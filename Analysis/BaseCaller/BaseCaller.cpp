@@ -38,6 +38,10 @@
 
 using namespace std;
 
+const float abFactor = 75.0;
+const float abLowerBound = -1.633333;
+const float abUpperBound = 1.633333;
+
 
 //! @brief    Information needed by BaseCaller worker threads
 //! @ingroup  BaseCaller
@@ -62,6 +66,8 @@ struct BaseCallerContext {
   int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
   bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
   int                       windowSize;             //!< Normalization window size
+
+  bool						save_hpmodel;
 
   // Important outside entities accessed by BaseCaller
   Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
@@ -179,6 +185,7 @@ void PrintHelp()
   printf ("     --calibration-file      FILE       Enable recalibration using tables from provided file [off]\n");
   printf ("     --model-file            FILE       Enable recalibration using model from provided file [off]\n");
   printf ("     --phase-estimation-file FILE       Enable reusing phase estimation from provided file [off]\n");
+  printf ("     --save-hpmodel			BOOL       Enable to save hpModel values to bam [off]\n");
   printf ("\n");
 
   BaseCallerFilters::PrintHelp();
@@ -259,7 +266,77 @@ void SaveBaseCallerProgress(int percent_complete, const string& output_directory
   SaveJson(progress_json, filename_json);
 }
 
+void SaveModelFileToBamComments(vector<string> &comments, OptArgs &opts, string &run_id, int block_col_offset, int block_row_offset){
+    //@TODO: doesn't anyone believe in function calls anymore?
+    string model_file_name = opts.GetFirstString ('-', "model-file", "");
+    if(!model_file_name.empty())
+    {
+      ifstream model_file;
+      model_file.open(model_file_name.c_str());
+      if(!model_file.fail()) 
+      {
+        Json::Value hpJson(Json::objectValue);
 
+        char buf[1000];
+        string id = run_id;
+
+        sprintf(buf, ".block_X%d_Y%d", block_col_offset, block_row_offset);
+        id += buf;
+        hpJson["MagicCode"] = "6d5b9d29ede5f176a4711d415d769108"; // md5hash "This uniquely identifies json comments for recalibration."
+        hpJson["MasterKey"] = id;
+        hpJson["MasterCol"] = block_col_offset;
+        hpJson["MasterRow"] = block_row_offset;
+
+        string comment_line;
+        getline(model_file, comment_line); //skip the comment time
+
+        int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
+        model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >> max_hp_calibrated;
+        hpJson[id]["flowStart"] = flowStart;
+        hpJson[id]["flowEnd"] = flowEnd;
+        hpJson[id]["flowSpan"] = flowSpan;
+        hpJson[id]["xMin"] = xMin;
+        hpJson[id]["xMax"] = xMax;
+        hpJson[id]["xSpan"] = xSpan;
+        hpJson[id]["yMin"] = yMin;
+        hpJson[id]["yMax"] = yMax;
+        hpJson[id]["ySpan"] = ySpan;
+        hpJson[id]["max_hp_calibrated"] = max_hp_calibrated;
+        
+        char flowBase;
+        int refHP;
+        float paramA, paramB;
+        int item = 0;
+        while(model_file.good())
+        {
+          model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
+          hpJson[id]["modelParameters"][item]["flowBase"] = flowBase;
+          hpJson[id]["modelParameters"][item]["flowStart"] = flowStart;
+          hpJson[id]["modelParameters"][item]["flowEnd"] = flowEnd;
+          hpJson[id]["modelParameters"][item]["xMin"] = xMin;
+          hpJson[id]["modelParameters"][item]["xMax"] = xMax;
+          hpJson[id]["modelParameters"][item]["yMin"] = yMin;
+          hpJson[id]["modelParameters"][item]["yMax"] = yMax;
+          hpJson[id]["modelParameters"][item]["refHP"] = refHP;
+          hpJson[id]["modelParameters"][item]["paramA"] = paramA;
+          hpJson[id]["modelParameters"][item]["paramB"] = paramB;
+          ++item;
+        }
+        
+        model_file.close();     
+        Json::FastWriter writer;
+        string str = writer.write(hpJson);
+            // trim unwanted newline added by writer
+            int last_char = str.size()-1;
+            if (last_char>=0) {
+                if (str[last_char]=='\n'){
+                    str.erase(last_char,1);
+                }
+            }
+        comments.push_back(str);
+      }
+    }
+}
 
 
 //! @brief    Main function for BaseCaller executable
@@ -363,6 +440,8 @@ int main (int argc, const char *argv[])
   int calibration_training      = opts.GetFirstInt    ('-', "calibration-training", 0);
   string phase_file_name        = opts.GetFirstString ('s', "phase-estimation-file", "");
   bc.windowSize                 = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
+
+  bc.save_hpmodel				        = opts.GetFirstBoolean('-', "save-hpmodel", true);
 
   bc.process_tfs = true;
   int subsample_library = -1;
@@ -593,13 +672,18 @@ int main (int argc, const char *argv[])
   //
   // Step 1. Open wells and output BAM files
   //
+  vector<string> comments;
+  if(bc.save_hpmodel)
+  {
+     SaveModelFileToBamComments(comments, opts, bc.run_id, bc.block_col_offset, bc.block_row_offset);
+  }
 
   bc.lib_writer.Open(output_directory, datasets, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
       "BaseCaller",
       basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
       basecaller_json["BaseCaller"]["command_line"].asString(),
       basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-      false);
+      false, comments);
 
   if (bc.process_tfs) {
     bc.tf_writer.Open(output_directory, datasets_tf, num_regions_x*num_regions_y, bc.flow_order, bc.keys[1].bases(),
@@ -607,7 +691,7 @@ int main (int argc, const char *argv[])
         basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
         basecaller_json["BaseCaller"]["command_line"].asString(),
         basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-        false);
+        false, comments);
   }
 
   //! @todo Random subset should also respect options -r and -c
@@ -622,14 +706,14 @@ int main (int argc, const char *argv[])
         basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
         basecaller_json["BaseCaller"]["command_line"].asString(),
         basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-        true);
+        true, comments);
 
     bc.unfiltered_trimmed_writer.Open(unfiltered_trimmed_directory, datasets_unfiltered_trimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
         "BaseCaller",
         basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
         basecaller_json["BaseCaller"]["command_line"].asString(),
         basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-        true);
+        true, comments);
   }
 
   //
@@ -779,6 +863,9 @@ void * BasecallerWorker(void *input)
   vector<uint16_t>  flowgram(bc.flow_order.num_flows());
   vector<int16_t>   flowgram2(bc.flow_order.num_flows());
   vector<int16_t> filtering_details(13,0);
+
+  vector<char> abParams;
+  abParams.reserve(256);
 
   vector<uint8_t>   quality(3*bc.flow_order.num_flows());
   vector<int>       base_to_flow (3*bc.flow_order.num_flows());             //!< Flow of in-phase incorporation of each base.
@@ -941,7 +1028,9 @@ void * BasecallerWorker(void *input)
           aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
           bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
           if(aPtr != 0 && bPtr != 0)
+		  {
             treephaser_sse.SetAsBs(aPtr, bPtr, true);
+		  }
         }
         treephaser_sse.NormalizeAndSolve(read);
         treephaser.SetModelParameters(cf, ie, 0);//to remove
@@ -961,7 +1050,7 @@ void * BasecallerWorker(void *input)
           aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
           bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
 //          printf("a: %6.4f; b: %6.4f\n", (*aPtr)[0][0][1], (*bPtr)[0][0][1]);
-          treephaser.SetAsBs(*aPtr, *bPtr, true);
+          treephaser.SetAsBs(aPtr, bPtr, true);
         }
         treephaser.NormalizeAndSolve5(read, bc.flow_order.num_flows()); // sliding window adaptive normalization
         treephaser.ComputeQVmetrics(read);

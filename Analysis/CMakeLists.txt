@@ -414,6 +414,7 @@ include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Bookkeeping")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Reads")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Splice")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/Filter")
+include_directories("${PROJECT_SOURCE_DIR}/realignment")
 
 add_executable(tvc
   VariantCaller/VariantCaller.cpp
@@ -427,7 +428,6 @@ add_executable(tvc
 
   VariantCaller/Bookkeeping/stats.cpp
   VariantCaller/Bookkeeping/MiscUtil.cpp
-
   VariantCaller/Bookkeeping/ExtendParameters.cpp 
   VariantCaller/Bookkeeping/InputStructures.cpp
   VariantCaller/Bookkeeping/VcfFormat.cpp
@@ -441,6 +441,7 @@ add_executable(tvc
   VariantCaller/Splice/ClassifyVariant.cpp
   VariantCaller/Splice/ErrorMotifs.cpp
   VariantCaller/Splice/SpliceVariantsToReads.cpp
+  VariantCaller/Splice/SpliceVariantHypotheses.cpp
 
   VariantCaller/Filter/DecisionTreeData.cpp
   VariantCaller/Filter/VariantAssist.cpp
@@ -489,11 +490,14 @@ add_executable(tvc
 
   BaseCaller/PIDloop.cpp
   BaseCaller/DPTreephaser.cpp
+  BaseCaller/TreephaserSSE.cpp
+  BaseCaller/RecalibrationModel.cpp
   Util/OptArgs.cpp
+  realignment/Realigner.cpp
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} z ${ION_LEVMAR_LIBS} pthread)
+target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} z ${ION_LEVMAR_LIBS} file-io pthread)
 add_dependencies(tvc levmar IONVERSION bamtools)
 install(TARGETS tvc DESTINATION bin)
 
@@ -512,6 +516,18 @@ add_executable(tvcvalidator
 )
 target_link_libraries(tvcvalidator ${ION_BAMTOOLS_LIBS} z ion-analysis pthread)
 add_dependencies(tvcvalidator IONVERSION bamtools)
+
+add_executable(tvcutils
+  VariantCaller/tvcutils/tvcutils.cpp
+  VariantCaller/tvcutils/prepare_hotspots.cpp
+  Util/OptArgs.cpp
+  ${PROJECT_BINARY_DIR}/IonVersion.cpp
+  Util/Utils.cpp
+  Image/ChipIdDecoder.cpp
+)
+#target_link_libraries(tvcutils ion-analysis)
+add_dependencies(tvcutils IONVERSION)
+install(TARGETS tvcutils DESTINATION bin)
 
 
 # Use local source to build tabix and bgzip. In the future just fetch latest tabix package
@@ -897,6 +913,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_316.bin" DESTINATION $
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_316v2.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_318.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_324.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_1.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_0.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -922,6 +940,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316.param" DESTINATION ${ION_IN
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316v2.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_900.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17_ampliseq_exome.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
 

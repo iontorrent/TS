@@ -6,30 +6,27 @@
 
 #include "HypothesisEvaluator.h"
 
+// Function to fill in prediceted signal values
+int CalculateHypPredictions(
+		PersistingThreadObjects  &thread_objects,
+        ExtendedReadInfo         &my_read,
+        InputStructures          &global_context,
+        const vector<string>     &Hypotheses,
+        vector<vector<float> >   &predictions,
+        vector<vector<float> >   &normalizedMeasurements) {
 
-//@TODO: rationalize all these calls to treephaser to be coherent
-// copypaste to get the code booted up - refactor away
-int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
-                           const vector<float>& PhaseParameters,
-                           const ion::FlowOrder& flow_order,
-                           const vector<string>& Hypotheses,
-                           const int& startFlow,
-                           vector<vector<float> >& predictions,
-                           vector<vector<float> >& normalizedMeasurements,
-                           int applyNormalization,
-                           int verbose) {
   // Create return data structures
   predictions.resize(Hypotheses.size());
   normalizedMeasurements.resize(Hypotheses.size());
 
-  // Step 1: Loading data to a read
+  // --- Step 1: Loading data to a read
 
-  int nFlows = min(flow_order.num_flows(), (int)NormalizedMeasurements.size());
+  int nFlows = min(global_context.treePhaserFlowOrder.num_flows(), (int)my_read.measurementValue.size());
 
   BasecallerRead read;
   read.key_normalizer = 1;
-  read.raw_measurements.reserve(flow_order.num_flows());
-  read.raw_measurements = NormalizedMeasurements;
+  read.raw_measurements.reserve(global_context.treePhaserFlowOrder.num_flows());
+  read.raw_measurements = my_read.measurementValue;
 
   for (unsigned int iFlow = 0; iFlow < read.raw_measurements.size(); iFlow++)
     if (isnan(read.raw_measurements[iFlow])) {
@@ -37,49 +34,73 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
       read.raw_measurements[iFlow] = 0;
     }
 
-  read.raw_measurements.resize(flow_order.num_flows(), 0);
+  read.raw_measurements.resize(global_context.treePhaserFlowOrder.num_flows(), 0);
   read.normalized_measurements = read.raw_measurements;
   read.sequence.clear();
-  read.sequence.reserve(2*flow_order.num_flows());
-  read.prediction.assign(flow_order.num_flows(), 0);
-  read.additive_correction.assign(flow_order.num_flows(), 0);
-  read.multiplicative_correction.assign(flow_order.num_flows(), 1.0);
+  read.sequence.reserve(2*global_context.treePhaserFlowOrder.num_flows());
+  read.prediction.assign(global_context.treePhaserFlowOrder.num_flows(), 0);
+  read.additive_correction.assign(global_context.treePhaserFlowOrder.num_flows(), 0);
+  read.multiplicative_correction.assign(global_context.treePhaserFlowOrder.num_flows(), 1.0);
 
-  // Step 2: Solve beginning of the read
+  // --- Step 1b: Initialize Treephaser and Recalibration
 
   int steps, window_size = 50;
-  DPTreephaser dpTreephaser(flow_order);
-  // Do not use droop to be consistent with with the way TreePhaser is used in the Analysis pipeline
-  dpTreephaser.SetModelParameters(PhaseParameters.at(0), PhaseParameters.at(1), PhaseParameters.at(2));
-  //TreephaserSSE sseTreephaser(flow_order, 50);
-  //sseTreephaser.SetModelParameters(PhaseParameters.at(0), PhaseParameters.at(1));
+  thread_objects.dpTreephaser.SetModelParameters(my_read.phase_params.at(0), my_read.phase_params.at(1), my_read.phase_params.at(2));
+  if (global_context.use_SSE_basecaller)
+	  thread_objects.treephaser_sse.SetModelParameters(my_read.phase_params.at(0), my_read.phase_params.at(1));
+
+  // Set up HP recalibration model: hide the recal object behind a mask so we can use the map to select
+  thread_objects.dpTreephaser.DisableRecalibration();   // Disable use of previously loaded recalibration model
+  thread_objects.treephaser_sse.DisableRecalibration();
+
+  if (global_context.do_recal.recal_is_live()) {
+    // query recalibration structure using row, column, entity
+    // look up entity here: using row, col, runid
+    // note: perhaps do this when we first get the read, exploit here
+    string found_key = global_context.do_recal.FindKey(my_read.runid, my_read.well_rowcol.at(1), my_read.well_rowcol.at(0));
+    MultiAB multi_ab;
+    global_context.do_recal.getAB(multi_ab, found_key, my_read.well_rowcol.at(1), my_read.well_rowcol.at(0));
+    if(multi_ab.Valid()) {
+      thread_objects.dpTreephaser.SetAsBs(multi_ab.aPtr, multi_ab.bPtr, true);
+      thread_objects.treephaser_sse.SetAsBs(multi_ab.aPtr, multi_ab.bPtr, true);
+      // in either case, we will have to provide the predicted intensity by simulateRead using recalibration
+      thread_objects.dpTreephaser.EnableRecalibration();    // Enable the use of the recalibration model
+      thread_objects.treephaser_sse.EnableRecalibration();  // in the 'Solve' function
+    }
+  }
+
+  // --- Step 2: Solve beginning of the read
 
   // Solve beginning of maybe clipped read
-  int until_flow = min((startFlow+20), nFlows);
-  if (startFlow>0) {
-    //sseTreephaser.SolveRead(read, 0, until_flow);
-    dpTreephaser.Solve(read, until_flow, 0); // XXX
+  int until_flow = min((my_read.start_flow+20), nFlows);
+  if (my_read.start_flow>0) {
+	if (global_context.use_SSE_basecaller)
+	  thread_objects.treephaser_sse.SolveRead(read, 0, until_flow);
+	else
+	  thread_objects.dpTreephaser.Solve(read, until_flow, 0);
   }
+
   // StartFlow clipped? Get solved HP length at startFlow
   unsigned int base = 0;
   int flow = 0;
   int HPlength = 0;
   while (base<read.sequence.size()) {
-    while (flow < flow_order.num_flows() and flow_order.nuc_at(flow) != read.sequence[base])
+    while (flow < global_context.treePhaserFlowOrder.num_flows()
+            and global_context.treePhaserFlowOrder.nuc_at(flow) != read.sequence[base])
       flow++;
-    if (flow > startFlow or flow == flow_order.num_flows())
+    if (flow > my_read.start_flow or flow == global_context.treePhaserFlowOrder.num_flows())
       break;
-    if (flow == startFlow)
+    if (flow == my_read.start_flow)
       HPlength++;
     base++;
   }
-  if (verbose>0)
-    printf("Solved %d bases until (not incl.) flow %d. HP of height %d at flow %d.\n", base, flow, HPlength, startFlow);
+  if (global_context.DEBUG>2)
+    printf("Solved %d bases until (not incl.) flow %d. HP of height %d at flow %d.\n", base, flow, HPlength, my_read.start_flow);
   // Get HP size at the start of the reference, i.e., Hypotheses[0]
   int count = 1;
   while (Hypotheses[0][count] == Hypotheses[0][0])
     count++;
-  if (verbose>0)
+  if (global_context.DEBUG>2)
     printf("Hypothesis starts with an HP of length %d\n", count);
   // Adjust the length of the prefix and erase extra solved bases
   if (HPlength>count)
@@ -89,7 +110,8 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
   read.sequence.erase(read.sequence.begin()+base, read.sequence.end());
   unsigned int prefix_size = read.sequence.size();
 
-  // Step 3: creating predictions for the individual hypotheses
+  // --- Step 3: creating predictions for the individual hypotheses
+
   vector<BasecallerRead> hypothesesReads(Hypotheses.size());
   int max_last_flow  = 0;
 
@@ -97,15 +119,15 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
 
     hypothesesReads[r] = read;
     // add hypothesis sequence to prefix
-    for (base=0; base<Hypotheses[r].length() and base<(2*(unsigned int)flow_order.num_flows()-prefix_size); base++)
+    for (base=0; base<Hypotheses[r].length() and base<(2*(unsigned int)global_context.treePhaserFlowOrder.num_flows()-prefix_size); base++)
       hypothesesReads[r].sequence.push_back(Hypotheses[r][base]);
 
     // get last main incorporating flow
     int last_incorporating_flow = 0;
     base = 0;
     flow = 0;
-    while (base<hypothesesReads[r].sequence.size() and flow<flow_order.num_flows()) {
-      while (flow<nFlows and flow_order.nuc_at(flow) != hypothesesReads[r].sequence[base])
+    while (base<hypothesesReads[r].sequence.size() and flow<global_context.treePhaserFlowOrder.num_flows()) {
+      while (flow<nFlows and global_context.treePhaserFlowOrder.nuc_at(flow) != hypothesesReads[r].sequence[base])
         flow++;
       last_incorporating_flow = flow;
       if (last_incorporating_flow > max_last_flow)
@@ -114,17 +136,23 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
     }
 
     // Simulate sequence
-    dpTreephaser.Simulate(hypothesesReads[r], flow_order.num_flows());
+    thread_objects.dpTreephaser.Simulate(hypothesesReads[r], global_context.treePhaserFlowOrder.num_flows());
 
     // Adaptively normalize each hypothesis if desired
-    if (applyNormalization>0) {
+    if (global_context.apply_normalization) {
       steps = last_incorporating_flow / window_size;
-      dpTreephaser.WindowedNormalize(hypothesesReads[r], steps, window_size);
+      thread_objects.dpTreephaser.WindowedNormalize(hypothesesReads[r], steps, window_size);
     }
 
     // Solver simulates beginning of the read and then fills in the remaining clipped bases
-    //sseTreephaser.SolveRead(hypothesesReads[r], last_incorporating_flow, flow_order.num_flows());
-    dpTreephaser.Solve(hypothesesReads[r], nFlows, last_incorporating_flow);
+    if (global_context.use_SSE_basecaller)
+    	thread_objects.treephaser_sse.SolveRead(hypothesesReads[r], last_incorporating_flow, nFlows);
+    else
+    	thread_objects.dpTreephaser.Solve(hypothesesReads[r], nFlows, last_incorporating_flow);
+
+    // Apply HP recalibration distortion to the predictions
+    if (global_context.do_recal.recal_is_live())
+    	thread_objects.dpTreephaser.SimulateRecalibrated(hypothesesReads[r], nFlows);
 
     // Store predictions and adaptively normalized measurements
     predictions[r] = hypothesesReads[r].prediction;
@@ -134,8 +162,8 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
   }
 
   // --- verbose ---
-  if (verbose>0) {
-    printf("Calculating predictions for %d hypotheses starting at flow %d:\n", (int)Hypotheses.size(), startFlow);
+  if (global_context.DEBUG>2) {
+    printf("Calculating predictions for %d hypotheses starting at flow %d:\n", (int)Hypotheses.size(), my_read.start_flow);
     for (unsigned int i=0; i<Hypotheses.size(); ++i) {
       for (unsigned int j=0; j<Hypotheses[i].length(); ++j)
         printf("%c", Hypotheses[i][j]);
@@ -152,7 +180,7 @@ int CalculateHypPredictions(const vector<float>& NormalizedMeasurements,
       printf("\n");
     }
     printf("Phasing Parameters, cf: %f ie: %f dr: %f \n Predictions: \n",
-    		PhaseParameters.at(0), PhaseParameters.at(1), PhaseParameters.at(2));
+    		my_read.phase_params.at(0), my_read.phase_params.at(1), my_read.phase_params.at(2));
     for (unsigned int i=0; i<hypothesesReads.size(); ++i) {
       for (unsigned int j=0; j<predictions[i].size(); ++j)
         printf("%f", predictions[i][j]);

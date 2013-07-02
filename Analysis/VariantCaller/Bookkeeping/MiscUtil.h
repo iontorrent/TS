@@ -45,6 +45,8 @@ std::string convertToString(const T& r) {
     return iss.str();
 }
 
+void stringToUpper(string &s);
+
 void getBaseName(const char *path, char *basename);
 
 template<typename T>

@@ -8,9 +8,12 @@ import os.path
 import sys
 import traceback
 import zipfile
+import subprocess
 import call_api as api
 from pprint import pprint
 from iondb.rundb.plan import ampliseq
+from iondb.rundb.json_field import JSONEncoder
+from decimal import Decimal
 
 def get_common_prefix(files):
     """For a list of files, a common path prefix and a list file names with
@@ -87,7 +90,7 @@ def pre_process():
         parse.print_help()
         sys.exit(1)
 
-    meta = json.load(args.meta_file)
+    meta = json.load(args.meta_file, parse_float=Decimal)
     meta.update({
         "is_ampliseq": None,
         "primary_bed": None,
@@ -103,18 +106,48 @@ def pre_process():
     if len(files) == 1 and files[0].endswith('.bed'):
         meta['is_ampliseq'] = False
         meta['primary_bed'] = files[0]
+    elif len(files) == 1 and files[0].endswith('.vcf') and meta['hotspot']:
+        # convert vcf to bed
+        target_filename = os.path.join(args.path,os.path.basename(files[0])) + '.bed'
+        convert_command = '/usr/local/bin/tvcutils prepare_hotspots'
+        convert_command += '  --input-vcf %s' % files[0]
+        convert_command += '  --output-bed %s' % target_filename
+        convert_command += '  --reference /results/referenceLibrary/tmap-f3/%s/%s.fasta' % (meta["reference"],meta["reference"]) #TODO: is this just name or full path??
+        convert_command += '  --filter-bypass on'
+        process = subprocess.Popen(convert_command, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
+        for line in process.communicate()[0].splitlines():
+            api.post('log', upload='/rundb/api/v1/contentupload/%s/' % str(args.upload_id), text=line.strip())
+        meta['is_ampliseq'] = False
+        meta['primary_bed'] = target_filename
+    
+        '''
+        elif len(files) == 1 and files[0].endswith('.vcf') and meta['hotspot']:
+        # convert vcf to bed
+        target_filename = os.path.join(args.path,os.path.basename(files[0])) + '.bed'
+        convert_command = '/usr/local/bin/tvcutils prepare_hotspots'
+        convert_command += '  --input-vcf %s' % files[0]
+        convert_command += '  --output-bed %s' % target_filename
+        convert_command += '  --reference /results/referenceLibrary/tmap-f3/%s/%s.fasta' % (meta["reference"],meta["reference"]) #TODO: is this just name or full path??
+        convert_command += '  --filter-bypass on'
+        process = subprocess.Popen(convert_command, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
+        for line in process.communicate()[0]:
+            api.post('log', upload='/rundb/api/v1/contentupload/%s/' % str(args.upload_id), text=line.strip())
+        meta['is_ampliseq'] = False
+        meta['primary_bed'] = target_filename
+        '''
+
     elif "plan.json" in files:
         print("Found ampliseq")
         meta['is_ampliseq'] = True
-        plan_data = json.load(open(os.path.join(args.path, "plan.json")))
+        plan_data = json.load(open(os.path.join(args.path, "plan.json")), parse_float=Decimal)
         version, design = ampliseq.handle_versioned_plans(plan_data)
         meta['design'] = design
         plan = design['plan']
         try:
             meta['primary_bed'] = plan['designed_bed']
             meta['secondary_bed'] = plan['hotspot_bed']
-            if 'reference' not in meta:
-                meta['reference'] = plan['genome'].lower()
+            if not meta.get("reference", None):
+                meta['reference'] = design['genome'].lower()
         except KeyError as err:
             api.patch("contentupload", args.upload_id, status="Error: malformed AmpliSeq archive")
             raise
@@ -124,7 +157,7 @@ def pre_process():
 
     args.meta_file.truncate(0)
     args.meta_file.seek(0)
-    json.dump(meta, args.meta_file)
+    json.dump(meta, args.meta_file, cls=JSONEncoder)
     api.patch("contentupload", args.upload_id, meta=meta)
 
 

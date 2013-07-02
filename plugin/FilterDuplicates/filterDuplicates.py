@@ -80,7 +80,7 @@ def main(options):
       #data = reformat_data(data)
   #fh.close()
   # write the html
-  header = ['Filtered Bam File','Percent Duplicate Reads Removed','Percent Reads Reaching Adaptor']
+  header = ['Filtered Bam File','Percent Duplicate Reads Removed','Percent Reads Reaching Adapter']
   data = reformat_data(data)
   fout = open('FilteredBam_block.html','w')
   print_html(fout, header, data)

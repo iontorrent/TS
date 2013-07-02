@@ -66,8 +66,10 @@ def generate_wells_beadogram2(basecaller, sigproc, beadogram_path=None):
     wells_ax = fig.add_subplot(121)
     lib_ax = fig.add_subplot(122)
 
-    available_wells =  int(beadfind["total wells"]) - int(beadfind["excluded wells"])
-
+    if "adjusted addressable wells" in beadfind:
+        available_wells = int(beadfind["adjusted addressable wells"])
+    else:
+        available_wells = int(beadfind["total wells"]) - int(beadfind["excluded wells"])
 
     suffixes = ('k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
     def formatter(major, minor):
@@ -122,8 +124,11 @@ def generate_wells_beadogram(basecaller, sigproc, beadogram_path=None):
             result = ",%03d%s" % (r, result)
         return "%d%s" % (x, result)
 
+    if "adjusted addressable wells" in beadfind:
+        available_wells = int(beadfind["adjusted addressable wells"])
+    else:
+        available_wells = int(beadfind["total wells"]) - int(beadfind["excluded wells"])
 
-    available_wells =  int(beadfind["total wells"]) - int(beadfind["excluded wells"])
 
     # Row 1: Loading
     loaded_wells = int(beadfind["bead wells"])

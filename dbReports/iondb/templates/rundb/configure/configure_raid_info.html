@@ -1,0 +1,34 @@
+{% extends "rundb/configure/base.html" %}
+{% block sub-nav %}
+    <li class="active"><a href="{% url configure_about %}">About</a></li>
+    <li><a href="{% url configure_references %}">References</a></li>
+    <li><a href="{% url configure_services %}">Services</a></li>
+    <li><a href="{% url configure_plugins %}">Plugins</a></li>
+    <li><a href="{% url configure_configure %}">Configure</a></li>
+    <li><a href="{% url configure_account %}">Accounts</a></li>
+{% endblock sub-nav %}
+{% block content %}
+<div id="main" class="content clearfix">
+    <h1>RAID Info</h1>
+    {% if raid_stats %}
+        <table>
+        {% for slot in raid_stats %}
+            {% cycle '<tr><td>' '<td>' %}
+            <table cellpadding="5px" style="border: 1px solid #D6D6D6;">
+            {% for key, value in slot %}
+                {% if forloop.first %} <tr style="font-weight:bold;"> {% else %} <tr> {% endif %}
+                    <td>{{ key }}</td>
+                    <td>{{value}}</td>
+                </tr>
+            {% endfor %}
+            </table>
+            {% cycle '</td>' '</td></tr>'%}
+        {% endfor %}
+        </table>
+    {% else %}
+      	<p><b>No RAID statistics available</b></p>
+    {% endif %}
+
+</div>
+
+{% endblock content %}

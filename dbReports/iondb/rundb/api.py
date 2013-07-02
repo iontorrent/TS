@@ -2553,6 +2553,7 @@ class CompositeDataManagementResource(ModelResource):
                     bundle.data['%s_keep' % t] = dmfilestat.getpreserved()
                 if dmfilestat.in_process():
                     bundle.data['in_process'] = True
+                bundle.data['%s_diskspace' % t] = dmfilestat.diskspace
             except:
                 pass
 
@@ -2578,7 +2579,7 @@ class CompositeDataManagementResource(ModelResource):
                         qset = qset & Q(experiment__storage_options='KI')
                     else:
                         qset = qset & Q(dmfilestat__preserve_data=True)
-                    qset = qset & ~Q(dmfilestat__action_state__in=['AG','DG','AD','DD'])
+                    qset = qset & Q(dmfilestat__action_state__in=['L','S','N','A','SE','EG','E'])
                 elif state_filter == 'P':
                     qset = qset &  Q(dmfilestat__action_state__in=['AG','DG','EG','SA','SE','S','N','A'])
                 else:
@@ -2641,7 +2642,7 @@ class MonitorPlannedExperimentResource(ModelResource):
 def monitor_comparator(bundle):
     return bundle.data['timeStamp']
 
-chips = dict((c.name, c.description) for c in models.Chip.objects.all())
+chips = dict((c.name, c) for c in models.Chip.objects.all())
 
 class MonitorExperimentResource(ModelResource):
 
@@ -2655,10 +2656,13 @@ class MonitorExperimentResource(ModelResource):
         bundle.data['results'].sort(key=monitor_comparator)
         bundle.data['results'].reverse()
 
-        chipDescription = chips.get(bundle.obj.chipType, "")
-        if not chipDescription:
-            chipDescription = chips.get(bundle.obj.chipType[:3], bundle.obj.chipType)
-        bundle.data['chipDescription'] = chipDescription
+        chip = chips.get(bundle.obj.chipType, None) or chips.get(bundle.obj.chipType[:3], None)
+        if chip:
+            bundle.data['chipDescription'] = chip.description
+            bundle.data['chipInstrumentType'] = chip.instrumentType
+        else:
+            bundle.data['chipDescription'] = bundle.obj.chipType
+            bundle.data['chipInstrumentType'] = ""
         
         try:
             qcThresholds = dict((qc.qcType.qcName, qc.threshold) for qc in
@@ -2768,10 +2772,13 @@ class CompositeExperimentResource(ModelResource):
         bundle.data['results'].sort(key=results_comparator)
         bundle.data['results'].reverse()
 
-        chipDescription = chips.get(bundle.obj.chipType, "")
-        if not chipDescription:
-            chipDescription = chips.get(bundle.obj.chipType[:3], bundle.obj.chipType)
-        bundle.data['chipDescription'] = chipDescription
+        chip = chips.get(bundle.obj.chipType, None) or chips.get(bundle.obj.chipType[:3], None)
+        if chip:
+            bundle.data['chipDescription'] = chip.description
+            bundle.data['chipInstrumentType'] = chip.instrumentType
+        else:
+            bundle.data['chipDescription'] = bundle.obj.chipType
+            bundle.data['chipInstrumentType'] = ""
                 
         samples = bundle.obj.samples.all()
         bundle.data['sample'] = samples[0].name if samples else ""
@@ -2803,6 +2810,13 @@ class CompositeExperimentResource(ModelResource):
                 Q(expName__iregex=name) |
                 Q(results_set__resultsName__iregex=name) |
                 Q(notes__iregex=name)
+            )
+            base_object_list = base_object_list.filter(qset)
+
+        samples = request.GET.get('samples__name', None)
+        if samples is not None:
+            qset = (
+                Q(samples__name=samples)
             )
             base_object_list = base_object_list.filter(qset)
 
@@ -2884,7 +2898,7 @@ class CompositeExperimentResource(ModelResource):
         authorization = DjangoAuthorization()
         # This query is expensive, and used on main data tab.
         # Cache frequent access
-        #cache = SimpleCache(timeout=17)
+        cache = SimpleCache(timeout=17)
 
 
 class TemplateResource(ModelResource):

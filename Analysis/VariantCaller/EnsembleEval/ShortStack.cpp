@@ -21,11 +21,10 @@ void ShortStack::PropagateTuningParameters(EnsembleEvalTuningParameters &my_para
 
 
 // fill in predictions for each hypothesis
-void ShortStack::FillInPredictions(StackPlus &my_data) {
-  ion::FlowOrder flow_order(my_data.flow_order, my_data.flow_order.length());
-
+void ShortStack::FillInPredictions(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context) {
+  //ion::FlowOrder flow_order(my_data.flow_order, my_data.flow_order.length());
   for (unsigned int i_read = 0; i_read < my_hypotheses.size(); i_read++) {
-    my_hypotheses[i_read].FillInPrediction(flow_order, my_data.read_stack[i_read]);
+    my_hypotheses[i_read].FillInPrediction(thread_objects, my_data.read_stack[i_read], global_context);
   }
 }
 

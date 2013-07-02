@@ -3,7 +3,7 @@
 
 #MAJOR_BLOCK 
 
-VERSION="3.6.58660"
+VERSION="3.6.61989"
 
 # Change the following line to all CAPS to disable auto-run of this plugin, but do not uncomment
 #autorundisable

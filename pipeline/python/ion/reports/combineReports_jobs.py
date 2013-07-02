@@ -30,7 +30,10 @@ if __name__=="__main__":
        # Merge BAM files 
        outputBAM = args.merge_out
        print "Merging bam files to %s, mark duplicates is %s" % (outputBAM, args.duplicates)
-       merge_bam_files(args.files, outputBAM, outputBAM.replace('.bam','.bam.bai'), args.duplicates)
+       try:
+          merge_bam_files(args.files, outputBAM, outputBAM.replace('.bam','.bam.bai'), args.duplicates)
+       except:
+          traceback.print_exc()
        # generate ionstats files from merged BAM
        graph_max_x = 400
        if outputBAM == 'rawlib.bam':

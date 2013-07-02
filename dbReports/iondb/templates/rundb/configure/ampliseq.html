@@ -74,7 +74,7 @@
               $('#upload_button').click(function() {
                 uploader.settings.multipart_params.meta = JSON.stringify({
                   hotspot: false,
-                  reference: "{{name}}"
+                  reference: null
                 });
                 uploader.start();
                 return false;
@@ -102,8 +102,8 @@
               });
 
               uploader.bind('FileUploaded', function(up, file) {
-                $('#file_progress').html("100%");
-                refresh_uploads();
+                $('#file_progress').html("100%").delay(500).html("");
+                $("#file_info").delay(500).html("File uploaded successfully.  Upload another or check the appropriate reference page for processing status.")
               });
               $('#hotspot_help_text').hide();
               $('#hotspot_help_button').click(function(){
@@ -132,7 +132,7 @@
                                 <tr>
                                     <td>
                                        <label>
-                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}},{{solution.plan.genome}}" />
+                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}}" />
                                             {{design.designName}} {{solution.solutionId}}
                                             <small>(design id {{design.id}} solution id {{solution.id}})</small>
                                         </label>
@@ -154,7 +154,7 @@
         <div class="row-fluid">
             <div class="span12">
                 {% if fixed_solutions %}
-                    <h3>Fixed and Community Panels:</h3>
+                    <h3>Ready-to-Use Panels</h3>
                                         <table class="table">
                         <thead>
                             <tr>
@@ -187,7 +187,7 @@
                         </tbody>
                     </table>
                 {% else %}
-                    <h5>You haven't ordered any AmpliSeq designs</h5>
+                    <h5>Unable to find matching AmpliSeq panels.</h5>
                 {% endif %}
             </div>
         </div>
@@ -195,7 +195,7 @@
         {% if unordered_solutions %}
         <div class="row-fluid">
             <div class="span12">
-                <a href="#" id="not_ordered_btn">Show solutions which were not ordered?</a>
+                <a href="#" id="not_ordered_btn">Show solutions which were not ordered.</a>
                 <div id="not_ordered" style="display: none;">
                     <table class="table">
                         <thead>
@@ -209,7 +209,7 @@
                                 <tr>
                                     <td>
                                        <label>
-                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}},{{solution.plan.genome}}" />
+                                            <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}}" />
                                             {{design.designName}} {{solution.solutionId}}
                                             <small>(design id {{design.id}} solution id {{solution.id}})</small>
                                         </label>

@@ -44,7 +44,17 @@ void reverseVector (vector<T>& myvector) {
 
 // ===================================================================
 
-Realigner::Realigner()
+
+Realigner::Realigner() {
+  InitializeRealigner(1000, 50);
+}
+
+Realigner::Realigner(unsigned int reserve_size,  unsigned int clipping_size) {
+  InitializeRealigner(reserve_size, clipping_size);
+}
+
+
+void Realigner::InitializeRealigner(unsigned int reserve_size, unsigned int clipping_size)
 {
   // Set default values
   kMatchScore    =  4;
@@ -61,7 +71,6 @@ Realigner::Realigner()
   verbose_               = false;
   invalid_cigar_in_input = false;
   
-  unsigned int reserve_size = 1000;
   alignment_bandwidth_   = 20;
   q_limit_minus_.reserve(reserve_size);
   q_limit_plus_.reserve(reserve_size);
@@ -80,7 +89,7 @@ Realigner::Realigner()
     DP_matrix[i].resize(reserve_size);
 }
 
-// ------------------------------------------------------------------- */
+// -------------------------------------------------------------------
 
 bool Realigner::SetScores(const vector<int> score_vec) {
   if (score_vec.size() != 4)

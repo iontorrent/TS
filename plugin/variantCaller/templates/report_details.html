@@ -112,7 +112,12 @@
             </div>
             <div class="span6">
                 {% if options.has_targets %}
-                {{options.targets_name}} <a class="btn" href="download.php3?name={{targets_bed_link}}">BED</a>
+                {{options.targets_name}} 
+                  {% if barcode %}
+                    <a class="btn" href="../download.php3?name={{targets_bed_link}}">BED</a>
+                  {% else %}
+                    <a class="btn" href="download.php3?name={{targets_bed_link}}">BED</a>
+                  {% endif %}
                 {% else %}
                 None
                 {% endif %}
@@ -121,12 +126,16 @@
 
         <div class="row-fluid bumper">
             <div class="span3">
-                <span class="headvc">Hopspot Regions</span>
+                <span class="headvc">Hotspot Regions</span>
             </div>
             <div class="span6">
                 {% if options.has_hotspots %}
                 {{options.hotspots_name}}
-                <a class="btn" href="download.php3?name={{hotspots_bed_link}}">BED</a>
+                  {% if barcode %}
+                    <a class="btn" href="../download.php3?name={{hotspots_bed_link}}">BED</a>
+                  {% else %}
+                    <a class="btn" href="download.php3?name={{hotspots_bed_link}}">BED</a>
+                  {% endif %}
                 {% else %}
                 None
                 {% endif %}
@@ -139,7 +148,11 @@
             </div>
             <div class="span6">
                 {{options.configuration}}
-                <a class="btn" href="download.php3?name={{configuration_link}}">Parameters File</a>
+                {% if barcode %}
+                  <a class="btn" href="../download.php3?name={{configuration_link}}">Parameters File</a>
+                {% else %}
+                  <a class="btn" href="download.php3?name={{configuration_link}}">Parameters File</a>
+                {% endif %}
             </div>
         </div>
         

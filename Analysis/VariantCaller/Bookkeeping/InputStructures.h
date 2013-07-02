@@ -42,12 +42,19 @@
 
 #include <time.h>
 #include "BaseCallerUtils.h"
+#include "RecalibrationModel.h"
 #include "../Splice/ErrorMotifs.h"
 #include "ExtendParameters.h"
+#include "TreephaserSSE.h"
+#include "DPTreephaser.h"
+#include "Realigner.h"
 
 using namespace std;
 using namespace BamTools;
 using namespace ion;
+
+
+// -------------------------------------------------------------------
 
 // TODO: Check if merging of Parameters and InputStructures makes sense
 // No: it does not make sense - Parameters keeps input values, InputStructures keeps active data provoked by those values
@@ -72,6 +79,27 @@ class LiveFiles{
     void ShutDown();
 };
 
+class RecalibrationHandler{
+  public:
+    bool use_recal_model_only;
+    bool is_live;
+    RecalibrationModel recalModel;
+    
+    map<string, RecalibrationModel> bam_header_recalibration; // look up the proper recalibration handler by run id + block coordinates
+    multimap<string,pair<int,int> > block_hash;  // from run id, find appropriate block coordinates available
+    
+ void ReadRecalibrationFromComments(SamHeader &samHeader);
+ 
+//  vector<vector<vector<float> > > * getAs(string &found_key, int x, int y){return(recalModel.getAs(x,y));};
+//  vector<vector<vector<float> > > * getBs(string &found_key, int x, int y){return(recalModel.getBs(x,y));};
+  void getAB(MultiAB &multi_ab, string &found_key, int x, int y);
+  
+  bool recal_is_live(){return(is_live);};
+  string FindKey(string &runid, int x, int y);
+  
+  RecalibrationHandler(){use_recal_model_only = false; is_live = false; };
+};
+
 //Input Structures
 class InputStructures {
   public:
@@ -84,23 +112,29 @@ class InputStructures {
     vector<string> sampleList;
     map<string, string> readGroupToSampleNames;
 
-    FlowOrder      treePhaserFlowOrder;
-    string         flowOrder ;
+    ion::FlowOrder treePhaserFlowOrder;
+    string         flowOrder;
     uint16_t       nFlows;
     vector<string> bamFlowOrderVector;
+
     uint16_t       min_map_qv;
+
+    bool           use_SSE_basecaller;
+    bool           apply_normalization;
+    bool           do_snp_realignment;
+    int            DEBUG;
 
     bool flowSigPresent;
     string flowKey;
     KeySequence key;
-    
-    int DEBUG;
+
+    // Reusable objects
     BamMultiReader bamMultiReader;
     SamHeader samHeader;
-        
     TIonMotifSet ErrorMotifs;
+    RecalibrationHandler do_recal;
 
-    
+   
     InputStructures();
     //~InputStructures();
     void BringUpReferenceData(ExtendParameters &parameters);
@@ -112,7 +146,25 @@ class InputStructures {
 
 };
 
+// -------------------------------------------------------------------
 
+// A collections of objects that are shared and reused thoughout the execution of one tread
+class PersistingThreadObjects {
+  public:
+
+	PersistingThreadObjects(InputStructures &global_context)
+    : realigner(50, 1), dpTreephaser(global_context.treePhaserFlowOrder, 50),
+      treephaser_sse(global_context.treePhaserFlowOrder, 50)
+    {};
+
+	BamTools::BamMultiReader bamMultiReader;
+
+	Realigner         realigner;      // realignment tool
+    DPTreephaser      dpTreephaser;   // c++ treephaser
+    TreephaserSSE     treephaser_sse; // vectorized treephaser
+
+    string            local_contig_sequence; // reference sequence
+};
 
 
 #endif //INPUTSTRUCTURES_H

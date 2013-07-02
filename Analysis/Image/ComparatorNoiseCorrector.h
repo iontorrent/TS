@@ -4,6 +4,7 @@
 
 #include "Mask.h"
 #include "RawImage.h"
+#include "RandSchrange.h"
 
 class ComparatorNoiseCorrector
 {
@@ -57,6 +58,7 @@ private:
     float *mComparator_sigs;
     float *mComparator_noise;
     float *mComparator_hf_noise;
+    RandSchrange mRand;
     int mSigsSize;
     int NNSpan;
 };

@@ -81,11 +81,19 @@ if __name__=="__main__":
 
         set_result_status('Merge Heatmaps')
         merged_bead_mask_path = os.path.join(env['SIGPROC_RESULTS'], 'MaskBead.mask')
+        
+        chipType = env.get('chipType','')
+        exclusionMaskFile = ''
+        if chipType.startswith('P1.1'):
+            exclusionMaskFile = 'exclusionMask_P1_1.txt'
+        elif chipType.startswith('P1.0'):
+            exclusionMaskFile = 'exclusionMask_P1_0.txt'
 
         sigproc.mergeSigProcResults(
             dirs,
             env['SIGPROC_RESULTS'],
-            env['shortRunName'])
+            env['shortRunName'],
+            exclusionMaskFile)
 
 
     if args.do_basecalling:
@@ -119,6 +127,12 @@ if __name__=="__main__":
                 env['SIGPROC_RESULTS'],
                 env['flows'],
                 env['flowOrder'])
+            RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration")
+            if not os.path.isdir(RECALIBRATION_RESULTS):
+                os.makedirs(RECALIBRATION_RESULTS)            
+            cmd = "calibrate --hpmodelMerge"
+            printtime("DEBUG: Calling '%s':" % cmd)
+            ret = subprocess.call(cmd,shell=True)
             ## Generate BaseCaller's composite "Big Data": unmapped.bam. Totally optional
             if env.get('libraryName','') == 'none':        
                 actually_merge_unmapped_bams = True

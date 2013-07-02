@@ -165,9 +165,14 @@
     
     // match available BED files to reference
     $("#modal_experiment_edit_form #id_reference, #report_analyze_form #id_reference").change(function(){
-      var value = this.value;
-      var select = $("#id_targetRegionBedFile option, #id_hotSpotRegionBedFile option");
-      select.filter('[value != ""]').hide().filter("[class ~= "+value+"]").show();
+        var reference = this.value;
+        var select = $("#id_targetRegionBedFile option, #id_hotSpotRegionBedFile option");
+        select.filter('[value != ""]').hide();
+        select.each(function(i,elem){
+            var bedfile_path = elem.value;
+            if( bedfile_path.split('/').indexOf(reference)>0 )
+                $(this).show();
+        })
     }).change();
     
 </script>

@@ -66,6 +66,8 @@ using namespace ion;
 
 class variantThreadInfo; // forward declaration to avoid the loop
 
+// -------------------------------------------------------------------
+
 class MasterTracker {
   public:
     long int totalVariants;
@@ -99,10 +101,17 @@ class MasterTracker {
     void StartJob(variantThreadInfo *variant_thread_job_spec, bool FINAL_JOB, int DEBUG);
 };
 
+
+// -------------------------------------------------------------------
+
+
 // each individual job
 class variantThreadInfo {
   public:
-    variantThreadInfo(): threadID(0), records_in_thread(0), weight_of_thread(0), heartbeat_done(false), variantArray(NULL), parameters(NULL), global_context(NULL), outVCFStream(NULL), filterVCFStream(NULL), thread_master(NULL) {
+    variantThreadInfo()
+    : threadID(0), records_in_thread(0), weight_of_thread(0), heartbeat_done(false),
+      variantArray(NULL), parameters(NULL), global_context(NULL), outVCFStream(NULL),
+      filterVCFStream(NULL), thread_master(NULL) {
     };
     variantThreadInfo(ofstream &outVCFFile, ofstream &filterVCFFile, ExtendParameters *inparameters, InputStructures *_global_context, MasterTracker &all_thread_master) {
       // new job goes on new thread ID
@@ -168,6 +177,7 @@ class variantThreadInfo {
     MasterTracker *thread_master; // all hail the one true master
 };
 
+// -------------------------------------------------------------------
 
 class VariantJobServer {
   public:
@@ -194,11 +204,13 @@ class VariantJobServer {
     ~VariantJobServer();
 };
 
+// -------------------------------------------------------------------
 
 // the actual worker function
 void *ProcessSetOfVariantsWorker(void *ptr);
 // the guy that orchestrates the dance
 void ThreadedVariantCaller(ofstream &outVCFFile, ofstream &filterVCFFile, ofstream &consensusFile, InputStructures &global_context, ExtendParameters *parameters);
 void justProcessInputVCFCandidates(CandidateGenerationHelper &candidate_generator, ExtendParameters *parameters);
+
 
 #endif // THREADEDVARIANTQUEUE_H

@@ -24,6 +24,8 @@ void VariantCallerHelp() {
   printf("  -t,--target-file                      FILE        only process targets in this bed file [optional]\n");
   printf("  -R --region                           STRING      only process <chrom>:<start_position>-<end_position> [optional] \n") ;
   printf("  -D,--downsample-to-coverage           INT         ?? [2000]\n");
+  printf("     --model-file                       FILE        HP recalibration model input file.\n");
+  printf("     --recal-model-hp-thres             INT         Lower threshold for HP recalibration.\n");
   printf("\n");
   printf("Outputs:\n");
   printf("  -O,--output-dir                       DIRECTORY   base directory for all output files [current dir]\n");
@@ -51,6 +53,8 @@ void VariantCallerHelp() {
   printf("\n");
   printf("Variant candidate scoring (Ensemble Evaluator):\n");
   printf("     --do-ensemble-eval                 on/off      use Ensemble Evaluator to score variants (off = use Peak Estimator) [on]\n");
+  printf("     --use-sse-basecaller               BOOL        Switch to use the vectorized version of the basecaller.\n");
+  printf("     --do-snp-realignment               BOOL        Realign reads in the vicinity of candidate snp variants.\n");
   printf("     --min-delta-for-flow               FLOAT       minimum prediction delta for scoring flows [0.1]\n");
   printf("     --max-flows-to-test                INT         maximum number of scoring flows [10]\n");
   printf("     --prediction-precision             FLOAT       prior weight in bias estimator [30.0]\n");
@@ -111,6 +115,8 @@ void VariantCallerHelp() {
 ControlCallAndFilters::ControlCallAndFilters() {
   // all defaults handled by sub-filters
   data_quality_stringency = 4.0f;  // phred-score for this variant per read
+  xbias_tune = 0.005f;
+  sbias_tune = 0.5f;
   downSampleCoverage = 2000;
   RandSeed = 631;
    // wanted by downstream
@@ -123,10 +129,13 @@ ProgramControlSettings::ProgramControlSettings() {
   nThreads = 1;
   DEBUG = 0;
   do_ensemble_eval = false;
+  use_SSE_basecaller = true;
   rich_json_diagnostic = false;
   json_plot_dir = "./json_diagnostic/";
   inputPositionsOnly = false;
   skipCandidateGeneration = false;
+  suppress_recalibration = true;
+  do_snp_realignment = true;
 }
 
 ExtendParameters::ExtendParameters(void) : Parameters() {
@@ -141,6 +150,7 @@ ExtendParameters::ExtendParameters(void) : Parameters() {
 
   info_vcf = 0;
   candidateVCFFileName = "";
+  recalModelHPThres = 4;
 
    consensusCalls = false;
 }
@@ -249,9 +259,13 @@ void EnsembleEvalTuningParameters::SetOpts(OptArgs &opts, Json::Value& tvc_param
 
   max_flows_to_test                     = RetrieveParameterInt   (opts, tvc_params, '-', "max-flows-to-test", 10);
   min_delta_for_flow                    = RetrieveParameterDouble(opts, tvc_params, '-', "min-delta-for-flow", 0.1);
+  use_unification_for_multialleles      = RetrieveParameterBool  (opts, tvc_params, '-', "unify-multiallele-flows", true);
+  
   prediction_precision                  = RetrieveParameterDouble(opts, tvc_params, '-', "prediction-precision", 30.0);
   outlier_prob                          = RetrieveParameterDouble(opts, tvc_params, '-', "outlier-probability", 0.01);
   heavy_tailed                          = RetrieveParameterInt   (opts, tvc_params, '-', "heavy-tailed", 3);
+  
+  
   filter_unusual_predictions            = RetrieveParameterDouble(opts, tvc_params, '-', "filter-unusual-predictions", 0.3f);
   filter_deletion_bias                  = RetrieveParameterDouble(opts, tvc_params, '-', "filter-deletion-predictions", 100.0f);
   filter_insertion_bias                 = RetrieveParameterDouble(opts, tvc_params, '-', "filter-insertion-predictions", 100.0f);
@@ -261,6 +275,7 @@ void EnsembleEvalTuningParameters::SetOpts(OptArgs &opts, Json::Value& tvc_param
   magic_sigma_base                      = RetrieveParameterDouble(opts, tvc_params, '-', "minimum-sigma-prior", 0.085f);
   magic_sigma_slope                     = RetrieveParameterDouble(opts, tvc_params, '-', "slope-sigma-prior", 0.0084f);
   sigma_prior_weight                     = RetrieveParameterDouble(opts, tvc_params, '-', "sigma-prior-weight", 1.0f);
+  k_zero                                =  RetrieveParameterDouble(opts, tvc_params, '-', "k-zero", 0.0f); // add variance from cluster shifts
 
   if (CheckTuningParameters()) {
     cout << "Nonfatal ERR: tuning parameters out of standard bounds, using safe range - check input files" << endl;
@@ -275,6 +290,7 @@ void ClassifyFilters::SetOpts(OptArgs &opts, Json::Value & tvc_params) {
   adjacent_max_length                   = RetrieveParameterInt   (opts, tvc_params, '-', "adjacent-max-length", 11);
   sseProbThreshold                      = RetrieveParameterDouble(opts, tvc_params, '-', "sse-prob-threshold", 0.2);
   minRatioReadsOnNonErrorStrand         = RetrieveParameterDouble(opts, tvc_params, '-', "min-ratio-reads-non-sse-strand", 0.2);
+  sse_relative_safety_level             = RetrieveParameterDouble(opts, tvc_params, '-', "sse-relative-safety-level", 0.025);
  // min ratio of reads supporting variant on non-sse strand for variant to be called
 
 }
@@ -298,7 +314,9 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   data_quality_stringency               = RetrieveParameterDouble(opts, tvc_params, '-', "data-quality-stringency",4.0f);
   downSampleCoverage                    = RetrieveParameterInt   (opts, tvc_params, 'D', "downsample-to-coverage", 2000);
   
-  
+  xbias_tune                            = RetrieveParameterDouble(opts, tvc_params, '-', "tune-xbias", 0.005f);
+  sbias_tune                            = RetrieveParameterDouble(opts, tvc_params, '-', "tune-sbias", 0.01f);
+ 
   suppress_reference_genotypes          = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-reference-genotypes", true);
   suppress_no_calls                     = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-no-calls", true);
 
@@ -336,10 +354,12 @@ void ProgramControlSettings::SetOpts(OptArgs &opts, Json::Value &tvc_params) {
   nThreads                              = RetrieveParameterInt   (opts, tvc_params, 'n', "num-threads", 12);
   nVariantsPerThread                    = RetrieveParameterInt   (opts, tvc_params, 'N', "num-variants-per-thread", 250);
   do_ensemble_eval                      = RetrieveParameterBool  (opts, tvc_params, '-', "do-ensemble-eval", true);
+  use_SSE_basecaller                    = RetrieveParameterBool  (opts, tvc_params, '-', "use-sse-basecaller", true);
   rich_json_diagnostic                  = RetrieveParameterBool  (opts, tvc_params, '-', "do-json-diagnostic", false);
   inputPositionsOnly                    = RetrieveParameterBool  (opts, tvc_params, '-', "process-input-positions-only", false);
   skipCandidateGeneration               = RetrieveParameterBool  (opts, tvc_params, '-', "skip-candidate-generation", false);
-
+  suppress_recalibration                = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-recalibration", true);
+  do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", true);
 }
 
 void ExtendParameters::SetupFileIO(OptArgs &opts) {
@@ -464,7 +484,7 @@ void ExtendParameters::ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params
 
 ExtendParameters::ExtendParameters(int argc, char** argv)  {
 
-  OptArgs opts;
+  //OptArgs opts;
   opts.ParseCmdLine(argc, (const char**)argv);
 
   if (argc == 1) {
@@ -493,6 +513,10 @@ ExtendParameters::ExtendParameters(int argc, char** argv)  {
   my_controls.SetOpts(opts, tvc_params);
   my_eval_control.SetOpts(opts, tvc_params);
   program_flow.SetOpts(opts, tvc_params);
+
+  // Dummy lines for HP recalibration
+  recal_model_file_name = opts.GetFirstString ('-', "model-file", "");
+  recalModelHPThres = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
 
 
   info_vcf                              = opts.GetFirstInt('F', "info-vcf", 0);

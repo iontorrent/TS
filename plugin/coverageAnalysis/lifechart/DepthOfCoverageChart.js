@@ -835,15 +835,16 @@ $(function () {
 
     var skip0x = !plotParams.include0x;
     var binSize = plotStats.binSize;
+	var binOff = plotParams.readAxis < 2 ? skip0x + parseInt(plotStats.minX/binSize)*binSize : plotStats.minX;
     var depth;
     if( plotParams.readAxis == 2 ) {
-      depth = ((skip0x+bin)/plotStats.meanX).toFixed(3);
+      depth = ((binOff+bin)/plotStats.meanX).toFixed(3);
     } else if( plotParams.readAxis == 3 ) {
-      depth = (100*(skip0x+bin)/plotStats.meanX).toFixed(1);
+      depth = (100*(binOff+bin)/plotStats.meanX).toFixed(1);
     } else if( label == LegendLabels.cumCover ) {
-      depth = skip0x + bin * binSize;
+      depth = binOff + bin * binSize;
     } else {
-      depth = skip0x + bin * binSize;
+      depth = binOff + bin * binSize;
       if( binSize > 1 ) depth += (binSize == 2 ? "," : "-")+(depth+binSize-1);
     }
     var xtitle = "depth"; //fieldIds[0].toLowerCase();

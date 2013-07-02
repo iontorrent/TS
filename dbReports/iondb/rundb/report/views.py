@@ -111,8 +111,13 @@ def percent(q, d):
 def load_ini(report,subpath,filename,namespace="global"):
     parse = ConfigParser.ConfigParser()
     parse.optionxform = str # preserve the case
+    report_dir = report.get_report_dir()
     try:
-        parse.read(os.path.join(report.get_report_dir(), subpath , filename))
+        if os.path.exists(os.path.join(report_dir, subpath , filename)):
+            parse.read(os.path.join(report_dir, subpath , filename))
+        else:
+            # try in top dir
+            parse.read(os.path.join(report_dir, filename))
         parse = parse._sections.copy()
         return parse[namespace]
     except:
@@ -485,6 +490,17 @@ def find_output_file_groups(report, datasets, barcodes):
 
     return output_file_groups
 
+def find_source_files(report, files, subfolders):
+    source_files = {}
+    report_dir = report.get_report_dir()
+    reportWebLink = report.reportWebLink()
+    for filename in files:
+        for folder in subfolders:
+            if os.path.isfile(os.path.join(report_dir,folder,filename)):
+                source_files[filename] =  os.path.normpath(os.path.join(reportWebLink,folder,filename))
+                break
+    return source_files
+
 @login_required
 def report_display(request, report_pk):
     """Show the main report for an data analysis result.
@@ -627,12 +643,17 @@ def report_display(request, report_pk):
 
     # Beadfind
     try:
-        bead_loading = 100 * float(beadfind["Bead Wells"]) / (float(beadfind["Total Wells"]) - float(beadfind["Excluded Wells"]))
+        if "Adjusted Addressable Wells" in beadfind:
+            addressable_wells = int(beadfind["Adjusted Addressable Wells"])
+        else:
+            addressable_wells = int(beadfind["Total Wells"]) - int(beadfind["Excluded Wells"])
+    
+        bead_loading = 100 * float(beadfind["Bead Wells"]) / float(addressable_wells)
         bead_loading = int(round(bead_loading))
         bead_loading_threshold = qcTypes.get("Bead Loading (%)", 0)
 
         beadsummary = {}
-        beadsummary["total_addressable_wells"] = int(beadfind["Total Wells"]) - int(beadfind["Excluded Wells"])
+        beadsummary["total_addressable_wells"] = addressable_wells
         beadsummary["bead_wells"] = beadfind["Bead Wells"]
         beadsummary["p_bead_wells"] = percent(beadfind["Bead Wells"], beadsummary["total_addressable_wells"])
         beadsummary["live_beads"] = beadfind["Live Beads"]
@@ -707,7 +728,7 @@ def report_display(request, report_pk):
                     ionstats_alignment[c]['p_num_bases'] = 100.0 * ionstats_alignment[c]['num_bases'] / float(ionstats_alignment['full']['num_reads'])
 
                 ionstats_alignment['unaligned'] = {}
-                ionstats_alignment['unaligned']['num_reads'] = int(ionstats_alignment['full']['num_reads']) - int(ionstats_alignment['aligned']['p_num_reads'])
+                ionstats_alignment['unaligned']['num_reads'] = int(ionstats_alignment['full']['num_reads']) - int(ionstats_alignment['aligned']['num_reads'])
                 # close enough, and ensures they sum to 100 despite rounding
                 ionstats_alignment['unaligned']['p_num_reads'] = 100.0 - ionstats_alignment['aligned']['p_num_reads']
                 #ionstats_alignment['unaligned']['p_num_reads'] = 100.0 * ionstats_alignment['unaligned']['num_reads']) / float(ionstats_alignment['full']['num_reads']
@@ -768,14 +789,17 @@ def report_display(request, report_pk):
     except Exception as err:
         logger.exception("Could not generate output file links")
 
+    # some files may be in non-standard location
+    search_files = ['Bead_density_1000.png','Bead_density_contour.png']
+    search_locations = ['.', 'sigproc_results']
+    source_files = find_source_files(report,search_files,search_locations)
 
     # Convert the barcodes back to JSON for use by Kendo UI Grid
+    _barcodes = []
     if barcodes:
-        _barcodes = filter(None, [bc if not bc.has_key('filtered') else None for bc in barcodes])
-        _barcodes += filter(None, [bc if bc.has_key('filtered') and not bc['filtered'] else None for bc in barcodes])
-        barcodes_json = json.dumps(_barcodes)
-    else:
-        barcodes_json = json.dumps([])
+        _barcodes += [bc for bc in barcodes if not bc.has_key('filtered')]
+        _barcodes += [bc for bc in barcodes if bc.has_key('filtered') and not bc['filtered']]
+    barcodes_json = json.dumps(_barcodes)
 
     # This is both awesome and playing with fire.  Should be made explicit soon
     ctxd = locals()
@@ -1547,6 +1571,24 @@ def _createReport(request, pk, reportpk):
                             selected_previous_pk = previous_obj[0].pk
                     if selected_previous_pk:
                         dmfilestat = models.Results.objects.get(pk=selected_previous_pk).get_filestat(dmactions_type)
+                        # replace dmfilestat
+                        result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
+                        dmfilestat.pk = None
+                        dmfilestat.result = result
+                        dmfilestat.save()
+                
+                # handle special case of Proton on-instrument analysis fullchip data:
+                #   all reanalyses start from files in expDir/onboard_results/sigproc_results/
+                if exp.log.get('oninstranalysis','') == "yes" and not doThumbnail:
+                    dmactions_type = "On-Instrument Analysis"
+                    previous_obj = exp.results_set.exclude(pk=result.pk)
+                    if previous_obj:
+                        dmfilestat = previous_obj[0].get_filestat(dmactions_types.BASE)
+                        # replace dmfilestat
+                        result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
+                        dmfilestat.pk = None
+                        dmfilestat.result = result
+                        dmfilestat.save()
 
                 if dmfilestat and dmfilestat.action_state in ['DG','DD']:
                     bail(result, "The analysis cannot start because %s data has been deleted." % dmactions_type)
@@ -1560,8 +1602,10 @@ def _createReport(request, pk, reportpk):
                             pathToData = dmfilestat.archivepath
                             if doThumbnail and exp.chipType == "900":
                                 pathToData = os.path.join(pathToData,'thumbnail')
-                        if dmactions_type == dmactions_types.BASE:
+                        elif dmactions_type == dmactions_types.BASE:
                             previousReport = dmfilestat.archivepath
+                        elif dmactions_type == "On-Instrument Analysis":
+                            pathToData = dmfilestat.archivepath
                     except:
                         logger.debug(traceback.format_exc())
                         bail(result,"Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."

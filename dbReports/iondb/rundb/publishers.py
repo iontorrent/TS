@@ -281,7 +281,7 @@ def run_pub_scripts(pub, upload):
                 logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
             else:
                 logger.error("Editing for %s died during %s." % (pub.name, script_path))
-                upload.status = "Error: publisher failed."
+                upload.status = "Error: %s" % stage_name
                 upload.save()
             # If either the script itself or we set the status to anything starting
             # with "Error" then we abort further processing here.

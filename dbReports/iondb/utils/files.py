@@ -66,3 +66,31 @@ def getSpaceMB(drive_path):
 @timeout(30, None)
 def getdeviceid(dirpath):
     return os.stat(dirpath)[2]
+
+
+def getdiskusage(directory):
+    # Try an all-python solution here - in case the suprocess spawning is causing grief.  We could be opening
+    # hundreds of instances of shells above.
+    def dir_size (start):
+        if not start or not os.path.exists(start):
+            return 0
+
+        file_walker = (
+            os.path.join(root, f)
+            for root, _, files in os.walk( start )
+            for f in files
+        )
+        total = 0L
+        for f in file_walker:
+            if os.path.isdir(f):
+                total += dir_size(f)
+                continue
+            if not os.path.isfile(f):
+                continue
+            try:
+                total += os.lstat(f).st_size
+            except OSError:
+                pass
+        return total
+    # Returns size in MB
+    return dir_size(directory)/(1024*1024)

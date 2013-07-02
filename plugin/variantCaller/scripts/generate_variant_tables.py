@@ -7,6 +7,7 @@ import math
 import bisect
 import json
 import traceback
+import copy
 from collections import defaultdict
 from optparse import OptionParser
 
@@ -65,7 +66,7 @@ def main():
     
     input_vcf = open(options.input,'r')
     output_xls = open(options.output,'w')
-    output_xls.write("Chrom\tPosition\tGene Sym\tTarget ID\tType\tZygosity\tGenotype\tRef\tVariant\tVar Freq\tP-value\tCoverage\tRef Cov\tVar Cov")
+    output_xls.write("Chrom\tPosition\tGene Sym\tTarget ID\tType\tZygosity\tGenotype\tRef\tVariant\tVar Freq\tQual\tCoverage\tRef Cov\tVar Cov")
     if options.hotspot:
         output_xls.write("\tHotSpot ID")
     output_xls.write("\n")
@@ -189,7 +190,7 @@ def main():
                 var_cov[alt_idx] = int(var_cov_txt)
             except:
                 pass
-        var_cov2 = var_cov
+        var_cov2 = copy.copy(var_cov)
         for alt_idx,var_cov_txt in enumerate(format.get('FAO','').split(',')):
             try:
                 var_cov2[alt_idx] = int(var_cov_txt)

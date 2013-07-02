@@ -238,6 +238,7 @@ case "$1" in
 EOF
     if ! service rabbitmq-server restart; then
         service rabbitmq-server stop
+        pgrep -u rabbitmq|xargs kill || true #ensure all rabbitmq pid are down
         rm -rf /var/lib/rabbitmq/mnesia/rabbit@localhost || true
         service rabbitmq-server start
     fi
@@ -270,10 +271,10 @@ EOF
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=60)'
 
     #TS-5598: Schedule task to fill diskusage field for all Experiments
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_exp_diskusage.apply_async(countdown=40)'
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.backfill_tasks as tasks; tasks.backfill_exp_diskusage.apply_async(countdown=40)'
 
     #TS-5908: Schedule task to fix value in Results.diskusage field
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_result_diskusage.apply_async(countdown=40)'
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.backfill_tasks as tasks; tasks.backfill_result_diskusage.apply_async(countdown=40)'
 
     # Rescan size and inode count for PluginResults
     python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=40)'
@@ -281,7 +282,7 @@ EOF
     #TS-6081: Create DMFileStat objs for existing Results objs without them.
     echo "Migrating to new Data Management..."
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_management as dm; dm.backfill_create_dmfilestat()'
-    
+
     # Now that prerequisite tasks have been run or scheduled, restart crawler.
     invoke-rc.d ionJobServer restart
     invoke-rc.d ionPlugin restart

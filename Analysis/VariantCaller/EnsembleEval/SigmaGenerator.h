@@ -33,10 +33,12 @@ public:
    int max_level;
    
    float prior_weight;
+   float k_zero;
    
    BasicSigmaGenerator(){
       max_level = 29;
       prior_weight = 1.0f;
+      k_zero = 0.0f;
       InitSigma();
       ResetUpdate();
    };
@@ -51,18 +53,20 @@ public:
    };
    void SimplePrior();
    void ZeroAccumulator();
-   void PushLatent(float responsibility,float x_val, float y_val);
+   void PushLatent(float responsibility,float x_val, float y_val, bool do_weight);
    float InterpolateSigma(float x_val);
    void ResetUpdate();
    void GenerateSigmaByRegression(vector<float> &prediction, vector<int> &test_flow, vector<float> &sigma_estimate);
    void GenerateSigma(CrossHypotheses &my_cross);
    void AddCrossUpdate(CrossHypotheses &my_cross);
+   void AddShiftCrossUpdate(CrossHypotheses &my_cross, float discount);
    void AddNullUpdate(CrossHypotheses &my_cross);
    void AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals);
    void DoLatentUpdate();
    void PushToPrior();
    void PopFromLatentPrior();
-   
+   void AddShiftUpdateForHypothesis(vector<float> &prediction, vector<float> &mod_prediction, 
+                                                      float discount, float responsibility, float skew_estimate, vector<int> &test_flow);
      void NullUpdateSigmaGenerator(ShortStack &total_theory);
   void UpdateSigmaGenerator(ShortStack &total_theory);
   void UpdateSigmaEstimates(ShortStack &total_theory);

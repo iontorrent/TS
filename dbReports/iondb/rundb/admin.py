@@ -411,7 +411,7 @@ class GlobalConfigAdmin(admin.ModelAdmin):
 
 
 class ChipAdmin(admin.ModelAdmin):
-    list_display = ('name','description','slots')
+    list_display = ('name','description','instrumentType', 'isActive', 'slots')
     formfield_overrides = {
         models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
     }

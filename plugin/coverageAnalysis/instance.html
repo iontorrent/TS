@@ -143,6 +143,8 @@
         pluginLibType = "targetseq";
       } else if( planLibType == "AMPS_RNA" ) {
         pluginLibType = "ampliseq-rna";
+      } else if( planLibType == "AMPS_EXOME" ) {
+        pluginLibType = "ampliseq-exome";
       }
     }
     if( planBedFile != "" ) {
@@ -154,29 +156,26 @@
 
     function setOptionDefaults(libType,refID) {
       $("#librarytype").val(libType);
-      if( libType == "ampliseq" ) {
-        // Note: this is a captured variable
+      if( libType.substr(0,8) == "ampliseq" ) {
+        //$("#ptrim").show();
+        $("#tpadding").hide();
+        $("#uniquereads").show();
+        $("#nondups").hide();
         if( referenceID == "hg19" ) {
           $("#sampid").show();
         } else {
           $("#sampid").hide();
         }
-        //$("#ptrim").show();
-        $("#tpadding").hide();
-        $("#uniquereads").show();
-        $("#nondups").hide();
+        if( libType == "ampliseq-rna" ) {
+          $("#uniquereads").hide();
+          $("#sampid").show();
+        }
       } else if( libType == "targetseq" ) {
         $("#sampid").hide();
         //$("#ptrim").hide();
         $("#tpadding").show();
         $("#uniquereads").show();
         $("#nondups").show();
-      } else if( libType == "ampliseq-rna" ) {
-        $("#sampid").show();
-        //$("#ptrim").hide();
-        $("#tpadding").hide();
-        $("#uniquereads").hide();
-        $("#nondups").hide();
       } else {
         $("#sampid").hide();
         //$("#ptrim").hide();
@@ -314,7 +313,7 @@
        }
       }
       // check for appropriate padding values
-      if( libType == "ampliseq" ) {
+      if( libType.substr(0,8) == "ampliseq" ) {
         document.coverageAnalysis.padtargets.value = 0;
       }
       var regex = /^[0-9]+$/;
@@ -341,16 +340,11 @@
       if( libType == "wholegenome" ) {
        //$("#trimreads").attr("checked",false);
        $("#padtargets").attr("value","0");
-      } else if( libType == "ampliseq" ) {
+      } else if( libType.substr(0,8) == "ampliseq" ) {
        $("#nonduplicates").attr("checked",false);
        $("#padtargets").attr("value","0");
       } else if( libType == "targetseq" ) {
        //$("#trimreads").attr("checked",false);
-      } else if( libType == "ampliseq-rna" ) {
-       //$("#trimreads").attr("checked",false);
-       $("#padtargets").attr("value","0");
-       $("#nonduplicates").attr("checked",false);
-       $("#uniquereads").attr("checked",false);
       }
       // pass user selection with spaces translated to underscores
       var usrSel = document.getElementById('librarytype')[libn].text;
@@ -399,6 +393,7 @@
       <option value="ampliseq" selected="selected">Ion AmpliSeq</option>
       <option value="targetseq">Ion TargetSeq</option>
       <option value="ampliseq-rna">Ion AmpliSeq RNA</option>
+      <option value="ampliseq-exome">Ion AmpliSeq Exome</option>
      </select></td> </tr>
     <tr>
      <td><span class="help"

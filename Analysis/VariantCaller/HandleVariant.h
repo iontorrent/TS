@@ -39,7 +39,6 @@
 
 #include "stats.h"
 
-
 #include "InputStructures.h"
 #include "AlignmentAssist.h"
 #include "MiscUtil.h"
@@ -50,12 +49,22 @@
 #include "StackEngine.h"
 #include "EnsembleGlue.h"
 
+
 using namespace std;
 using namespace BamTools;
 using namespace ion;
 
 
-void ProcessOneVariant(BamMultiReader *bamReader, string *local_contig_sequence,   vcf::Variant ** candidate_variant, ExtendParameters * parameters,  InputStructures &global_context);
-void DoWorkForOneVariant(BamTools::BamMultiReader &bamReader, vcf::Variant **current_variant, string &local_contig_sequence,  ExtendParameters *parameters, InputStructures *global_context_ptr);
+// ----------------------------------------------------------------------
+
+
+void ProcessOneVariant(PersistingThreadObjects &thread_objects, vcf::Variant ** candidate_variant, ExtendParameters * parameters,  InputStructures &global_context);
+
+void EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, vcf::Variant ** candidate_variant,
+                               ExtendParameters * parameters, InputStructures &global_context);
+
+//void DoWorkForOneVariant(BamTools::BamMultiReader &bamReader, vcf::Variant **current_variant, string &local_contig_sequence,  ExtendParameters *parameters, InputStructures *global_context_ptr);
+void DoWorkForOneVariant(PersistingThreadObjects &thread_objects, vcf::Variant **current_variant, ExtendParameters *parameters, InputStructures *global_context_ptr);
+
 
 #endif //HANDLEVARIANT_H

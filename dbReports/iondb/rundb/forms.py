@@ -247,31 +247,13 @@ class RunParamsForm(forms.Form):
 
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 
-class bedfiles_Select(forms.Select):
-    # class to allow filtering bedfiles options by reference
-    def __init__(self, attrs=None, choices=()):
-        super(bedfiles_Select, self).__init__(attrs=attrs, choices=choices)
-        bedfiles = dict_bed_hotspot()
-        self.bedfiles = bedfiles.get(attrs['name'],[])
-    
-    def render(self, name, value, attrs=None):
-        output = '<select id="%s" class="input-xlarge" name="%s">' % (attrs['id'], name)
-        output+= '<option value=""></option>'
-        for bedfile in self.bedfiles:
-            if value and value == bedfile.file:
-                output+='<option selected class="%s" value="%s">%s</option>' % (bedfile.meta['reference'], bedfile.file, bedfile.path)
-            else:
-                output+='<option class="%s" value="%s">%s</option>' % (bedfile.meta['reference'], bedfile.file, bedfile.path)
-        output+='</select>'
-        return mark_safe(output)
-
 class AnalysisSettingsForm(forms.ModelForm):
 
     reference = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
-    targetRegionBedFile = forms.ChoiceField(required=False, widget=bedfiles_Select(attrs={'name':'bedFiles'}) )
-    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=bedfiles_Select(attrs={'name':'hotspotFiles'}) )
+    targetRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
-        queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
+    queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
     barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
@@ -316,39 +298,6 @@ class ExperimentSettingsForm(forms.ModelForm):
         model = models.Experiment
         fields = ('sample', 'sequencekitname', 'chipBarcode', 'notes')
         
-
-class EditBackup(forms.Form):
-    def get_dir_choices():
-        basicChoice = [(None, 'None')]
-        for choice in devices.to_media(devices.disk_report()):
-            basicChoice.append(choice)
-        return tuple(basicChoice)
-    def get_loc_choices():
-        basicChoice = []
-        for loc in models.Location.objects.all():
-            basicChoice.append((loc,loc))
-        return tuple(basicChoice)
-    def make_throttle_choices():
-        choice = [(0,'Unlimited'), (10000,'10MB/Sec')]
-        return tuple(choice)
-
-    archive_directory = forms.ChoiceField(choices=())
-    number_to_archive = forms.IntegerField()
-    timeout = forms.IntegerField()
-    percent_full_before_archive = forms.IntegerField(max_value=99,min_value = 1)
-    bandwidth_limit = forms.ChoiceField(make_throttle_choices())
-    email = forms.EmailField(required=False)
-    enabled = forms.BooleanField(required=False)
-    grace_period = forms.IntegerField()
-
-    def __init__(self,*args,**kwargs):
-        super(EditBackup,self).__init__(*args,**kwargs)
-        def get_dir_choices():
-            basicChoice = [(None, 'None')]
-            for choice in devices.to_media(devices.disk_report()):
-                basicChoice.append(choice)
-            return tuple(basicChoice)
-        self.fields['archive_directory'].choices = get_dir_choices()
 
 def getLevelChoices():
     #try:
@@ -484,7 +433,6 @@ class EmailAddress(forms.ModelForm):
 class EditReferenceGenome(forms.Form):
     name = forms.CharField(max_length=512,required=True)
     NCBI_name = forms.CharField(max_length=512,required=True)
-    read_sample_size = forms.CharField(max_length=512,required=False)
     notes = forms.CharField(max_length=1048,required=False,widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
     enabled = forms.BooleanField(required=False)
     genome_key = forms.IntegerField(widget=forms.HiddenInput(), required=True)
@@ -497,15 +445,11 @@ class EditReferenceGenome(forms.Form):
 
         index_version = self.data.getlist("index_version")[0]
         genome_key = self.data.getlist("genome_key")[0]
-        sample_size = self.data.getlist("read_sample_size")[0]
         get_name = self.cleaned_data.get('name')
         genomes = models.ReferenceGenome.objects.filter(short_name=get_name).exclude(pk=genome_key)
 
         if not set(get_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"):
             raise forms.ValidationError(("The short name has invalid characters. The valid values are letters, numbers, and underscores."))
-
-        if not sample_size.isdigit():
-            raise forms.ValidationError(("The read sample size must be a positive number."))
 
         for g in genomes:
             if get_name == g.name and g.index_version == index_version :

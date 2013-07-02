@@ -4,6 +4,9 @@ import os
 import argparse
 import ConfigParser
 
+addressable_fraction = {
+    '15456,10656': 0.88,
+}
 
 def main_merge(stats_list, stats_file, verbose):
 
@@ -76,6 +79,10 @@ def main_merge(stats_list, stats_file, verbose):
 
     if config_out.get('global','Total Wells') != sum_wells:
         print "ERROR: StatsMerge: Total Wells: %s (sum) != %s (expected)" % (sum_wells, config_out.get('global','Total Wells'))
+
+    # adjust total wells by the addressable fraction if specified
+    if (chip in addressable_fraction) and (config_out.getint('global', 'Excluded Wells') == 0):
+        config_out.set('global','Adjusted Addressable Wells', int(addressable_fraction[chip]*config_out.getint('global', 'Total Wells')) )
 
     with open(stats_file, 'wb') as configfile:
         if verbose:

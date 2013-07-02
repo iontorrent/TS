@@ -18,6 +18,16 @@ def legacy_plan_handler(data):
 # Current plan handler
 def plan_handler_3_6(data):
 	plan = data["plan"]["3.6"]
+
+	if "runType" in plan:
+		if plan["runType"] == "AMPS_DNA":
+			plan["runType"] = "AMPS"
+	elif "pipeline" in data:
+		if data["pipeline"] == "RNA":
+			plan["runType"] = "AMPS_RNA"
+		else:
+			plan["runType"] = "AMPS"
+
 	vc_config = plan.pop("variant_caller", None)
 	# If there's no VC config, we'll just skip the entire plugin configuration
 	if vc_config is not None:

@@ -571,12 +571,50 @@ void DPTreephaser::Simulate(BasecallerRead& data, int max_flows)
 }
 
 
+void DPTreephaser::SimulateRecalibrated(BasecallerRead& data, int max_flows)
+{
+  InitializeState(&path_[0]);
+
+  // Generate predicted signal
+  for (vector<char>::iterator nuc = data.sequence.begin(); nuc != data.sequence.end() and path_[0].flow < max_flows; ++nuc) {
+    int flow_s = path_[0].flow;
+    AdvanceStateInPlace(&path_[0], *nuc, flow_order_.num_flows());
+
+    if (path_[0].flow < flow_order_.num_flows()) {
+      //update flow2base_pos
+      path_[0].base_pos++;
+      path_[0].flow2base_pos[path_[0].flow] = path_[0].base_pos;
+      for(int flow_inter = flow_s+1; flow_inter < path_[0].flow; flow_inter++)
+        path_[0].flow2base_pos[flow_inter] = path_[0].flow2base_pos[flow_s];
+    }
+  }
+
+  // Apply signal distortion according to HP recalibration model
+  if (pm_model_available_) {
+    for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
+      int hp_length = 0;
+      if(flow == 0)
+        hp_length = path_[0].flow2base_pos[0];
+      else
+        hp_length =path_[0].flow2base_pos[flow] - path_[0].flow2base_pos[flow-1];
+      if(hp_length < 0)
+        hp_length = 0;
+      if(hp_length > MAX_HPXLEN)
+        hp_length = MAX_HPXLEN;
+
+      path_[0].prediction[flow] = path_[0].prediction[flow] * (*As_)[flow][flow_order_.int_at(flow)][hp_length]
+                                          + (*Bs_)[flow][flow_order_.int_at(flow)][hp_length];
+    }
+  }
+
+  data.prediction.swap(path_[0].prediction);
+}
+
+
 //-------------------------------------------------------------------------
 
 void DPTreephaser::QueryState(BasecallerRead& data, vector<float>& query_state, int& current_hp, int max_flows, int query_flow)
 {
-  // xxx See if max_flows is really necessary or if it should be replaced with num_flows()
-  // xxx How about a query_base?
   max_flows = min(max_flows,flow_order_.num_flows());
   assert(query_flow < max_flows);
   InitializeState(&path_[0]);
@@ -690,7 +728,9 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
             if(flow==0) hp_length = path_[0].flow2base_pos[0];
             else hp_length =path_[0].flow2base_pos[flow] - path_[0].flow2base_pos[flow-1];
             if(hp_length<0) hp_length = 0;
-            residual = read.normalized_measurements[flow] - (path_[0].prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+            residual = read.normalized_measurements[flow]
+                       - (path_[0].prediction[flow] * (*As_)[flow][flow_order_.int_at(flow)][hp_length]
+                          + (*Bs_)[flow][flow_order_.int_at(flow)][hp_length]);
         }
       path_[0].residual_left_of_window += residual * residual;
     }
@@ -824,7 +864,9 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
             else
               hp_length = parent->flow2base_pos[flow] - parent->flow2base_pos[flow-1];
             if(hp_length<0) hp_length = 0;
-              residual = read.normalized_measurements[flow] - (child->prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+              residual = read.normalized_measurements[flow]
+                         - (child->prediction[flow] * (*As_)[flow][flow_order_.int_at(flow)][hp_length]
+                            + (*Bs_)[flow][flow_order_.int_at(flow)][hp_length]);
         }
 
         float residual_squared = residual * residual;
@@ -889,7 +931,10 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
           if(child->flow==0) hp_length = parent->flow2base_pos[0];
           else hp_length = parent->flow2base_pos[child->flow] - parent->flow2base_pos[child->flow-1];
             if(hp_length<0) hp_length = 0;
-          dot_signal = (read.normalized_measurements[child->flow] - (parent->prediction[child->flow]*As_[child->flow][flow_order_.int_at(child->flow)][hp_length] + Bs_[child->flow][flow_order_.int_at(child->flow)][hp_length])) / child->state[child->flow];
+          dot_signal = (read.normalized_measurements[child->flow] - (parent->prediction[child->flow]
+                        * (*As_)[child->flow][flow_order_.int_at(child->flow)][hp_length]
+                          + (*Bs_)[child->flow][flow_order_.int_at(child->flow)][hp_length]))
+                        / child->state[child->flow];
       }
 
       child->dot_counter = (dot_signal < kDotThreshold) ? (parent->dot_counter + 1) : 0;
@@ -938,7 +983,9 @@ void DPTreephaser::Solve(BasecallerRead& read, int max_flows, int restart_flows)
           if(flow==0) hp_length = parent->flow2base_pos[0];
           else hp_length = parent->flow2base_pos[flow] - parent->flow2base_pos[flow-1];
           if(hp_length<0) hp_length = 0;
-          residual = read.normalized_measurements[flow] - (parent->prediction[flow]*As_[flow][flow_order_.int_at(flow)][hp_length] + Bs_[flow][flow_order_.int_at(flow)][hp_length]);
+          residual = read.normalized_measurements[flow] - (parent->prediction[flow]
+                     * (*As_)[flow][flow_order_.int_at(flow)][hp_length]
+                        + (*Bs_)[flow][flow_order_.int_at(flow)][hp_length]);
       }
       sum_of_squares += residual * residual;
     }

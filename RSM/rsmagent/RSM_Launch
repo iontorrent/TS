@@ -1,5 +1,15 @@
 #!/bin/bash
 
+### BEGIN INIT INFO
+# Provides:          RSM_Launch
+# Required-Start:    $time $network $named
+# Required-Stop:     $time $network $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start RSMAgent daemon at boot time
+# Description:       Enable RSMAgent service
+### END INIT INFO
+
 function start()
 {
   pid=`pidof RSMAgent_TS`

@@ -28,7 +28,7 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   bfMult = 1.0;
   sdAsBf = true;
   gainCorrection = true;
-  blobFilter = true;
+  blobFilter = false;
   if (isInternalServer()) {
     bfOutputDebug = 2;
   }

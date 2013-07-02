@@ -32,6 +32,8 @@
 #include "LocalContext.h"
 #include "InputStructures.h"
 #include "ExtendParameters.h"
+//@TODO: remove when moving SSE detector
+#include "VariantAssist.h"
 
 using namespace std;
 
@@ -43,12 +45,15 @@ class VarButton {
     bool isOverCallUnderCallSNP;
     bool isInsertion ;
     bool isDeletion ;
+    bool isPotentiallyCorrelated;
     //bool isHP;
     bool isMNV;
     bool isIndel;
     bool isHotSpot;
     bool isNoCallVariant;
     bool isReferenceCall;
+    bool isBadAllele;
+    bool doRealignment;
 
     VarButton() {
       isHPIndel = false;
@@ -56,12 +61,15 @@ class VarButton {
       isOverCallUnderCallSNP = false;
       isInsertion = false;
       isDeletion = false;
+      isPotentiallyCorrelated = false;
       //isHP = false;
       isMNV = false;
       isIndel = false;
       isHotSpot=false;
       isNoCallVariant = false;
       isReferenceCall = false;
+      isBadAllele = false;
+      doRealignment = false;
     }
 };
 
@@ -130,6 +138,7 @@ class AlleleIdentity {
     bool ActAsHPIndel(){
       return(status.isIndel && status.isHPIndel);
     }
+    void DetectPotentialCorrelation(LocalReferenceContext &reference_context);
     bool SubCategorizeInDel(LocalReferenceContext &reference_context);
     void SubCategorizeSNP(LocalReferenceContext &reference_context, int min_hp_for_overcall);
     bool getVariantType(string _altAllele, LocalReferenceContext &reference_context,
@@ -144,7 +153,7 @@ class AlleleIdentity {
 
     void DetectCasesToForceNoCall(LocalReferenceContext seq_context, ClassifyFilters &filter_variant,
                                   map<string, vector<string> > & info, unsigned _altAlleIndex);
-    void DetectSSEForNoCall(float sseProbThreshold, float minRatioReadsOnNonErrorStrand, map<string, vector<string> > & info, unsigned _altAlleIndex);
+    void DetectSSEForNoCall(float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float relative_safety_level, map<string, vector<string> > & info, unsigned _altAlleIndex);
     void DetectLongHPThresholdCases(LocalReferenceContext seq_context, int maxHPLength, int adjacent_max_length);
     void DetectNotAVariant(LocalReferenceContext seq_context);
     void PredictSequenceMotifSSE(LocalReferenceContext &reference_context, const  string &local_contig_sequence, TIonMotifSet & ErrorMotifs);
@@ -186,7 +195,7 @@ class MultiAlleleVariantIdentity{
 
     void FilterAllAlleles(vcf::Variant ** candidate_variant,ClassifyFilters &filter_variant);
 
-    void GetMultiAlleleVariantWindow();
+    void GetMultiAlleleVariantWindow(const string & local_contig_sequence, int DEBUG);
 };
 
 //void calculate_window(string *local_contig_sequence, uint32_t startPos, WhatVariantAmI &variant_identity, int *start_window, int *end_window, int DEBUG);

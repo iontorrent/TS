@@ -447,6 +447,11 @@ elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASE -eq 1 ]; then
   if [ $AMPLICONS -ne 0 ]; then
     COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPSTSOPTS -M $MAPPED_READS \"$TARGETCOVFILE\""
   else
+    if [ "$PADVAL" -gt 0 -a -n "$ANNOBED" ];then
+      # use ANNOBED to get on-target reads for Target Coverage (since padded targets not used here)
+      TREADS=`samtools view -c $SAMVIEWOPT -L "$ANNOBED" "$BAMFILE"`
+      PCTREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+    fi
     COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -b -P $PCTREADS \"$TARGETCOVFILE\""
   fi
   eval "$COVERAGE_ANALYSIS >> \"$OUTFILE\"" >&2

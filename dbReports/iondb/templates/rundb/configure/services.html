@@ -149,9 +149,9 @@ $(document).ready(function () {
 			contentType: 'application/json'
 		}).done(function(data) {
 			if (enabled) {
-				var log_entry = 'ENABLED Data Management automactic action';
+				var log_entry = 'ENABLED Data Management automatic action';
 			} else {
-				var log_entry = 'DISABLED Data Management automactic action';
+				var log_entry = 'DISABLED Data Management automatic action';
 			}
 			$.post('{% url dm_configuration_log %}', {log: log_entry});
 		});
@@ -222,7 +222,9 @@ $(document).ready(function () {
 			groupable: false,
 			sortable: true,
 			selectable: false,
-			pageable: true,
+			pageable: {
+    			pageSizes: [10, 20, 50, 100]
+			},
 			scrollable: false,
 			columns: [ {
 					field: "resultsName",

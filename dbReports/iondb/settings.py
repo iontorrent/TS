@@ -190,8 +190,9 @@ CELERY_IMPORTS = (
     "iondb.rundb.publishers",
     "iondb.plugins.tasks",
     "iondb.rundb.data.tasks",
+    "iondb.rundb.data.backfill_tasks",
     "iondb.rundb.session_cleanup.tasks",
-    "iondb.rundb.data.data_management"
+    "iondb.rundb.data.data_management",
 )
 
 # Allow tasks the generous run-time of six hours before they're killed.
@@ -316,7 +317,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 114857600
 PLUGIN_WAREHOUSE = [
     (
      'Torrent Browser Plugin Store',
-     'http://lifetech-it.hosted.jivesoftware.com/community/products/torrent_browser_plugin_store',
+     'http://ioncommunity.lifetechnologies.com/community/products/torrent_browser_plugin_store',
      'http://torrentcircuit.iontorrent.com/warehouse/'
     )
 ]
@@ -357,8 +358,8 @@ TEST_RUNNER = "iondb.test_runner.IonTestSuiteRunner"
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'ion-rundb-cache'
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': '127.0.0.1:11211'
     }
 }
 

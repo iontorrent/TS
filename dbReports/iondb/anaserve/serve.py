@@ -87,7 +87,7 @@ REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 import iondb.anaserve.djangoinit
 import iondb.rundb.models
 
-__version__ = filter(str.isdigit, "$Revision: 55938 $")
+__version__ = filter(str.isdigit, "$Revision: 61415 $")
 
 
 class ProcessExecutionService(service.Service):
@@ -1000,7 +1000,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
         '''Launches celery task which determines disk space usage and records it
            in the Results object for the given primary key reference'''
         try:
-            from iondb.rundb import tasks
+            from iondb.rundb.data import backfill_tasks as tasks
         except:
             logger.error("Could not import iondb/rundb/tasks.py.  Could not determine disk space.")
         else:
@@ -1008,18 +1008,18 @@ class AnalysisServer(xmlrpc.XMLRPC):
             try:
                 tasks.setResultDiskspace.delay(pk)
             except:
-                logger.exception("setResultDiskspace celery task launch failed")
+                logger.error("setResultDiskspace celery task launch failed")
 
             # update raw data directory disk usage
             try:
                 experiment_pk = iondb.rundb.models.Results.objects.filter(pk=pk).values_list('experiment', flat=True)
                 tasks.setRunDiskspace.delay(experiment_pk)
             except:
-                logger.exception("setRunDiskspace celery task launch failed")
+                logger.error("setRunDiskspace celery task launch failed")
         return 0
 
 
-    def xmlrpc_tmap(self, id, fasta, short, long, version, read_sample_size, read_exclude_length, index_version):
+    def xmlrpc_tmap(self, id, fasta, short, long, version, read_exclude_length, index_version):
         """ Provides a way to kick off the tmap index generation
             this should spawn a process that calls the build_genome_index.pl script
             it may take up to 3 hours.
@@ -1043,10 +1043,6 @@ class AnalysisServer(xmlrpc.XMLRPC):
             "--genome-name-long", long,
             "--genome-version", version
         ]
-        if read_sample_size:
-            args.append("--read-sample-size")
-            args.append(read_sample_size)
-
         uuid_path = ''.join([choice(string.letters + string.digits) for i in range(10)])
 
         #move the fasta to a guaranteed uniq path
@@ -1095,13 +1091,13 @@ class AnalysisServer(xmlrpc.XMLRPC):
             logger.exception("failed the update genome status")
 
         d = execService.getProcessOutputAndValue(build_genome_index, args, path=temp_path_uniq, env=os.environ)
-        d.addCallback(finished, id, fasta, short, temp_path_uniq, tmap_version, read_sample_size)
+        d.addCallback(finished, id, fasta, short, temp_path_uniq, tmap_version)
         logger.debug("genome building was started")
 
         return True, "Genome Building started"
 
 
-def finished(val, id, temp_fasta, short, temp_path, tmap_version, read_sample_size):
+def finished(val, id, temp_fasta, short, temp_path, tmap_version):
     """This is a callback function that will be called when the build_genome_index.pl
     script returns"""
 

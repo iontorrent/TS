@@ -48,14 +48,14 @@ from twisted.internet import task
 from twisted.web import xmlrpc, server
 
 from iondb.rundb import models
-from iondb.rundb import tasks
+from iondb.rundb.data import backfill_tasks as tasks
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
 from iondb.utils.crawler_utils import getFlowOrder
 from iondb.utils.crawler_utils import folder_mtime, explog_time
 from iondb.utils.crawler_utils import tdelt2secs
 
-__version__ = filter(str.isdigit, "$Revision: 57230 $")
+__version__ = filter(str.isdigit, "$Revision: 61988 $")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -403,21 +403,22 @@ def exp_kwargs(d, folder):
         ret['rawdatastyle'] = 'single'
 
     sequencingKitName = d.get("seqkitname", '')
-    if sequencingKitName != "NOT_SCANNED":
+    #do not replace plan's seqKit info if explog has blank seqkitname
+    if sequencingKitName and sequencingKitName != "NOT_SCANNED":
         ret['sequencekitname'] = sequencingKitName
 
     #in rundb_experiment, there are 2 attributes for sequencingKitBarcode!!
     sequencingKitBarcode = d.get("seqkitpart", '')
-    if sequencingKitBarcode != "NOT_SCANNED":
+    if sequencingKitBarcode and sequencingKitBarcode != "NOT_SCANNED":
         ret['seqKitBarcode'] = sequencingKitBarcode
         ret['sequencekitbarcode'] = sequencingKitBarcode
 
     libraryKitBarcode = d.get("libbarcode", '')
-    if libraryKitBarcode != "NOT_SCANNED":
+    if libraryKitBarcode and libraryKitBarcode != "NOT_SCANNED":
         ret['libraryKitBarcode'] = libraryKitBarcode
 
     libraryKitName = d.get('libkit', '')
-    if libraryKitName != "NOT_SCANNED":
+    if libraryKitName and libraryKitName != "NOT_SCANNED":
         ret['libraryKitName'] = libraryKitName
 
     ##note: if PGM is running the old version, there is no isReverseRun in explog.txt.
@@ -497,7 +498,13 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
     expObj.status = 'run'
     expObj.runMode = planObj.runMode
     for key,value in kwargs.items():
-        setattr(expObj, key, value)
+        if key == "sequencekitname":            
+            if value:
+                setattr(expObj, key, value)
+            else:
+                logger.errors.debug("crawler.update_exp_objects_from_log() SKIPPED key=%s; value=%s" %(key, value))
+        else:                   
+            setattr(expObj, key, value)
 
     expObj.save()
     logger.errors.info("Updated experiment=%s, pk=%s, expDir=%s" % (expObj.expName, expObj.pk, expObj.expDir) )
@@ -524,9 +531,17 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj):
 
 
     # *** Update ExperimentAnalysisSettings ***
-    eas_keys = ['barcodeKitName', 'reference', 'libraryKey', 'libraryKitName', 'libraryKitBarcode']
+    eas_keys = ['barcodeKitName', 'reference', 'libraryKey']
+
     for key in eas_keys:
         setattr(easObj, key, kwargs[key])
+    
+    #do not replace plan's EAS value if explog does not have a value for it
+    eas_keys = ['libraryKitName', 'libraryKitBarcode']
+    for key in eas_keys:
+        if (key in kwargs) and kwargs[key]:
+            setattr(easObj, key, kwargs[key])
+        
     easObj.status = 'run'
     easObj.save()
     logger.errors.info("Updated EAS=%s" % easObj)

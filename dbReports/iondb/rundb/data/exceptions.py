@@ -56,3 +56,11 @@ class SrcDirDoesNotExist(Exception):
         self.message = str(_msg)
     def __str__(self):
         return repr(self.message)
+
+class BaseInputLinked(Exception):
+    def __init__(self,_msg):
+        self.tag = "basecalling_input_linked"
+        self.message = str(_msg)
+    def __str__(self):
+        return repr(self.message)
+

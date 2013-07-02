@@ -569,7 +569,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             beadMetrics = parseBeadfind.generateMetrics(beadPath)
         except:
             beadMetrics = None
-            return_message += traceback.print_exc()
+            return_message += traceback.format_exc()
     else:
         beadMetrics = None
         return_message += 'ERROR: generating beadMetrics failed - file %s is missing\n' % beadPath
@@ -582,7 +582,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             file.close()
         except:
             tfMetrics = None
-            return_message += traceback.print_exc()
+            return_message += traceback.format_exc()
     else:
         tfMetrics = None
         return_message += 'ERROR: generating tfMetrics failed - file %s is missing\n' % tfPath
@@ -602,7 +602,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             afile.close()
         except:
             BaseCallerMetrics = None
-            return_message += traceback.print_exc()
+            return_message += traceback.format_exc()
     else:
         BaseCallerMetrics = None
         return_message += 'ERROR: generating BaseCallerMetrics failed - file %s is missing\n' % BaseCallerJsonPath
@@ -615,7 +615,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             afile.close()
         except:
             ionstats_basecaller = None
-            return_message += traceback.print_exc()
+            return_message += traceback.format_exc()
     else:
         ionstats_basecaller = None
         return_message += 'ERROR: generating ionstats_basecaller failed - file %s is missing\n' % ionstats_basecaller_json_path
@@ -629,7 +629,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
                 afile.close()
             except:
                 ionstats_alignment = None
-                return_message += traceback.print_exc()
+                return_message += traceback.format_exc()
         else:
             ionstats_alignment = None
             return_message += 'ERROR: generating ionstats_alignment failed - file %s is missing\n' % ionstats_alignment_json_path
@@ -648,7 +648,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             genomeinfodict['genome_name'] = 'None'
             genomeinfodict['genome_length'] = 0
     except:
-        return_message += traceback.print_exc()
+        return_message += traceback.format_exc()
 
     extra_files = glob.glob(os.path.join(cwd,'BamDuplicates*.json'))
     extra = { u'reads_with_adaptor':0, u'duplicate_reads':0, u'total_reads':0, u'fraction_with_adaptor':0, u'fraction_duplicates':0 }
@@ -660,7 +660,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
                 for key in extra.keys():
                     extra[key] += val.get(key,0)
           except:
-              return_message += traceback.print_exc()
+              return_message += traceback.format_exc()
       else:
           return_message += 'INFO: generating extra metrics failed - file %s is missing\n' % extra_file
     else:
@@ -672,7 +672,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
             extra[u'fraction_with_adaptor'] = extra[u'reads_with_adaptor'] / float( extra[u'total_reads'] )
             extra[u'fraction_duplicates'] = extra[u'duplicate_reads'] / float( extra[u'total_reads'] )
     except:
-        return_message += traceback.print_exc()
+        return_message += traceback.format_exc()
         
     #print "BamDuplicates stats: ", extra
     

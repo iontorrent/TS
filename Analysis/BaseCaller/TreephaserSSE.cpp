@@ -200,13 +200,26 @@ inline __m128 applyRecalModel(__m128 current_value, PathRec RESTRICT_PTR current
 };
 
 
-// ---------
+// ----------------------------------------------------------------------------
 
+// Constructor used in variant caller
+TreephaserSSE::TreephaserSSE()
+{
+  flow_order_.SetFlowOrder("TACG", 4);
+  SetFlowOrder(flow_order_, 38);
+}
+
+// Constructor used in Basecaller
 TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize)
-  : flow_order_(flow_order)
+{
+	SetFlowOrder(flow_order, windowSize);
+}
+
+// Initialize Object
+void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize)
 {
   SetNormalizationWindowSize(windowSize);
-
+  flow_order_ = flow_order;
   num_flows_ = flow_order.num_flows();
 
   // For some perverse reason cppcheck does not like this loop
@@ -845,6 +858,26 @@ void TreephaserSSE::sumNormMeasures() {
   while(--i >= 0)
     rd_SqNormMeasureSum[i] = (sum += rd_NormMeasure[i]*rd_NormMeasure[i]);
 }
+
+// -------------------------------------------------
+
+void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow)
+{
+  copySSE(rd_NormMeasure, &read.normalized_measurements[0], num_flows_*sizeof(float));
+  setZeroSSE(sv_PathPtr[MAX_PATHS]->pred, num_flows_*sizeof(float));
+  copySSE(sv_PathPtr[MAX_PATHS]->sequence, &read.sequence[0], (int)read.sequence.size()*sizeof(char));
+  sv_PathPtr[MAX_PATHS]->sequence_length = read.sequence.size();
+
+  Solve(begin_flow, end_flow);
+
+  read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
+  copySSE(&read.sequence[0], sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
+  copySSE(&read.normalized_measurements[0], rd_NormMeasure, num_flows_*sizeof(float));
+  setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
+  copySSE(&read.prediction[0], sv_PathPtr[MAX_PATHS]->pred, sv_PathPtr[MAX_PATHS]->window_end*sizeof(float));
+}
+
+// -------------------------------------------------
 
 bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 {

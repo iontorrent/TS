@@ -109,7 +109,7 @@ void CalculateOrdinaryScore(FlowDist *flowDist, AlleleIdentity &variant_identity
   //string *filterReason = new string();
 
   //cout << "Bayesian Score = " << BayesianScore << endl;
-  float stdBias = flowDist->summary_stats.getStrandBias();
+  float stdBias = flowDist->summary_stats.getStrandBias(0.5f);
   float refBias = flowDist->summary_stats.getRefStrandBias();
   //float baseStdBias = flowDist->summary_stats.getBaseStrandBias();
 
@@ -237,7 +237,7 @@ void RunPeakFinderOnFlowDist(FlowDist *flowDist, MultiAlleleVariantIdentity& mul
                              string *filterReason, stringstream &infoss, float &BayesianScore, float &maxProb) {
   // CK: Replaced in fuction call: AlleleIdentity &variant_identity, vcf::Variant ** candidate_variant,
 
-  float stdBias = flowDist->summary_stats.getStrandBias();
+  float stdBias = flowDist->summary_stats.getStrandBias(0.5f);
   float refBias = flowDist->summary_stats.getRefStrandBias();
   //float baseStdBias = flowDist->summary_stats.getBaseStrandBias();
 

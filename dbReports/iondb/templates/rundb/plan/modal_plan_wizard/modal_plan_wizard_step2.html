@@ -309,7 +309,7 @@
         <table class="plan-grid">
             <tr>
                 <td width="65%">
-                    <p class="form-label">Templating Kit:   
+                    <p class="form-label">Template Kit:   
                     <span class="option-group">
                     <small style="font-weight: normal; font-size: 75%;">
                     	{% if selectedApplProductData %}
@@ -394,7 +394,7 @@
             </tr>
             <tr>
                 <td width="65%">
-                    <p class="form-label">Sequence Kit:</p>
+                    <p class="form-label">Sequencing Kit:</p>
                     {% for seqKit in planTemplateData.seqKits %}
                         <input value="{{seqKit.flowCount}}"  id="{{seqKit.name}}" name="{{seqKit.name}}" type="hidden"/>
                     {% endfor %}

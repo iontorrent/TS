@@ -110,3 +110,6 @@ hr{
     height: 2px;
 }
 
+#resultList {
+    width: auto;
+}

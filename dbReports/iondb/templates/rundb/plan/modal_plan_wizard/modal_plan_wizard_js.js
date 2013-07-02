@@ -35,7 +35,8 @@ selectedApplProductData.isDefaultBarcoded = "{{selectedApplProductData.isDefault
 selectedApplProductData.defaultBarcodeKitName = "{{selectedApplProductData.defaultBarcodeKitName}}";
 selectedApplProductData.defaultOneTouchTemplateKit = "{{selectedApplProductData.defaultOneTouchTemplateKit}}";
 selectedApplProductData.defaultIonChefKit = "{{selectedApplProductData.defaultIonChefKit}}";
-selectedApplProductData.reference = "{{selectedApplProductData.reference}}"
+selectedApplProductData.reference = "{{selectedApplProductData.reference}}";
+selectedApplProductData.defaultSamplePrepKit = "{{selectedApplProductData.defaultSamplePrepKit}}";
 {% endif %}
 
 
@@ -138,6 +139,9 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.GENS.controlSeqKit}}") {
         applProduct.GENS.controlSeqName = "{{planTemplateData.GENS.controlSeqKit.name}}";
     }
+    if ("{{planTemplateData.GENS.defaultSamplePrepKit}}") {
+    	applProduct.GENS.defaultSamplePrepKit = "{{planTemplateData.GENS.defaultSamplePrepKit.name}}";
+    }        
     applProduct.GENS.flowCount = "{{planTemplateData.GENS.flowCount}}";
     applProduct.GENS.isHotspotRegionBEDFileSupported = "{{planTemplateData.GENS.isHotspotRegionBEDFileSupported}}";
     applProduct.GENS.reference = "{{planTemplateData.GENS.reference}}"
@@ -166,6 +170,9 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.AMPS.controlSeqKit}}") {
         applProduct.AMPS.controlSeqName = "{{planTemplateData.AMPS.controlSeqKit.name}}";
     }
+    if ("{{planTemplateData.AMPS.defaultSamplePrepKit}}") {
+    	applProduct.AMPS.defaultSamplePrepKit = "{{planTemplateData.AMPS.defaultSamplePrepKit.name}}";
+    }        
     applProduct.AMPS.flowCount = "{{planTemplateData.AMPS.flowCount}}";
     applProduct.AMPS.isHotspotRegionBEDFileSupported = "{{planTemplateData.AMPS.isHotspotRegionBEDFileSupported}}";
     applProduct.AMPS.reference = "{{planTemplateData.AMPS.reference}}"
@@ -194,7 +201,9 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.TARS.controlSeqKit}}") {
         applProduct.TARS.controlSeqName = "{{planTemplateData.TARS.controlSeqKit.name}}";
     }
-
+    if ("{{planTemplateData.TARS.defaultSamplePrepKit}}") {
+    	applProduct.TARS.defaultSamplePrepKit = "{{planTemplateData.TARS.defaultSamplePrepKit.name}}";
+    }
     applProduct.TARS.flowCount = "{{planTemplateData.TARS.flowCount}}";
     applProduct.TARS.isHotspotRegionBEDFileSupported = "{{planTemplateData.TARS.isHotspotRegionBEDFileSupported}}";
     applProduct.TARS.reference = "{{planTemplateData.TARS.reference}}"
@@ -223,6 +232,9 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.WGNM.controlSeqKit}}") {
         applProduct.WGNM.controlSeqName = "{{planTemplateData.WGNM.controlSeqKit.name}}";
     }
+    if ("{{planTemplateData.WGNM.defaultSamplePrepKit}}") {
+    	applProduct.WGNM.defaultSamplePrepKit = "{{planTemplateData.WGNM.defaultSamplePrepKit.name}}";
+    }    
     applProduct.WGNM.flowCount = "{{planTemplateData.WGNM.flowCount}}";
     applProduct.WGNM.isHotspotRegionBEDFileSupported = "{{planTemplateData.WGNM.isHotspotRegionBEDFileSupported}}";
     applProduct.WGNM.reference = "{{planTemplateData.WGNM.reference}}"
@@ -251,6 +263,9 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.RNA.controlSeqKit}}") {
         applProduct.RNA.controlSeqName = "{{planTemplateData.RNA.controlSeqKit.name}}";
     }
+    if ("{{planTemplateData.RNA.defaultSamplePrepKit}}") {
+    	applProduct.RNA.defaultSamplePrepKit = "{{planTemplateData.RNA.defaultSamplePrepKit.name}}";
+    }        
     applProduct.RNA.flowCount = "{{planTemplateData.RNA.flowCount}}";
     applProduct.RNA.isHotspotRegionBEDFileSupported = "{{planTemplateData.RNA.isHotspotRegionBEDFileSupported}}";
     applProduct.RNA.reference = "{{planTemplateData.RNA.reference}}"
@@ -279,9 +294,43 @@ TB.plan.wizard.getApplProduct = function(runType) {
     if ("{{planTemplateData.AMPS_RNA.controlSeqKit}}") {
         applProduct.AMPS_RNA.controlSeqName = "{{planTemplateData.AMPS_RNA.controlSeqKit.name}}";
     }
+    if ("{{planTemplateData.AMPS_RNA.defaultSamplePrepKit}}") {
+    	applProduct.AMPS_RNA.defaultSamplePrepKit = "{{planTemplateData.AMPS_RNA.defaultSamplePrepKit.name}}";
+    }        
     applProduct.AMPS_RNA.flowCount = "{{planTemplateData.AMPS_RNA.flowCount}}";
     applProduct.AMPS_RNA.isHotspotRegionBEDFileSupported = "{{planTemplateData.AMPS_RNA.isHotspotRegionBEDFileSupported}}";
     applProduct.AMPS_RNA.reference = "{{planTemplateData.AMPS_RNA.reference}}"
-    	
+  	
+    applProduct.AMPS_EXOME = {};
+    applProduct.AMPS_EXOME.runTypeDescription = '{{planTemplateData.AMPS_EXOME.runType.description}}';
+    applProduct.AMPS_EXOME.variantFrequency = "{{planTemplateData.AMPS_EXOME.defaultVariantFrequency}}";
+    applProduct.AMPS_EXOME.isDefaultPairedEnd = "{{planTemplateData.AMPS_EXOME.isDefaultPairedEnd}}";
+    applProduct.AMPS_EXOME.reference = '{{planTemplateData.AMPS_EXOME.reference}}';
+    applProduct.AMPS_EXOME.targetBedFile = '{{planTemplateData.AMPS_EXOME.targetBedFile}}';
+    applProduct.AMPS_EXOME.hotSpotBedFile = '{{planTemplateData.AMPS_EXOME.hotSpotBedFile}}';
+    if (applProduct.AMPS_EXOME.isDefaultPairedEnd == "True") {
+    	applProduct.AMPS_EXOME.libKitName = '{{planTemplateData.AMPS_EXOME.peLibKit.name}}';
+    	applProduct.AMPS_EXOME.seqKitName = "{{planTemplateData.AMPS_EXOME.peSeqKit.name}}";
+    } else {
+    	applProduct.AMPS_EXOME.libKitName = '{{planTemplateData.AMPS_EXOME.libKit.name}}';
+    	applProduct.AMPS_EXOME.seqKitName = "{{planTemplateData.AMPS_EXOME.seqKit.name}}";
+    }
+    applProduct.AMPS_EXOME.chipType = '{{planTemplateData.AMPS_EXOME.chipType}}';
+    if ("{{planTemplateData.AMPS_EXOME.defaultOneTouchTemplateKit}}") {
+    	applProduct.AMPS_EXOME.defaultOneTouchTemplateKitName = "{{planTemplateData.AMPS_EXOME.defaultOneTouchTemplateKit.name}}";
+    }
+    if ("{{planTemplateData.AMPS_EXOME.defaultIonChefKit}}") {
+    	applProduct.AMPS_EXOME.defaultIonChefKitName = "{{planTemplateData.AMPS_EXOME.defaultIonChefKit.name}}";
+    }    
+    if ("{{planTemplateData.AMPS_EXOME.controlSeqKit}}") {
+    	applProduct.AMPS_EXOME.controlSeqName = "{{planTemplateData.AMPS_EXOME.controlSeqKit.name}}";
+    } 
+    if ("{{planTemplateData.AMPS_EXOME.defaultSamplePrepKit}}") {
+    	applProduct.AMPS_EXOME.defaultSamplePrepKit = "{{planTemplateData.AMPS_EXOME.defaultSamplePrepKit.name}}";
+    }    
+    applProduct.AMPS_EXOME.flowCount = "{{planTemplateData.AMPS_EXOME.flowCount}}";
+    applProduct.AMPS_EXOME.isHotspotRegionBEDFileSupported = "{{planTemplateData.AMPS_EXOME.isHotspotRegionBEDFileSupported}}";
+    applProduct.AMPS_EXOME.reference = "{{planTemplateData.AMPS_EXOME.reference}}"
+
     return runType && applProduct[runType] || null;
 };

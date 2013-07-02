@@ -5,6 +5,7 @@
 import json
 import httplib2
 import urllib
+from iondb.rundb.json_field import JSONEncoder
 
 url = "http://localhost/rundb/api/v1/%s/"
 uri = "http://localhost/rundb/api/v1/%s/%s/"
@@ -22,7 +23,7 @@ def get(where, **query):
 
 def post(where, **query):
     """Returns the API URI for the newly created item."""
-    body = json.dumps(query)
+    body = json.dumps(query, cls=JSONEncoder)
     item_url = url % where
     h = httplib2.Http()
     response, content = h.request(item_url, method="POST", body=body, headers=headers)
@@ -31,7 +32,7 @@ def post(where, **query):
 
 def put(where, item_id, **update):
     """Returns True if successful; otherwise, False"""
-    body = json.dumps(update)
+    body = json.dumps(update, cls=JSONEncoder)
     item_uri = uri % (where, str(item_id))
     h = httplib2.Http()
     response, content = h.request(item_uri, method="PUT", body=body, headers=headers)
@@ -40,7 +41,7 @@ def put(where, item_id, **update):
 
 def patch(where, item_id, **update):
     """Returns True if successful; otherwise, False"""
-    body = json.dumps(update)
+    body = json.dumps(update, cls=JSONEncoder)
     item_uri = uri % (where, str(item_id))
     h = httplib2.Http()
     response, content = h.request(item_uri, method="PATCH", body=body, headers=headers)

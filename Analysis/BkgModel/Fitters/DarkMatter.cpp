@@ -181,12 +181,30 @@ void Axion::PCACalc(arma::fmat &avg_0mers,bool region_sampled)
       if (icnt < target_sample_size)
          mat_obs.resize(icnt,npts);
 
-      bool success = princomp(coeff,score,mat_obs);
-      
+      bool success = false;
+
+      try {
+	arma::fmat X = mat_obs.t() * mat_obs;
+	arma::fmat evec;
+	arma::Col<float> eval;
+	arma::eig_sym(eval, evec, X);
+	amat.set_size(X.n_cols, NUM_DM_PCA);
+	int count = 0;
+	// Copy first N eigen vectors
+	for (int vIx = X.n_cols - 1; vIx >= (int)(X.n_cols - (NUM_DM_PCA)) && vIx >= 0; vIx--) {
+	  std::copy(evec.begin_col(vIx), evec.end_col(vIx), amat.begin_col(count++));
+	}
+	success = true;
+      }
+      catch (...) {
+	// @todo - warning or something here?
+       	success = false;
+      }
+
       if (success)
-         total_vectors = NUM_DM_PCA;
-      else
-         total_vectors = 1;
+	total_vectors = NUM_DM_PCA;
+      else 
+	total_vectors = 1;
    }
    else
    {
@@ -196,23 +214,25 @@ void Axion::PCACalc(arma::fmat &avg_0mers,bool region_sampled)
       total_vectors = 1;
    }
 
-   amat.set_size(npts,total_vectors);
-
-   if (region_sampled)
-      region_mean_0mer = arma::mean(mat_obs,0).t();
-   else
-      region_mean_0mer = arma::mean(avg_0mers,0).t();
-
-   if (total_vectors > 1)
-      amat(arma::span::all,arma::span(1,total_vectors-1)) = coeff(arma::span::all,arma::span(0,total_vectors-2));
-   amat(arma::span::all,0) = region_mean_0mer;
-
-   vals = solve(amat,avg_0mers.t());
+   // If not doing pca set up the amat matrix (vector in this case really)
+   if (total_vectors == 1) {
+     if (region_sampled)
+       region_mean_0mer = arma::mean(mat_obs,0).t();
+     else
+       region_mean_0mer = arma::mean(avg_0mers,0).t();
+     amat.set_size(npts, total_vectors);
+     amat(arma::span::all,0) = region_mean_0mer;
+     vals = solve(amat,avg_0mers.t());
+     vals = vals.t();
+   }
+   else {
+     vals = avg_0mers * amat;
+   }
 
    // store coefficients for each bead into the bead params structure
    for (int ibd=0;ibd < numLBeads;ibd++)
       for (int i=0;i < total_vectors;i++)
-         bkg.region_data->my_beads.params_nn[ibd].pca_vals[i] = vals(i,ibd);
+	bkg.region_data->my_beads.params_nn[ibd].pca_vals[i] = vals(ibd,i);
 
    // store the components of the PCA vector into the DarkHalo object
    for (int icomp=0;icomp < total_vectors;icomp++)

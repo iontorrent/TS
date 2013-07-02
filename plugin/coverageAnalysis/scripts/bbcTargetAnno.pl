@@ -98,7 +98,7 @@ if( !$bedout )
     else { $headerLine .= sprintf("field%d\t", $i+1); }
   }
   # these are the added 6 base coverage fields
-  $headerLine .= "covered\tuncov_3p\tuncov_5p\tdepth\tfwd_reads\trev_reads";
+  $headerLine .= "covered\tuncov_5p\tuncov_3p\tdepth\tfwd_reads\trev_reads";
 }
 
 my $numBedWarnings = 0;
@@ -180,7 +180,7 @@ while( <BEDFILE> )
   seek(BBCFILE,$lastHead,0);
   bciSeekForward($chrIdx,$targSrt);
   # read from current BBC cursor to end of current target region
-  my ($pos,$nfwd,$nrev,$fcov3p,$lcov5p,$tcov) = (0,0,0,0,0,0);
+  my ($pos,$nfwd,$nrev,$fcov5p,$lcov3p,$tcov) = (0,0,0,0,0,0);
   while( $pos <= $targEnd )
   {
     # record the start of the next BBC region in case there adjacent/overlapping targets
@@ -224,8 +224,8 @@ while( <BEDFILE> )
         {
           $nfwd += $fcov; # forward base reads
           $nrev += $rcov; # reverse base reads
-          $fcov3p = $pos if( !$fcov3p ); # position in target of first base covered
-          $lcov5p = $pos; # position in target of last base covered
+          $fcov5p = $pos if( !$fcov5p ); # position in target of first base covered
+          $lcov3p = $pos; # position in target of last base covered
           ++$tcov; # total base reads on target (not including deletions)
         }
       }
@@ -242,8 +242,8 @@ while( <BEDFILE> )
   {
     print "$fields[$i]\t";
   }
-  $fcov3p = $fcov3p ? $fcov3p-$targSrt : $len;
-  $lcov5p = $lcov5p ? $targEnd-$lcov5p : $len;
+  $fcov5p = $fcov5p ? $fcov5p-$targSrt : $len;
+  $lcov3p = $lcov3p ? $targEnd-$lcov3p : $len;
   printf "%d\t%d\t%d\t%.3f\t%d\t%d\n", $tcov, $fcov3p, $lcov5p, $depth, $nfwd, $nrev;
 }
 close( BEDFILE );

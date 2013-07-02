@@ -34,7 +34,7 @@ public:
    InitForStrand();
   }
  
-  void GenerateBiasByStrand(vector<float> &delta, vector<int> &test_flow, int strand_key, vector<float> &new_residuals);
+  void GenerateBiasByStrand(vector<float> &delta, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions);
   void UpdateResiduals(CrossHypotheses &my_cross);
   void ResetUpdate();
   void AddOneUpdate(vector<float> &delta, vector<vector<float> >&residuals, vector<int> &test_flow, int strand_key, vector<float> &responsibility);

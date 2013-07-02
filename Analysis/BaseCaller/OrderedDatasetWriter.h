@@ -100,10 +100,12 @@ struct ProcessedRead {
   ProcessedRead() {
     read_group_index = 0;
     barcode_n_errors = 0;
+	barcode_adjust_errors = 0;
   }
 
   int                   read_group_index;         //!< Read group index, generally based on barcode classification.
   int                   barcode_n_errors;         //!< Number of base mismatches in barcode sequence
+  int                   barcode_adjust_errors;    //!< Number of base mismatches in barcode sequence
 
   ReadFilteringHistory  filter;
   BamAlignment          bam;
@@ -129,7 +131,8 @@ public:
   void Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions, const ion::FlowOrder& flow_order, const string& key,
       const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
       const string& production_date, const string& platform_unit,
-      bool save_filtered_reads);
+      bool save_filtered_reads,
+	    vector<string>& comments);
 
   //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
   //! @param  region          Index of the region being dropped off.

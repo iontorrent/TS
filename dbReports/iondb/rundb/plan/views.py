@@ -124,6 +124,7 @@ def _add_plan(request, code, intent):
         '3': "WGNM",
         '4': "RNA",
         '5': "AMPS_RNA",
+        '6': "AMPS_EXOME"
     }
     product_code = codes.get(code, "GENS")
     logger.debug("views.add_planTemplate()... code=%s, product_code=%s" % (code, product_code))
@@ -645,6 +646,7 @@ def _get_allApplProduct_data(isForTemplate):
                 applData['defaultBarcodeKitName'] = defaultApplProduct[0].defaultBarcodeKitName
                 
                 applData['defaultIonChefKit'] = defaultApplProduct[0].defaultIonChefPrepKit
+                applData['defaultSamplePrepKit'] = defaultApplProduct[0].defaultSamplePrepKit
                 
                 #20120619-TODO-add compatible plugins, default plugins
 
@@ -724,7 +726,10 @@ def _dict_IR_plugins_uploaders(isForTemplate):
 def _get_base_planTemplate_data(isForTemplate):
     data = {}
 
-    data["runTypes"] = list(RunType.objects.all().order_by('nucleotideType', 'runType'))
+    #per requirement, we want to display Generic Sequencing as the last entry in the selection list
+    data["runTypes"] = list(RunType.objects.all().exclude(runType = "GENS").order_by('nucleotideType', 'runType'))
+    data["secondaryRunTypes"] = list(RunType.objects.filter(runType = "GENS"))
+                
     data["barcodes"] = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
 
     ##barcodeKitNames = dnaBarcode.objects.values_list('name', flat=True).distinct().order_by('name')

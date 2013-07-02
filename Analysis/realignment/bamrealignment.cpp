@@ -121,11 +121,11 @@ int main (int argc, const char *argv[])
   while(reader.GetNextAlignment(alignment)){
     readcounter ++;
     
-    if(debug) {
+    /*if(debug) {
       cout << alignment.Name << endl;
       if (alignment.Name.compare("8HDVJ:00239:00175") == 0)
 	aligner.verbose_ = true;
-    }
+    }*/
     
     if ( (readcounter % 100000) == 0 )
        cout << "Processed " << readcounter << " reads. Elapsed time: " << (time(NULL) - start_time) << endl;

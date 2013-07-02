@@ -422,6 +422,9 @@ class PluginManager(object):
                 oldp.active=False
             oldp.save()
 
+            # Important! This is passed back to preserve autorun and selected settings
+            oldplugin = oldp
+
         if count:
             logger.debug('Deactivated %d old versions while upgrading to %s v%s', count, plugin.name, plugin.version)
 

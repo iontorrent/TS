@@ -92,32 +92,6 @@ def _change_genome_name(rg, new_name, old_full_name, new_full_name):
             print line,
 
 
-def _genome_set_alignment_sample(pk, size_to_set):
-    """Allow the alignment sample size to be changed"""
-
-    try:
-        rg = ReferenceGenome.objects.get(pk=pk)
-        size_to_set = int(size_to_set)
-    except:
-        return False
-
-    genome_info = _read_genome_info(rg.info_text())
-
-    if size_to_set == 0:
-        try:
-            del genome_info['read_sample_size']
-        except KeyError:
-            return
-
-        _write_genome_info(rg.info_text(), genome_info)
-        return
-
-    if size_to_set > 0:
-        genome_info["read_sample_size"] = size_to_set
-        _write_genome_info(rg.info_text(), genome_info)
-        return
-
-
 def _write_genome_info(info_path, _dict):
     """write genome info to file from dict
     """
@@ -209,11 +183,14 @@ def _verbose_error_trim(verbose_error):
 
 
 @login_required
-def edit_genome(request, pk):
+def edit_genome(request, pk_or_name):
     """Make changes to an existing genome database reference,
     or create a new one if ``pk`` is zero."""
+    try:
+        rg = ReferenceGenome.objects.get(pk=pk_or_name)
+    except (ValueError, ReferenceGenome.DoesNotExist):
+        rg = get_object_or_404(ReferenceGenome, short_name=pk_or_name)
 
-    rg = get_object_or_404(ReferenceGenome, pk=pk)
     uploads = ContentUpload.objects.filter(publisher__name="BED")
     relevant = [u for u in uploads if u.meta.get("reference", "") == rg.short_name]
     #TODO give an indication if it is a hotspot BED file
@@ -255,14 +232,12 @@ def edit_genome(request, pk):
 
             rg.save()
 
-            _genome_set_alignment_sample(rg.pk, rfd.cleaned_data['read_sample_size'])
-
             url = urlresolvers.reverse("configure_references")
             return HttpResponsePermanentRedirect(url)
         else:
             genome_dict = _read_genome_info(rg.info_text())
             verbose_error = _verbose_error_trim(rg.verbose_error)
-            genome_fasta, genome_size = _genome_get_fasta(pk)
+            genome_fasta, genome_size = _genome_get_fasta(rg.pk)
 
             ctxd = {"temp": rfd, "name": rg.short_name, "key": rg.pk, "enabled": rg.enabled,
                     "genome_dict": genome_dict, "status": rg.status, "verbose_error": verbose_error,
@@ -279,18 +254,11 @@ def edit_genome(request, pk):
         temp.fields['name'].initial = rg.short_name
         temp.fields['notes'].initial = rg.notes
         temp.fields['enabled'].initial = rg.enabled
-        temp.fields['genome_key'].initial = pk
+        temp.fields['genome_key'].initial = rg.pk
         temp.fields['index_version'].initial = rg.index_version
 
         genome_dict = _read_genome_info(rg.info_text())
-
-        try:
-            sample_size = genome_dict["read_sample_size"]
-            temp.fields['read_sample_size'].initial = sample_size
-        except:
-            temp.fields['read_sample_size'].initial = 0
-
-        genome_fasta, genome_size = _genome_get_fasta(pk)
+        genome_fasta, genome_size = _genome_get_fasta(rg.pk)
 
         verbose_error = _verbose_error_trim(rg.verbose_error)
         fastaOrig = rg.fastaOrig()
@@ -418,7 +386,6 @@ def new_genome(request):
         notes = request.POST.get('notes', "")
 
         #optional
-        read_sample_size = request.POST.get('read_sample_size', False)
         read_exclude_length = request.POST.get('read_exclude_length', False)
 
         #URL download
@@ -492,7 +459,7 @@ def new_genome(request):
         try:
             conn = client.connect(JOBSERVER_HOST, settings.JOBSERVER_PORT)
             tmap_bool, tmap_status = conn.tmap(str(ref_genome.id), fasta, short_name, name, version,
-                                               read_sample_size, read_exclude_length, settings.TMAP_VERSION)
+                                               read_exclude_length, settings.TMAP_VERSION)
             logger.debug('ionJobserver process reported %s %s' % (tmap_bool, tmap_status))
         except (socket.error, xmlrpclib.Fault):
             #delete the genome object, because it was not sucessful

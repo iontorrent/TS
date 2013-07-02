@@ -107,7 +107,7 @@ bool LocalReferenceContext::ContextSanityChecks(const string & local_contig_sequ
 
   // Sanity checks that abort context detection
   reference_allele = (*candidate_variant)->ref;
-  context_detected = false;
+  context_detected = true;
 
   if ((*candidate_variant)->position < 1 or (*candidate_variant)->position > (long)local_contig_sequence.length()) {
     cerr << "Non-fatal ERROR: Candidate Variant Position is not within the Contig Bounds at VCF Position "
@@ -116,9 +116,9 @@ bool LocalReferenceContext::ContextSanityChecks(const string & local_contig_sequ
     cout << "Non-fatal ERROR: Candidate Variant Position is not within the Contig Bounds at VCF Position "
          << (*candidate_variant)->sequenceName << ":" << (*candidate_variant)->position
          << " Contig length = " << local_contig_sequence.length() << endl;
-    // Go to positive out-of-bounds position -> zero coverage in bam
-    position0 = local_contig_sequence.length();
-    return (false);
+    // Choose safe parameter
+    position0 = 0;
+    context_detected = false;
   }
 
   if (reference_allele.length() == 0) {
@@ -126,7 +126,9 @@ bool LocalReferenceContext::ContextSanityChecks(const string & local_contig_sequ
          << (*candidate_variant)->sequenceName << ":" << (*candidate_variant)->position << endl;
     cout << "Non-fatal ERROR: Reference allele has zero length at vcf position "
          << (*candidate_variant)->sequenceName << ":" << (*candidate_variant)->position << endl;
-    return (false);
+    // Choose safe parameter
+    reference_allele = local_contig_sequence.at(position0);
+    context_detected = false;
   }
 
   if (((unsigned int)(*candidate_variant)->position + reference_allele.length() -1) > local_contig_sequence.length()) {
@@ -138,9 +140,9 @@ bool LocalReferenceContext::ContextSanityChecks(const string & local_contig_sequ
 	     << (*candidate_variant)->sequenceName << ":" << (*candidate_variant)->position
 	     << " Contig length = " << local_contig_sequence.length()
 	     << " Reference Allele: " << reference_allele << endl;
-    // Reduce reference allele to length 1 to make it fit
+    // Choose safe parameter
     reference_allele = reference_allele.at(0);
-    return (false);
+    context_detected = false;
   }
 
   string contig_str(local_contig_sequence, position0, reference_allele.length());
@@ -151,9 +153,8 @@ bool LocalReferenceContext::ContextSanityChecks(const string & local_contig_sequ
     cout << "Non-fatal ERROR: Reference allele does not match reference at VCF position "
          << (*candidate_variant)->sequenceName << ":" << (*candidate_variant)->position
          << " Reference Allele: " << reference_allele << " Reference: " << contig_str << endl;
-    return (false);
+    context_detected = false;
   }
 
-  context_detected = true;
-  return (true);
+  return (context_detected);
 }

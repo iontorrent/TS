@@ -2,8 +2,7 @@
 1.	Torrent Suite Software License
 =====================================================================
 
-Torrent Suite Software: This software provides for the analysis and storage of data 
-received from the Ion Personal Genome Machine (PGM(tm)).
+Torrent Suite Software: This software provides for the analysis and storage of data received from the Ion Personal Genome Machine(R) PGM(tm) Sequencer or the Ion Proton(R) Sequencer.
 ---------------------------------------------------------------------
 
 Copyright (C) 2011 Life Technologies Corporation

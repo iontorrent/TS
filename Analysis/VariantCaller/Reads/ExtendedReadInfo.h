@@ -49,7 +49,7 @@ class ExtendedReadInfo{
   public:
   BamTools::BamAlignment     alignment;         //!< BamTools Alignment Information
   bool                       is_forward_strand; //!< Indicates whether read is from the forward or reverse strand
-  string                     read_seq;          //!< Read sequence as base called (minus hard clips)
+  //string                     read_seq;          //!< Read sequence as base called (minus hard clips)
   string                     ref_aln;           //!< Gap padded read sequence
   string                     seq_aln;           //!< Gap padded reference sequence
   string                     pretty_aln;        //!< pretty alignment string displaying matches, insertions, deletions
@@ -61,6 +61,9 @@ class ExtendedReadInfo{
   int                        start_flow;        //!< Flow corresponding to the first base in read_seq
   int                        start_pos;         //!< Start position of the alignment as reported in BAM
   bool                       is_happy_read;
+  string                     runid;             //!< Identify the run from which this read came: used to find run-specific parameters
+  vector<int>                well_rowcol;       //!< 2 element int vector 0-based row, col in that order mapping to row,col in chip
+  unsigned short             map_quality;        //! MapQuality as reported in BAM
 
   ExtendedReadInfo(){
     Default();
@@ -81,6 +84,7 @@ class ExtendedReadInfo{
     start_flow = 0;
     start_pos = 0;
     is_happy_read = false;
+    map_quality = 0;
   };
 
   //! @brief  Populates object variables

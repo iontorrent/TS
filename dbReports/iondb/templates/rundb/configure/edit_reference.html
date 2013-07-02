@@ -171,11 +171,6 @@
               <td>{{ temp.NCBI_name.errors }}</td>
             </tr>
             <tr>
-              <th>Read Sample Size (set to 0 for no sampling)</th>
-              <td>{{ temp.read_sample_size }}</td>
-              <td>{{ temp.read_sample_size.errors }}</td>
-            </tr>
-            <tr>
               <th>{{ temp.notes.label }}</th>
               <td>{{ temp.notes }}</td>
               <td>{{ temp.notes.errors }}</td>
@@ -271,23 +266,23 @@
             </tr>
             <tr id="availableBedFiles" class="fileList">
               <th>
-                <p>Available BED Files</p>
+                <p>Available Target Regions and Hotspot Files</p>
                 <button class="btn" id="bedUpload"
-                       type="button">Upload BED files</button>
+                       type="button">Upload new files</button>
               </th>
               <td>
                 <div id="bedPublish">
-                  <h3>Upload a BED file for {{name}}: </h3>
+                  <h3>Upload new Target Regions file (BED) or Hotspot file (BED or VCF) for {{name}}: </h3>
                   <div style="margin: 10px 0;">
                     <span id="file_info">No file selected.</span>
                     <span id="file_progress"></span>
                   </div>
                   <div class="buttonHolder form-inline">
-                    <button class="btn" id="pickfiles">Select a new BED File</button>
+                    <button class="btn" id="pickfiles">Select a new BED/VCF File</button>
                     <label  style="margin-left: 10px" for="hotspot" >Hotspot </label>
                     <input type="checkbox" id="hotspot" name="hotspot"/>
                     <a href="#" id="hotspot_help_button">?</a>
-                    <p id="hotspot_help_text">A "HotSpot" type BED file defines regions or individual bases where variants are expected to occur.</p>
+                    <p id="hotspot_help_text">A "HotSpot" type BED or VCF file defines regions and individual bases where variants are expected to occur.</p>
                     <div style="margin: 10px 0;">
                       <button class="btn" id="upload_button">Upload</button>
                     </div>

@@ -30,9 +30,11 @@
         
         "downsample_to_coverage":2000,
         "outlier_probability":0.005,
+        "do_snp_realignment":1,
 
         "prediction_precision":1.0,
-        "heavy_tailed":3
+        "heavy_tailed":3,
+        "suppress_recalibration":1
 
     },
     "long_indel_assembler":{

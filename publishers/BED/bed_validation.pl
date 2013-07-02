@@ -160,7 +160,7 @@ for( my $i = 0; $i <= $#bfile; $i++ ) {
   }
   chomp $inputLine;
   # Line type
-  if( $inputLine =~ m/track/ ) { # Track line
+  if( $inputLine =~ m/^\s*track\s/ ) { # Track line
     # Check that this is the first line
     # If not, send warning and don't process other lines
     if( $lineNum != 1 ) {
@@ -449,9 +449,12 @@ sub chkTrack {
   }
   # Trailing white space
   if( $line =~ s/\s+$// ) {
-    #error("Warning @ line $lineNum: Track line has trailing whitespace. Correcting.",1,0);
+  #  error("Warning @ line $lineNum: Track line has trailing whitespace. Correcting.",1,0);
   }
-  
+  # Tab separators (or in quotes!)
+  if( $line =~ s/\t/ /g ) {
+    error("Warning @ line $lineNum: Track line contains tab characters. Correcting to spaces.",1,0);
+  }
   # Split contents
   my @lineConts = quotewords('\s+',1,$line);
   unless( @lineConts ) {

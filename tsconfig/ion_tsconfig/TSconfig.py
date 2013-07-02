@@ -124,10 +124,10 @@ def is_proton_ts():
         for line in stdout.split("\n"):
             if 'ion-protonupdates' in line:
                 if line.startswith('ii'):
-                    logger.info("This is a Proton TS")
+                    logger.debug("This is a Proton TS")
                     return True
                 else:
-                    logger.info("This is not a Proton TS")
+                    logger.debug("This is not a Proton TS")
                     return False
     else:
         logger.error(stderr)
@@ -290,6 +290,7 @@ class TSconfig (object):
         self.logger = logger
         self.packageListFile = os.path.join('/','usr','share','ion-tsconfig','torrentsuite-packagelist.json')
         self.updatePackageLists()
+        self.aptcachedir = self.get_apt_cache_dir()     # Directory used by apt for package downloads
 
         self.apt_cache = None
 
@@ -308,6 +309,19 @@ class TSconfig (object):
         self.logger.info("TSconfig.__init__() executing")
 
     #--- End of __init__ ---#
+
+    def get_apt_cache_dir(self):
+        try:
+            apt_pkg.InitConfig()
+            _dir = os.path.join(
+                apt_pkg.config.get("dir"),
+                apt_pkg.config.get("dir::cache"),
+                apt_pkg.config.get("dir::cache::archives")
+            )
+        except:
+            _dir = "/var/cache/apt/archives"    # default setting
+
+        return _dir
 
     def reload_logger(self):
         logging.shutdown()
@@ -341,9 +355,7 @@ class TSconfig (object):
     def update_progress(self, status):
         if self.dbaccess:
             try:
-                self.logger.debug("Before ts_update_status")
                 models.GlobalConfig.objects.update(ts_update_status=status)
-                self.logger.debug("After ts_update_status")
             except:
                 self.logger.exception("Unable to update database with progress")
 
@@ -494,20 +506,22 @@ class TSconfig (object):
         else:
             self.updatePackageLists()
             status, ionpkglist = self.pollForUpdates()
+            # check available disk space
+            available = self.freespace(self.aptcachedir)
+            syspkglist = self.buildPkgList(self.get_syspkglist())
+            required = self.required_download_space(ionpkglist+syspkglist)
+
             if status and len(ionpkglist) > 0:
                 self.logger.info("There are %d updates!" % len(ionpkglist))
                 self.set_state('A')
                 self.pkglist = ionpkglist
-                # check available disk space
-                available = self.freespace('/var')
-                syspkglist = self.buildPkgList(self.get_syspkglist())
-                required = self.required_download_space(ionpkglist+syspkglist)
-                self.logger.debug("%.1fMB required download space, %.1fMB available in /var." % (required, available))
+                self.logger.info("%.1fMB required download space, %.1fMB available in %s." % (required, available, self.aptcachedir))
                 if available < required:
                     msg = "WARNING: insufficient disk space for update"
                     self.update_progress(msg)
                     self.logger.debug(msg)
             else:
+                self.logger.info("%.1fMB required download space, %.1fMB available in %s." % (required, available, self.aptcachedir))
                 self.set_state('N')
 
             return ionpkglist
@@ -749,6 +763,16 @@ class TSconfig (object):
         self.logger.debug(stdout)
         self.logger.error(stderr)
 
+    def TSupdate_conf_file(self):
+        self.logger.debug("update_conf_file")
+        cmd = ["/usr/sbin/TSwrapper",
+               "update_conf_file"
+        ]
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p1.communicate()
+        self.logger.debug(stdout)
+        self.logger.error(stderr)
+
 
     ################################################################################
     #
@@ -822,6 +846,11 @@ class TSconfig (object):
             # Execute Ion configuration
             #================================
             self.TSpostinst_ionpkg()
+
+            #================================
+            # Update tsconf.conf file
+            #================================
+            self.TSupdate_conf_file()
 
         except:
             self.logger.exception(traceback.format_exc())

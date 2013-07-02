@@ -21,7 +21,7 @@
             # } #
             </p>
             
-            <p  style="line-height:100%; font-weight: bold;">Library Kit Type:</p> 
+            <p  style="line-height:100%; font-weight: bold;">Library Kit:</p> 
             <p style="line-height:100%; margin:10px;" id="review_libKit"> 
             # if (data.librarykitname != null) { #
             	#= data.librarykitname # 
@@ -63,7 +63,7 @@
 	            </p>				
 			# } #
 			
-            <p  style="line-height:50%; font-weight: bold;">Templating Kit: </p>  
+            <p  style="line-height:50%; font-weight: bold;">Template Kit: </p>  
             <p style="line-height:100%; margin:10px;" id="review_templateKit">
             # if (data.templatingKitName != null) { #
             	#= data.templatingKitName # 

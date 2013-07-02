@@ -2,7 +2,7 @@
 
 //! @file     SpliceVariantsToReads.cpp
 //! @ingroup  VariantCaller
-//! @brief    HP Indel detection
+//! @brief    Functions in this file are all retired from ensemble evaluator as of May 24 2013
 
 #include "SpliceVariantsToReads.h"
 
@@ -59,7 +59,7 @@ void TinyAlignCell::InsertBase(
           cout << "Found Insertion allele " << *inAlleleString << endl;
 
       }
-      inAlleleString = new string(); // xxx
+      inAlleleString = new string(); // xxx memory leak
       (*inAlleleString) += base_seq;
     }
   }
@@ -94,7 +94,7 @@ void TinyAlignCell::DeleteBase(
           cout << "Found deletion allele " <<  *delAlleleString << endl;
 
       }
-      delAlleleString = new string(); // xxx
+      delAlleleString = new string(); // xxx memory leak
       (*delAlleleString) += base_ref;
     }
   }
@@ -217,8 +217,12 @@ bool SpliceMeNow(bool check_valid,
     // Ensure proper choice of substring without soft clipped bases
     if ((startSC + pos_seq + endSC) == (int)readBase.length())
       readSequence = readBase.substr(startSC, pos_seq);
-    else
+    else {
+      if (DEBUG>0)
+        cout << "Error in splicing read. Query length: " << readBase.length()
+             << " startSC: " << startSC << " pos_seq: " << pos_seq << " endSC: " << endSC << endl;
       return false;
+    }
     //if (pos_seq < (int)readBase.length()-1)
     //  readSequence = readBase.substr(0, pos_seq);
     //else
@@ -232,8 +236,12 @@ bool SpliceMeNow(bool check_valid,
     }
     if ((startSC + pos_seq + endSC) == (int)readBase.length())
       readSequence = readBase.substr(startSC, pos_seq);
-    else
+    else {
+      if (DEBUG>0)
+        cout << "Error in splicing read. Query length: " << readBase.length()
+             << " startSC: " << startSC << " pos_seq: " << pos_seq << " endSC: " << endSC << endl;
       return false;
+    }
     //if (pos_seq < (int)readBase.length()-1)
     //          readSequence = readBase.substr(0, pos_seq);
     //else
@@ -252,8 +260,11 @@ bool SpliceMeNow(bool check_valid,
       // we do this if we have found a "valid allele", i.e. the
       if (isDeletion) {
 
-        if (refSequence.size() < finalIndelPos+refAllele.length()-1)
+        if (refSequence.size() < finalIndelPos+refAllele.length()-1) {
+          if (DEBUG>0)
+            cout << "Error in splicing: Deletion size test failed." << endl;
           return false; // Safety so that we can splice the whole variant
+        }
 
         varSequence += refSequence.substr(0,finalIndelPos);
         //need to splice complex deletions such as REF=CAGAGAGA, VAR=CAGAGAG,CAGAGA,CAGA....
@@ -263,8 +274,11 @@ bool SpliceMeNow(bool check_valid,
         //cout << "final del var seq = " << varSequence << endl;
 
       } else if (isInsertion) {
-          if (refSequence.size() < finalIndelPos+refAllele.size()-1)
-           return false;
+          if (refSequence.size() < finalIndelPos+refAllele.size()-1) {
+            if (DEBUG>0)
+              cout << "Error in splicing: Deletion size test failed." << endl;
+            return false;
+          }
 
           //cout << "Ref::" << refSequence << endl;
           varSequence += refSequence.substr(0,finalIndelPos-1);
@@ -280,8 +294,12 @@ bool SpliceMeNow(bool check_valid,
         }
       if ((startSC + pos_seq + endSC) == (int)readBase.length())
         readSequence = readBase.substr(startSC, pos_seq);
-      else
+      else {
+        if (DEBUG>0)
+          cout << "Error in splicing read. Query length: " << readBase.length()
+               << " startSC: " << startSC << " pos_seq: " << pos_seq << " endSC: " << endSC << endl;
         return false;
+      }
       //if (pos_seq < (int)readBase.length()-1)
       //  readSequence = readBase.substr(0, pos_seq);
       //else
@@ -321,7 +339,7 @@ int ConstructRefVarSeq(int DEBUG, string readBase, const string &local_contig_se
   my_align_cell.Init(DEBUG);
   my_align_cell.SetWindow(start_window, end_window);
   int refSeqAtIndel = 0;
-  int finalIndelPos = 0;    // Index of variant start position within generated hypothesis string
+  int finalIndelPos = -1;    // Index of variant start position within generated hypothesis string
   int pos_ref = start_pos;  // reference index
   int pos_seq = 0;          // read sequence index w.r.t aligned bases
   //int pos_seq = startSC; // Old version assumed that softclips had been added to read hypothesis
@@ -331,28 +349,32 @@ int ConstructRefVarSeq(int DEBUG, string readBase, const string &local_contig_se
                                        local_contig_sequence, start_pos, hotPos, refSeqAtIndel,
                                        refSequence);
 
-  bool constructVarSeq = my_align_cell.CheckValid(isInsertion,isDeletion,refAllele,varAllele);
+  //bool constructVarSeq = my_align_cell.CheckValid(isInsertion,isDeletion,refAllele,varAllele);
   //check to make sure that the read spans the entire variant allele, if not skip this read
-  if (finalIndelPos == 0 || finalIndelPos > (int)refSequence.length() - 2
+  if (finalIndelPos == -1 || finalIndelPos > (int)refSequence.length() - 2
       || (isMNV && (finalIndelPos + (int)varAllele.length()) > (int)refSequence.length()  )
       || (isDeletion && (finalIndelPos+ (int)refAllele.length()-1) > (int)refSequence.length())
       || (isInsertion && (finalIndelPos+ (int)refAllele.length()-1) > (int)refSequence.length()) ) {
-    if (DEBUG >1) {
-      cerr << "ERROR: final IndelPos = " << finalIndelPos << " Reference Length = " << refSequence.length() << endl;
-      cerr << "Ref = " << refSequence << endl;
-      cerr << "RefA= " << ref_aln << endl;
-      cerr << "BasA= " << seq_aln << endl;
-      cerr << "Var Pos = " << hotPos << endl;
-      cerr << "Start   = " << start_pos << endl;
-      cerr << "IndelType = " << isInsertion << " " << isDeletion << "  " << refAllele << "  " << varAllele << endl;
+    if (DEBUG >0) {
+      cout << "ERROR: final IndelPos = " << finalIndelPos << " Reference Length = " << refSequence.length() << endl;
+      cout << "Ref = " << refSequence << endl;
+      cout << "RefA= " << ref_aln << endl;
+      cout << "BasA= " << seq_aln << endl;
+      cout << "Var Pos = " << hotPos << endl;
+      cout << "Start   = " << start_pos << endl;
+      cout << "IndelType = " << isInsertion << " " << isDeletion << "  " << refAllele << "  " << varAllele << endl;
     }
     return -1;
   }
 
-  return SpliceMeNow(constructVarSeq, readBase,isSNP, isMNV,
-              isInsertion, isDeletion, isHpIndel, inDelSize,
-              pos_seq, finalIndelPos, startSC, endSC, refAllele, varAllele,
-              refSequence,varSequence,readSequence,DEBUG);
+  //return SpliceMeNow(constructVarSeq, readBase,isSNP, isMNV,
+  //            isInsertion, isDeletion, isHpIndel, inDelSize,
+  //            pos_seq, finalIndelPos, startSC, endSC, refAllele, varAllele,
+  //            refSequence,varSequence,readSequence,DEBUG);
+  return SpliceMeNow(true, readBase,isSNP, isMNV,
+                isInsertion, isDeletion, isHpIndel, inDelSize,
+                pos_seq, finalIndelPos, startSC, endSC, refAllele, varAllele,
+                refSequence,varSequence,readSequence,DEBUG);
   //return 0;
 }
 
@@ -378,9 +400,9 @@ void LoadTripleHypotheses(vector<string> &hypotheses, string &firstSeq, string &
   LoadOneHypothesis(hypotheses,thirdSeq, strand);
   //DEBUG=true;
   if (DEBUG >1) {
-    cout << "hypo = " << hypotheses[0] << endl;
-    cout << "hypo = " << hypotheses[1] << endl;
-    cout << "hypo = " << hypotheses[2] << endl;
+    cout << "hyp. 0 = " << hypotheses[0] << endl;
+    cout << "hyp. 1 = " << hypotheses[1] << endl;
+    cout << "hyp. 2 = " << hypotheses[2] << endl;
   }
 }
 

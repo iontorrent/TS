@@ -3,7 +3,7 @@
 
 #MAJOR_BLOCK
 
-VERSION="3.6.58977"
+VERSION="3.6.63324"
 
 # Disable excess debug output for test machine
 #set +o xtrace
@@ -36,7 +36,7 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
   PLUGINCONFIG__SAMPLEID="No"
   PLUGINCONFIG__TRIMREADS="No"
   PLUGINCONFIG__PADTARGETS=0
-  PLUGINCONFIG__UNIQUEMAPS="Yes"
+  PLUGINCONFIG__UNIQUEMAPS="No"
   PLUGINCONFIG__NONDUPS="Yes"
   PLUGINCONFIG__BARCODETARGETREGIONS=""
   if [ -z "$PLUGINCONFIG__LIBRARYTYPE" ]; then
@@ -59,6 +59,9 @@ if [ -z "$PLUGINCONFIG__LIBRARYTYPE_ID" ]; then
     PLUGINCONFIG__NONDUPS="No"
   elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "ampliseq-rna" ]; then
     PLUGINCONFIG__LIBRARYTYPE_ID="Ion AmpliSeq RNA"
+    PLUGINCONFIG__NONDUPS="No"
+  elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "ampliseq-exome" ]; then
+    PLUGINCONFIG__LIBRARYTYPE_ID="Ion AmpliSeq Exome"
     PLUGINCONFIG__NONDUPS="No"
   elif [ "$PLUGINCONFIG__LIBRARYTYPE" = "targetseq" ]; then
     PLUGINCONFIG__LIBRARYTYPE_ID="Ion TargetSeq"
@@ -110,6 +113,8 @@ PLUGIN_ANNOFIELDS="-f 4,8"
 PLUGIN_READCOV="e2e"
 AMPOPT=""
 if [ "$PLUGIN_RUNTYPE" = "ampliseq" ]; then
+  AMPOPT="-a"
+elif [ "$PLUGIN_RUNTYPE" = "ampliseq-exome" ]; then
   AMPOPT="-a"
 elif [ "$PLUGIN_RUNTYPE" = "ampliseq-rna" ]; then
   AMPOPT="-r"

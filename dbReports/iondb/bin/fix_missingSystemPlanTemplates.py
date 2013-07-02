@@ -118,7 +118,8 @@ def finish_create_system_template(sysDefaultTemplate, chipType = "", flows = 500
          'baselineRun' : '',
          'flowsInOrder' : '',
          'ftpStatus' : '',
-         'runMode' : sysDefaultTemplate.runMode
+         'runMode' : sysDefaultTemplate.runMode,
+         'storageHost' : ''
         }
     
     experiment = models.Experiment(**exp_kwargs) 

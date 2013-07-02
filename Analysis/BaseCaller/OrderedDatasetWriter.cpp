@@ -41,7 +41,7 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
 
 void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions, const ion::FlowOrder& flow_order, const string& key,
     const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
-    const string& production_date, const string& platform_unit, bool save_filtered_reads)
+    const string& production_date, const string& platform_unit, bool save_filtered_reads, vector<string>& comments)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -114,6 +114,11 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
       sam_header.ReadGroups.Add(read_group);
     }
+
+	for(size_t i = 0; i < comments.size(); ++i)
+	{
+		sam_header.Comments.push_back(comments[i]);
+	}
 
     // Open Bam for writing
 

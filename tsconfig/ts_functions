@@ -68,6 +68,9 @@ function config_head_node()
     write_conf_file
     config_ionSoftware
 
+    # Set host location of Ion Torrent Server Daemons
+    config_cluster_settings
+
     return 0
 }
 
@@ -206,26 +209,37 @@ function unconfigure_torrentserver ()
     user_msg "=================================================================="
     user_msg "All Torrent Server Software will be removed"
     user_msg "=================================================================="
-    # This is the start
 
     # Remove Torrent Suite Packages
-    apt-get --assume-yes --force-yes remove \
-        ion-alignment \
-        ion-analysis \
-        ion-dbreports \
-        ion-gpu \
-        ion-pipeline \
-        ion-plugins \
-        ion-rndplugins \
-        ion-referenceLibrary \
-        ion-docs \
-        ion-rsmts \
-        ion-sampledata \
-        ion-samita \
-        ion-torrentr \
-        ion-pgmupdates \
-        ion-publishers \
-        ion-onetouchupdater
+    server_files=
+    master_files=
+    read_packagelist_file torrentsuite allservers server_files
+    if is_master; then
+        read_packagelist_file torrentsuite master master_files
+        pkg_list=( ${server_files[@]} ${master_files[@]} )
+
+        #Load proton specific packages if this is Proton Torrent Server
+        inst_files=
+        if is_proton_ts; then
+            read_packagelist_file torrentsuite proton inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+        else
+            #Default to PGM specific packages
+            read_packagelist_file torrentsuite pgm inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+        fi
+    else
+        pkg_list=( ${server_files[@]} )
+    fi
+
+    # Remove ion-tsconfig package from the list
+    pkg_list=( $(echo ${pkg_list[@]} | sed 's/ion-tsconfig//g') )
+
+    #user_msg "\nNot Implemented - simulated apt-get"
+    for pkg in ${pkg_list[@]}; do
+        user_msg "\tRemoving $pkg"
+        apt-get --assume-yes --force-yes remove $pkg 1>&2
+    done
 
     # Do not execute these by default
     # Remove gridengine
@@ -235,11 +249,13 @@ function unconfigure_torrentserver ()
     # Remove apache2
     #apt-get --assume-yes --force-yes purge apache2 apache2.2-common apache2.2-bin apache2-utils apache2-mpm-prefork
 
-    # Remove ion-dbreports settings.py
-    rm -f /opt/ion/iondb/settings.py
-    rm -f /opt/ion/iondb/settings.py.backup
     # Clean up directories
+    rm -rf /opt/ion/iondb/
+    rm -rf /opt/ion/config/
     rm -rf /opt/ion/RSM
+    rm -rf $TSCONFIG_DIR/$TSCONFIG_CONF
+    rm -rf $TSCONFIG_DIR/local_cluster_settings.py
+
     # Do not remove contents of these directories: may contain user-added data
     #rm -rf /results/referenceLibrary
     #rm -rf /results/plugins
@@ -285,7 +301,83 @@ function unconfigure_torrentserver ()
     user_msg "exportfs"
     user_msg "sudo enabled commands for user www-data"
     user_msg "gridengine (SGE)"
+    user_msg
+    user_msg "ion-tsconfig package is still installed:  sudo apt-get remove ion-tsconfig to remove"
+    user_msg "You can delete /var/log/ion directory"
+    user_msg "You can delete contents of /results"
+    if ! is_master; then user_msg "You may have remote mounts to cleanup manually"; fi
+    if is_master; then user_msg "You may have exported directories to cleanup manually"; fi
+    user_msg
     # This is the end
+    echo -n "Do you want to remove all the packages Torrent Suite installed? (n|Y) "
+    read usrmsg
+    case $usrmsg in
+        y|Y)
+        scrub_torrentserver
+        ;;
+        *)
+        exit 1
+        ;;
+    esac
+}
+
+#---------------------------------------------
+# REALLY removes everything from torrentserver
+#---------------------------------------------
+function scrub_torrentserver()
+{
+    # WARNING: This will remove non-ion packages possibly destroying user data, configurations, etc.
+    log "Scrub Torrent Server"
+    user_msg "=================================================================="
+    user_msg "All Ubuntu Software installed by Torrent Server installation will be removed"
+    user_msg "WARNING!!!"
+    user_msg "This will remove things like apache2, postgresql, gridengine"
+    user_msg "User data may get deleted"
+    user_msg "For ION internal use only"
+    user_msg "You have been warned!"
+    user_msg "=================================================================="
+
+    pkg_list=(
+	gridengine-common
+	gridengine-client
+	gridengine-exec
+    gridengine-master
+	gridengine-qmon
+    vsftpd
+	postgresql
+	apache2-mpm-prefork
+	apache2
+	libapache2-mod-wsgi
+	libapache2-mod-php5
+	dnsmasq
+	dhcp3-server
+	tomcat6
+	tomcat6-admin
+	nxclient
+	nxnode
+	nxserver
+    )
+    user_msg "=================================================================="
+    user_msg "Packages which will be removed (using apt-get remove command )"
+    user_msg "=================================================================="
+    for pkg in ${pkg_list[@]}; do
+        user_msg "\t$pkg"
+    done
+    user_msg "BPP has not tested the effects of this code!!!"
+    echo -n "Do you REALLY want to delete these packages? (n|Y) "
+    read usrmsg
+    case $usrmsg in
+        y|Y)
+        ;;
+        *)
+        exit 1
+        ;;
+    esac
+    #user_msg "\nNot Implemented - simulated apt-get"
+    for pkg in ${pkg_list[@]}; do
+        user_msg "\tRemoving $pkg"
+        apt-get --assume-yes --force-yes purge $pkg 1>&2
+    done
 }
 
 #---    ---#
@@ -354,8 +446,8 @@ function remove_pgm_support ()
     sed -i '/^192.168.203.10[[:blank:]]pgm3/d' /etc/hosts
     sed -i '/^192.168.204.10[[:blank:]]pgm4/d' /etc/hosts
 
-    if [ -e /etc/init.d/dhcp3-server ]; then service dhcp3-server stop; fi
-    if [ -e /etc/init.d/dnsmasq ]; then service dnsmasq stop; fi
+    if [ -e /etc/init.d/dhcp3-server ]; then service dhcp3-server stop 1>&2; fi
+    if [ -e /etc/init.d/dnsmasq ]; then service dnsmasq stop 1>&2; fi
     #apt-get --assume-yes --force-yes purge dhcp3-server dnsmasq
 
     return 0
@@ -1052,12 +1144,19 @@ function pkg_installation ()
 function preinst_system_packages ()
 {
 
+    user_msg "=================================================================="
+    user_msg "Updating previous configurations"
+    user_msg "=================================================================="
+
 	# Cleanup old installations
 	cleanup_previousInstallations
 
     # Is there room in /var/ to update?
     log "Deleting obsolete deb packages from cache"
     apt-get autoclean 1>&2
+
+    # Reconfigure apt cache archives directory
+    config_apt_cache
 
     # Fix high system load due to leap second issue
     # http://www.novell.com/support/kb/doc.php?id=7010351
@@ -1077,7 +1176,7 @@ EOF
         # rabbitmq-server upgrade to from before 3.0 needs it's conf file removed
         RMQ_VERSION=`dpkg -l rabbitmq-server|awk '$2 ~ "rabbitmq-server" {print $3}'`
         #if [[ $RMQ_VERSION < '3.0' ]] && [[ -f /usr/sbin/rabbitmqctl ]]; then
-        if [[ $RMQ_VERSION < '3.0' ]]; then
+        if [[ ! $RMQ_VERSION == '' ]] && [[ $RMQ_VERSION < '3.0' ]]; then
             echo Resetting rabbitmq-server, $RMQ_VERSION 1>&2
             # http://www.rabbitmq.com/clustering.html#upgrading
             service rabbitmq-server stop 1>&2
@@ -1203,20 +1302,20 @@ function install_ion_packages()
     for i in ${pkg_list[@]}
     do
         i=${i,,}    # to lower case.  dpkg database is all lowercase despite what the package filename might contain
-        echo "Verifying $i"
+        user_msg "Verifying $i"
         if [ "ii" != "$(dpkg -l ${i}|tail -1|awk '{print $1}')" ]; then
             ((ERRCNT++)) || echo "Error detected"   # or statement required to prevent early exit
         fi
     done
 
     if [ $ERRCNT -gt 0 ]; then
-        echo
-        echo "There was an error installing Ion software packages."
-        echo "Critical Error."
-        echo "Aborting the configuration now"
-        echo
+        user_msg
+        user_msg "There was an error installing Ion software packages."
+        user_msg "Critical Error."
+        user_msg "Aborting the configuration now"
+        user_msg
         dpkg -l "ion-*" samtools
-        echo
+        user_msg
         exit 1
     fi
 }
@@ -1255,6 +1354,7 @@ function config_ion_packages ()
         echo "Removing deprecated package: tmap.  Package ion-analysis now provides tmap." 1>&2
         #apt-get --assume-yes --force-yes remove tmap 1>&2 || true
         dpkg -P --ignore-depends=ion-dbreports,ion-alignment tmap 1>&2 || true
+        echo "removal done." 1>&2
     fi
 
     return 0
@@ -1700,7 +1800,7 @@ function config_postgres()
 {
     log "Postgresql Configuration"
     user_msg "=================================================================="
-    user_msg "Postgresql Configuration"
+    user_msg "Configuring Postgresql"
     user_msg "=================================================================="
 
     # Make sure server is running
@@ -1801,7 +1901,7 @@ EOFdb
     BACKUP_DBASE_DIR=/results
     if [ -d $BACKUP_DBASE_DIR ]; then
         user_msg "=================================================================="
-        user_msg "       Creating backup of postgresql database"
+        user_msg "\tCreating backup of postgresql database"
         user_msg "=================================================================="
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         BACKUP_DBASE_FILE="${BACKUP_DBASE_DIR}/iondb.${TIMESTAMP}.backup"
@@ -1838,7 +1938,7 @@ function config_cluster_settings()
     idaemon_host=${idaemon_host:-localhost}
 
     # Edit the local cluster_settings file
-    settings_file="/etc/torrentserver/local_cluster_settings.py"
+    settings_file="$TSCONFIG_DIR/local_cluster_settings.py"
     if [ -f $settings_file ]; then
         sed -i "s/^PLUGINSERVER_HOST =.*/PLUGINSERVER_HOST = '$idaemon_host'/" $settings_file
         sed -i "s/^JOBSERVER_HOST =.*/JOBSERVER_HOST = '$idaemon_host'/" $settings_file
@@ -2913,7 +3013,7 @@ function write_conf_file()
         fi
 
         #--- change the mode    ---#
-        if [ $CONF_HEAD_NODE == 1 ]; then mode="master"; else mode="compute"; fi
+        if [ -f /opt/ion/.masternode ]; then mode="master"; else mode="compute"; fi
         sed -i "s/^mode:.*/mode:$mode/" ${conflog}
 
         #--- change the configuration   ---#
@@ -2958,7 +3058,7 @@ function write_conf_file()
             echo >> ${conflog}
         fi
         echo -n "mode:" >> $conflog
-        if [ $CONF_HEAD_NODE == 1 ]; then echo "master" >> $conflog; else echo "compute" >> $conflog; fi
+        if [ -f /opt/ion/.masternode ]; then echo "master" >> $conflog; else echo "compute" >> $conflog; fi
         echo -n "configuration:" >> $conflog
         #TODO: indicate Dual-Torrent Server configuration
         conf="standalone"
@@ -3013,8 +3113,8 @@ function update_conf_file()
         sed -i "s/^version:.*/version:$version/" ${conflog}
 
     else
-    	echo "Error - could not update $TSCONFIG_CONF"
-        echo "Does not exist: $conflog"
+        echo "Does not exist: $conflog ... creating it now." 1>&2
+        write_conf_file
     fi
 }
 
@@ -3083,6 +3183,7 @@ function is_master ()
 #--------------------------------------
 function error ()
 {
+    if [ "$PID_LOCKED" == "1" ]; then rm -rf $LOCK_FILE; fi
     local PARENT_LINENO="$1"
     local MESSAGE="$2"
     local CODE="${3:-1}"
@@ -3092,6 +3193,7 @@ function error ()
     else
         user_msg "ERROR on or near line ${PARENT_LINENO}; exiting with status ${CODE}"
     fi
+    user_msg "\nSee file $TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG for error details"
     user_msg "=================================================================="
     log "ERROR ${CODE}"
     if [[ -n $MESSAGE ]]; then log "${MESSAGE}"; fi
@@ -3324,7 +3426,7 @@ function updated_mirror_check()
             echo $APT_ENTRY >> $SRCLIST
         else
 
-            echo "Found the expected entry:"
+            echo "Found the expected entry:" 1>&2
             # deb http://updates.iontorrent.com/updates/software lucid/
             # N.B. use of comma as the sed command delimiter.  Insert desired entry
             # before expected entry
@@ -3334,4 +3436,52 @@ function updated_mirror_check()
         echo "An apt repository entry exists with desired web address" 1>&2
     fi
 
+}
+
+function config_apt_cache() {
+    # Get current apt cache location
+    cachepath=$(apt-config dump|grep "^Dir "|awk '{print $2}'|sed 's:[";]::g')
+    cachepath=${cachepath}$(apt-config dump|grep "^Dir::Cache "|awk '{print $2}'|sed 's:[";]::g')
+    cachepath=${cachepath}$(apt-config dump|grep "^Dir::Cache::archives "|awk '{print $2}'|sed 's:[";]::g')
+    log Current apt cache location is $cachepath
+
+    # If total capacity is below threshold, change location
+    threshold_kb=5242880 # 5GB in kbyte units
+    #threshold_kb=2097152 # 2GB in kbyte units
+    total_capacity=$(df -P $cachepath | awk 'NR==2 {print $2}')
+    if [ ! "$total_capacity" == "" ] && [ "$total_capacity" -lt "$threshold_kb" ]; then
+        log "Partition capacity is under $threshold_kb kbytes"
+        log "Migrating apt cache to a larger partition"
+
+        # compute nodes mount a remote /results; do not use that location
+        if is_master; then
+            rootdir="/"
+            cachedir="results/cache/apt/"
+            archivedir="archives/"
+        else
+            rootdir="/"
+            cachedir="TSapt/cache/apt/"
+            archivedir="archives/"
+        fi
+        newcachepath=${rootdir}${cachedir}${archivedir}
+        mkdir -p ${newcachepath}partial
+        log "New apt cache location is $newcachepath"
+
+        # Change the default apt cache directory by writing a conf file
+        conffile=/etc/apt/apt.conf.d/99cache
+        echo "Dir::Cache ${cachedir};" > $conffile
+        echo "Dir::Cache::archives ${archivedir};" >> $conffile
+        apt-get update
+    else
+        log "Partition capacity is over $threshold_kb kbytes"
+    fi
+
+    # Contents of 99cache ought to be (Removing the hash of course):
+    # Dir::cache results/cache/apt/;
+    # Dir::cache::archives archives/;
+    # Don't forget to make the partial directory under the archives/:
+    # mkdir -p /results/cache/apt/archives/partial
+
+    #TODO: Can we move existing contents to the new cache directory?
+    #This would preserve already downloaded pkg files.
 }

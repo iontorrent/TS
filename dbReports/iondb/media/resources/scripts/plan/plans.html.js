@@ -268,6 +268,10 @@ $(document).ready(function() {
         basePlannedExperimentUrl + "&runType=AMPS_RNA" + orderByOptions,
         'No Ampliseq RNA templates yet'));
 
+    var ampliSeqExome = $("#ampliSeqExome").kendoGrid(commonKendoGrid("#ampliSeqExome",
+        basePlannedExperimentUrl + "&runType=AMPS_EXOME" + orderByOptions,
+        'No Ampliseq Exome templates yet'));
+
     $('.add-new-plan').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();

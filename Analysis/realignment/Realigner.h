@@ -67,8 +67,8 @@ class Realigner {
 public:
 
   //! @brief  Constructor.
-  //! @param[in]  flow_order     Flow order object, also stores number of flows
   Realigner();
+  Realigner(unsigned int reserve_size, unsigned int clipping_size);
 
   //! @brief  Initialized the flow order.
   //! @param[in]  flow_order     Flow order object, also stores number of flows
@@ -171,6 +171,8 @@ public:
 
 
 protected:
+
+  void InitializeRealigner(unsigned int reserve_size, unsigned int clipping_size);
 
   //! @brief  Read alignment from filled dynamic programming matrix
   //! @param[in]  t_idx       row index (target seq) of cell to start the readout

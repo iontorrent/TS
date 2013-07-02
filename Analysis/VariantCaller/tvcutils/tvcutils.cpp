@@ -1,0 +1,44 @@
+/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+
+#include "tvcutils.h"
+
+#include <string>
+//#include <fstream>
+#include <stdio.h>
+
+#include "OptArgs.h"
+#include "IonVersion.h"
+
+using namespace std;
+
+
+void TVCUtilsHelp()
+{
+  printf ("\n");
+  printf ("tvcutils %s-%s (%s) - Miscellaneous tools used by Torrent Variant Caller plugin and workflow.\n",
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+  printf ("\n");
+  printf ("Usage:   tvcutils <command> [options]\n");
+  printf ("\n");
+  printf ("Command: prepare_hotspots  Convert BED or VCF file into a valid hotspot file\n");
+  printf ("\n");
+}
+
+
+int main(int argc, const char *argv[])
+{
+  if(argc < 2) {
+    TVCUtilsHelp();
+    return 1;
+  }
+
+  string tvcutils_command = argv[1];
+
+  if      (tvcutils_command == "prepare_hotspots") return PrepareHotspots(argc-1, argv+1);
+  else {
+      fprintf(stderr, "ERROR: unrecognized tvcutils command '%s'\n", tvcutils_command.c_str());
+      return 1;
+  }
+  return 0;
+}
+

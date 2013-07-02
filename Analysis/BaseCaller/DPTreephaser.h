@@ -120,6 +120,13 @@ public:
   //! @param[in]  max_flows         Number of flows to process
   void  Simulate(BasecallerRead& read, int max_flows);
 
+  //! @brief  Generate predicted signal from base sequence and apply signal distortion according to HP recalibration model.
+  //! @param[in]  read.sequence     Base sequence
+  //! @param[out] read.prediction   Predicted signal
+  //! @param[in]  max_flows         Number of flows to process
+  //! @param[in]  readname          Name of the read as written in BAM file
+  void SimulateRecalibrated(BasecallerRead& data, int max_flows);
+
   //! @brief  Computes the state vector at a query main incorporating flow
   //! @param[in]  read.sequence     Base sequence
   //! @param[out] query_state       State vector
@@ -165,10 +172,24 @@ public:
   void  PIDNormalize(BasecallerRead& read, const int num_samples);
   float PIDNormalize(BasecallerRead& read, const int start_flow, const int end_flow);
 
-  void SetAsBs(vector<vector< vector<float> > > As, vector<vector< vector<float> > > Bs,  bool pm_model_available){
+  //! @brief     Set popinters to recalibration model
+  void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
     As_ = As;
     Bs_ = Bs;
     pm_model_available_ =  pm_model_available;
+  };
+
+  //! @brief     Enables the use of recalibration if a model is available
+  bool EnableRecalibration() {
+    if (pm_model_available_)
+      pm_model_enabled_ = true;
+    return pm_model_available_;
+  };
+
+  //! @brief     Diasbles the use of recalibration.
+  void DisableRecalibration() {
+    pm_model_available_ = false;
+    pm_model_enabled_   = false;
   };
 
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending
@@ -251,8 +272,8 @@ protected:
   const static float  kDgainG       = 0.0f;
   const static float  kInitGain     = 1.0f;
 
-  vector< vector< vector<float> > > As_;
-  vector< vector< vector<float> > > Bs_;
+  vector< vector< vector<float> > > *As_;
+  vector< vector< vector<float> > > *Bs_;
   bool pm_model_available_;
   bool pm_model_enabled_;
 };

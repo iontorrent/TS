@@ -47,6 +47,8 @@ def main():
         validate(meta['primary_bed'])
         if meta['secondary_bed'] is not None:
             validate(meta['secondary_bed'])
+    elif args.upload_file.endswith('.vcf'):
+        validate(meta['primary_bed'])
     else:
         validate(args.upload_file)
 

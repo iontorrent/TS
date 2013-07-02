@@ -95,7 +95,7 @@ public:
   void ExecuteFullInference();
   void ExecuteExtremeInferences();
   void ExecuteInference( );
-  void InitForInference( StackPlus &my_data);
+  void InitForInference(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context);
   
   // change estimates for variance
   
@@ -112,9 +112,12 @@ class EnsembleEval{
  
     vector<HypothesisStack> allele_eval;
     
+    bool use_unification;
+    
+    EnsembleEval(){use_unification = false;};
     void SetupHypothesisChecks(ExtendParameters *parameters);
     void ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id);
-    void ScanSupportingEvidence(float &mean_ll_delta, float &mean_supporting_flows, float &mean_max_discrimination, float threshold, int i_allele);
+    void ScanSupportingEvidence(float &mean_ll_delta, int i_allele);
     void UnifyTestFlows();
     int DetectBestAllele();
     int DetectBestAlleleHardClassify();

@@ -68,7 +68,15 @@ struct PathRec {
 
 class TreephaserSSE {
 public:
+
+
+  TreephaserSSE();
   TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
+
+  //! @brief  Set flow order and initialize internal variables
+  //! @param[in]  flow_order  Flow order object
+  //! @param[in]  windowSize  Size of the normalization window to use.
+  void SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize);
 
   //! @brief  Set the normalization window size
   //! @param[in]  windowSize  Size of the normalization window to use.
@@ -76,17 +84,35 @@ public:
 
   void SetModelParameters(double cf, double ie);
 
-
+  //! @brief Interface function similar to DPTreephaser Solve
+  //! @param[out] read        Basecaller read to be solved
+  //! @param[in]  begin_flow  Start solving at this flow
+  //! @param[in]  end_flow    Do not solve for any flows past this one
+  void SolveRead(BasecallerRead& read, int begin_flow, int end_flow);
 
   void NormalizeAndSolve(BasecallerRead& read);
   PathRec* parent;
   int best;
 
+  //! @brief     Set popinters to recalibration model
   void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
-     As_ = As;
-     Bs_ = Bs;
-     pm_model_available_ =  pm_model_available;
-   }
+    As_ = As;
+    Bs_ = Bs;
+    pm_model_available_ =  pm_model_available;
+  };
+
+  //! @brief     Enables the use of recalibration if a model is available
+  bool EnableRecalibration() {
+    if (pm_model_available_)
+      pm_model_enabled_ = true;
+    return pm_model_available_;
+  };
+
+  //! @brief     Diasbles the use of recalibration.
+  void DisableRecalibration() {
+    pm_model_available_ = false;
+    pm_model_enabled_   = false;
+  };
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
   void  ComputeQVmetrics(BasecallerRead& read);

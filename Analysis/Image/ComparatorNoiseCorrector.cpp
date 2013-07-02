@@ -19,7 +19,7 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
 {
 
    if (aggressive_correction)
-      NNSpan = 4;
+     NNSpan = 4;
    else
       NNSpan = 1;
 
@@ -32,7 +32,9 @@ void ComparatorNoiseCorrector::CorrectComparatorNoise(short *image, int rows, in
          int blk_size = 96;
          int sub_blocks = rows / blk_size;
 
-         if (blk_size * sub_blocks < rows) sub_blocks++;
+         if (blk_size * sub_blocks < rows) {
+           sub_blocks++;
+         }
 
          for (int blk = 0; blk < sub_blocks; blk++)
          {
@@ -945,7 +947,8 @@ void ComparatorNoiseCorrector::GetPrincComp(float *pcomp,float *pnn,int *mask,in
 	
 	for (int i=0;i < nframes;i++)
 	{
-		ptmp[i] = rand();
+          //		ptmp[i] = rand();
+          ptmp[i] = mRand.Rand();
 		ttmp[i] = 0.0f;
 	}
 	

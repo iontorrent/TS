@@ -40,14 +40,16 @@ bool StackPlus::AlignmentReadFilter(const InputStructures &global_context, const
 // ------------------------------------------------------------
 
 // Perform reservoir sampling on reads
-void StackPlus::ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned int max_coverage) {
+void StackPlus::ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned int max_coverage, int DEBUG) {
 
   if (read_stack.size() < max_coverage) {
     read_counter++;
     read_stack.push_back(current_read);
-    //if (DEBUG)
-    //  cout << "Read no. " << read_stack.size() << ": " << current_read.alignment.Name
-    //       << " Start: " << current_read.alignment.Position << " End: " << current_read.alignment.GetEndPosition();
+    if (DEBUG>2)
+      cout << "Read no. " << read_stack.size() << ": " << current_read.alignment.Name
+           << " Start: " << current_read.alignment.Position << " End: " << current_read.alignment.GetEndPosition()
+           << " start SC: " << current_read.startSC << " end SC: " << current_read.endSC << " Forw.Strand: " << current_read.is_forward_strand
+           << " Start Flow: " << current_read.start_flow << endl << current_read.alignment.QueryBases << endl;
   }
   else {
     read_counter++;
@@ -61,7 +63,7 @@ void StackPlus::ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned in
 // ------------------------------------------------------------
 
 // Read and process records appropriate for this variant; positions are zero based
-void StackPlus::StackUpOneVariant(BamMultiReader * bamReader, const string & local_contig_sequence,
+void StackPlus::StackUpOneVariant(PersistingThreadObjects & thread_objects,
                                   int variant_start_pos, int variant_end_pos, vcf::Variant ** candidate_variant,
                                   ExtendParameters * parameters, InputStructures &global_context) {
 
@@ -78,7 +80,7 @@ void StackPlus::StackUpOneVariant(BamMultiReader * bamReader, const string & loc
   read_counter = 0;
   num_map_qv_filtered = 0;
 
-  while (bamReader->GetNextAlignment(current_read.alignment)) {
+  while (thread_objects.bamMultiReader.GetNextAlignment(current_read.alignment)) {
 
     // Check valid read group
     validReadGroup = false;
@@ -102,8 +104,8 @@ void StackPlus::StackUpOneVariant(BamMultiReader * bamReader, const string & loc
       continue;
     if (!AlignmentReadFilter(global_context, current_read.alignment, variant_end_pos))
       continue;
-    if (current_read.UnpackThisRead(global_context, local_contig_sequence, global_context.DEBUG))
-      ReservoirSampleReads(current_read, parameters->my_controls.downSampleCoverage);
+    if (current_read.UnpackThisRead(global_context, thread_objects.local_contig_sequence, global_context.DEBUG))
+      ReservoirSampleReads(current_read, parameters->my_controls.downSampleCoverage, global_context.DEBUG);
   }
   if (read_stack.size()==0) {
     cerr << "Nonfatal: No reads found for " << (*candidate_variant)->sequenceName << "\t" << variant_start_pos << endl;

@@ -1,0 +1,40 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% block sub-nav %}
+    <li><a href="{% url "configure_about" %}">About</a></li>
+    <li><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
+    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    <li><a href="{% url "configure_configure" %}">Configure</a></li>
+    <li><a href="{% url "configure_account" %}">Accounts</a></li>
+{% endblock sub-nav %}
+
+{% block content %}
+<div class="content clearfix">
+    <h1>Cache Status</h1>
+    <ul>
+    <li>Memory usage:
+        {{ stats.bytes|filesizeformat }}
+    <li>Keys in cache:
+        {{ stats.curr_items }} of {{ stats.total_items }}
+    <li>Cache hits:
+        {{ stats.get_hits }} of {{ total_get }}:
+        <b>{{ hit_rate }}%</b>
+    <li>Cache traffic:
+        {{ stats.bytes_read|filesizeformat }} in,
+        {{ stats.bytes_written|filesizeformat }} out
+    <li>uptime: {{ stats.uptime }}
+    </ul>
+
+    <table class="table table-condensed table-striped" style="width:auto;">
+        <tbody>
+            {% for key, value in items %}
+                <tr>
+                    <th>{{ key }}</th>
+                    <td>{{ value }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock content %}

@@ -74,6 +74,7 @@ def main():
     parser.add_option('-p', '--parameters-file',help='JSON file containing variant calling parameters', dest='paramfile')
     parser.add_option('-B', '--bin-dir',        help='Directory path to location of variant caller programs. Defaults to the directory this script is located', dest='rundir', default=os.path.realpath(__file__)) 
     parser.add_option('-n', '--num-threads',    help='Set TVC number of threads', dest='numthreads',default='12') 
+    parser.add_option('-c', '--recalibration-hpmodel',  help='Path to hpModel.txt recalibration file. Enables recalibration.', dest='hpmodel_path') 
     (options, args) = parser.parse_args()
     
     if not options.bamfile or not options.reference:
@@ -124,6 +125,8 @@ def main():
         tvc_command +=          '   --parameters-file %s' % options.paramfile
     tvc_command +=              '   --num-threads %s' % options.numthreads
     tvc_command +=              '   --error-motifs %s' % os.path.join(options.rundir,'TVC/sse/motifset.txt')
+    if options.hpmodel_path:
+        tvc_command +=          '   --model-file %s' % options.hpmodel_path
     #tvc_command +=              '  > %s/tvc.log' % options.outdir
     RunCommand(tvc_command,'Call small indels and SNPs')
 
@@ -159,6 +162,8 @@ def main():
         tvc2_command +=         '   --use-input-allele-only on'
         tvc2_command +=         '   --num-threads %s' % options.numthreads
         tvc2_command +=         '   --error-motifs %s' % os.path.join(options.rundir,'TVC/sse/motifset.txt')
+        if options.hpmodel_path:
+            tvc2_command +=     '   --model-file %s' % options.hpmodel_path
         RunCommand(tvc2_command,'Call Hotspots')
 
     

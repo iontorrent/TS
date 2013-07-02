@@ -12,121 +12,229 @@
 #include <SystemMagicDefines.h>
 
 int NuctoInt(char nuc) {
-  switch(nuc) {
-  case 'A': return 0;
-  case 'C': return 1;
-  case 'G': return 2;
-  default: return 3;
-  }
+    switch (nuc) {
+    case 'A':
+        return 0;
+    case 'C':
+        return 1;
+    case 'G':
+        return 2;
+    default:
+        return 3;
+    }
 }
 
-RecalibrationModel::RecalibrationModel():stratification_(NULL)
+RecalibrationModel::RecalibrationModel()
 {
-  is_enabled_ = false;
-  max_hp_calibrated_ = 0;
+    is_enabled_ = false;
+    max_hp_calibrated_ = 0;
+    recalModelHPThres = 4;
 }
 
 
 RecalibrationModel::~RecalibrationModel()
 {
-  if(stratification_!=NULL) delete stratification_;
+}
+
+int rGetParamsInt(Json::Value& json, const string& key, int default_value) {
+    if (not json.isMember(key))
+        return default_value;
+    if (json[key].isString())
+        return atoi(json[key].asCString());
+    return json[key].asInt();
+}
+
+double rGetParamsDbl(Json::Value& json, const string& key, double default_value) {
+    if (not json.isMember(key))
+        return default_value;
+    if (json[key].isString())
+        return atof(json[key].asCString());
+    return json[key].asDouble();
+}
+
+
+void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled) {
+  // this needs to signal when it fails in some way
+  
+    int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
+    flowStart = rGetParamsInt(recal_params[my_block_key],"flowStart",0);
+    //cout << flowStart << endl;
+    flowEnd = rGetParamsInt(recal_params[my_block_key],"flowEnd",0);
+    //cout << flowEnd << endl;
+    flowSpan = rGetParamsInt(recal_params[my_block_key],"flowSpan",0);
+    //cout << flowSpan << endl;
+    xMin = rGetParamsInt(recal_params[my_block_key],"xMin",0);
+    //cout << xMin << endl;
+    xMax =rGetParamsInt(recal_params[my_block_key],"xMax",0);
+    //cout << xMax << endl;
+    xSpan =rGetParamsInt(recal_params[my_block_key],"xSpan",0);
+    //cout << xSpan << endl;
+    yMin = rGetParamsInt(recal_params[my_block_key],"yMin",0);
+    //cout << yMin << endl;
+    yMax =rGetParamsInt(recal_params[my_block_key],"yMax",0);
+    //cout << yMax << endl;
+    ySpan = rGetParamsInt(recal_params[my_block_key],"ySpan",0);
+    //cout << ySpan << endl;
+    max_hp_calibrated = rGetParamsInt(recal_params[my_block_key],"max_hp_calibrated",0);
+    stratification.SetupRegion(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    //calculate number of partitions and initialize the stratifiedAs and stratifiedBs
+    SetupStratification(flowStart,flowEnd, flowSpan,xMin,xMax,xSpan,yMin,yMax,ySpan,max_hp_calibrated);
+
+    // stratification setup done
+    // now iterate and obtain each line from the JSON
+    int iter_size = recal_params[my_block_key]["modelParameters"].size();
+    for (int i_item=0; i_item<iter_size; i_item++) {
+        // extract my single line
+        //model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
+        //flowBase is a special extraction
+        flowStart = rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"flowStart",0);
+        flowEnd = rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"flowEnd",0);
+        xMin = rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"xMin",0);
+        xMax =rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"xMax",0);
+        yMin = rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"yMin",0);
+        yMax =rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"yMax",0);
+
+        int refHP;
+        refHP = rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"refHP",0);
+        float paramA, paramB;
+        paramA = rGetParamsDbl(recal_params[my_block_key]["modelParameters"][i_item],"paramA",1.0);
+        paramB = rGetParamsDbl(recal_params[my_block_key]["modelParameters"][i_item],"paramB",0.0);
+
+        //string flowBase = recal_params[my_block_key]["modelParameters"][i_item]["flowBase"].asCString();
+        char flowBase = (char) rGetParamsInt(recal_params[my_block_key]["modelParameters"][i_item],"flowBase",0);
+        int nucInd = NuctoInt(flowBase);
+        
+        // all set with the values
+        int offsetRegion = stratification.OffsetRegion(xMin,yMin);
+        FillIndexes(offsetRegion,nucInd, refHP, flowStart, flowEnd, paramA, paramB);        
+    }
+   // now we're done!
+   if (spam_enabled)
+    printf("Recalibration: enabled (using recalibration comment %s)\n\n", my_block_key.c_str());
+    // if something bad happened above, how do we find out?
+    is_enabled_ = true;
+}
+
+void RecalibrationModel::SetupStratification(int flowStart, int flowEnd, int flowSpan,
+        int xMin, int xMax, int xSpan,
+        int yMin, int yMax, int ySpan, int max_hp_calibrated) {
+    const int numRegionStratifications = stratification.xCuts * stratification.yCuts;
+    const int numFlows = flowEnd - flowStart + 1;
+    const int numHPs = MAX_HPXLEN + 1; //max_hp_calibrated + 1;
+    const int numNucs = 4;
+    stratifiedAs.resize(numRegionStratifications);
+    stratifiedBs.resize(numRegionStratifications);
+    for (int ind = 0; ind < numRegionStratifications; ++ind) {
+        stratifiedAs[ind].resize(numFlows);
+        stratifiedBs[ind].resize(numFlows);
+        for (int flowInd = 0; flowInd < numFlows; flowInd++) {
+            stratifiedAs[ind][flowInd].resize(numNucs);
+            stratifiedBs[ind][flowInd].resize(numNucs);
+            for (int nucInd = 0; nucInd < numNucs; ++nucInd) {
+                stratifiedAs[ind][flowInd][nucInd].assign(numHPs, 1.0);
+                stratifiedBs[ind][flowInd][nucInd].assign(numHPs, 0.0);
+            }
+        }
+    }
 }
 
 
 void RecalibrationModel::Initialize(OptArgs& opts)
 {
-  is_enabled_ = false;
+    is_enabled_ = false;
 
-  string model_file_name = opts.GetFirstString ('s', "model-file", "");
-  if(model_file_name.empty()) {
-    printf("RecalibrationModel: disabled\n\n");
-    return;
-  }
+    string model_file_name = opts.GetFirstString ('-', "model-file", "");
+    if (model_file_name.empty() or model_file_name == "off") {
+        printf("RecalibrationModel: disabled\n\n");
+        return;
+    }
 
-  ifstream model_file;
-  model_file.open(model_file_name.c_str());
-  if (model_file.fail()) {
-    printf("RecalibrationModel: disabled (cannot open %s)\n\n", model_file_name.c_str());
+    ifstream model_file;
+    model_file.open(model_file_name.c_str());
+    if (model_file.fail()) {
+        printf("RecalibrationModel: disabled (cannot open %s)\n\n", model_file_name.c_str());
+        model_file.close();
+        return;
+    }
+
+    recalModelHPThres = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+
+    string comment_line;
+    getline(model_file, comment_line); //skip the comment time
+
+    int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
+    model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >>  max_hp_calibrated;
+    stratification.SetupRegion(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    //calculate number of partitions and initialize the stratifiedAs and stratifiedBs
+    SetupStratification(flowStart,flowEnd, flowSpan,xMin,xMax,xSpan,yMin,yMax,ySpan,max_hp_calibrated);
+
+    //TODO: parse model_file into stratifiedAs and stratifiedBs
+    while (model_file.good()) {
+        float paramA, paramB;
+        int refHP;
+        char flowBase;
+        model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
+        //populate it to stratifiedAs and startifiedBs
+        int nucInd = NuctoInt(flowBase);
+        //boundary check
+        int offsetRegion = stratification.OffsetRegion(xMin,yMin);
+        FillIndexes(offsetRegion,nucInd, refHP, flowStart, flowEnd, paramA, paramB);
+    }
+
     model_file.close();
-    return;
-  }
 
-  int recalModelHPThres = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+    printf("Recalibration: enabled (using calibration file %s)\n\n", model_file_name.c_str());
+    is_enabled_ = true;
+    if (recalModelHPThres > MAX_HPXLEN) is_enabled_ = false;
+}
 
-  string comment_line;
-  getline(model_file, comment_line); //skip the comment time
-
-  int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
-  model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >>  max_hp_calibrated;
-  stratification_ = new RegionStratification(xMin, xMax, xSpan, yMin, yMax, ySpan);
-  //calculate number of partitions and initialize the stratifiedAs and stratifiedBs
-  const int numRegionStratifications = stratification_->xCuts * stratification_->yCuts;
-  const int numFlows = flowEnd - flowStart + 1;
-  const int numHPs = MAX_HPXLEN + 1; //max_hp_calibrated + 1;
-  const int numNucs = 4;
-  stratifiedAs.resize(numRegionStratifications);
-  stratifiedBs.resize(numRegionStratifications);
-  for(int ind = 0; ind < numRegionStratifications; ++ind){
-    stratifiedAs[ind].resize(numFlows);
-    stratifiedBs[ind].resize(numFlows);
-    for(int flowInd = 0; flowInd < numFlows; flowInd++){
-      stratifiedAs[ind][flowInd].resize(numNucs);
-      stratifiedBs[ind][flowInd].resize(numNucs);
-      for(int nucInd = 0; nucInd < numNucs; ++nucInd){
-        stratifiedAs[ind][flowInd][nucInd].assign(numHPs, 1.0);
-        stratifiedBs[ind][flowInd][nucInd].assign(numHPs, 0.0);
-      }
+void RecalibrationModel::FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB) {
+    for (int flowInd = flowStart; flowInd < flowEnd; ++flowInd) {
+        if (refHP < recalModelHPThres -1) continue;
+        stratifiedAs[offsetRegion][flowInd][nucInd][refHP] = paramA;
+        stratifiedBs[offsetRegion][flowInd][nucInd][refHP] = paramB;
     }
-  }
+}
 
-  //TODO: parse model_file into stratifiedAs and stratifiedBs
-  float paramA, paramB;
-  int refHP;
-  char flowBase;
-  while(model_file.good()){
-    model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
-    //populate it to stratifiedAs and startifiedBs
-    int nucInd = NuctoInt(flowBase);
-    int offsetRegion = (yMin - stratification_->yMin)/stratification_->ySpan + (xMin - stratification_->xMin)/stratification_->xSpan * stratification_->yCuts;
-    //boundary check
-    for(int flowInd = flowStart; flowInd < flowEnd; ++flowInd){
-      if(refHP < recalModelHPThres -1) continue;
-      stratifiedAs[offsetRegion][flowInd][nucInd][refHP] = paramA;
-      stratifiedBs[offsetRegion][flowInd][nucInd][refHP] = paramB;
+void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y){
+     if (!is_enabled_) {
+       multi_ab.Null();
     }
-
-  }
-
-  model_file.close();
-
-  printf("Recalibration: enabled (using calibration file %s)\n\n", model_file_name.c_str());
-  is_enabled_ = true;
-  if(recalModelHPThres > MAX_HPXLEN) is_enabled_ = false;
+    int offsetRegion = stratification.OffsetRegion(x,y);
+    //dimension checking
+    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size() || offsetRegion>=(int)stratifiedBs.size())
+    {
+        multi_ab.Null();
+    }
+    else{
+      multi_ab.aPtr = &(stratifiedAs[offsetRegion]);
+      multi_ab.bPtr = &(stratifiedBs[offsetRegion]);
+    }
 }
 
 vector<vector<vector<float> > > * RecalibrationModel::getAs(int x, int y)
 {
-  if(!is_enabled_){
-    return 0;
-  }
-  int offsetRegion = (y - stratification_->yMin)/stratification_->ySpan + (x - stratification_->xMin)/stratification_->xSpan * stratification_->yCuts;
-  //dimension checking
-  if(offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size())
-    return 0;
-  else
-    return &(stratifiedAs[offsetRegion]);
+    if (!is_enabled_) {
+        return 0;
+    }
+    int offsetRegion = stratification.OffsetRegion(x,y);
+    //dimension checking
+    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size())
+        return 0;
+    else
+        return &(stratifiedAs[offsetRegion]);
 }
 
- vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y)
+vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y)
 {
-  if(!is_enabled_){
-    return 0;
-  }
-  int offsetRegion = (y - stratification_->yMin)/stratification_->ySpan + (x - stratification_->xMin)/stratification_->xSpan * stratification_->yCuts;
-  if(offsetRegion < 0 || offsetRegion >= (int)stratifiedBs.size())
-    return 0;
-  else
-    return &(stratifiedBs[offsetRegion]);
+    if (!is_enabled_) {
+        return 0;
+    }
+    int offsetRegion = stratification.OffsetRegion(x,y);
+    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedBs.size())
+        return 0;
+    else
+        return &(stratifiedBs[offsetRegion]);
 }
 
 

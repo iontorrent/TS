@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 set -e
 
 #--------------------------------------
@@ -38,11 +38,12 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision: 58487 $'|awk '{print $2}'`
+version=`echo '$Revision: 62409 $'|awk '{print $2}'`
 DEMO=0
 interactive=1
 REMOVE=0
 environment="/etc/environment"
+aptproxyfile="/etc/apt/apt.conf.d/99proxy"
 
 # Log command line arguments
 cmdline=${@}
@@ -131,19 +132,38 @@ if [ $REMOVE -eq 1 ]; then
         sed "/^http_proxy/d" $environment
         echo
     else
+    #=============================================================
+    # Edit /etc/environment
+    #=============================================================
         # Remove existing proxy setting
         if [ -e $environment ]; then
             sed -i "/^http_proxy/d" $environment
             unset http_proxy
-            echo -e "\nRebooting will ensure the http_proxy environment variable is cleared.\n"
+            echo "$environment has been modified."
+            #echo -e "\nRebooting will ensure the http_proxy environment variable is cleared.\n"
         fi
 
+    #=============================================================
+    # Edit apt configuration
+    #=============================================================
+        # This was released in TS3.6.0; deprecated
         if [ -e /etc/apt/apt.conf ]; then
             sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
+            # If apt.conf is empty, remove it.  TSsetproxy is the only process that created the file
+            if [ $(stat --printf="%s" /etc/apt/apt.conf) -eq 0 ]; then
+                rm -f /etc/apt/apt.conf;
+            fi
         fi
+        # Remove existing apt proxy setting file
+        rm -f $aptproxyfile
+        echo "apt configuration has been modified."
 
+    #=============================================================
+    # Edit wget configuration
+    #=============================================================
         if [ -e /etc/wgetrc ]; then
             sed -i 's/^http_proxy.*/#&/' /etc/wgetrc
+            echo "wget configuration has been modified."
         fi
     fi
     log "$0 completed successfully"
@@ -246,6 +266,9 @@ if [ $DEMO -eq 1 ]; then
     echo "http_proxy=$proxy_addr:$proxy_port"
     echo
 else
+    #=============================================================
+    # Edit /etc/environment
+    #=============================================================
     # = remove previous proxy information
     if [ -e $environment ]; then
         sed -i '/http_proxy/d' $environment
@@ -260,12 +283,23 @@ else
     source $environment
     echo "http_proxy is set to "$http_proxy
 
-    # Edit apt.conf
-    if [ -e /etc/apt/apt.conf ]; then
-        sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
-    fi
-    echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" >> /etc/apt/apt.conf
+    #=============================================================
+    # Edit apt configuration
+    #=============================================================
+# Released with TS3.6.0:
+#    # Edit apt.conf
+#    if [ -e /etc/apt/apt.conf ]; then
+#        sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
+#    fi
+#    echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" >> /etc/apt/apt.conf
+#
+# editing apt.conf is not the way to do this correctly.  drop a file in apt.conf.d instead
+    echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" > $aptproxyfile
+    echo "apt has been configured for proxy use"
 
+    #=============================================================
+    # Edit wget configuration
+    #=============================================================
     # Edit /etc/wgetrc.  Could be either
     # http_proxy=
     # #http_proxy=
@@ -274,6 +308,7 @@ else
         sed -i "s,\(http_proxy=\).*,\1$proxy_addr\:$proxy_port," /etc/wgetrc
         # Second, enable if it is commented by removing the comment character
         sed -i 's/^#\(http_proxy.*\)/\1/' /etc/wgetrc
+        echo "wget has been configured for proxy use"
     fi
 fi
 log "$0 completed successfully"

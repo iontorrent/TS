@@ -49,18 +49,18 @@ string getVCFHeader(ExtendParameters *parameters, CandidateGenerationHelper &can
   << "##INFO=<ID=NR,Number=1,Type=String,Description=\"Reason why the variant is a No-Call.\">" << endl
   
 //  << "##INFO=<ID=BLL,Number=1,Type=Float,Description=\"Log-likelihood of bias parameters under prior.\">" << endl
-  << "##INFO=<ID=RBI,Number=1,Type=Float,Description=\"Distance of bias parameters from zero.\">" << endl
-  << "##INFO=<ID=FWDB,Number=1,Type=Float,Description=\"Forward strand bias in prediction.\">" << endl
-  << "##INFO=<ID=REVB,Number=1,Type=Float,Description=\"Reverse strand bias in prediction.\">" << endl
-  << "##INFO=<ID=REFB,Number=1,Type=Float,Description=\"Reference Hypothesis bias in prediction.\">" << endl
-  << "##INFO=<ID=VARB,Number=1,Type=Float,Description=\"Variant Hypothesis bias in prediction.\">" << endl
+  << "##INFO=<ID=RBI,Number=A,Type=Float,Description=\"Distance of bias parameters from zero.\">" << endl
+  << "##INFO=<ID=FWDB,Number=A,Type=Float,Description=\"Forward strand bias in prediction.\">" << endl
+  << "##INFO=<ID=REVB,Number=A,Type=Float,Description=\"Reverse strand bias in prediction.\">" << endl
+  << "##INFO=<ID=REFB,Number=A,Type=Float,Description=\"Reference Hypothesis bias in prediction.\">" << endl
+  << "##INFO=<ID=VARB,Number=A,Type=Float,Description=\"Variant Hypothesis bias in prediction.\">" << endl
   << "##INFO=<ID=SSEN,Number=1,Type=Float,Description=\"Strand-specific-error prediction on negative strand.\">" << endl
   << "##INFO=<ID=SSEP,Number=1,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
   
   << "##INFO=<ID=STB,Number=1,Type=Float,Description=\"Strand bias in variant relative to reference.\">" << endl
   << "##INFO=<ID=SXB,Number=1,Type=Float,Description=\"Experimental strand bias based on approximate bayesian score for difference in frequency.\">" << endl
   
-  << "##INFO=<ID=MLLD,Number=1,Type=Float,Description=\"Mean log-likelihood delta per read.\">" << endl;
+  << "##INFO=<ID=MLLD,Number=A,Type=Float,Description=\"Mean log-likelihood delta per read.\">" << endl;
 //  << "##INFO=<ID=MXFD,Number=1,Type=Float,Description=\"Mean maximum discrimination per read.\">" << endl;
 //  << "##INFO=<ID=MFDT,Number=1,Type=Float,Description=\"Mean flows per read distinguishing variant above threshold.\">" << endl
 
@@ -248,5 +248,22 @@ int CalculateWeightOfVariant(vcf::Variant *current_variant){
   if (it != current_variant->info.end())
     weight = atoi(current_variant->info.at("DP")[0].c_str()); // or is this current sample ident?
   else weight = 1;
+  return(weight);
+}
+
+float RetrieveQualityTagValue(vcf::Variant *current_variant, const string &tag_wanted, int _allele_index){
+  
+    map<string, vector<string> >::iterator it;
+    float weight;
+    
+  it = current_variant->info.find(tag_wanted);
+  if (it != current_variant->info.end()){
+    // if the index is valid...
+    if (current_variant->info.at(tag_wanted).size()> (unsigned int) _allele_index)
+      weight = atof(current_variant->info.at(tag_wanted)[_allele_index].c_str()); // or is this current sample ident?
+      else
+        weight = 0.0f;
+  }
+  else weight = 0.0f;
   return(weight);
 }

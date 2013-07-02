@@ -3109,6 +3109,9 @@ void ExponentialTailFitting_k(
 	  tail_end_idx = i;
       }
 
+      if (tail_start_idx == -1)
+        continue;
+
       if (tail_end_idx == -1)
         tail_end_idx = num_frames;
 

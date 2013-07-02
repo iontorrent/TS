@@ -1,4 +1,83 @@
 [
+
+  {
+    "pk": 1,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "Generic Sequencing",
+      "nucleotideType": "dna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "GENS"
+    }
+  },
+  {
+    "pk": 2,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "AmpliSeq DNA ",
+      "nucleotideType": "dna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "AMPS"
+    }
+  },  
+  {
+    "pk": 3,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "TargetSeq",
+      "nucleotideType": "dna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "TARS"
+    }
+  },
+  {
+    "pk": 4,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "Whole Genome",
+      "nucleotideType": "dna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "WGNM"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "RNA Sequencing",
+      "nucleotideType": "rna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "RNA"
+    }
+  }, 
+  {
+    "pk": 6,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "AmpliSeq RNA",
+      "nucleotideType": "rna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "AMPS_RNA"
+    }
+  },
+  {
+    "pk": 7,
+    "model": "rundb.runtype",
+    "fields": {
+      "description": "AmpliSeq Exome",
+      "nucleotideType": "dna",
+      "barcode": "",
+      "meta": "{}",
+      "runType": "AMPS_EXOME"
+    }
+  },
+
   {
     "pk": 20001,
     "model": "rundb.kitinfo",
@@ -659,6 +738,52 @@
       "description": "Ion PI Sequencing 200 Kit v2"
     }
   },
+  {
+    "pk": 20045,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion AmpliSeq Exome Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "SPREP0009",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "Ion AmpliSeq Exome Kit"
+    }
+  },  
+  {
+    "pk": 20046,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit-v2XT",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0013",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 Kit v2 with XT"
+    }
+  },
+  {
+    "pk": 20047,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Template OT2 200 Kit with XT",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0007",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Template OT2 200 Kit with XT"
+    }
+  },
+  
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -1629,8 +1754,28 @@
       ]
     }
   },
-  
-     
+  {     
+    "pk": 20098,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4487084",
+      "kit": [
+        "SPREP0009"
+      ]
+    }
+  },
+  {     
+    "pk": 20099,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4487053",
+      "kit": [
+        "SEQ0013"
+      ]
+    }
+  },
+
+
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -1912,5 +2057,365 @@
         "ICPREP0001"
       ]      
     }
+  },
+  
+  {
+    "pk": 20007,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "TEMPLT0007"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0008"
+      ],
+      "productCode": "AMPS_EXOME_0",
+      "defaultChipType": "900v2",
+      "isPairedEndSupported": false,
+      "defaultVariantFrequency": "",
+      "isDefault": true,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS_EXOME"
+      ],
+      "productName": "AMPS_EXOME_default",
+      "defaultFlowCount": 520,
+      "defaultPairedEndSequencingKit": [
+        "SEQ0007"
+      ],
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0013"
+      ],
+      "defaultSamplePrepKit": [
+        "SPREP0009"
+      ],
+      "defaultControlSeqKit": null,
+      "isVisible": true,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : null
+    }
+  },
+  
+  {
+    "pk": 1,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "314",
+      "slots": 1,
+      "description": "314",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },
+  {
+    "pk": 2,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "316",
+      "slots": 1,
+      "description": "316",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },  
+  {
+    "pk": 3,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "318",
+      "slots": 1,
+      "description": "318",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },  
+  {
+    "pk": 4,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "900",
+      "slots": 1,
+      "description": "PI",
+      "isActive": true,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+       "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  }, 
+  {
+    "pk": 5,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "314v2",
+      "slots": 1,
+      "description": "314v2",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },    
+  {
+    "pk": 6,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "316v2",
+      "slots": 1,
+      "description": "316v2",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },  
+  {
+    "pk": 7,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "318v2",
+      "slots": 1,
+      "description": "318v2",
+      "isActive": true,
+      "instrumentType": "pgm",
+      "beadfindargs"            : "justBeadFind",
+      "analysisargs"            : "Analysis --from-beadfind",
+      "prebasecallerargs"       : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16",
+      "thumbnailbeadfindargs"   : "",
+      "thumbnailanalysisargs"   : "",
+      "prethumbnailbasecallerargs" : "",
+      "thumbnailbasecallerargs" : ""
+    }
+  },
+  {
+    "pk": 8,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "900v2",
+      "slots": 1,
+      "description": "PIv2",
+      "isActive": true,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },     
+  {
+    "pk": 9,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.0.19",
+      "slots": 1,
+      "description": "P0",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 10,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.1.16",
+      "slots": 1,
+      "description": "PI",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 11,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.1.17",
+      "slots": 1,
+      "description": "PI",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 12,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.2.18",
+      "slots": 1,
+      "description": "PII",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 13,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.0.16",
+      "slots": 1,
+      "description": "P0",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  }, 
+  {
+    "pk": 14,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.1.16",
+      "slots": 1,
+      "description": "PI",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 15,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.2.16",
+      "slots": 1,
+      "description": "PII",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+
+    }
+  },
+  {
+    "pk": 16,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "900AMPS_EXOME",
+      "slots": 1,
+      "description": "PIv2",
+      "isActive": false,
+      "instrumentType": "proton",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+     "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000"
+ 
+    }
   }
+
 ]

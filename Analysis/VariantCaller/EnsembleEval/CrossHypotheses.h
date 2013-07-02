@@ -16,6 +16,7 @@
 #include "ExtendedReadInfo.h"
 #include "HypothesisEvaluator.h"
 
+
 // use both strands for evaluating likelihood
 #define ALL_STRAND_KEY -1
 // no matter what, the read as called should be 1 in a million relative to the variant
@@ -28,11 +29,15 @@ class CrossHypotheses{
 public:
   vector<string> instance_of_read_by_state;  // this read, modified by each state of a variant
 	vector<vector<float> > predictions;
+  vector<vector<float> > mod_predictions;
 	vector<vector<float> > normalized;
 
 // is this its own sub-structure?
 // extra data supporting evaluation of hypotheses
   vector<float> delta;
+  // in some unfortunate cases, we have dependent errors 
+  float delta_correlation;
+  bool use_correlated_likelihood;
 
 // hold some intermediates size data matrix hyp * nFlows (should be active flows)
 
@@ -79,16 +84,23 @@ public:
     ll_scale = 0.0f;
     magic_sigma_base = 0.085f;
     magic_sigma_slope = 0.0084f;
+    delta_correlation = 0.0f;
+    use_correlated_likelihood = false;
 
   };
   void CleanAllocate(int num_hyp, int num_flow);
-  void FillInPrediction(ion::FlowOrder &flow_order, ExtendedReadInfo &my_read);
+  void SetModPredictions();
+  void FillInPrediction(PersistingThreadObjects &thread_objects, ExtendedReadInfo &my_read, InputStructures &global_context);
   void InitializeDerivedQualities();
   void InitializeTestFlows();
   void ComputeBasicResiduals();
+  void ResetModPredictions();
+  void ComputeDeltaCorrelation();
   void ResetRelevantResiduals();
   void ComputeBasicLikelihoods();
   void ComputeLogLikelihoods();
+  void ComputeLogLikelihoodsSum();
+  void JointLogLikelihood();
   void ComputeScaledLikelihood();
   float ComputePosteriorLikelihood(float reference_prob, float typical_prob);
   void InitializeSigma();
@@ -99,7 +111,6 @@ public:
   void ComputeDelta();
   void ComputeTestFlow();
   void ExtendedComputeTestFlow(float threshold, int max_choice);
-  void ComputeLocalDiscriminationStrength(float threshold, float &max_fld, int &reinforcing_flows);
   float ComputeLLDifference();
 };
 

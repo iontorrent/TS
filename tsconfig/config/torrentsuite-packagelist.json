@@ -51,6 +51,7 @@
                 "python-jsonpipe",
                 "python-rpy2",
                 "python-django",
+                "python-gnuplot",
                 "perl",
                 "perl-doc",
                 "emboss-data",

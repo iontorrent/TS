@@ -322,7 +322,7 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
             fig = plt.figure(figsize=(7,5),dpi=100)
 
         max_x = min(graph_max_x, len(ionstats_alignment['full']['read_length_histogram']))
-        max_y = max(histogram_full)
+        max_y = max(histogram_full)+1
 
         if not y_ticks:
             ax = fig.add_subplot(111,frame_on=False,yticks=[], position=[0.1,0.15,0.8,0.89])
@@ -335,7 +335,8 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
 
             d  = len(str(max_y)) - 1
             yticks=range(10**d,max_y,10**d)
-            yticks.pop()
+            if yticks:
+                yticks.pop()
             yticks.append(max_y)
 
             ax = fig.add_subplot(111,frame_on=False,yticks=yticks, position=[0.14,0.15,0.8,0.89])
@@ -348,7 +349,7 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
         ax.set_xlabel('Position in Read')
         ax.set_ylabel('Reads')
     
-        if sum(histogram_full) > 0:
+        if sum(histogram_full) > 0 and float(ionstats_alignment['full']['num_bases']) > 0:
             map_percent = int(round(100.0 * float(ionstats_alignment['aligned']['num_bases']) 
                                           / float(ionstats_alignment['full']['num_bases'])))
             unmap_percent = 100 - map_percent

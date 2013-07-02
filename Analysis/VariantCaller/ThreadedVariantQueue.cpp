@@ -166,17 +166,17 @@ void MasterTracker::Finalize() {
 
 void *ProcessSetOfVariantsWorker(void *ptr) {
 
-  variantThreadInfo *variant_thread_ptr = static_cast<variantThreadInfo *>(ptr);
+  variantThreadInfo       *variant_thread_ptr = static_cast<variantThreadInfo *>(ptr);
+  PersistingThreadObjects  thread_objects(*(variant_thread_ptr->global_context));
 
-  BamTools::BamMultiReader bamMultiReader;
+  //BamTools::BamMultiReader bamMultiReader;
 
-  variant_thread_ptr->OpenThreadBamReader(bamMultiReader);
-
+  variant_thread_ptr->OpenThreadBamReader(thread_objects.bamMultiReader);
   variant_thread_ptr->EchoThread();
 
   string prevSequenceName = "";
   string currentSequenceName = "";
-  string local_contig_sequence = "";
+  //string local_contig_sequence = "";
   int variant_counter = 0;
   while (variant_counter < variant_thread_ptr->records_in_thread) {
 
@@ -191,16 +191,16 @@ void *ProcessSetOfVariantsWorker(void *ptr) {
     if (currentSequenceName.compare(prevSequenceName) != 0) {
 
       prevSequenceName = currentSequenceName;
-      local_contig_sequence = variant_thread_ptr->global_context->ReturnReferenceContigSequence(current_variant);
+      thread_objects.local_contig_sequence = variant_thread_ptr->global_context->ReturnReferenceContigSequence(current_variant);
 
     }
 
-    if (local_contig_sequence.empty()) {
+    if (thread_objects.local_contig_sequence.empty()) {
       cerr << "FATAL: Reference sequence for Contig " << (*current_variant)->sequenceName << " , not found in reference fasta file " << endl;
       exit(-1);
     }
     // separate queuing of variants from >actual work< of calling variants
-    DoWorkForOneVariant(bamMultiReader, current_variant, local_contig_sequence , variant_thread_ptr->parameters, variant_thread_ptr->global_context);
+    DoWorkForOneVariant(thread_objects, current_variant, variant_thread_ptr->parameters, variant_thread_ptr->global_context);
   }
 
   //bamReader.close();
@@ -262,6 +262,24 @@ void VariantJobServer::PushCurVariantOntoJobs(ofstream &outVCFFile,
       cerr << "FATAL: thought I had a thread available but I didn't" << endl;
       exit(-1);
     }
+    //Added for 3.6.1 Patch to clear thread resource after they terminate. Need to move this to use thread pools instead.
+    if (all_thread_master.thread_tracker.size() > (size_t) 3*all_thread_master.max_threads_available) {
+      std::vector<pthread_t*>::iterator thread_itr = all_thread_master.thread_tracker.begin();
+      int counter = 0;
+      int rc = 0;
+      while (counter < all_thread_master.max_threads_available && thread_itr != all_thread_master.thread_tracker.end()) {
+        rc = pthread_join(**thread_itr, NULL);
+        if (rc) {
+          cerr << "FATAL: pthread_join returned non-zero return code " << rc << endl;
+          exit(-1);
+        }
+        //remove the thread reference since it has completed successfully to release it's resources
+        delete *thread_itr;
+        thread_itr = all_thread_master.thread_tracker.erase(thread_itr);
+        counter++;
+      }
+    }
+
   }
 
   NewVariant(vcfFile);

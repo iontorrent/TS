@@ -157,7 +157,7 @@ class Migration(DataMigration):
                           'baselineRun' : '',
                           'flowsInOrder' : '',
                           'ftpStatus' : '',
-            
+                          'storageHost' : ''
                           }
     
 

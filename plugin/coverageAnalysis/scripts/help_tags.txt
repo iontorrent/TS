@@ -74,7 +74,7 @@ The average number of reads of all targeted reference bases. This is the total n
 target divided by the number of targeted bases and therefore includes any bases that had no coverage.
 
 @Uniformity of base coverage
-The percentage of bases in all targeted regions (or whole genome) covered by at least 0.2x the average base read depth.
+The percentage of bases in all targeted regions (or whole genome) covered by at least (the nearest integer to) 20% of the average base read depth reads.
 
 @Maximum base read depth
 The maximum number of reads of any target base. (Not including deletions.)
@@ -142,7 +142,7 @@ that has the greatest overlap of aligned sequence.
 The average number of reads assigned to amplicons.
 
 @Uniformity of amplicon coverage
-The percentage of amplicons that had at least 0.2x of the average number of reads per amplicon.
+The percentage of amplicons that had at least (the nearest integer to) 20% of the average number of reads per amplicon reads.
 
 @Maximum amplicon read depth
 The maximum number of reads assigned to any amplicon.
@@ -249,7 +249,7 @@ A read is assigned to a particular target region has at least one aligned base o
 The average number of reads assigned to targets.
 
 @Uniformity of target coverage
-The percentage of bases in all targeted regions (or whole genome) covered by at least 0.2x the average base read depth.
+The percentage of bases in all targeted regions (or whole genome) covered by at least (the nearest integer to) 20% of the average base read depth reads.
 
 @Maximum target read depth
 The maximum number of reads assigned to any target.
@@ -301,15 +301,22 @@ Each point plotted is the base 10 logorithm value of the total aligned base read
 @Target Coverage
 Summary statistics relative to coverage of individual targets as measured by the average base read depth for
 those targets. The average base read depth across a group of overlapping targets is assumed to be distributed
-evenly.
+evenly. These statistics are not affect using the padding option.
 
 @Number of unmerged targets
 The number of targets specified in the target regions file.
 Note that this may be more than those shown in the Target Coverage Chart and listed in the target coverage summary file
-if any individual targets overlap, as base coverage here is resolved to merged target regions.
+if any individual targets overlap, as base coverage here is resolved to merged target regions. Note that target padding
+does not affect the number of reads assigned to original targets.
+
+@Average base coverage depth per target
+The average of the mean base read depth of all individual targets. For N overlapping targets it is assumed that base
+coverage is spread evenly as if N separated target had this mean base coverage.
 
 @Uniformity of base coverage per target
-The percentage of all individual targets that had an average base coverage depth that was at least 0.2x the average base coverage depth per target.
+The percentage of all individual targets that had an average base coverage depth that is at least (the nearest integer to) 20% of
+the average base coverage depth per target reads. Note that this value is based on an integerized threshold to be consisent with other
+uniformity of coverage statistics, even though average base coverage depth for individual targets is a non-integer value.
 
 @Targets with base coverage at 1x
 The percentage of targets that had an average base coverage depth of at least one base.

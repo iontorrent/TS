@@ -37,12 +37,14 @@ import pytz
 import time
 import tempfile
 import urllib
+import traceback
 
 import urlparse
 from ion.utils.timeout import timeout
 from iondb.utils.files import percent_full
 
 logger = get_task_logger(__name__)
+
 
 def call(*cmd, **kwargs):
     if "stdout" not in kwargs:
@@ -666,7 +668,7 @@ def updateOneTouch():
 
 
 @task
-def build_tmap_index(reference, read_sample_size=None):
+def build_tmap_index(reference):
     """ Provides a way to kick off the tmap index generation
         this should spawn a process that calls the build_genome_index.pl script
         it may take up to 3 hours.
@@ -689,9 +691,6 @@ def build_tmap_index(reference, read_sample_size=None):
         "--genome-name-long", reference.name,
         "--genome-version", reference.version
     ]
-    if read_sample_size is not None:
-        cmd.append("--read-sample-size")
-        cmd.append(read_sample_size)
 
     ret, stdout, stderr = call(*cmd, cwd=settings.TMAP_DIR)
     if ret == 0:
@@ -899,7 +898,6 @@ def install_updates():
         raise
 
 
-@task
 def update_diskusage(fs):
     if os.path.exists(fs.filesPrefix):
         try:
@@ -1013,10 +1011,7 @@ if time.daylight:
     cronjobtime = 6 + int(time.altzone/60/60)
 else:
     cronjobtime = 6 + int(time.timezone/60/60)
-
-# ensure that cronjobtime returns non-negative hours (0..23)
-if (cronjobtime <0): cronjobtime = cronjobtime+24
-
+cronjobtime = (24 + cronjobtime) % 24
 @periodic_task(run_every=crontab(hour=str(cronjobtime), minute="0", day_of_week="*"), queue="periodic")
 def runnightly():
     import traceback
@@ -1030,93 +1025,6 @@ def runnightly():
     return
 
 
-def getdiskusage(directory):
-    # Try an all-python solution here - in case the suprocess spawning is causing grief.  We could be opening
-    # hundreds of instances of shells above.
-    logger = get_task_logger('iondb.rundb.tasks.getdiskusage')
-    def dir_size (start):
-        if not start or not os.path.exists(start):
-            return 0
-
-        file_walker = (
-            os.path.join(root, f)
-            for root, _, files in os.walk( start )
-            for f in files
-        )
-        total = 0L
-        for f in file_walker:
-            if os.path.isdir(f):
-                total += dir_size(f)
-                continue
-            if not os.path.isfile(f):
-                continue
-            try:
-                total += os.lstat(f).st_size
-            except OSError:
-                logger.exception("Cannot stat %s during calc_size", f)
-        return total
-    # Returns size in MB
-    return dir_size(directory)/(1024*1024)
-
-
-@task(queue="periodic")
-def setRunDiskspace(experimentpk):
-    '''Sets diskusage field in Experiment record with data returned from du command'''
-    try:
-        from iondb.rundb import models
-        from django.core.exceptions import ObjectDoesNotExist
-        # Get Experiment record
-        exp = models.Experiment.objects.get(pk=experimentpk)
-    except ObjectDoesNotExist:
-        pass
-    except:
-        raise
-    else:
-        # Get filesystem location of given Experiment record
-        directory = exp.expDir
-
-        used = getdiskusage(directory)
-
-        # Update database entry for the given Experiment record
-        try:
-            used = used if used != None else "0"
-            exp.diskusage = int(used)
-            exp.save()
-        except:
-            # field does not exist, cannot update
-            pass
-
-
-@task(queue="periodic")
-def setResultDiskspace(resultpk):
-    '''Sets diskusage field in Results record with data returned from du command'''
-
-    try:
-        from iondb.rundb import models
-        from django.core.exceptions import ObjectDoesNotExist
-        # Get Results record
-        result = models.Results.objects.get(pk=resultpk)
-    except ObjectDoesNotExist:
-        logger.error("Object does not exist error")
-        pass
-    except:
-        raise
-    else:
-        # Get filesystem location of given Results record
-        directory = result.get_report_dir()
-
-        used = getdiskusage(directory)
-
-        # Update database entry for the given Experiment record
-        try:
-            used = used if used != None else "0"
-            result.diskusage = int(used)
-            result.save()
-        except:
-            # field does not exist, cannot update
-            pass
-
-
 @task
 def update_diskspace_fields(resultpk):
     '''uses dmfileset objects to calculate disk space for each fileset'''
@@ -1128,75 +1036,6 @@ def update_diskspace_fields(resultpk):
         for dmfilestat in dmfilestats:
             dmfilestat.update_diskusage()
 
-@task(queue="periodic")
-def backfill_exp_diskusage():
-    '''
-    For every Experiment object in database, scan filesystem and determine disk usage.
-    Intended to be run at package installation to populate existing databases.
-    '''
-    import traceback
-    from django.db.models import Q
-    from iondb.rundb import models
-
-    # Setup log file logging
-    filename = '/var/log/ion/%s.log' % 'backfill_exp_diskusage'
-    log = logging.getLogger('backfill_exp_diskusage')
-    log.propagate = False
-    log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
-    log.info("")
-    log.info("===== New Run =====")
-
-    log.info("EXPERIMENTS:")
-    query = Q(diskusage=None) | Q(diskusage=0)
-    obj_list = models.Experiment.objects.filter(query).exclude(status="planned").values('pk','expName')
-    #obj_list = models.Experiment.objects.values('pk','expName')
-    for obj in obj_list:
-        log.info(obj['expName'])
-        try:
-            setRunDiskspace(obj['pk'])
-        except:
-            log.exception(traceback.format_exc())
-
-
-@task(queue="periodic")
-def backfill_result_diskusage():
-    '''Due to error in initial code that filled in the diskusage field, this function
-    updates every Result object's diskusage value.
-    '''
-    import traceback
-    from django.db.models import Q
-    from iondb.rundb import models
-
-    # Setup log file logging
-    filename = '/var/log/ion/%s.log' % 'backfill_result_diskusage'
-    log = logging.getLogger('backfill_result_diskusage')
-    log.propagate = False
-    log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
-    log.info("")
-    log.info("===== New Run =====")
-
-    log.info("RESULTS:")
-    query = Q(diskusage=None) | Q(diskusage=0)
-    obj_list = models.Results.objects.filter(query).values('pk','resultsName')
-    #obj_list = models.Results.objects.values('pk','resultsName')
-    for obj in obj_list:
-        log.debug(obj['resultsName'])
-        try:
-            setResultDiskspace(obj['pk'])
-        except:
-            log.exception(traceback.format_exc())
 
 @task(queue="periodic")
 def backfill_pluginresult_diskusage():
@@ -1329,6 +1168,7 @@ def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth
         return None, monitor.id
 
     monitor.progress += progress
+    monitor.size = monitor.size or monitor.progress
     monitor.status = "Complete"
     monitor.save()
 
